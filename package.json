@@ -10,7 +10,11 @@
     "db:generate": "npx prisma generate",
     "db:push": "npx prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
-    "db:studio": "npx prisma studio"
+    "db:studio": "npx prisma studio",
+    "deploy:check-env": "npx tsx scripts/check-env.ts",
+    "deploy:db-status": "npx tsx scripts/db-status.ts",
+    "deploy:create-admin": "npx tsx scripts/create-admin.ts",
+    "deploy:migrate": "npx prisma db push && npx tsx scripts/db-status.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
