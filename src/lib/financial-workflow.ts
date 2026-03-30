@@ -172,7 +172,7 @@ export async function applyTemplate(
     return {
       itemId: item.id,
       useCustomMargin: !!customMargin,
-      customMarginPercent: customMargin,
+      customMarginPercent: typeof customMargin === 'number' ? customMargin : undefined,
     };
   });
 
