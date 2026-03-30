@@ -189,6 +189,13 @@ function LoginForm() {
             </button>
           </form>
 
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Немає акаунту?{" "}
+            <Link href="/register" className="text-primary hover:underline font-medium">
+              Зареєструватися
+            </Link>
+          </p>
+
           <p className="mt-8 text-center text-xs text-muted-foreground">
             Проблеми з доступом?{" "}
             <a href="tel:+380677430101" className="text-primary hover:underline font-medium">
