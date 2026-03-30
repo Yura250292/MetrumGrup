@@ -3,6 +3,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
+import { TEMPLATE_PROMPTS } from "@/lib/estimate-prompts";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -54,6 +57,52 @@ async function extractFileContent(file: File): Promise<string> {
   return `[${file.name}] — невідомий формат файлу`;
 }
 
+async function generateWithOpenAI(prompt: string, textContent: string) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY не налаштований");
+  }
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      { role: "system", content: prompt },
+      { role: "user", content: textContent },
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.3,
+    max_tokens: 8000,
+  });
+
+  return completion.choices[0]?.message?.content || "{}";
+}
+
+async function generateWithAnthropic(systemPrompt: string, userContent: string) {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY не налаштований");
+  }
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const message = await anthropic.messages.create({
+    model: "claude-opus-4-20250514",
+    max_tokens: 8000,
+    temperature: 0.3,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  const content = message.content[0];
+  if (content.type === "text") {
+    // Claude може повертати JSON в markdown блоках
+    const text = content.text;
+    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/\{[\s\S]*\}/);
+    return jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : text;
+  }
+  return "{}";
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -77,6 +126,8 @@ export async function POST(request: NextRequest) {
     const additionalNotes = formData.get("notes") as string || "";
     const categoriesStr = formData.get("categories") as string || "";
     const selectedCategories = categoriesStr ? categoriesStr.split(",") : [];
+    const model = (formData.get("model") as string) || "gemini";
+    const template = (formData.get("template") as string) || "custom";
 
     if (files.length === 0) {
       return NextResponse.json({ error: "Завантажте хоча б один файл" }, { status: 400 });
@@ -254,6 +305,12 @@ export async function POST(request: NextRequest) {
       ? selectedCategories.map(catId => categoryDescriptions[catId]).filter(Boolean).join("\n\n")
       : Object.values(categoryDescriptions).join("\n\n");
 
+    // Add template-specific prompt if applicable
+    const templateSpecificPrompt =
+      template !== "custom" && TEMPLATE_PROMPTS[template]
+        ? `\n\n${TEMPLATE_PROMPTS[template]}\n\n`
+        : "";
+
     // Build prompt
     const prompt = `# РОЛЬ
 Ти — головний кошторисник із 20-річним досвідом будівельної компанії "Metrum Group" у Львові, Україна.
@@ -276,7 +333,7 @@ export async function POST(request: NextRequest) {
 - Додаткові примітки: ${additionalNotes || "немає"}
 - Локація: Львів, Україна
 - Валюта: гривня (₴, UAH)
-
+${templateSpecificPrompt}
 # КРИТИЧНО ВАЖЛИВО — ПОВНОТА КОШТОРИСУ
 Кошторис має бути ПОВНИМ і РЕАЛІСТИЧНИМ. Типовий ремонт квартири 60-100 м² включає 50-120+ позицій матеріалів.
 НЕ СКОРОЧУЙ і НЕ УЗАГАЛЬНЮЙ. Кожен матеріал — окрема позиція.
@@ -551,22 +608,40 @@ ${textParts.join("\n\n")}
 ✓ Посилання — ТІЛЬКИ пошукові URL магазинів (НЕ прямі сторінки товарів)
 ✓ Кожен матеріал має конкретну назву з маркою/виробником`;
 
-    // Call Gemini with Google Search grounding for real prices
-    const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview",
-      tools: [{
-        googleSearch: {},
-      } as unknown as import("@google/generative-ai").Tool],
-    });
+    // Generate estimate using selected AI model
+    let text = "";
 
-    const parts: (string | { inlineData: { data: string; mimeType: string } })[] = [prompt];
-    if (imageParts.length > 0) {
-      parts.push(...imageParts);
+    switch (model) {
+      case "openai":
+        console.log("🤖 Використовуємо OpenAI GPT-4o...");
+        text = await generateWithOpenAI(prompt, textParts.join("\n\n"));
+        break;
+
+      case "anthropic":
+        console.log("🧠 Використовуємо Anthropic Claude Opus 4...");
+        text = await generateWithAnthropic(prompt, textParts.join("\n\n"));
+        break;
+
+      default: // "gemini"
+        console.log("✨ Використовуємо Google Gemini з Google Search...");
+        // Call Gemini with Google Search grounding for real prices
+        const geminiModel = genAI.getGenerativeModel({
+          model: "gemini-3-flash-preview",
+          tools: [{
+            googleSearch: {},
+          } as unknown as import("@google/generative-ai").Tool],
+        });
+
+        const parts: (string | { inlineData: { data: string; mimeType: string } })[] = [prompt];
+        if (imageParts.length > 0) {
+          parts.push(...imageParts);
+        }
+
+        const result = await geminiModel.generateContent(parts);
+        const response = result.response;
+        text = response.text();
+        break;
     }
-
-    const result = await model.generateContent(parts);
-    const response = result.response;
-    const text = response.text();
 
     // Parse JSON from response
     let estimateData;

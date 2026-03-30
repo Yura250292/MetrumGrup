@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { PROJECT_TEMPLATES } from "@/lib/constants";
 
 type EstimateItem = {
   description: string;
@@ -113,6 +114,8 @@ export default function AIEstimatePage() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(WORK_CATEGORIES.map(c => c.id)) // За замовчуванням всі категорії вибрані
   );
+  const [selectedGenerationModel, setSelectedGenerationModel] = useState<"gemini" | "openai" | "anthropic">("gemini");
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [estimate, setEstimate] = useState<EstimateData | null>(null);
@@ -224,6 +227,8 @@ export default function AIEstimatePage() {
       formData.append("area", area);
       formData.append("notes", notes);
       formData.append("categories", Array.from(selectedCategories).join(","));
+      formData.append("model", selectedGenerationModel);
+      formData.append("template", selectedTemplate);
 
       const res = await fetch("/api/admin/estimates/generate", {
         method: "POST",
@@ -609,6 +614,72 @@ export default function AIEstimatePage() {
             )}
           </div>
 
+          {/* AI Model Selection */}
+          <Card className="p-6">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              AI Модель для генерації
+            </h3>
+            <select
+              value={selectedGenerationModel}
+              onChange={(e) => setSelectedGenerationModel(e.target.value as "gemini" | "openai" | "anthropic")}
+              className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+            >
+              <option value="gemini">✨ Google Gemini 3 Flash (З пошуком цін через Google Search)</option>
+              <option value="openai">🤖 OpenAI GPT-4o (Швидка та точна)</option>
+              <option value="anthropic">🧠 Anthropic Claude Opus 4 (Найкращий аналіз документів)</option>
+            </select>
+            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              Gemini має доступ до Google Search для актуальних цін матеріалів з українських магазинів
+            </p>
+          </Card>
+
+          {/* Project Template Selection */}
+          <Card className="p-6">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <Plus className="w-5 h-5 text-primary" />
+              Тип проєкту
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {PROJECT_TEMPLATES.map((template) => (
+                <label
+                  key={template.id}
+                  className={cn(
+                    "flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-sm",
+                    selectedTemplate === template.id
+                      ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
+                      : "border-border bg-white hover:border-primary/30"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="projectTemplate"
+                    checked={selectedTemplate === template.id}
+                    onChange={() => {
+                      setSelectedTemplate(template.id);
+                      if (template.id !== "custom") {
+                        // Автоматично вибрати категорії для цього шаблону
+                        setSelectedCategories(new Set(template.categories));
+                      }
+                    }}
+                    className="sr-only"
+                  />
+                  <div className="text-3xl mb-2">{template.icon}</div>
+                  <div className="font-semibold text-sm mb-1">{template.label}</div>
+                  <div className="text-xs text-muted-foreground leading-tight">
+                    {template.description}
+                  </div>
+                  {selectedTemplate === template.id && template.id !== "custom" && (
+                    <Badge variant="outline" className="mt-2 text-xs">
+                      {template.categories.length} категорій
+                    </Badge>
+                  )}
+                </label>
+              ))}
+            </div>
+          </Card>
+
           {/* Settings */}
           <Card className="p-6">
             <h3 className="font-semibold mb-4">Параметри проєкту</h3>
@@ -651,7 +722,8 @@ export default function AIEstimatePage() {
             </div>
           </Card>
 
-          {/* Work Categories Selection */}
+          {/* Work Categories Selection (only visible for custom template) */}
+          {selectedTemplate === "custom" && (
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -715,6 +787,7 @@ export default function AIEstimatePage() {
               Обрано: {selectedCategories.size} з {WORK_CATEGORIES.length} категорій
             </div>
           </Card>
+          )}
 
           {/* Error */}
           {error && (

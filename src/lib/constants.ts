@@ -79,3 +79,58 @@ export const SERVICE_CATEGORIES = [
   { id: "design", label: "Дизайн", icon: "Palette" },
   { id: "cleaning", label: "Клінінг", icon: "Sparkles" },
 ] as const;
+
+export const PROJECT_TEMPLATES = [
+  {
+    id: "foundation",
+    label: "Фундамент",
+    icon: "🏗️",
+    description: "Тільки фундаментні роботи",
+    categories: ["earthworks", "foundation"],
+  },
+  {
+    id: "shell",
+    label: "Коробка",
+    icon: "🏠",
+    description: "Будівництво коробки без оздоблення",
+    categories: ["foundation", "walls", "ceiling", "roof"],
+  },
+  {
+    id: "turnkey",
+    label: "Під ключ",
+    icon: "✨",
+    description: "Повний ремонт з усіма роботами",
+    categories: [
+      "demolition", "walls", "ceiling", "floor", "electrical",
+      "plumbing", "heating", "windows", "finishing", "kitchen", "bathroom"
+    ],
+  },
+  {
+    id: "house_full",
+    label: "Будинок (повний)",
+    icon: "🏘️",
+    description: "Будівництво повного будинку",
+    categories: [
+      "earthworks", "foundation", "walls", "ceiling", "roof",
+      "electrical", "plumbing", "heating", "windows", "facade"
+    ],
+  },
+  {
+    id: "apartment_rough",
+    label: "Квартира (чорнові)",
+    icon: "🔨",
+    description: "Чорнове оздоблення квартири",
+    categories: [
+      "demolition", "walls", "ceiling", "floor", "electrical", "plumbing"
+    ],
+  },
+  {
+    id: "custom",
+    label: "Власний вибір",
+    icon: "⚙️",
+    description: "Оберіть категорії самостійно",
+    categories: [],
+  },
+] as const;
+
+export type ProjectTemplateId = typeof PROJECT_TEMPLATES[number]["id"];
