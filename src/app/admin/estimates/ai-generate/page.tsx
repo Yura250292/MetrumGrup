@@ -683,23 +683,7 @@ export default function AIEstimatePage() {
           {/* Settings */}
           <Card className="p-6">
             <h3 className="font-semibold mb-4">Параметри проєкту</h3>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">Тип проєкту</label>
-                <select
-                  value={projectType}
-                  onChange={(e) => setProjectType(e.target.value)}
-                  className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
-                >
-                  <option>ремонт квартири</option>
-                  <option>ремонт комерційного приміщення</option>
-                  <option>будівництво під ключ</option>
-                  <option>капітальний ремонт</option>
-                  <option>дизайн інтер&apos;єру + ремонт</option>
-                  <option>фасадні роботи</option>
-                  <option>інженерні мережі</option>
-                </select>
-              </div>
+            <div className="grid gap-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Площа (м²)</label>
                 <input
@@ -709,7 +693,7 @@ export default function AIEstimatePage() {
                   className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm outline-none focus:border-primary transition-colors"
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div>
                 <label className="mb-1.5 block text-sm font-medium">Додаткові побажання</label>
                 <textarea
                   value={notes}
@@ -722,7 +706,34 @@ export default function AIEstimatePage() {
             </div>
           </Card>
 
-          {/* Work Categories Selection (only visible for custom template) */}
+          {/* Selected Categories Preview */}
+          {selectedTemplate !== "custom" && selectedCategories.size > 0 && (
+            <Card className="p-6">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-base font-semibold">Обрані категорії робіт</h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSelectedTemplate("custom")}
+                  type="button"
+                >
+                  Налаштувати
+                </Button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {WORK_CATEGORIES.filter(cat => selectedCategories.has(cat.id)).map((category) => (
+                  <Badge key={category.id} variant="outline" className="text-sm">
+                    {category.icon} {category.label}
+                  </Badge>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Обрано {selectedCategories.size} категорій на основі шаблону "{PROJECT_TEMPLATES.find(t => t.id === selectedTemplate)?.label}"
+              </p>
+            </Card>
+          )}
+
+          {/* Work Categories Selection (visible for custom template) */}
           {selectedTemplate === "custom" && (
           <Card className="p-6">
             <div className="flex items-center justify-between mb-4">
