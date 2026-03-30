@@ -722,8 +722,9 @@ export default function AIEstimatePage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {WORK_CATEGORIES.filter(cat => selectedCategories.has(cat.id)).map((category) => (
-                  <Badge key={category.id} variant="outline" className="text-sm">
-                    {category.icon} {category.label}
+                  <Badge key={category.id} variant="outline" className="text-xs whitespace-nowrap">
+                    <span className="mr-1">{category.icon}</span>
+                    {category.label}
                   </Badge>
                 ))}
               </div>
@@ -760,7 +761,7 @@ export default function AIEstimatePage() {
                   <label
                     key={category.id}
                     className={cn(
-                      "flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
+                      "flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
                       isSelected
                         ? "border-primary bg-primary/5"
                         : "border-border bg-white"
@@ -770,13 +771,11 @@ export default function AIEstimatePage() {
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleCategory(category.id)}
-                      className="rounded border-gray-300 text-primary focus:ring-primary"
+                      className="rounded border-gray-300 text-primary focus:ring-primary flex-shrink-0"
                     />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-base">{category.icon}</span>
-                        <span className="text-xs font-medium leading-tight">{category.label}</span>
-                      </div>
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
+                      <span className="text-base flex-shrink-0">{category.icon}</span>
+                      <span className="text-xs font-medium leading-tight truncate">{category.label}</span>
                     </div>
                   </label>
                 );
