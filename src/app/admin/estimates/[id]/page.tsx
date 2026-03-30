@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
@@ -16,6 +16,28 @@ const STATUS_COLORS: Record<string, string> = {
   APPROVED: "bg-green-100 text-green-700",
   REJECTED: "bg-red-100 text-red-700",
   REVISION: "bg-yellow-100 text-yellow-700",
+  ENGINEER_REVIEW: "bg-purple-100 text-purple-700",
+  FINANCE_REVIEW: "bg-orange-100 text-orange-700",
+};
+
+type EstimateItem = {
+  id: string;
+  description: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  laborRate: number;
+  laborHours: number;
+  amount: number;
+  useCustomMargin: boolean;
+  customMarginPercent: number | null;
+  material: { name: string; sku: string } | null;
+};
+
+type EstimateSection = {
+  id: string;
+  title: string;
+  items: EstimateItem[];
 };
 
 type Estimate = {
@@ -31,7 +53,6 @@ type Estimate = {
   discount: number;
   finalAmount: number;
   notes: string | null;
-  // Financial fields
   profitMarginMaterials: number | null;
   profitMarginLabor: number | null;
   profitMarginOverall: number;
@@ -40,24 +61,11 @@ type Estimate = {
   taxRate: number;
   taxAmount: number;
   finalClientPrice: number;
+  logisticsCost: number;
   createdAt: string;
   project: { title: string; client: { name: string } };
   createdBy: { name: string };
-  sections: Array<{
-    id: string;
-    title: string;
-    items: Array<{
-      id: string;
-      description: string;
-      unit: string;
-      quantity: number;
-      unitPrice: number;
-      laborRate: number;
-      laborHours: number;
-      amount: number;
-      material: { name: string; sku: string } | null;
-    }>;
-  }>;
+  sections: EstimateSection[];
 };
 
 export default function EstimateDetailPage({
@@ -71,19 +79,33 @@ export default function EstimateDetailPage({
   const [updating, setUpdating] = useState(false);
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [applyingFinance, setApplyingFinance] = useState(false);
-  const [separateMargins, setSeparateMargins] = useState(false);
-  const [financeForm, setFinanceForm] = useState({
-    profitMarginOverall: 20,
-    profitMarginMaterials: 20,
-    profitMarginLabor: 20,
-    taxationType: "CASH" as "CASH" | "FOP" | "VAT",
-    financeNotes: "",
-  });
+
+  // Financial form state
+  const [globalMargin, setGlobalMargin] = useState(20);
+  const [logisticsCost, setLogisticsCost] = useState(0);
+  const [taxationType, setTaxationType] = useState<"CASH" | "FOP" | "VAT">("CASH");
+  const [financeNotes, setFinanceNotes] = useState("");
+  const [itemMargins, setItemMargins] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetch(`/api/admin/estimates/${id}`)
       .then((r) => r.json())
-      .then(({ data }) => setEstimate(data));
+      .then(({ data }) => {
+        setEstimate(data);
+        // Initialize item margins from existing data
+        const margins: Record<string, number> = {};
+        data.sections?.forEach((section: EstimateSection) => {
+          section.items.forEach((item) => {
+            if (item.useCustomMargin && item.customMarginPercent) {
+              margins[item.id] = item.customMarginPercent;
+            } else {
+              margins[item.id] = 20; // Default
+            }
+          });
+        });
+        setItemMargins(margins);
+        setLogisticsCost(data.logisticsCost || 0);
+      });
   }, [id]);
 
   async function updateStatus(status: string) {
@@ -100,21 +122,34 @@ export default function EstimateDetailPage({
     }
   }
 
+  function applyGlobalMargin() {
+    const newMargins = { ...itemMargins };
+    estimate?.sections.forEach((section) => {
+      section.items.forEach((item) => {
+        newMargins[item.id] = globalMargin;
+      });
+    });
+    setItemMargins(newMargins);
+  }
+
+  function updateItemMargin(itemId: string, value: number) {
+    setItemMargins((prev) => ({ ...prev, [itemId]: value }));
+  }
+
   async function applyFinancialSettings() {
+    if (!estimate) return;
+
     setApplyingFinance(true);
     try {
-      const body = separateMargins
-        ? {
-            profitMarginMaterials: financeForm.profitMarginMaterials,
-            profitMarginLabor: financeForm.profitMarginLabor,
-            taxationType: financeForm.taxationType,
-            financeNotes: financeForm.financeNotes,
-          }
-        : {
-            profitMarginOverall: financeForm.profitMarginOverall,
-            taxationType: financeForm.taxationType,
-            financeNotes: financeForm.financeNotes,
-          };
+      const body = {
+        itemMargins: Object.entries(itemMargins).map(([itemId, marginPercent]) => ({
+          itemId,
+          marginPercent,
+        })),
+        logisticsCost,
+        taxationType,
+        financeNotes,
+      };
 
       const res = await fetch(`/api/admin/estimates/${id}/finance`, {
         method: "PATCH",
@@ -123,12 +158,12 @@ export default function EstimateDetailPage({
       });
 
       if (res.ok) {
-        const { data } = await res.json();
-        // Reload estimate to get updated financial data
+        // Reload estimate
         const estimateRes = await fetch(`/api/admin/estimates/${id}`);
         const estimateData = await estimateRes.json();
         setEstimate(estimateData.data);
         setFinanceModalOpen(false);
+        alert("Фінансові налаштування успішно застосовано!");
       } else {
         const error = await res.json();
         alert(error.error || "Помилка застосування фінансових налаштувань");
@@ -145,30 +180,34 @@ export default function EstimateDetailPage({
   const calculatePreview = () => {
     if (!estimate) return null;
 
-    const baseTotal = estimate.totalAmount;
-    let profitAmount = 0;
+    let totalWithMargins = 0;
 
-    if (separateMargins) {
-      const materialsProfit = estimate.totalMaterials * (financeForm.profitMarginMaterials / 100);
-      const laborProfit = (estimate.totalLabor + estimate.totalOverhead) * (financeForm.profitMarginLabor / 100);
-      profitAmount = materialsProfit + laborProfit;
-    } else {
-      profitAmount = baseTotal * (financeForm.profitMarginOverall / 100);
-    }
+    // Calculate each item with its margin
+    estimate.sections.forEach((section) => {
+      section.items.forEach((item) => {
+        const margin = itemMargins[item.id] || 0;
+        const itemWithMargin = item.amount * (1 + margin / 100);
+        totalWithMargins += itemWithMargin;
+      });
+    });
 
-    const totalWithProfit = baseTotal + profitAmount;
+    // Add logistics
+    const totalWithLogistics = totalWithMargins + logisticsCost;
 
+    // Calculate tax
     let taxRate = 0;
-    if (financeForm.taxationType === "FOP") taxRate = 6;
-    if (financeForm.taxationType === "VAT") taxRate = 20;
+    if (taxationType === "FOP") taxRate = 6;
+    if (taxationType === "VAT") taxRate = 20;
 
-    const taxAmount = totalWithProfit * (taxRate / 100);
-    const finalPrice = totalWithProfit + taxAmount;
+    const taxAmount = totalWithLogistics * (taxRate / 100);
+    const finalPrice = totalWithLogistics + taxAmount;
 
     return {
-      baseTotal,
-      profitAmount,
-      totalWithProfit,
+      baseTotal: estimate.totalAmount,
+      totalWithMargins,
+      profitAmount: totalWithMargins - estimate.totalAmount,
+      logisticsCost,
+      totalWithLogistics,
       taxRate,
       taxAmount,
       finalPrice,
@@ -204,7 +243,7 @@ export default function EstimateDetailPage({
           </p>
         </div>
         <div className="flex gap-2">
-          {/* Financial settings button (for FINANCIER and SUPER_ADMIN) */}
+          {/* Financial settings button */}
           {(session?.user?.role === "FINANCIER" || session?.user?.role === "SUPER_ADMIN") && (
             <Button
               variant="outline"
@@ -226,27 +265,6 @@ export default function EstimateDetailPage({
               <Send className="h-4 w-4" />
               Надіслати клієнту
             </Button>
-          )}
-          {estimate.status === "SENT" && (
-            <>
-              <Button
-                size="sm"
-                disabled={updating}
-                onClick={() => updateStatus("APPROVED")}
-              >
-                <CheckCircle className="h-4 w-4" />
-                Затвердити
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={updating}
-                onClick={() => updateStatus("REJECTED")}
-              >
-                <XCircle className="h-4 w-4" />
-                Відхилити
-              </Button>
-            </>
           )}
         </div>
       </div>
@@ -321,20 +339,21 @@ export default function EstimateDetailPage({
             <span className="font-medium">{formatCurrency(Number(estimate.totalAmount))}</span>
           </div>
 
-          {/* Financial calculations (if applied) */}
+          {/* Financial calculations */}
           {estimate.profitAmount > 0 && (
             <>
               <div className="flex justify-between text-green-600">
-                <span>Рентабельність ({Number(estimate.profitMarginOverall)}%)</span>
+                <span>Рентабельність</span>
                 <span>+{formatCurrency(Number(estimate.profitAmount))}</span>
               </div>
-              <div className="flex justify-between border-t pt-2">
-                <span className="font-medium">З рентабельністю</span>
-                <span className="font-medium">
-                  {formatCurrency(Number(estimate.totalAmount) + Number(estimate.profitAmount))}
-                </span>
-              </div>
             </>
+          )}
+
+          {estimate.logisticsCost > 0 && (
+            <div className="flex justify-between text-blue-600">
+              <span>Логістика</span>
+              <span>+{formatCurrency(Number(estimate.logisticsCost))}</span>
+            </div>
           )}
 
           {estimate.taxAmount > 0 && (
@@ -370,17 +389,17 @@ export default function EstimateDetailPage({
       {/* Finance Modal */}
       {financeModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <Card className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 space-y-6">
               {/* Header */}
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between sticky top-0 bg-white z-10 pb-4 border-b">
                 <div>
                   <h3 className="text-lg font-bold flex items-center gap-2">
                     <Calculator className="h-5 w-5 text-green-600" />
                     Налаштування фінансів
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Додайте рентабельність та оберіть тип оподаткування
+                    Встановіть рентабельність для кожної позиції
                   </p>
                 </div>
                 <Button
@@ -389,118 +408,101 @@ export default function EstimateDetailPage({
                   onClick={() => setFinanceModalOpen(false)}
                   disabled={applyingFinance}
                 >
-                  <XCircle className="h-4 w-4" />
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
 
-              {/* Current totals */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-muted/30 rounded-lg">
+              {/* Global margin controls */}
+              <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div>
-                  <p className="text-xs text-muted-foreground">Матеріали</p>
-                  <p className="font-semibold">{formatCurrency(Number(estimate.totalMaterials))}</p>
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Percent className="h-4 w-4" />
+                    Загальна рентабельність
+                  </label>
+                  <div className="flex items-center gap-3 mt-2">
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={globalMargin}
+                      onChange={(e) => setGlobalMargin(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <input
+                      type="number"
+                      value={globalMargin}
+                      onChange={(e) => setGlobalMargin(Number(e.target.value))}
+                      className="w-20 rounded border px-2 py-1 text-sm text-right"
+                    />
+                    <span className="text-sm">%</span>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Роботи</p>
-                  <p className="font-semibold">{formatCurrency(Number(estimate.totalLabor))}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Сира вартість</p>
-                  <p className="font-semibold text-primary">{formatCurrency(Number(estimate.totalAmount))}</p>
+                <div className="flex items-end">
+                  <Button
+                    onClick={applyGlobalMargin}
+                    variant="outline"
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white border-blue-700"
+                  >
+                    Застосувати до всіх позицій
+                  </Button>
                 </div>
               </div>
 
-              {/* Profit margin settings */}
+              {/* Items list with individual margins */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <label className="text-sm font-medium">Рентабельність</label>
-                  <button
-                    onClick={() => setSeparateMargins(!separateMargins)}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    {separateMargins ? "Загальна" : "Окремо для матеріалів і робіт"}
-                  </button>
-                </div>
-
-                {!separateMargins ? (
-                  <div>
-                    <label className="text-sm text-muted-foreground">Загальна рентабельність</label>
-                    <div className="flex items-center gap-3 mt-2">
-                      <input
-                        type="range"
-                        min="0"
-                        max="50"
-                        step="1"
-                        value={financeForm.profitMarginOverall}
-                        onChange={(e) =>
-                          setFinanceForm((p) => ({ ...p, profitMarginOverall: Number(e.target.value) }))
-                        }
-                        className="flex-1"
-                      />
-                      <input
-                        type="number"
-                        value={financeForm.profitMarginOverall}
-                        onChange={(e) =>
-                          setFinanceForm((p) => ({ ...p, profitMarginOverall: Number(e.target.value) }))
-                        }
-                        className="w-20 rounded border px-2 py-1 text-sm text-right"
-                      />
-                      <span className="text-sm">%</span>
+                <h4 className="font-medium">Індивідуальна рентабельність по позиціях:</h4>
+                {estimate.sections.map((section) => (
+                  <div key={section.id} className="space-y-2">
+                    <div className="text-sm font-medium text-primary bg-primary/10 px-3 py-1.5 rounded">
+                      {section.title}
                     </div>
+                    {section.items.map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{item.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatCurrency(item.amount)} • {item.quantity} {item.unit}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={itemMargins[item.id] || 0}
+                            onChange={(e) => updateItemMargin(item.id, Number(e.target.value))}
+                            className="w-20 rounded border px-2 py-1 text-sm text-right"
+                            min="0"
+                            max="200"
+                          />
+                          <span className="text-sm text-muted-foreground">%</span>
+                          <span className="text-sm font-medium text-green-600 w-24 text-right">
+                            +{formatCurrency(item.amount * (itemMargins[item.id] || 0) / 100)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : (
-                  <>
-                    <div>
-                      <label className="text-sm text-muted-foreground">Рентабельність матеріалів</label>
-                      <div className="flex items-center gap-3 mt-2">
-                        <input
-                          type="range"
-                          min="0"
-                          max="50"
-                          step="1"
-                          value={financeForm.profitMarginMaterials}
-                          onChange={(e) =>
-                            setFinanceForm((p) => ({ ...p, profitMarginMaterials: Number(e.target.value) }))
-                          }
-                          className="flex-1"
-                        />
-                        <input
-                          type="number"
-                          value={financeForm.profitMarginMaterials}
-                          onChange={(e) =>
-                            setFinanceForm((p) => ({ ...p, profitMarginMaterials: Number(e.target.value) }))
-                          }
-                          className="w-20 rounded border px-2 py-1 text-sm text-right"
-                        />
-                        <span className="text-sm">%</span>
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-sm text-muted-foreground">Рентабельність робіт</label>
-                      <div className="flex items-center gap-3 mt-2">
-                        <input
-                          type="range"
-                          min="0"
-                          max="50"
-                          step="1"
-                          value={financeForm.profitMarginLabor}
-                          onChange={(e) =>
-                            setFinanceForm((p) => ({ ...p, profitMarginLabor: Number(e.target.value) }))
-                          }
-                          className="flex-1"
-                        />
-                        <input
-                          type="number"
-                          value={financeForm.profitMarginLabor}
-                          onChange={(e) =>
-                            setFinanceForm((p) => ({ ...p, profitMarginLabor: Number(e.target.value) }))
-                          }
-                          className="w-20 rounded border px-2 py-1 text-sm text-right"
-                        />
-                        <span className="text-sm">%</span>
-                      </div>
-                    </div>
-                  </>
-                )}
+                ))}
+              </div>
+
+              {/* Logistics cost */}
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <label className="text-sm font-medium flex items-center gap-2">
+                  <Truck className="h-4 w-4" />
+                  Вартість логістики
+                </label>
+                <div className="flex items-center gap-3 mt-2">
+                  <input
+                    type="number"
+                    value={logisticsCost}
+                    onChange={(e) => setLogisticsCost(Number(e.target.value))}
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    min="0"
+                    step="100"
+                    placeholder="0"
+                  />
+                  <span className="text-sm text-muted-foreground">₴</span>
+                </div>
               </div>
 
               {/* Tax type */}
@@ -508,9 +510,9 @@ export default function EstimateDetailPage({
                 <label className="text-sm font-medium">Тип оподаткування</label>
                 <div className="grid grid-cols-3 gap-2 mt-2">
                   <button
-                    onClick={() => setFinanceForm((p) => ({ ...p, taxationType: "CASH" }))}
+                    onClick={() => setTaxationType("CASH")}
                     className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
-                      financeForm.taxationType === "CASH"
+                      taxationType === "CASH"
                         ? "border-green-500 bg-green-50 text-green-700"
                         : "border-border hover:border-green-200"
                     }`}
@@ -519,9 +521,9 @@ export default function EstimateDetailPage({
                     <div className="text-xs text-muted-foreground mt-1">Без податків</div>
                   </button>
                   <button
-                    onClick={() => setFinanceForm((p) => ({ ...p, taxationType: "FOP" }))}
+                    onClick={() => setTaxationType("FOP")}
                     className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
-                      financeForm.taxationType === "FOP"
+                      taxationType === "FOP"
                         ? "border-blue-500 bg-blue-50 text-blue-700"
                         : "border-border hover:border-blue-200"
                     }`}
@@ -530,9 +532,9 @@ export default function EstimateDetailPage({
                     <div className="text-xs text-muted-foreground mt-1">3-я група, 6%</div>
                   </button>
                   <button
-                    onClick={() => setFinanceForm((p) => ({ ...p, taxationType: "VAT" }))}
+                    onClick={() => setTaxationType("VAT")}
                     className={`p-3 rounded-lg border-2 text-sm font-medium transition-colors ${
-                      financeForm.taxationType === "VAT"
+                      taxationType === "VAT"
                         ? "border-orange-500 bg-orange-50 text-orange-700"
                         : "border-border hover:border-orange-200"
                     }`}
@@ -556,17 +558,21 @@ export default function EstimateDetailPage({
                       <span>+ Рентабельність:</span>
                       <span className="font-medium">{formatCurrency(preview.profitAmount)}</span>
                     </div>
+                    {preview.logisticsCost > 0 && (
+                      <div className="flex justify-between text-blue-600">
+                        <span>+ Логістика:</span>
+                        <span className="font-medium">{formatCurrency(preview.logisticsCost)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between border-t border-green-200 pt-1">
-                      <span>Разом з рентабельністю:</span>
-                      <span className="font-medium">{formatCurrency(preview.totalWithProfit)}</span>
+                      <span>Разом з рентабельністю та логістикою:</span>
+                      <span className="font-medium">{formatCurrency(preview.totalWithLogistics)}</span>
                     </div>
                     {preview.taxRate > 0 && (
-                      <>
-                        <div className="flex justify-between text-orange-600">
-                          <span>+ Податок ({preview.taxRate}%):</span>
-                          <span className="font-medium">{formatCurrency(preview.taxAmount)}</span>
-                        </div>
-                      </>
+                      <div className="flex justify-between text-orange-600">
+                        <span>+ Податок ({preview.taxRate}%):</span>
+                        <span className="font-medium">{formatCurrency(preview.taxAmount)}</span>
+                      </div>
                     )}
                     <div className="flex justify-between border-t-2 border-green-300 pt-2 text-base font-bold text-green-700">
                       <span>ФІНАЛЬНА ЦІНА ДЛЯ КЛІЄНТА:</span>
@@ -580,8 +586,8 @@ export default function EstimateDetailPage({
               <div>
                 <label className="text-sm font-medium">Примітки (опціонально)</label>
                 <textarea
-                  value={financeForm.financeNotes}
-                  onChange={(e) => setFinanceForm((p) => ({ ...p, financeNotes: e.target.value }))}
+                  value={financeNotes}
+                  onChange={(e) => setFinanceNotes(e.target.value)}
                   placeholder="Додаткові примітки..."
                   className="w-full mt-2 rounded border px-3 py-2 text-sm outline-none focus:border-primary"
                   rows={3}
@@ -589,7 +595,7 @@ export default function EstimateDetailPage({
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 justify-end pt-4 border-t">
+              <div className="flex gap-2 justify-end pt-4 border-t sticky bottom-0 bg-white">
                 <Button
                   variant="outline"
                   onClick={() => setFinanceModalOpen(false)}

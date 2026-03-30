@@ -21,21 +21,21 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const {
-      profitMarginMaterials,
-      profitMarginLabor,
-      profitMarginOverall,
+      itemMargins, // Array<{ itemId: string, marginPercent: number }>
+      logisticsCost,
       taxationType,
       financeNotes,
     } = body;
 
-    // Get current estimate
+    // Get current estimate with all items
     const estimate = await prisma.estimate.findUnique({
       where: { id },
-      select: {
-        totalMaterials: true,
-        totalLabor: true,
-        totalOverhead: true,
-        totalAmount: true,
+      include: {
+        sections: {
+          include: {
+            items: true,
+          },
+        },
       },
     });
 
@@ -46,70 +46,89 @@ export async function PATCH(
       );
     }
 
-    // Calculate profit
-    const materials = new Decimal(estimate.totalMaterials.toString());
-    const labor = new Decimal(estimate.totalLabor.toString());
-    const overhead = new Decimal(estimate.totalOverhead.toString());
-    const baseTotal = materials.plus(labor).plus(overhead);
+    // Create margin lookup map
+    const marginMap = new Map<string, number>();
+    itemMargins?.forEach((im: { itemId: string; marginPercent: number }) => {
+      marginMap.set(im.itemId, im.marginPercent);
+    });
 
-    let profitAmount = new Decimal(0);
+    // Calculate profit for each item and update
+    let totalProfitAmount = new Decimal(0);
+    let baseTotal = new Decimal(0);
 
-    // If individual margins specified for materials and labor
-    if (profitMarginMaterials !== undefined && profitMarginLabor !== undefined) {
-      const materialsProfit = materials.times(new Decimal(profitMarginMaterials).div(100));
-      const laborProfit = labor.plus(overhead).times(new Decimal(profitMarginLabor).div(100));
-      profitAmount = materialsProfit.plus(laborProfit);
-    } else {
-      // Use overall profit margin
-      const margin = new Decimal(profitMarginOverall || 20);
-      profitAmount = baseTotal.times(margin.div(100));
-    }
+    await prisma.$transaction(async (tx) => {
+      // Update each item with its margin
+      for (const section of estimate.sections) {
+        for (const item of section.items) {
+          const itemAmount = new Decimal(item.amount.toString());
+          baseTotal = baseTotal.plus(itemAmount);
 
-    const totalWithProfit = baseTotal.plus(profitAmount);
+          const marginPercent = marginMap.get(item.id) || 0;
+          const marginAmount = itemAmount.times(new Decimal(marginPercent).div(100));
+          const priceWithMargin = itemAmount.plus(marginAmount);
 
-    // Calculate tax
-    let taxRate = new Decimal(0);
-    let taxAmount = new Decimal(0);
+          totalProfitAmount = totalProfitAmount.plus(marginAmount);
 
-    if (taxationType === "FOP") {
-      taxRate = new Decimal(6);
-      taxAmount = totalWithProfit.times(taxRate.div(100));
-    } else if (taxationType === "VAT") {
-      taxRate = new Decimal(20);
-      taxAmount = totalWithProfit.times(taxRate.div(100));
-    }
-    // CASH = 0% tax
+          // Update item
+          await tx.estimateItem.update({
+            where: { id: item.id },
+            data: {
+              useCustomMargin: true,
+              customMarginPercent: new Decimal(marginPercent),
+              marginAmount: marginAmount.toDecimalPlaces(2),
+              priceWithMargin: priceWithMargin.toDecimalPlaces(2),
+            },
+          });
+        }
+      }
 
-    const finalClientPrice = totalWithProfit.plus(taxAmount);
+      // Add logistics cost to total
+      const logisticsCostDecimal = new Decimal(logisticsCost || 0);
+      const totalWithProfitAndLogistics = baseTotal.plus(totalProfitAmount).plus(logisticsCostDecimal);
 
-    // Update estimate
-    const updated = await prisma.estimate.update({
+      // Calculate tax
+      let taxRate = new Decimal(0);
+      let taxAmount = new Decimal(0);
+
+      if (taxationType === "FOP") {
+        taxRate = new Decimal(6);
+        taxAmount = totalWithProfitAndLogistics.times(taxRate.div(100));
+      } else if (taxationType === "VAT") {
+        taxRate = new Decimal(20);
+        taxAmount = totalWithProfitAndLogistics.times(taxRate.div(100));
+      }
+      // CASH = 0% tax
+
+      const finalClientPrice = totalWithProfitAndLogistics.plus(taxAmount);
+
+      // Update estimate
+      await tx.estimate.update({
+        where: { id },
+        data: {
+          profitAmount: totalProfitAmount.toDecimalPlaces(2),
+          logisticsCost: logisticsCostDecimal.toDecimalPlaces(2),
+          taxationType: taxationType || null,
+          taxRate: taxRate.toDecimalPlaces(2),
+          taxAmount: taxAmount.toDecimalPlaces(2),
+          finalClientPrice: finalClientPrice.toDecimalPlaces(2),
+          finalAmount: finalClientPrice.toDecimalPlaces(2),
+          financeReviewedById: session.user.id,
+          financeReviewedAt: new Date(),
+          financeNotes: financeNotes || null,
+          status: "APPROVED", // Move to APPROVED after finance review
+        },
+      });
+    });
+
+    // Get updated estimate
+    const updated = await prisma.estimate.findUnique({
       where: { id },
-      data: {
-        profitMarginMaterials: profitMarginMaterials !== undefined
-          ? new Decimal(profitMarginMaterials)
-          : null,
-        profitMarginLabor: profitMarginLabor !== undefined
-          ? new Decimal(profitMarginLabor)
-          : null,
-        profitMarginOverall: profitMarginOverall !== undefined
-          ? new Decimal(profitMarginOverall)
-          : new Decimal(20),
-        profitAmount: profitAmount.toDecimalPlaces(2),
-        taxationType: taxationType || null,
-        taxRate: taxRate.toDecimalPlaces(2),
-        taxAmount: taxAmount.toDecimalPlaces(2),
-        finalClientPrice: finalClientPrice.toDecimalPlaces(2),
-        financeReviewedById: session.user.id,
-        financeReviewedAt: new Date(),
-        financeNotes: financeNotes || null,
-        status: "APPROVED", // Move to APPROVED after finance review
-      },
       select: {
         id: true,
         number: true,
         totalAmount: true,
         profitAmount: true,
+        logisticsCost: true,
         taxationType: true,
         taxRate: true,
         taxAmount: true,
@@ -126,11 +145,10 @@ export async function PATCH(
         entityId: id,
         userId: session.user.id,
         newData: {
-          profitMarginMaterials,
-          profitMarginLabor,
-          profitMarginOverall,
+          itemMarginsCount: itemMargins?.length || 0,
+          logisticsCost,
           taxationType,
-          finalClientPrice: finalClientPrice.toNumber(),
+          finalClientPrice: updated?.finalClientPrice.toString(),
         },
       },
     });
@@ -139,10 +157,10 @@ export async function PATCH(
       data: updated,
       message: "Фінансові налаштування застосовано",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error applying financial settings:", error);
     return NextResponse.json(
-      { error: "Помилка застосування фінансових налаштувань" },
+      { error: error.message || "Помилка застосування фінансових налаштувань" },
       { status: 500 }
     );
   }
