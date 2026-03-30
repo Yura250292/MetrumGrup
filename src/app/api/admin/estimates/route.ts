@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
         totalAmount,
         finalAmount: totalAmount,
         sections: {
-          create: sectionsData.map(section => ({
+          create: sectionsData.map((section: { title: string; sortOrder: number }) => ({
             title: section.title,
             sortOrder: section.sortOrder,
           })),
