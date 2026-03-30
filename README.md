@@ -1,0 +1,166 @@
+# Metrum Group - Construction Management System
+
+Професійна система управління будівельними проєктами для будівельної компанії Metrum Group.
+
+## 🏗️ Основний функціонал
+
+### Для адміністраторів і менеджерів
+- **Управління проєктами**: повний контроль над будівельними проєктами
+- **Система кошторисів**: створення, затвердження та редагування кошторисів
+- **AI-генерація кошторисів**: автоматична генерація кошторисів за допомогою Gemini, Claude та OpenAI
+- **Workflow кошторисів**: Інженер → Фінансист → Клієнт
+- **Управління фінансами**: графіки платежів, акти виконаних робіт
+- **Фотозвіти**: документування прогресу будівництва
+- **Довідники**: матеріали, розцінки на роботи
+- **Управління ресурсами**: склад, обладнання, робітники
+- **CMS**: управління публічним сайтом (портфоліо, новини, сторінки)
+
+### Для клієнтів
+- **Особистий кабінет**: перегляд своїх проєктів
+- **Відстеження прогресу**: етапи будівництва з прогрес-барами
+- **Фінансовий контроль**: графіки платежів, акти виконаних робіт
+- **Фотозвіти**: перегляд актуальних фото з об'єкту
+- **Документи**: доступ до важливих документів проєкту
+- **Сповіщення**: важливі оновлення по проєкту
+
+## 🎨 Технології
+
+- **Frontend**: Next.js 16, React 19, TypeScript
+- **Styling**: Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Database**: PostgreSQL, Prisma ORM
+- **Authentication**: NextAuth.js v5
+- **AI Integration**:
+  - Google Gemini - генерація кошторисів
+  - Anthropic Claude - аналіз архітектурних планів
+  - OpenAI - інженерне редагування кошторисів
+
+## 🚀 Встановлення
+
+### Передумови
+- Node.js 18+
+- PostgreSQL 14+
+- npm або yarn
+
+### Крок 1: Клонування репозиторію
+```bash
+git clone https://github.com/Yura250292/MetrumGrup.git
+cd MetrumGrup
+```
+
+### Крок 2: Встановлення залежностей
+```bash
+npm install
+```
+
+### Крок 3: Налаштування бази даних
+1. Створіть PostgreSQL базу даних
+2. Скопіюйте `.env.example` в `.env`
+3. Налаштуйте змінні оточення:
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/metrum_group"
+AUTH_SECRET="your-secret-key"
+AUTH_URL="http://localhost:3000"
+
+# AI API Keys (опціонально)
+GEMINI_API_KEY="your-gemini-key"
+ANTHROPIC_API_KEY="your-anthropic-key"
+OPENAI_API_KEY="your-openai-key"
+```
+
+### Крок 4: Міграція та seed бази даних
+```bash
+npm run db:push
+npm run db:seed
+```
+
+### Крок 5: Запуск dev сервера
+```bash
+npm run dev
+```
+
+Відкрийте [http://localhost:3000](http://localhost:3000)
+
+## 🔐 Тестові акаунти
+
+Після виконання `npm run db:seed` будуть доступні наступні акаунти:
+
+- **Адміністратор**: admin@metrum.group / password123
+- **Менеджер**: manager@metrum.group / password123
+- **Клієнт 1**: client@example.com / password123
+- **Клієнт 2**: client2@example.com / password123
+
+## 📁 Структура проєкту
+
+```
+metrum-group/
+├── prisma/
+│   ├── schema.prisma        # Prisma схема БД
+│   └── seed.ts             # Тестові дані
+├── public/                 # Статичні файли
+├── src/
+│   ├── app/               # Next.js App Router
+│   │   ├── (auth)/       # Сторінки авторизації
+│   │   ├── admin/        # Адмін панель
+│   │   ├── dashboard/    # Клієнтський кабінет
+│   │   └── api/          # API endpoints
+│   ├── components/       # React компоненти
+│   │   ├── ui/          # Базові UI компоненти
+│   │   ├── dashboard/   # Компоненти клієнтського кабінету
+│   │   ├── landing/     # Компоненти лендінгу
+│   │   └── layout/      # Компоненти макету
+│   ├── lib/             # Утиліти та хелпери
+│   │   ├── auth.ts      # NextAuth конфігурація
+│   │   ├── prisma.ts    # Prisma клієнт
+│   │   └── utils/       # Утиліти
+│   └── types/           # TypeScript типи
+└── package.json
+```
+
+## 🎯 Основні можливості
+
+### Ролі користувачів
+- **SUPER_ADMIN**: повний доступ до всіх функцій
+- **MANAGER**: управління проєктами, кошторисами
+- **ENGINEER**: прораховує кошториси, вносить правки
+- **FINANCIER**: перевіряє та звіряє цифри
+- **CLIENT**: перегляд свого проєкту
+- **USER**: базовий доступ
+
+### Етапи будівництва
+1. Проєктування (DESIGN)
+2. Фундамент (FOUNDATION)
+3. Стіни (WALLS)
+4. Покрівля (ROOF)
+5. Інженерія (ENGINEERING)
+6. Оздоблення (FINISHING)
+7. Здача об'єкта (HANDOVER)
+
+### Статуси проєктів
+- DRAFT - Чернетка
+- ACTIVE - Активний
+- ON_HOLD - Призупинено
+- COMPLETED - Завершено
+- CANCELLED - Скасовано
+
+## 🛠️ Команди npm
+
+```bash
+npm run dev          # Запуск dev сервера
+npm run build        # Збірка для продакшну
+npm run start        # Запуск продакшн сервера
+npm run lint         # Перевірка коду
+npm run db:generate  # Генерація Prisma клієнта
+npm run db:push      # Синхронізація схеми БД
+npm run db:seed      # Заповнення БД тестовими даними
+npm run db:studio    # Відкриття Prisma Studio
+```
+
+## 📝 Ліцензія
+
+© 2024 Metrum Group. Всі права захищено.
+
+## 👥 Команда
+
+Розроблено з ❤️ для Metrum Group
