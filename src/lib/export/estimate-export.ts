@@ -216,10 +216,39 @@ export async function generateEstimatePDF(estimate: EstimateWithDetails): Promis
   };
 
   return new Promise<Buffer>((resolve, reject) => {
-    const pdfDocGenerator = pdfMake.createPdf(docDefinition);
-    (pdfDocGenerator as any).getBuffer((buffer: Buffer) => {
-      resolve(buffer);
-    }, reject);
+    // Timeout для дебагу (30 секунд)
+    const timeout = setTimeout(() => {
+      reject(new Error('PDF generation timeout after 30 seconds'));
+    }, 30000);
+
+    try {
+      console.log('[PDF] Creating pdfMake document...');
+      const pdfDocGenerator = pdfMake.createPdf(docDefinition);
+
+      console.log('[PDF] Calling getBase64...');
+      // Використовуємо getBase64 замість getBuffer (більш надійно для серверного рендерингу)
+      (pdfDocGenerator as any).getBase64((data: string) => {
+        try {
+          clearTimeout(timeout);
+          console.log('[PDF] Got base64 data, length:', data.length);
+          const buffer = Buffer.from(data, 'base64');
+          console.log('[PDF] Converted to buffer, size:', buffer.length);
+          resolve(buffer);
+        } catch (error) {
+          clearTimeout(timeout);
+          console.error('[PDF] Error converting base64 to buffer:', error);
+          reject(error);
+        }
+      }, (error: any) => {
+        clearTimeout(timeout);
+        console.error('[PDF] Error from pdfMake:', error);
+        reject(error);
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      console.error('[PDF] Error creating PDF:', error);
+      reject(error);
+    }
   });
 }
 

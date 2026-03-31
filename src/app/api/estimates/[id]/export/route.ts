@@ -60,11 +60,15 @@ export async function GET(
     let contentType: string;
 
     if (format === "excel") {
+      console.log('[Export] Generating Excel...');
       buffer = await generateEstimateExcel(estimate);
       filename = `Кошторис_${estimate.number}.xlsx`;
       contentType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+      console.log('[Export] Excel generated successfully, size:', buffer.length);
     } else {
+      console.log('[Export] Generating PDF...');
       buffer = await generateEstimatePDF(estimate);
+      console.log('[Export] PDF generated successfully, size:', buffer.length);
       filename = `Кошторис_${estimate.number}.pdf`;
       contentType = "application/pdf";
     }
