@@ -22,10 +22,10 @@ export default async function ProjectsListPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Мої проєкти</h1>
+      <h1 className="mb-4 text-xl md:text-2xl font-bold">Мої проєкти</h1>
 
       {projects.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
           {(projects as ProjectWithStages[]).map((project) => (
             <ProjectCard key={project.id} project={project} />
           ))}

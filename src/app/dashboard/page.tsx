@@ -42,17 +42,17 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">
+      <div className="mb-4 md:mb-6">
+        <h1 className="text-xl md:text-2xl font-bold">
           Вітаємо, {session.user.name?.split(" ")[0]}!
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <p className="mt-1 text-xs md:text-sm text-muted-foreground">
           Огляд ваших проєктів
         </p>
       </div>
 
       {/* Stats */}
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-6 md:mb-8 grid gap-3 md:gap-4 grid-cols-3">
         <StatsCard
           title="Активні проєкти"
           value={String(activeProjects.length)}
@@ -79,8 +79,8 @@ export default async function DashboardPage() {
       {/* Projects */}
       {projects.length > 0 ? (
         <div>
-          <h2 className="mb-4 text-lg font-semibold">Ваші проєкти</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <h2 className="mb-3 md:mb-4 text-base md:text-lg font-semibold">Ваші проєкти</h2>
+          <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
             {(projects as ProjectWithStages[]).map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
