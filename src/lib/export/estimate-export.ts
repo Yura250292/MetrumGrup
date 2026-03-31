@@ -95,7 +95,7 @@ export async function generateEstimatePDF(estimate: EstimateWithDetails): Promis
   }
 
   doc.setFontSize(12);
-  doc.setFont(undefined, "bold");
+  doc.setFont("helvetica", "bold");
   doc.text(
     `Разом до сплати: ${Number(estimate.finalAmount).toFixed(2)} грн`,
     130,
@@ -106,7 +106,7 @@ export async function generateEstimatePDF(estimate: EstimateWithDetails): Promis
   if (estimate.notes) {
     const notesY = finalY + (Number(estimate.discount) > 0 ? 42 : 36);
     doc.setFontSize(9);
-    doc.setFont(undefined, "normal");
+    doc.setFont("helvetica", "normal");
     doc.text("Примітки:", 14, notesY);
     const notesLines = doc.splitTextToSize(estimate.notes, 180);
     doc.text(notesLines, 14, notesY + 5);
