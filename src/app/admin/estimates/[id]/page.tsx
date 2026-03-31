@@ -9,7 +9,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
+// import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard"; // TEMPORARILY DISABLED
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -424,8 +424,8 @@ export default function EstimateDetailPage({
         </Card>
       ))}
 
-      {/* Tax Breakdown */}
-      {estimate.taxationType && estimate.taxationType !== "CASH" && estimate.taxCalculationDetails && (
+      {/* Tax Breakdown - TEMPORARILY DISABLED until DB migration on production */}
+      {/* {estimate.taxationType && estimate.taxationType !== "CASH" && estimate.taxCalculationDetails && (
         <TaxBreakdownCard
           taxationType={estimate.taxationType as "VAT" | "FOP"}
           taxBreakdown={{
@@ -442,7 +442,7 @@ export default function EstimateDetailPage({
           totalMargin={Number(estimate.profitAmount)}
           className="mb-4"
         />
-      )}
+      )} */}
 
       {/* Totals */}
       <Card className="p-5">
