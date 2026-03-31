@@ -80,8 +80,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const role = auth.user.role;
 
-        // Admins/Managers on /dashboard → redirect to /admin
-        if (isOnDashboard && (role === "SUPER_ADMIN" || role === "MANAGER")) {
+        // Admins/Managers/Engineers/Financiers on /dashboard → redirect to /admin
+        if (isOnDashboard && ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"].includes(role)) {
           return Response.redirect(new URL("/admin", nextUrl));
         }
 

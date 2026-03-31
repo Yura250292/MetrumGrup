@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
@@ -15,7 +15,19 @@ export async function GET() {
   }
 
   try {
+    const { searchParams } = new URL(request.url);
+    const statusFilter = searchParams.get("status");
+
+    // Build where clause
+    const where: any = {};
+    if (statusFilter) {
+      // Support multiple statuses separated by comma
+      const statuses = statusFilter.split(",").map(s => s.trim());
+      where.status = { in: statuses };
+    }
+
     const estimates = await prisma.estimate.findMany({
+      where,
       include: {
         project: { select: { title: true, client: { select: { name: true } } } },
         createdBy: { select: { name: true } },
