@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, FolderKanban, Bell, User } from "lucide-react";
+import { LayoutDashboard, FolderKanban, Bell, User, LogOut } from "lucide-react";
 
 const navItems = [
   { href: "/dashboard", label: "Огляд", icon: LayoutDashboard },
@@ -40,6 +41,15 @@ export function ClientBottomNav() {
             </Link>
           );
         })}
+
+        {/* Logout button */}
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="flex flex-col items-center gap-1 rounded-xl px-4 py-2 transition-all duration-200 text-muted-foreground active:bg-muted/50"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="text-[10px]">Вийти</span>
+        </button>
       </div>
     </nav>
   );

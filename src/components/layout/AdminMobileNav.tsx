@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, Building2, FileText, Users } from "lucide-react";
+import { LayoutDashboard, Building2, FileText, Users, LogOut } from "lucide-react";
 
 const navItems = [
   { href: "/admin", label: "Головна", icon: LayoutDashboard },
@@ -40,6 +41,15 @@ export function AdminMobileNav() {
             </Link>
           );
         })}
+
+        {/* Logout button */}
+        <button
+          onClick={() => signOut({ callbackUrl: "/login" })}
+          className="flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition-all duration-200 text-muted-foreground active:bg-muted/50"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="text-[10px] font-medium">Вийти</span>
+        </button>
       </div>
     </nav>
   );
