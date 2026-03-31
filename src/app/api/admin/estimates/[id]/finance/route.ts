@@ -168,7 +168,7 @@ export async function PATCH(
             effectiveTaxRate: effectiveTaxRate.toNumber(),
             calculatedAt: new Date().toISOString(),
             taxationType,
-          } : null,
+          } : undefined,
           taxCalculatedAt: taxationType !== "CASH" ? new Date() : null,
 
           finalClientPrice: finalClientPrice.toDecimalPlaces(2),

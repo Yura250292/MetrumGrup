@@ -425,7 +425,7 @@ export default function EstimateDetailPage({
       ))}
 
       {/* Tax Breakdown */}
-      {estimate.taxationType && estimate.taxType !== "CASH" && estimate.taxCalculationDetails && (
+      {estimate.taxationType && estimate.taxationType !== "CASH" && estimate.taxCalculationDetails && (
         <TaxBreakdownCard
           taxationType={estimate.taxationType as "VAT" | "FOP"}
           taxBreakdown={{

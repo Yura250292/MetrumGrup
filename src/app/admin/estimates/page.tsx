@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import Link from "next/link";
-import { Plus, FileText, Sparkles } from "lucide-react";
+import { Plus, FileText, Sparkles, FileDown, FileSpreadsheet, Mail } from "lucide-react";
 import { redirect } from "next/navigation";
+import { EstimateActions } from "@/components/admin/EstimateActions";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -73,12 +74,12 @@ export default async function EstimatesPage() {
           {estimates.map((est) => (
             <Link key={est.id} href={`/admin/estimates/${est.id}`}>
               <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer mb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 min-w-0">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div className="rounded-lg bg-primary/10 p-2">
                       <FileText className="h-4 w-4 text-primary" />
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <p className="font-medium truncate">{est.title}</p>
                         <Badge className={STATUS_COLORS[est.status]}>
@@ -91,13 +92,21 @@ export default async function EstimatesPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold">{formatCurrency(Number(est.finalAmount))}</p>
-                    {Number(est.discount) > 0 && (
-                      <p className="text-xs text-muted-foreground line-through">
-                        {formatCurrency(Number(est.totalAmount))}
-                      </p>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="font-bold">{formatCurrency(Number(est.finalAmount))}</p>
+                      {Number(est.discount) > 0 && (
+                        <p className="text-xs text-muted-foreground line-through">
+                          {formatCurrency(Number(est.totalAmount))}
+                        </p>
+                      )}
+                    </div>
+                    <EstimateActions
+                      estimateId={est.id}
+                      estimateNumber={est.number}
+                      status={est.status}
+                      clientName={est.project.client.name}
+                    />
                   </div>
                 </div>
               </Card>
