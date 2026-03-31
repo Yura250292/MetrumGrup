@@ -102,50 +102,10 @@ export default async function ProjectFinancesPage({
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className="bg-green-100 text-green-700">Затверджено</Badge>
-                    <a
-                      href={`/api/estimates/${estimate.id}/export?format=pdf`}
-                      download
-                      className="hidden md:inline-flex"
-                    >
-                      <Button variant="outline" size="sm">
-                        <Download className="h-3.5 w-3.5 mr-1.5" />
-                        PDF
-                      </Button>
-                    </a>
-                    <a
-                      href={`/api/estimates/${estimate.id}/export?format=excel`}
-                      download
-                      className="hidden md:inline-flex"
-                    >
-                      <Button variant="outline" size="sm">
-                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
-                        Excel
-                      </Button>
-                    </a>
-                    {/* Mobile: Single dropdown */}
-                    <div className="md:hidden relative group">
-                      <Button variant="outline" size="sm">
-                        <Download className="h-3.5 w-3.5" />
-                      </Button>
-                      <div className="hidden group-active:block absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg z-10 min-w-[120px]">
-                        <a
-                          href={`/api/estimates/${estimate.id}/export?format=pdf`}
-                          download
-                          className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          PDF
-                        </a>
-                        <a
-                          href={`/api/estimates/${estimate.id}/export?format=excel`}
-                          download
-                          className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
-                        >
-                          <FileSpreadsheet className="h-3.5 w-3.5" />
-                          Excel
-                        </a>
-                      </div>
-                    </div>
+                    {/* Експорт кошторису може виконувати тільки адміністратор */}
+                    <p className="text-sm text-muted-foreground">
+                      Кошторис буде надіслано вам адміністратором
+                    </p>
                   </div>
                 </div>
               </Card>

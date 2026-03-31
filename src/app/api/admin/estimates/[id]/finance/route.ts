@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
+import { calculateTaxesLLCWithVAT, calculateTaxesFOP3rdGroup } from "@/lib/financial-calculations";
 
 // PATCH /api/admin/estimates/[id]/finance - Apply financial settings (FINANCIER only)
 export async function PATCH(
@@ -84,24 +85,65 @@ export async function PATCH(
 
       // Add logistics cost to total
       const logisticsCostDecimal = new Decimal(logisticsCost || 0);
-      const totalWithProfitAndLogistics = baseTotal.plus(totalProfitAmount).plus(logisticsCostDecimal);
+      const subtotal = baseTotal.plus(totalProfitAmount);
+      const totalWithProfitAndLogistics = subtotal.plus(logisticsCostDecimal);
 
-      // Calculate tax
+      // Calculate detailed tax breakdown
       let taxRate = new Decimal(0);
       let taxAmount = new Decimal(0);
+      let pdvAmount = new Decimal(0);
+      let esvAmount = new Decimal(0);
+      let militaryTaxAmount = new Decimal(0);
+      let profitTaxAmount = new Decimal(0);
+      let unifiedTaxAmount = new Decimal(0);
+      let pdfoAmount = new Decimal(0);
+      let totalTaxBurden = new Decimal(0);
+      let netProfit = new Decimal(0);
+      let effectiveTaxRate = new Decimal(0);
 
       if (taxationType === "FOP") {
-        taxRate = new Decimal(6);
-        taxAmount = totalWithProfitAndLogistics.times(taxRate.div(100));
+        // ФОП 3 група - детальний розрахунок
+        const fopTaxes = calculateTaxesFOP3rdGroup({
+          subtotal: subtotal.toNumber(),
+          totalMargin: totalProfitAmount.toNumber(),
+        });
+
+        taxRate = new Decimal(5); // ВИПРАВЛЕНО: було 6%, правильно 5%
+        unifiedTaxAmount = new Decimal(fopTaxes.unifiedTaxAmount);
+        esvAmount = new Decimal(fopTaxes.esvAmount);
+        militaryTaxAmount = new Decimal(fopTaxes.militaryTaxAmount);
+        totalTaxBurden = new Decimal(fopTaxes.totalTaxAmount);
+        netProfit = new Decimal(fopTaxes.netProfit);
+        effectiveTaxRate = new Decimal(fopTaxes.effectiveTaxRate);
+
+        // Для клієнта показуємо тільки єдиний податок
+        taxAmount = unifiedTaxAmount;
       } else if (taxationType === "VAT") {
+        // ТОВ з ПДВ - детальний розрахунок
+        const vatTaxes = calculateTaxesLLCWithVAT({
+          subtotal: subtotal.toNumber(),
+          totalLabor: estimate.totalLabor.toNumber(),
+          totalMargin: totalProfitAmount.toNumber(),
+        });
+
         taxRate = new Decimal(20);
-        taxAmount = totalWithProfitAndLogistics.times(taxRate.div(100));
+        pdvAmount = new Decimal(vatTaxes.pdvAmount);
+        esvAmount = new Decimal(vatTaxes.esvAmount);
+        pdfoAmount = new Decimal(vatTaxes.pdfoAmount);
+        militaryTaxAmount = new Decimal(vatTaxes.militaryTaxAmount);
+        profitTaxAmount = new Decimal(vatTaxes.profitTaxAmount);
+        totalTaxBurden = new Decimal(vatTaxes.totalTaxAmount);
+        netProfit = new Decimal(vatTaxes.netProfit);
+        effectiveTaxRate = new Decimal(vatTaxes.effectiveTaxRate);
+
+        // Для клієнта показуємо тільки ПДВ (транзитний податок)
+        taxAmount = pdvAmount;
       }
       // CASH = 0% tax
 
       const finalClientPrice = totalWithProfitAndLogistics.plus(taxAmount);
 
-      // Update estimate
+      // Update estimate with detailed tax breakdown
       await tx.estimate.update({
         where: { id },
         data: {
@@ -110,6 +152,25 @@ export async function PATCH(
           taxationType: taxationType || null,
           taxRate: taxRate.toDecimalPlaces(2),
           taxAmount: taxAmount.toDecimalPlaces(2),
+
+          // Детальний розподіл податків
+          pdvAmount: pdvAmount.toDecimalPlaces(2),
+          esvAmount: esvAmount.toDecimalPlaces(2),
+          militaryTaxAmount: militaryTaxAmount.toDecimalPlaces(2),
+          profitTaxAmount: profitTaxAmount.toDecimalPlaces(2),
+          unifiedTaxAmount: unifiedTaxAmount.toDecimalPlaces(2),
+          pdfoAmount: pdfoAmount.toDecimalPlaces(2),
+
+          // Метадані розрахунків
+          taxCalculationDetails: taxationType !== "CASH" ? {
+            totalTaxAmount: totalTaxBurden.toNumber(),
+            netProfit: netProfit.toNumber(),
+            effectiveTaxRate: effectiveTaxRate.toNumber(),
+            calculatedAt: new Date().toISOString(),
+            taxationType,
+          } : null,
+          taxCalculatedAt: taxationType !== "CASH" ? new Date() : null,
+
           finalClientPrice: finalClientPrice.toDecimalPlaces(2),
           finalAmount: finalClientPrice.toDecimalPlaces(2),
           financeReviewedById: session.user.id,
@@ -118,6 +179,33 @@ export async function PATCH(
           status: "APPROVED", // Move to APPROVED after finance review
         },
       });
+
+      // Create tax record for audit trail (only for VAT and FOP)
+      if (taxationType === "VAT" || taxationType === "FOP") {
+        await tx.taxRecord.create({
+          data: {
+            estimateId: id,
+            taxationType: taxationType,
+            pdvAmount: pdvAmount.toDecimalPlaces(2),
+            esvAmount: esvAmount.toDecimalPlaces(2),
+            militaryTaxAmount: militaryTaxAmount.toDecimalPlaces(2),
+            profitTaxAmount: profitTaxAmount.toDecimalPlaces(2),
+            unifiedTaxAmount: unifiedTaxAmount.toDecimalPlaces(2),
+            pdfoAmount: pdfoAmount.toDecimalPlaces(2),
+            totalTaxAmount: totalTaxBurden.toDecimalPlaces(2),
+            netProfit: netProfit.toDecimalPlaces(2),
+            effectiveTaxRate: effectiveTaxRate.toDecimalPlaces(2),
+            calculationDetails: {
+              subtotal: subtotal.toNumber(),
+              totalLabor: estimate.totalLabor.toNumber(),
+              totalMargin: totalProfitAmount.toNumber(),
+              logisticsCost: logisticsCostDecimal.toNumber(),
+              appliedBy: session.user.id,
+              appliedAt: new Date().toISOString(),
+            },
+          },
+        });
+      }
     });
 
     // Get updated estimate

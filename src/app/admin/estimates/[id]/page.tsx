@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -66,6 +67,18 @@ type Estimate = {
   project: { title: string; client: { name: string } };
   createdBy: { name: string };
   sections: EstimateSection[];
+  // Детальний розподіл податків
+  pdvAmount?: number;
+  esvAmount?: number;
+  militaryTaxAmount?: number;
+  profitTaxAmount?: number;
+  unifiedTaxAmount?: number;
+  pdfoAmount?: number;
+  taxCalculationDetails?: {
+    totalTaxAmount: number;
+    netProfit: number;
+    effectiveTaxRate: number;
+  };
 };
 
 export default function EstimateDetailPage({
@@ -79,6 +92,8 @@ export default function EstimateDetailPage({
   const [updating, setUpdating] = useState(false);
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
   const [applyingFinance, setApplyingFinance] = useState(false);
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [sendingToClient, setSendingToClient] = useState(false);
 
   // Financial form state
   const [globalMargin, setGlobalMargin] = useState(20);
@@ -196,7 +211,7 @@ export default function EstimateDetailPage({
 
     // Calculate tax
     let taxRate = 0;
-    if (taxationType === "FOP") taxRate = 6;
+    if (taxationType === "FOP") taxRate = 5; // ВИПРАВЛЕНО: було 6%, правильно 5%
     if (taxationType === "VAT") taxRate = 20;
 
     const taxAmount = totalWithLogistics * (taxRate / 100);
@@ -215,6 +230,51 @@ export default function EstimateDetailPage({
   };
 
   const preview = calculatePreview();
+
+  // Експорт кошторису
+  async function exportEstimate(format: "pdf" | "excel") {
+    setExporting(format);
+    try {
+      const response = await fetch(`/api/estimates/${id}/export?format=${format}`);
+      if (!response.ok) throw new Error("Failed to export");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `Кошторис_${estimate?.number}.${format === "pdf" ? "pdf" : "xlsx"}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Помилка експорту кошторису");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  // Експорт і відправка клієнту
+  async function sendToClient() {
+    if (!confirm(`Надіслати кошторис ${estimate?.number} клієнту ${estimate?.project.client.name}?`)) {
+      return;
+    }
+
+    setSendingToClient(true);
+    try {
+      const response = await fetch(`/api/estimates/${id}/export?format=pdf&sendToClient=true`);
+      if (!response.ok) throw new Error("Failed to send");
+
+      const data = await response.json();
+      alert(data.message || "Кошторис успішно надіслано клієнту!");
+    } catch (error) {
+      console.error("Send error:", error);
+      alert("Помилка відправки кошторису клієнту");
+    } finally {
+      setSendingToClient(false);
+    }
+  }
 
   if (!estimate) return <div className="p-8 text-muted-foreground">Завантаження...</div>;
 
@@ -242,7 +302,52 @@ export default function EstimateDetailPage({
             {formatDate(estimate.createdAt)}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {/* Export buttons */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportEstimate("pdf")}
+            disabled={exporting === "pdf"}
+          >
+            {exporting === "pdf" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileDown className="h-4 w-4" />
+            )}
+            PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => exportEstimate("excel")}
+            disabled={exporting === "excel"}
+          >
+            {exporting === "excel" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4" />
+            )}
+            Excel
+          </Button>
+
+          {/* Send to client button - only for approved estimates */}
+          {estimate.status === "APPROVED" && (
+            <Button
+              size="sm"
+              onClick={sendToClient}
+              disabled={sendingToClient}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {sendingToClient ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Mail className="h-4 w-4" />
+              )}
+              Надіслати клієнту
+            </Button>
+          )}
+
           {/* Financial settings button */}
           {(session?.user?.role === "FINANCIER" || session?.user?.role === "SUPER_ADMIN") && (
             <Button
@@ -318,6 +423,26 @@ export default function EstimateDetailPage({
           </div>
         </Card>
       ))}
+
+      {/* Tax Breakdown */}
+      {estimate.taxationType && estimate.taxType !== "CASH" && estimate.taxCalculationDetails && (
+        <TaxBreakdownCard
+          taxationType={estimate.taxationType as "VAT" | "FOP"}
+          taxBreakdown={{
+            pdvAmount: Number(estimate.pdvAmount || 0),
+            esvAmount: Number(estimate.esvAmount || 0),
+            militaryTaxAmount: Number(estimate.militaryTaxAmount || 0),
+            profitTaxAmount: Number(estimate.profitTaxAmount || 0),
+            unifiedTaxAmount: Number(estimate.unifiedTaxAmount || 0),
+            pdfoAmount: Number(estimate.pdfoAmount || 0),
+            totalTaxAmount: estimate.taxCalculationDetails.totalTaxAmount,
+            netProfit: estimate.taxCalculationDetails.netProfit,
+            effectiveTaxRate: estimate.taxCalculationDetails.effectiveTaxRate,
+          }}
+          totalMargin={Number(estimate.profitAmount)}
+          className="mb-4"
+        />
+      )}
 
       {/* Totals */}
       <Card className="p-5">
@@ -529,7 +654,7 @@ export default function EstimateDetailPage({
                     }`}
                   >
                     👤 ФОП
-                    <div className="text-xs text-muted-foreground mt-1">3-я група, 6%</div>
+                    <div className="text-xs text-muted-foreground mt-1">3-я група, 5%</div>
                   </button>
                   <button
                     onClick={() => setTaxationType("VAT")}
