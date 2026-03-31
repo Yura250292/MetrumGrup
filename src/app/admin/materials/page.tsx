@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Edit2, X, Save } from "lucide-react";
+import { Plus, Search, Edit2, X, Save, FileSpreadsheet, Download, Upload } from "lucide-react";
+import { MaterialsImportDialog } from "@/components/admin/MaterialsImportDialog";
 
 type Material = {
   id: string;
@@ -30,11 +31,16 @@ export default function MaterialsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
-  useEffect(() => {
+  function loadMaterials() {
     fetch("/api/admin/materials")
       .then((r) => r.json())
       .then((d) => setMaterials(d.data || []));
+  }
+
+  useEffect(() => {
+    loadMaterials();
   }, []);
 
   const filtered = materials.filter(
@@ -110,19 +116,94 @@ export default function MaterialsPage() {
     setShowForm(true);
   }
 
+  async function handleDownloadTemplate() {
+    try {
+      const response = await fetch("/api/admin/materials/template");
+      if (!response.ok) throw new Error("Помилка завантаження шаблону");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "Шаблон_Матеріали.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Error downloading template:", error);
+      alert("Помилка завантаження шаблону");
+    }
+  }
+
+  async function handleExport() {
+    try {
+      const response = await fetch("/api/admin/materials/export");
+      if (!response.ok) throw new Error("Помилка експорту");
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      a.download = `Матеріали_${date}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("Error exporting materials:", error);
+      alert("Помилка експорту матеріалів");
+    }
+  }
+
+  function handleImportSuccess() {
+    loadMaterials();
+  }
+
   return (
     <div>
-      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Матеріали та ціни</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {materials.length} позицій у базі
-          </p>
+      <div className="mb-6 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Матеріали та ціни</h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {materials.length} позицій у базі
+            </p>
+          </div>
+          <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyForm); }} className="w-full md:w-auto">
+            <Plus className="h-4 w-4" />
+            Додати матеріал
+          </Button>
         </div>
-        <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyForm); }} className="w-full md:w-auto">
-          <Plus className="h-4 w-4" />
-          Додати матеріал
-        </Button>
+
+        {/* Import/Export buttons */}
+        <div className="flex flex-col gap-2 md:flex-row">
+          <Button
+            variant="outline"
+            onClick={handleDownloadTemplate}
+            className="w-full md:w-auto"
+          >
+            <Download className="h-4 w-4" />
+            Завантажити шаблон
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleExport}
+            className="w-full md:w-auto"
+          >
+            <FileSpreadsheet className="h-4 w-4" />
+            Експорт в Excel
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowImport(true)}
+            className="w-full md:w-auto bg-green-50 hover:bg-green-100 border-green-200 text-green-700 hover:text-green-800"
+          >
+            <Upload className="h-4 w-4" />
+            Імпорт з Excel
+          </Button>
+        </div>
       </div>
 
       {/* Form */}
@@ -268,6 +349,14 @@ export default function MaterialsPage() {
         <Card className="p-8 text-center">
           <p className="text-sm text-muted-foreground">Матеріалів не знайдено</p>
         </Card>
+      )}
+
+      {/* Import Dialog */}
+      {showImport && (
+        <MaterialsImportDialog
+          onClose={() => setShowImport(false)}
+          onSuccess={handleImportSuccess}
+        />
       )}
     </div>
   );
