@@ -81,7 +81,7 @@ export function AdminSidebar() {
       {/* Mobile overlay */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-border/50 bg-white transition-all duration-300",
+          "fixed inset-y-0 left-0 z-50 hidden md:flex flex-col border-r border-border/50 bg-white transition-all duration-300",
           collapsed ? "w-16" : "w-64"
         )}
       >

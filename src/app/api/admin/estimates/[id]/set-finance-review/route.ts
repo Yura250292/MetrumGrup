@@ -11,7 +11,7 @@ import { prisma } from "@/lib/prisma";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -21,9 +21,11 @@ export async function POST(
     return forbiddenResponse();
   }
 
+  const { id } = await context.params;
+
   try {
     const estimate = await prisma.estimate.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, number: true, title: true, status: true },
     });
 
@@ -35,7 +37,7 @@ export async function POST(
     }
 
     const updated = await prisma.estimate.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: "FINANCE_REVIEW" },
       select: { id: true, number: true, title: true, status: true },
     });

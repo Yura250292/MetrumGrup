@@ -9,6 +9,7 @@ export interface Column<T> {
   label: string;
   sortable?: boolean;
   className?: string;
+  hideOnMobile?: boolean;
   render: (item: T) => React.ReactNode;
 }
 
@@ -20,6 +21,7 @@ interface DataTableProps<T> {
   searchFn?: (item: T, query: string) => boolean;
   emptyMessage?: string;
   onRowClick?: (item: T) => void;
+  mobileCardRenderer?: (item: T) => React.ReactNode;
 }
 
 export function DataTable<T extends { id: string }>({
@@ -30,6 +32,7 @@ export function DataTable<T extends { id: string }>({
   searchFn,
   emptyMessage = "Немає даних",
   onRowClick,
+  mobileCardRenderer,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
@@ -77,7 +80,8 @@ export function DataTable<T extends { id: string }>({
         </div>
       )}
 
-      <div className="rounded-xl border bg-card overflow-hidden">
+      {/* Desktop view - Table */}
+      <div className="hidden md:block rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -136,6 +140,42 @@ export function DataTable<T extends { id: string }>({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile view - Cards */}
+      <div className="md:hidden space-y-3">
+        {sorted.map((item) => (
+          <div
+            key={item.id}
+            className={cn(
+              "bg-card rounded-lg p-4 border border-border",
+              onRowClick && "cursor-pointer active:bg-muted/50 transition-colors"
+            )}
+            onClick={() => onRowClick?.(item)}
+          >
+            {mobileCardRenderer ? (
+              mobileCardRenderer(item)
+            ) : (
+              <div className="space-y-2">
+                {columns
+                  .filter((col) => !col.hideOnMobile)
+                  .map((col) => (
+                    <div key={col.key} className="flex justify-between items-center gap-3">
+                      <span className="text-xs text-muted-foreground font-medium">
+                        {col.label}:
+                      </span>
+                      <span className="text-sm font-medium text-right">{col.render(item)}</span>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        ))}
+        {sorted.length === 0 && (
+          <div className="bg-card rounded-lg p-12 text-center text-sm text-muted-foreground border border-border">
+            {emptyMessage}
+          </div>
+        )}
       </div>
     </div>
   );
