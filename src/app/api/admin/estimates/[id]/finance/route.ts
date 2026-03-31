@@ -3,8 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
-// TEMPORARILY DISABLED - waiting for DB migration on production
-// import { calculateTaxesLLCWithVAT, calculateTaxesFOP3rdGroup } from "@/lib/financial-calculations";
+import { calculateTaxesLLCWithVAT, calculateTaxesFOP3rdGroup } from "@/lib/financial-calculations";
 
 // PATCH /api/admin/estimates/[id]/finance - Apply financial settings (FINANCIER only)
 export async function PATCH(
@@ -89,16 +88,56 @@ export async function PATCH(
       const subtotal = baseTotal.plus(totalProfitAmount);
       const totalWithProfitAndLogistics = subtotal.plus(logisticsCostDecimal);
 
-      // Calculate tax (simple version - detailed breakdown disabled until DB migration)
+      // Calculate detailed tax breakdown
       let taxRate = new Decimal(0);
       let taxAmount = new Decimal(0);
+      let pdvAmount = new Decimal(0);
+      let esvAmount = new Decimal(0);
+      let militaryTaxAmount = new Decimal(0);
+      let profitTaxAmount = new Decimal(0);
+      let unifiedTaxAmount = new Decimal(0);
+      let pdfoAmount = new Decimal(0);
+      let totalTaxBurden = new Decimal(0);
+      let netProfit = new Decimal(0);
+      let effectiveTaxRate = new Decimal(0);
 
       if (taxationType === "FOP") {
+        // ФОП 3 група - детальний розрахунок
+        const fopTaxes = calculateTaxesFOP3rdGroup({
+          subtotal: subtotal.toNumber(),
+          totalMargin: totalProfitAmount.toNumber(),
+        });
+
         taxRate = new Decimal(5); // ВИПРАВЛЕНО: було 6%, правильно 5%
-        taxAmount = totalWithProfitAndLogistics.times(taxRate.div(100));
+        unifiedTaxAmount = new Decimal(fopTaxes.unifiedTaxAmount);
+        esvAmount = new Decimal(fopTaxes.esvAmount);
+        militaryTaxAmount = new Decimal(fopTaxes.militaryTaxAmount);
+        totalTaxBurden = new Decimal(fopTaxes.totalTaxAmount);
+        netProfit = new Decimal(fopTaxes.netProfit);
+        effectiveTaxRate = new Decimal(fopTaxes.effectiveTaxRate);
+
+        // Для клієнта показуємо тільки єдиний податок
+        taxAmount = unifiedTaxAmount;
       } else if (taxationType === "VAT") {
+        // ТОВ з ПДВ - детальний розрахунок
+        const vatTaxes = calculateTaxesLLCWithVAT({
+          subtotal: subtotal.toNumber(),
+          totalLabor: estimate.totalLabor.toNumber(),
+          totalMargin: totalProfitAmount.toNumber(),
+        });
+
         taxRate = new Decimal(20);
-        taxAmount = totalWithProfitAndLogistics.times(taxRate.div(100));
+        pdvAmount = new Decimal(vatTaxes.pdvAmount);
+        esvAmount = new Decimal(vatTaxes.esvAmount);
+        pdfoAmount = new Decimal(vatTaxes.pdfoAmount);
+        militaryTaxAmount = new Decimal(vatTaxes.militaryTaxAmount);
+        profitTaxAmount = new Decimal(vatTaxes.profitTaxAmount);
+        totalTaxBurden = new Decimal(vatTaxes.totalTaxAmount);
+        netProfit = new Decimal(vatTaxes.netProfit);
+        effectiveTaxRate = new Decimal(vatTaxes.effectiveTaxRate);
+
+        // Для клієнта показуємо тільки ПДВ (транзитний податок)
+        taxAmount = pdvAmount;
       }
       // CASH = 0% tax
 
@@ -114,24 +153,23 @@ export async function PATCH(
           taxRate: taxRate.toDecimalPlaces(2),
           taxAmount: taxAmount.toDecimalPlaces(2),
 
-          // TEMPORARILY DISABLED - waiting for DB migration on production
           // Детальний розподіл податків
-          // pdvAmount: pdvAmount.toDecimalPlaces(2),
-          // esvAmount: esvAmount.toDecimalPlaces(2),
-          // militaryTaxAmount: militaryTaxAmount.toDecimalPlaces(2),
-          // profitTaxAmount: profitTaxAmount.toDecimalPlaces(2),
-          // unifiedTaxAmount: unifiedTaxAmount.toDecimalPlaces(2),
-          // pdfoAmount: pdfoAmount.toDecimalPlaces(2),
+          pdvAmount: pdvAmount.toDecimalPlaces(2),
+          esvAmount: esvAmount.toDecimalPlaces(2),
+          militaryTaxAmount: militaryTaxAmount.toDecimalPlaces(2),
+          profitTaxAmount: profitTaxAmount.toDecimalPlaces(2),
+          unifiedTaxAmount: unifiedTaxAmount.toDecimalPlaces(2),
+          pdfoAmount: pdfoAmount.toDecimalPlaces(2),
 
           // Метадані розрахунків
-          // taxCalculationDetails: taxationType !== "CASH" ? {
-          //   totalTaxAmount: totalTaxBurden.toNumber(),
-          //   netProfit: netProfit.toNumber(),
-          //   effectiveTaxRate: effectiveTaxRate.toNumber(),
-          //   calculatedAt: new Date().toISOString(),
-          //   taxationType,
-          // } : undefined,
-          // taxCalculatedAt: taxationType !== "CASH" ? new Date() : null,
+          taxCalculationDetails: taxationType !== "CASH" ? {
+            totalTaxAmount: totalTaxBurden.toNumber(),
+            netProfit: netProfit.toNumber(),
+            effectiveTaxRate: effectiveTaxRate.toNumber(),
+            calculatedAt: new Date().toISOString(),
+            taxationType,
+          } : undefined,
+          taxCalculatedAt: taxationType !== "CASH" ? new Date() : null,
 
           finalClientPrice: finalClientPrice.toDecimalPlaces(2),
           finalAmount: finalClientPrice.toDecimalPlaces(2),
@@ -142,9 +180,8 @@ export async function PATCH(
         },
       });
 
-      // TEMPORARILY DISABLED - waiting for DB migration on production
       // Create tax record for audit trail (only for VAT and FOP)
-      /* if (taxationType === "VAT" || taxationType === "FOP") {
+      if (taxationType === "VAT" || taxationType === "FOP") {
         await tx.taxRecord.create({
           data: {
             estimateId: id,
@@ -168,7 +205,7 @@ export async function PATCH(
             },
           },
         });
-      } */
+      }
     });
 
     // Get updated estimate
