@@ -187,9 +187,9 @@ export default function NewEstimatePage() {
         Назад
       </Link>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Новий кошторис</h1>
-        <Button onClick={handleSave} disabled={saving || !projectId || !title}>
+        <Button onClick={handleSave} disabled={saving || !projectId || !title} className="w-full md:w-auto">
           <Save className="h-4 w-4" />
           {saving ? "Збереження..." : "Зберегти"}
         </Button>

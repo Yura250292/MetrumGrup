@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
+import { getNextEstimateNumber } from "@/lib/document-numbers";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -66,126 +67,128 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique number
-    const count = await prisma.estimate.count();
-    const number = `EST-${String(count + 1).padStart(4, "0")}`;
+    // Create estimate with sections and items in atomic transaction
+    const completeEstimate = await prisma.$transaction(async (tx) => {
+      // Generate unique number atomically
+      const number = await getNextEstimateNumber();
 
-    // Calculate totals
-    let totalMaterials = 0;
-    let totalLabor = 0;
+      // Calculate totals
+      let totalMaterials = 0;
+      let totalLabor = 0;
 
-    const sectionsData = (sections || []).map((section: {
-      title: string;
-      items: Array<{
-        description: string;
-        unit: string;
-        quantity: number;
-        unitPrice: number;
-        laborRate?: number;
-        laborHours?: number;
-        materialId?: string;
-        isManualOverride?: boolean;
-      }>;
-    }, sIdx: number) => {
-      const items = (section.items || []).map((item: {
-        description: string;
-        unit: string;
-        quantity: number;
-        unitPrice: number;
-        laborRate?: number;
-        laborHours?: number;
-        materialId?: string;
-        isManualOverride?: boolean;
-      }, iIdx: number) => {
-        const materialCost = item.quantity * item.unitPrice;
-        const laborCost = (item.laborHours || 0) * (item.laborRate || 0);
-        const amount = materialCost + laborCost;
-        totalMaterials += materialCost;
-        totalLabor += laborCost;
+      const sectionsData = (sections || []).map((section: {
+        title: string;
+        items: Array<{
+          description: string;
+          unit: string;
+          quantity: number;
+          unitPrice: number;
+          laborRate?: number;
+          laborHours?: number;
+          materialId?: string;
+          isManualOverride?: boolean;
+        }>;
+      }, sIdx: number) => {
+        const items = (section.items || []).map((item: {
+          description: string;
+          unit: string;
+          quantity: number;
+          unitPrice: number;
+          laborRate?: number;
+          laborHours?: number;
+          materialId?: string;
+          isManualOverride?: boolean;
+        }, iIdx: number) => {
+          const materialCost = item.quantity * item.unitPrice;
+          const laborCost = (item.laborHours || 0) * (item.laborRate || 0);
+          const amount = materialCost + laborCost;
+          totalMaterials += materialCost;
+          totalLabor += laborCost;
+
+          return {
+            description: item.description,
+            unit: item.unit,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            laborRate: item.laborRate || 0,
+            laborHours: item.laborHours || 0,
+            amount,
+            materialId: item.materialId || null,
+            isManualOverride: item.isManualOverride || false,
+            sortOrder: iIdx,
+          };
+        });
 
         return {
-          description: item.description,
-          unit: item.unit,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          laborRate: item.laborRate || 0,
-          laborHours: item.laborHours || 0,
-          amount,
-          materialId: item.materialId || null,
-          isManualOverride: item.isManualOverride || false,
-          sortOrder: iIdx,
+          title: section.title,
+          sortOrder: sIdx,
+          items: { create: items },
         };
       });
 
-      return {
-        title: section.title,
-        sortOrder: sIdx,
-        items: { create: items },
-      };
-    });
+      const overhead = overheadRate ? ((totalMaterials + totalLabor) * overheadRate / 100) : 0;
+      const totalAmount = totalMaterials + totalLabor + overhead;
 
-    const overhead = overheadRate ? ((totalMaterials + totalLabor) * overheadRate / 100) : 0;
-    const totalAmount = totalMaterials + totalLabor + overhead;
-
-    // Create estimate with sections and items in a transaction
-    const estimate = await prisma.estimate.create({
-      data: {
-        number,
-        projectId,
-        createdById: session.user.id,
-        title,
-        description: description || null,
-        totalMaterials,
-        totalLabor,
-        totalOverhead: overhead,
-        totalAmount,
-        finalAmount: totalAmount,
-        sections: {
-          create: sectionsData.map((section: { title: string; sortOrder: number }) => ({
-            title: section.title,
-            sortOrder: section.sortOrder,
-          })),
+      // Create estimate with sections
+      const estimate = await tx.estimate.create({
+        data: {
+          number,
+          projectId,
+          createdById: session.user.id,
+          title,
+          description: description || null,
+          totalMaterials,
+          totalLabor,
+          totalOverhead: overhead,
+          totalAmount,
+          finalAmount: totalAmount,
+          sections: {
+            create: sectionsData.map((section: { title: string; sortOrder: number }) => ({
+              title: section.title,
+              sortOrder: section.sortOrder,
+            })),
+          },
         },
-      },
-      include: {
-        sections: { orderBy: { sortOrder: "asc" } },
-      },
-    });
+        include: {
+          sections: { orderBy: { sortOrder: "asc" } },
+        },
+      });
 
-    // Now create items for each section with proper estimateId
-    for (let sIdx = 0; sIdx < sectionsData.length; sIdx++) {
-      const section = sectionsData[sIdx];
-      const createdSection = estimate.sections[sIdx];
+      // Create items for each section
+      for (let sIdx = 0; sIdx < sectionsData.length; sIdx++) {
+        const section = sectionsData[sIdx];
+        const createdSection = estimate.sections[sIdx];
 
-      if (section.items?.create && Array.isArray(section.items.create)) {
-        await prisma.estimateItem.createMany({
-          data: section.items.create.map((item: any) => ({
-            ...item,
-            estimateId: estimate.id,
-            sectionId: createdSection.id,
-          })),
-        });
+        if (section.items?.create && Array.isArray(section.items.create)) {
+          await tx.estimateItem.createMany({
+            data: section.items.create.map((item: any) => ({
+              ...item,
+              estimateId: estimate.id,
+              sectionId: createdSection.id,
+            })),
+          });
+        }
       }
-    }
 
-    // Fetch the complete estimate with all relations
-    const completeEstimate = await prisma.estimate.findUnique({
-      where: { id: estimate.id },
-      include: {
-        sections: {
-          include: { items: { orderBy: { sortOrder: "asc" } } },
-          orderBy: { sortOrder: "asc" },
+      // Fetch complete estimate with all relations
+      return await tx.estimate.findUnique({
+        where: { id: estimate.id },
+        include: {
+          sections: {
+            include: { items: { orderBy: { sortOrder: "asc" } } },
+            orderBy: { sortOrder: "asc" },
+          },
         },
-      },
+      });
     });
 
     await auditLog({
       userId: session.user.id,
       action: "CREATE",
       entity: "Estimate",
-      entityId: estimate.id,
+      entityId: completeEstimate!.id,
       projectId,
-      newData: { title, totalAmount },
+      newData: { title, totalAmount: completeEstimate!.totalAmount },
     });
 
     return NextResponse.json({ data: completeEstimate }, { status: 201 });

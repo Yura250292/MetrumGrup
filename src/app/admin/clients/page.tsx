@@ -56,12 +56,12 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Клієнти</h1>
           <p className="mt-1 text-sm text-muted-foreground">{clients.length} клієнтів</p>
         </div>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto">
           <Plus className="h-4 w-4" />
           Додати клієнта
         </Button>

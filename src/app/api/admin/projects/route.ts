@@ -14,6 +14,9 @@ const STAGE_ORDER: ProjectStage[] = [
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
+    return forbiddenResponse();
+  }
 
   try {
     const projects = await prisma.project.findMany({

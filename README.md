@@ -2,6 +2,14 @@
 
 Професійна система управління будівельними проєктами для будівельної компанії Metrum Group.
 
+## Agent Context
+
+Для AI-агентів і кодових асистентів:
+
+- основний entrypoint: [AGENTS.md](./AGENTS.md)
+- детальна архітектура: [ARCHITECTURE_FOR_CLAUDE.md](./ARCHITECTURE_FOR_CLAUDE.md)
+- продакшн-аудит і пріоритети виправлень: [PRODUCTION_REVIEW.md](./PRODUCTION_REVIEW.md)
+
 ## 🏗️ Основний функціонал
 
 ### Для адміністраторів і менеджерів

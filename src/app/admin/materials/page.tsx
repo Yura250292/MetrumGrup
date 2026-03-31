@@ -112,14 +112,14 @@ export default function MaterialsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Матеріали та ціни</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {materials.length} позицій у базі
           </p>
         </div>
-        <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyForm); }}>
+        <Button onClick={() => { setShowForm(!showForm); setEditingId(null); setForm(emptyForm); }} className="w-full md:w-auto">
           <Plus className="h-4 w-4" />
           Додати матеріал
         </Button>

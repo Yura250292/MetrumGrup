@@ -90,9 +90,9 @@ export default function ProjectFinancesPage({
         {projectTitle}
       </Link>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Управління фінансами</h1>
-        <Button onClick={() => setShowForm(!showForm)}>
+        <Button onClick={() => setShowForm(!showForm)} className="w-full md:w-auto">
           <Plus className="h-4 w-4" />
           Додати платіж
         </Button>

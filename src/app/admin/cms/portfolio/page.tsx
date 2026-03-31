@@ -13,9 +13,9 @@ export default async function PortfolioManagementPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <h1 className="text-2xl font-bold">Портфоліо</h1>
-        <Button><Plus className="h-4 w-4" /> Додати проєкт</Button>
+        <Button className="w-full md:w-auto"><Plus className="h-4 w-4" /> Додати проєкт</Button>
       </div>
 
       {projects.length > 0 ? (

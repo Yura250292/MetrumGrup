@@ -571,3 +571,11 @@ model FinancialTemplate {
   @@index([createdById])
   @@map("financial_templates")
 }
+
+model DocumentSequence {
+  id     String @id // "EST", "INV", etc.
+  prefix String // "EST-", "INV-", etc.
+  last   Int    @default(0)
+
+  @@map("document_sequences")
+}

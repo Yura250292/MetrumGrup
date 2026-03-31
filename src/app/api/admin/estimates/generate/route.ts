@@ -110,13 +110,6 @@ export async function POST(request: NextRequest) {
     return forbiddenResponse();
   }
 
-  if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
-    return NextResponse.json(
-      { error: "GEMINI_API_KEY не налаштований. Додайте ключ в .env файл." },
-      { status: 500 }
-    );
-  }
-
   try {
     const formData = await request.formData();
     const files = formData.getAll("files") as File[];
@@ -613,16 +606,34 @@ ${textParts.join("\n\n")}
 
     switch (model) {
       case "openai":
+        if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "") {
+          return NextResponse.json(
+            { error: "OPENAI_API_KEY не налаштований" },
+            { status: 500 }
+          );
+        }
         console.log("🤖 Використовуємо OpenAI GPT-4o...");
         text = await generateWithOpenAI(prompt, textParts.join("\n\n"));
         break;
 
       case "anthropic":
+        if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "") {
+          return NextResponse.json(
+            { error: "ANTHROPIC_API_KEY не налаштований" },
+            { status: 500 }
+          );
+        }
         console.log("🧠 Використовуємо Anthropic Claude Opus 4...");
         text = await generateWithAnthropic(prompt, textParts.join("\n\n"));
         break;
 
       default: // "gemini"
+        if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
+          return NextResponse.json(
+            { error: "GEMINI_API_KEY не налаштований" },
+            { status: 500 }
+          );
+        }
         console.log("✨ Використовуємо Google Gemini з Google Search...");
         // Call Gemini with Google Search grounding for real prices
         const geminiModel = genAI.getGenerativeModel({
@@ -633,6 +644,12 @@ ${textParts.join("\n\n")}
         });
 
         const parts: (string | { inlineData: { data: string; mimeType: string } })[] = [prompt];
+
+        // Include extracted text from PDF/Excel/CSV
+        if (textParts.length > 0) {
+          parts.push(textParts.join("\n\n"));
+        }
+
         if (imageParts.length > 0) {
           parts.push(...imageParts);
         }

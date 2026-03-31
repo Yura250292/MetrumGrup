@@ -45,22 +45,24 @@ export default async function EstimatesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Кошториси</h1>
           <p className="mt-1 text-sm text-muted-foreground">{estimates.length} кошторисів</p>
         </div>
         <div className="flex gap-2">
-          <Link href="/admin/estimates/ai-generate">
-            <Button className="bg-gradient-to-r from-primary to-amber-500 hover:from-primary/90 hover:to-amber-500/90">
+          <Link href="/admin/estimates/ai-generate" className="flex-1 md:flex-none">
+            <Button className="w-full bg-gradient-to-r from-primary to-amber-500 hover:from-primary/90 hover:to-amber-500/90">
               <Sparkles className="h-4 w-4" />
-              AI Генератор
+              <span className="hidden sm:inline">AI Генератор</span>
+              <span className="sm:hidden">AI</span>
             </Button>
           </Link>
-          <Link href="/admin/estimates/new">
-            <Button variant="outline">
+          <Link href="/admin/estimates/new" className="flex-1 md:flex-none">
+            <Button variant="outline" className="w-full">
               <Plus className="h-4 w-4" />
-              Вручну
+              <span className="hidden sm:inline">Вручну</span>
+              <span className="sm:hidden">Новий</span>
             </Button>
           </Link>
         </div>
