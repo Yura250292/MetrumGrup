@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import Link from "next/link";
-import { ArrowLeft, FileText, Download } from "lucide-react";
+import { ArrowLeft, FileText, Download, FileSpreadsheet } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,14 @@ export default async function ProjectFinancesPage({
     orderBy: { createdAt: "desc" },
   });
 
+  const estimates = await prisma.estimate.findMany({
+    where: {
+      projectId: id,
+      status: "APPROVED", // Тільки затверджені кошториси
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
   return (
     <div>
       <Link
@@ -67,6 +76,83 @@ export default async function ProjectFinancesPage({
         <h2 className="mb-4 text-lg font-semibold">Графік платежів</h2>
         <PaymentScheduleTable payments={payments} />
       </div>
+
+      {/* Estimates */}
+      {estimates.length > 0 && (
+        <div className="mb-8">
+          <h2 className="mb-4 text-lg font-semibold">Кошториси</h2>
+          <div className="space-y-3">
+            {estimates.map((estimate) => (
+              <Card key={estimate.id} className="p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className="rounded-lg bg-primary/10 p-2">
+                      <FileText className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{estimate.title}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>№{estimate.number}</span>
+                        <span>•</span>
+                        <span>{formatCurrency(Number(estimate.finalAmount))}</span>
+                        <span>•</span>
+                        <span>{formatDateShort(estimate.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-green-100 text-green-700">Затверджено</Badge>
+                    <a
+                      href={`/api/estimates/${estimate.id}/export?format=pdf`}
+                      download
+                      className="hidden md:inline-flex"
+                    >
+                      <Button variant="outline" size="sm">
+                        <Download className="h-3.5 w-3.5 mr-1.5" />
+                        PDF
+                      </Button>
+                    </a>
+                    <a
+                      href={`/api/estimates/${estimate.id}/export?format=excel`}
+                      download
+                      className="hidden md:inline-flex"
+                    >
+                      <Button variant="outline" size="sm">
+                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
+                        Excel
+                      </Button>
+                    </a>
+                    {/* Mobile: Single dropdown */}
+                    <div className="md:hidden relative group">
+                      <Button variant="outline" size="sm">
+                        <Download className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="hidden group-active:block absolute right-0 top-full mt-1 bg-card border rounded-lg shadow-lg z-10 min-w-[120px]">
+                        <a
+                          href={`/api/estimates/${estimate.id}/export?format=pdf`}
+                          download
+                          className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          PDF
+                        </a>
+                        <a
+                          href={`/api/estimates/${estimate.id}/export?format=excel`}
+                          download
+                          className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+                        >
+                          <FileSpreadsheet className="h-3.5 w-3.5" />
+                          Excel
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Completion Acts */}
       <div>
