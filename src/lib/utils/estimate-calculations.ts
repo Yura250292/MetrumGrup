@@ -140,7 +140,7 @@ export class EstimateCalculator {
    * @returns string - рядкове представлення числа
    */
   static toString(decimal: Decimal, precision: number = 2): string {
-    return decimal.toDecimalPlaces(precision).toString();
+    return decimal.toFixed(precision);
   }
 
   /**

@@ -26,23 +26,23 @@ describe("EstimateCalculator", () => {
       const item: EstimateItem = {
         description: "Складна позиція",
         unit: "м²",
-        quantity: new Decimal(123.456),
-        unitPrice: new Decimal(789.12),
-        laborHours: new Decimal(5.5),
-        laborRate: new Decimal(250),
+        quantity: new Decimal('123.456'),
+        unitPrice: new Decimal('789.12'),
+        laborHours: new Decimal('5.5'),
+        laborRate: new Decimal('250'),
         };
 
-      // Materials: 123.456 × 789.12 = 97,434.72672
+      // Materials: 123.456 × 789.12 = 97,421.59872 → 97,421.60 (округлено)
       // Labor: 5.5 × 250 = 1,375.00
-      // Total: 98,809.72672 → 98,809.73 (округлено)
+      // Total: 97,421.60 + 1,375.00 = 98,796.60
 
       const materialCost = EstimateCalculator.calculateMaterialCost(item);
       const laborCost = EstimateCalculator.calculateLaborCost(item);
       const totalAmount = EstimateCalculator.calculateItemAmount(item);
 
-      expect(materialCost.toFixed(2)).toBe("97434.73");
+      expect(materialCost.toFixed(2)).toBe("97421.60");
       expect(laborCost.toFixed(2)).toBe("1375.00");
-      expect(totalAmount.toFixed(2)).toBe("98809.73");
+      expect(totalAmount.toFixed(2)).toBe("98796.60");
     });
   });
 

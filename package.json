@@ -7,6 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:unit": "jest --config jest.config.ts",
+    "test:components": "jest --config jest.config.components.ts",
+    "test:ci": "jest --ci --coverage --maxWorkers=2",
     "db:generate": "npx prisma generate",
     "db:push": "npx prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
@@ -14,7 +20,10 @@
     "deploy:check-env": "npx tsx scripts/check-env.ts",
     "deploy:db-status": "npx tsx scripts/db-status.ts",
     "deploy:create-admin": "npx tsx scripts/create-admin.ts",
-    "deploy:migrate": "npx prisma db push && npx tsx scripts/db-status.ts"
+    "deploy:migrate": "npx prisma db push && npx tsx scripts/db-status.ts",
+    "bot:dev": "tsx bot/index.ts",
+    "bot:build": "tsc --project tsconfig.bot.json",
+    "bot:start": "node dist/bot/index.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
@@ -30,6 +39,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "decimal.js": "^10.6.0",
+    "dotenv": "^16.4.5",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.38.0",
     "jspdf": "^4.2.1",
@@ -47,17 +57,26 @@
     "recharts": "^3.8.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.2",
+    "telegraf": "^4.16.3",
     "typescript": "^6.0.2",
     "xlsx": "^0.18.5",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@jest/globals": "^30.3.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/decimal.js": "^0.0.32",
     "@types/jest": "^30.0.0",
     "@types/pdfmake": "^0.3.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "^16.2.1",
+    "jest": "^30.3.0",
+    "jest-environment-jsdom": "^30.3.0",
+    "jest-mock-extended": "^4.0.0",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.21.0"
   }
 }

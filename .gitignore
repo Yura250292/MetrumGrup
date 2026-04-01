@@ -46,3 +46,7 @@ credentials/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Testing
+coverage/
+*.log
