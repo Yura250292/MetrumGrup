@@ -85,7 +85,7 @@ export async function createApprovalStep(params: CreateApprovalStepParams) {
       reviewerRole: user.role,
       notes,
       signatureHash,
-      signatureData: signaturePayload,
+      signatureData: signaturePayload as any,
       ipAddress: metadata.ipAddress,
       userAgent: metadata.userAgent,
       reviewedById: userId,
