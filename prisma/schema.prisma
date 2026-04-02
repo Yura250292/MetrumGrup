@@ -138,6 +138,11 @@ model Estimate {
   versions              EstimateVersion[]
   approvalSteps         EstimateApprovalStep[]
   criticalChanges       EstimateCriticalChange[]
+  verificationStatus    String?           // "passed" | "warnings" | "critical" | "not_verified"
+  verificationResults   Json?             // повні результати у форматі JSON
+  verificationScore     Decimal?          @db.Decimal(5, 2) // 0-100
+  verifiedAt            DateTime?
+  verifiedBy            String?           // "openai" | "anthropic"
   createdBy             User              @relation("EstimateCreator", fields: [createdById], references: [id])
   engineerReviewedBy    User?             @relation("EngineerReviews", fields: [engineerReviewedById], references: [id])
   financeReviewedBy     User?             @relation("FinanceReviews", fields: [financeReviewedById], references: [id])
