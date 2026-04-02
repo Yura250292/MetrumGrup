@@ -157,7 +157,7 @@ export async function verifyApprovalIntegrity(approvalId: string) {
   const { signatureHash, signatureData } = approval;
 
   // Перевірити підпис
-  const expectedHash = createApprovalSignature(signatureData as ApprovalSignaturePayload);
+  const expectedHash = createApprovalSignature(signatureData as unknown as ApprovalSignaturePayload);
   const isValid = signatureHash === expectedHash;
 
   return {
