@@ -5,11 +5,13 @@
 import { prisma } from "./prisma";
 import { calculateFinancials, decimalToNumber, numberToDecimal } from "./financial-calculations";
 import { TaxationType } from "@prisma/client";
+import { createEstimateVersion } from "./versioning";
+import { createApprovalStep } from "./approval-tracking";
 
 /**
  * Передати кошторис фінансисту на налаштування
  */
-export async function sendToFinancial(estimateId: string) {
+export async function sendToFinancial(estimateId: string, userId: string) {
   const estimate = await prisma.estimate.findUnique({
     where: { id: estimateId },
   });
@@ -22,9 +24,34 @@ export async function sendToFinancial(estimateId: string) {
     throw new Error("Можна передати тільки чернетку або кошторис після інженерного огляду");
   }
 
-  await prisma.estimate.update({
-    where: { id: estimateId },
-    data: { status: "FINANCE_REVIEW" },
+  const oldStatus = estimate.status;
+
+  await prisma.$transaction(async (tx) => {
+    // Оновити статус
+    await tx.estimate.update({
+      where: { id: estimateId },
+      data: { status: "FINANCE_REVIEW" },
+    });
+
+    // Створити версію
+    await createEstimateVersion({
+      estimateId,
+      userId,
+      eventType: 'STATUS_CHANGED',
+      description: 'Передано на фінансову перевірку',
+    });
+
+    // Створити критичну зміну
+    await tx.estimateCriticalChange.create({
+      data: {
+        estimateId,
+        changeType: 'STATUS_CHANGE',
+        fieldName: 'status',
+        oldValue: oldStatus,
+        newValue: 'FINANCE_REVIEW',
+        userId,
+      },
+    });
   });
 }
 
@@ -40,13 +67,19 @@ interface ConfigureFinancialsParams {
   notes?: string;
 }
 
+interface ConfigureFinancialsMetadata {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
 /**
  * Налаштувати фінансові параметри кошториса
  */
 export async function configureFinancials(
   estimateId: string,
   userId: string,
-  params: ConfigureFinancialsParams
+  params: ConfigureFinancialsParams,
+  metadata?: ConfigureFinancialsMetadata
 ) {
   const estimate = await prisma.estimate.findUnique({
     where: { id: estimateId },
@@ -115,6 +148,19 @@ export async function configureFinancials(
       },
     });
   });
+
+  // Створити підпис фінансиста (поза транзакцією, щоб мати фінальні дані)
+  await createApprovalStep({
+    estimateId,
+    userId,
+    stepType: 'FINANCE_REVIEW',
+    status: 'APPROVED',
+    notes: params.notes,
+    metadata: {
+      ipAddress: metadata?.ipAddress || null,
+      userAgent: metadata?.userAgent || null,
+    },
+  });
 }
 
 /**
@@ -144,7 +190,8 @@ export async function returnToDraft(estimateId: string, reason?: string) {
 export async function applyTemplate(
   estimateId: string,
   templateId: string,
-  userId: string
+  userId: string,
+  metadata?: ConfigureFinancialsMetadata
 ) {
   const template = await prisma.financialTemplate.findUnique({
     where: { id: templateId },
@@ -177,11 +224,16 @@ export async function applyTemplate(
   });
 
   // Застосувати налаштування з шаблону
-  await configureFinancials(estimateId, userId, {
-    taxationType: template.taxationType,
-    globalMarginPercent: decimalToNumber(template.globalMarginPercent),
-    logisticsCost: decimalToNumber(template.logisticsCost),
-    itemMargins,
-    notes: `Застосовано шаблон: ${template.name}`,
-  });
+  await configureFinancials(
+    estimateId,
+    userId,
+    {
+      taxationType: template.taxationType,
+      globalMarginPercent: decimalToNumber(template.globalMarginPercent),
+      logisticsCost: decimalToNumber(template.logisticsCost),
+      itemMargins,
+      notes: `Застосовано шаблон: ${template.name}`,
+    },
+    metadata
+  );
 }

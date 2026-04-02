@@ -4,12 +4,15 @@ import { useState, useEffect, use } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
+import { EstimateHistoryTimeline } from "@/components/admin/EstimateHistoryTimeline";
+import { ApprovalSignatureCard } from "@/components/admin/ApprovalSignatureCard";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -94,6 +97,8 @@ export default function EstimateDetailPage({
   const [applyingFinance, setApplyingFinance] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  const [approvals, setApprovals] = useState<any[]>([]);
 
   // Financial form state
   const [globalMargin, setGlobalMargin] = useState(20);
@@ -122,6 +127,20 @@ export default function EstimateDetailPage({
         setLogisticsCost(data.logisticsCost || 0);
       });
   }, [id]);
+
+  // Load approvals when history tab is active
+  useEffect(() => {
+    if (activeTab === 'history') {
+      fetch(`/api/admin/estimates/${id}/history`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.approvals) {
+            setApprovals(data.approvals);
+          }
+        })
+        .catch((err) => console.error('Failed to load approvals:', err));
+    }
+  }, [id, activeTab]);
 
   async function updateStatus(status: string) {
     setUpdating(true);
@@ -374,8 +393,16 @@ export default function EstimateDetailPage({
         </div>
       </div>
 
-      {/* Sections with items */}
-      {estimate.sections.map((section) => (
+      {/* Tabs for Details and History */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'details' | 'history')} className="mt-6">
+        <TabsList className="mb-6">
+          <TabsTrigger value="details">Деталі кошторису</TabsTrigger>
+          <TabsTrigger value="history">Історія та підписи</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="details" className="space-y-4">
+          {/* Sections with items */}
+          {estimate.sections.map((section) => (
         <Card key={section.id} className="mb-4 overflow-hidden">
           <div className="bg-muted/50 px-4 py-2.5">
             <h3 className="font-medium text-sm">{section.title}</h3>
@@ -510,6 +537,20 @@ export default function EstimateDetailPage({
           )}
         </div>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="space-y-6">
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Цифрові підписи</h3>
+            <ApprovalSignatureCard approvals={approvals} estimateId={estimate.id} />
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-4">Історія змін</h3>
+            <EstimateHistoryTimeline estimateId={estimate.id} />
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Finance Modal */}
       {financeModalOpen && (

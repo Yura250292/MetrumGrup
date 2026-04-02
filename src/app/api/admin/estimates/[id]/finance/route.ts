@@ -4,6 +4,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
 import { calculateTaxesLLCWithVAT, calculateTaxesFOP3rdGroup } from "@/lib/financial-calculations";
+import { createApprovalStep } from "@/lib/approval-tracking";
 
 // PATCH /api/admin/estimates/[id]/finance - Apply financial settings (FINANCIER only)
 export async function PATCH(
@@ -27,6 +28,12 @@ export async function PATCH(
       taxationType,
       financeNotes,
     } = body;
+
+    // Отримати metadata для підпису
+    const metadata = {
+      ipAddress: request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip'),
+      userAgent: request.headers.get('user-agent'),
+    };
 
     // Get current estimate with all items
     const estimate = await prisma.estimate.findUnique({
@@ -239,6 +246,16 @@ export async function PATCH(
           finalClientPrice: updated?.finalClientPrice.toString(),
         },
       },
+    });
+
+    // Створити цифровий підпис фінансиста
+    await createApprovalStep({
+      estimateId: id,
+      userId: session.user.id,
+      stepType: 'FINANCE_REVIEW',
+      status: 'APPROVED',
+      notes: financeNotes,
+      metadata,
     });
 
     return NextResponse.json({

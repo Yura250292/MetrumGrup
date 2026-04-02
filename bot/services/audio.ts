@@ -3,7 +3,6 @@ import type { Telegram } from 'telegraf';
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
-import fetch from 'node-fetch';
 
 const writeFile = promisify(fs.writeFile);
 const unlink = promisify(fs.unlink);
@@ -26,7 +25,8 @@ async function downloadAudio(telegram: Telegram, fileId: string): Promise<{ path
     throw new Error('Failed to download audio file');
   }
 
-  const buffer = await response.buffer();
+  const arrayBuffer = await response.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
 
   // Зберігаємо тимчасово
   const tempPath = path.join('/tmp', `audio_${Date.now()}.ogg`);
