@@ -1,8 +1,18 @@
 [phases.setup]
-nixPkgs = ["nodejs-20_x"]
+nixPkgs = ["nodejs"]
+nixLibs = []
 
 [phases.install]
-cmds = ["npm install", "npx prisma generate"]
+cmds = [
+  "npm install",
+  "npx prisma generate"
+]
+
+[phases.build]
+cmds = [
+  "npm install",
+  "npx prisma generate"
+]
 
 [start]
 cmd = "npx tsx bot/index.ts"
