@@ -19,6 +19,7 @@ import {
   LogOut,
   ChevronLeft,
   Menu,
+  Table,
 } from "lucide-react";
 
 type NavItem = {
@@ -35,6 +36,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
     items: [
       { href: "/admin", label: "Дашборд", icon: LayoutDashboard, exact: true },
       { href: "/admin/projects", label: "Проєкти", icon: FolderKanban },
+      { href: "/admin/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin/clients", label: "Клієнти", icon: Users },
     ],
   },

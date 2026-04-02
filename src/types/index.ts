@@ -1,4 +1,4 @@
-import type { Project, ProjectStageRecord, Payment, PhotoReport, PhotoReportImage, CompletionAct, User } from "@prisma/client";
+import type { Project, ProjectStageRecord, Payment, PhotoReport, PhotoReportImage, CompletionAct, User, CrewAssignment, Worker, Estimate } from "@prisma/client";
 
 // Extended types with relations
 export type ProjectWithStages = Project & {
@@ -11,6 +11,19 @@ export type ProjectWithAll = ProjectWithStages & {
   payments: Payment[];
   photoReports: (PhotoReport & { images: PhotoReportImage[] })[];
   completionActs: CompletionAct[];
+};
+
+export type ProjectDashboardData = Project & {
+  client: Pick<User, "id" | "name">;
+  manager: Pick<User, "id" | "name"> | null;
+  crewAssignments: (CrewAssignment & {
+    worker: Pick<Worker, "id" | "name" | "specialty">;
+  })[];
+  estimates: Pick<Estimate, "id" | "number" | "finalAmount" | "status" | "createdAt">[];
+  _count: {
+    estimates: number;
+    crewAssignments: number;
+  };
 };
 
 export type PhotoReportWithImages = PhotoReport & {
