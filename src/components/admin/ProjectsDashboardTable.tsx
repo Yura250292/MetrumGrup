@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Search, Filter, Users, Calculator, DollarSign,
-  ExternalLink, ChevronDown, Download
+  ExternalLink, ChevronDown, Download, Calendar, Clock, AlertCircle
 } from "lucide-react";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import {
@@ -23,6 +23,39 @@ type Props = {
   projects: ProjectDashboardData[];
   managers: { id: string; name: string }[];
 };
+
+// Helper functions for deadline calculations
+function getDeadlineStatus(expectedEndDate: Date | null) {
+  if (!expectedEndDate) return null;
+
+  const now = new Date();
+  const deadline = new Date(expectedEndDate);
+  const daysUntil = Math.ceil((deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (daysUntil < 0) {
+    return { status: 'overdue', days: Math.abs(daysUntil), color: 'bg-red-50 text-red-700 border-red-200' };
+  } else if (daysUntil <= 7) {
+    return { status: 'urgent', days: daysUntil, color: 'bg-orange-50 text-orange-700 border-orange-200' };
+  } else if (daysUntil <= 30) {
+    return { status: 'soon', days: daysUntil, color: 'bg-yellow-50 text-yellow-700 border-yellow-200' };
+  } else {
+    return { status: 'normal', days: daysUntil, color: 'bg-green-50 text-green-700 border-green-200' };
+  }
+}
+
+function getProgressPercentage(startDate: Date | null, endDate: Date | null) {
+  if (!startDate || !endDate) return 0;
+
+  const now = new Date();
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+
+  const total = end.getTime() - start.getTime();
+  const elapsed = now.getTime() - start.getTime();
+
+  const percentage = Math.round((elapsed / total) * 100);
+  return Math.max(0, Math.min(100, percentage));
+}
 
 export function ProjectsDashboardTable({ projects, managers }: Props) {
   const [search, setSearch] = useState("");
@@ -258,144 +291,8 @@ export function ProjectsDashboardTable({ projects, managers }: Props) {
         </div>
       </Card>
 
-      {/* Desktop Table */}
-      <div className="hidden lg:block">
-        <Card className="overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
-                  Проєкт
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
-                  <Users className="inline h-3 w-3 mr-1" />
-                  Бригадири
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
-                  <DollarSign className="inline h-3 w-3 mr-1" />
-                  Бюджет
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">
-                  <Calculator className="inline h-3 w-3 mr-1" />
-                  Кошторис
-                </th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground w-10">
-
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((project) => {
-                const latestEstimate = project.estimates[0];
-                const brigadiers = project.crewAssignments.filter(ca =>
-                  ca.role?.toLowerCase().includes('бригадир') ||
-                  ca.role?.toLowerCase().includes('brigadier') ||
-                  ca.role?.toLowerCase().includes('foreman')
-                );
-                const allWorkers = project.crewAssignments;
-
-                return (
-                  <tr key={project.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <Link
-                            href={`/admin/projects/${project.id}`}
-                            className="font-medium text-sm hover:text-primary transition-colors"
-                          >
-                            {project.title}
-                          </Link>
-                          <Badge className={PROJECT_STATUS_COLORS[project.status]}>
-                            {PROJECT_STATUS_LABELS[project.status]}
-                          </Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {project.client.name} • {STAGE_LABELS[project.currentStage]}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {brigadiers.length > 0 ? (
-                        <div className="flex flex-col gap-1">
-                          {brigadiers.slice(0, 3).map((ca) => (
-                            <div key={ca.id} className="text-sm">
-                              {ca.worker.name}
-                              <span className="text-xs text-muted-foreground ml-1">
-                                ({ca.worker.specialty})
-                              </span>
-                            </div>
-                          ))}
-                          {brigadiers.length > 3 && (
-                            <span className="text-xs text-muted-foreground">
-                              ще {brigadiers.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      ) : allWorkers.length > 0 ? (
-                        <div className="text-xs text-muted-foreground">
-                          {allWorkers.length} працівник(ів)
-                        </div>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">Не призначено</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="text-sm font-medium">
-                          {formatCurrency(Number(project.totalBudget))}
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          Сплачено: {formatCurrency(Number(project.totalPaid))}
-                        </div>
-                        {Number(project.totalPaid) > 0 && Number(project.totalBudget) > 0 && (
-                          <div className="text-xs text-primary">
-                            {Math.round((Number(project.totalPaid) / Number(project.totalBudget)) * 100)}% оплачено
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {latestEstimate ? (
-                        <Link
-                          href={`/admin/estimates/${latestEstimate.id}`}
-                          className="flex flex-col gap-0.5 hover:text-primary transition-colors"
-                        >
-                          <div className="text-sm font-medium">
-                            {formatCurrency(Number(latestEstimate.finalAmount))}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {latestEstimate.number}
-                          </div>
-                          <Badge variant="secondary" className="w-fit text-[10px]">
-                            {ESTIMATE_STATUS_LABELS[latestEstimate.status]}
-                          </Badge>
-                        </Link>
-                      ) : (
-                        <div className="text-xs text-muted-foreground">
-                          {project._count.estimates > 0
-                            ? `${project._count.estimates} кошторис(ів)`
-                            : "Немає кошторису"
-                          }
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Link href={`/admin/projects/${project.id}`}>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Card>
-      </div>
-
-      {/* Mobile Card View */}
-      <div className="lg:hidden space-y-3">
+      {/* Projects Grid Cards */}
+      <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
         {filtered.map((project) => {
           const latestEstimate = project.estimates[0];
           const brigadiers = project.crewAssignments.filter(ca =>
@@ -404,15 +301,23 @@ export function ProjectsDashboardTable({ projects, managers }: Props) {
             ca.role?.toLowerCase().includes('foreman')
           );
 
+          const deadlineInfo = getDeadlineStatus(project.expectedEndDate);
+          const progress = getProgressPercentage(project.startDate, project.expectedEndDate);
+
           return (
-            <Link key={project.id} href={`/admin/projects/${project.id}`}>
-              <Card className="p-4 hover:shadow-md transition-shadow">
-                <div className="flex flex-col gap-3">
-                  {/* Header */}
-                  <div className="flex items-start justify-between gap-2">
+            <Card
+              key={project.id}
+              className={`p-0 hover:shadow-lg transition-all border-l-4 overflow-hidden ${
+                deadlineInfo ? deadlineInfo.color : 'border-l-gray-300'
+              }`}
+            >
+              <Link href={`/admin/projects/${project.id}`}>
+                {/* Card Header with Deadline Badge */}
+                <div className="p-4 pb-3 bg-gradient-to-br from-white to-gray-50">
+                  <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold truncate">{project.title}</h3>
-                      <p className="text-xs text-muted-foreground">
+                      <h3 className="font-bold text-base truncate">{project.title}</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         {project.client.name}
                       </p>
                     </div>
@@ -421,52 +326,138 @@ export function ProjectsDashboardTable({ projects, managers }: Props) {
                     </Badge>
                   </div>
 
-                  {/* Brigadiers */}
+                  {/* Deadline Alert */}
+                  {deadlineInfo && (
+                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md border ${deadlineInfo.color} mt-2`}>
+                      {deadlineInfo.status === 'overdue' ? (
+                        <>
+                          <AlertCircle className="h-4 w-4" />
+                          <span className="text-xs font-medium">
+                            Прострочено на {deadlineInfo.days} дн.
+                          </span>
+                        </>
+                      ) : deadlineInfo.status === 'urgent' ? (
+                        <>
+                          <Clock className="h-4 w-4" />
+                          <span className="text-xs font-medium">
+                            Терміново! {deadlineInfo.days} дн.
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Calendar className="h-4 w-4" />
+                          <span className="text-xs font-medium">
+                            До здачі: {deadlineInfo.days} дн.
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Timeline Progress */}
+                  {project.startDate && project.expectedEndDate && (
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                        <span>{formatDateShort(project.startDate)}</span>
+                        <span className="font-medium">{progress}%</span>
+                        <span>{formatDateShort(project.expectedEndDate)}</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${
+                            progress > 100 ? 'bg-red-500' : progress > 75 ? 'bg-orange-500' : 'bg-green-500'
+                          }`}
+                          style={{ width: `${Math.min(progress, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Card Body */}
+                <div className="p-4 pt-3 space-y-3">
+                  {/* Stage Badge */}
+                  <div>
+                    <Badge variant="outline" className="text-xs">
+                      {STAGE_LABELS[project.currentStage]}
+                    </Badge>
+                  </div>
+
+                  {/* Brigadiers with Timeline */}
                   {brigadiers.length > 0 && (
-                    <div className="flex items-start gap-2">
-                      <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs font-medium text-muted-foreground mb-0.5">
-                          Бригадири
-                        </p>
-                        {brigadiers.slice(0, 3).map((ca) => (
-                          <p key={ca.id} className="text-sm">
-                            {ca.worker.name} ({ca.worker.specialty})
-                          </p>
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-blue-600" />
+                        <p className="text-xs font-semibold text-blue-900">Бригадири</p>
+                      </div>
+                      <div className="space-y-1.5 pl-6">
+                        {brigadiers.slice(0, 2).map((ca) => (
+                          <div key={ca.id} className="bg-blue-50 rounded-md p-2 border border-blue-100">
+                            <p className="text-sm font-medium text-blue-900">
+                              {ca.worker.name}
+                            </p>
+                            <p className="text-xs text-blue-700">
+                              {ca.worker.specialty}
+                            </p>
+                            {ca.startDate && (
+                              <div className="flex items-center gap-1 mt-1">
+                                <Clock className="h-3 w-3 text-blue-600" />
+                                <span className="text-xs text-blue-600">
+                                  {formatDateShort(ca.startDate)}
+                                  {ca.endDate && ` - ${formatDateShort(ca.endDate)}`}
+                                  {!ca.endDate && ' - активний'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
                         ))}
-                        {brigadiers.length > 3 && (
-                          <p className="text-xs text-muted-foreground">ще {brigadiers.length - 3}</p>
+                        {brigadiers.length > 2 && (
+                          <p className="text-xs text-blue-600 pl-2">
+                            ще {brigadiers.length - 2} бригадир(ів)
+                          </p>
                         )}
                       </div>
                     </div>
                   )}
 
                   {/* Budget */}
-                  <div className="flex items-start gap-2">
-                    <DollarSign className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-xs font-medium text-muted-foreground">Бюджет</p>
-                      <p className="text-sm font-bold">
-                        {formatCurrency(Number(project.totalBudget))}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
+                  <div className="bg-green-50 rounded-md p-3 border border-green-100">
+                    <div className="flex items-center gap-2 mb-1">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <p className="text-xs font-semibold text-green-900">Бюджет</p>
+                    </div>
+                    <p className="text-lg font-bold text-green-700">
+                      {formatCurrency(Number(project.totalBudget))}
+                    </p>
+                    <div className="flex justify-between items-center mt-1">
+                      <p className="text-xs text-green-600">
                         Сплачено: {formatCurrency(Number(project.totalPaid))}
                       </p>
+                      {Number(project.totalBudget) > 0 && (
+                        <span className="text-xs font-medium text-green-700">
+                          {Math.round((Number(project.totalPaid) / Number(project.totalBudget)) * 100)}%
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   {/* Estimate */}
                   {latestEstimate && (
-                    <div className="flex items-start gap-2">
-                      <Calculator className="h-4 w-4 text-muted-foreground mt-0.5" />
-                      <div className="flex-1">
-                        <p className="text-xs font-medium text-muted-foreground">Кошторис</p>
-                        <p className="text-sm font-bold">
-                          {formatCurrency(Number(latestEstimate.finalAmount))}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
+                    <div className="bg-purple-50 rounded-md p-3 border border-purple-100">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Calculator className="h-4 w-4 text-purple-600" />
+                        <p className="text-xs font-semibold text-purple-900">Кошторис</p>
+                      </div>
+                      <p className="text-lg font-bold text-purple-700">
+                        {formatCurrency(Number(latestEstimate.finalAmount))}
+                      </p>
+                      <div className="flex justify-between items-center mt-1">
+                        <p className="text-xs text-purple-600">
                           {latestEstimate.number}
                         </p>
+                        <Badge variant="secondary" className="text-[10px]">
+                          {ESTIMATE_STATUS_LABELS[latestEstimate.status]}
+                        </Badge>
                       </div>
                     </div>
                   )}
