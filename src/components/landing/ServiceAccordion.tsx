@@ -52,7 +52,7 @@ export function ServiceAccordion({ services }: ServiceAccordionProps) {
                     {service.title}
                   </h3>
                   {!isActive && (
-                    <p className="text-xs text-[#999] mt-0.5 truncate">
+                    <p className="text-xs text-[#999] mt-0.5 line-clamp-2">
                       {service.desc}
                     </p>
                   )}
