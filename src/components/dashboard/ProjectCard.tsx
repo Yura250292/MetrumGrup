@@ -23,14 +23,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
               {project.title}
             </h3>
             {project.address && (
-              <div className="mt-1 md:mt-1.5 flex items-center gap-1 text-[10px] md:text-xs text-muted-foreground">
-                <MapPin className="h-2.5 w-2.5 md:h-3 md:w-3 flex-shrink-0" />
+              <div className="mt-1 md:mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                <MapPin className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate">{project.address}</span>
               </div>
             )}
           </div>
           <div className="flex items-center gap-1 md:gap-2">
-            <Badge className={`${PROJECT_STATUS_COLORS[project.status]} text-[9px] md:text-xs px-1.5 md:px-2 py-0.5`}>
+            <Badge className={`${PROJECT_STATUS_COLORS[project.status]} text-xs px-1.5 md:px-2 py-0.5`}>
               {PROJECT_STATUS_LABELS[project.status]}
             </Badge>
             <ArrowUpRight className="hidden md:block h-4 w-4 text-muted-foreground/30 group-hover:text-primary transition-colors" />
@@ -49,16 +49,16 @@ export function ProjectCard({ project }: ProjectCardProps) {
           />
         </div>
 
-        <div className="mt-2 md:mt-4 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-[10px] md:text-xs text-muted-foreground">
+        <div className="mt-2 md:mt-4 flex flex-col md:flex-row md:items-center gap-1 md:gap-4 text-xs text-muted-foreground">
           {project.startDate && (
             <div className="flex items-center gap-1">
-              <Calendar className="h-2.5 w-2.5 md:h-3 md:w-3" />
+              <Calendar className="h-3 w-3" />
               <span className="hidden md:inline">{formatDateShort(project.startDate)}</span>
               <span className="md:hidden">{new Date(project.startDate).toLocaleDateString('uk-UA', { day: '2-digit', month: '2-digit' })}</span>
             </div>
           )}
           <div className="flex items-center gap-1">
-            <Wallet className="h-2.5 w-2.5 md:h-3 md:w-3" />
+            <Wallet className="h-3 w-3" />
             <span className="hidden md:inline">Залишок: </span>
             <span className="font-medium text-foreground">{formatCurrency(remaining)}</span>
           </div>

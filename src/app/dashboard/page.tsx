@@ -52,7 +52,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats */}
-      <div className="mb-6 md:mb-8 grid gap-3 md:gap-4 grid-cols-3">
+      <div className="mb-6 md:mb-8 grid gap-3 md:gap-4 grid-cols-1 sm:grid-cols-3">
         <StatsCard
           title="Активні проєкти"
           value={String(activeProjects.length)}

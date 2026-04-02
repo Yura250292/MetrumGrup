@@ -194,8 +194,42 @@
     @apply flex items-center justify-center;
   }
 
+  .touch-padding {
+    padding: 0.75rem;
+  }
+
   .tap-highlight-none {
     -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Mobile typography - minimum 12px for readability */
+  .text-mobile-xs {
+    font-size: 0.75rem; /* 12px */
+  }
+
+  .text-mobile-sm {
+    font-size: 0.875rem; /* 14px */
+  }
+
+  .text-mobile-base {
+    font-size: 1rem; /* 16px */
+  }
+
+  .text-mobile-lg {
+    font-size: 1.125rem; /* 18px */
+  }
+
+  /* Responsive grid helpers */
+  .grid-auto-fit-sm {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+
+  .grid-auto-fit-md {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .grid-auto-fit-lg {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   }
 }
 

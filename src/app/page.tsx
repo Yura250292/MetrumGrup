@@ -302,7 +302,7 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.55 }}
-            className="mt-20 grid grid-cols-3 gap-6 max-w-xl"
+            className="mt-20 grid grid-cols-1 sm:grid-cols-3 gap-6 max-w-xl"
           >
             {[
               { value: "12+", unit: "млн $", label: "продажів нерухомості" },
@@ -313,7 +313,7 @@ export default function HomePage() {
                 <p className="text-2xl font-bold text-white sm:text-3xl font-heading">
                   {stat.value}<span className="text-primary text-lg ml-1 font-mono">{stat.unit}</span>
                 </p>
-                <p className="mt-1 text-[11px] text-white/50 font-mono">{stat.label}</p>
+                <p className="mt-1 text-xs text-white/50 font-mono">{stat.label}</p>
               </div>
             ))}
           </motion.div>
@@ -434,7 +434,7 @@ export default function HomePage() {
                       sizes="25vw"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                    <span className="absolute bottom-3 left-3 text-[10px] font-medium text-white/80 font-mono">SPA & Wellness</span>
+                    <span className="absolute bottom-3 left-3 text-xs font-medium text-white/80 font-mono">SPA & Wellness</span>
                   </div>
                   <div className="relative aspect-[4/3] overflow-hidden group">
                     <Image
@@ -445,22 +445,22 @@ export default function HomePage() {
                       sizes="25vw"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-                    <span className="absolute bottom-3 left-3 text-[10px] font-medium text-white/80 font-mono">Panoramic View</span>
+                    <span className="absolute bottom-3 left-3 text-xs font-medium text-white/80 font-mono">Panoramic View</span>
                   </div>
                 </div>
 
                 <div className="flex gap-3 mt-4">
                   <div className="flex-1 bg-white/5 backdrop-blur-md border border-white/10 p-4 text-center">
                     <p className="text-2xl font-bold text-white font-heading">3 000+</p>
-                    <p className="text-[10px] text-white/60 mt-0.5 font-mono">проєктів</p>
+                    <p className="text-xs text-white/60 mt-0.5 font-mono">проєктів</p>
                   </div>
                   <div className="flex-1 bg-white/5 backdrop-blur-md border border-white/10 p-4 text-center">
                     <p className="text-2xl font-bold text-white font-heading">200k+</p>
-                    <p className="text-[10px] text-white/60 mt-0.5 font-mono">м² ремонту</p>
+                    <p className="text-xs text-white/60 mt-0.5 font-mono">м² ремонту</p>
                   </div>
                   <div className="flex-1 bg-primary/15 border border-primary/25 p-4 text-center">
                     <p className="text-2xl font-bold text-primary font-heading">3 роки</p>
-                    <p className="text-[10px] text-white/60 mt-0.5 font-mono">гарантії</p>
+                    <p className="text-xs text-white/60 mt-0.5 font-mono">гарантії</p>
                   </div>
                 </div>
               </ScrollReveal>
@@ -708,10 +708,10 @@ export default function HomePage() {
             </div>
           </div>
           <div className="border-t border-[#2d2d2d] mt-12 pt-8 flex flex-wrap items-center justify-between gap-4">
-            <p className="text-[10px] text-[#777] font-mono tracking-wider">
+            <p className="text-xs text-[#777] font-mono tracking-wider">
               © {new Date().getFullYear()} METRUM GROUP. ВСІ ПРАВА ЗАХИЩЕНІ.
             </p>
-            <p className="text-[10px] text-[#777] font-mono tracking-wider font-bold">
+            <p className="text-xs text-[#777] font-mono tracking-wider font-bold">
               FORBES NEXT 250 · ISO CERTIFIED
             </p>
           </div>
