@@ -103,6 +103,94 @@ async function generateWithAnthropic(systemPrompt: string, userContent: string) 
   return "{}";
 }
 
+function calculateMinimumItems(wizardData: any): number {
+  let base = 40;
+
+  const area = parseFloat(wizardData.totalArea || '100');
+  if (area > 100) base += 30;
+  if (area > 150) base += 50;
+  if (area > 200) base += 70;
+
+  if (wizardData.floors) base += (wizardData.floors - 1) * 25;
+  if (wizardData.hasBasement) base += 20;
+  if (wizardData.hasAttic) base += 15;
+  if (wizardData.hasGarage) base += 20;
+
+  if (wizardData.rooms) {
+    base += (wizardData.rooms.bathrooms || 0) * 15;
+    base += (wizardData.rooms.bedrooms || 0) * 10;
+  }
+
+  if (wizardData.materialLevel === 'premium') base += 20;
+  if (wizardData.heating?.enabled) base += 15;
+  if (wizardData.electrical === 'full') base += 20;
+
+  return base;
+}
+
+function buildWizardContext(wizardData: any): string {
+  if (!wizardData) return '';
+
+  const {
+    buildingType, totalArea, floors, hasBasement, hasAttic, hasGarage,
+    rooms, wallMaterial, roofType, foundationType, materialLevel,
+    ceilingHeight, heating, waterSupply, sewerage, electrical,
+    ventilation, specialRequirements
+  } = wizardData;
+
+  let context = `\n\n## ДЕТАЛЬНА ІНФОРМАЦІЯ ПРО ПРОЕКТ (з wizard):\n\n`;
+
+  context += `### Характеристики будівлі:\n`;
+  context += `- Тип: ${buildingType === 'house' ? 'Приватний будинок' : buildingType === 'apartment' ? 'Квартира' : 'Комерційне приміщення'}\n`;
+  context += `- Загальна площа: ${totalArea} м²\n`;
+
+  if (buildingType === 'house') {
+    context += `- Поверхів: ${floors}\n`;
+    if (hasBasement) context += `- Підвал: ТАК\n`;
+    if (hasAttic) context += `- Мансарда/горище: ТАК\n`;
+    if (hasGarage) context += `- Гараж: ТАК\n`;
+
+    if (rooms) {
+      context += `\n### Кімнати:\n`;
+      context += `- Спальні: ${rooms.bedrooms}\n`;
+      context += `- Санвузли: ${rooms.bathrooms}\n`;
+      context += `- Вітальні: ${rooms.livingRooms}\n`;
+      context += `- Кухні: ${rooms.kitchens}\n`;
+    }
+
+    context += `\n### Конструкція:\n`;
+    if (wallMaterial) context += `- Матеріал стін: ${wallMaterial === 'gasblock' ? 'Газоблок' : wallMaterial === 'brick' ? 'Цегла' : wallMaterial === 'wood' ? 'Дерево' : 'Панельний'}\n`;
+    if (roofType) context += `- Тип даху: ${roofType === 'pitched' ? 'Скатний' : 'Плоский'}\n`;
+    if (foundationType) context += `- Тип фундаменту: ${foundationType === 'strip' ? 'Стрічковий' : foundationType === 'slab' ? 'Плитний' : 'Пальовий'}\n`;
+  }
+
+  context += `- Рівень матеріалів: ${materialLevel === 'premium' ? 'ПРЕМІУМ (якісні матеріали)' : materialLevel === 'standard' ? 'СТАНДАРТ' : 'ЕКОНОМ'}\n`;
+  if (ceilingHeight) context += `- Висота стелі: ${ceilingHeight} м\n`;
+
+  context += `\n### Інженерні системи:\n`;
+  if (heating?.enabled) context += `- Опалення: ТАК (${heating.type === 'gas' ? 'газ' : heating.type === 'electric' ? 'електро' : 'тверде паливо'})\n`;
+  if (waterSupply) context += `- Водопостачання: ТАК\n`;
+  if (sewerage) context += `- Каналізація: ТАК\n`;
+  if (electrical) context += `- Електрика: ${electrical === 'full' ? 'ПОВНА розводка' : electrical === 'partial' ? 'Часткова' : 'Немає'}\n`;
+  if (ventilation?.bathroom || ventilation?.kitchen) {
+    context += `- Вентиляція:`;
+    if (ventilation.bathroom) context += ` ванна`;
+    if (ventilation.kitchen) context += ` кухня`;
+    context += `\n`;
+  }
+
+  if (specialRequirements) {
+    context += `\n### Особливі вимоги:\n${specialRequirements}\n`;
+  }
+
+  // Calculate minimum items based on wizard data
+  const minItems = calculateMinimumItems(wizardData);
+  context += `\n**МІНІМАЛЬНА КІЛЬКІСТЬ ПОЗИЦІЙ НА ОСНОВІ ЦИХ ДАНИХ: ${minItems}**\n`;
+  context += `**Це НЕ рекомендація - це ОБОВ'ЯЗКОВА вимога!**\n\n`;
+
+  return context;
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -121,6 +209,28 @@ export async function POST(request: NextRequest) {
     const selectedCategories = categoriesStr ? categoriesStr.split(",") : [];
     const model = (formData.get("model") as string) || "gemini";
     const template = (formData.get("template") as string) || "custom";
+
+    // Wizard data (optional)
+    const wizardDataStr = formData.get("wizardData") as string || null;
+    const wizardData = wizardDataStr ? JSON.parse(wizardDataStr) : null;
+
+    // Dynamic minimum items calculation based on template and area
+    const minItemsByTemplate: Record<string, number> = {
+      'foundation': 25,
+      'shell': 60,
+      'turnkey': 80,
+      'house_full': 150,
+      'apartment_rough': 50,
+      'custom': 50
+    };
+
+    const areaNum = parseFloat(area) || 100;
+    const baseMin = minItemsByTemplate[template] || 50;
+
+    // Dynamic calculation - for house_full scale with area
+    const calculatedMin = template === 'house_full'
+      ? Math.max(baseMin, Math.floor(areaNum * 1.2))
+      : baseMin;
 
     if (files.length === 0) {
       return NextResponse.json({ error: "Завантажте хоча б один файл" }, { status: 400 });
@@ -326,7 +436,7 @@ export async function POST(request: NextRequest) {
 - Додаткові примітки: ${additionalNotes || "немає"}
 - Локація: Львів, Україна
 - Валюта: гривня (₴, UAH)
-${templateSpecificPrompt}
+${templateSpecificPrompt}${buildWizardContext(wizardData)}
 # КРИТИЧНО ВАЖЛИВО — ПОВНОТА КОШТОРИСУ
 Кошторис має бути ПОВНИМ і РЕАЛІСТИЧНИМ. Типовий ремонт квартири 60-100 м² включає 50-120+ позицій матеріалів.
 НЕ СКОРОЧУЙ і НЕ УЗАГАЛЬНЮЙ. Кожен матеріал — окрема позиція.
@@ -335,12 +445,31 @@ ${templateSpecificPrompt}
 
 ${sectionsText}
 
-## ВАЖЛИВО ПРО КІЛЬКІСТЬ ПОЗИЦІЙ:
-- Мінімум 40-60 позицій для простого ремонту однокімнатної квартири
-- 60-90 позицій для двокімнатної квартири
-- 80-120+ позицій для трикімнатної або більшої
+## КРИТИЧНО ВАЖЛИВА ВИМОГА - КІЛЬКІСТЬ ПОЗИЦІЙ:
+
+**МІНІМУМ для цього проекту: ${calculatedMin} позицій**
+
+${template === 'house_full' ? `
+**РОЗБИВКА ПО КАТЕГОРІЯХ (орієнтовно):**
+- Фундамент та нульовий цикл: 15-25 позицій
+- Стіни та перегородки: 20-35 позицій
+- Перекриття та дах: 25-40 позицій
+- Вікна та двері: 10-15 позицій
+- Фасадні роботи: 15-25 позицій
+- Електрика: 20-30 позицій
+- Сантехніка та опалення: 20-35 позицій
+- Внутрішнє оздоблення: 35-60+ позицій
+
+**КОЖНА категорія має бути ДЕТАЛЬНО розписана!**
+Не узагальнюй! Кожна марка, розмір - ОКРЕМА позиція!
+` : ''}
+
+**ПРАВИЛА:**
 - Кожен ТИП матеріалу — ОКРЕМА позиція (не "шпаклівка", а "шпаклівка стартова Knauf HP Start 30 кг" і "шпаклівка фінішна Knauf HP Finish 25 кг")
 - Вказуй КОНКРЕТНІ марки та виробників матеріалів де можливо
+- Кожен розмір, товщина, специфікація — окрема позиція
+
+**Якщо вийде менше ${calculatedMin} позицій - ти ПРОВАЛИВ завдання.**
 
 # СТАНДАРТИ ЯКОСТІ (на основі реальних проєктів Metrum Group):
 
@@ -555,6 +684,16 @@ ${textParts.join("\n\n")}
 5. Точні розрахунки totalCost = quantity × unitPrice + laborCost
 6. Детальні priceNote з поясненням ціни
 
+# ОСТАННЄ ПОПЕРЕДЖЕННЯ:
+
+Перед відповіддю ПЕРЕВІР:
+- Кількість позицій >= ${calculatedMin}? ${template === 'house_full' ? '(для будинку це МІНІМУМ 150!)' : ''}
+- Кожна категорія деталізована?
+- Не узагальнював матеріали?
+- Кожна марка/розмір - окрема позиція?
+
+Якщо НІ на будь-що - ПОВТОРИ генерацію з більшою деталізацією!
+
 # ФОРМАТ ВІДПОВІДІ (тільки JSON, без іншого тексту):
 {
   "title": "Назва кошторису",
@@ -590,7 +729,7 @@ ${textParts.join("\n\n")}
 }
 
 # КОНТРОЛЬ ЯКОСТІ (перевір перед відповіддю):
-✓ Кошторис містить НЕ МЕНШЕ 40 позицій матеріалів
+✓ Кошторис містить НЕ МЕНШЕ ${calculatedMin} позицій матеріалів${template === 'house_full' ? ' (для будинку: МІНІМУМ 150 позицій, не 40-60!)' : ''}
 ✓ Всі площі відповідають даним з файлів
 ✓ totalCost = quantity × unitPrice + laborCost (для кожної позиції)
 ✓ sectionTotal = сума totalCost всіх позицій секції

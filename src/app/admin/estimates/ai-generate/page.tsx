@@ -66,6 +66,32 @@ type EstimateData = {
 
 type AIGeneratedEstimate = EstimateData;
 
+type WizardData = {
+  buildingType: 'house' | 'apartment' | 'commercial';
+  totalArea: string;
+  floors?: number;
+  hasBasement?: boolean;
+  hasAttic?: boolean;
+  hasGarage?: boolean;
+  rooms?: {
+    bedrooms: number;
+    bathrooms: number;
+    livingRooms: number;
+    kitchens: number;
+  };
+  wallMaterial?: 'gasblock' | 'brick' | 'wood' | 'panel';
+  roofType?: 'pitched' | 'flat';
+  foundationType?: 'strip' | 'slab' | 'pile';
+  materialLevel: 'economy' | 'standard' | 'premium';
+  ceilingHeight?: string;
+  heating: { enabled: boolean; type?: 'gas' | 'electric' | 'solid' };
+  waterSupply: boolean;
+  sewerage: boolean;
+  electrical: 'full' | 'partial' | 'none';
+  ventilation: { bathroom: boolean; kitchen: boolean };
+  specialRequirements?: string;
+};
+
 const FILE_ICONS: Record<string, typeof FileText> = {
   pdf: FileText,
   xlsx: FileSpreadsheet,
@@ -106,6 +132,532 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Компонент для відображення результатів верифікації
+function VerificationResults({ result }: { result: any }) {
+  if (!result?.verification) return null;
+
+  const { status, overallScore, issues, improvements, summary } = result.verification;
+
+  const statusConfig = {
+    passed: { color: "#22c55e", bgColor: "#f0fdf4", borderColor: "#86efac", label: "Пройдено", icon: "✓" },
+    warnings: { color: "#f59e0b", bgColor: "#fffbeb", borderColor: "#fde68a", label: "Попередження", icon: "⚠" },
+    critical: { color: "#ef4444", bgColor: "#fef2f2", borderColor: "#fca5a5", label: "Критичні помилки", icon: "✕" },
+  };
+
+  const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.warnings;
+
+  return (
+    <Card className="p-6 mb-6 border-2" style={{ borderColor: config.borderColor }}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">{config.icon}</span>
+          <div>
+            <h3 className="text-xl font-bold">Результати верифікації OpenAI</h3>
+            <Badge
+              variant={status === "passed" ? "default" : "secondary"}
+              style={{
+                backgroundColor: config.bgColor,
+                color: config.color,
+                borderColor: config.borderColor
+              }}
+            >
+              {config.label}
+            </Badge>
+          </div>
+        </div>
+        <div className="text-right">
+          <div className="text-3xl font-bold" style={{ color: config.color }}>
+            {overallScore}/100
+          </div>
+          <div className="text-sm text-muted-foreground">Оцінка якості</div>
+        </div>
+      </div>
+
+      {/* Summary */}
+      <div className="mb-4 p-4 bg-muted rounded-lg">
+        <p className="text-sm">{summary}</p>
+      </div>
+
+      {/* Issues */}
+      {issues && issues.length > 0 && (
+        <div className="mb-4">
+          <h4 className="font-semibold mb-2">Знайдені проблеми ({issues.length}):</h4>
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {issues.map((issue: any, idx: number) => (
+              <div
+                key={idx}
+                className="p-3 rounded-lg border"
+                style={{
+                  backgroundColor: issue.severity === "error" ? "#fef2f2" : "#f9fafb",
+                  borderColor: issue.severity === "error" ? "#fca5a5" : "#e5e7eb",
+                }}
+              >
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">
+                      {issue.category === "calculation" && "Розрахунок"}
+                      {issue.category === "pricing" && "Ціна"}
+                      {issue.category === "completeness" && "Повнота"}
+                      {issue.category === "logic" && "Логіка"}
+                      {issue.category === "specifications" && "Специфікації"}
+                      {" - "}
+                      Секція {issue.sectionIndex + 1}, Позиція {issue.itemIndex + 1}
+                    </div>
+                    <div className="text-sm mt-1">{issue.message}</div>
+                    {issue.suggestion && (
+                      <div className="text-sm mt-1 text-muted-foreground">
+                        <strong>Рекомендація:</strong> {issue.suggestion}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Improvements */}
+      {improvements && improvements.length > 0 && (
+        <div>
+          <h4 className="font-semibold mb-2">Рекомендації для покращення ({improvements.length}):</h4>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {improvements.map((improvement: any, idx: number) => (
+              <div key={idx} className="p-3 bg-blue-50 rounded-lg text-sm">
+                <div className="font-medium">
+                  {improvement.type === "add" && "➕ Додати"}
+                  {improvement.type === "modify" && "✏️ Змінити"}
+                  {improvement.type === "remove" && "🗑️ Видалити"}
+                </div>
+                <div>{improvement.description}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Wizard Modal Component
+function EstimateWizardModal({
+  isOpen,
+  onClose,
+  wizardData,
+  setWizardData,
+  wizardStep,
+  setWizardStep,
+  onComplete,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  wizardData: WizardData;
+  setWizardData: (data: WizardData) => void;
+  wizardStep: number;
+  setWizardStep: (step: number) => void;
+  onComplete: () => void;
+}) {
+  if (!isOpen) return null;
+
+  const totalSteps = wizardData.buildingType === 'house' ? 3 : 2;
+  const progress = (wizardStep / totalSteps) * 100;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        {/* Progress Bar */}
+        <div className="h-2 bg-muted">
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+
+        <div className="p-8">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold">Деталі проекту</h2>
+              <p className="text-sm text-muted-foreground">
+                Крок {wizardStep} з {totalSteps}
+              </p>
+            </div>
+            <Button variant="ghost" onClick={onClose}>
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
+
+          {/* Step Content */}
+          {wizardStep === 1 && <WizardStep1 data={wizardData} setData={setWizardData} />}
+          {wizardStep === 2 && <WizardStep2 data={wizardData} setData={setWizardData} />}
+          {wizardStep === 3 && wizardData.buildingType === 'house' && (
+            <WizardStep3 data={wizardData} setData={setWizardData} />
+          )}
+
+          {/* Navigation */}
+          <div className="flex justify-between mt-8 pt-6 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setWizardStep(Math.max(1, wizardStep - 1))}
+              disabled={wizardStep === 1}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" /> Назад
+            </Button>
+
+            {wizardStep < totalSteps ? (
+              <Button onClick={() => setWizardStep(wizardStep + 1)}>
+                Далі <ChevronDown className="ml-2 h-4 w-4 rotate-[-90deg]" />
+              </Button>
+            ) : (
+              <Button onClick={onComplete} className="bg-green-600 hover:bg-green-700">
+                <Check className="mr-2 h-4 w-4" /> Завершити
+              </Button>
+            )}
+          </div>
+
+          {/* Skip */}
+          <div className="text-center mt-4">
+            <Button variant="link" onClick={onComplete} className="text-xs text-muted-foreground">
+              Пропустити wizard
+            </Button>
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+// Step 1: Type and Size
+function WizardStep1({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-sm font-medium mb-2">Загальна площа (м²)</label>
+        <input
+          type="number"
+          value={data.totalArea}
+          onChange={(e) => setData({ ...data, totalArea: e.target.value })}
+          className="w-full px-4 py-2 border rounded-lg"
+          placeholder="150"
+        />
+      </div>
+
+      {data.buildingType === 'house' && (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-2">Кількість поверхів</label>
+            <select
+              value={data.floors}
+              onChange={(e) => setData({ ...data, floors: parseInt(e.target.value) })}
+              className="w-full px-4 py-2 border rounded-lg"
+            >
+              <option value="1">1 поверх</option>
+              <option value="2">2 поверхи</option>
+              <option value="3">3 поверхи</option>
+              <option value="4">4+ поверхів</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={data.hasBasement}
+                onChange={(e) => setData({ ...data, hasBasement: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium">Підвал</span>
+            </label>
+
+            <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={data.hasAttic}
+                onChange={(e) => setData({ ...data, hasAttic: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium">Мансарда</span>
+            </label>
+
+            <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+              <input
+                type="checkbox"
+                checked={data.hasGarage}
+                onChange={(e) => setData({ ...data, hasGarage: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium">Гараж</span>
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-3">Кімнати</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Спальні</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={data.rooms?.bedrooms}
+                  onChange={(e) => setData({
+                    ...data,
+                    rooms: { ...data.rooms!, bedrooms: parseInt(e.target.value) || 0 }
+                  })}
+                  className="w-full px-3 py-2 border rounded"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Санвузли</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={data.rooms?.bathrooms}
+                  onChange={(e) => setData({
+                    ...data,
+                    rooms: { ...data.rooms!, bathrooms: parseInt(e.target.value) || 0 }
+                  })}
+                  className="w-full px-3 py-2 border rounded"
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Step 2: Construction
+function WizardStep2({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  return (
+    <div className="space-y-6">
+      {data.buildingType === 'house' && (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-2">Матеріал стін</label>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { value: 'gasblock', label: 'Газоблок' },
+                { value: 'brick', label: 'Цегла' },
+                { value: 'wood', label: 'Дерево' },
+                { value: 'panel', label: 'Панельний' },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className={cn(
+                    "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                    data.wallMaterial === option.value && "border-primary bg-primary/5"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="wallMaterial"
+                    value={option.value}
+                    checked={data.wallMaterial === option.value}
+                    onChange={(e) => setData({ ...data, wallMaterial: e.target.value as any })}
+                    className="text-primary"
+                  />
+                  <span className="text-sm font-medium">{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Тип даху</label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className={cn("flex items-center gap-2 p-3 border rounded-lg cursor-pointer", data.roofType === 'pitched' && "border-primary bg-primary/5")}>
+                <input type="radio" name="roofType" value="pitched" checked={data.roofType === 'pitched'} onChange={(e) => setData({ ...data, roofType: e.target.value as any })} />
+                <span className="text-sm font-medium">Скатний</span>
+              </label>
+              <label className={cn("flex items-center gap-2 p-3 border rounded-lg cursor-pointer", data.roofType === 'flat' && "border-primary bg-primary/5")}>
+                <input type="radio" name="roofType" value="flat" checked={data.roofType === 'flat'} onChange={(e) => setData({ ...data, roofType: e.target.value as any })} />
+                <span className="text-sm font-medium">Плоский</span>
+              </label>
+            </div>
+          </div>
+        </>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Рівень матеріалів</label>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: 'economy', label: 'Економ', desc: 'Базові матеріали' },
+            { value: 'standard', label: 'Стандарт', desc: 'Середній клас' },
+            { value: 'premium', label: 'Преміум', desc: 'Якісні матеріали' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                data.materialLevel === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="materialLevel"
+                value={option.value}
+                checked={data.materialLevel === option.value}
+                onChange={(e) => setData({ ...data, materialLevel: e.target.value as any })}
+                className="sr-only"
+              />
+              <span className="text-sm font-bold">{option.label}</span>
+              <span className="text-xs text-muted-foreground">{option.desc}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Висота стелі (м)</label>
+        <input
+          type="number"
+          step="0.1"
+          min="2.4"
+          max="4.0"
+          value={data.ceilingHeight}
+          onChange={(e) => setData({ ...data, ceilingHeight: e.target.value })}
+          className="w-full px-4 py-2 border rounded-lg"
+        />
+      </div>
+    </div>
+  );
+}
+
+// Step 3: Engineering
+function WizardStep3({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="flex items-center gap-2 mb-3">
+          <input
+            type="checkbox"
+            checked={data.heating.enabled}
+            onChange={(e) => setData({
+              ...data,
+              heating: { ...data.heating, enabled: e.target.checked }
+            })}
+            className="rounded"
+          />
+          <span className="text-sm font-medium">Опалення</span>
+        </label>
+
+        {data.heating.enabled && (
+          <div className="ml-6 grid grid-cols-3 gap-3">
+            {[
+              { value: 'gas', label: 'Газ' },
+              { value: 'electric', label: 'Електро' },
+              { value: 'solid', label: 'Тверде паливо' },
+            ].map((option) => (
+              <label key={option.value} className={cn("flex items-center gap-2 p-2 border rounded cursor-pointer", data.heating.type === option.value && "border-primary bg-primary/5")}>
+                <input
+                  type="radio"
+                  name="heatingType"
+                  value={option.value}
+                  checked={data.heating.type === option.value}
+                  onChange={(e) => setData({
+                    ...data,
+                    heating: { ...data.heating, type: e.target.value as any }
+                  })}
+                />
+                <span className="text-sm">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={data.waterSupply}
+            onChange={(e) => setData({ ...data, waterSupply: e.target.checked })}
+            className="rounded"
+          />
+          <span className="text-sm font-medium">Водопостачання</span>
+        </label>
+
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={data.sewerage}
+            onChange={(e) => setData({ ...data, sewerage: e.target.checked })}
+            className="rounded"
+          />
+          <span className="text-sm font-medium">Каналізація</span>
+        </label>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Електрика</label>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: 'full', label: 'Повна' },
+            { value: 'partial', label: 'Часткова' },
+            { value: 'none', label: 'Немає' },
+          ].map((option) => (
+            <label key={option.value} className={cn("flex items-center gap-2 p-3 border rounded-lg cursor-pointer", data.electrical === option.value && "border-primary bg-primary/5")}>
+              <input
+                type="radio"
+                name="electrical"
+                value={option.value}
+                checked={data.electrical === option.value}
+                onChange={(e) => setData({ ...data, electrical: e.target.value as any })}
+              />
+              <span className="text-sm font-medium">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Вентиляція</label>
+        <div className="grid grid-cols-2 gap-4">
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={data.ventilation.bathroom}
+              onChange={(e) => setData({
+                ...data,
+                ventilation: { ...data.ventilation, bathroom: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Ванна</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={data.ventilation.kitchen}
+              onChange={(e) => setData({
+                ...data,
+                ventilation: { ...data.ventilation, kitchen: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Кухня</span>
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Особливі вимоги</label>
+        <textarea
+          value={data.specialRequirements}
+          onChange={(e) => setData({ ...data, specialRequirements: e.target.value })}
+          placeholder="Наприклад: теплі підлоги у всіх кімнатах, натяжні стелі..."
+          rows={4}
+          className="w-full px-4 py-2 border rounded-lg"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function AIEstimatePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [projectType, setProjectType] = useState("ремонт квартири");
@@ -134,6 +686,39 @@ export default function AIEstimatePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<any>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // Wizard state
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardCompleted, setWizardCompleted] = useState(false);
+  const [wizardData, setWizardData] = useState<WizardData>({
+    buildingType: 'house',
+    totalArea: '',
+    floors: 1,
+    hasBasement: false,
+    hasAttic: false,
+    hasGarage: false,
+    rooms: {
+      bedrooms: 3,
+      bathrooms: 2,
+      livingRooms: 1,
+      kitchens: 1,
+    },
+    wallMaterial: 'gasblock',
+    roofType: 'pitched',
+    foundationType: 'strip',
+    materialLevel: 'standard',
+    ceilingHeight: '2.7',
+    heating: { enabled: true, type: 'gas' },
+    waterSupply: true,
+    sewerage: true,
+    electrical: 'full',
+    ventilation: { bathroom: true, kitchen: true },
+    specialRequirements: '',
+  });
+
   const router = useRouter();
 
   // Load projects on mount
@@ -151,6 +736,25 @@ export default function AIEstimatePage() {
     }
     loadProjects();
   }, []);
+
+  // Auto-trigger wizard for complex projects
+  useEffect(() => {
+    if (['house_full', 'turnkey'].includes(selectedTemplate) && !wizardCompleted) {
+      setShowWizard(true);
+    }
+  }, [selectedTemplate, wizardCompleted]);
+
+  // Wizard complete handler
+  const handleWizardComplete = () => {
+    setShowWizard(false);
+    setWizardCompleted(true);
+    setWizardStep(1);
+
+    // Sync area from wizard to main form
+    if (wizardData.totalArea) {
+      setArea(wizardData.totalArea);
+    }
+  };
 
   // Drag and drop handlers
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -230,6 +834,11 @@ export default function AIEstimatePage() {
       formData.append("model", selectedGenerationModel);
       formData.append("template", selectedTemplate);
 
+      // Add wizard data if completed
+      if (wizardCompleted && wizardData) {
+        formData.append("wizardData", JSON.stringify(wizardData));
+      }
+
       const res = await fetch("/api/admin/estimates/generate", {
         method: "POST",
         body: formData,
@@ -245,10 +854,39 @@ export default function AIEstimatePage() {
       setEstimate(json.data);
       // Expand all sections by default
       setExpandedSections(new Set(json.data.sections.map((_: unknown, i: number) => i)));
+
+      // Автоматична верифікація через OpenAI
+      await verifyEstimate(json.data);
     } catch (err) {
       setError("Не вдалось з'єднатись з сервером");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Функція верифікації кошторису через OpenAI
+  async function verifyEstimate(estimateData: EstimateData) {
+    setIsVerifying(true);
+    setVerificationResult(null);
+
+    try {
+      const response = await fetch("/api/admin/estimates/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ estimate: estimateData }),
+      });
+
+      if (!response.ok) {
+        console.error("Verification failed");
+        return;
+      }
+
+      const result = await response.json();
+      setVerificationResult(result);
+    } catch (error) {
+      console.error("Verification error:", error);
+    } finally {
+      setIsVerifying(false);
     }
   }
 
@@ -889,6 +1527,19 @@ export default function AIEstimatePage() {
             </div>
           </div>
 
+          {/* Індикатор верифікації */}
+          {isVerifying && (
+            <Card className="p-6">
+              <div className="flex items-center gap-3">
+                <Loader2 className="animate-spin h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">OpenAI перевіряє кошторис...</span>
+              </div>
+            </Card>
+          )}
+
+          {/* Результати верифікації */}
+          {verificationResult && <VerificationResults result={verificationResult} />}
+
           {/* Summary cards */}
           <div className="grid gap-3 sm:grid-cols-4">
             {[
@@ -1391,6 +2042,17 @@ export default function AIEstimatePage() {
           </Card>
         </div>
       )}
+
+      {/* Wizard Modal */}
+      <EstimateWizardModal
+        isOpen={showWizard}
+        onClose={() => setShowWizard(false)}
+        wizardData={wizardData}
+        setWizardData={setWizardData}
+        wizardStep={wizardStep}
+        setWizardStep={setWizardStep}
+        onComplete={handleWizardComplete}
+      />
     </div>
   );
 }
