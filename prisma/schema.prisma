@@ -31,6 +31,9 @@ model User {
   projectFiles       ProjectFile[]
   clientProjects     Project[]              @relation("ClientProjects")
   managedProjects    Project[]              @relation("ManagerProjects")
+  estimateVersions   EstimateVersion[]
+  approvalSteps      EstimateApprovalStep[]
+  criticalChanges    EstimateCriticalChange[]
 
   @@map("users")
 }
@@ -132,6 +135,9 @@ model Estimate {
   taxCalculatedAt       DateTime?
   items                 EstimateItem[]
   sections              EstimateSection[]
+  versions              EstimateVersion[]
+  approvalSteps         EstimateApprovalStep[]
+  criticalChanges       EstimateCriticalChange[]
   createdBy             User              @relation("EstimateCreator", fields: [createdById], references: [id])
   engineerReviewedBy    User?             @relation("EngineerReviews", fields: [engineerReviewedById], references: [id])
   financeReviewedBy     User?             @relation("FinanceReviews", fields: [financeReviewedById], references: [id])
@@ -508,6 +514,71 @@ model TaxRecord {
   @@index([estimateId])
   @@index([calculatedAt])
   @@map("tax_records")
+}
+
+model EstimateVersion {
+  id                String                 @id @default(cuid())
+  estimateId        String
+  versionNumber     Int
+  eventType         String
+  status            EstimateStatus
+  financialSnapshot Json
+  snapshotHash      String
+  changeDescription String?
+  createdAt         DateTime               @default(now())
+  createdById       String
+  estimate          Estimate               @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  createdBy         User                   @relation(fields: [createdById], references: [id])
+  approvalSteps     EstimateApprovalStep[]
+  criticalChanges   EstimateCriticalChange[]
+
+  @@unique([estimateId, versionNumber])
+  @@index([estimateId, createdAt])
+  @@map("estimate_versions")
+}
+
+model EstimateApprovalStep {
+  id            String          @id @default(cuid())
+  estimateId    String
+  versionId     String
+  stepType      String
+  status        String
+  reviewerRole  String
+  notes         String?
+  signatureHash String
+  signatureData Json
+  ipAddress     String?
+  userAgent     String?
+  reviewedAt    DateTime        @default(now())
+  reviewedById  String
+  estimate      Estimate        @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  version       EstimateVersion @relation(fields: [versionId], references: [id])
+  reviewer      User            @relation(fields: [reviewedById], references: [id])
+
+  @@index([estimateId, reviewedAt])
+  @@index([reviewedById])
+  @@map("estimate_approval_steps")
+}
+
+model EstimateCriticalChange {
+  id         String           @id @default(cuid())
+  estimateId String
+  versionId  String?
+  changeType String
+  fieldName  String
+  oldValue   Json?
+  newValue   Json?
+  reason     String?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+  userId     String
+  estimate   Estimate         @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  version    EstimateVersion? @relation(fields: [versionId], references: [id])
+  user       User             @relation(fields: [userId], references: [id])
+
+  @@index([estimateId, createdAt])
+  @@index([changeType])
+  @@map("estimate_critical_changes")
 }
 
 model DocumentSequence {
