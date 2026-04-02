@@ -462,8 +462,8 @@ export function ProjectsDashboardTable({ projects, managers }: Props) {
                     </div>
                   )}
                 </div>
-              </Card>
-            </Link>
+              </Link>
+            </Card>
           );
         })}
       </div>
