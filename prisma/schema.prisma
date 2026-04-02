@@ -510,6 +510,16 @@ model TaxRecord {
   @@map("tax_records")
 }
 
+model DocumentSequence {
+  id        String   @id
+  prefix    String
+  last      Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("document_sequences")
+}
+
 enum Role {
   SUPER_ADMIN
   MANAGER
