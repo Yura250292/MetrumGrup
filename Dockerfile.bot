@@ -1,0 +1,28 @@
+# Dockerfile для Telegram бота
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Копіюємо package files
+COPY package*.json ./
+COPY prisma ./prisma/
+
+# Встановлюємо залежності
+RUN npm ci --only=production
+
+# Генеруємо Prisma Client
+RUN npx prisma generate
+
+# Копіюємо код бота
+COPY bot ./bot
+COPY src/lib/prisma.ts ./src/lib/
+
+# Компілюємо TypeScript
+RUN npm install -g tsx
+
+# Змінні оточення
+ENV NODE_ENV=production
+ENV BOT_MODE=polling
+
+# Запуск бота
+CMD ["tsx", "bot/index.ts"]
