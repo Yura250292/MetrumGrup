@@ -89,6 +89,24 @@ type WizardData = {
   sewerage: boolean;
   electrical: 'full' | 'partial' | 'none';
   ventilation: { bathroom: boolean; kitchen: boolean };
+  // Step 4: Детальна специфікація
+  electricalDetails?: {
+    hasOnPlans: boolean;
+    outletsCount?: number;
+    switchesCount?: number;
+    lightsCount?: number;
+  };
+  heatingDetails?: {
+    radiatorsCount?: number;
+    underfloorHeating: boolean;
+    underfloorRooms?: string;
+  };
+  flooringDetails?: {
+    tile?: number;
+    laminate?: number;
+    parquet?: number;
+    carpet?: number;
+  };
   specialRequirements?: string;
 };
 
@@ -260,7 +278,7 @@ function EstimateWizardModal({
 }) {
   if (!isOpen) return null;
 
-  const totalSteps = wizardData.buildingType === 'house' ? 3 : 2;
+  const totalSteps = wizardData.buildingType === 'house' ? 4 : 3;
   const progress = (wizardStep / totalSteps) * 100;
 
   return (
@@ -291,8 +309,9 @@ function EstimateWizardModal({
           {/* Step Content */}
           {wizardStep === 1 && <WizardStep1 data={wizardData} setData={setWizardData} />}
           {wizardStep === 2 && <WizardStep2 data={wizardData} setData={setWizardData} />}
-          {wizardStep === 3 && wizardData.buildingType === 'house' && (
-            <WizardStep3 data={wizardData} setData={setWizardData} />
+          {wizardStep === 3 && <WizardStep3 data={wizardData} setData={setWizardData} />}
+          {wizardStep === 4 && wizardData.buildingType === 'house' && (
+            <WizardStep4 data={wizardData} setData={setWizardData} />
           )}
 
           {/* Navigation */}
@@ -649,10 +668,208 @@ function WizardStep3({ data, setData }: { data: WizardData; setData: (d: WizardD
         <textarea
           value={data.specialRequirements}
           onChange={(e) => setData({ ...data, specialRequirements: e.target.value })}
-          placeholder="Наприклад: теплі підлоги у всіх кімнатах, натяжні стелі..."
+          placeholder="Наприклад: натяжні стелі, декоративні елементи..."
           rows={4}
           className="w-full px-4 py-2 border rounded-lg"
         />
+      </div>
+    </div>
+  );
+}
+
+// Step 4: Детальна специфікація (тільки для будинків)
+function WizardStep4({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+        <p className="text-sm text-blue-800">
+          💡 <strong>Порада:</strong> Чим детальніше ви вкажете кількість елементів (розетки, радіатори, площі покриттів),
+          тим точніший буде кошторис!
+        </p>
+      </div>
+
+      {/* Електрика */}
+      <div>
+        <label className="block text-sm font-medium mb-3">⚡ Електрика (якщо є на планах)</label>
+        <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted mb-3">
+          <input
+            type="checkbox"
+            checked={data.electricalDetails?.hasOnPlans || false}
+            onChange={(e) => setData({
+              ...data,
+              electricalDetails: { ...data.electricalDetails!, hasOnPlans: e.target.checked }
+            })}
+            className="rounded"
+          />
+          <span className="text-sm">На планах вказано розташування розеток/вимикачів</span>
+        </label>
+
+        {data.electricalDetails?.hasOnPlans && (
+          <div className="ml-6 grid grid-cols-3 gap-4">
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Розеток</label>
+              <input
+                type="number"
+                min="0"
+                value={data.electricalDetails?.outletsCount || 0}
+                onChange={(e) => setData({
+                  ...data,
+                  electricalDetails: { ...data.electricalDetails!, outletsCount: parseInt(e.target.value) || 0 }
+                })}
+                className="w-full px-3 py-2 border rounded"
+                placeholder="25"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Вимикачів</label>
+              <input
+                type="number"
+                min="0"
+                value={data.electricalDetails?.switchesCount || 0}
+                onChange={(e) => setData({
+                  ...data,
+                  electricalDetails: { ...data.electricalDetails!, switchesCount: parseInt(e.target.value) || 0 }
+                })}
+                className="w-full px-3 py-2 border rounded"
+                placeholder="15"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Світильників</label>
+              <input
+                type="number"
+                min="0"
+                value={data.electricalDetails?.lightsCount || 0}
+                onChange={(e) => setData({
+                  ...data,
+                  electricalDetails: { ...data.electricalDetails!, lightsCount: parseInt(e.target.value) || 0 }
+                })}
+                className="w-full px-3 py-2 border rounded"
+                placeholder="20"
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Опалення */}
+      <div>
+        <label className="block text-sm font-medium mb-3">🔥 Опалення</label>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Кількість радіаторів</label>
+            <input
+              type="number"
+              min="0"
+              value={data.heatingDetails?.radiatorsCount || 0}
+              onChange={(e) => setData({
+                ...data,
+                heatingDetails: { ...data.heatingDetails!, radiatorsCount: parseInt(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="10"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={data.heatingDetails?.underfloorHeating || false}
+              onChange={(e) => setData({
+                ...data,
+                heatingDetails: { ...data.heatingDetails!, underfloorHeating: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Теплі підлоги</span>
+          </label>
+
+          {data.heatingDetails?.underfloorHeating && (
+            <div className="ml-6">
+              <label className="block text-xs text-muted-foreground mb-1">В яких приміщеннях?</label>
+              <input
+                type="text"
+                value={data.heatingDetails?.underfloorRooms || ''}
+                onChange={(e) => setData({
+                  ...data,
+                  heatingDetails: { ...data.heatingDetails!, underfloorRooms: e.target.value }
+                })}
+                className="w-full px-3 py-2 border rounded"
+                placeholder="Ванна, кухня, коридор..."
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Покриття підлоги */}
+      <div>
+        <label className="block text-sm font-medium mb-3">🏠 Покриття підлоги (площі в м²)</label>
+        <p className="text-xs text-muted-foreground mb-3">
+          Вкажіть орієнтовні площі різних типів покриття
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Плитка</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={data.flooringDetails?.tile || 0}
+              onChange={(e) => setData({
+                ...data,
+                flooringDetails: { ...data.flooringDetails!, tile: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="40"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Ламінат</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={data.flooringDetails?.laminate || 0}
+              onChange={(e) => setData({
+                ...data,
+                flooringDetails: { ...data.flooringDetails!, laminate: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="100"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Паркет</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={data.flooringDetails?.parquet || 0}
+              onChange={(e) => setData({
+                ...data,
+                flooringDetails: { ...data.flooringDetails!, parquet: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-1">Ковролін</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={data.flooringDetails?.carpet || 0}
+              onChange={(e) => setData({
+                ...data,
+                flooringDetails: { ...data.flooringDetails!, carpet: parseFloat(e.target.value) || 0 }
+              })}
+              className="w-full px-3 py-2 border rounded"
+              placeholder="0"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -717,6 +934,23 @@ export default function AIEstimatePage() {
     sewerage: true,
     electrical: 'full',
     ventilation: { bathroom: true, kitchen: true },
+    electricalDetails: {
+      hasOnPlans: false,
+      outletsCount: 0,
+      switchesCount: 0,
+      lightsCount: 0,
+    },
+    heatingDetails: {
+      radiatorsCount: 0,
+      underfloorHeating: false,
+      underfloorRooms: '',
+    },
+    flooringDetails: {
+      tile: 0,
+      laminate: 0,
+      parquet: 0,
+      carpet: 0,
+    },
     specialRequirements: '',
   });
 

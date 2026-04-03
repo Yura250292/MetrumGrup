@@ -167,6 +167,29 @@ function calculateMinimumItems(wizardData: any): number {
   if (wizardData.heating?.enabled) base += 15;
   if (wizardData.electrical === 'full') base += 20;
 
+  // Детальна специфікація збільшує мінімум
+  if (wizardData.electricalDetails?.hasOnPlans) {
+    const { outletsCount, switchesCount, lightsCount } = wizardData.electricalDetails;
+    // Кожна розетка/вимикач = мінімум 2-3 позиції (сам прилад + підрозетник + кабель)
+    base += (outletsCount || 0) * 2;
+    base += (switchesCount || 0) * 2;
+    base += (lightsCount || 0) * 2;
+  }
+
+  if (wizardData.heatingDetails) {
+    base += (wizardData.heatingDetails.radiatorsCount || 0) * 3; // Радіатор + кріплення + труби
+    if (wizardData.heatingDetails.underfloorHeating) base += 10;
+  }
+
+  if (wizardData.flooringDetails) {
+    const { tile, laminate, parquet, carpet } = wizardData.flooringDetails;
+    // Кожен тип покриття = мінімум 4-5 позицій
+    if (tile > 0) base += 5;
+    if (laminate > 0) base += 5;
+    if (parquet > 0) base += 5;
+    if (carpet > 0) base += 4;
+  }
+
   return base;
 }
 
@@ -182,7 +205,8 @@ function buildWizardContext(wizardData: any): string {
     buildingType, totalArea, floors, hasBasement, hasAttic, hasGarage,
     rooms, wallMaterial, roofType, foundationType, materialLevel,
     ceilingHeight, heating, waterSupply, sewerage, electrical,
-    ventilation, specialRequirements
+    ventilation, electricalDetails, heatingDetails, flooringDetails,
+    specialRequirements
   } = wizardData;
 
   let context = `\n\n## ДЕТАЛЬНА ІНФОРМАЦІЯ ПРО ПРОЕКТ (з wizard):\n\n`;
@@ -224,6 +248,44 @@ function buildWizardContext(wizardData: any): string {
     if (ventilation.bathroom) context += ` ванна`;
     if (ventilation.kitchen) context += ` кухня`;
     context += `\n`;
+  }
+
+  // Детальна специфікація
+  if (electricalDetails || heatingDetails || flooringDetails) {
+    context += `\n### 🎯 ДЕТАЛЬНА СПЕЦИФІКАЦІЯ (з wizard):\n`;
+
+    if (electricalDetails?.hasOnPlans) {
+      context += `\n**Електрика (підраховано з планів):**\n`;
+      if (electricalDetails.outletsCount) {
+        context += `- Розеток: ${electricalDetails.outletsCount} шт → Додай ${electricalDetails.outletsCount} позицій "Розетка + підрозетник + кабель"\n`;
+      }
+      if (electricalDetails.switchesCount) {
+        context += `- Вимикачів: ${electricalDetails.switchesCount} шт → Додай ${electricalDetails.switchesCount} позицій "Вимикач + підрозетник"\n`;
+      }
+      if (electricalDetails.lightsCount) {
+        context += `- Світильників: ${electricalDetails.lightsCount} шт → Додай ${electricalDetails.lightsCount} позицій "Світильник + монтаж"\n`;
+      }
+    }
+
+    if (heatingDetails?.radiatorsCount) {
+      context += `\n**Опалення:**\n`;
+      context += `- Радіаторів: ${heatingDetails.radiatorsCount} шт → Додай ${heatingDetails.radiatorsCount} позицій радіаторів (різної потужності в залежності від площі кімнат)\n`;
+    }
+
+    if (heatingDetails?.underfloorHeating) {
+      context += `- Теплі підлоги: ТАК (${heatingDetails.underfloorRooms || 'не вказано де'}) → Додай мат, термостат, кабель для кожного приміщення\n`;
+    }
+
+    if (flooringDetails) {
+      const { tile, laminate, parquet, carpet } = flooringDetails;
+      if (tile || laminate || parquet || carpet) {
+        context += `\n**Покриття підлоги (площі вказані):**\n`;
+        if (tile) context += `- Плитка: ${tile} м² → Додай конкретні позиції: плитка, клей, затирка, підрізка\n`;
+        if (laminate) context += `- Ламінат: ${laminate} м² → Додай: ламінат, підкладка, плінтус, поріжки\n`;
+        if (parquet) context += `- Паркет: ${parquet} м² → Додай: паркет, лак, монтаж\n`;
+        if (carpet) context += `- Ковролін: ${carpet} м² → Додай: ковролін, клей, монтаж\n`;
+      }
+    }
   }
 
   if (specialRequirements) {
@@ -954,6 +1016,8 @@ ${imageParts.length > 0 ? `
 
     // Parse JSON from response
     let estimateData;
+    let totalItems = 0;
+
     try {
       // Extract JSON from potential markdown code blocks
       const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
@@ -961,7 +1025,7 @@ ${imageParts.length > 0 ? `
       estimateData = JSON.parse(jsonStr);
 
       // Log generated estimate stats
-      const totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
+      totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
         sum + (section.items?.length || 0), 0) || 0;
 
       const stats = {
