@@ -302,6 +302,7 @@ function EstimateWizardModal({
           {wizardStep === 3 && wizardData.objectType === 'house' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
           {wizardStep === 4 && wizardData.objectType === 'house' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
           {wizardStep === 5 && wizardData.objectType === 'house' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
+          {wizardStep === 6 && wizardData.objectType === 'house' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
 
           {/* Navigation */}
           <div className="flex justify-between mt-8 pt-6 border-t">
@@ -1019,6 +1020,202 @@ function WizardStep5_Walls({ data, setData }: { data: WizardData; setData: (d: W
               <span className="text-sm font-medium">{option.label}</span>
             </label>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Step 6: Roof (only for house, if workScope includes roof)
+function WizardStep6_Roof({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const roof = data.houseData?.roof || {
+    type: 'pitched',
+    material: 'metal_tile',
+    insulation: true,
+    attic: 'cold',
+    gutterSystem: true,
+    roofWindows: 0,
+  };
+
+  const updateRoof = (updates: Partial<typeof roof>) => {
+    setData({
+      ...data,
+      houseData: {
+        ...data.houseData,
+        roof: { ...roof, ...updates },
+      } as any
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          🏠 <strong>Покрівля:</strong> Надійний дах захищає будинок від негоди та забезпечує комфорт
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Тип даху</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'pitched', label: 'Скатний', desc: 'Класичний варіант' },
+            { value: 'flat', label: 'Плоский', desc: 'Сучасний стиль' },
+            { value: 'mansard', label: 'Мансардний', desc: 'Житловий горищ' },
+            { value: 'combined', label: 'Комбінований', desc: 'Складна форма' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                roof.type === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="roofType"
+                value={option.value}
+                checked={roof.type === option.value}
+                onChange={(e) => updateRoof({ type: e.target.value as any })}
+                className="sr-only"
+              />
+              <span className="text-sm font-semibold">{option.label}</span>
+              <span className="text-xs text-muted-foreground">{option.desc}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {(roof.type === 'pitched' || roof.type === 'mansard') && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Кут нахилу (градуси)</label>
+          <input
+            type="number"
+            min="15"
+            max="60"
+            value={roof.pitchAngle || ''}
+            onChange={(e) => updateRoof({ pitchAngle: parseInt(e.target.value) || undefined })}
+            className="w-full px-4 py-2 border rounded-lg"
+            placeholder="30"
+          />
+          <p className="text-xs text-muted-foreground mt-1">Рекомендовано: 25-45°</p>
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Покрівельний матеріал</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'metal_tile', label: 'Металочерепиця', desc: 'Популярний вибір' },
+            { value: 'soft_tile', label: 'М\'яка черепиця', desc: 'Безшумна' },
+            { value: 'profiled_sheet', label: 'Профнастил', desc: 'Економ варіант' },
+            { value: 'ceramic', label: 'Керамічна', desc: 'Преміум класу' },
+            { value: 'slate', label: 'Шифер', desc: 'Бюджетний' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                roof.material === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="roofMaterial"
+                value={option.value}
+                checked={roof.material === option.value}
+                onChange={(e) => updateRoof({ material: e.target.value as any })}
+                className="sr-only"
+              />
+              <span className="text-sm font-semibold">{option.label}</span>
+              <span className="text-xs text-muted-foreground">{option.desc}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={roof.insulation}
+            onChange={(e) => updateRoof({ insulation: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Утеплення даху</div>
+            <div className="text-xs text-muted-foreground">Теплоізоляція покрівлі</div>
+          </div>
+        </label>
+      </div>
+
+      {roof.insulation && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Товщина утеплення (мм)</label>
+          <input
+            type="number"
+            value={roof.insulationThickness || ''}
+            onChange={(e) => updateRoof({ insulationThickness: parseInt(e.target.value) || undefined })}
+            className="w-full px-4 py-2 border rounded-lg"
+            placeholder="200"
+          />
+        </div>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Використання горища/мансарди</label>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: 'cold', label: 'Холодне', desc: 'Не опалюється' },
+            { value: 'warm', label: 'Тепле', desc: 'Опалення є' },
+            { value: 'living', label: 'Житлове', desc: 'Повноцінна кімната' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                roof.attic === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="attic"
+                value={option.value}
+                checked={roof.attic === option.value}
+                onChange={(e) => updateRoof({ attic: e.target.value as any })}
+                className="sr-only"
+              />
+              <span className="text-sm font-semibold">{option.label}</span>
+              <span className="text-xs text-muted-foreground">{option.desc}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={roof.gutterSystem}
+            onChange={(e) => updateRoof({ gutterSystem: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Система водостоків</div>
+            <div className="text-xs text-muted-foreground">Ринви та труби</div>
+          </div>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Мансардні вікна</label>
+          <input
+            type="number"
+            min="0"
+            value={roof.roofWindows || 0}
+            onChange={(e) => updateRoof({ roofWindows: parseInt(e.target.value) || 0 })}
+            className="w-full px-4 py-2 border rounded-lg"
+            placeholder="0"
+          />
         </div>
       </div>
     </div>
