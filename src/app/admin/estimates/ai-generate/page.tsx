@@ -255,7 +255,7 @@ function EstimateWizardModal({
     } else if (wizardData.objectType === 'townhouse') {
       steps += 1; // Townhouse specifics
       if (wizardData.workScope === 'full_cycle') {
-        steps += 5; // Similar to house
+        steps += 6; // Terrain + Foundation + Walls + Roof + Utilities + Finishing (same as house)
       }
     } else if (['apartment', 'office'].includes(wizardData.objectType)) {
       if (wizardData.workScope === 'renovation') {
@@ -309,6 +309,14 @@ function EstimateWizardModal({
 
           {/* Townhouse-specific step */}
           {wizardStep === 3 && wizardData.objectType === 'townhouse' && <WizardStepTownhouse data={wizardData} setData={setWizardData} />}
+
+          {/* Townhouse construction steps (same as house, but offset by 1) */}
+          {wizardStep === 4 && wizardData.objectType === 'townhouse' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
+          {wizardStep === 5 && wizardData.objectType === 'townhouse' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
+          {wizardStep === 6 && wizardData.objectType === 'townhouse' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
+          {wizardStep === 7 && wizardData.objectType === 'townhouse' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
+          {wizardStep === 8 && wizardData.objectType === 'townhouse' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
+          {wizardStep === 9 && wizardData.objectType === 'townhouse' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
 
           {/* Renovation steps for apartment/office */}
           {wizardStep === 3 && ['apartment', 'office'].includes(wizardData.objectType) && <WizardStepRenovation_CurrentState data={wizardData} setData={setWizardData} />}
