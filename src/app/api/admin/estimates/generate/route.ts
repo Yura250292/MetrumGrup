@@ -57,40 +57,82 @@ async function extractFileContent(file: File): Promise<string> {
   return `[${file.name}] — невідомий формат файлу`;
 }
 
-async function generateWithOpenAI(prompt: string, textContent: string) {
+async function generateWithOpenAI(
+  prompt: string,
+  textContent: string,
+  imageParts: { inlineData: { data: string; mimeType: string } }[] = []
+) {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("OPENAI_API_KEY не налаштований");
   }
 
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+  // Build messages with vision support
+  const userContent: any[] = [{ type: "text", text: textContent }];
+
+  // Add images for GPT-4o vision
+  if (imageParts.length > 0) {
+    console.log(`  🖼️  Adding ${imageParts.length} images to OpenAI request`);
+    for (const img of imageParts) {
+      userContent.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${img.inlineData.mimeType};base64,${img.inlineData.data}`
+        }
+      });
+    }
+  }
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [
       { role: "system", content: prompt },
-      { role: "user", content: textContent },
+      { role: "user", content: userContent },
     ],
     response_format: { type: "json_object" },
     temperature: 0.3,
-    max_tokens: 8000,
+    max_tokens: 16000, // Збільшено для більшої кількості позицій
   });
 
   return completion.choices[0]?.message?.content || "{}";
 }
 
-async function generateWithAnthropic(systemPrompt: string, userContent: string) {
+async function generateWithAnthropic(
+  systemPrompt: string,
+  userContent: string,
+  imageParts: { inlineData: { data: string; mimeType: string } }[] = []
+) {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY не налаштований");
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // Build content with vision support
+  const messageContent: any[] = [{ type: "text", text: userContent }];
+
+  // Add images for Claude vision
+  if (imageParts.length > 0) {
+    console.log(`  🖼️  Adding ${imageParts.length} images to Anthropic request`);
+    for (const img of imageParts) {
+      messageContent.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: img.inlineData.mimeType,
+          data: img.inlineData.data
+        }
+      });
+    }
+  }
+
   const message = await anthropic.messages.create({
     model: "claude-opus-4-20250514",
-    max_tokens: 8000,
+    max_tokens: 16000, // Збільшено для більшої кількості позицій
     temperature: 0.3,
     system: systemPrompt,
-    messages: [{ role: "user", content: userContent }],
+    messages: [{ role: "user", content: messageContent }],
   });
 
   const content = message.content[0];
@@ -253,15 +295,25 @@ export async function POST(request: NextRequest) {
     const textParts: string[] = [];
     const imageParts: { inlineData: { data: string; mimeType: string } }[] = [];
 
+    console.log('📂 Processing files...');
     for (const file of files) {
       const content = await extractFileContent(file);
       if (content.startsWith("__IMAGE__:")) {
         const [, base64, mimeType] = content.split(":");
         imageParts.push({ inlineData: { data: base64, mimeType } });
+        console.log(`  🖼️  Image: ${file.name} (${(base64.length / 1024).toFixed(1)} KB base64)`);
       } else {
         textParts.push(content);
+        const textLength = content.length;
+        const lines = content.split('\n').length;
+        console.log(`  📄 Text: ${file.name} (${textLength} chars, ${lines} lines)`);
+        if (textLength < 100) {
+          console.log(`    ⚠️ WARNING: Very short content from ${file.name}`);
+        }
       }
     }
+
+    console.log(`📊 Extraction summary: ${textParts.length} text files, ${imageParts.length} images`);
 
     // Load materials from DB for reference pricing
     const materials = await prisma.material.findMany({
@@ -611,6 +663,62 @@ ${laborRef}
 # ДАНІ З ФАЙЛІВ КЛІЄНТА:
 ${textParts.join("\n\n")}
 
+${imageParts.length > 0 ? `
+# АНАЛІЗ ЗОБРАЖЕНЬ ТА ПЛАНІВ (${imageParts.length} файлів):
+
+⚠️ КРИТИЧНО ВАЖЛИВО - ДЕТАЛЬНИЙ АНАЛІЗ ЗОБРАЖЕНЬ:
+
+Ти отримав ${imageParts.length} зображень - це архітектурні плани, схеми комунікацій та креслення.
+
+**ЩО ШУКАТИ НА ПЛАНАХ:**
+
+1. **План приміщень:**
+   - Розміри кімнат (довжина × ширина в мм або см)
+   - Площі кожної кімнати (зазвичай вказані на плані)
+   - Висота стель (якщо вказана)
+   - Товщина стін та перегородок
+
+2. **План електрики:**
+   - Розетки (кількість та розташування) - кожна розетка = окрема позиція
+   - Вимикачі (скільки і де)
+   - Світильники (кількість по кімнатах)
+   - Електрощит та автомати
+   - Довжини кабельних трас
+
+3. **План сантехніки:**
+   - Водопровід (холодна + гаряча вода, довжини труб)
+   - Каналізація (труби 50мм, 110мм, довжини)
+   - Сантехприлади (унітаз, умивальник, душ, ванна - кількість)
+   - Змішувачі та фітинги
+
+4. **План опалення:**
+   - Радіатори (кількість по кімнатах, потужність)
+   - Труби опалення (діаметр, довжини)
+   - Котел (тип, потужність)
+   - Колектори та розподільчі системи
+
+5. **План підлоги (якщо є):**
+   - Теплі підлоги (площі покриття)
+   - Типи покриттів (плитка, ламінат - де і скільки м²)
+   - Стяжка (товщина, площі)
+
+**ЯК ВИКОРИСТОВУВАТИ ЦЮ ІНФОРМАЦІЮ:**
+
+- КОЖНА розетка на плані = окрема позиція "Розетка + підрозетник + кабель"
+- КОЖНА лампа = окрема позиція "Світильник + монтаж"
+- КОЖЕН радіатор = окрема позиція з конкретною потужністю
+- Виміряй довжини комунікацій по планах і порахуй метраж кабелів/труб
+
+**ПРИКЛАД:**
+Якщо на плані бачиш 25 розеток → додай МІНІМУМ:
+- 25 позицій "Розетка двомісна"
+- 25 позицій "Підрозетник"
+- Кабель ВВГнг 3×2.5 (порахуй загальний метраж)
+- Гофра для кабелю
+
+НЕ УЗАГАЛЬНЮЙ! Кожен елемент з плану = окрема позиція в кошторисі!
+` : ''}
+
 # ПОШУК ЦІН ТА ПОСИЛАННЯ
 Для КОЖНОГО матеріалу в кошторисі:
 - Знайди РЕАЛЬНУ АКТУАЛЬНУ ціну на українському ринку через Google Search
@@ -797,7 +905,7 @@ ${textParts.join("\n\n")}
           );
         }
         console.log("🤖 Використовуємо OpenAI GPT-4o...");
-        text = await generateWithOpenAI(prompt, textParts.join("\n\n"));
+        text = await generateWithOpenAI(prompt, textParts.join("\n\n"), imageParts);
         break;
 
       case "anthropic":
@@ -808,7 +916,7 @@ ${textParts.join("\n\n")}
           );
         }
         console.log("🧠 Використовуємо Anthropic Claude Opus 4...");
-        text = await generateWithAnthropic(prompt, textParts.join("\n\n"));
+        text = await generateWithAnthropic(prompt, textParts.join("\n\n"), imageParts);
         break;
 
       default: // "gemini"
@@ -886,7 +994,11 @@ ${textParts.join("\n\n")}
         gap: totalItems - calculatedMin,
         wizardUsed: !!wizardData,
         template,
-        area: areaNum
+        area: areaNum,
+        filesCount: files.length,
+        textFiles: textParts.length,
+        imageFiles: imageParts.length,
+        model
       }
     });
   } catch (error: unknown) {

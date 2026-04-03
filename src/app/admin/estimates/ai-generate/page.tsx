@@ -1577,6 +1577,10 @@ export default function AIEstimatePage() {
                     <span className="text-orange-600">Wizard не використано</span>
                   )}
                   <span>•</span>
+                  <span>Model: {debugInfo.model || 'gemini'}</span>
+                  <span>•</span>
+                  <span>Files: {debugInfo.filesCount || 0} ({debugInfo.textFiles || 0} text, {debugInfo.imageFiles || 0} images)</span>
+                  <span>•</span>
                   <span>Template: {debugInfo.template}</span>
                   <span>•</span>
                   <span>Площа: {debugInfo.area} м²</span>
