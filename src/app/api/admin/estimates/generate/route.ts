@@ -9,18 +9,74 @@ import { TEMPLATE_PROMPTS } from "@/lib/estimate-prompts";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
-// Parse uploaded files to text
-async function extractFileContent(file: File): Promise<string> {
+// Convert PDF pages to images for visual analysis
+async function convertPdfToImages(buffer: Buffer): Promise<string[]> {
+  try {
+    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const { createCanvas } = await import("canvas");
+
+    // Load PDF document
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(buffer),
+      useSystemFonts: true,
+    });
+    const pdfDocument = await loadingTask.promise;
+
+    const images: string[] = [];
+    const numPages = Math.min(pdfDocument.numPages, 20); // Limit to 20 pages to avoid huge requests
+
+    console.log(`  📄 PDF has ${pdfDocument.numPages} pages, converting first ${numPages} to images...`);
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
+
+      const canvas = createCanvas(viewport.width, viewport.height);
+      const context = canvas.getContext("2d");
+
+      await page.render({
+        canvasContext: context as any,
+        viewport: viewport,
+        canvas: canvas as any,
+      }).promise;
+
+      // Convert canvas to base64 image
+      const imageData = canvas.toDataURL("image/png");
+      const base64 = imageData.split(",")[1]; // Remove "data:image/png;base64," prefix
+      images.push(base64);
+
+      console.log(`  ✅ Page ${pageNum}/${numPages} converted (${(base64.length / 1024).toFixed(1)} KB)`);
+    }
+
+    return images;
+  } catch (error) {
+    console.error("  ❌ PDF to image conversion failed:", error);
+    return [];
+  }
+}
+
+// Parse uploaded files to text and/or images
+async function extractFileContent(file: File): Promise<string | { text: string; images: string[] }> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileName = file.name.toLowerCase();
 
   if (fileName.endsWith(".pdf")) {
     try {
+      // Extract text content
       const pdfModule = await import("pdf-parse");
       const pdfParse = (pdfModule as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default || pdfModule;
       const data = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer);
-      return `[PDF: ${file.name}]\n${data.text}`;
+
+      // Convert pages to images for visual analysis
+      const images = await convertPdfToImages(buffer);
+
+      // Return both text and images
+      return {
+        text: `[PDF: ${file.name}]\n${data.text}`,
+        images: images,
+      };
     } catch (e) {
+      console.error("  ❌ PDF processing failed:", e);
       return `[PDF: ${file.name}] — не вдалось прочитати PDF`;
     }
   }
@@ -801,11 +857,32 @@ export async function POST(request: NextRequest) {
     console.log('📂 Processing files...');
     for (const file of files) {
       const content = await extractFileContent(file);
-      if (content.startsWith("__IMAGE__:")) {
+
+      // Handle PDF files (returns object with text and images)
+      if (typeof content === 'object' && 'text' in content && 'images' in content) {
+        // Add PDF text content
+        textParts.push(content.text);
+        console.log(`  📄 PDF text: ${file.name} (${content.text.length} chars)`);
+
+        // Add PDF pages as images for visual analysis
+        for (let i = 0; i < content.images.length; i++) {
+          imageParts.push({
+            inlineData: {
+              data: content.images[i],
+              mimeType: 'image/png'
+            }
+          });
+        }
+        console.log(`  🖼️  PDF images: ${file.name} (${content.images.length} pages converted to images)`);
+      }
+      // Handle regular image files
+      else if (typeof content === 'string' && content.startsWith("__IMAGE__:")) {
         const [, base64, mimeType] = content.split(":");
         imageParts.push({ inlineData: { data: base64, mimeType } });
         console.log(`  🖼️  Image: ${file.name} (${(base64.length / 1024).toFixed(1)} KB base64)`);
-      } else {
+      }
+      // Handle text files (Excel, CSV, TXT, etc.)
+      else if (typeof content === 'string') {
         textParts.push(content);
         const textLength = content.length;
         const lines = content.split('\n').length;
@@ -1172,6 +1249,7 @@ ${imageParts.length > 0 ? `
 ⚠️ КРИТИЧНО ВАЖЛИВО - ДЕТАЛЬНИЙ АНАЛІЗ ЗОБРАЖЕНЬ:
 
 Ти отримав ${imageParts.length} зображень - це архітектурні плани, схеми комунікацій та креслення.
+**PDF файли автоматично конвертовані в зображення** для візуального аналізу кожної сторінки.
 
 **ЩО ШУКАТИ НА ПЛАНАХ:**
 
