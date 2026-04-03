@@ -2354,6 +2354,11 @@ export default function AIEstimatePage() {
     if (wizardData.totalArea) {
       setArea(wizardData.totalArea);
     }
+
+    // Auto-select all categories and set default template when wizard is completed
+    // This ensures backend has necessary data even though UI is hidden
+    setSelectedCategories(new Set(WORK_CATEGORIES.map(c => c.id)));
+    setSelectedTemplate('house_full'); // Default template, wizard data will override
   };
 
   // Drag and drop handlers
@@ -2883,50 +2888,7 @@ export default function AIEstimatePage() {
             </p>
           </Card>
 
-          {/* Project Template Selection */}
-          <Card className="p-6">
-            <h3 className="font-semibold mb-3 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-primary" />
-              Тип проєкту
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {PROJECT_TEMPLATES.map((template) => (
-                <label
-                  key={template.id}
-                  className={cn(
-                    "flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all hover:shadow-sm",
-                    selectedTemplate === template.id
-                      ? "border-primary bg-primary/5 shadow-sm ring-2 ring-primary/20"
-                      : "border-border bg-white hover:border-primary/30"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="projectTemplate"
-                    checked={selectedTemplate === template.id}
-                    onChange={() => {
-                      setSelectedTemplate(template.id);
-                      if (template.id !== "custom") {
-                        // Автоматично вибрати категорії для цього шаблону
-                        setSelectedCategories(new Set(template.categories));
-                      }
-                    }}
-                    className="sr-only"
-                  />
-                  <div className="text-3xl mb-2">{template.icon}</div>
-                  <div className="font-semibold text-sm mb-1">{template.label}</div>
-                  <div className="text-xs text-muted-foreground leading-tight">
-                    {template.description}
-                  </div>
-                  {selectedTemplate === template.id && template.id !== "custom" && (
-                    <Badge variant="outline" className="mt-2 text-xs">
-                      {template.categories.length} категорій
-                    </Badge>
-                  )}
-                </label>
-              ))}
-            </div>
-          </Card>
+          {/* Project Template Selection - REMOVED: Wizard replaces this */}
 
           {/* Wizard Button */}
           <Card className="p-6 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
@@ -2984,98 +2946,7 @@ export default function AIEstimatePage() {
             </div>
           </Card>
 
-          {/* Selected Categories Preview */}
-          {selectedTemplate !== "custom" && selectedCategories.size > 0 && (
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-base font-semibold">Обрані категорії робіт</h3>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedTemplate("custom")}
-                  type="button"
-                >
-                  Налаштувати
-                </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {WORK_CATEGORIES.filter(cat => selectedCategories.has(cat.id)).map((category) => (
-                  <Badge key={category.id} variant="outline" className="text-xs whitespace-nowrap">
-                    <span className="mr-1">{category.icon}</span>
-                    {category.label}
-                  </Badge>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-3">
-                Обрано {selectedCategories.size} категорій на основі шаблону "{PROJECT_TEMPLATES.find(t => t.id === selectedTemplate)?.label}"
-              </p>
-            </Card>
-          )}
-
-          {/* Work Categories Selection (visible for custom template) */}
-          {selectedTemplate === "custom" && (
-          <Card className="p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-semibold">Категорії робіт</h3>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Оберіть які категорії включити в кошторис
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={toggleAllCategories}
-                type="button"
-              >
-                {selectedCategories.size === WORK_CATEGORIES.length ? "Зняти всі" : "Обрати всі"}
-              </Button>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {WORK_CATEGORIES.map((category) => {
-                const isSelected = selectedCategories.has(category.id);
-                return (
-                  <label
-                    key={category.id}
-                    className={cn(
-                      "flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-all hover:border-primary/50",
-                      isSelected
-                        ? "border-primary bg-primary/5"
-                        : "border-border bg-white"
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => toggleCategory(category.id)}
-                      className="rounded border-gray-300 text-primary focus:ring-primary flex-shrink-0"
-                    />
-                    <div className="flex items-center gap-1.5 flex-1 min-w-0 overflow-hidden">
-                      <span className="text-base flex-shrink-0">{category.icon}</span>
-                      <span className="text-xs font-medium leading-tight truncate">{category.label}</span>
-                    </div>
-                  </label>
-                );
-              })}
-            </div>
-
-            {selectedCategories.size === 0 && (
-              <div className="mt-4 rounded-lg bg-yellow-50 border border-yellow-200 p-3">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-yellow-800">
-                    Оберіть хоча б одну категорію робіт для генерації кошторису
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="mt-4 text-xs text-muted-foreground">
-              Обрано: {selectedCategories.size} з {WORK_CATEGORIES.length} категорій
-            </div>
-          </Card>
-          )}
+          {/* Categories - REMOVED: Wizard replaces this */}
 
           {/* Error */}
           {error && (
@@ -3091,7 +2962,7 @@ export default function AIEstimatePage() {
           {/* Generate button */}
           <Button
             onClick={generate}
-            disabled={loading || files.length === 0 || selectedCategories.size === 0}
+            disabled={loading || files.length === 0 || (!wizardCompleted && selectedCategories.size === 0)}
             size="lg"
             className="w-full h-14 text-base gap-3"
           >
