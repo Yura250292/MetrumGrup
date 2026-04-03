@@ -146,51 +146,159 @@ async function generateWithAnthropic(
 }
 
 function calculateMinimumItems(wizardData: any): number {
-  let base = 40;
+  if (!wizardData) return 50;
 
+  let base = 40;
   const area = parseFloat(wizardData.totalArea || '100');
+
+  // Base calculation by area
   if (area > 100) base += 30;
   if (area > 150) base += 50;
   if (area > 200) base += 70;
 
-  if (wizardData.floors) base += (wizardData.floors - 1) * 25;
-  if (wizardData.hasBasement) base += 20;
-  if (wizardData.hasAttic) base += 15;
-  if (wizardData.hasGarage) base += 20;
+  // Object type specific calculations
+  if (wizardData.objectType === 'house' || wizardData.objectType === 'townhouse') {
+    const houseData = wizardData.houseData;
 
-  if (wizardData.rooms) {
-    base += (wizardData.rooms.bathrooms || 0) * 15;
-    base += (wizardData.rooms.bedrooms || 0) * 10;
+    // Floors
+    if (wizardData.floors) base += (wizardData.floors - 1) * 25;
+
+    // Additional spaces
+    if (houseData?.hasBasement) base += 25;
+    if (houseData?.hasAttic) base += 20;
+    if (houseData?.hasGarage) base += 20;
+
+    // Terrain and foundation work
+    if (houseData?.terrain?.needsExcavation) base += 10;
+    if (houseData?.terrain?.needsDrainage) base += 8;
+
+    // Foundation details
+    if (houseData?.foundation) {
+      base += 15; // Base foundation items
+      if (houseData.foundation.waterproofing) base += 5;
+      if (houseData.foundation.insulation) base += 5;
+    }
+
+    // Walls
+    if (houseData?.walls) {
+      base += 20; // Base wall items
+      if (houseData.walls.insulation) base += 10;
+      if (houseData.walls.partitionMaterial !== 'same') base += 8;
+    }
+
+    // Roof
+    if (houseData?.roof) {
+      base += 15; // Base roof items
+      if (houseData.roof.insulation) base += 8;
+      if (houseData.roof.gutterSystem) base += 5;
+      base += (houseData.roof.roofWindows || 0) * 3;
+    }
   }
 
-  if (wizardData.materialLevel === 'premium') base += 20;
-  if (wizardData.heating?.enabled) base += 15;
-  if (wizardData.electrical === 'full') base += 20;
-
-  // Детальна специфікація збільшує мінімум
-  if (wizardData.electricalDetails?.hasOnPlans) {
-    const { outletsCount, switchesCount, lightsCount } = wizardData.electricalDetails;
-    // Кожна розетка/вимикач = мінімум 2-3 позиції (сам прилад + підрозетник + кабель)
-    base += (outletsCount || 0) * 2;
-    base += (switchesCount || 0) * 2;
-    base += (lightsCount || 0) * 2;
+  // Townhouse specific
+  if (wizardData.objectType === 'townhouse' && wizardData.townhouseData) {
+    if (wizardData.townhouseData.sharedUtilities) base -= 10; // Less items if shared
   }
 
-  if (wizardData.heatingDetails) {
-    base += (wizardData.heatingDetails.radiatorsCount || 0) * 3; // Радіатор + кріплення + труби
-    if (wizardData.heatingDetails.underfloorHeating) base += 10;
+  // Renovation (apartments/offices)
+  if (wizardData.renovationData) {
+    const reno = wizardData.renovationData;
+
+    // Current stage affects base
+    switch (reno.currentStage) {
+      case 'bare_concrete': base += 60; break;
+      case 'rough_walls': base += 45; break;
+      case 'rough_floor': base += 40; break;
+      case 'utilities_installed': base += 30; break;
+      case 'ready_for_finish': base += 20; break;
+    }
+
+    // Work required
+    if (reno.workRequired?.demolition) base += 15;
+    if (reno.workRequired?.roughPlaster) base += 20;
+    if (reno.workRequired?.electrical) base += 25;
+    if (reno.workRequired?.plumbing) base += 20;
+    if (reno.layoutChange) base += 15;
+    if (reno.newPartitions) base += 10;
+
+    // Rooms
+    if (reno.rooms) {
+      base += (reno.rooms.bathrooms || 0) * 20;
+      base += (reno.rooms.bedrooms || 0) * 12;
+      base += (reno.rooms.kitchen || 0) * 18;
+    }
   }
 
-  if (wizardData.flooringDetails) {
-    const { tile, laminate, parquet, carpet } = wizardData.flooringDetails;
-    // Кожен тип покриття = мінімум 4-5 позицій
-    if (tile > 0) base += 5;
-    if (laminate > 0) base += 5;
-    if (parquet > 0) base += 5;
-    if (carpet > 0) base += 4;
+  // Commercial specific
+  if (wizardData.commercialData) {
+    const comm = wizardData.commercialData;
+
+    if (comm.floor?.type === 'industrial') base += 25;
+    if (comm.floor?.antiStatic) base += 8;
+    if (comm.fireRating) base += 15;
+    if (comm.hvac) base += 20;
+    if (comm.heavyDutyElectrical) base += 15;
+    if (comm.accessControl) base += 10;
+    if (comm.surveillance) base += 12;
   }
 
-  return base;
+  // Utilities (for all types)
+  if (wizardData.utilities) {
+    const util = wizardData.utilities;
+
+    // Electrical
+    if (util.electrical) {
+      base += (util.electrical.outlets || 0) * 2;
+      base += (util.electrical.switches || 0) * 2;
+      base += (util.electrical.lightPoints || 0) * 2;
+      if (util.electrical.power === 'three_phase') base += 10;
+    }
+
+    // Heating
+    if (util.heating) {
+      if (util.heating.type && util.heating.type !== 'none') base += 15;
+      base += (util.heating.radiators || 0) * 3;
+      if (util.heating.underfloor) base += 15;
+    }
+
+    // Water & sewerage
+    if (util.water?.coldWater) base += 8;
+    if (util.water?.hotWater) base += 8;
+    if (util.sewerage?.pumpNeeded) base += 5;
+
+    // Ventilation
+    if (util.ventilation?.forced) base += 10;
+    if (util.ventilation?.recuperation) base += 8;
+  }
+
+  // Finishing
+  if (wizardData.finishing) {
+    const finish = wizardData.finishing;
+
+    // Walls
+    if (finish.walls?.qualityLevel === 'premium') base += 15;
+    if (finish.walls?.tileArea && finish.walls.tileArea > 0) base += 10;
+
+    // Flooring
+    const flooring = finish.flooring || {};
+    Object.keys(flooring).forEach(key => {
+      if (flooring[key] > 0) base += 6;
+    });
+
+    // Ceiling
+    if (finish.ceiling) {
+      if (finish.ceiling.levels && finish.ceiling.levels > 1) base += 8 * finish.ceiling.levels;
+    }
+  }
+
+  // Windows & Doors
+  if (wizardData.openings) {
+    base += (wizardData.openings.windows?.count || 0) * 2;
+    base += (wizardData.openings.doors?.entrance || 0) * 2;
+    base += (wizardData.openings.doors?.interior || 0) * 1.5;
+  }
+
+  return Math.round(base);
 }
 
 function buildWizardContext(wizardData: any): string {
@@ -199,103 +307,436 @@ function buildWizardContext(wizardData: any): string {
     return '';
   }
 
-  console.log('✅ Building wizard context from data:', JSON.stringify(wizardData, null, 2));
+  console.log('✅ Building wizard context from NEW wizard structure');
 
-  const {
-    buildingType, totalArea, floors, hasBasement, hasAttic, hasGarage,
-    rooms, wallMaterial, roofType, foundationType, materialLevel,
-    ceilingHeight, heating, waterSupply, sewerage, electrical,
-    ventilation, electricalDetails, heatingDetails, flooringDetails,
-    specialRequirements
-  } = wizardData;
+  let context = `\n\n## 🎯 ДЕТАЛЬНА ІНФОРМАЦІЯ ПРО ПРОЕКТ (Professional Engineering Wizard):\n\n`;
 
-  let context = `\n\n## ДЕТАЛЬНА ІНФОРМАЦІЯ ПРО ПРОЕКТ (з wizard):\n\n`;
+  // Object Type and Work Scope
+  const objectTypeLabels: Record<string, string> = {
+    house: 'Приватний будинок',
+    townhouse: 'Котедж (Таунхаус)',
+    apartment: 'Квартира',
+    office: 'Офісне приміщення',
+    commercial: 'Комерційне приміщення',
+  };
 
-  context += `### Характеристики будівлі:\n`;
-  context += `- Тип: ${buildingType === 'house' ? 'Приватний будинок' : buildingType === 'apartment' ? 'Квартира' : 'Комерційне приміщення'}\n`;
-  context += `- Загальна площа: ${totalArea} м²\n`;
+  const workScopeLabels: Record<string, string> = {
+    foundation_only: 'Тільки фундамент',
+    foundation_walls: 'Фундамент + Коробка',
+    foundation_walls_roof: 'Коробка з дахом',
+    full_cycle: 'Повний цикл будівництва',
+    renovation: 'Ремонт',
+  };
 
-  if (buildingType === 'house') {
-    context += `- Поверхів: ${floors}\n`;
-    if (hasBasement) context += `- Підвал: ТАК\n`;
-    if (hasAttic) context += `- Мансарда/горище: ТАК\n`;
-    if (hasGarage) context += `- Гараж: ТАК\n`;
+  context += `### Тип проекту:\n`;
+  context += `- Об'єкт: **${objectTypeLabels[wizardData.objectType] || wizardData.objectType}**\n`;
+  context += `- Обсяг робіт: **${workScopeLabels[wizardData.workScope] || wizardData.workScope}**\n`;
+  context += `- Загальна площа: **${wizardData.totalArea} м²**\n`;
+  if (wizardData.floors) context += `- Поверхів: ${wizardData.floors}\n`;
+  if (wizardData.ceilingHeight) context += `- Висота стелі: ${wizardData.ceilingHeight} м\n`;
 
-    if (rooms) {
-      context += `\n### Кімнати:\n`;
-      context += `- Спальні: ${rooms.bedrooms}\n`;
-      context += `- Санвузли: ${rooms.bathrooms}\n`;
-      context += `- Вітальні: ${rooms.livingRooms}\n`;
-      context += `- Кухні: ${rooms.kitchens}\n`;
-    }
+  // HOUSE-SPECIFIC DATA
+  if ((wizardData.objectType === 'house' || wizardData.objectType === 'townhouse') && wizardData.houseData) {
+    const house = wizardData.houseData;
 
-    context += `\n### Конструкція:\n`;
-    if (wallMaterial) context += `- Матеріал стін: ${wallMaterial === 'gasblock' ? 'Газоблок' : wallMaterial === 'brick' ? 'Цегла' : wallMaterial === 'wood' ? 'Дерево' : 'Панельний'}\n`;
-    if (roofType) context += `- Тип даху: ${roofType === 'pitched' ? 'Скатний' : 'Плоский'}\n`;
-    if (foundationType) context += `- Тип фундаменту: ${foundationType === 'strip' ? 'Стрічковий' : foundationType === 'slab' ? 'Плитний' : 'Пальовий'}\n`;
-  }
-
-  context += `- Рівень матеріалів: ${materialLevel === 'premium' ? 'ПРЕМІУМ (якісні матеріали)' : materialLevel === 'standard' ? 'СТАНДАРТ' : 'ЕКОНОМ'}\n`;
-  if (ceilingHeight) context += `- Висота стелі: ${ceilingHeight} м\n`;
-
-  context += `\n### Інженерні системи:\n`;
-  if (heating?.enabled) context += `- Опалення: ТАК (${heating.type === 'gas' ? 'газ' : heating.type === 'electric' ? 'електро' : 'тверде паливо'})\n`;
-  if (waterSupply) context += `- Водопостачання: ТАК\n`;
-  if (sewerage) context += `- Каналізація: ТАК\n`;
-  if (electrical) context += `- Електрика: ${electrical === 'full' ? 'ПОВНА розводка' : electrical === 'partial' ? 'Часткова' : 'Немає'}\n`;
-  if (ventilation?.bathroom || ventilation?.kitchen) {
-    context += `- Вентиляція:`;
-    if (ventilation.bathroom) context += ` ванна`;
-    if (ventilation.kitchen) context += ` кухня`;
-    context += `\n`;
-  }
-
-  // Детальна специфікація
-  if (electricalDetails || heatingDetails || flooringDetails) {
-    context += `\n### 🎯 ДЕТАЛЬНА СПЕЦИФІКАЦІЯ (з wizard):\n`;
-
-    if (electricalDetails?.hasOnPlans) {
-      context += `\n**Електрика (підраховано з планів):**\n`;
-      if (electricalDetails.outletsCount) {
-        context += `- Розеток: ${electricalDetails.outletsCount} шт → Додай ${electricalDetails.outletsCount} позицій "Розетка + підрозетник + кабель"\n`;
-      }
-      if (electricalDetails.switchesCount) {
-        context += `- Вимикачів: ${electricalDetails.switchesCount} шт → Додай ${electricalDetails.switchesCount} позицій "Вимикач + підрозетник"\n`;
-      }
-      if (electricalDetails.lightsCount) {
-        context += `- Світильників: ${electricalDetails.lightsCount} шт → Додай ${electricalDetails.lightsCount} позицій "Світильник + монтаж"\n`;
+    // Additional spaces
+    if (house.hasBasement || house.hasAttic || house.hasGarage) {
+      context += `\n### Додаткові приміщення:\n`;
+      if (house.hasBasement) context += `- ✓ Підвал${house.basementArea ? ` (${house.basementArea} м²)` : ''}\n`;
+      if (house.hasAttic) context += `- ✓ Мансарда/Горище${house.atticArea ? ` (${house.atticArea} м²)` : ''}\n`;
+      if (house.hasGarage) {
+        context += `- ✓ Гараж${house.garageArea ? ` (${house.garageArea} м²)` : ''}`;
+        if (house.garageType) context += ` - ${house.garageType === 'attached' ? 'Прибудований' : 'Окремий'}`;
+        context += `\n`;
       }
     }
 
-    if (heatingDetails?.radiatorsCount) {
+    // Terrain
+    if (house.terrain) {
+      const t = house.terrain;
+      context += `\n### 🌍 Місцевість та підготовка ділянки:\n`;
+
+      const soilLabels: Record<string, string> = {
+        clay: 'Глина', sand: 'Пісок', rock: 'Скеля', mixed: 'Змішаний', unknown: 'Невідомо'
+      };
+      const waterLabels: Record<string, string> = {
+        shallow: 'Близько (< 2м)', medium: 'Середньо (2-5м)', deep: 'Глибоко (> 5м)', unknown: 'Невідомо'
+      };
+      const slopeLabels: Record<string, string> = {
+        flat: 'Рівна', slight: 'Невеликий ухил', steep: 'Крутий ухил'
+      };
+
+      context += `- Тип ґрунту: ${soilLabels[t.soilType] || t.soilType}\n`;
+      context += `- Рівень ґрунтових вод: ${waterLabels[t.groundwaterDepth] || t.groundwaterDepth}\n`;
+      context += `- Ухил ділянки: ${slopeLabels[t.slope] || t.slope}\n`;
+      if (t.needsExcavation) context += `- ⚠️ ПОТРІБНА розкопка та виїмка грунту\n`;
+      if (t.needsDrainage) context += `- ⚠️ ПОТРІБЕН дренаж для відведення води\n`;
+    }
+
+    // Foundation
+    if (house.foundation) {
+      const f = house.foundation;
+      context += `\n### 🏗️ Фундамент:\n`;
+
+      const foundationLabels: Record<string, string> = {
+        strip: 'Стрічковий', slab: 'Плитний', pile: 'Пальовий', combined: 'Комбінований'
+      };
+      const reinforcementLabels: Record<string, string> = {
+        light: 'Легке', standard: 'Стандартне', heavy: 'Посилене'
+      };
+
+      context += `- Тип: ${foundationLabels[f.type] || f.type}\n`;
+      if (f.depth) context += `- Глибина закладення: ${f.depth} м\n`;
+      if (f.width) context += `- Ширина: ${f.width} м\n`;
+      context += `- Армування: ${reinforcementLabels[f.reinforcement] || f.reinforcement}\n`;
+      if (f.waterproofing) context += `- ✓ Гідроізоляція\n`;
+      if (f.insulation) {
+        context += `- ✓ Утеплення`;
+        if (f.insulationThickness) context += ` (${f.insulationThickness} мм)`;
+        context += `\n`;
+      }
+    }
+
+    // Walls
+    if (house.walls) {
+      const w = house.walls;
+      context += `\n### 🧱 Стіни та перегородки:\n`;
+
+      const wallMaterialLabels: Record<string, string> = {
+        gasblock: 'Газоблок', brick: 'Цегла', wood: 'Дерево', panel: 'Панельний', monolith: 'Моноліт'
+      };
+      const insulationLabels: Record<string, string> = {
+        foam: 'Пінопласт', mineral: 'Мінеральна вата', ecowool: 'Екова'
+      };
+
+      context += `- Матеріал несучих стін: ${wallMaterialLabels[w.material] || w.material}\n`;
+      if (w.thickness) context += `- Товщина: ${w.thickness} мм\n`;
+      if (w.insulation) {
+        context += `- ✓ Додаткове утеплення`;
+        if (w.insulationType) context += ` (${insulationLabels[w.insulationType] || w.insulationType})`;
+        if (w.insulationThickness) context += ` ${w.insulationThickness} мм`;
+        context += `\n`;
+      }
+      if (w.partitionMaterial) {
+        const partLabel = w.partitionMaterial === 'same' ? 'Такий самий' : wallMaterialLabels[w.partitionMaterial] || w.partitionMaterial;
+        context += `- Матеріал перегородок: ${partLabel}\n`;
+      }
+    }
+
+    // Roof
+    if (house.roof) {
+      const r = house.roof;
+      context += `\n### 🏠 Покрівля:\n`;
+
+      const roofTypeLabels: Record<string, string> = {
+        pitched: 'Скатний', flat: 'Плоский', mansard: 'Мансардний', combined: 'Комбінований'
+      };
+      const roofMaterialLabels: Record<string, string> = {
+        metal_tile: 'Металочерепиця',
+        soft_tile: 'М\'яка черепиця',
+        profiled_sheet: 'Профнастил',
+        ceramic: 'Керамічна черепиця',
+        slate: 'Шифер'
+      };
+      const atticLabels: Record<string, string> = {
+        cold: 'Холодне', warm: 'Тепле (опалюється)', living: 'Житлове приміщення'
+      };
+
+      context += `- Тип даху: ${roofTypeLabels[r.type] || r.type}\n`;
+      if (r.pitchAngle) context += `- Кут нахилу: ${r.pitchAngle}°\n`;
+      context += `- Покрівельний матеріал: ${roofMaterialLabels[r.material] || r.material}\n`;
+      if (r.insulation) {
+        context += `- ✓ Утеплення покрівлі`;
+        if (r.insulationThickness) context += ` (${r.insulationThickness} мм)`;
+        context += `\n`;
+      }
+      context += `- Використання горища/мансарди: ${atticLabels[r.attic] || r.attic}\n`;
+      if (r.gutterSystem) context += `- ✓ Система водостоків\n`;
+      if (r.roofWindows && r.roofWindows > 0) context += `- Мансардні вікна: ${r.roofWindows} шт\n`;
+    }
+  }
+
+  // TOWNHOUSE-SPECIFIC
+  if (wizardData.objectType === 'townhouse' && wizardData.townhouseData) {
+    const t = wizardData.townhouseData;
+    context += `\n### 🏘️ Особливості таунхаусу:\n`;
+    context += `- Кількість суміжних стін: ${t.adjacentWalls}\n`;
+    context += `- Розташування: ${t.isEndUnit ? 'Крайній в ряді' : 'Середній в ряді'}\n`;
+    if (t.sharedUtilities) context += `- ✓ Спільні комунікації з сусідами\n`;
+  }
+
+  // RENOVATION-SPECIFIC (apartments/offices)
+  if (wizardData.renovationData) {
+    const reno = wizardData.renovationData;
+    context += `\n### 🔨 Ремонт - Поточний стан:\n`;
+
+    const stageLabels: Record<string, string> = {
+      bare_concrete: 'Голий бетон',
+      rough_walls: 'Чорнова штукатурка є',
+      rough_floor: 'Чорнова стяжка є',
+      utilities_installed: 'Комунікації встановлені',
+      ready_for_finish: 'Готово під чистове оздоблення'
+    };
+
+    context += `- Стадія: ${stageLabels[reno.currentStage] || reno.currentStage}\n`;
+
+    // What exists
+    const existing = [];
+    if (reno.existing?.roughPlaster) existing.push('чорнова штукатурка');
+    if (reno.existing?.roughFloor) existing.push('чорнова стяжка');
+    if (reno.existing?.electricalRoughIn) existing.push('електрика прокладена');
+    if (reno.existing?.plumbingRoughIn) existing.push('сантехніка прокладена');
+    if (reno.existing?.windowsInstalled) existing.push('вікна встановлені');
+    if (reno.existing?.doorsInstalled) existing.push('двері встановлені');
+
+    if (existing.length > 0) {
+      context += `- Що вже є: ${existing.join(', ')}\n`;
+    }
+
+    // What's required
+    const required = [];
+    if (reno.workRequired?.demolition) required.push('демонтаж');
+    if (reno.workRequired?.roughPlaster) required.push('чорнова штукатурка');
+    if (reno.workRequired?.roughFloor) required.push('чорнова стяжка');
+    if (reno.workRequired?.electrical) required.push('електрика');
+    if (reno.workRequired?.plumbing) required.push('сантехніка');
+    if (reno.workRequired?.heating) required.push('опалення');
+    if (reno.workRequired?.finishPlaster) required.push('фінішна штукатурка');
+    if (reno.workRequired?.painting) required.push('фарбування');
+    if (reno.workRequired?.flooring) required.push('підлога');
+    if (reno.workRequired?.tiling) required.push('плитка');
+    if (reno.workRequired?.windows) required.push('вікна');
+    if (reno.workRequired?.doors) required.push('двері');
+
+    if (required.length > 0) {
+      context += `- Що потрібно зробити: ${required.join(', ')}\n`;
+    }
+
+    if (reno.layoutChange) context += `- ⚠️ Зміна планування (перенесення стін)\n`;
+    if (reno.newPartitions) {
+      context += `- ⚠️ Нові перегородки`;
+      if (reno.newPartitionsLength) context += ` (${reno.newPartitionsLength} м.п.)`;
+      context += `\n`;
+    }
+
+    if (reno.rooms) {
+      context += `- Кімнати: ${reno.rooms.bedrooms || 0} спальні, ${reno.rooms.bathrooms || 0} санвузли, ${reno.rooms.kitchen || 0} кухня, ${reno.rooms.living || 0} вітальня\n`;
+    }
+  }
+
+  // COMMERCIAL-SPECIFIC
+  if (wizardData.commercialData) {
+    const comm = wizardData.commercialData;
+    context += `\n### 🏭 Комерційне приміщення:\n`;
+
+    const purposeLabels: Record<string, string> = {
+      shop: 'Магазин', restaurant: 'Ресторан/Кафе', warehouse: 'Склад',
+      production: 'Виробництво', showroom: 'Шоурум', other: 'Інше'
+    };
+
+    context += `- Призначення: ${purposeLabels[comm.purpose] || comm.purpose}\n`;
+
+    if (comm.floor) {
+      context += `- Тип підлоги: ${comm.floor.type === 'industrial' ? 'Промислова' : 'Стандартна'}\n`;
+      if (comm.floor.coating) {
+        const coatingLabels: Record<string, string> = {
+          epoxy: 'Епоксидне', polyurethane: 'Поліуретанове', tile: 'Плитка', concrete: 'Бетон', other: 'Інше'
+        };
+        context += `- Покриття підлоги: ${coatingLabels[comm.floor.coating] || comm.floor.coating}\n`;
+      }
+      if (comm.floor.loadCapacity) context += `- Навантаження: ${comm.floor.loadCapacity} кг/м²\n`;
+      if (comm.floor.antiStatic) context += `- ✓ Антистатична підлога\n`;
+    }
+
+    const features = [];
+    if (comm.fireRating) features.push('протипожежні вимоги');
+    if (comm.hvac) features.push('потужна вентиляція');
+    if (comm.heavyDutyElectrical) features.push('підвищене навантаження електрики');
+    if (comm.accessControl) features.push('контроль доступу');
+    if (comm.surveillance) features.push('відеоспостереження');
+
+    if (features.length > 0) {
+      context += `- Додаткові вимоги: ${features.join(', ')}\n`;
+    }
+  }
+
+  // UTILITIES (for all types)
+  if (wizardData.utilities) {
+    const util = wizardData.utilities;
+    context += `\n### ⚡ Інженерні системи:\n`;
+
+    // Electrical
+    if (util.electrical) {
+      const e = util.electrical;
+      context += `\n**Електрика:**\n`;
+      context += `- Потужність: ${e.power === 'three_phase' ? 'Трифазна' : 'Однофазна'}${e.capacity ? ` (${e.capacity} кВт)` : ''}\n`;
+      if (e.outlets) context += `- Розеток: ${e.outlets} шт → Додай ${e.outlets} позицій (розетка + підрозетник + кабель)\n`;
+      if (e.switches) context += `- Вимикачів: ${e.switches} шт → Додай ${e.switches} позицій\n`;
+      if (e.lightPoints) context += `- Точок освітлення: ${e.lightPoints} шт → Додай ${e.lightPoints} позицій\n`;
+      if (e.outdoorLighting) context += `- ✓ Зовнішнє освітлення\n`;
+    }
+
+    // Heating
+    if (util.heating && util.heating.type && util.heating.type !== 'none') {
+      const h = util.heating;
       context += `\n**Опалення:**\n`;
-      context += `- Радіаторів: ${heatingDetails.radiatorsCount} шт → Додай ${heatingDetails.radiatorsCount} позицій радіаторів (різної потужності в залежності від площі кімнат)\n`;
+
+      const heatingLabels: Record<string, string> = {
+        gas: 'Газове', electric: 'Електричне', solid_fuel: 'Тверде паливо', heat_pump: 'Тепловий насос'
+      };
+
+      context += `- Тип: ${heatingLabels[h.type] || h.type}\n`;
+      if (h.radiators) context += `- Радіаторів: ${h.radiators} шт → Додай ${h.radiators} позицій з різною потужністю\n`;
+      if (h.underfloor) {
+        context += `- ✓ Теплі підлоги`;
+        if (h.underfloorArea) context += ` (${h.underfloorArea} м²)`;
+        context += ` → Додай мат, термостат, кабель\n`;
+      }
+      if (h.boilerPower) context += `- Потужність котла: ${h.boilerPower} кВт\n`;
     }
 
-    if (heatingDetails?.underfloorHeating) {
-      context += `- Теплі підлоги: ТАК (${heatingDetails.underfloorRooms || 'не вказано де'}) → Додай мат, термостат, кабель для кожного приміщення\n`;
+    // Water
+    if (util.water) {
+      const w = util.water;
+      context += `\n**Водопостачання:**\n`;
+
+      const sourceLabels: Record<string, string> = {
+        central: 'Центральне', well: 'Свердловина', borehole: 'Артезіанська'
+      };
+
+      context += `- Джерело: ${sourceLabels[w.source] || w.source}\n`;
+      if (w.coldWater) context += `- ✓ Холодна вода\n`;
+      if (w.hotWater) {
+        context += `- ✓ Гаряча вода`;
+        if (w.boilerType && w.boilerType !== 'none') {
+          const boilerLabels: Record<string, string> = { gas: 'Газовий', electric: 'Електричний' };
+          context += ` (${boilerLabels[w.boilerType] || w.boilerType} бойлер`;
+          if (w.boilerVolume) context += `, ${w.boilerVolume} л`;
+          context += `)`;
+        }
+        context += `\n`;
+      }
     }
 
-    if (flooringDetails) {
-      const { tile, laminate, parquet, carpet } = flooringDetails;
-      if (tile || laminate || parquet || carpet) {
-        context += `\n**Покриття підлоги (площі вказані):**\n`;
-        if (tile) context += `- Плитка: ${tile} м² → Додай конкретні позиції: плитка, клей, затирка, підрізка\n`;
-        if (laminate) context += `- Ламінат: ${laminate} м² → Додай: ламінат, підкладка, плінтус, поріжки\n`;
-        if (parquet) context += `- Паркет: ${parquet} м² → Додай: паркет, лак, монтаж\n`;
-        if (carpet) context += `- Ковролін: ${carpet} м² → Додай: ковролін, клей, монтаж\n`;
+    // Sewerage
+    if (util.sewerage) {
+      const s = util.sewerage;
+      context += `\n**Каналізація:**\n`;
+
+      const sewerageLabels: Record<string, string> = {
+        central: 'Центральна', septic: 'Септик', treatment: 'Очисна станція'
+      };
+
+      context += `- Тип: ${sewerageLabels[s.type] || s.type}\n`;
+      if (s.pumpNeeded) context += `- ⚠️ Потрібен насос\n`;
+    }
+
+    // Ventilation
+    if (util.ventilation) {
+      const v = util.ventilation;
+      const ventTypes = [];
+      if (v.natural) ventTypes.push('природна');
+      if (v.forced) ventTypes.push('примусова');
+      if (v.recuperation) ventTypes.push('з рекуперацією');
+
+      if (ventTypes.length > 0) {
+        context += `\n**Вентиляція:** ${ventTypes.join(', ')}\n`;
+        if (v.areas && v.areas.length > 0) {
+          context += `- Приміщення: ${v.areas.join(', ')}\n`;
+        }
       }
     }
   }
 
-  if (specialRequirements) {
-    context += `\n### Особливі вимоги:\n${specialRequirements}\n`;
+  // FINISHING
+  if (wizardData.finishing) {
+    const finish = wizardData.finishing;
+    context += `\n### 🎨 Оздоблення:\n`;
+
+    if (finish.walls) {
+      const materialLabels: Record<string, string> = {
+        paint: 'Фарбування', wallpaper: 'Шпалери', tile: 'Плитка', panels: 'Панелі', mixed: 'Змішане'
+      };
+      const qualityLabels: Record<string, string> = {
+        economy: 'Економ', standard: 'Стандарт', premium: 'Преміум'
+      };
+
+      context += `- Стіни: ${materialLabels[finish.walls.material] || finish.walls.material}, ${qualityLabels[finish.walls.qualityLevel] || finish.walls.qualityLevel}\n`;
+      if (finish.walls.tileArea) context += `  Плитка: ${finish.walls.tileArea} м²\n`;
+    }
+
+    if (finish.flooring) {
+      const flooring = finish.flooring;
+      const floorTypes = [];
+      if (flooring.tile) floorTypes.push(`плитка ${flooring.tile} м²`);
+      if (flooring.laminate) floorTypes.push(`ламінат ${flooring.laminate} м²`);
+      if (flooring.parquet) floorTypes.push(`паркет ${flooring.parquet} м²`);
+      if (flooring.vinyl) floorTypes.push(`вініл ${flooring.vinyl} м²`);
+      if (flooring.carpet) floorTypes.push(`ковролін ${flooring.carpet} м²`);
+      if (flooring.epoxy) floorTypes.push(`епоксид ${flooring.epoxy} м²`);
+
+      if (floorTypes.length > 0) {
+        context += `- Підлога: ${floorTypes.join(', ')}\n`;
+      }
+    }
+
+    if (finish.ceiling) {
+      const ceilingLabels: Record<string, string> = {
+        paint: 'Фарбування', drywall: 'Гіпсокартон', suspended: 'Підвісна', stretch: 'Натяжна'
+      };
+      const lightingLabels: Record<string, string> = {
+        spots: 'Точкові світильники', chandelier: 'Люстри', led: 'LED', mixed: 'Змішане'
+      };
+
+      context += `- Стеля: ${ceilingLabels[finish.ceiling.type] || finish.ceiling.type}`;
+      if (finish.ceiling.levels && finish.ceiling.levels > 1) context += `, ${finish.ceiling.levels} рівні`;
+      context += `\n`;
+      context += `  Освітлення: ${lightingLabels[finish.ceiling.lighting] || finish.ceiling.lighting}\n`;
+    }
   }
 
-  // Calculate minimum items based on wizard data
+  // WINDOWS & DOORS
+  if (wizardData.openings) {
+    const op = wizardData.openings;
+    context += `\n### 🚪 Вікна та двері:\n`;
+
+    if (op.windows) {
+      const w = op.windows;
+      const typeLabels: Record<string, string> = {
+        plastic: 'Пластикові', wood: 'Дерев\'яні', aluminum: 'Алюмінієві'
+      };
+      const glazingLabels: Record<string, string> = {
+        single: 'Однокамерний', double: 'Двокамерний', triple: 'Трикамерний'
+      };
+
+      context += `- Вікна: ${w.count} шт`;
+      if (w.totalArea) context += `, ${w.totalArea} м²`;
+      if (w.type) context += `, ${typeLabels[w.type] || w.type}`;
+      if (w.glazing) context += `, ${glazingLabels[w.glazing] || w.glazing} склопакет`;
+      context += `\n`;
+    }
+
+    if (op.doors) {
+      const d = op.doors;
+      context += `- Двері вхідні: ${d.entrance} шт\n`;
+      context += `- Двері внутрішні: ${d.interior} шт`;
+      if (d.type) context += ` (${d.type === 'premium' ? 'Преміум' : 'Стандарт'})`;
+      context += `\n`;
+    }
+  }
+
+  // Special requirements
+  if (wizardData.specialRequirements) {
+    context += `\n### ⚠️ Особливі вимоги:\n${wizardData.specialRequirements}\n`;
+  }
+
+  // Calculate minimum items
   const minItems = calculateMinimumItems(wizardData);
-  context += `\n**МІНІМАЛЬНА КІЛЬКІСТЬ ПОЗИЦІЙ НА ОСНОВІ ЦИХ ДАНИХ: ${minItems}**\n`;
-  context += `**Це НЕ рекомендація - це ОБОВ'ЯЗКОВА вимога!**\n\n`;
+  context += `\n\n═══════════════════════════════════════════════════════\n`;
+  context += `📊 **МІНІМАЛЬНА КІЛЬКІСТЬ ПОЗИЦІЙ: ${minItems}**\n`;
+  context += `⚠️ **Це ОБОВ'ЯЗКОВА вимога, НЕ рекомендація!**\n`;
+  context += `💡 Якщо вийде менше - ПРОВАЛ завдання!\n`;
+  context += `═══════════════════════════════════════════════════════\n\n`;
 
   return context;
 }
