@@ -30,6 +30,7 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { PROJECT_TEMPLATES } from "@/lib/constants";
+import { WizardData, ObjectType, WorkScope, RenovationStage } from "@/lib/wizard-types";
 
 type EstimateItem = {
   description: string;
@@ -65,50 +66,6 @@ type EstimateData = {
 };
 
 type AIGeneratedEstimate = EstimateData;
-
-type WizardData = {
-  buildingType: 'house' | 'apartment' | 'commercial';
-  totalArea: string;
-  floors?: number;
-  hasBasement?: boolean;
-  hasAttic?: boolean;
-  hasGarage?: boolean;
-  rooms?: {
-    bedrooms: number;
-    bathrooms: number;
-    livingRooms: number;
-    kitchens: number;
-  };
-  wallMaterial?: 'gasblock' | 'brick' | 'wood' | 'panel';
-  roofType?: 'pitched' | 'flat';
-  foundationType?: 'strip' | 'slab' | 'pile';
-  materialLevel: 'economy' | 'standard' | 'premium';
-  ceilingHeight?: string;
-  heating: { enabled: boolean; type?: 'gas' | 'electric' | 'solid' };
-  waterSupply: boolean;
-  sewerage: boolean;
-  electrical: 'full' | 'partial' | 'none';
-  ventilation: { bathroom: boolean; kitchen: boolean };
-  // Step 4: Детальна специфікація
-  electricalDetails?: {
-    hasOnPlans: boolean;
-    outletsCount?: number;
-    switchesCount?: number;
-    lightsCount?: number;
-  };
-  heatingDetails?: {
-    radiatorsCount?: number;
-    underfloorHeating: boolean;
-    underfloorRooms?: string;
-  };
-  flooringDetails?: {
-    tile?: number;
-    laminate?: number;
-    parquet?: number;
-    carpet?: number;
-  };
-  specialRequirements?: string;
-};
 
 const FILE_ICONS: Record<string, typeof FileText> = {
   pdf: FileText,
@@ -278,7 +235,39 @@ function EstimateWizardModal({
 }) {
   if (!isOpen) return null;
 
-  const totalSteps = wizardData.buildingType === 'house' ? 4 : 3;
+  // Calculate total steps based on object type and work scope
+  const calculateTotalSteps = () => {
+    // Step 0: Object Type (always)
+    // Step 1: Work Scope (always)
+    let steps = 2;
+
+    if (wizardData.objectType === 'house') {
+      if (wizardData.workScope === 'foundation_only') {
+        steps += 2; // Terrain + Foundation
+      } else if (wizardData.workScope === 'foundation_walls') {
+        steps += 3; // Terrain + Foundation + Walls
+      } else if (wizardData.workScope === 'foundation_walls_roof') {
+        steps += 4; // Terrain + Foundation + Walls + Roof
+      } else if (wizardData.workScope === 'full_cycle') {
+        steps += 6; // Terrain + Foundation + Walls + Roof + Utilities + Finishing
+      }
+    } else if (wizardData.objectType === 'townhouse') {
+      steps += 1; // Townhouse specifics
+      if (wizardData.workScope === 'full_cycle') {
+        steps += 5; // Similar to house
+      }
+    } else if (['apartment', 'office'].includes(wizardData.objectType)) {
+      if (wizardData.workScope === 'renovation') {
+        steps += 3; // Current stage + Work required + Finishing
+      }
+    } else if (wizardData.objectType === 'commercial') {
+      steps += 3; // Commercial specifics + Utilities + Finishing
+    }
+
+    return steps;
+  };
+
+  const totalSteps = calculateTotalSteps();
   const progress = (wizardStep / totalSteps) * 100;
 
   return (
@@ -296,7 +285,7 @@ function EstimateWizardModal({
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-bold">Деталі проекту</h2>
+              <h2 className="text-2xl font-bold">Детальний опитувальник проекту</h2>
               <p className="text-sm text-muted-foreground">
                 Крок {wizardStep} з {totalSteps}
               </p>
@@ -307,19 +296,19 @@ function EstimateWizardModal({
           </div>
 
           {/* Step Content */}
-          {wizardStep === 1 && <WizardStep1 data={wizardData} setData={setWizardData} />}
-          {wizardStep === 2 && <WizardStep2 data={wizardData} setData={setWizardData} />}
-          {wizardStep === 3 && <WizardStep3 data={wizardData} setData={setWizardData} />}
-          {wizardStep === 4 && wizardData.buildingType === 'house' && (
-            <WizardStep4 data={wizardData} setData={setWizardData} />
-          )}
+          {wizardStep === 0 && <WizardStep0_ObjectType data={wizardData} setData={setWizardData} />}
+          {wizardStep === 1 && <WizardStep1_WorkScope data={wizardData} setData={setWizardData} />}
+          {wizardStep === 2 && <WizardStep2_GeneralInfo data={wizardData} setData={setWizardData} />}
+          {wizardStep === 3 && wizardData.objectType === 'house' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
+          {wizardStep === 4 && wizardData.objectType === 'house' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
+          {wizardStep === 5 && wizardData.objectType === 'house' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
 
           {/* Navigation */}
           <div className="flex justify-between mt-8 pt-6 border-t">
             <Button
               variant="outline"
-              onClick={() => setWizardStep(Math.max(1, wizardStep - 1))}
-              disabled={wizardStep === 1}
+              onClick={() => setWizardStep(Math.max(0, wizardStep - 1))}
+              disabled={wizardStep === 0}
             >
               <ArrowLeft className="mr-2 h-4 w-4" /> Назад
             </Button>
@@ -338,7 +327,7 @@ function EstimateWizardModal({
           {/* Skip */}
           <div className="text-center mt-4">
             <Button variant="link" onClick={onComplete} className="text-xs text-muted-foreground">
-              Пропустити wizard
+              Пропустити опитувальник
             </Button>
           </div>
         </div>
@@ -347,8 +336,127 @@ function EstimateWizardModal({
   );
 }
 
-// Step 1: Type and Size
-function WizardStep1({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+// Step 0: Object Type Selection
+function WizardStep0_ObjectType({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const objectTypes = [
+    { value: 'house' as ObjectType, label: 'Будинок', icon: '🏡', desc: 'Приватний будинок з нуля' },
+    { value: 'townhouse' as ObjectType, label: 'Котедж (Таунхаус)', icon: '🏘️', desc: 'Будинок із суміжними стінами' },
+    { value: 'apartment' as ObjectType, label: 'Квартира', icon: '🏢', desc: 'Квартира в багатоповерховому будинку' },
+    { value: 'office' as ObjectType, label: 'Офісне приміщення', icon: '🏪', desc: 'Офіс або бізнес-простір' },
+    { value: 'commercial' as ObjectType, label: 'Комерційне приміщення', icon: '🏭', desc: 'Магазин, склад, виробництво' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <h3 className="text-lg font-semibold mb-2">Оберіть тип об'єкта</h3>
+        <p className="text-sm text-muted-foreground">
+          Це допоможе нам задати правильні питання для вашого проекту
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {objectTypes.map((type) => (
+          <label
+            key={type.value}
+            className={cn(
+              "relative flex flex-col gap-3 p-6 border-2 rounded-xl cursor-pointer transition-all hover:shadow-md",
+              data.objectType === type.value
+                ? "border-primary bg-primary/5 shadow-md"
+                : "border-gray-200 hover:border-gray-300"
+            )}
+          >
+            <input
+              type="radio"
+              name="objectType"
+              value={type.value}
+              checked={data.objectType === type.value}
+              onChange={(e) => setData({ ...data, objectType: e.target.value as ObjectType })}
+              className="sr-only"
+            />
+            <div className="flex items-center gap-3">
+              <span className="text-4xl">{type.icon}</span>
+              <div className="flex-1">
+                <div className="font-semibold text-base">{type.label}</div>
+                <div className="text-xs text-muted-foreground mt-1">{type.desc}</div>
+              </div>
+              {data.objectType === type.value && (
+                <Check className="h-6 w-6 text-primary flex-shrink-0" />
+              )}
+            </div>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Step 1: Work Scope Selection
+function WizardStep1_WorkScope({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const getWorkScopes = () => {
+    if (data.objectType === 'house' || data.objectType === 'townhouse') {
+      return [
+        { value: 'foundation_only' as WorkScope, label: 'Тільки фундамент', icon: '🏗️', desc: 'Нульовий цикл та фундаментні роботи' },
+        { value: 'foundation_walls' as WorkScope, label: 'Фундамент + Коробка', icon: '🧱', desc: 'Фундамент та зведення стін' },
+        { value: 'foundation_walls_roof' as WorkScope, label: 'Коробка з дахом', icon: '🏠', desc: 'Фундамент, стіни та дах' },
+        { value: 'full_cycle' as WorkScope, label: 'Повний цикл', icon: '✨', desc: 'Від фундаменту до оздоблення' },
+      ];
+    } else {
+      return [
+        { value: 'renovation' as WorkScope, label: 'Ремонт', icon: '🔨', desc: 'Ремонт та оздоблення приміщення' },
+      ];
+    }
+  };
+
+  const workScopes = getWorkScopes();
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <h3 className="text-lg font-semibold mb-2">Оберіть обсяг робіт</h3>
+        <p className="text-sm text-muted-foreground">
+          Що саме плануєте робити?
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {workScopes.map((scope) => (
+          <label
+            key={scope.value}
+            className={cn(
+              "relative flex items-center gap-4 p-5 border-2 rounded-xl cursor-pointer transition-all hover:shadow-md",
+              data.workScope === scope.value
+                ? "border-primary bg-primary/5 shadow-md"
+                : "border-gray-200 hover:border-gray-300"
+            )}
+          >
+            <input
+              type="radio"
+              name="workScope"
+              value={scope.value}
+              checked={data.workScope === scope.value}
+              onChange={(e) => setData({ ...data, workScope: e.target.value as WorkScope })}
+              className="sr-only"
+            />
+            <span className="text-3xl">{scope.icon}</span>
+            <div className="flex-1">
+              <div className="font-semibold">{scope.label}</div>
+              <div className="text-sm text-muted-foreground mt-1">{scope.desc}</div>
+            </div>
+            {data.workScope === scope.value && (
+              <Check className="h-6 w-6 text-primary flex-shrink-0" />
+            )}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Step 2: General Info (Area, Floors, Ceiling Height)
+function WizardStep2_GeneralInfo({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const isHouse = data.objectType === 'house' || data.objectType === 'townhouse';
+
   return (
     <div className="space-y-6">
       <div>
@@ -362,12 +470,12 @@ function WizardStep1({ data, setData }: { data: WizardData; setData: (d: WizardD
         />
       </div>
 
-      {data.buildingType === 'house' && (
+      {isHouse && (
         <>
           <div>
             <label className="block text-sm font-medium mb-2">Кількість поверхів</label>
             <select
-              value={data.floors}
+              value={data.floors || 1}
               onChange={(e) => setData({ ...data, floors: parseInt(e.target.value) })}
               className="w-full px-4 py-2 border rounded-lg"
             >
@@ -378,12 +486,28 @@ function WizardStep1({ data, setData }: { data: WizardData; setData: (d: WizardD
             </select>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium mb-2">Висота стелі (м)</label>
+            <input
+              type="number"
+              step="0.1"
+              min="2.4"
+              max="4.0"
+              value={data.ceilingHeight || '2.7'}
+              onChange={(e) => setData({ ...data, ceilingHeight: e.target.value })}
+              className="w-full px-4 py-2 border rounded-lg"
+            />
+          </div>
+
           <div className="grid grid-cols-3 gap-4">
             <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
               <input
                 type="checkbox"
-                checked={data.hasBasement}
-                onChange={(e) => setData({ ...data, hasBasement: e.target.checked })}
+                checked={data.houseData?.hasBasement || false}
+                onChange={(e) => setData({
+                  ...data,
+                  houseData: { ...data.houseData, hasBasement: e.target.checked } as any
+                })}
                 className="rounded"
               />
               <span className="text-sm font-medium">Підвал</span>
@@ -392,8 +516,11 @@ function WizardStep1({ data, setData }: { data: WizardData; setData: (d: WizardD
             <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
               <input
                 type="checkbox"
-                checked={data.hasAttic}
-                onChange={(e) => setData({ ...data, hasAttic: e.target.checked })}
+                checked={data.houseData?.hasAttic || false}
+                onChange={(e) => setData({
+                  ...data,
+                  houseData: { ...data.houseData, hasAttic: e.target.checked } as any
+                })}
                 className="rounded"
               />
               <span className="text-sm font-medium">Мансарда</span>
@@ -402,229 +529,88 @@ function WizardStep1({ data, setData }: { data: WizardData; setData: (d: WizardD
             <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
               <input
                 type="checkbox"
-                checked={data.hasGarage}
-                onChange={(e) => setData({ ...data, hasGarage: e.target.checked })}
+                checked={data.houseData?.hasGarage || false}
+                onChange={(e) => setData({
+                  ...data,
+                  houseData: { ...data.houseData, hasGarage: e.target.checked } as any
+                })}
                 className="rounded"
               />
               <span className="text-sm font-medium">Гараж</span>
             </label>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-3">Кімнати</label>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Спальні</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={data.rooms?.bedrooms}
-                  onChange={(e) => setData({
-                    ...data,
-                    rooms: { ...data.rooms!, bedrooms: parseInt(e.target.value) || 0 }
-                  })}
-                  className="w-full px-3 py-2 border rounded"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Санвузли</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={data.rooms?.bathrooms}
-                  onChange={(e) => setData({
-                    ...data,
-                    rooms: { ...data.rooms!, bathrooms: parseInt(e.target.value) || 0 }
-                  })}
-                  className="w-full px-3 py-2 border rounded"
-                />
-              </div>
-            </div>
-          </div>
         </>
+      )}
+
+      {!isHouse && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Висота стелі (м)</label>
+          <input
+            type="number"
+            step="0.1"
+            min="2.4"
+            max="4.0"
+            value={data.ceilingHeight || '2.7'}
+            onChange={(e) => setData({ ...data, ceilingHeight: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg"
+          />
+        </div>
       )}
     </div>
   );
 }
 
-// Step 2: Construction
-function WizardStep2({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+// Step 3: Terrain and Site Preparation (only for house)
+function WizardStep3_Terrain({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const terrain = data.houseData?.terrain || {
+    soilType: 'unknown',
+    groundwaterDepth: 'unknown',
+    slope: 'flat',
+    needsExcavation: false,
+    needsDrainage: false,
+  };
+
+  const updateTerrain = (updates: Partial<typeof terrain>) => {
+    setData({
+      ...data,
+      houseData: {
+        ...data.houseData,
+        terrain: { ...terrain, ...updates },
+      } as any
+    });
+  };
+
   return (
     <div className="space-y-6">
-      {data.buildingType === 'house' && (
-        <>
-          <div>
-            <label className="block text-sm font-medium mb-2">Матеріал стін</label>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: 'gasblock', label: 'Газоблок' },
-                { value: 'brick', label: 'Цегла' },
-                { value: 'wood', label: 'Дерево' },
-                { value: 'panel', label: 'Панельний' },
-              ].map((option) => (
-                <label
-                  key={option.value}
-                  className={cn(
-                    "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
-                    data.wallMaterial === option.value && "border-primary bg-primary/5"
-                  )}
-                >
-                  <input
-                    type="radio"
-                    name="wallMaterial"
-                    value={option.value}
-                    checked={data.wallMaterial === option.value}
-                    onChange={(e) => setData({ ...data, wallMaterial: e.target.value as any })}
-                    className="text-primary"
-                  />
-                  <span className="text-sm font-medium">{option.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-2">Тип даху</label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className={cn("flex items-center gap-2 p-3 border rounded-lg cursor-pointer", data.roofType === 'pitched' && "border-primary bg-primary/5")}>
-                <input type="radio" name="roofType" value="pitched" checked={data.roofType === 'pitched'} onChange={(e) => setData({ ...data, roofType: e.target.value as any })} />
-                <span className="text-sm font-medium">Скатний</span>
-              </label>
-              <label className={cn("flex items-center gap-2 p-3 border rounded-lg cursor-pointer", data.roofType === 'flat' && "border-primary bg-primary/5")}>
-                <input type="radio" name="roofType" value="flat" checked={data.roofType === 'flat'} onChange={(e) => setData({ ...data, roofType: e.target.value as any })} />
-                <span className="text-sm font-medium">Плоский</span>
-              </label>
-            </div>
-          </div>
-        </>
-      )}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          💡 <strong>Підготовка ділянки:</strong> Інформація про місцевість допоможе точно розрахувати роботи з підготовки та фундаменту
+        </p>
+      </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">Рівень матеріалів</label>
-        <div className="grid grid-cols-3 gap-3">
+        <label className="block text-sm font-medium mb-2">Тип ґрунту</label>
+        <div className="grid grid-cols-2 gap-3">
           {[
-            { value: 'economy', label: 'Економ', desc: 'Базові матеріали' },
-            { value: 'standard', label: 'Стандарт', desc: 'Середній клас' },
-            { value: 'premium', label: 'Преміум', desc: 'Якісні матеріали' },
+            { value: 'clay', label: 'Глина' },
+            { value: 'sand', label: 'Пісок' },
+            { value: 'rock', label: 'Скеля' },
+            { value: 'mixed', label: 'Змішаний' },
+            { value: 'unknown', label: 'Не знаю' },
           ].map((option) => (
             <label
               key={option.value}
               className={cn(
-                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
-                data.materialLevel === option.value && "border-primary bg-primary/5"
+                "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                terrain.soilType === option.value && "border-primary bg-primary/5"
               )}
             >
               <input
                 type="radio"
-                name="materialLevel"
+                name="soilType"
                 value={option.value}
-                checked={data.materialLevel === option.value}
-                onChange={(e) => setData({ ...data, materialLevel: e.target.value as any })}
-                className="sr-only"
-              />
-              <span className="text-sm font-bold">{option.label}</span>
-              <span className="text-xs text-muted-foreground">{option.desc}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-2">Висота стелі (м)</label>
-        <input
-          type="number"
-          step="0.1"
-          min="2.4"
-          max="4.0"
-          value={data.ceilingHeight}
-          onChange={(e) => setData({ ...data, ceilingHeight: e.target.value })}
-          className="w-full px-4 py-2 border rounded-lg"
-        />
-      </div>
-    </div>
-  );
-}
-
-// Step 3: Engineering
-function WizardStep3({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <label className="flex items-center gap-2 mb-3">
-          <input
-            type="checkbox"
-            checked={data.heating.enabled}
-            onChange={(e) => setData({
-              ...data,
-              heating: { ...data.heating, enabled: e.target.checked }
-            })}
-            className="rounded"
-          />
-          <span className="text-sm font-medium">Опалення</span>
-        </label>
-
-        {data.heating.enabled && (
-          <div className="ml-6 grid grid-cols-3 gap-3">
-            {[
-              { value: 'gas', label: 'Газ' },
-              { value: 'electric', label: 'Електро' },
-              { value: 'solid', label: 'Тверде паливо' },
-            ].map((option) => (
-              <label key={option.value} className={cn("flex items-center gap-2 p-2 border rounded cursor-pointer", data.heating.type === option.value && "border-primary bg-primary/5")}>
-                <input
-                  type="radio"
-                  name="heatingType"
-                  value={option.value}
-                  checked={data.heating.type === option.value}
-                  onChange={(e) => setData({
-                    ...data,
-                    heating: { ...data.heating, type: e.target.value as any }
-                  })}
-                />
-                <span className="text-sm">{option.label}</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-4">
-        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
-          <input
-            type="checkbox"
-            checked={data.waterSupply}
-            onChange={(e) => setData({ ...data, waterSupply: e.target.checked })}
-            className="rounded"
-          />
-          <span className="text-sm font-medium">Водопостачання</span>
-        </label>
-
-        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
-          <input
-            type="checkbox"
-            checked={data.sewerage}
-            onChange={(e) => setData({ ...data, sewerage: e.target.checked })}
-            className="rounded"
-          />
-          <span className="text-sm font-medium">Каналізація</span>
-        </label>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-2">Електрика</label>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { value: 'full', label: 'Повна' },
-            { value: 'partial', label: 'Часткова' },
-            { value: 'none', label: 'Немає' },
-          ].map((option) => (
-            <label key={option.value} className={cn("flex items-center gap-2 p-3 border rounded-lg cursor-pointer", data.electrical === option.value && "border-primary bg-primary/5")}>
-              <input
-                type="radio"
-                name="electrical"
-                value={option.value}
-                checked={data.electrical === option.value}
-                onChange={(e) => setData({ ...data, electrical: e.target.value as any })}
+                checked={terrain.soilType === option.value}
+                onChange={(e) => updateTerrain({ soilType: e.target.value as any })}
               />
               <span className="text-sm font-medium">{option.label}</span>
             </label>
@@ -633,242 +619,406 @@ function WizardStep3({ data, setData }: { data: WizardData; setData: (d: WizardD
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">Вентиляція</label>
-        <div className="grid grid-cols-2 gap-4">
-          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
-            <input
-              type="checkbox"
-              checked={data.ventilation.bathroom}
-              onChange={(e) => setData({
-                ...data,
-                ventilation: { ...data.ventilation, bathroom: e.target.checked }
-              })}
-              className="rounded"
-            />
-            <span className="text-sm">Ванна</span>
-          </label>
-
-          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
-            <input
-              type="checkbox"
-              checked={data.ventilation.kitchen}
-              onChange={(e) => setData({
-                ...data,
-                ventilation: { ...data.ventilation, kitchen: e.target.checked }
-              })}
-              className="rounded"
-            />
-            <span className="text-sm">Кухня</span>
-          </label>
+        <label className="block text-sm font-medium mb-2">Рівень ґрунтових вод</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'shallow', label: 'Близько (< 2м)' },
+            { value: 'medium', label: 'Середньо (2-5м)' },
+            { value: 'deep', label: 'Глибоко (> 5м)' },
+            { value: 'unknown', label: 'Не знаю' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                terrain.groundwaterDepth === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="groundwaterDepth"
+                value={option.value}
+                checked={terrain.groundwaterDepth === option.value}
+                onChange={(e) => updateTerrain({ groundwaterDepth: e.target.value as any })}
+              />
+              <span className="text-sm">{option.label}</span>
+            </label>
+          ))}
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-2">Особливі вимоги</label>
-        <textarea
-          value={data.specialRequirements}
-          onChange={(e) => setData({ ...data, specialRequirements: e.target.value })}
-          placeholder="Наприклад: натяжні стелі, декоративні елементи..."
-          rows={4}
-          className="w-full px-4 py-2 border rounded-lg"
-        />
+        <label className="block text-sm font-medium mb-2">Ухил ділянки</label>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: 'flat', label: 'Рівна' },
+            { value: 'slight', label: 'Невеликий' },
+            { value: 'steep', label: 'Крутий' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                terrain.slope === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="slope"
+                value={option.value}
+                checked={terrain.slope === option.value}
+                onChange={(e) => updateTerrain({ slope: e.target.value as any })}
+              />
+              <span className="text-sm font-medium">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={terrain.needsExcavation}
+            onChange={(e) => updateTerrain({ needsExcavation: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Потрібна розкопка</div>
+            <div className="text-xs text-muted-foreground">Виїмка грунту</div>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={terrain.needsDrainage}
+            onChange={(e) => updateTerrain({ needsDrainage: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Потрібен дренаж</div>
+            <div className="text-xs text-muted-foreground">Відведення води</div>
+          </div>
+        </label>
       </div>
     </div>
   );
 }
 
-// Step 4: Детальна специфікація (тільки для будинків)
-function WizardStep4({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+// Step 4: Foundation (only for house, if workScope includes foundation)
+function WizardStep4_Foundation({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const foundation = data.houseData?.foundation || {
+    type: 'strip',
+    depth: '',
+    width: '',
+    reinforcement: 'standard',
+    waterproofing: true,
+    insulation: false,
+  };
+
+  const updateFoundation = (updates: Partial<typeof foundation>) => {
+    setData({
+      ...data,
+      houseData: {
+        ...data.houseData,
+        foundation: { ...foundation, ...updates },
+      } as any
+    });
+  };
+
   return (
     <div className="space-y-6">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <p className="text-sm text-blue-800">
-          💡 <strong>Порада:</strong> Чим детальніше ви вкажете кількість елементів (розетки, радіатори, площі покриттів),
-          тим точніший буде кошторис!
+          🏗️ <strong>Фундамент:</strong> Основа вашого будинку - від цього залежить міцність всієї конструкції
         </p>
       </div>
 
-      {/* Електрика */}
       <div>
-        <label className="block text-sm font-medium mb-3">⚡ Електрика (якщо є на планах)</label>
-        <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted mb-3">
-          <input
-            type="checkbox"
-            checked={data.electricalDetails?.hasOnPlans || false}
-            onChange={(e) => setData({
-              ...data,
-              electricalDetails: { ...data.electricalDetails!, hasOnPlans: e.target.checked }
-            })}
-            className="rounded"
-          />
-          <span className="text-sm">На планах вказано розташування розеток/вимикачів</span>
-        </label>
-
-        {data.electricalDetails?.hasOnPlans && (
-          <div className="ml-6 grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Розеток</label>
+        <label className="block text-sm font-medium mb-2">Тип фундаменту</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'strip', label: 'Стрічковий', desc: 'Найпопулярніший' },
+            { value: 'slab', label: 'Плитний', desc: 'Монолітна плита' },
+            { value: 'pile', label: 'Пальовий', desc: 'Для складного грунту' },
+            { value: 'combined', label: 'Комбінований', desc: 'Змішаний тип' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                foundation.type === option.value && "border-primary bg-primary/5"
+              )}
+            >
               <input
-                type="number"
-                min="0"
-                value={data.electricalDetails?.outletsCount || 0}
-                onChange={(e) => setData({
-                  ...data,
-                  electricalDetails: { ...data.electricalDetails!, outletsCount: parseInt(e.target.value) || 0 }
-                })}
-                className="w-full px-3 py-2 border rounded"
-                placeholder="25"
+                type="radio"
+                name="foundationType"
+                value={option.value}
+                checked={foundation.type === option.value}
+                onChange={(e) => updateFoundation({ type: e.target.value as any })}
+                className="sr-only"
               />
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Вимикачів</label>
-              <input
-                type="number"
-                min="0"
-                value={data.electricalDetails?.switchesCount || 0}
-                onChange={(e) => setData({
-                  ...data,
-                  electricalDetails: { ...data.electricalDetails!, switchesCount: parseInt(e.target.value) || 0 }
-                })}
-                className="w-full px-3 py-2 border rounded"
-                placeholder="15"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Світильників</label>
-              <input
-                type="number"
-                min="0"
-                value={data.electricalDetails?.lightsCount || 0}
-                onChange={(e) => setData({
-                  ...data,
-                  electricalDetails: { ...data.electricalDetails!, lightsCount: parseInt(e.target.value) || 0 }
-                })}
-                className="w-full px-3 py-2 border rounded"
-                placeholder="20"
-              />
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Опалення */}
-      <div>
-        <label className="block text-sm font-medium mb-3">🔥 Опалення</label>
-        <div className="space-y-3">
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Кількість радіаторів</label>
-            <input
-              type="number"
-              min="0"
-              value={data.heatingDetails?.radiatorsCount || 0}
-              onChange={(e) => setData({
-                ...data,
-                heatingDetails: { ...data.heatingDetails!, radiatorsCount: parseInt(e.target.value) || 0 }
-              })}
-              className="w-full px-3 py-2 border rounded"
-              placeholder="10"
-            />
-          </div>
-
-          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
-            <input
-              type="checkbox"
-              checked={data.heatingDetails?.underfloorHeating || false}
-              onChange={(e) => setData({
-                ...data,
-                heatingDetails: { ...data.heatingDetails!, underfloorHeating: e.target.checked }
-              })}
-              className="rounded"
-            />
-            <span className="text-sm">Теплі підлоги</span>
-          </label>
-
-          {data.heatingDetails?.underfloorHeating && (
-            <div className="ml-6">
-              <label className="block text-xs text-muted-foreground mb-1">В яких приміщеннях?</label>
-              <input
-                type="text"
-                value={data.heatingDetails?.underfloorRooms || ''}
-                onChange={(e) => setData({
-                  ...data,
-                  heatingDetails: { ...data.heatingDetails!, underfloorRooms: e.target.value }
-                })}
-                className="w-full px-3 py-2 border rounded"
-                placeholder="Ванна, кухня, коридор..."
-              />
-            </div>
-          )}
+              <span className="text-sm font-semibold">{option.label}</span>
+              <span className="text-xs text-muted-foreground">{option.desc}</span>
+            </label>
+          ))}
         </div>
       </div>
 
-      {/* Покриття підлоги */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">Глибина (м)</label>
+          <input
+            type="number"
+            step="0.1"
+            value={foundation.depth}
+            onChange={(e) => updateFoundation({ depth: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg"
+            placeholder="1.2"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Ширина (м)</label>
+          <input
+            type="number"
+            step="0.1"
+            value={foundation.width}
+            onChange={(e) => updateFoundation({ width: e.target.value })}
+            className="w-full px-4 py-2 border rounded-lg"
+            placeholder="0.4"
+          />
+        </div>
+      </div>
+
       <div>
-        <label className="block text-sm font-medium mb-3">🏠 Покриття підлоги (площі в м²)</label>
-        <p className="text-xs text-muted-foreground mb-3">
-          Вкажіть орієнтовні площі різних типів покриття
-        </p>
-        <div className="grid grid-cols-2 gap-4">
+        <label className="block text-sm font-medium mb-2">Армування</label>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { value: 'light', label: 'Легке' },
+            { value: 'standard', label: 'Стандарт' },
+            { value: 'heavy', label: 'Посилене' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                foundation.reinforcement === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="reinforcement"
+                value={option.value}
+                checked={foundation.reinforcement === option.value}
+                onChange={(e) => updateFoundation({ reinforcement: e.target.value as any })}
+              />
+              <span className="text-sm font-medium">{option.label}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={foundation.waterproofing}
+            onChange={(e) => updateFoundation({ waterproofing: e.target.checked })}
+            className="rounded"
+          />
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Плитка</label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={data.flooringDetails?.tile || 0}
-              onChange={(e) => setData({
-                ...data,
-                flooringDetails: { ...data.flooringDetails!, tile: parseFloat(e.target.value) || 0 }
-              })}
-              className="w-full px-3 py-2 border rounded"
-              placeholder="40"
-            />
+            <div className="text-sm font-medium">Гідроізоляція</div>
+            <div className="text-xs text-muted-foreground">Захист від вологи</div>
           </div>
+        </label>
+
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={foundation.insulation}
+            onChange={(e) => updateFoundation({ insulation: e.target.checked })}
+            className="rounded"
+          />
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">Ламінат</label>
+            <div className="text-sm font-medium">Утеплення</div>
+            <div className="text-xs text-muted-foreground">Теплоізоляція</div>
+          </div>
+        </label>
+      </div>
+
+      {foundation.insulation && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Товщина утеплення (мм)</label>
+          <input
+            type="number"
+            value={foundation.insulationThickness || ''}
+            onChange={(e) => updateFoundation({ insulationThickness: parseInt(e.target.value) || undefined })}
+            className="w-full px-4 py-2 border rounded-lg"
+            placeholder="50"
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Step 5: Walls (only for house, if workScope includes walls)
+function WizardStep5_Walls({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const walls = data.houseData?.walls || {
+    material: 'gasblock',
+    thickness: '',
+    insulation: false,
+    hasLoadBearing: true,
+    partitionMaterial: 'same',
+  };
+
+  const updateWalls = (updates: Partial<typeof walls>) => {
+    setData({
+      ...data,
+      houseData: {
+        ...data.houseData,
+        walls: { ...walls, ...updates },
+      } as any
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          🧱 <strong>Стіни:</strong> Матеріал стін впливає на термоізоляцію, міцність та вартість будівництва
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Матеріал несучих стін</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'gasblock', label: 'Газоблок', desc: 'Популярний, теплий' },
+            { value: 'brick', label: 'Цегла', desc: 'Надійний, класичний' },
+            { value: 'wood', label: 'Дерево', desc: 'Екологічний' },
+            { value: 'panel', label: 'Панель', desc: 'Швидка збудова' },
+            { value: 'monolith', label: 'Моноліт', desc: 'Максимальна міцність' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                walls.material === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="wallMaterial"
+                value={option.value}
+                checked={walls.material === option.value}
+                onChange={(e) => updateWalls({ material: e.target.value as any })}
+                className="sr-only"
+              />
+              <span className="text-sm font-semibold">{option.label}</span>
+              <span className="text-xs text-muted-foreground">{option.desc}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Товщина стін (мм)</label>
+        <input
+          type="number"
+          value={walls.thickness}
+          onChange={(e) => updateWalls({ thickness: e.target.value })}
+          className="w-full px-4 py-2 border rounded-lg"
+          placeholder="400"
+        />
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={walls.insulation}
+            onChange={(e) => updateWalls({ insulation: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Додаткове утеплення стін</div>
+            <div className="text-xs text-muted-foreground">Зовнішня теплоізоляція</div>
+          </div>
+        </label>
+      </div>
+
+      {walls.insulation && (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-2">Тип утеплення</label>
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { value: 'foam', label: 'Пінопласт' },
+                { value: 'mineral', label: 'Мінвата' },
+                { value: 'ecowool', label: 'Екова' },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className={cn(
+                    "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                    walls.insulationType === option.value && "border-primary bg-primary/5"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="insulationType"
+                    value={option.value}
+                    checked={walls.insulationType === option.value}
+                    onChange={(e) => updateWalls({ insulationType: e.target.value as any })}
+                  />
+                  <span className="text-sm font-medium">{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Товщина утеплення (мм)</label>
             <input
               type="number"
-              min="0"
-              step="0.1"
-              value={data.flooringDetails?.laminate || 0}
-              onChange={(e) => setData({
-                ...data,
-                flooringDetails: { ...data.flooringDetails!, laminate: parseFloat(e.target.value) || 0 }
-              })}
-              className="w-full px-3 py-2 border rounded"
+              value={walls.insulationThickness || ''}
+              onChange={(e) => updateWalls({ insulationThickness: parseInt(e.target.value) || undefined })}
+              className="w-full px-4 py-2 border rounded-lg"
               placeholder="100"
             />
           </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Паркет</label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={data.flooringDetails?.parquet || 0}
-              onChange={(e) => setData({
-                ...data,
-                flooringDetails: { ...data.flooringDetails!, parquet: parseFloat(e.target.value) || 0 }
-              })}
-              className="w-full px-3 py-2 border rounded"
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-muted-foreground mb-1">Ковролін</label>
-            <input
-              type="number"
-              min="0"
-              step="0.1"
-              value={data.flooringDetails?.carpet || 0}
-              onChange={(e) => setData({
-                ...data,
-                flooringDetails: { ...data.flooringDetails!, carpet: parseFloat(e.target.value) || 0 }
-              })}
-              className="w-full px-3 py-2 border rounded"
-              placeholder="0"
-            />
-          </div>
+        </>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Матеріал перегородок</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'same', label: 'Такий самий' },
+            { value: 'gasblock', label: 'Газоблок' },
+            { value: 'brick', label: 'Цегла' },
+            { value: 'gypsum', label: 'Гіпсокартон' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-center gap-2 p-3 border rounded-lg cursor-pointer",
+                walls.partitionMaterial === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="partitionMaterial"
+                value={option.value}
+                checked={walls.partitionMaterial === option.value}
+                onChange={(e) => updateWalls({ partitionMaterial: e.target.value as any })}
+              />
+              <span className="text-sm font-medium">{option.label}</span>
+            </label>
+          ))}
         </div>
       </div>
     </div>
@@ -909,49 +1059,57 @@ export default function AIEstimatePage() {
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false);
-  const [wizardStep, setWizardStep] = useState(1);
+  const [wizardStep, setWizardStep] = useState(0);
   const [wizardCompleted, setWizardCompleted] = useState(false);
   const [wizardData, setWizardData] = useState<WizardData>({
-    buildingType: 'house',
+    // Step 0: Object Type
+    objectType: 'house',
+    // Step 1: Work Scope
+    workScope: 'full_cycle',
+    // General data
     totalArea: '',
-    floors: 1,
-    hasBasement: false,
-    hasAttic: false,
-    hasGarage: false,
-    rooms: {
-      bedrooms: 3,
-      bathrooms: 2,
-      livingRooms: 1,
-      kitchens: 1,
-    },
-    wallMaterial: 'gasblock',
-    roofType: 'pitched',
-    foundationType: 'strip',
-    materialLevel: 'standard',
+    floors: 2,
     ceilingHeight: '2.7',
-    heating: { enabled: true, type: 'gas' },
-    waterSupply: true,
-    sewerage: true,
-    electrical: 'full',
-    ventilation: { bathroom: true, kitchen: true },
-    electricalDetails: {
-      hasOnPlans: false,
-      outletsCount: 0,
-      switchesCount: 0,
-      lightsCount: 0,
+    // Utilities (for all types)
+    utilities: {
+      electrical: {
+        power: 'single_phase',
+        outlets: 0,
+        switches: 0,
+        lightPoints: 0,
+        outdoorLighting: false,
+      },
+      heating: {
+        type: 'none',
+      },
+      water: {
+        coldWater: false,
+        hotWater: false,
+        source: 'central',
+      },
+      sewerage: {
+        type: 'central',
+        pumpNeeded: false,
+      },
+      ventilation: {
+        natural: true,
+        forced: false,
+        recuperation: false,
+      },
     },
-    heatingDetails: {
-      radiatorsCount: 0,
-      underfloorHeating: false,
-      underfloorRooms: '',
+    // Finishing
+    finishing: {
+      walls: {
+        material: 'paint',
+        qualityLevel: 'standard',
+      },
+      flooring: {},
+      ceiling: {
+        type: 'paint',
+        levels: 1,
+        lighting: 'mixed',
+      },
     },
-    flooringDetails: {
-      tile: 0,
-      laminate: 0,
-      parquet: 0,
-      carpet: 0,
-    },
-    specialRequirements: '',
   });
 
   const router = useRouter();
