@@ -688,6 +688,7 @@ export default function AIEstimatePage() {
   const [isDragging, setIsDragging] = useState(false);
   const [verificationResult, setVerificationResult] = useState<any>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -852,8 +853,18 @@ export default function AIEstimatePage() {
       }
 
       setEstimate(json.data);
+      setDebugInfo(json.debug || null);
       // Expand all sections by default
       setExpandedSections(new Set(json.data.sections.map((_: unknown, i: number) => i)));
+
+      // Show debug info if available
+      if (json.debug) {
+        console.log('🔍 AI Generation Debug Info:', json.debug);
+        if (json.debug.status === 'TOO_FEW') {
+          console.warn(`⚠️ AI generated ${json.debug.totalItems} items, but ${json.debug.requiredMin} required!`);
+          console.warn(`   Gap: ${json.debug.gap} items missing`);
+        }
+      }
 
       // Автоматична верифікація через OpenAI
       await verifyEstimate(json.data);
@@ -1539,6 +1550,40 @@ export default function AIEstimatePage() {
 
           {/* Результати верифікації */}
           {verificationResult && <VerificationResults result={verificationResult} />}
+
+          {/* Debug Info */}
+          {debugInfo && (
+            <Card className={cn("p-4 border-2", debugInfo.status === 'OK' ? 'border-green-500/30 bg-green-50' : 'border-orange-500/30 bg-orange-50')}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Badge variant={debugInfo.status === 'OK' ? 'default' : 'secondary'} className={debugInfo.status === 'OK' ? 'bg-green-600' : 'bg-orange-600'}>
+                    {debugInfo.status === 'OK' ? '✅ Достатньо позицій' : '⚠️ Замало позицій'}
+                  </Badge>
+                  <span className="text-sm font-medium">
+                    Згенеровано: <strong className={debugInfo.status === 'OK' ? 'text-green-700' : 'text-orange-700'}>{debugInfo.totalItems}</strong> / {debugInfo.requiredMin} позицій
+                  </span>
+                  {debugInfo.status !== 'OK' && (
+                    <span className="text-sm text-orange-600">
+                      (бракує {Math.abs(debugInfo.gap)} позицій)
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {debugInfo.wizardUsed ? (
+                    <span className="flex items-center gap-1">
+                      <Check className="h-3 w-3 text-green-600" /> Wizard використано
+                    </span>
+                  ) : (
+                    <span className="text-orange-600">Wizard не використано</span>
+                  )}
+                  <span>•</span>
+                  <span>Template: {debugInfo.template}</span>
+                  <span>•</span>
+                  <span>Площа: {debugInfo.area} м²</span>
+                </div>
+              </div>
+            </Card>
+          )}
 
           {/* Summary cards */}
           <div className="grid gap-3 sm:grid-cols-4">

@@ -855,11 +855,19 @@ ${textParts.join("\n\n")}
       // Log generated estimate stats
       const totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
         sum + (section.items?.length || 0), 0) || 0;
-      console.log('📝 AI Generated Estimate:');
-      console.log('  - Sections:', estimateData.sections?.length || 0);
-      console.log('  - Total Items:', totalItems);
-      console.log('  - Required Min:', calculatedMin);
-      console.log('  - Status:', totalItems >= calculatedMin ? '✅ OK' : '❌ TOO FEW!');
+
+      const stats = {
+        sections: estimateData.sections?.length || 0,
+        totalItems: totalItems,
+        requiredMin: calculatedMin,
+        status: totalItems >= calculatedMin ? 'OK' : 'TOO_FEW',
+        gap: totalItems - calculatedMin,
+        wizardUsed: !!wizardData
+      };
+
+      console.log('📝 AI Generated Estimate:', JSON.stringify(stats));
+      console.log('Section breakdown:', estimateData.sections?.map((s: any) =>
+        `${s.title}: ${s.items?.length || 0} items`).join(', '));
 
     } catch (parseError) {
       return NextResponse.json({
@@ -871,6 +879,15 @@ ${textParts.join("\n\n")}
     return NextResponse.json({
       data: estimateData,
       filesProcessed: files.map((f) => f.name),
+      debug: {
+        totalItems,
+        requiredMin: calculatedMin,
+        status: totalItems >= calculatedMin ? 'OK' : 'TOO_FEW',
+        gap: totalItems - calculatedMin,
+        wizardUsed: !!wizardData,
+        template,
+        area: areaNum
+      }
     });
   } catch (error: unknown) {
     console.error("Estimate generation error:", error);
