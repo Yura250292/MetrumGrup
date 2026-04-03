@@ -1853,16 +1853,19 @@ export default function AIEstimatePage() {
 
   // Auto-trigger wizard for complex projects
   useEffect(() => {
-    if (['house_full', 'turnkey'].includes(selectedTemplate) && !wizardCompleted) {
+    // Reset wizard completion when template changes to allow re-opening
+    if (['house_full', 'turnkey', 'shell'].includes(selectedTemplate)) {
+      // Auto-open wizard for complex templates
       setShowWizard(true);
+      setWizardCompleted(false); // Allow reopening for new template
     }
-  }, [selectedTemplate, wizardCompleted]);
+  }, [selectedTemplate]);
 
   // Wizard complete handler
   const handleWizardComplete = () => {
     setShowWizard(false);
     setWizardCompleted(true);
-    setWizardStep(1);
+    setWizardStep(0); // Reset to step 0 (object type selection)
 
     // Sync area from wizard to main form
     if (wizardData.totalArea) {
@@ -2439,6 +2442,36 @@ export default function AIEstimatePage() {
                   )}
                 </label>
               ))}
+            </div>
+          </Card>
+
+          {/* Wizard Button */}
+          <Card className="p-6 bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
+            <div className="flex items-start gap-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <Sparkles className="w-6 h-6 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg mb-1">Детальний опитувальник проекту</h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Заповніть детальну інформацію про проект для точнішого кошторису.
+                  AI згенерує <strong>в 3-5 разів більше позицій</strong> з конкретними матеріалами та специфікаціями.
+                </p>
+                <Button
+                  onClick={() => setShowWizard(true)}
+                  className="bg-primary hover:bg-primary/90"
+                  size="lg"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Відкрити опитувальник
+                  {wizardCompleted && <Badge variant="secondary" className="ml-2">Заповнено</Badge>}
+                </Button>
+                {wizardCompleted && (
+                  <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Детальна інформація збережена
+                  </p>
+                )}
+              </div>
             </div>
           </Card>
 
