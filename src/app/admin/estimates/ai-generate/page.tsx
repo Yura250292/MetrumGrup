@@ -239,7 +239,8 @@ function EstimateWizardModal({
   const calculateTotalSteps = () => {
     // Step 0: Object Type (always)
     // Step 1: Work Scope (always)
-    let steps = 2;
+    // Step 2: General Info (always)
+    let steps = 3;
 
     if (wizardData.objectType === 'house') {
       if (wizardData.workScope === 'foundation_only') {
@@ -268,7 +269,7 @@ function EstimateWizardModal({
   };
 
   const totalSteps = calculateTotalSteps();
-  const progress = (wizardStep / totalSteps) * 100;
+  const progress = ((wizardStep + 1) / totalSteps) * 100;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -287,7 +288,7 @@ function EstimateWizardModal({
             <div>
               <h2 className="text-2xl font-bold">Детальний опитувальник проекту</h2>
               <p className="text-sm text-muted-foreground">
-                Крок {wizardStep} з {totalSteps}
+                Крок {wizardStep + 1} з {totalSteps}
               </p>
             </div>
             <Button variant="ghost" onClick={onClose}>
@@ -303,6 +304,8 @@ function EstimateWizardModal({
           {wizardStep === 4 && wizardData.objectType === 'house' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
           {wizardStep === 5 && wizardData.objectType === 'house' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
           {wizardStep === 6 && wizardData.objectType === 'house' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
+          {wizardStep === 7 && wizardData.objectType === 'house' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
+          {wizardStep === 8 && wizardData.objectType === 'house' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
 
           {/* Townhouse-specific step */}
           {wizardStep === 3 && wizardData.objectType === 'townhouse' && <WizardStepTownhouse data={wizardData} setData={setWizardData} />}
@@ -323,7 +326,7 @@ function EstimateWizardModal({
               <ArrowLeft className="mr-2 h-4 w-4" /> Назад
             </Button>
 
-            {wizardStep < totalSteps ? (
+            {wizardStep < totalSteps - 1 ? (
               <Button onClick={() => setWizardStep(wizardStep + 1)}>
                 Далі <ChevronDown className="ml-2 h-4 w-4 rotate-[-90deg]" />
               </Button>
@@ -1225,6 +1228,478 @@ function WizardStep6_Roof({ data, setData }: { data: WizardData; setData: (d: Wi
             className="w-full px-4 py-2 border rounded-lg"
             placeholder="0"
           />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Step 7: Utilities (Engineering Systems)
+function WizardStep7_Utilities({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const utilities = data.utilities || {
+    electrical: { power: 'three_phase', outlets: 20, switches: 15, lightPoints: 25, outdoorLighting: true },
+    heating: { type: 'gas', radiators: 10, underfloor: false },
+    water: { coldWater: true, hotWater: true, source: 'central', boilerType: 'gas' },
+    sewerage: { type: 'central', pumpNeeded: false },
+    ventilation: { natural: true, forced: true, recuperation: false },
+  };
+
+  const updateUtilities = (section: keyof typeof utilities, updates: any) => {
+    setData({
+      ...data,
+      utilities: {
+        ...utilities,
+        [section]: { ...utilities[section], ...updates },
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          ⚡ <strong>Інженерні системи:</strong> Детально вкажіть всі комунікації для точного розрахунку
+        </p>
+      </div>
+
+      {/* Electrical */}
+      <div className="border rounded-lg p-4 space-y-4">
+        <h4 className="font-semibold flex items-center gap-2">
+          ⚡ Електрика
+        </h4>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Тип електроживлення</label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'single_phase', label: '1-фазна (220В)', desc: 'Стандартна' },
+              { value: 'three_phase', label: '3-фазна (380В)', desc: 'Потужна' },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                  utilities.electrical.power === option.value && "border-primary bg-primary/5"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="electricalPower"
+                  value={option.value}
+                  checked={utilities.electrical.power === option.value}
+                  onChange={(e) => updateUtilities('electrical', { power: e.target.value })}
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.desc}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Розетки (шт)</label>
+            <input
+              type="number"
+              min="0"
+              value={utilities.electrical.outlets || 0}
+              onChange={(e) => updateUtilities('electrical', { outlets: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="20"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Вимикачі (шт)</label>
+            <input
+              type="number"
+              min="0"
+              value={utilities.electrical.switches || 0}
+              onChange={(e) => updateUtilities('electrical', { switches: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="15"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Світильники (шт)</label>
+            <input
+              type="number"
+              min="0"
+              value={utilities.electrical.lightPoints || 0}
+              onChange={(e) => updateUtilities('electrical', { lightPoints: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="25"
+            />
+          </div>
+        </div>
+
+        <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={utilities.electrical.outdoorLighting || false}
+            onChange={(e) => updateUtilities('electrical', { outdoorLighting: e.target.checked })}
+            className="rounded"
+          />
+          <span className="text-sm font-medium">Зовнішнє освітлення</span>
+        </label>
+      </div>
+
+      {/* Heating */}
+      <div className="border rounded-lg p-4 space-y-4">
+        <h4 className="font-semibold flex items-center gap-2">
+          🔥 Опалення
+        </h4>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Тип опалення</label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'gas', label: 'Газове', desc: 'Економічне' },
+              { value: 'electric', label: 'Електричне', desc: 'Без газу' },
+              { value: 'solid_fuel', label: 'Тверде паливо', desc: 'Дрова/пелети' },
+              { value: 'heat_pump', label: 'Тепловий насос', desc: 'Енергоефективне' },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                  utilities.heating.type === option.value && "border-primary bg-primary/5"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="heatingType"
+                  value={option.value}
+                  checked={utilities.heating.type === option.value}
+                  onChange={(e) => updateUtilities('heating', { type: e.target.value })}
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.desc}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Радіатори (шт)</label>
+            <input
+              type="number"
+              min="0"
+              value={utilities.heating.radiators || 0}
+              onChange={(e) => updateUtilities('heating', { radiators: parseInt(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="10"
+            />
+          </div>
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={utilities.heating.underfloor || false}
+              onChange={(e) => updateUtilities('heating', { underfloor: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm font-medium">Тепла підлога</span>
+          </label>
+        </div>
+      </div>
+
+      {/* Water & Sewerage */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="border rounded-lg p-4 space-y-3">
+          <h4 className="font-semibold flex items-center gap-2">
+            💧 Водопостачання
+          </h4>
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={utilities.water.coldWater}
+                onChange={(e) => updateUtilities('water', { coldWater: e.target.checked })}
+                className="rounded"
+              />
+              Холодна вода
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={utilities.water.hotWater}
+                onChange={(e) => updateUtilities('water', { hotWater: e.target.checked })}
+                className="rounded"
+              />
+              Гаряча вода
+            </label>
+          </div>
+        </div>
+
+        <div className="border rounded-lg p-4 space-y-3">
+          <h4 className="font-semibold flex items-center gap-2">
+            🚰 Каналізація
+          </h4>
+          <div>
+            <label className="block text-sm font-medium mb-2">Тип</label>
+            <select
+              value={utilities.sewerage.type}
+              onChange={(e) => updateUtilities('sewerage', { type: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg text-sm"
+            >
+              <option value="central">Центральна</option>
+              <option value="septic">Септик</option>
+              <option value="treatment">Очисні споруди</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Ventilation */}
+      <div className="border rounded-lg p-4 space-y-3">
+        <h4 className="font-semibold flex items-center gap-2">
+          💨 Вентиляція
+        </h4>
+        <div className="grid grid-cols-3 gap-3">
+          <label className="flex items-center gap-2 text-sm p-2 border rounded cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={utilities.ventilation.natural}
+              onChange={(e) => updateUtilities('ventilation', { natural: e.target.checked })}
+              className="rounded"
+            />
+            Природна
+          </label>
+          <label className="flex items-center gap-2 text-sm p-2 border rounded cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={utilities.ventilation.forced}
+              onChange={(e) => updateUtilities('ventilation', { forced: e.target.checked })}
+              className="rounded"
+            />
+            Примусова
+          </label>
+          <label className="flex items-center gap-2 text-sm p-2 border rounded cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={utilities.ventilation.recuperation || false}
+              onChange={(e) => updateUtilities('ventilation', { recuperation: e.target.checked })}
+              className="rounded"
+            />
+            Рекуперація
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Step 8: Finishing
+function WizardStep8_Finishing({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const finishing = data.finishing || {
+    walls: { material: 'paint', qualityLevel: 'standard' },
+    flooring: {},
+    ceiling: { type: 'paint', levels: 1, lighting: 'spots' },
+  };
+
+  const updateFinishing = (section: keyof typeof finishing, updates: any) => {
+    setData({
+      ...data,
+      finishing: {
+        ...finishing,
+        [section]: { ...finishing[section], ...updates },
+      },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          🎨 <strong>Оздоблення:</strong> Вкажіть матеріали для фінішних робіт
+        </p>
+      </div>
+
+      {/* Walls */}
+      <div className="border rounded-lg p-4 space-y-4">
+        <h4 className="font-semibold">Стіни</h4>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Основний матеріал</label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'paint', label: 'Фарба', desc: 'Класичний варіант' },
+              { value: 'wallpaper', label: 'Шпалери', desc: 'Затишок' },
+              { value: 'tile', label: 'Плитка', desc: 'Ванна/кухня' },
+              { value: 'panels', label: 'Панелі', desc: 'Декоративні' },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                  finishing.walls.material === option.value && "border-primary bg-primary/5"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="wallMaterial"
+                  value={option.value}
+                  checked={finishing.walls.material === option.value}
+                  onChange={(e) => updateFinishing('walls', { material: e.target.value })}
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.desc}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Рівень якості</label>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { value: 'economy', label: 'Економ' },
+              { value: 'standard', label: 'Стандарт' },
+              { value: 'premium', label: 'Преміум' },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex items-center justify-center p-3 border rounded-lg cursor-pointer",
+                  finishing.walls.qualityLevel === option.value && "border-primary bg-primary/5"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="wallQuality"
+                  value={option.value}
+                  checked={finishing.walls.qualityLevel === option.value}
+                  onChange={(e) => updateFinishing('walls', { qualityLevel: e.target.value })}
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold">{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Flooring */}
+      <div className="border rounded-lg p-4 space-y-4">
+        <h4 className="font-semibold">Підлога</h4>
+        <p className="text-xs text-muted-foreground">Вкажіть площу для кожного типу покриття (м²)</p>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Плитка (м²)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={finishing.flooring.tile || ''}
+              onChange={(e) => updateFinishing('flooring', { tile: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Ламінат (м²)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={finishing.flooring.laminate || ''}
+              onChange={(e) => updateFinishing('flooring', { laminate: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Паркет (м²)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={finishing.flooring.parquet || ''}
+              onChange={(e) => updateFinishing('flooring', { parquet: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="0"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Вініл (м²)</label>
+            <input
+              type="number"
+              min="0"
+              step="0.1"
+              value={finishing.flooring.vinyl || ''}
+              onChange={(e) => updateFinishing('flooring', { vinyl: parseFloat(e.target.value) || 0 })}
+              className="w-full px-3 py-2 border rounded-lg"
+              placeholder="0"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Ceiling */}
+      <div className="border rounded-lg p-4 space-y-4">
+        <h4 className="font-semibold">Стеля</h4>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Тип</label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'paint', label: 'Фарба', desc: 'Просто' },
+              { value: 'drywall', label: 'Гіпсокартон', desc: 'Вирівнювання' },
+              { value: 'suspended', label: 'Підвісна', desc: 'Модульна' },
+              { value: 'stretch', label: 'Натяжна', desc: 'Швидко' },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex flex-col gap-1 p-3 border rounded-lg cursor-pointer",
+                  finishing.ceiling.type === option.value && "border-primary bg-primary/5"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="ceilingType"
+                  value={option.value}
+                  checked={finishing.ceiling.type === option.value}
+                  onChange={(e) => updateFinishing('ceiling', { type: e.target.value })}
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.desc}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">Рівні стелі</label>
+            <select
+              value={finishing.ceiling.levels}
+              onChange={(e) => updateFinishing('ceiling', { levels: parseInt(e.target.value) })}
+              className="w-full px-3 py-2 border rounded-lg"
+            >
+              <option value="1">1 рівень</option>
+              <option value="2">2 рівні</option>
+              <option value="3">3 рівні</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-2">Освітлення</label>
+            <select
+              value={finishing.ceiling.lighting}
+              onChange={(e) => updateFinishing('ceiling', { lighting: e.target.value })}
+              className="w-full px-3 py-2 border rounded-lg"
+            >
+              <option value="spots">Точкові світильники</option>
+              <option value="chandelier">Люстра</option>
+              <option value="led">LED стрічка</option>
+              <option value="mixed">Змішане</option>
+            </select>
+          </div>
         </div>
       </div>
     </div>
