@@ -304,6 +304,15 @@ function EstimateWizardModal({
           {wizardStep === 5 && wizardData.objectType === 'house' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
           {wizardStep === 6 && wizardData.objectType === 'house' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
 
+          {/* Townhouse-specific step */}
+          {wizardStep === 3 && wizardData.objectType === 'townhouse' && <WizardStepTownhouse data={wizardData} setData={setWizardData} />}
+
+          {/* Renovation steps for apartment/office */}
+          {wizardStep === 3 && ['apartment', 'office'].includes(wizardData.objectType) && <WizardStepRenovation_CurrentState data={wizardData} setData={setWizardData} />}
+
+          {/* Commercial-specific step */}
+          {wizardStep === 3 && wizardData.objectType === 'commercial' && <WizardStepCommercial data={wizardData} setData={setWizardData} />}
+
           {/* Navigation */}
           <div className="flex justify-between mt-8 pt-6 border-t">
             <Button
@@ -1216,6 +1225,521 @@ function WizardStep6_Roof({ data, setData }: { data: WizardData; setData: (d: Wi
             className="w-full px-4 py-2 border rounded-lg"
             placeholder="0"
           />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Townhouse-specific step (after general info for townhouses)
+function WizardStepTownhouse({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const townhouseData = data.townhouseData || {
+    adjacentWalls: 1,
+    isEndUnit: false,
+    sharedUtilities: false,
+  };
+
+  const updateTownhouse = (updates: Partial<typeof townhouseData>) => {
+    setData({
+      ...data,
+      townhouseData: { ...townhouseData, ...updates },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          🏘️ <strong>Особливості котеджу:</strong> Таунхаус має специфіку через суміжні стіни з сусідами
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Кількість суміжних стін</label>
+        <div className="grid grid-cols-2 gap-3">
+          <label
+            className={cn(
+              "flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer",
+              townhouseData.adjacentWalls === 1 && "border-primary bg-primary/5"
+            )}
+          >
+            <input
+              type="radio"
+              name="adjacentWalls"
+              value="1"
+              checked={townhouseData.adjacentWalls === 1}
+              onChange={() => updateTownhouse({ adjacentWalls: 1 })}
+              className="sr-only"
+            />
+            <div className="flex-1">
+              <div className="font-semibold">Одна суміжна стіна</div>
+              <div className="text-xs text-muted-foreground mt-1">Крайній в ряді</div>
+            </div>
+            {townhouseData.adjacentWalls === 1 && <Check className="h-5 w-5 text-primary" />}
+          </label>
+
+          <label
+            className={cn(
+              "flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer",
+              townhouseData.adjacentWalls === 2 && "border-primary bg-primary/5"
+            )}
+          >
+            <input
+              type="radio"
+              name="adjacentWalls"
+              value="2"
+              checked={townhouseData.adjacentWalls === 2}
+              onChange={() => updateTownhouse({ adjacentWalls: 2 })}
+              className="sr-only"
+            />
+            <div className="flex-1">
+              <div className="font-semibold">Дві суміжні стіни</div>
+              <div className="text-xs text-muted-foreground mt-1">Середній в ряді</div>
+            </div>
+            {townhouseData.adjacentWalls === 2 && <Check className="h-5 w-5 text-primary" />}
+          </label>
+        </div>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={townhouseData.isEndUnit}
+            onChange={(e) => updateTownhouse({ isEndUnit: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Крайній в ряді</div>
+            <div className="text-xs text-muted-foreground">З одного боку відкрита стіна</div>
+          </div>
+        </label>
+      </div>
+
+      <div>
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={townhouseData.sharedUtilities}
+            onChange={(e) => updateTownhouse({ sharedUtilities: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Спільні комунікації</div>
+            <div className="text-xs text-muted-foreground">Загальна котельня, водопостачання тощо</div>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Renovation: Current State (for apartments/offices)
+function WizardStepRenovation_CurrentState({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const renovationData = data.renovationData || {
+    currentStage: 'bare_concrete' as RenovationStage,
+    existing: {
+      roughPlaster: false,
+      roughFloor: false,
+      finishFloor: false,
+      electricalRoughIn: false,
+      plumbingRoughIn: false,
+      heatingRoughIn: false,
+      windowsInstalled: false,
+      doorsInstalled: false,
+    },
+    workRequired: {
+      demolition: false,
+      roughPlaster: false,
+      roughFloor: false,
+      electrical: false,
+      plumbing: false,
+      heating: false,
+      finishPlaster: false,
+      painting: false,
+      flooring: false,
+      tiling: false,
+      ceiling: 'none',
+      windows: false,
+      doors: false,
+    },
+    layoutChange: false,
+    newPartitions: false,
+    rooms: {
+      bedrooms: 0,
+      bathrooms: 0,
+      kitchen: 0,
+      living: 0,
+      other: 0,
+    },
+  };
+
+  const updateRenovation = (updates: Partial<typeof renovationData>) => {
+    setData({
+      ...data,
+      renovationData: { ...renovationData, ...updates },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          🔨 <strong>Поточний стан:</strong> Визначте що вже є, щоб точно розрахувати обсяг робіт
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">На якій стадії приміщення зараз?</label>
+        <div className="grid grid-cols-1 gap-3">
+          {[
+            { value: 'bare_concrete' as RenovationStage, label: 'Голий бетон', desc: 'Нова будівля без обробки' },
+            { value: 'rough_walls' as RenovationStage, label: 'Чорнова штукатурка є', desc: 'Стіни вирівняні' },
+            { value: 'rough_floor' as RenovationStage, label: 'Чорнова стяжка є', desc: 'Підлога вирівняна' },
+            { value: 'utilities_installed' as RenovationStage, label: 'Комунікації встановлені', desc: 'Електрика, сантехніка прокладені' },
+            { value: 'ready_for_finish' as RenovationStage, label: 'Готово під чистове', desc: 'Все готово для фінішного оздоблення' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer",
+                renovationData.currentStage === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <input
+                type="radio"
+                name="currentStage"
+                value={option.value}
+                checked={renovationData.currentStage === option.value}
+                onChange={(e) => updateRenovation({ currentStage: e.target.value as RenovationStage })}
+                className="sr-only"
+              />
+              <div className="flex-1">
+                <div className="font-semibold">{option.label}</div>
+                <div className="text-xs text-muted-foreground mt-1">{option.desc}</div>
+              </div>
+              {renovationData.currentStage === option.value && <Check className="h-5 w-5 text-primary" />}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-3">Що вже є в приміщенні?</label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={renovationData.existing.roughPlaster}
+              onChange={(e) => updateRenovation({
+                existing: { ...renovationData.existing, roughPlaster: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Чорнова штукатурка</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={renovationData.existing.roughFloor}
+              onChange={(e) => updateRenovation({
+                existing: { ...renovationData.existing, roughFloor: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Чорнова стяжка</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={renovationData.existing.electricalRoughIn}
+              onChange={(e) => updateRenovation({
+                existing: { ...renovationData.existing, electricalRoughIn: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Електрика прокладена</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={renovationData.existing.plumbingRoughIn}
+              onChange={(e) => updateRenovation({
+                existing: { ...renovationData.existing, plumbingRoughIn: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Сантехніка прокладена</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={renovationData.existing.windowsInstalled}
+              onChange={(e) => updateRenovation({
+                existing: { ...renovationData.existing, windowsInstalled: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Вікна встановлені</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={renovationData.existing.doorsInstalled}
+              onChange={(e) => updateRenovation({
+                existing: { ...renovationData.existing, doorsInstalled: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Двері встановлені</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={renovationData.layoutChange}
+            onChange={(e) => updateRenovation({ layoutChange: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Зміна планування</div>
+            <div className="text-xs text-muted-foreground">Перенесення стін</div>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-2 p-4 border rounded-lg cursor-pointer hover:bg-muted">
+          <input
+            type="checkbox"
+            checked={renovationData.newPartitions}
+            onChange={(e) => updateRenovation({ newPartitions: e.target.checked })}
+            className="rounded"
+          />
+          <div>
+            <div className="text-sm font-medium">Нові перегородки</div>
+            <div className="text-xs text-muted-foreground">Додаткові стіни</div>
+          </div>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+// Commercial-specific step
+function WizardStepCommercial({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
+  const commercialData = data.commercialData || {
+    purpose: 'shop' as const,
+    floor: {
+      type: 'standard' as const,
+      antiStatic: false,
+    },
+    fireRating: false,
+    hvac: false,
+    heavyDutyElectrical: false,
+    accessControl: false,
+    surveillance: false,
+  };
+
+  const updateCommercial = (updates: Partial<typeof commercialData>) => {
+    setData({
+      ...data,
+      commercialData: { ...commercialData, ...updates },
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <p className="text-sm text-blue-800">
+          🏭 <strong>Комерційне приміщення:</strong> Спеціальні вимоги для бізнесу
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Призначення приміщення</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { value: 'shop', label: 'Магазин', icon: '🛒' },
+            { value: 'restaurant', label: 'Ресторан/Кафе', icon: '🍽️' },
+            { value: 'warehouse', label: 'Склад', icon: '📦' },
+            { value: 'production', label: 'Виробництво', icon: '🏭' },
+            { value: 'showroom', label: 'Шоурум', icon: '✨' },
+            { value: 'other', label: 'Інше', icon: '🏪' },
+          ].map((option) => (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-center gap-3 p-3 border-2 rounded-lg cursor-pointer",
+                commercialData.purpose === option.value && "border-primary bg-primary/5"
+              )}
+            >
+              <span className="text-2xl">{option.icon}</span>
+              <input
+                type="radio"
+                name="purpose"
+                value={option.value}
+                checked={commercialData.purpose === option.value}
+                onChange={(e) => updateCommercial({ purpose: e.target.value as any })}
+                className="sr-only"
+              />
+              <span className="text-sm font-medium flex-1">{option.label}</span>
+              {commercialData.purpose === option.value && <Check className="h-5 w-5 text-primary" />}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Тип підлоги</label>
+        <div className="grid grid-cols-2 gap-3">
+          <label
+            className={cn(
+              "flex flex-col gap-2 p-4 border-2 rounded-lg cursor-pointer",
+              commercialData.floor.type === 'standard' && "border-primary bg-primary/5"
+            )}
+          >
+            <input
+              type="radio"
+              name="floorType"
+              value="standard"
+              checked={commercialData.floor.type === 'standard'}
+              onChange={(e) => updateCommercial({
+                floor: { ...commercialData.floor, type: e.target.value as any }
+              })}
+              className="sr-only"
+            />
+            <div className="font-semibold">Стандартна</div>
+            <div className="text-xs text-muted-foreground">Звичайне навантаження</div>
+          </label>
+
+          <label
+            className={cn(
+              "flex flex-col gap-2 p-4 border-2 rounded-lg cursor-pointer",
+              commercialData.floor.type === 'industrial' && "border-primary bg-primary/5"
+            )}
+          >
+            <input
+              type="radio"
+              name="floorType"
+              value="industrial"
+              checked={commercialData.floor.type === 'industrial'}
+              onChange={(e) => updateCommercial({
+                floor: { ...commercialData.floor, type: e.target.value as any }
+              })}
+              className="sr-only"
+            />
+            <div className="font-semibold">Промислова</div>
+            <div className="text-xs text-muted-foreground">Високе навантаження</div>
+          </label>
+        </div>
+      </div>
+
+      {commercialData.floor.type === 'industrial' && (
+        <>
+          <div>
+            <label className="block text-sm font-medium mb-2">Покриття підлоги</label>
+            <select
+              value={commercialData.floor.coating || ''}
+              onChange={(e) => updateCommercial({
+                floor: { ...commercialData.floor, coating: e.target.value as any }
+              })}
+              className="w-full px-4 py-2 border rounded-lg"
+            >
+              <option value="">Оберіть покриття</option>
+              <option value="epoxy">Епоксидне</option>
+              <option value="polyurethane">Поліуретанове</option>
+              <option value="tile">Плитка</option>
+              <option value="concrete">Бетон</option>
+              <option value="other">Інше</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2">Навантаження на підлогу (кг/м²)</label>
+            <input
+              type="number"
+              value={commercialData.floor.loadCapacity || ''}
+              onChange={(e) => updateCommercial({
+                floor: { ...commercialData.floor, loadCapacity: parseInt(e.target.value) || undefined }
+              })}
+              className="w-full px-4 py-2 border rounded-lg"
+              placeholder="500"
+            />
+          </div>
+        </>
+      )}
+
+      <div>
+        <label className="block text-sm font-medium mb-3">Додаткові вимоги</label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={commercialData.floor.antiStatic}
+              onChange={(e) => updateCommercial({
+                floor: { ...commercialData.floor, antiStatic: e.target.checked }
+              })}
+              className="rounded"
+            />
+            <span className="text-sm">Антистатична підлога</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={commercialData.fireRating}
+              onChange={(e) => updateCommercial({ fireRating: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm">Протипожежні вимоги</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={commercialData.hvac}
+              onChange={(e) => updateCommercial({ hvac: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm">Потужна вентиляція</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={commercialData.heavyDutyElectrical}
+              onChange={(e) => updateCommercial({ heavyDutyElectrical: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm">Підвищене навантаження електрики</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={commercialData.accessControl}
+              onChange={(e) => updateCommercial({ accessControl: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm">Контроль доступу</span>
+          </label>
+
+          <label className="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-muted">
+            <input
+              type="checkbox"
+              checked={commercialData.surveillance}
+              onChange={(e) => updateCommercial({ surveillance: e.target.checked })}
+              className="rounded"
+            />
+            <span className="text-sm">Відеоспостереження</span>
+          </label>
         </div>
       </div>
     </div>
