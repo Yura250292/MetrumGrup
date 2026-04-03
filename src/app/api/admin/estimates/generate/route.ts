@@ -6,8 +6,21 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { TEMPLATE_PROMPTS } from "@/lib/estimate-prompts";
+import fs from "fs/promises";
+import path from "path";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+// Load drawing reading guide for AI
+async function loadDrawingGuide(): Promise<string> {
+  try {
+    const filePath = path.join(process.cwd(), "src/lib/DRAWING_READING_GUIDE.md");
+    return await fs.readFile(filePath, "utf-8");
+  } catch (error) {
+    console.error("Failed to load drawing guide:", error);
+    return ""; // Return empty if file not found (won't break generation)
+  }
+}
 
 // Convert PDF pages to images for visual analysis
 async function convertPdfToImages(buffer: Buffer): Promise<string[]> {
@@ -1059,6 +1072,9 @@ export async function POST(request: NextRequest) {
         ? `\n\n${TEMPLATE_PROMPTS[template]}\n\n`
         : "";
 
+    // Load drawing reading guide for visual analysis
+    const drawingGuide = imageParts.length > 0 ? await loadDrawingGuide() : "";
+
     // Build prompt
     const prompt = `# РОЛЬ
 Ти — головний кошторисник із 20-річним досвідом будівельної компанії "Metrum Group" у Львові, Україна.
@@ -1250,6 +1266,12 @@ ${imageParts.length > 0 ? `
 
 Ти отримав ${imageParts.length} зображень - це архітектурні плани, схеми комунікацій та креслення.
 **PDF файли автоматично конвертовані в зображення** для візуального аналізу кожної сторінки.
+
+---
+
+${drawingGuide}
+
+---
 
 **ЩО ШУКАТИ НА ПЛАНАХ:**
 
