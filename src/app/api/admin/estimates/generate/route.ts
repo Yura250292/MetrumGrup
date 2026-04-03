@@ -129,7 +129,12 @@ function calculateMinimumItems(wizardData: any): number {
 }
 
 function buildWizardContext(wizardData: any): string {
-  if (!wizardData) return '';
+  if (!wizardData) {
+    console.log('⚠️ Wizard context: EMPTY - no wizard data provided');
+    return '';
+  }
+
+  console.log('✅ Building wizard context from data:', JSON.stringify(wizardData, null, 2));
 
   const {
     buildingType, totalArea, floors, hasBasement, hasAttic, hasGarage,
@@ -232,9 +237,17 @@ export async function POST(request: NextRequest) {
       ? Math.max(baseMin, Math.floor(areaNum * 1.2))
       : baseMin;
 
+    console.log('📊 Wizard Data:', wizardData ? 'Присутній' : 'Відсутній');
+    console.log('📐 Calculated Min Items:', calculatedMin);
+    console.log('🏗️ Template:', template);
+    console.log('📏 Area:', areaNum, 'm²');
+
     if (files.length === 0) {
       return NextResponse.json({ error: "Завантажте хоча б один файл" }, { status: 400 });
     }
+
+    console.log('📁 Files uploaded:', files.length);
+    files.forEach((f, i) => console.log(`  ${i + 1}. ${f.name} (${(f.size / 1024).toFixed(1)} KB)`));
 
     // Extract content from all files
     const textParts: string[] = [];
@@ -424,8 +437,9 @@ export async function POST(request: NextRequest) {
 2. **Площа стін ≠ площа підлоги.** Площа стін = периметр × висота стелі (зазвичай 2.7м). Не плутай ці величини.
 3. **Віднімай площі вікон та дверей** при розрахунку оздоблення стін (вікно ≈ 1.5 м², двері ≈ 1.8 м²).
 4. **Перевіряй математику ДВІЧІ.** totalCost = quantity × unitPrice + laborCost. sectionTotal = сума всіх totalCost у секції.
-5. Якщо площа вказана у файлі як "загальна площа квартири" — це площа ПІДЛОГИ, не стін.
-6. Якщо площа НЕ вказана у файлах і користувач не вказав — оціни на основі кількості кімнат та типу приміщення, але ПОЗНАЧИТИ що це оцінка.
+5. **ОБОВ'ЯЗКОВО ВКЛЮЧАЙ ВАРТІСТЬ РОБІТ (laborCost).** Якщо є матеріал - ЗАВЖДИ є робота з ним! Не ставте laborCost: 0 для всіх позицій!
+6. Якщо площа вказана у файлі як "загальна площа квартири" — це площа ПІДЛОГИ, не стін.
+7. Якщо площа НЕ вказана у файлах і користувач не вказав — оціни на основі кількості кімнат та типу приміщення, але ПОЗНАЧИТИ що це оцінка.
 
 # ЗАВДАННЯ
 Проаналізуй надані файли проєкту та створи МАКСИМАЛЬНО ДЕТАЛЬНИЙ та РЕАЛІСТИЧНИЙ КОШТОРИС.
@@ -469,7 +483,14 @@ ${template === 'house_full' ? `
 - Вказуй КОНКРЕТНІ марки та виробників матеріалів де можливо
 - Кожен розмір, товщина, специфікація — окрема позиція
 
-**Якщо вийде менше ${calculatedMin} позицій - ти ПРОВАЛИВ завдання.**
+⚠️⚠️⚠️ КРИТИЧНО ВАЖЛИВО ⚠️⚠️⚠️
+**АБСОЛЮТНИЙ МІНІМУМ: ${calculatedMin} позицій**
+
+Якщо ти згенеруєш менше ${calculatedMin} позицій - це НЕПРИЙНЯТНО!
+Користувач ВІДХИЛИТЬ кошторис!
+
+ПЕРЕД ВІДПОВІДДЮ ПОРАХУЙ: sections[0].items.length + sections[1].items.length + ... >= ${calculatedMin}
+Якщо НІ - ДОДАЙ ЩЕ ПОЗИЦІЙ!
 
 # СТАНДАРТИ ЯКОСТІ (на основі реальних проєктів Metrum Group):
 
@@ -562,6 +583,30 @@ ${materialsRef}
 
 Тарифи на роботи:
 ${laborRef}
+
+# ВАЖЛИВО ПРО ВАРТІСТЬ РОБІТ:
+Кожна позиція матеріалів ПОВИННА мати вартість робіт (laborCost)!
+
+Приклади ПРАВИЛЬНИХ позицій:
+1. Штукатурка МП-75 30кг:
+   - quantity: 96
+   - unitPrice: 400 (матеріал)
+   - laborCost: 96 × 350 = 33,600 ₴ (робота 350₴/мішок або ~300-350₴/м² площі)
+   - totalCost: 38,400 + 33,600 = 72,000 ₴
+
+2. Гіпсокартон Knauf 12.5мм:
+   - quantity: 50
+   - unitPrice: 505 (матеріал)
+   - laborCost: 50 × 3 × 250 = 37,500 ₴ (монтаж 250₴/м², лист = 3м²)
+   - totalCost: 25,250 + 37,500 = 62,750 ₴
+
+3. Плитка керамічна:
+   - quantity: 45 м²
+   - unitPrice: 350 ₴/м² (матеріал)
+   - laborCost: 45 × 450 = 20,250 ₴ (укладання 450₴/м²)
+   - totalCost: 15,750 + 20,250 = 36,000 ₴
+
+НЕПРИЙНЯТНО: laborCost: 0 для всіх позицій!
 
 # ДАНІ З ФАЙЛІВ КЛІЄНТА:
 ${textParts.join("\n\n")}
@@ -806,6 +851,16 @@ ${textParts.join("\n\n")}
       const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
       const jsonStr = (jsonMatch[1] || text).trim();
       estimateData = JSON.parse(jsonStr);
+
+      // Log generated estimate stats
+      const totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
+        sum + (section.items?.length || 0), 0) || 0;
+      console.log('📝 AI Generated Estimate:');
+      console.log('  - Sections:', estimateData.sections?.length || 0);
+      console.log('  - Total Items:', totalItems);
+      console.log('  - Required Min:', calculatedMin);
+      console.log('  - Status:', totalItems >= calculatedMin ? '✅ OK' : '❌ TOO FEW!');
+
     } catch (parseError) {
       return NextResponse.json({
         error: "AI повернув невалідний JSON. Спробуйте ще раз.",
