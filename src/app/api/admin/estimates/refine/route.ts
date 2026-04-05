@@ -90,6 +90,9 @@ ${engineerPrompt}
 
     let responseText = "";
 
+    console.log(`🤖 Викликаємо ${model} для редагування кошторису...`);
+    console.log(`📝 Інженер просить: "${engineerPrompt.substring(0, 100)}..."`);
+
     // Викликати відповідну AI модель
     if (model === "openai") {
       const completion = await openai.chat.completions.create({
@@ -103,6 +106,12 @@ ${engineerPrompt}
         response_format: { type: "json_object" },
       });
       responseText = completion.choices[0]?.message?.content || "";
+
+      // OpenAI може повернути JSON в markdown блоці навіть з json_object форматом
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        responseText = jsonMatch[1].trim();
+      }
     } else if (model === "gemini") {
       const geminiModel = genAI.getGenerativeModel({
         model: "gemini-2.0-flash-exp",
@@ -149,16 +158,29 @@ ${engineerPrompt}
       );
     }
 
+    // Очистити текст перед парсингом
+    responseText = responseText.trim();
+
+    // Спроба видалити можливі додаткові markdown блоки якщо пропустили раніше
+    if (responseText.startsWith('```')) {
+      const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        responseText = jsonMatch[1].trim();
+      }
+    }
+
     // Парсити JSON відповідь
     let refinedEstimate;
     try {
       refinedEstimate = JSON.parse(responseText);
     } catch (parseError) {
-      console.error(`Помилка парсингу JSON від ${model}:`, responseText);
+      console.error(`❌ Помилка парсингу JSON від ${model}:`, parseError);
+      console.error(`📄 Raw response (перші 500 символів):`, responseText.substring(0, 500));
       return NextResponse.json(
         {
           error: `${model} повернув невалідний JSON`,
-          rawResponse: responseText,
+          details: parseError instanceof Error ? parseError.message : 'Unknown error',
+          rawResponse: responseText.substring(0, 1000), // Обмежити для читабельності
         },
         { status: 422 }
       );
