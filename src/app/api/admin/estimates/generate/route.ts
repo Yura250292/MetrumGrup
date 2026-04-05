@@ -22,54 +22,11 @@ async function loadDrawingGuide(): Promise<string> {
   }
 }
 
-// Convert PDF pages to images for visual analysis
-async function convertPdfToImages(buffer: Buffer): Promise<string[]> {
-  try {
-    const pdfjsLib = await import("pdfjs-dist/legacy/build/pdf.mjs");
-    const { createCanvas } = await import("canvas");
+// Note: PDF to image conversion removed - Gemini can read PDFs natively!
+// PDFs are now sent directly to Gemini without conversion.
 
-    // Load PDF document
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(buffer),
-      useSystemFonts: true,
-    });
-    const pdfDocument = await loadingTask.promise;
-
-    const images: string[] = [];
-    const numPages = Math.min(pdfDocument.numPages, 20); // Limit to 20 pages to avoid huge requests
-
-    console.log(`  📄 PDF has ${pdfDocument.numPages} pages, converting first ${numPages} to images...`);
-
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 2.0 }); // 2x scale for better quality
-
-      const canvas = createCanvas(viewport.width, viewport.height);
-      const context = canvas.getContext("2d");
-
-      await page.render({
-        canvasContext: context as any,
-        viewport: viewport,
-        canvas: canvas as any,
-      }).promise;
-
-      // Convert canvas to base64 image
-      const imageData = canvas.toDataURL("image/png");
-      const base64 = imageData.split(",")[1]; // Remove "data:image/png;base64," prefix
-      images.push(base64);
-
-      console.log(`  ✅ Page ${pageNum}/${numPages} converted (${(base64.length / 1024).toFixed(1)} KB)`);
-    }
-
-    return images;
-  } catch (error) {
-    console.error("  ❌ PDF to image conversion failed:", error);
-    return [];
-  }
-}
-
-// Parse uploaded files to text and/or images
-async function extractFileContent(file: File): Promise<string | { text: string; images: string[] }> {
+// Parse uploaded files to text and/or images/PDFs
+async function extractFileContent(file: File): Promise<string | { text: string; images: string[]; pdfs: Array<{ data: string; mimeType: string; name: string }> }> {
   const buffer = Buffer.from(await file.arrayBuffer());
   const fileName = file.name.toLowerCase();
 
@@ -80,13 +37,19 @@ async function extractFileContent(file: File): Promise<string | { text: string; 
       const pdfParse = (pdfModule as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default || pdfModule;
       const data = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer);
 
-      // Convert pages to images for visual analysis
-      const images = await convertPdfToImages(buffer);
+      // For Gemini: send PDF directly as it supports native PDF parsing
+      // This is more reliable than image conversion
+      const pdfBase64 = buffer.toString('base64');
 
-      // Return both text and images
+      // Return text and PDF data
       return {
         text: `[PDF: ${file.name}]\n${data.text}`,
-        images: images,
+        images: [], // No images needed for Gemini
+        pdfs: [{
+          data: pdfBase64,
+          mimeType: 'application/pdf',
+          name: file.name
+        }],
       };
     } catch (e) {
       console.error("  ❌ PDF processing failed:", e);
@@ -866,27 +829,36 @@ export async function POST(request: NextRequest) {
     // Extract content from all files
     const textParts: string[] = [];
     const imageParts: { inlineData: { data: string; mimeType: string } }[] = [];
+    const pdfParts: Array<{ data: string; mimeType: string; name: string }> = [];
 
     console.log('📂 Processing files...');
     for (const file of files) {
       const content = await extractFileContent(file);
 
-      // Handle PDF files (returns object with text and images)
-      if (typeof content === 'object' && 'text' in content && 'images' in content) {
+      // Handle PDF files (returns object with text, images, and PDF data)
+      if (typeof content === 'object' && 'text' in content && 'pdfs' in content) {
         // Add PDF text content
         textParts.push(content.text);
         console.log(`  📄 PDF text: ${file.name} (${content.text.length} chars)`);
 
-        // Add PDF pages as images for visual analysis
-        for (let i = 0; i < content.images.length; i++) {
-          imageParts.push({
-            inlineData: {
-              data: content.images[i],
-              mimeType: 'image/png'
-            }
-          });
+        // Add PDF files for native Gemini processing (Gemini can read PDFs directly!)
+        if (content.pdfs && content.pdfs.length > 0) {
+          pdfParts.push(...content.pdfs);
+          console.log(`  📑 PDF file: ${file.name} (${(content.pdfs[0].data.length / 1024).toFixed(1)} KB base64) - будеGemini може читати PDF нативно!`);
         }
-        console.log(`  🖼️  PDF images: ${file.name} (${content.images.length} pages converted to images)`);
+
+        // Add images if any (fallback for non-Gemini models)
+        if (content.images && content.images.length > 0) {
+          for (let i = 0; i < content.images.length; i++) {
+            imageParts.push({
+              inlineData: {
+                data: content.images[i],
+                mimeType: 'image/png'
+              }
+            });
+          }
+          console.log(`  🖼️  PDF images: ${file.name} (${content.images.length} pages as fallback)`);
+        }
       }
       // Handle regular image files
       else if (typeof content === 'string' && content.startsWith("__IMAGE__:")) {
@@ -906,7 +878,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    console.log(`📊 Extraction summary: ${textParts.length} text files, ${imageParts.length} images`);
+    console.log(`📊 Extraction summary: ${textParts.length} text files, ${imageParts.length} images, ${pdfParts.length} PDFs`);
 
     // Load materials from DB for reference pricing
     const materials = await prisma.material.findMany({
@@ -1545,6 +1517,20 @@ ${drawingGuide}
           parts.push(textParts.join("\n\n"));
         }
 
+        // Add PDF files directly - Gemini can read PDFs natively!
+        if (pdfParts.length > 0) {
+          console.log(`  📑 Adding ${pdfParts.length} PDF files for native Gemini analysis`);
+          for (const pdf of pdfParts) {
+            parts.push({
+              inlineData: {
+                data: pdf.data,
+                mimeType: pdf.mimeType,
+              }
+            });
+          }
+        }
+
+        // Add images (for non-PDF image files)
         if (imageParts.length > 0) {
           parts.push(...imageParts);
         }
