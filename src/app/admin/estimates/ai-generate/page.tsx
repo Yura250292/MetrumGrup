@@ -2582,6 +2582,11 @@ export default function AIEstimatePage() {
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardCompleted, setWizardCompleted] = useState(false);
+
+  // Pre-analysis state
+  const [showPreAnalysis, setShowPreAnalysis] = useState(false);
+  const [preAnalysisData, setPreAnalysisData] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [wizardData, setWizardData] = useState<WizardData>({
     // Step 0: Object Type
     objectType: 'house',
@@ -2662,7 +2667,7 @@ export default function AIEstimatePage() {
   }, [selectedTemplate]);
 
   // Wizard complete handler
-  const handleWizardComplete = () => {
+  const handleWizardComplete = async () => {
     setShowWizard(false);
     setWizardCompleted(true);
     setWizardStep(0); // Reset to step 0 (object type selection)
@@ -2676,6 +2681,12 @@ export default function AIEstimatePage() {
     // This ensures backend has necessary data even though UI is hidden
     setSelectedCategories(new Set(WORK_CATEGORIES.map(c => c.id)));
     setSelectedTemplate('house_full'); // Default template, wizard data will override
+
+    // AUTO-TRIGGER PRE-ANALYSIS after wizard completion
+    if (files.length > 0) {
+      console.log('🔍 Auto-triggering pre-analysis after wizard completion...');
+      await preAnalyze();
+    }
   };
 
   // Drag and drop handlers
@@ -2733,6 +2744,48 @@ export default function AIEstimatePage() {
       setSelectedCategories(new Set());
     } else {
       setSelectedCategories(new Set(WORK_CATEGORIES.map(c => c.id)));
+    }
+  }
+
+  // Pre-analyze files before generation
+  async function preAnalyze() {
+    if (files.length === 0) {
+      setError("Завантажте хоча б один файл проєкту");
+      return;
+    }
+
+    setIsAnalyzing(true);
+    setError("");
+
+    try {
+      const formData = new FormData();
+      files.forEach((file) => formData.append("files", file));
+
+      if (wizardData) {
+        formData.append("wizardData", JSON.stringify(wizardData));
+      }
+
+      const res = await fetch("/api/admin/estimates/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setError(json.error || "Помилка аналізу");
+        return;
+      }
+
+      console.log('🔍 Pre-analysis result:', json.analysis);
+
+      setPreAnalysisData(json.analysis);
+      setShowPreAnalysis(true);
+
+    } catch (err) {
+      setError("Не вдалось проаналізувати файли");
+    } finally {
+      setIsAnalyzing(false);
     }
   }
 
