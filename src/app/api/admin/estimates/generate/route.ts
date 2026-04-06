@@ -6,6 +6,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { TEMPLATE_PROMPTS } from "@/lib/estimate-prompts";
+import { validateEstimate, formatValidationReport } from "@/lib/estimate-validation";
 import fs from "fs/promises";
 import path from "path";
 
@@ -123,7 +124,7 @@ async function generateWithOpenAI(
       { role: "user", content: userContent },
     ],
     response_format: { type: "json_object" },
-    temperature: 0.3,
+    temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
     max_tokens: 16000, // Збільшено для більшої кількості позицій
   });
 
@@ -162,7 +163,7 @@ async function generateWithAnthropic(
   const message = await anthropic.messages.create({
     model: "claude-opus-4-20250514",
     max_tokens: 16000, // Збільшено для більшої кількості позицій
-    temperature: 0.3,
+    temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
     system: systemPrompt,
     messages: [{ role: "user", content: messageContent }],
   });
@@ -1813,8 +1814,9 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
             googleSearch: {},
           } as unknown as import("@google/generative-ai").Tool],
           generationConfig: {
-            temperature: 0.3,
+            temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
             maxOutputTokens: 30000, // Increased to max (32768 is absolute max, 30k is safe)
+            responseMimeType: "application/json", // Force JSON output
           },
         });
 
@@ -1960,8 +1962,9 @@ ${JSON.stringify(estimateData, null, 2)}
             const geminiModel = genAI.getGenerativeModel({
               model: "gemini-3-flash-preview",
               generationConfig: {
-                temperature: 0.3,
+                temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
                 maxOutputTokens: 30000,
+                responseMimeType: "application/json", // Force JSON output
               },
             });
 
@@ -2002,9 +2005,43 @@ ${JSON.stringify(estimateData, null, 2)}
       console.log(`⚠️ Finished ${iterationCount} iterations but still short: ${totalItems}/${calculatedMin} items`);
     }
 
+    // VALIDATION: Check for hallucinations and errors
+    console.log(`🔍 Validating estimate...`);
+    const validationResult = validateEstimate(estimateData, {
+      area: parseFloat(area),
+      wizardData,
+      files: files.length,
+    });
+
+    console.log(`📊 Validation complete:`);
+    console.log(`   - Valid: ${validationResult.valid ? '✅' : '❌'}`);
+    console.log(`   - Errors: ${validationResult.errors.length}`);
+    console.log(`   - Warnings: ${validationResult.warnings.length}`);
+
+    if (validationResult.errors.length > 0) {
+      console.log(`❌ Critical errors found:`);
+      validationResult.errors.slice(0, 5).forEach((err) => {
+        console.log(`   - [${err.code}] ${err.message}`);
+      });
+    }
+
+    if (validationResult.warnings.length > 0) {
+      console.log(`⚠️ Warnings (first 3):`);
+      validationResult.warnings.slice(0, 3).forEach((warn) => {
+        console.log(`   - [${warn.code}] ${warn.message}`);
+      });
+    }
+
     return NextResponse.json({
       data: estimateData,
       filesProcessed: files.map((f) => f.name),
+      validation: {
+        valid: validationResult.valid,
+        errors: validationResult.errors,
+        warnings: validationResult.warnings,
+        stats: validationResult.stats,
+        report: formatValidationReport(validationResult),
+      },
       debug: {
         totalItems,
         requiredMin: calculatedMin,

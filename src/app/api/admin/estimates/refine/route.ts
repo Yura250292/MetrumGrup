@@ -101,7 +101,7 @@ ${engineerPrompt}
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.3,
+        temperature: 0.1, // Lower for consistency (was 0.3)
         max_tokens: 8000,
         response_format: { type: "json_object" },
       });
@@ -132,7 +132,7 @@ ${engineerPrompt}
       const message = await anthropic.messages.create({
         model: "claude-opus-4-20250514",
         max_tokens: 8000,
-        temperature: 0.3,
+        temperature: 0.1, // Lower for consistency (was 0.3)
         system: systemPrompt,
         messages: [
           { role: "user", content: userPrompt },

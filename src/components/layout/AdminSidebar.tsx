@@ -83,22 +83,22 @@ export function AdminSidebar() {
       {/* Mobile overlay */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 hidden md:flex flex-col border-r border-border/50 bg-white transition-all duration-300",
+          "fixed inset-y-0 left-0 z-50 hidden md:flex flex-col border-r border-white/10 bg-gradient-to-b from-gray-900 to-black backdrop-blur-xl transition-all duration-300 shadow-lg",
           collapsed ? "w-16" : "w-64"
         )}
       >
         {/* Header */}
-        <div className="flex h-14 items-center justify-between border-b border-border/50 px-4">
+        <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
           {!collapsed && (
             <div className="flex items-center gap-2">
-              <img src="/images/metrum-logo.svg" alt="Metrum" className="h-5 w-auto" />
-              <span className="text-[8px] text-muted-foreground uppercase tracking-[0.15em]">Адмін-панель</span>
+              <img src="/images/metrum-logo.svg" alt="Metrum" className="h-5 w-auto brightness-0 invert" />
+              <span className="text-[8px] text-gray-400 uppercase tracking-[0.15em]">Адмін-панель</span>
             </div>
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
-              "rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors",
+              "rounded-lg p-1.5 text-gray-400 hover:bg-white/10 hover:text-white transition-colors",
               collapsed && "mx-auto"
             )}
           >
@@ -117,7 +117,7 @@ export function AdminSidebar() {
             return (
               <div key={group.label} className="mb-4">
                 {!collapsed && (
-                  <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <p className="mb-1 px-4 text-[10px] font-semibold uppercase tracking-wider text-gray-500">
                     {group.label}
                   </p>
                 )}
@@ -135,8 +135,8 @@ export function AdminSidebar() {
                         className={cn(
                           "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all duration-200",
                           isActive
-                            ? "bg-primary/10 text-primary font-semibold shadow-sm"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                            ? "bg-gradient-to-r from-blue-500/20 to-green-500/20 text-white font-semibold shadow-neon-blue-soft"
+                            : "text-gray-400 hover:bg-white/10 hover:text-white",
                           collapsed && "justify-center px-2"
                         )}
                       >
@@ -152,18 +152,18 @@ export function AdminSidebar() {
         </nav>
 
         {/* User */}
-        <div className="border-t p-3">
+        <div className="border-t border-white/10 p-3">
           <div className={cn("flex items-center", collapsed ? "justify-center" : "gap-3")}>
             {!collapsed && (
               <>
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-primary text-xs font-medium flex-shrink-0">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-green-500 text-white text-xs font-medium flex-shrink-0">
                   {session?.user?.name?.charAt(0) || "A"}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="truncate text-xs font-medium">
+                  <p className="truncate text-xs font-medium text-white">
                     {session?.user?.name}
                   </p>
-                  <p className="truncate text-[10px] text-muted-foreground">
+                  <p className="truncate text-[10px] text-gray-400">
                     {session?.user?.role === "SUPER_ADMIN" ? "Адмін" : "Менеджер"}
                   </p>
                 </div>
@@ -171,7 +171,7 @@ export function AdminSidebar() {
             )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              className="rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors"
               title="Вийти"
             >
               <LogOut className="h-4 w-4" />

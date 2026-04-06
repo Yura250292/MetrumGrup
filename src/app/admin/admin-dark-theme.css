@@ -1,0 +1,265 @@
+/* Admin Dark Theme Overrides */
+
+/* All admin pages get dark background */
+.admin-dark {
+  background: #0F0F0F;
+  color: #FAFAF9;
+}
+
+/* Override Card components to dark theme */
+.admin-dark [class*="card"],
+.admin-dark [class*="Card"] {
+  background: rgba(31, 41, 55, 0.3) !important;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #FAFAF9 !important;
+}
+
+/* Dark text colors */
+.admin-dark h1,
+.admin-dark h2,
+.admin-dark h3,
+.admin-dark h4,
+.admin-dark h5,
+.admin-dark h6 {
+  color: #FAFAF9 !important;
+}
+
+.admin-dark p {
+  color: #E5E7EB;
+}
+
+.admin-dark [class*="muted-foreground"],
+.admin-dark .text-muted-foreground {
+  color: #9CA3AF !important;
+}
+
+/* Tables */
+.admin-dark table {
+  color: #FAFAF9;
+}
+
+.admin-dark thead {
+  background: rgba(31, 41, 55, 0.5) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.admin-dark tbody tr {
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.admin-dark tbody tr:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.admin-dark td,
+.admin-dark th {
+  color: #FAFAF9 !important;
+}
+
+/* Input fields */
+.admin-dark input,
+.admin-dark textarea,
+.admin-dark select {
+  background: rgba(31, 41, 55, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #FAFAF9 !important;
+}
+
+.admin-dark input::placeholder,
+.admin-dark textarea::placeholder {
+  color: #6B7280 !important;
+}
+
+.admin-dark input:focus,
+.admin-dark textarea:focus,
+.admin-dark select:focus {
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Buttons - keep original colors but adjust for dark bg */
+.admin-dark button[class*="primary"] {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.admin-dark button[class*="secondary"] {
+  background: rgba(31, 41, 55, 0.8) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #FAFAF9 !important;
+}
+
+.admin-dark button[class*="outline"] {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: #FAFAF9 !important;
+}
+
+.admin-dark button[class*="outline"]:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Dialogs and Modals */
+.admin-dark [role="dialog"],
+.admin-dark [class*="dialog"],
+.admin-dark [class*="modal"] {
+  background: #1F2937 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Dividers */
+.admin-dark hr,
+.admin-dark [class*="divide"] > * {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Links */
+.admin-dark a {
+  color: #60A5FA;
+}
+
+.admin-dark a:hover {
+  color: #93C5FD;
+}
+
+/* Badges - keep colors but ensure visibility */
+.admin-dark [class*="badge"] {
+  font-weight: 600;
+}
+
+/* Empty states */
+.admin-dark [class*="empty"],
+.admin-dark .text-center {
+  color: #9CA3AF !important;
+}
+
+/* Specific component fixes */
+.admin-dark [class*="bg-muted"] {
+  background: rgba(31, 41, 55, 0.3) !important;
+}
+
+.admin-dark [class*="bg-card"] {
+  background: rgba(31, 41, 55, 0.3) !important;
+}
+
+.admin-dark [class*="bg-background"] {
+  background: #0F0F0F !important;
+}
+
+.admin-dark [class*="border-border"] {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* DataTable improvements */
+.admin-dark [class*="data-table"] {
+  background: transparent;
+}
+
+.admin-dark [class*="data-table"] tr:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Select dropdowns */
+.admin-dark [class*="select"],
+.admin-dark [role="listbox"],
+.admin-dark [role="option"] {
+  background: #1F2937 !important;
+  color: #FAFAF9 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.admin-dark [role="option"]:hover {
+  background: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Scrollbars */
+.admin-dark::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.admin-dark::-webkit-scrollbar-track {
+  background: rgba(31, 41, 55, 0.3);
+}
+
+.admin-dark::-webkit-scrollbar-thumb {
+  background: rgba(107, 114, 128, 0.5);
+  border-radius: 4px;
+}
+
+.admin-dark::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
+/* Loading states */
+.admin-dark [class*="skeleton"],
+.admin-dark [class*="loading"] {
+  background: linear-gradient(
+    90deg,
+    rgba(31, 41, 55, 0.3) 0%,
+    rgba(55, 65, 81, 0.3) 50%,
+    rgba(31, 41, 55, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: loading 1.5s ease-in-out infinite;
+}
+
+@keyframes loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Code blocks */
+.admin-dark code,
+.admin-dark pre {
+  background: rgba(17, 24, 39, 0.8) !important;
+  color: #F9FAFB !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Toast/Notifications */
+.admin-dark [class*="toast"],
+.admin-dark [role="alert"] {
+  background: #1F2937 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  color: #FAFAF9 !important;
+}
+
+/* Tabs */
+.admin-dark [role="tab"] {
+  color: #9CA3AF;
+  border-bottom-color: transparent !important;
+}
+
+.admin-dark [role="tab"][data-state="active"],
+.admin-dark [role="tab"][aria-selected="true"] {
+  color: #FAFAF9 !important;
+  border-bottom-color: #3B82F6 !important;
+}
+
+/* Checkbox and Radio */
+.admin-dark input[type="checkbox"],
+.admin-dark input[type="radio"] {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.admin-dark input[type="checkbox"]:checked,
+.admin-dark input[type="radio"]:checked {
+  background-color: #3B82F6 !important;
+  border-color: #3B82F6 !important;
+}
+
+/* Progress bars */
+.admin-dark [role="progressbar"],
+.admin-dark progress {
+  background: rgba(31, 41, 55, 0.5) !important;
+}
+
+.admin-dark [role="progressbar"] > div,
+.admin-dark progress::-webkit-progress-value {
+  background: linear-gradient(90deg, #3B82F6 0%, #10B981 100%) !important;
+}
