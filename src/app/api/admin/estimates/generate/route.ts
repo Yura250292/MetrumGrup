@@ -340,6 +340,18 @@ function buildWizardContext(wizardData: any): string {
   }
 
   console.log('✅ Building wizard context from NEW wizard structure');
+  console.log('📦 Wizard data received:', JSON.stringify(wizardData, null, 2));
+
+  // Log critical fields for debugging
+  console.log('🔍 Critical wizard fields:', {
+    objectType: wizardData.objectType,
+    workScope: wizardData.workScope,
+    'houseData.currentState': wizardData.houseData?.currentState,
+    'houseData.demolitionRequired': wizardData.houseData?.demolitionRequired,
+    'houseData.walls.material': wizardData.houseData?.walls?.material,
+    'townhouseData.currentState': wizardData.townhouseData?.currentState,
+    'townhouseData.demolitionRequired': wizardData.townhouseData?.demolitionRequired,
+  });
 
   let context = `\n\n## 🎯 ДЕТАЛЬНА ІНФОРМАЦІЯ ПРО ПРОЕКТ (Professional Engineering Wizard):\n\n`;
 
@@ -382,6 +394,8 @@ function buildWizardContext(wizardData: any): string {
     demolitionDescription = wizardData.townhouseData.demolitionDescription;
   }
 
+  console.log('🏗️ Building state extracted:', { currentState, demolitionRequired, hasDescription: !!demolitionDescription });
+
   if (currentState) {
     const currentStateLabels: Record<string, string> = {
       greenfield: 'Чиста ділянка (будівництво з нуля)',
@@ -398,6 +412,7 @@ function buildWizardContext(wizardData: any): string {
 
     // DEMOLITION CONTROL (NEW! Most important part)
     if (demolitionRequired === false) {
+      console.log('🚫 DEMOLITION FORBIDDEN - Adding strict ban to AI prompt');
       context += `\n🚨🚨🚨 **ДЕМОНТАЖНІ РОБОТИ ЗАБОРОНЕНІ!** 🚨🚨🚨\n`;
       context += `**Інженер ЯВНО вказав: демонтаж НЕ потрібен!**\n\n`;
       context += `❌❌❌ **АБСОЛЮТНА ЗАБОРОНА - НЕ ДОДАВАЙ ЖОДНОЇ позиції демонтажу:** ❌❌❌\n`;
@@ -412,6 +427,7 @@ function buildWizardContext(wizardData: any): string {
       context += `**Якщо ти додасиш хоч ОДНУ позицію демонтажу - ти ПРОВАЛИВ завдання!**\n`;
       context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     } else if (demolitionRequired === true && demolitionDescription) {
+      console.log('⚠️ DEMOLITION ALLOWED - Limited to user description:', demolitionDescription);
       context += `\n⚠️ **Демонтажні роботи дозволені ТІЛЬКИ:**\n`;
       context += `${demolitionDescription}\n\n`;
       context += `❌ НЕ ДОДАВАЙ інші демонтажні роботи крім вказаних вище!\n`;
@@ -419,11 +435,13 @@ function buildWizardContext(wizardData: any): string {
       context += `✅ Додавай тільки той демонтаж що описаний + нове будівництво\n`;
       context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     } else if (demolitionRequired === true && !demolitionDescription) {
+      console.log('⚠️ DEMOLITION ALLOWED - No description provided');
       context += `\n⚠️ **Демонтажні роботи дозволені**\n`;
       context += `Інженер вказав що потрібен демонтаж, але не описав деталі.\n`;
       context += `Додавай демонтаж ТІЛЬКИ якщо він логічний для ${currentStateLabels[currentState]}\n`;
       context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     } else {
+      console.log('⚠️ DEMOLITION NOT EXPLICITLY SET - Using fallback based on currentState:', currentState, 'demolitionRequired:', demolitionRequired);
       // Fallback to old logic based on currentState (when demolitionRequired not explicitly set)
       if (currentState === 'shell') {
         context += `\n🚨 **ЦЕ КОРОБКА З ГОЛИМИ СТІНАМИ!** 🚨\n\n`;
@@ -467,6 +485,11 @@ function buildWizardContext(wizardData: any): string {
         context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
       }
     }
+  } else {
+    console.log('❌ WARNING: currentState NOT SET - demolition control will not work!');
+    console.log('   objectType:', wizardData.objectType);
+    console.log('   has houseData:', !!wizardData.houseData);
+    console.log('   has townhouseData:', !!wizardData.townhouseData);
   }
 
   // HOUSE-SPECIFIC DATA

@@ -2756,8 +2756,23 @@ export default function AIEstimatePage() {
       formData.append("model", selectedGenerationModel);
       formData.append("template", selectedTemplate);
 
-      // Add wizard data if completed
-      if (wizardCompleted && wizardData) {
+      // Add wizard data (always, if available - not just when completed)
+      if (wizardData) {
+        console.log('📝 Sending wizard data:', JSON.stringify(wizardData, null, 2));
+
+        // Log critical demolition control data
+        const currentState = wizardData.houseData?.currentState || wizardData.townhouseData?.currentState;
+        const demolitionRequired = wizardData.houseData?.demolitionRequired ?? wizardData.townhouseData?.demolitionRequired;
+        const wallMaterial = wizardData.houseData?.walls?.material;
+
+        console.log('🔍 Demolition control:', {
+          currentState,
+          demolitionRequired,
+          wallMaterial,
+          objectType: wizardData.objectType,
+          wizardCompleted
+        });
+
         formData.append("wizardData", JSON.stringify(wizardData));
       }
 
