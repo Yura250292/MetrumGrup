@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -24,11 +25,37 @@ export async function POST(request: NextRequest) {
 
     console.log(`📋 PRE-ANALYSIS: ${files.length} files, wizard: ${!!wizardData}`);
 
-    // Extract PDF content
+    // Classify files: plans vs specifications
+    const planFiles: File[] = [];
+    const specFiles: File[] = [];
+
+    for (const file of files) {
+      const name = file.name.toLowerCase();
+      // Detect specification files by name keywords
+      const isSpec =
+        name.includes('специф') ||
+        name.includes('spec') ||
+        name.includes('технолог') ||
+        name.includes('інструкц') ||
+        name.includes('instruction') ||
+        name.includes('вимог') ||
+        name.includes('requirement') ||
+        file.size > 10 * 1024 * 1024; // Files > 10MB are likely detailed specs
+
+      if (isSpec) {
+        specFiles.push(file);
+      } else {
+        planFiles.push(file);
+      }
+    }
+
+    console.log(`📂 Classified: ${planFiles.length} plans, ${specFiles.length} specifications`);
+
+    // Extract plan PDF content (for visual analysis)
     const pdfParts: Array<{ data: string; mimeType: string; name: string }> = [];
     const textParts: string[] = [];
 
-    for (const file of files) {
+    for (const file of planFiles) {
       if (file.name.endsWith('.pdf')) {
         const buffer = Buffer.from(await file.arrayBuffer());
         const pdfBase64 = buffer.toString('base64');
@@ -43,14 +70,50 @@ export async function POST(request: NextRequest) {
           const pdfModule = await import("pdf-parse");
           const pdfParse = (pdfModule as any).default || pdfModule;
           const data = await pdfParse(buffer);
-          textParts.push(`[PDF: ${file.name}]\n${data.text}`);
+          textParts.push(`[ПЛАН: ${file.name}]\n${data.text}`);
         } catch (e) {
           console.error("PDF text extraction failed:", e);
         }
       }
     }
 
-    console.log(`📑 Extracted: ${pdfParts.length} PDFs, ${textParts.length} text parts`);
+    // Extract specification content (text only, no visual needed)
+    const specificationTexts: string[] = [];
+    let specificationData: any = null;
+
+    if (specFiles.length > 0) {
+      console.log(`📚 Processing ${specFiles.length} specification files...`);
+
+      for (const file of specFiles) {
+        try {
+          if (file.name.endsWith('.pdf')) {
+            const buffer = Buffer.from(await file.arrayBuffer());
+            const pdfModule = await import("pdf-parse");
+            const pdfParse = (pdfModule as any).default || pdfModule;
+            const data = await pdfParse(buffer);
+            specificationTexts.push(`[СПЕЦИФІКАЦІЯ: ${file.name}]\n${data.text}`);
+            console.log(`  ✓ ${file.name}: ${data.numpages} pages, ${data.text.length} chars`);
+          } else if (file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+            const text = await file.text();
+            specificationTexts.push(`[СПЕЦИФІКАЦІЯ: ${file.name}]\n${text}`);
+          }
+        } catch (e) {
+          console.error(`  ✗ ${file.name}: extraction failed`, e);
+        }
+      }
+
+      // Parse specifications
+      if (specificationTexts.length > 0) {
+        const allSpecText = specificationTexts.join('\n\n---\n\n');
+        specificationData = parseSpecificationText(allSpecText);
+        console.log(`📊 Parsed specification data:`);
+        console.log(`   - Materials: ${specificationData.materials.length}`);
+        console.log(`   - Methods: ${specificationData.methods.length}`);
+        console.log(`   - Requirements: ${specificationData.requirements.length}`);
+      }
+    }
+
+    console.log(`📑 Extracted: ${pdfParts.length} plan PDFs, ${textParts.length} plan texts, ${specificationTexts.length} spec texts`);
 
     // Build wizard summary
     let wizardSummary = "";
@@ -266,6 +329,18 @@ ${wizardSummary}
     return NextResponse.json({
       analysis,
       filesAnalyzed: files.length,
+      planFiles: planFiles.length,
+      specFiles: specFiles.length,
+      specification: specificationData
+        ? {
+            summary: specificationData.summary,
+            materialsCount: specificationData.materials.length,
+            methodsCount: specificationData.methods.length,
+            requirementsCount: specificationData.requirements.length,
+            criticalRequirements: specificationData.requirements.filter((r: any) => r.critical)
+              .length,
+          }
+        : null,
       wizardDataUsed: !!wizardData,
     });
 

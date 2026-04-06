@@ -36,17 +36,17 @@ export function AdminHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b bg-white/80 backdrop-blur-sm px-6">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-gradient-to-r from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl px-6 shadow-lg">
       <div className="flex items-center gap-2 text-sm">
         {breadcrumbs.map((crumb, index) => (
           <div key={crumb.href} className="flex items-center gap-2">
-            {index > 0 && <span className="text-muted-foreground">/</span>}
+            {index > 0 && <span className="text-gray-500">/</span>}
             {index === breadcrumbs.length - 1 ? (
-              <span className="font-medium">{crumb.label}</span>
+              <span className="font-medium text-white">{crumb.label}</span>
             ) : (
               <Link
                 href={crumb.href}
-                className="text-muted-foreground hover:text-foreground transition-colors"
+                className="text-gray-400 hover:text-white transition-colors"
               >
                 {crumb.label}
               </Link>
@@ -55,7 +55,7 @@ export function AdminHeader() {
         ))}
       </div>
 
-      <button className="relative rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+      <button className="relative rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
         <Bell className="h-5 w-5" />
       </button>
     </header>

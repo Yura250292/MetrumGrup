@@ -4,16 +4,37 @@
 .admin-dark {
   background: #0F0F0F;
   color: #FAFAF9;
+  min-height: 100vh;
+}
+
+/* Desktop layout improvements */
+@media (min-width: 768px) {
+  .admin-dark main {
+    max-width: 1800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
 }
 
 /* Override Card components to dark theme */
 .admin-dark [class*="card"],
-.admin-dark [class*="Card"] {
-  background: rgba(31, 41, 55, 0.3) !important;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border-color: rgba(255, 255, 255, 0.1) !important;
+.admin-dark [class*="Card"],
+.admin-dark .card {
+  background: rgba(31, 41, 55, 0.5) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
   color: #FAFAF9 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.3s ease;
+}
+
+.admin-dark [class*="card"]:hover,
+.admin-dark [class*="Card"]:hover,
+.admin-dark .card:hover {
+  background: rgba(31, 41, 55, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
 }
 
 /* Dark text colors */
@@ -24,6 +45,7 @@
 .admin-dark h5,
 .admin-dark h6 {
   color: #FAFAF9 !important;
+  font-weight: 600;
 }
 
 .admin-dark p {
@@ -35,27 +57,62 @@
   color: #9CA3AF !important;
 }
 
+.admin-dark label {
+  color: #D1D5DB !important;
+  font-weight: 500;
+}
+
+.admin-dark strong,
+.admin-dark b {
+  color: #F9FAFB !important;
+}
+
 /* Tables */
 .admin-dark table {
   color: #FAFAF9;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .admin-dark thead {
-  background: rgba(31, 41, 55, 0.5) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(31, 41, 55, 0.7) !important;
+  border-bottom: 2px solid rgba(59, 130, 246, 0.3) !important;
+}
+
+.admin-dark thead th {
+  font-weight: 600 !important;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  padding: 0.875rem 1rem !important;
 }
 
 .admin-dark tbody tr {
-  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+  transition: all 0.2s ease;
 }
 
 .admin-dark tbody tr:hover {
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-bottom-color: rgba(59, 130, 246, 0.2) !important;
 }
 
 .admin-dark td,
 .admin-dark th {
   color: #FAFAF9 !important;
+  padding: 0.75rem 1rem !important;
+}
+
+.admin-dark td {
+  font-size: 0.875rem;
+}
+
+/* Table wrapper */
+.admin-dark [class*="table-wrapper"],
+.admin-dark .overflow-x-auto {
+  background: rgba(17, 24, 39, 0.4);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Input fields */
@@ -80,23 +137,58 @@
 }
 
 /* Buttons - keep original colors but adjust for dark bg */
-.admin-dark button[class*="primary"] {
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+.admin-dark button[class*="primary"],
+.admin-dark button.bg-primary,
+.admin-dark a[class*="primary"] {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+  border: none !important;
+  color: white !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
 }
 
-.admin-dark button[class*="secondary"] {
+.admin-dark button[class*="primary"]:hover,
+.admin-dark button.bg-primary:hover,
+.admin-dark a[class*="primary"]:hover {
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.5);
+  transform: translateY(-1px);
+}
+
+.admin-dark button[class*="secondary"],
+.admin-dark button.bg-secondary {
   background: rgba(31, 41, 55, 0.8) !important;
-  border-color: rgba(255, 255, 255, 0.2) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
   color: #FAFAF9 !important;
+  font-weight: 500;
+  transition: all 0.3s ease;
 }
 
-.admin-dark button[class*="outline"] {
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  color: #FAFAF9 !important;
+.admin-dark button[class*="secondary"]:hover,
+.admin-dark button.bg-secondary:hover {
+  background: rgba(55, 65, 81, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
 }
 
-.admin-dark button[class*="outline"]:hover {
+.admin-dark button[class*="outline"],
+.admin-dark button[class*="ghost"] {
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #FAFAF9 !important;
+  background: transparent !important;
+  transition: all 0.3s ease;
+}
+
+.admin-dark button[class*="outline"]:hover,
+.admin-dark button[class*="ghost"]:hover {
   background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.3) !important;
+}
+
+.admin-dark button[class*="destructive"] {
+  background: linear-gradient(135deg, #EF4444 0%, #DC2626 100%) !important;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  border: none !important;
+  color: white !important;
 }
 
 /* Dialogs and Modals */
@@ -262,4 +354,187 @@
 .admin-dark [role="progressbar"] > div,
 .admin-dark progress::-webkit-progress-value {
   background: linear-gradient(90deg, #3B82F6 0%, #10B981 100%) !important;
+}
+
+/* Page headers and titles */
+.admin-dark main > div:first-child,
+.admin-dark .page-header {
+  background: linear-gradient(135deg, rgba(31, 41, 55, 0.6) 0%, rgba(17, 24, 39, 0.6) 100%);
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  backdrop-filter: blur(12px);
+}
+
+/* Grid layouts */
+.admin-dark .grid {
+  gap: 1rem;
+}
+
+@media (min-width: 768px) {
+  .admin-dark .grid {
+    gap: 1.5rem;
+  }
+}
+
+/* Action buttons container */
+.admin-dark .flex.gap-2,
+.admin-dark .flex.gap-3,
+.admin-dark .flex.gap-4 {
+  flex-wrap: wrap;
+}
+
+/* Stat cards on desktop */
+@media (min-width: 1024px) {
+  .admin-dark [class*="stats"] > div,
+  .admin-dark .grid > [class*="card"]:first-child {
+    min-height: 120px;
+  }
+}
+
+/* Better spacing for sections */
+.admin-dark section,
+.admin-dark .space-y-4 > *,
+.admin-dark .space-y-6 > * {
+  margin-top: 0 !important;
+}
+
+.admin-dark section + section {
+  margin-top: 2rem !important;
+}
+
+/* Improve form layouts */
+.admin-dark form {
+  max-width: 100%;
+}
+
+@media (min-width: 768px) {
+  .admin-dark form {
+    max-width: 800px;
+  }
+}
+
+.admin-dark fieldset {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  background: rgba(31, 41, 55, 0.3);
+}
+
+.admin-dark legend {
+  color: #F9FAFB !important;
+  font-weight: 600;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 0.5rem;
+}
+
+/* Better empty states */
+.admin-dark .text-center.py-8,
+.admin-dark .text-center.py-12,
+.admin-dark [class*="empty"] {
+  background: rgba(31, 41, 55, 0.3);
+  border: 2px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 3rem 1.5rem;
+}
+
+/* Data cards/lists */
+.admin-dark [class*="space-y"] > div:not([class*="grid"]) {
+  background: rgba(31, 41, 55, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  transition: all 0.2s ease;
+}
+
+.admin-dark [class*="space-y"] > div:not([class*="grid"]):hover {
+  background: rgba(31, 41, 55, 0.5);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+/* Tooltips */
+.admin-dark [role="tooltip"] {
+  background: #1F2937 !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #FAFAF9 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* Popovers and Dropdowns */
+.admin-dark [role="menu"],
+.admin-dark [class*="popover"],
+.admin-dark [class*="dropdown"] {
+  background: rgba(31, 41, 55, 0.95) !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.admin-dark [role="menuitem"]:hover,
+.admin-dark [role="option"]:hover {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #FAFAF9 !important;
+}
+
+/* Better contrast for text on cards */
+.admin-dark [class*="card"] p,
+.admin-dark [class*="Card"] p {
+  color: #E5E7EB !important;
+}
+
+.admin-dark [class*="card"] h3,
+.admin-dark [class*="Card"] h3 {
+  color: #F9FAFB !important;
+  font-weight: 600;
+}
+
+/* Status indicators */
+.admin-dark .bg-green-100,
+.admin-dark .bg-emerald-100 {
+  background: rgba(16, 185, 129, 0.15) !important;
+  color: #34D399 !important;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.admin-dark .bg-blue-100,
+.admin-dark .bg-sky-100 {
+  background: rgba(59, 130, 246, 0.15) !important;
+  color: #60A5FA !important;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.admin-dark .bg-yellow-100,
+.admin-dark .bg-amber-100 {
+  background: rgba(245, 158, 11, 0.15) !important;
+  color: #FBBF24 !important;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.admin-dark .bg-red-100,
+.admin-dark .bg-rose-100 {
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #F87171 !important;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.admin-dark .bg-gray-100 {
+  background: rgba(156, 163, 175, 0.15) !important;
+  color: #9CA3AF !important;
+  border: 1px solid rgba(156, 163, 175, 0.3);
+}
+
+/* Improve readability of small text */
+.admin-dark .text-xs,
+.admin-dark .text-sm {
+  letter-spacing: 0.01em;
+}
+
+/* Better focus states */
+.admin-dark *:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.6) !important;
+  outline-offset: 2px;
+  border-radius: 0.25rem;
 }
