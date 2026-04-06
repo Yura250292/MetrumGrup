@@ -45,20 +45,42 @@
 .admin-dark h5,
 .admin-dark h6 {
   color: #FFFFFF !important;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .admin-dark h1 {
   font-size: clamp(1.75rem, 2vw, 2rem);
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .admin-dark h2 {
   font-size: clamp(1.5rem, 1.75vw, 1.75rem);
+  font-weight: 600;
 }
 
 .admin-dark h3 {
   font-size: clamp(1.25rem, 1.5vw, 1.5rem);
+  font-weight: 600;
+}
+
+/* Headings in content area */
+.admin-dark main h1 {
+  color: #FFFFFF !important;
+  font-size: 1.875rem !important;
+  font-weight: 700 !important;
+}
+
+.admin-dark main h2 {
+  color: #F9FAFB !important;
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+}
+
+.admin-dark main h3 {
+  color: #E5E7EB !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
 }
 
 .admin-dark p {
@@ -218,12 +240,107 @@
   color: white !important;
 }
 
-/* Dialogs and Modals */
+/* Dialogs and Modals - Enhanced readability */
 .admin-dark [role="dialog"],
 .admin-dark [class*="dialog"],
-.admin-dark [class*="modal"] {
+.admin-dark [class*="modal"],
+.admin-dark .modal,
+.admin-dark .dialog {
   background: #1F2937 !important;
-  border-color: rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Modal headers */
+.admin-dark [role="dialog"] h1,
+.admin-dark [role="dialog"] h2,
+.admin-dark [role="dialog"] h3,
+.admin-dark [class*="dialog"] h1,
+.admin-dark [class*="dialog"] h2,
+.admin-dark [class*="dialog"] h3 {
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  font-size: 1.25rem !important;
+}
+
+/* Modal text content */
+.admin-dark [role="dialog"] p,
+.admin-dark [class*="dialog"] p,
+.admin-dark [role="dialog"] span,
+.admin-dark [class*="dialog"] span,
+.admin-dark [role="dialog"] div,
+.admin-dark [class*="dialog"] div {
+  color: #E5E7EB !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.6 !important;
+}
+
+/* Modal labels */
+.admin-dark [role="dialog"] label,
+.admin-dark [class*="dialog"] label {
+  color: #F3F4F6 !important;
+  font-weight: 500 !important;
+  font-size: 0.875rem !important;
+}
+
+/* Warning/Info sections in modals */
+.admin-dark [role="dialog"] [class*="warning"],
+.admin-dark [role="dialog"] [class*="info"],
+.admin-dark [class*="dialog"] [class*="warning"],
+.admin-dark [class*="dialog"] [class*="info"] {
+  background: rgba(245, 158, 11, 0.15) !important;
+  border: 1px solid rgba(245, 158, 11, 0.5) !important;
+  color: #FCD34D !important;
+  padding: 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+}
+
+.admin-dark [role="dialog"] [class*="error"],
+.admin-dark [class*="dialog"] [class*="error"] {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border: 1px solid rgba(239, 68, 68, 0.5) !important;
+  color: #FCA5A5 !important;
+  padding: 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+}
+
+.admin-dark [role="dialog"] [class*="success"],
+.admin-dark [class*="dialog"] [class*="success"] {
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.5) !important;
+  color: #6EE7B7 !important;
+  padding: 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+}
+
+/* Card titles - improved readability */
+.admin-dark [class*="card"] h1,
+.admin-dark [class*="card"] h2,
+.admin-dark [class*="card"] h3,
+.admin-dark [class*="card"] h4 {
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Card descriptions and labels */
+.admin-dark [class*="card"] [class*="description"],
+.admin-dark [class*="card"] [class*="label"],
+.admin-dark [class*="card"] small {
+  color: #D1D5DB !important;
+  font-size: 0.875rem !important;
+}
+
+/* Card values/numbers */
+.admin-dark [class*="card"] [class*="value"],
+.admin-dark [class*="card"] strong,
+.admin-dark [class*="card"] b {
+  color: #FFFFFF !important;
+  font-weight: 600 !important;
+  font-size: 1.125rem !important;
 }
 
 /* Dividers */

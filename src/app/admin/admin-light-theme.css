@@ -159,12 +159,80 @@
   background: transparent !important;
 }
 
-/* Dialogs and Modals */
+/* Dialogs and Modals - Enhanced readability */
 .admin-light [role="dialog"],
-.admin-light [class*="dialog"] {
+.admin-light [class*="dialog"],
+.admin-light [class*="modal"],
+.admin-light .modal,
+.admin-light .dialog {
   background: #FFFFFF !important;
-  border: 1px solid #E5E7EB !important;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
+  border: 1px solid #D1D5DB !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Modal headers */
+.admin-light [role="dialog"] h1,
+.admin-light [role="dialog"] h2,
+.admin-light [role="dialog"] h3,
+.admin-light [class*="dialog"] h1,
+.admin-light [class*="dialog"] h2,
+.admin-light [class*="dialog"] h3 {
+  color: #111827 !important;
+  font-weight: 700 !important;
+  font-size: 1.25rem !important;
+}
+
+/* Modal text content */
+.admin-light [role="dialog"] p,
+.admin-light [class*="dialog"] p,
+.admin-light [role="dialog"] span,
+.admin-light [class*="dialog"] span,
+.admin-light [role="dialog"] div,
+.admin-light [class*="dialog"] div {
+  color: #374151 !important;
+  font-size: 0.9375rem !important;
+  line-height: 1.6 !important;
+}
+
+/* Modal labels */
+.admin-light [role="dialog"] label,
+.admin-light [class*="dialog"] label {
+  color: #111827 !important;
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+}
+
+/* Warning/Info sections in modals */
+.admin-light [role="dialog"] [class*="warning"],
+.admin-light [role="dialog"] [class*="info"],
+.admin-light [class*="dialog"] [class*="warning"],
+.admin-light [class*="dialog"] [class*="info"] {
+  background: #FEF3C7 !important;
+  border: 1px solid #F59E0B !important;
+  color: #92400E !important;
+  padding: 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+}
+
+.admin-light [role="dialog"] [class*="error"],
+.admin-light [class*="dialog"] [class*="error"] {
+  background: #FEE2E2 !important;
+  border: 1px solid #EF4444 !important;
+  color: #991B1B !important;
+  padding: 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
+}
+
+.admin-light [role="dialog"] [class*="success"],
+.admin-light [class*="dialog"] [class*="success"] {
+  background: #D1FAE5 !important;
+  border: 1px solid #10B981 !important;
+  color: #065F46 !important;
+  padding: 1rem !important;
+  border-radius: 0.5rem !important;
+  font-weight: 500 !important;
 }
 
 /* Dividers */
@@ -246,4 +314,62 @@
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 700;
+}
+
+/* Card titles - improved readability */
+.admin-light [class*="card"] h1,
+.admin-light [class*="card"] h2,
+.admin-light [class*="card"] h3,
+.admin-light [class*="card"] h4 {
+  color: #111827 !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.5rem !important;
+}
+
+/* Card descriptions and labels */
+.admin-light [class*="card"] [class*="description"],
+.admin-light [class*="card"] [class*="label"],
+.admin-light [class*="card"] small {
+  color: #6B7280 !important;
+  font-size: 0.875rem !important;
+  font-weight: 500 !important;
+}
+
+/* Card values/numbers */
+.admin-light [class*="card"] [class*="value"],
+.admin-light [class*="card"] strong,
+.admin-light [class*="card"] b {
+  color: #111827 !important;
+  font-weight: 700 !important;
+  font-size: 1.125rem !important;
+}
+
+/* Improve all text elements contrast */
+.admin-light span,
+.admin-light div:not([class*="gradient"]) {
+  color: #374151;
+}
+
+.admin-light [class*="text-muted"],
+.admin-light [class*="secondary"] {
+  color: #6B7280 !important;
+}
+
+/* Headings in content area */
+.admin-light main h1 {
+  color: #111827 !important;
+  font-size: 1.875rem !important;
+  font-weight: 700 !important;
+}
+
+.admin-light main h2 {
+  color: #1F2937 !important;
+  font-size: 1.5rem !important;
+  font-weight: 600 !important;
+}
+
+.admin-light main h3 {
+  color: #374151 !important;
+  font-size: 1.25rem !important;
+  font-weight: 600 !important;
 }
