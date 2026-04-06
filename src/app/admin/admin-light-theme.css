@@ -20,23 +20,8 @@
   background: #F9FAFB !important;
 }
 
-/* Dashboard and page sections */
-.admin-light [class*="bg-"],
-.admin-light div[class*="gradient"] {
-  background: #FFFFFF !important;
-  color: #111827 !important;
-}
-
-/* Page title sections with emoji */
-.admin-light div[class*="rounded"],
-.admin-light section {
-  background: #FFFFFF !important;
-  border: 1px solid #E5E7EB !important;
-  color: #111827 !important;
-}
-
-/* Dashboard header with emoji */
-.admin-light main > div:first-child {
+/* Dashboard header with emoji - keep it subtle */
+.admin-light main > div:first-child:not([class*="grid"]) {
   background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%) !important;
   border: 1px solid #E5E7EB !important;
   color: #111827 !important;
@@ -299,29 +284,40 @@
   color: #2563EB;
 }
 
-/* Status indicators */
+/* Status indicators - vibrant gradients */
 .admin-light .bg-green-100 {
-  background: #D1FAE5 !important;
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%) !important;
   color: #065F46 !important;
-  border: 1px solid #A7F3D0;
+  border: 1px solid #10B981 !important;
+  font-weight: 600 !important;
 }
 
 .admin-light .bg-blue-100 {
-  background: #DBEAFE !important;
+  background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%) !important;
   color: #1E40AF !important;
-  border: 1px solid #BFDBFE;
+  border: 1px solid #3B82F6 !important;
+  font-weight: 600 !important;
 }
 
 .admin-light .bg-yellow-100 {
-  background: #FEF3C7 !important;
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%) !important;
   color: #92400E !important;
-  border: 1px solid #FDE68A;
+  border: 1px solid #F59E0B !important;
+  font-weight: 600 !important;
 }
 
 .admin-light .bg-red-100 {
-  background: #FEE2E2 !important;
+  background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%) !important;
   color: #991B1B !important;
-  border: 1px solid #FECACA;
+  border: 1px solid #EF4444 !important;
+  font-weight: 600 !important;
+}
+
+.admin-light .bg-purple-100 {
+  background: linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%) !important;
+  color: #6B21A8 !important;
+  border: 1px solid #A855F7 !important;
+  font-weight: 600 !important;
 }
 
 /* Specific component fixes */
@@ -350,18 +346,33 @@
   border: 1px solid #E5E7EB !important;
 }
 
-/* Stat cards in light mode */
-.admin-light [class*="mesh"],
-.admin-light [class*="stat"],
-.admin-light [class*="Stat"],
-.admin-light [class*="compact"] {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%) !important;
-  border: 1px solid #E5E7EB !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
-  color: #111827 !important;
+/* Stat cards in light mode - KEEP COLORS but make them light-friendly */
+.admin-light [class*="bg-mesh-blue"] {
+  background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 50%, #93C5FD 100%) !important;
+  border: 1px solid #3B82F6 !important;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.2) !important;
 }
 
-/* Stat card values */
+.admin-light [class*="bg-mesh-green"] {
+  background: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 50%, #6EE7B7 100%) !important;
+  border: 1px solid #10B981 !important;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2) !important;
+}
+
+.admin-light [class*="bg-mesh-amber"],
+.admin-light [class*="bg-mesh-orange"] {
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 50%, #FCD34D 100%) !important;
+  border: 1px solid #F59E0B !important;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.2) !important;
+}
+
+.admin-light [class*="bg-glass-dark"] {
+  background: linear-gradient(135deg, #F3F4F6 0%, #E5E7EB 50%, #D1D5DB 100%) !important;
+  border: 1px solid #9CA3AF !important;
+  box-shadow: 0 4px 16px rgba(107, 114, 128, 0.15) !important;
+}
+
+/* Stat card text - dark text on light colored backgrounds */
 .admin-light [class*="mesh"] *,
 .admin-light [class*="stat"] *,
 .admin-light [class*="Stat"] *,
@@ -369,19 +380,23 @@
   color: #111827 !important;
 }
 
-/* Project cards */
-.admin-light [class*="project"],
-.admin-light [class*="Project"] {
-  background: #FFFFFF !important;
-  border: 1px solid #E5E7EB !important;
-  color: #111827 !important;
+/* Icon backgrounds in stat cards */
+.admin-light [class*="mesh"] [class*="bg-gradient"],
+.admin-light [class*="stat"] [class*="bg-gradient"],
+.admin-light [class*="compact"] [class*="bg-gradient"] {
+  /* Keep gradient colors for icons */
+  opacity: 1 !important;
 }
 
-/* Dark sections in light mode */
-.admin-light [style*="background"][style*="#"],
-.admin-light [style*="bg-"] {
-  background: #FFFFFF !important;
-  color: #111827 !important;
+/* Project cards - keep variant colors */
+.admin-light [class*="project"][class*="blue"] {
+  background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%) !important;
+  border: 1px solid #3B82F6 !important;
+}
+
+.admin-light [class*="project"][class*="amber"] {
+  background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%) !important;
+  border: 1px solid #F59E0B !important;
 }
 
 /* Navigation section labels with pearlescent hints */
