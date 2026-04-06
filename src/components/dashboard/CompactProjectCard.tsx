@@ -47,15 +47,15 @@ export function CompactProjectCard({
           <div className="absolute inset-0 animate-shimmer" />
         </div>
 
-        <div className="relative space-y-2">
+        <div className="relative space-y-2.5">
           {/* Header */}
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-white truncate">
+            <h3 className="text-base font-bold text-white leading-tight line-clamp-2 flex-1 min-w-0">
               {title}
             </h3>
             <span
               className={cn(
-                "flex-shrink-0 rounded px-1.5 py-0.5 text-[9px] font-medium text-white",
+                "flex-shrink-0 rounded-lg px-2 py-1 text-[10px] font-semibold text-white shadow-lg",
                 statusConfig[status].color
               )}
             >
@@ -64,20 +64,20 @@ export function CompactProjectCard({
           </div>
 
           {/* Address */}
-          <div className="flex items-center gap-1 text-gray-400">
-            <MapPin className="h-3 w-3 flex-shrink-0" />
-            <span className="text-[10px] truncate">{address}</span>
+          <div className="flex items-center gap-1.5 text-gray-300">
+            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="text-xs truncate">{address}</span>
           </div>
 
           {/* Progress */}
-          <div className="space-y-1">
-            <div className="h-1 w-full rounded-full bg-gray-700 overflow-hidden">
+          <div className="space-y-1.5">
+            <div className="h-1.5 w-full rounded-full bg-gray-700 overflow-hidden shadow-inner">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
+                className="h-full rounded-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500 shadow-neon-blue-soft"
                 style={{ width: `${progress}%` }}
               />
             </div>
-            <p className="text-[10px] text-emerald-200">{progress}%</p>
+            <p className="text-xs font-semibold text-emerald-300">Прогрес: {progress}%</p>
           </div>
         </div>
       </div>

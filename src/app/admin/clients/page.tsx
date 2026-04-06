@@ -124,31 +124,33 @@ export default function ClientsPage() {
       </div>
 
       {/* List */}
-      <div className="space-y-2">
+      <div className="space-y-3">
         {filtered.map((client) => (
           <Card key={client.id} className="p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary font-medium">
-                  {client.name.charAt(0)}
+            <div className="flex items-start gap-3">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full admin-dark:bg-gradient-to-br admin-dark:from-blue-500 admin-dark:to-green-500 admin-light:bg-blue-100 admin-dark:text-white admin-light:text-blue-700 font-bold text-lg flex-shrink-0 shadow-lg">
+                {client.name.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="font-semibold text-base admin-dark:text-white admin-light:text-gray-900">{client.name}</p>
+                  <Badge variant={client.isActive ? "success" : "secondary"} className="flex-shrink-0">
+                    {client.isActive ? "Активний" : "Неактивний"}
+                  </Badge>
                 </div>
-                <div>
-                  <p className="font-medium">{client.name}</p>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <Mail className="h-3 w-3" /> {client.email}
+                <div className="flex flex-col gap-1.5 text-sm">
+                  <span className="flex items-center gap-2 admin-dark:text-gray-300 admin-light:text-gray-700">
+                    <Mail className="h-4 w-4 flex-shrink-0 admin-dark:text-blue-400 admin-light:text-blue-600" />
+                    <span className="truncate">{client.email}</span>
+                  </span>
+                  {client.phone && (
+                    <span className="flex items-center gap-2 admin-dark:text-gray-300 admin-light:text-gray-700">
+                      <Phone className="h-4 w-4 flex-shrink-0 admin-dark:text-green-400 admin-light:text-green-600" />
+                      {client.phone}
                     </span>
-                    {client.phone && (
-                      <span className="flex items-center gap-1">
-                        <Phone className="h-3 w-3" /> {client.phone}
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </div>
               </div>
-              <Badge variant={client.isActive ? "success" : "secondary"}>
-                {client.isActive ? "Активний" : "Неактивний"}
-              </Badge>
             </div>
           </Card>
         ))}

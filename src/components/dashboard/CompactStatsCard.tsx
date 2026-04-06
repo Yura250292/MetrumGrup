@@ -39,7 +39,7 @@ export function CompactStatsCard({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-xl p-3 backdrop-blur-sm hover-scale tap-scale transition-smooth animate-slide-in",
+        "relative overflow-hidden rounded-xl p-4 backdrop-blur-sm hover-scale tap-scale transition-smooth animate-slide-in",
         variants[variant],
         className
       )}
@@ -52,30 +52,30 @@ export function CompactStatsCard({
         <div className="absolute inset-0 animate-shimmer" />
       </div>
 
-      <div className="relative space-y-2">
-        {/* Icon with neon glow */}
+      <div className="relative flex flex-col items-center text-center space-y-2">
+        {/* Icon with neon glow - larger and centered */}
         <div
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-lg shadow-lg hover-lift animate-float",
+            "flex h-12 w-12 items-center justify-center rounded-xl shadow-lg hover-lift animate-float",
             iconVariants[variant]
           )}
         >
-          <Icon className="h-[18px] w-[18px] text-white transition-transform duration-300 group-hover:scale-110" />
+          <Icon className="h-6 w-6 text-white transition-transform duration-300 group-hover:scale-110" />
         </div>
 
-        {/* Value */}
+        {/* Value - centered */}
         <p className="text-2xl font-bold text-white tracking-tight">
           {value}
         </p>
 
-        {/* Title */}
-        <p className={cn("text-[11px] font-medium", textVariants[variant])}>
+        {/* Title - centered */}
+        <p className={cn("text-xs font-semibold", textVariants[variant])}>
           {title}
         </p>
 
-        {/* Optional Description */}
+        {/* Optional Description - centered */}
         {description && (
-          <p className="text-[10px] text-gray-400 leading-tight">
+          <p className="text-[11px] text-gray-300 leading-tight">
             {description}
           </p>
         )}

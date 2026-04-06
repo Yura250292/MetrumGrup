@@ -65,18 +65,19 @@ export function EstimateActions({ estimateId, estimateNumber, status, clientName
   }
 
   return (
-    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+    <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
       <Button
         variant="ghost"
         size="sm"
         onClick={(e) => exportEstimate("pdf", e)}
         disabled={exporting === "pdf"}
         title="Експорт в PDF"
+        className="h-10 w-10 p-0 flex items-center justify-center admin-dark:hover:bg-white/10 admin-light:hover:bg-gray-100"
       >
         {exporting === "pdf" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
-          <FileDown className="h-4 w-4" />
+          <FileDown className="h-5 w-5" />
         )}
       </Button>
       <Button
@@ -85,11 +86,12 @@ export function EstimateActions({ estimateId, estimateNumber, status, clientName
         onClick={(e) => exportEstimate("excel", e)}
         disabled={exporting === "excel"}
         title="Експорт в Excel"
+        className="h-10 w-10 p-0 flex items-center justify-center admin-dark:hover:bg-white/10 admin-light:hover:bg-gray-100"
       >
         {exporting === "excel" ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="h-5 w-5 animate-spin" />
         ) : (
-          <FileSpreadsheet className="h-4 w-4" />
+          <FileSpreadsheet className="h-5 w-5" />
         )}
       </Button>
       {status === "APPROVED" && (
@@ -99,12 +101,12 @@ export function EstimateActions({ estimateId, estimateNumber, status, clientName
           onClick={sendToClient}
           disabled={sendingToClient}
           title="Надіслати клієнту"
-          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          className="h-10 w-10 p-0 flex items-center justify-center admin-dark:text-blue-400 admin-dark:hover:bg-blue-500/10 admin-light:text-blue-600 admin-light:hover:bg-blue-50"
         >
           {sendingToClient ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
-            <Mail className="h-4 w-4" />
+            <Mail className="h-5 w-5" />
           )}
         </Button>
       )}

@@ -70,43 +70,62 @@ export default async function EstimatesPage() {
       </div>
 
       {estimates.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {estimates.map((est) => (
             <Link key={est.id} href={`/admin/estimates/${est.id}`}>
-              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer mb-2">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="rounded-lg bg-primary/10 p-2">
-                      <FileText className="h-4 w-4 text-primary" />
+              <Card className="p-4 hover:shadow-md transition-shadow cursor-pointer">
+                {/* Mobile-optimized layout */}
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  {/* Icon and Title Section */}
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <div className="rounded-xl admin-dark:bg-gradient-to-br admin-dark:from-amber-500 admin-dark:to-amber-600 admin-light:bg-amber-100 p-3 flex-shrink-0 shadow-lg">
+                      <FileText className="h-5 w-5 admin-dark:text-white admin-light:text-amber-700" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium truncate">{est.title}</p>
-                        <Badge className={STATUS_COLORS[est.status]}>
-                          {ESTIMATE_STATUS_LABELS[est.status]}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        {est.number} • {est.project.title} • {est.project.client.name} •{" "}
+                      <p className="font-semibold text-base admin-dark:text-white admin-light:text-gray-900 mb-1">{est.title}</p>
+                      <Badge className={STATUS_COLORS[est.status]}>
+                        {ESTIMATE_STATUS_LABELS[est.status]}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Info Section - Stack on mobile */}
+                  <div className="flex flex-col gap-2 md:gap-3 md:flex-row md:items-center">
+                    {/* Details */}
+                    <div className="flex flex-col gap-0.5">
+                      <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
+                        <span className="font-medium">{est.number}</span>
+                      </p>
+                      <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
+                        {est.project.title}
+                      </p>
+                      <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
+                        {est.project.client.name}
+                      </p>
+                      <p className="text-xs admin-dark:text-gray-500 admin-light:text-gray-500">
                         {formatDateShort(est.createdAt)}
                       </p>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="font-bold">{formatCurrency(Number(est.finalAmount))}</p>
-                      {Number(est.discount) > 0 && (
-                        <p className="text-xs text-muted-foreground line-through">
-                          {formatCurrency(Number(est.totalAmount))}
+
+                    {/* Amount and Actions */}
+                    <div className="flex items-center justify-between md:justify-end gap-3">
+                      <div className="text-left md:text-right">
+                        <p className="font-bold text-lg admin-dark:text-white admin-light:text-gray-900">
+                          {formatCurrency(Number(est.finalAmount))}
                         </p>
-                      )}
+                        {Number(est.discount) > 0 && (
+                          <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-500 line-through">
+                            {formatCurrency(Number(est.totalAmount))}
+                          </p>
+                        )}
+                      </div>
+                      <EstimateActions
+                        estimateId={est.id}
+                        estimateNumber={est.number}
+                        status={est.status}
+                        clientName={est.project.client.name}
+                      />
                     </div>
-                    <EstimateActions
-                      estimateId={est.id}
-                      estimateNumber={est.number}
-                      status={est.status}
-                      clientName={est.project.client.name}
-                    />
                   </div>
                 </div>
               </Card>

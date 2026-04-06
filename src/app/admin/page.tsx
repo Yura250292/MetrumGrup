@@ -109,31 +109,35 @@ export default async function AdminDashboardPage() {
 
         {/* Recent Projects */}
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold admin-dark:text-white admin-light:text-gray-900">Останні проєкти</h2>
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-lg font-bold admin-dark:text-white admin-light:text-gray-900">Останні проєкти</h2>
             <Link
               href="/admin/projects"
-              className="flex items-center gap-1 text-xs admin-dark:text-blue-400 admin-dark:hover:text-blue-300 admin-light:text-blue-600 admin-light:hover:text-blue-700"
+              className="flex items-center gap-1 text-sm font-medium admin-dark:text-blue-400 admin-dark:hover:text-blue-300 admin-light:text-blue-600 admin-light:hover:text-blue-700 transition-colors"
             >
-              Всі <ArrowRight className="h-3 w-3" />
+              Всі <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
 
-          <div className="rounded-xl border admin-dark:border-gray-800 admin-dark:bg-glass-dark admin-light:border-gray-200 admin-light:bg-white backdrop-blur-md overflow-hidden admin-light:shadow-sm">
+          <div className="rounded-xl border admin-dark:border-gray-800 admin-dark:bg-glass-dark admin-light:border-gray-200 admin-light:bg-white backdrop-blur-md overflow-hidden admin-light:shadow-md">
             {recentProjects.length > 0 ? (
               <div className="divide-y admin-dark:divide-gray-800 admin-light:divide-gray-100">
                 {recentProjects.map((project) => (
                   <Link
                     key={project.id}
                     href={`/admin/projects/${project.id}`}
-                    className="flex items-center justify-between px-4 py-3 admin-dark:hover:bg-white/5 admin-light:hover:bg-gray-50 transition-colors"
+                    className="flex items-center justify-between px-4 py-4 admin-dark:hover:bg-white/5 admin-light:hover:bg-gray-50 transition-colors"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium admin-dark:text-white admin-light:text-gray-900 truncate">{project.title}</p>
-                      <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
+                    <div className="min-w-0 flex-1 mr-3">
+                      <p className="text-base font-semibold admin-dark:text-white admin-light:text-gray-900 mb-1 leading-tight">{project.title}</p>
+                      <p className="text-sm admin-dark:text-gray-400 admin-light:text-gray-600 leading-tight">
                         {project.client.name}
-                        {project.manager && ` • ${project.manager.name}`}
                       </p>
+                      {project.manager && (
+                        <p className="text-xs admin-dark:text-gray-500 admin-light:text-gray-500 mt-0.5">
+                          Менеджер: {project.manager.name}
+                        </p>
+                      )}
                     </div>
                     <Badge className={PROJECT_STATUS_COLORS[project.status]}>
                       {PROJECT_STATUS_LABELS[project.status]}
@@ -152,28 +156,28 @@ export default async function AdminDashboardPage() {
         {/* Overdue Payments */}
         {overduePayments.length > 0 && (
           <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 admin-dark:text-red-400 admin-light:text-red-600" />
-              <h2 className="text-base font-semibold admin-dark:text-white admin-light:text-gray-900">Прострочені платежі</h2>
+            <div className="flex items-center gap-2 px-1">
+              <AlertCircle className="h-5 w-5 admin-dark:text-red-400 admin-light:text-red-600" />
+              <h2 className="text-lg font-bold admin-dark:text-white admin-light:text-gray-900">Прострочені платежі</h2>
             </div>
 
-            <div className="rounded-xl border admin-dark:border-red-500/20 admin-dark:bg-glass-dark admin-light:border-red-200 admin-light:bg-red-50 backdrop-blur-md overflow-hidden admin-light:shadow-sm">
+            <div className="rounded-xl border admin-dark:border-red-500/20 admin-dark:bg-glass-dark admin-light:border-red-200 admin-light:bg-red-50 backdrop-blur-md overflow-hidden admin-light:shadow-md">
               <div className="divide-y admin-dark:divide-gray-800 admin-light:divide-red-100">
                 {overduePayments.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between px-4 py-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium admin-dark:text-white admin-light:text-gray-900 truncate">
+                  <div key={payment.id} className="flex items-center justify-between px-4 py-4">
+                    <div className="min-w-0 flex-1 mr-3">
+                      <p className="text-base font-semibold admin-dark:text-white admin-light:text-gray-900 mb-1 leading-tight">
                         {payment.project.title}
                       </p>
-                      <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
+                      <p className="text-sm admin-dark:text-gray-400 admin-light:text-gray-600 leading-tight">
                         Дата: {formatDateShort(payment.scheduledDate)}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold admin-dark:text-red-400 admin-light:text-red-600">
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-base font-bold admin-dark:text-red-400 admin-light:text-red-600 mb-0.5">
                         {formatCurrency(Number(payment.amount))}
                       </p>
-                      <span className="text-[10px] admin-dark:text-red-500 admin-light:text-red-700">Прострочено</span>
+                      <span className="text-xs font-medium admin-dark:text-red-500 admin-light:text-red-700">Прострочено</span>
                     </div>
                   </div>
                 ))}
