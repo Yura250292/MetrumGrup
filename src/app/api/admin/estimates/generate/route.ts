@@ -1877,6 +1877,125 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
       }, { status: 422 });
     }
 
+    // ============================================================================
+    // ITERATIVE GENERATION: If not enough items, make additional requests
+    // ============================================================================
+    let iterationCount = 0;
+    const maxIterations = 3;
+    const iterationHistory: string[] = [];
+
+    while (totalItems < calculatedMin && iterationCount < maxIterations) {
+      iterationCount++;
+      const gap = calculatedMin - totalItems;
+
+      console.log(`\n🔄 ITERATION ${iterationCount}: Need ${gap} more items (have ${totalItems}/${calculatedMin})`);
+      iterationHistory.push(`Iteration ${iterationCount}: ${totalItems} → target ${calculatedMin}`);
+
+      // Build supplementary prompt
+      const supplementPrompt = `
+# ДОДАТКОВА ГЕНЕРАЦІЯ ПОЗИЦІЙ (Ітерація ${iterationCount})
+
+Ти вже згенерував початковий кошторис з ${totalItems} позиціями.
+Але потрібно МІНІМУМ ${calculatedMin} позицій.
+
+**БРАКУЄ: ${gap} позицій!**
+
+Твоє завдання: ДОДАЙ ще ${gap} позицій до ІСНУЮЧИХ секцій кошторису.
+
+## ПОТОЧНИЙ КОШТОРИС:
+\`\`\`json
+${JSON.stringify(estimateData, null, 2)}
+\`\`\`
+
+## ЯК ДОДАВАТИ ПОЗИЦІЇ:
+
+1. **НЕ створюй нові секції** - додавай в існуючі!
+2. **Деталізуй кожну секцію:**
+   - Якщо є "Електрика" - додай: різні типи розеток, вимикачів, кабелів, автоматів, підрозетників
+   - Якщо є "Сантехніка" - додай: різні діаметри труб, фітинги, краніки, змішувачі, сифони
+   - Якщо є "Стіни" - додай: різні типи профілів, саморізи, дюбелі, серпянку, кутники
+   - Якщо є "Підлога" - додай: підкладка, плінтуси, поріжки, клей, ізоляція
+3. **Розбивай узагальнені позиції:**
+   - Замість "Розетки 20шт" → "Розетка одинарна 10шт" + "Розетка двомісна 10шт" + "Підрозетник 20шт"
+4. **Додавай допоміжні матеріали:**
+   - Ґрунтовки, серпянка, кутники, кріплення, ізоляція, герметики
+
+## ФОРМАТ ВІДПОВІДІ:
+
+Поверни ПОВНИЙ кошторис (всі існуючі позиції + нові) у форматі JSON.
+Структура залишається точно така сама.
+
+**ВАЖЛИВО:**
+- Зберігай ВСІ існуючі позиції
+- Додавай нові позиції в існуючі секції
+- Перераховуй sectionTotal для кожної секції
+- Перераховуй summary (materialsCost, laborCost, overheadCost, totalBeforeDiscount)
+
+Поверни тільки JSON без додаткового тексту.
+`;
+
+      let supplementText = "";
+
+      // Call AI again with supplementary prompt
+      try {
+        switch (model) {
+          case "openai":
+            console.log("🤖 OpenAI: Generating supplementary items...");
+            supplementText = await generateWithOpenAI(supplementPrompt, "", []);
+            break;
+
+          case "anthropic":
+            console.log("🧠 Anthropic: Generating supplementary items...");
+            supplementText = await generateWithAnthropic(supplementPrompt, "", []);
+            break;
+
+          default: // gemini
+            console.log("✨ Gemini: Generating supplementary items...");
+            const geminiModel = genAI.getGenerativeModel({
+              model: "gemini-3-flash-preview",
+              generationConfig: {
+                temperature: 0.3,
+                maxOutputTokens: 30000,
+              },
+            });
+
+            const result = await geminiModel.generateContent([supplementPrompt]);
+            supplementText = result.response.text();
+            break;
+        }
+
+        // Parse supplementary response
+        const supplementMatch = supplementText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, supplementText];
+        const supplementJson = (supplementMatch[1] || supplementText).trim();
+        const supplementData = JSON.parse(supplementJson);
+
+        // Update estimate data
+        estimateData = supplementData;
+
+        // Recalculate total items
+        totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
+          sum + (section.items?.length || 0), 0) || 0;
+
+        console.log(`✅ Iteration ${iterationCount} complete: now have ${totalItems} items (target: ${calculatedMin})`);
+
+        // If we reached the target, break
+        if (totalItems >= calculatedMin) {
+          console.log(`🎉 SUCCESS: Reached target after ${iterationCount} iteration(s)!`);
+          break;
+        }
+
+      } catch (error) {
+        console.error(`❌ Iteration ${iterationCount} failed:`, error);
+        // Continue with what we have
+        break;
+      }
+    }
+
+    // Final logging
+    if (totalItems < calculatedMin) {
+      console.log(`⚠️ Finished ${iterationCount} iterations but still short: ${totalItems}/${calculatedMin} items`);
+    }
+
     return NextResponse.json({
       data: estimateData,
       filesProcessed: files.map((f) => f.name),
@@ -1891,7 +2010,9 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
         filesCount: files.length,
         textFiles: textParts.length,
         imageFiles: imageParts.length,
-        model
+        model,
+        iterations: iterationCount,
+        iterationHistory: iterationCount > 0 ? iterationHistory : undefined,
       }
     });
   } catch (error: unknown) {

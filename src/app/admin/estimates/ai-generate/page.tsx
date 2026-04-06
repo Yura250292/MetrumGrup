@@ -2796,9 +2796,19 @@ export default function AIEstimatePage() {
       // Show debug info if available
       if (json.debug) {
         console.log('🔍 AI Generation Debug Info:', json.debug);
+
+        if (json.debug.iterations && json.debug.iterations > 0) {
+          console.log(`🔄 Iterative generation used: ${json.debug.iterations} iteration(s)`);
+          if (json.debug.iterationHistory) {
+            console.log('📊 Iteration history:', json.debug.iterationHistory);
+          }
+        }
+
         if (json.debug.status === 'TOO_FEW') {
           console.warn(`⚠️ AI generated ${json.debug.totalItems} items, but ${json.debug.requiredMin} required!`);
           console.warn(`   Gap: ${json.debug.gap} items missing`);
+        } else if (json.debug.iterations && json.debug.iterations > 0) {
+          console.log(`✅ Success! Reached ${json.debug.totalItems}/${json.debug.requiredMin} items after ${json.debug.iterations} iteration(s)`);
         }
       }
 
@@ -3407,6 +3417,14 @@ export default function AIEstimatePage() {
                     </span>
                   ) : (
                     <span className="text-orange-600">Wizard не використано</span>
+                  )}
+                  {debugInfo.iterations && debugInfo.iterations > 0 && (
+                    <>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 text-blue-600 font-medium">
+                        🔄 Ітерацій: {debugInfo.iterations}
+                      </span>
+                    </>
                   )}
                   <span>•</span>
                   <span>Model: {debugInfo.model || 'gemini'}</span>
