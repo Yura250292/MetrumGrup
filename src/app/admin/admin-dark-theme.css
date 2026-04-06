@@ -37,34 +37,60 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* Dark text colors */
+/* Dark text colors - improved readability */
 .admin-dark h1,
 .admin-dark h2,
 .admin-dark h3,
 .admin-dark h4,
 .admin-dark h5,
 .admin-dark h6 {
-  color: #FAFAF9 !important;
+  color: #FFFFFF !important;
   font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.admin-dark h1 {
+  font-size: clamp(1.75rem, 2vw, 2rem);
+}
+
+.admin-dark h2 {
+  font-size: clamp(1.5rem, 1.75vw, 1.75rem);
+}
+
+.admin-dark h3 {
+  font-size: clamp(1.25rem, 1.5vw, 1.5rem);
 }
 
 .admin-dark p {
   color: #E5E7EB;
+  font-size: 0.9375rem; /* 15px */
+  line-height: 1.6;
 }
 
 .admin-dark [class*="muted-foreground"],
 .admin-dark .text-muted-foreground {
-  color: #9CA3AF !important;
+  color: #A1A1AA !important; /* Lighter gray for better readability */
 }
 
 .admin-dark label {
-  color: #D1D5DB !important;
+  color: #E5E7EB !important;
   font-weight: 500;
+  font-size: 0.875rem;
 }
 
 .admin-dark strong,
 .admin-dark b {
-  color: #F9FAFB !important;
+  color: #FFFFFF !important;
+  font-weight: 600;
+}
+
+/* Improved text contrast */
+.admin-dark .text-sm {
+  font-size: 0.875rem !important;
+}
+
+.admin-dark .text-xs {
+  font-size: 0.8125rem !important; /* 13px instead of 12px */
 }
 
 /* Tables */
@@ -104,7 +130,8 @@
 }
 
 .admin-dark td {
-  font-size: 0.875rem;
+  font-size: 0.9375rem; /* 15px for better readability */
+  color: #E5E7EB !important;
 }
 
 /* Table wrapper */

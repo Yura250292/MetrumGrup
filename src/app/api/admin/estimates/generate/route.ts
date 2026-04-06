@@ -7,6 +7,8 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { TEMPLATE_PROMPTS } from "@/lib/estimate-prompts";
 import { validateEstimate, formatValidationReport } from "@/lib/estimate-validation";
+import { generateMaterialsContext } from "@/lib/materials-database";
+import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 import fs from "fs/promises";
 import path from "path";
 
@@ -1063,6 +1065,69 @@ export async function POST(request: NextRequest) {
 
     console.log(`📊 Extraction summary: ${textParts.length} text files, ${imageParts.length} images, ${pdfParts.length} PDFs`);
 
+    // Classify files: plans vs specifications
+    const planFiles: File[] = [];
+    const specFiles: File[] = [];
+
+    for (const file of files) {
+      const name = file.name.toLowerCase();
+      // Detect specification files by name keywords or size
+      const isSpec =
+        name.includes('специф') ||
+        name.includes('spec') ||
+        name.includes('технолог') ||
+        name.includes('інструкц') ||
+        name.includes('instruction') ||
+        name.includes('вимог') ||
+        name.includes('requirement') ||
+        file.size > 10 * 1024 * 1024; // Files > 10MB are likely detailed specs
+
+      if (isSpec) {
+        specFiles.push(file);
+      } else {
+        planFiles.push(file);
+      }
+    }
+
+    console.log(`📂 Classified: ${planFiles.length} plan files, ${specFiles.length} specification files`);
+
+    // Process specification files
+    let specificationData: any = null;
+    if (specFiles.length > 0) {
+      console.log(`📚 Processing ${specFiles.length} specification files...`);
+      const specificationTexts: string[] = [];
+
+      for (const file of specFiles) {
+        try {
+          if (file.name.endsWith('.pdf')) {
+            const buffer = Buffer.from(await file.arrayBuffer());
+            const pdfModule = await import("pdf-parse");
+            const pdfParse = (pdfModule as any).default || pdfModule;
+            const data = await pdfParse(buffer);
+            specificationTexts.push(`[SPECIFICATION: ${file.name}]\n${data.text}`);
+            console.log(`  ✓ ${file.name}: ${data.numpages} pages, ${data.text.length} chars`);
+          } else if (file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+            const text = await file.text();
+            specificationTexts.push(`[SPECIFICATION: ${file.name}]\n${text}`);
+            console.log(`  ✓ ${file.name}: ${text.length} chars`);
+          }
+        } catch (e) {
+          console.error(`  ✗ ${file.name}: extraction failed`, e);
+        }
+      }
+
+      // Parse specifications
+      if (specificationTexts.length > 0) {
+        const allSpecText = specificationTexts.join('\n\n---\n\n');
+        specificationData = parseSpecificationText(allSpecText);
+        console.log(`📊 Parsed specification data:`);
+        console.log(`   - Materials: ${specificationData.materials.length}`);
+        console.log(`   - Methods: ${specificationData.methods.length}`);
+        console.log(`   - Requirements: ${specificationData.requirements.length}`);
+        console.log(`   - Critical requirements: ${specificationData.requirements.filter((r: any) => r.critical).length}`);
+      }
+    }
+
     // Load materials from DB for reference pricing
     const materials = await prisma.material.findMany({
       where: { isActive: true },
@@ -1238,6 +1303,24 @@ export async function POST(request: NextRequest) {
 
     // Build wizard context FIRST for highest priority
     const wizardContext = buildWizardContext(wizardData);
+
+    // Build materials context from database
+    const relevantCategories = template === 'house_full'
+      ? ['foundation', 'walls', 'roof', 'electrical', 'plumbing', 'heating', 'windows', 'doors', 'finishing']
+      : template === 'apartment_rough'
+      ? ['walls', 'electrical', 'plumbing', 'finishing']
+      : undefined; // All categories for custom
+    const materialsContext = generateMaterialsContext(relevantCategories);
+    console.log(`💰 Materials database context: ${(materialsContext.length / 1024).toFixed(1)}KB, categories: ${relevantCategories?.join(', ') || 'all'}`);
+
+    // Build specification context if available
+    const specificationContext = specificationData
+      ? generateSpecificationContext(specificationData)
+      : '';
+    if (specificationContext) {
+      console.log(`📚 Specification context: ${(specificationContext.length / 1024).toFixed(1)}KB`);
+      console.log(`   - ${specificationData.materials.length} materials, ${specificationData.methods.length} methods, ${specificationData.requirements.filter((r: any) => r.critical).length} critical requirements`);
+    }
 
     // Build prompt
     const prompt = `# РОЛЬ

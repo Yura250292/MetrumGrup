@@ -30,9 +30,16 @@ type NavItem = {
   superAdminOnly?: boolean;
 };
 
-const navGroups: { label: string; items: NavItem[] }[] = [
+type NavGroup = {
+  label: string;
+  items: NavItem[];
+  colorTheme: "blue" | "purple" | "orange" | "cyan" | "red";
+};
+
+const navGroups: NavGroup[] = [
   {
     label: "Головне",
+    colorTheme: "blue",
     items: [
       { href: "/admin", label: "Дашборд", icon: LayoutDashboard, exact: true },
       { href: "/admin/projects", label: "Проєкти", icon: FolderKanban },
@@ -42,6 +49,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Фінанси",
+    colorTheme: "purple",
     items: [
       { href: "/admin/estimates", label: "Кошториси", icon: Calculator },
       { href: "/admin/materials", label: "Матеріали та ціни", icon: Package },
@@ -49,6 +57,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Ресурси",
+    colorTheme: "orange",
     items: [
       { href: "/admin/resources/equipment", label: "Техніка", icon: Truck },
       { href: "/admin/resources/warehouse", label: "Склад", icon: Warehouse },
@@ -57,6 +66,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Контент",
+    colorTheme: "cyan",
     items: [
       { href: "/admin/cms/portfolio", label: "Портфоліо", icon: Globe },
       { href: "/admin/cms/news", label: "Новини", icon: Globe },
@@ -64,6 +74,7 @@ const navGroups: { label: string; items: NavItem[] }[] = [
   },
   {
     label: "Система",
+    colorTheme: "red",
     items: [
       { href: "/admin/users", label: "Користувачі", icon: Users, superAdminOnly: true },
       { href: "/admin/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
@@ -77,6 +88,40 @@ export function AdminSidebar() {
   const [collapsed, setCollapsed] = useState(false);
 
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+
+  // Color theme configurations
+  const colorThemes = {
+    blue: {
+      active: "bg-gradient-to-r from-blue-500/20 to-green-500/20 shadow-neon-blue-soft",
+      icon: "text-blue-400",
+      text: "text-blue-100",
+      hover: "hover:bg-blue-500/10",
+    },
+    purple: {
+      active: "bg-gradient-to-r from-purple-500/20 to-violet-500/20 shadow-[0_0_20px_rgba(168,85,247,0.15)]",
+      icon: "text-purple-400",
+      text: "text-purple-100",
+      hover: "hover:bg-purple-500/10",
+    },
+    orange: {
+      active: "bg-gradient-to-r from-orange-500/20 to-amber-500/20 shadow-[0_0_20px_rgba(251,146,60,0.15)]",
+      icon: "text-orange-400",
+      text: "text-orange-100",
+      hover: "hover:bg-orange-500/10",
+    },
+    cyan: {
+      active: "bg-gradient-to-r from-cyan-500/20 to-teal-500/20 shadow-[0_0_20px_rgba(34,211,238,0.15)]",
+      icon: "text-cyan-400",
+      text: "text-cyan-100",
+      hover: "hover:bg-cyan-500/10",
+    },
+    red: {
+      active: "bg-gradient-to-r from-red-500/20 to-pink-500/20 shadow-[0_0_20px_rgba(239,68,68,0.15)]",
+      icon: "text-red-400",
+      text: "text-red-100",
+      hover: "hover:bg-red-500/10",
+    },
+  };
 
   return (
     <>
@@ -114,6 +159,8 @@ export function AdminSidebar() {
             );
             if (visibleItems.length === 0) return null;
 
+            const theme = colorThemes[group.colorTheme];
+
             return (
               <div key={group.label} className="mb-4">
                 {!collapsed && (
@@ -133,15 +180,18 @@ export function AdminSidebar() {
                         href={item.href}
                         title={collapsed ? item.label : undefined}
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-all duration-200",
+                          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] transition-all duration-200",
                           isActive
-                            ? "bg-gradient-to-r from-blue-500/20 to-green-500/20 text-white font-semibold shadow-neon-blue-soft"
-                            : "text-gray-400 hover:bg-white/10 hover:text-white",
+                            ? `${theme.active} ${theme.text} font-semibold`
+                            : `text-gray-300 ${theme.hover} hover:text-white`,
                           collapsed && "justify-center px-2"
                         )}
                       >
-                        <item.icon className="h-4.5 w-4.5 flex-shrink-0" />
-                        {!collapsed && <span>{item.label}</span>}
+                        <item.icon className={cn(
+                          "h-[18px] w-[18px] flex-shrink-0",
+                          isActive ? theme.icon : ""
+                        )} />
+                        {!collapsed && <span className="font-medium">{item.label}</span>}
                       </Link>
                     );
                   })}
