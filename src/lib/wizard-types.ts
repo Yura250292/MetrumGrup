@@ -30,6 +30,18 @@ export interface WizardData {
 
   // Для будинку/котеджу
   houseData?: {
+    // Поточний стан будівлі
+    currentState:
+      | 'greenfield' // Чиста ділянка (будівництво з нуля)
+      | 'foundation_only' // Є фундамент
+      | 'shell' // Коробка (фундамент + стіни + дах)
+      | 'rough_utilities' // Коробка + комунікації прокладені
+      | 'existing_building'; // Існуюча будівля (реконструкція)
+
+    // Чи потрібен демонтаж? (КРИТИЧНО для запобігання зайвих позицій)
+    demolitionRequired?: boolean;
+    demolitionDescription?: string; // Опис що саме демонтувати
+
     // Місцевість та підготовка
     terrain: {
       soilType: 'clay' | 'sand' | 'rock' | 'mixed' | 'unknown';
@@ -85,6 +97,18 @@ export interface WizardData {
 
   // Для котеджу (таунхаус)
   townhouseData?: {
+    // Поточний стан будівлі (такий самий як у будинку)
+    currentState:
+      | 'greenfield'
+      | 'foundation_only'
+      | 'shell'
+      | 'rough_utilities'
+      | 'existing_building';
+
+    // Чи потрібен демонтаж? (КРИТИЧНО для запобігання зайвих позицій)
+    demolitionRequired?: boolean;
+    demolitionDescription?: string; // Опис що саме демонтувати
+
     adjacentWalls: number; // Кількість суміжних стін (1-2)
     isEndUnit: boolean; // Крайній в ряді
     sharedUtilities: boolean; // Спільні комунікації

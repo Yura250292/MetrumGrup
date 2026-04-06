@@ -243,6 +243,7 @@ function EstimateWizardModal({
     let steps = 3;
 
     if (wizardData.objectType === 'house') {
+      steps += 1; // Step 3: Current State (NEW!)
       if (wizardData.workScope === 'foundation_only') {
         steps += 2; // Terrain + Foundation
       } else if (wizardData.workScope === 'foundation_walls') {
@@ -253,6 +254,7 @@ function EstimateWizardModal({
         steps += 6; // Terrain + Foundation + Walls + Roof + Utilities + Finishing
       }
     } else if (wizardData.objectType === 'townhouse') {
+      steps += 1; // Step 3: Current State (NEW!)
       steps += 1; // Townhouse specifics
       if (wizardData.workScope === 'full_cycle') {
         steps += 6; // Terrain + Foundation + Walls + Roof + Utilities + Finishing (same as house)
@@ -300,23 +302,31 @@ function EstimateWizardModal({
           {wizardStep === 0 && <WizardStep0_ObjectType data={wizardData} setData={setWizardData} />}
           {wizardStep === 1 && <WizardStep1_WorkScope data={wizardData} setData={setWizardData} />}
           {wizardStep === 2 && <WizardStep2_GeneralInfo data={wizardData} setData={setWizardData} />}
-          {wizardStep === 3 && wizardData.objectType === 'house' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
-          {wizardStep === 4 && wizardData.objectType === 'house' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
-          {wizardStep === 5 && wizardData.objectType === 'house' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
-          {wizardStep === 6 && wizardData.objectType === 'house' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
-          {wizardStep === 7 && wizardData.objectType === 'house' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
-          {wizardStep === 8 && wizardData.objectType === 'house' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
 
-          {/* Townhouse-specific step */}
-          {wizardStep === 3 && wizardData.objectType === 'townhouse' && <WizardStepTownhouse data={wizardData} setData={setWizardData} />}
+          {/* House: Current State (NEW!) */}
+          {wizardStep === 3 && wizardData.objectType === 'house' && <WizardStep3_CurrentState data={wizardData} setData={setWizardData} objectType="house" />}
 
-          {/* Townhouse construction steps (same as house, but offset by 1) */}
-          {wizardStep === 4 && wizardData.objectType === 'townhouse' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
-          {wizardStep === 5 && wizardData.objectType === 'townhouse' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
-          {wizardStep === 6 && wizardData.objectType === 'townhouse' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
-          {wizardStep === 7 && wizardData.objectType === 'townhouse' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
-          {wizardStep === 8 && wizardData.objectType === 'townhouse' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
-          {wizardStep === 9 && wizardData.objectType === 'townhouse' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
+          {/* House: Construction steps (offset +1) */}
+          {wizardStep === 4 && wizardData.objectType === 'house' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
+          {wizardStep === 5 && wizardData.objectType === 'house' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
+          {wizardStep === 6 && wizardData.objectType === 'house' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
+          {wizardStep === 7 && wizardData.objectType === 'house' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
+          {wizardStep === 8 && wizardData.objectType === 'house' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
+          {wizardStep === 9 && wizardData.objectType === 'house' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
+
+          {/* Townhouse: Current State (NEW!) */}
+          {wizardStep === 3 && wizardData.objectType === 'townhouse' && <WizardStep3_CurrentState data={wizardData} setData={setWizardData} objectType="townhouse" />}
+
+          {/* Townhouse-specific step (offset +1) */}
+          {wizardStep === 4 && wizardData.objectType === 'townhouse' && <WizardStepTownhouse data={wizardData} setData={setWizardData} />}
+
+          {/* Townhouse construction steps (offset +2) */}
+          {wizardStep === 5 && wizardData.objectType === 'townhouse' && <WizardStep3_Terrain data={wizardData} setData={setWizardData} />}
+          {wizardStep === 6 && wizardData.objectType === 'townhouse' && <WizardStep4_Foundation data={wizardData} setData={setWizardData} />}
+          {wizardStep === 7 && wizardData.objectType === 'townhouse' && <WizardStep5_Walls data={wizardData} setData={setWizardData} />}
+          {wizardStep === 8 && wizardData.objectType === 'townhouse' && <WizardStep6_Roof data={wizardData} setData={setWizardData} />}
+          {wizardStep === 9 && wizardData.objectType === 'townhouse' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
+          {wizardStep === 10 && wizardData.objectType === 'townhouse' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
 
           {/* Renovation steps for apartment/office */}
           {wizardStep === 3 && ['apartment', 'office'].includes(wizardData.objectType) && <WizardStepRenovation_CurrentState data={wizardData} setData={setWizardData} />}
@@ -575,6 +585,312 @@ function WizardStep2_GeneralInfo({ data, setData }: { data: WizardData; setData:
             onChange={(e) => setData({ ...data, ceilingHeight: e.target.value })}
             className="w-full px-4 py-2 border rounded-lg"
           />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Step 3: Current Building State (NEW! for house/townhouse)
+function WizardStep3_CurrentState({
+  data,
+  setData,
+  objectType
+}: {
+  data: WizardData;
+  setData: (d: WizardData) => void;
+  objectType: 'house' | 'townhouse';
+}) {
+  const getCurrentState = () => {
+    if (objectType === 'house') {
+      return data.houseData?.currentState || 'greenfield';
+    } else {
+      return data.townhouseData?.currentState || 'greenfield';
+    }
+  };
+
+  const updateCurrentState = (state: 'greenfield' | 'foundation_only' | 'shell' | 'rough_utilities' | 'existing_building') => {
+    // Auto-set demolitionRequired based on state
+    let autoDemolition = false;
+    if (state === 'existing_building') {
+      autoDemolition = true; // Реконструкція завжди має демонтаж
+    }
+
+    if (objectType === 'house') {
+      setData({
+        ...data,
+        houseData: {
+          ...data.houseData,
+          currentState: state,
+          demolitionRequired: autoDemolition,
+          demolitionDescription: autoDemolition ? data.houseData?.demolitionDescription : '',
+        } as any
+      });
+    } else {
+      setData({
+        ...data,
+        townhouseData: {
+          ...data.townhouseData,
+          currentState: state,
+          demolitionRequired: autoDemolition,
+          demolitionDescription: autoDemolition ? data.townhouseData?.demolitionDescription : '',
+        } as any
+      });
+    }
+  };
+
+  const getDemolitionRequired = () => {
+    if (objectType === 'house') {
+      return data.houseData?.demolitionRequired || false;
+    } else {
+      return data.townhouseData?.demolitionRequired || false;
+    }
+  };
+
+  const getDemolitionDescription = () => {
+    if (objectType === 'house') {
+      return data.houseData?.demolitionDescription || '';
+    } else {
+      return data.townhouseData?.demolitionDescription || '';
+    }
+  };
+
+  const updateDemolitionRequired = (required: boolean) => {
+    if (objectType === 'house') {
+      setData({
+        ...data,
+        houseData: {
+          ...data.houseData,
+          demolitionRequired: required,
+          demolitionDescription: required ? data.houseData?.demolitionDescription : '',
+        } as any
+      });
+    } else {
+      setData({
+        ...data,
+        townhouseData: {
+          ...data.townhouseData,
+          demolitionRequired: required,
+          demolitionDescription: required ? data.townhouseData?.demolitionDescription : '',
+        } as any
+      });
+    }
+  };
+
+  const updateDemolitionDescription = (desc: string) => {
+    if (objectType === 'house') {
+      setData({
+        ...data,
+        houseData: {
+          ...data.houseData,
+          demolitionDescription: desc,
+        } as any
+      });
+    } else {
+      setData({
+        ...data,
+        townhouseData: {
+          ...data.townhouseData,
+          demolitionDescription: desc,
+        } as any
+      });
+    }
+  };
+
+  const currentState = getCurrentState();
+  const demolitionRequired = getDemolitionRequired();
+  const demolitionDescription = getDemolitionDescription();
+
+  const stateOptions = [
+    {
+      value: 'greenfield' as const,
+      label: 'Чиста ділянка',
+      icon: '🌳',
+      desc: 'Будівництво з нуля на пустій ділянці',
+      demolition: false,
+      construction: 'Повний цикл з фундаменту'
+    },
+    {
+      value: 'foundation_only' as const,
+      label: 'Є фундамент',
+      icon: '🏗️',
+      desc: 'Фундамент готовий, потрібно будувати далі',
+      demolition: false,
+      construction: 'Зведення стін та дах'
+    },
+    {
+      value: 'shell' as const,
+      label: 'Коробка (стіни + дах)',
+      icon: '🏚️',
+      desc: 'Є фундамент, стіни та дах. Голі стіни, комунікацій немає',
+      demolition: false,
+      construction: 'Тільки нові комунікації та оздоблення'
+    },
+    {
+      value: 'rough_utilities' as const,
+      label: 'Коробка + комунікації',
+      icon: '🔌',
+      desc: 'Коробка з прокладеними комунікаціями, готова під оздоблення',
+      demolition: false,
+      construction: 'Тільки оздоблювальні роботи'
+    },
+    {
+      value: 'existing_building' as const,
+      label: 'Існуюча будівля',
+      icon: '🏡',
+      desc: 'Реконструкція/ремонт готового будинку',
+      demolition: true,
+      construction: 'Демонтаж старого + нове'
+    },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center mb-6">
+        <h3 className="text-lg font-semibold mb-2">Поточний стан будівлі</h3>
+        <p className="text-sm text-muted-foreground">
+          Що вже є на ділянці? Це критично важливо для точного кошторису
+        </p>
+      </div>
+
+      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-orange-800">
+            <strong>Чому це важливо:</strong> Якщо будівля в стані "коробка" (голі стіни),
+            AI НЕ додасть демонтаж плитки, шпалер, підлоги - бо їх ще немає.
+            Це запобігає зайвим позиціям у кошторисі.
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {stateOptions.map((option) => (
+          <label
+            key={option.value}
+            className={cn(
+              "relative flex items-start gap-4 p-5 border-2 rounded-xl cursor-pointer transition-all hover:shadow-md",
+              currentState === option.value
+                ? "border-primary bg-primary/5 shadow-md"
+                : "border-gray-200 hover:border-gray-300"
+            )}
+          >
+            <input
+              type="radio"
+              name="currentState"
+              value={option.value}
+              checked={currentState === option.value}
+              onChange={(e) => updateCurrentState(e.target.value as any)}
+              className="sr-only"
+            />
+            <span className="text-4xl flex-shrink-0">{option.icon}</span>
+            <div className="flex-1">
+              <div className="font-semibold text-base mb-1">{option.label}</div>
+              <div className="text-sm text-muted-foreground mb-2">{option.desc}</div>
+              <div className="flex flex-wrap gap-2 mt-2">
+                <Badge variant={option.demolition ? "destructive" : "outline"} className="text-xs">
+                  {option.demolition ? '🔨 Потрібен демонтаж' : '✓ БЕЗ демонтажу'}
+                </Badge>
+                <Badge variant="secondary" className="text-xs">
+                  {option.construction}
+                </Badge>
+              </div>
+            </div>
+            {currentState === option.value && (
+              <Check className="h-6 w-6 text-primary flex-shrink-0" />
+            )}
+          </label>
+        ))}
+      </div>
+
+      {/* Питання про демонтаж (показувати для всіх станів окрім greenfield) */}
+      {currentState && currentState !== 'greenfield' && (
+        <div className="mt-6 p-6 border-2 border-dashed border-orange-300 rounded-xl bg-orange-50/30">
+          <div className="flex items-start gap-3 mb-4">
+            <AlertCircle className="h-6 w-6 text-orange-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-semibold text-base mb-1">Чи потрібен демонтаж?</h4>
+              <p className="text-sm text-muted-foreground">
+                {currentState === 'existing_building'
+                  ? 'Реконструкція зазвичай включає демонтаж старого'
+                  : currentState === 'shell'
+                  ? 'Коробка має голі стіни, але можливо треба демонтувати якісь перегородки?'
+                  : 'Чи потрібно щось демонтувати перед будівництвом?'}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label
+              className={cn(
+                "flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all",
+                !demolitionRequired && "border-green-500 bg-green-50"
+              )}
+            >
+              <input
+                type="radio"
+                name={`demolition-${objectType}`}
+                checked={!demolitionRequired}
+                onChange={() => updateDemolitionRequired(false)}
+                className="w-4 h-4"
+              />
+              <div className="flex-1">
+                <div className="font-medium">❌ Ні, демонтажні роботи НЕ потрібні</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Тільки будівництво нового. AI НЕ додасть жодних позицій демонтажу.
+                </div>
+              </div>
+            </label>
+
+            <label
+              className={cn(
+                "flex items-center gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all",
+                demolitionRequired && "border-orange-500 bg-orange-50"
+              )}
+            >
+              <input
+                type="radio"
+                name={`demolition-${objectType}`}
+                checked={demolitionRequired}
+                onChange={() => updateDemolitionRequired(true)}
+                className="w-4 h-4"
+              />
+              <div className="flex-1">
+                <div className="font-medium">✅ Так, є демонтажні роботи</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Вкажіть що саме потрібно демонтувати (AI врахує це)
+                </div>
+              </div>
+            </label>
+          </div>
+
+          {demolitionRequired && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium mb-2">
+                Опишіть що потрібно демонтувати:
+              </label>
+              <textarea
+                value={demolitionDescription}
+                onChange={(e) => updateDemolitionDescription(e.target.value)}
+                placeholder="Наприклад: демонтаж 2 перегородок (12 м.п. з газоблоку), демонтаж старого дверного прорізу..."
+                rows={3}
+                className="w-full px-4 py-2 border rounded-lg text-sm"
+              />
+              <p className="text-xs text-muted-foreground mt-2">
+                💡 Підказка: Вкажіть конкретно що демонтувати. Все інше AI вважатиме "голими стінами" і не додасть зайвий демонтаж.
+              </p>
+            </div>
+          )}
+
+          {!demolitionRequired && currentState === 'shell' && (
+            <div className="mt-4 flex items-start gap-2 p-3 bg-green-100 border border-green-300 rounded-lg">
+              <Check className="h-5 w-5 text-green-700 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-green-800">
+                <strong>Відмінно!</strong> AI НЕ додасть демонтаж плитки, шпалер, стяжки, підлоги.
+                Кошторис буде тільки на нове будівництво.
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

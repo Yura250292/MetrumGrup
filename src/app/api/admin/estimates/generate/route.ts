@@ -367,6 +367,108 @@ function buildWizardContext(wizardData: any): string {
   if (wizardData.floors) context += `- Поверхів: ${wizardData.floors}\n`;
   if (wizardData.ceilingHeight) context += `- Висота стелі: ${wizardData.ceilingHeight} м\n`;
 
+  // CURRENT BUILDING STATE (CRITICAL for demolition decisions!)
+  let currentState: string | null = null;
+  let demolitionRequired: boolean | undefined = undefined;
+  let demolitionDescription: string | undefined = undefined;
+
+  if (wizardData.objectType === 'house' && wizardData.houseData) {
+    currentState = wizardData.houseData.currentState;
+    demolitionRequired = wizardData.houseData.demolitionRequired;
+    demolitionDescription = wizardData.houseData.demolitionDescription;
+  } else if (wizardData.objectType === 'townhouse' && wizardData.townhouseData) {
+    currentState = wizardData.townhouseData.currentState;
+    demolitionRequired = wizardData.townhouseData.demolitionRequired;
+    demolitionDescription = wizardData.townhouseData.demolitionDescription;
+  }
+
+  if (currentState) {
+    const currentStateLabels: Record<string, string> = {
+      greenfield: 'Чиста ділянка (будівництво з нуля)',
+      foundation_only: 'Є фундамент',
+      shell: 'Коробка (фундамент + стіни + дах, БЕЗ оздоблення)',
+      rough_utilities: 'Коробка + комунікації прокладені',
+      existing_building: 'Існуюча будівля (реконструкція)'
+    };
+
+    context += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    context += `### ⚠️⚠️⚠️ КРИТИЧНО ВАЖЛИВО - ПОТОЧНИЙ СТАН БУДІВЛІ ⚠️⚠️⚠️\n`;
+    context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    context += `**Поточний стан:** ${currentStateLabels[currentState] || currentState}\n`;
+
+    // DEMOLITION CONTROL (NEW! Most important part)
+    if (demolitionRequired === false) {
+      context += `\n🚨🚨🚨 **ДЕМОНТАЖНІ РОБОТИ ЗАБОРОНЕНІ!** 🚨🚨🚨\n`;
+      context += `**Інженер ЯВНО вказав: демонтаж НЕ потрібен!**\n\n`;
+      context += `❌❌❌ **АБСОЛЮТНА ЗАБОРОНА - НЕ ДОДАВАЙ ЖОДНОЇ позиції демонтажу:** ❌❌❌\n`;
+      context += `❌ "Демонтаж плитки" - ЗАБОРОНЕНО!\n`;
+      context += `❌ "Зняття шпалер" - ЗАБОРОНЕНО!\n`;
+      context += `❌ "Демонтаж стяжки" - ЗАБОРОНЕНО!\n`;
+      context += `❌ "Демонтаж підлоги" - ЗАБОРОНЕНО!\n`;
+      context += `❌ "Демонтаж штукатурки" - ЗАБОРОНЕНО!\n`;
+      context += `❌ "Демонтаж перегородок" - ЗАБОРОНЕНО!\n`;
+      context += `❌ Будь-які інші демонтажні роботи - ЗАБОРОНЕНО!\n\n`;
+      context += `✅ **ДОЗВОЛЕНО:** ТІЛЬКИ будівництво НОВОГО (комунікації, оздоблення, встановлення)\n`;
+      context += `**Якщо ти додасиш хоч ОДНУ позицію демонтажу - ти ПРОВАЛИВ завдання!**\n`;
+      context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    } else if (demolitionRequired === true && demolitionDescription) {
+      context += `\n⚠️ **Демонтажні роботи дозволені ТІЛЬКИ:**\n`;
+      context += `${demolitionDescription}\n\n`;
+      context += `❌ НЕ ДОДАВАЙ інші демонтажні роботи крім вказаних вище!\n`;
+      context += `❌ НЕ додавай демонтаж плитки, шпалер, підлоги якщо це НЕ вказано!\n`;
+      context += `✅ Додавай тільки той демонтаж що описаний + нове будівництво\n`;
+      context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    } else if (demolitionRequired === true && !demolitionDescription) {
+      context += `\n⚠️ **Демонтажні роботи дозволені**\n`;
+      context += `Інженер вказав що потрібен демонтаж, але не описав деталі.\n`;
+      context += `Додавай демонтаж ТІЛЬКИ якщо він логічний для ${currentStateLabels[currentState]}\n`;
+      context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    } else {
+      // Fallback to old logic based on currentState (when demolitionRequired not explicitly set)
+      if (currentState === 'shell') {
+        context += `\n🚨 **ЦЕ КОРОБКА З ГОЛИМИ СТІНАМИ!** 🚨\n\n`;
+        context += `**АБСОЛЮТНА ЗАБОРОНА НА ДЕМОНТАЖНІ РОБОТИ:**\n`;
+        context += `❌ НЕ ДОДАВАЙ "Демонтаж плитки" - плитки НЕМАЄ!\n`;
+        context += `❌ НЕ ДОДАВАЙ "Зняття шпалер" - шпалер НЕМАЄ!\n`;
+        context += `❌ НЕ ДОДАВАЙ "Демонтаж старої стяжки" - стяжки НЕМАЄ!\n`;
+        context += `❌ НЕ ДОДАВАЙ "Демонтаж підлоги" - підлоги НЕМАЄ!\n`;
+        context += `❌ НЕ ДОДАВАЙ "Зняття старої штукатурки" - штукатурки НЕМАЄ!\n`;
+        context += `❌ НЕ ДОДАВАЙ жодних інших демонтажних робіт оздоблення!\n\n`;
+        context += `✅ **ЩО МОЖНА ДОДАВАТИ:**\n`;
+        context += `✓ Демонтаж ТІЛЬКИ тих стін, які зазначені на ПЛАНІ як "демонтувати"\n`;
+        context += `✓ Всі інші роботи - ТІЛЬКИ НОВЕ БУДІВНИЦТВО (комунікації, оздоблення)\n\n`;
+        context += `**Це голі бетонні/цегляні стіни без жодного оздоблення!**\n`;
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      } else if (currentState === 'foundation_only') {
+        context += `\n🚨 **ЦЕ ТІЛЬКИ ФУНДАМЕНТ!** 🚨\n\n`;
+        context += `**АБСОЛЮТНА ЗАБОРОНА НА ДЕМОНТАЖНІ РОБОТИ:**\n`;
+        context += `❌ НЕ ДОДАВАЙ жодних демонтажних робіт - стін, підлоги, оздоблення ще НЕМАЄ!\n`;
+        context += `✅ **ЩО ДОДАВАТИ:** ТІЛЬКИ будівництво з нуля - стіни, дах, комунікації, оздоблення\n`;
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      } else if (currentState === 'greenfield') {
+        context += `\n🚨 **ЦЕ ЧИСТА ДІЛЯНКА!** 🚨\n\n`;
+        context += `**АБСОЛЮТНА ЗАБОРОНА НА ДЕМОНТАЖНІ РОБОТИ:**\n`;
+        context += `❌ НЕ ДОДАВАЙ жодних демонтажних робіт - будівлі ще НЕМАЄ взагалі!\n`;
+        context += `✅ **ЩО ДОДАВАТИ:** Підготовка ділянки + будівництво з нуля\n`;
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      } else if (currentState === 'rough_utilities') {
+        context += `\n**Коробка з прокладеними комунікаціями, БЕЗ чистового оздоблення**\n\n`;
+        context += `**ОБМЕЖЕНІ ДЕМОНТАЖНІ РОБОТИ:**\n`;
+        context += `❌ НЕ ДОДАВАЙ демонтаж плитки, шпалер, підлоги - оздоблення НЕМАЄ!\n`;
+        context += `✓ Можливий демонтаж ТІЛЬКИ якщо на плані зазначено перепланування\n`;
+        context += `✅ **ЩО ДОДАВАТИ:** Оздоблювальні роботи (штукатурка, підлога, плитка, малярка)\n`;
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      } else if (currentState === 'existing_building') {
+        context += `\n**Існуюча будівля - реконструкція/ремонт**\n\n`;
+        context += `**ДЕМОНТАЖНІ РОБОТИ ДОЗВОЛЕНІ:**\n`;
+        context += `✓ Можна додавати демонтаж старого оздоблення (плитка, шпалери, підлога)\n`;
+        context += `✓ Можна додавати демонтаж перегородок якщо є перепланування\n`;
+        context += `⚠️ Але додавай ТІЛЬКИ те, що реально потрібно за планом!\n`;
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      }
+    }
+  }
+
   // HOUSE-SPECIFIC DATA
   if ((wizardData.objectType === 'house' || wizardData.objectType === 'townhouse') && wizardData.houseData) {
     const house = wizardData.houseData;
