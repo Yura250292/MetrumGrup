@@ -6,7 +6,7 @@ interface CompactProjectCardProps {
   id: string;
   title: string;
   address: string;
-  status: "ACTIVE" | "IN_PROGRESS" | "COMPLETED";
+  status: "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
   progress: number;
   variant?: "blue" | "amber";
 }
@@ -20,9 +20,11 @@ export function CompactProjectCard({
   variant = "blue",
 }: CompactProjectCardProps) {
   const statusConfig = {
+    DRAFT: { label: "Чернетка", color: "bg-gradient-to-r from-gray-500 to-gray-400" },
     ACTIVE: { label: "Активний", color: "bg-gradient-to-r from-green-500 to-emerald-400 shadow-neon-green" },
-    IN_PROGRESS: { label: "В роботі", color: "bg-gradient-to-r from-amber-500 to-yellow-400 shadow-neon-amber" },
+    ON_HOLD: { label: "Призупинено", color: "bg-gradient-to-r from-amber-500 to-yellow-400 shadow-neon-amber" },
     COMPLETED: { label: "Завершено", color: "bg-gradient-to-r from-blue-500 to-cyan-400 shadow-neon-blue" },
+    CANCELLED: { label: "Скасовано", color: "bg-gradient-to-r from-red-500 to-rose-400" },
   };
 
   const borderVariant = variant === "blue" ? "border-blue-500/20" : "border-amber-500/20";
