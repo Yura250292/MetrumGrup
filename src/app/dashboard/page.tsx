@@ -44,6 +44,9 @@ export default async function DashboardPage() {
       {/* Header with gradient */}
       <div className="bg-gradient-to-r from-gray-800 via-gray-900 to-black border-b border-white/10 shadow-neon-top">
         <div className="px-4 py-4">
+          <div className="mb-2 p-2 bg-red-500 text-white text-center font-bold rounded">
+            ⚠️ ТЕСТ: Якщо бачите це - новий дизайн працює!
+          </div>
           <h1 className="text-2xl font-bold text-white">
             🎨 Новий дизайн! Вітаємо, {session.user.name?.split(" ")[0]}!
           </h1>
