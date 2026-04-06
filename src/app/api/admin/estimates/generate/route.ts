@@ -1863,7 +1863,7 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
         gap: totalItems - calculatedMin,
         wizardUsed: !!wizardData,
         template,
-        area: areaNum,
+        area: area,
         filesCount: files.length,
         textFiles: textParts.length,
         imageFiles: imageParts.length,
