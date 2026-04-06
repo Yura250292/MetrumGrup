@@ -2865,6 +2865,35 @@ export default function AIEstimatePage() {
         }
       }
 
+      // Show validation info if available
+      if (json.validation) {
+        console.log('🔍 Estimate Validation:', json.validation);
+        console.log(`   Valid: ${json.validation.valid ? '✅' : '❌'}`);
+        console.log(`   Errors: ${json.validation.errors?.length || 0}`);
+        console.log(`   Warnings: ${json.validation.warnings?.length || 0}`);
+
+        if (json.validation.errors && json.validation.errors.length > 0) {
+          console.warn('❌ Validation Errors:');
+          json.validation.errors.slice(0, 5).forEach((err: any) => {
+            console.warn(`   - [${err.code}] ${err.message}`);
+          });
+        }
+
+        if (json.validation.warnings && json.validation.warnings.length > 0) {
+          console.log('⚠️ Validation Warnings (first 3):');
+          json.validation.warnings.slice(0, 3).forEach((warn: any) => {
+            console.log(`   - [${warn.code}] ${warn.message}`);
+          });
+        }
+
+        if (json.validation.stats) {
+          console.log('📊 Estimate Stats:');
+          console.log(`   - Items: ${json.validation.stats.totalItems}`);
+          console.log(`   - Total: ${json.validation.stats.totalCost?.toFixed(2)} грн`);
+          console.log(`   - Items/m²: ${json.validation.stats.itemsPerSquareMeter?.toFixed(2)}`);
+        }
+      }
+
       // Автоматична верифікація через OpenAI
       await verifyEstimate(json.data);
     } catch (err) {
