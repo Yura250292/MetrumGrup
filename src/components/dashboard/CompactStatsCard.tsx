@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 interface CompactStatsCardProps {
   title: string;
   value: string;
+  description?: string;
   icon: LucideIcon;
   variant?: "blue" | "green" | "gray";
   className?: string;
@@ -12,6 +13,7 @@ interface CompactStatsCardProps {
 export function CompactStatsCard({
   title,
   value,
+  description,
   icon: Icon,
   variant = "blue",
   className,
@@ -70,6 +72,13 @@ export function CompactStatsCard({
         <p className={cn("text-[11px] font-medium", textVariants[variant])}>
           {title}
         </p>
+
+        {/* Optional Description */}
+        {description && (
+          <p className="text-[10px] text-gray-400 leading-tight">
+            {description}
+          </p>
+        )}
       </div>
     </div>
   );

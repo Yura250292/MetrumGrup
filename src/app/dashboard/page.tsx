@@ -29,6 +29,16 @@ export default async function DashboardPage() {
     0
   );
 
+  // Find next upcoming payment
+  const nextPayment = await prisma.payment.findFirst({
+    where: {
+      project: { clientId: session.user.id },
+      status: { in: ["PENDING", "PARTIAL"] },
+      scheduledDate: { gte: new Date() },
+    },
+    orderBy: { scheduledDate: "asc" },
+  });
+
   return (
     <div className="min-h-screen bg-[#0F0F0F] pb-20 md:pb-6">
       {/* Header with gradient */}
@@ -50,6 +60,7 @@ export default async function DashboardPage() {
           <CompactStatsCard
             title="Активні"
             value={String(activeProjects.length)}
+            description={`з ${projects.length} загалом`}
             icon={FolderKanban}
             variant="blue"
           />
@@ -65,6 +76,11 @@ export default async function DashboardPage() {
         <CompactStatsCard
           title="Залишок до сплати"
           value={formatCurrency(totalRemaining)}
+          description={
+            nextPayment
+              ? `Наступний платіж: ${formatCurrency(Number(nextPayment.amount))}`
+              : undefined
+          }
           icon={Clock}
           variant="gray"
           className="col-span-2"
