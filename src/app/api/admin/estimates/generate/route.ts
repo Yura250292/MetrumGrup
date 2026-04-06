@@ -180,19 +180,19 @@ async function generateWithAnthropic(
 function calculateMinimumItems(wizardData: any): number {
   if (!wizardData) return 50;
 
-  let base = 60; // Increased from 40 to 60
+  let base = 60;
   const area = parseFloat(wizardData.totalArea || '100');
 
-  // More aggressive area-based calculation
-  // Rule: 1.5 items per m² minimum (realistic for full house)
-  base = Math.max(base, Math.floor(area * 1.5));
+  // Balanced area-based calculation
+  // Rule: 1.2 items per m² minimum (realistic for full house)
+  base = Math.max(base, Math.floor(area * 1.2));
 
-  console.log(`📐 Base minimum from area (${area}m² × 1.5): ${Math.floor(area * 1.5)}`);
+  console.log(`📐 Base minimum from area (${area}m² × 1.2): ${Math.floor(area * 1.2)}`);
 
-  // Additional items by area tiers
-  if (area > 100) base += 30;
-  if (area > 150) base += 50;
-  if (area > 200) base += 70;
+  // Additional items by area tiers (reduced)
+  if (area > 100) base += 20;
+  if (area > 150) base += 30;
+  if (area > 200) base += 40;
 
   // Object type specific calculations
   if (wizardData.objectType === 'house' || wizardData.objectType === 'townhouse') {
@@ -280,39 +280,48 @@ function calculateMinimumItems(wizardData: any): number {
     if (comm.surveillance) base += 12;
   }
 
-  // Utilities (for all types) - INCREASED multipliers for more detail
+  // Utilities (for all types) - Balanced multipliers
   if (wizardData.utilities) {
     const util = wizardData.utilities;
 
-    // Electrical - much more items per point
-    // Each outlet needs: outlet, backbox, cable, breaker → 4 items
+    // Electrical - reasonable multipliers with caps
     if (util.electrical) {
-      base += (util.electrical.outlets || 0) * 4; // Increased from 2 to 4
-      base += (util.electrical.switches || 0) * 3; // Increased from 2 to 3
-      base += (util.electrical.lightPoints || 0) * 3; // Increased from 2 to 3
-      if (util.electrical.power === 'three_phase') base += 15; // Increased from 10
-      base += 20; // Base electrical items (panel, main breaker, wiring, etc)
+      // Cap at reasonable numbers to prevent explosion
+      const outlets = Math.min(util.electrical.outlets || 0, 50);
+      const switches = Math.min(util.electrical.switches || 0, 40);
+      const lightPoints = Math.min(util.electrical.lightPoints || 0, 30);
+
+      base += outlets * 2; // outlet + cable (not 4 - too much)
+      base += switches * 1.5;
+      base += lightPoints * 1.5;
+      if (util.electrical.power === 'three_phase') base += 10;
+      base += 15; // Base electrical items (panel, breakers, wiring)
+
+      console.log(`⚡ Electrical: +${Math.round(outlets * 2 + switches * 1.5 + lightPoints * 1.5 + 15)} items`);
     }
 
-    // Heating - each radiator needs pipes, fittings, valves
+    // Heating - reasonable multipliers with caps
     if (util.heating) {
       if (util.heating.type && util.heating.type !== 'none') {
-        base += 25; // Base heating items (boiler, expansion tank, pump, etc) - increased from 15
+        base += 20; // Base heating items
       }
-      base += (util.heating.radiators || 0) * 5; // Increased from 3 - each radiator needs valves, brackets, pipes
-      if (util.heating.underfloor) base += 25; // Increased from 15 - collectors, manifolds, pipes, insulation
+      const radiators = Math.min(util.heating.radiators || 0, 30);
+      base += radiators * 3; // radiator + valves + pipes (not 5)
+      if (util.heating.underfloor) base += 15;
+
+      console.log(`🔥 Heating: +${20 + radiators * 3 + (util.heating.underfloor ? 15 : 0)} items`);
     }
 
-    // Water & sewerage - more items
-    if (util.water?.coldWater) base += 15; // Pipes, fittings, valves - increased from 8
-    if (util.water?.hotWater) base += 15; // Increased from 8
-    if (util.water?.boilerType && util.water.boilerType !== 'none') base += 10; // Boiler + connections
-    if (util.sewerage?.type) base += 12; // Pipes, fittings - increased from implicit
-    if (util.sewerage?.pumpNeeded) base += 8; // Increased from 5
+    // Water & sewerage
+    if (util.water?.coldWater) base += 10;
+    if (util.water?.hotWater) base += 10;
+    if (util.water?.boilerType && util.water.boilerType !== 'none') base += 8;
+    if (util.sewerage?.type) base += 8;
+    if (util.sewerage?.pumpNeeded) base += 5;
 
-    // Ventilation - more detailed
-    if (util.ventilation?.forced) base += 15; // Fans, ducts, grilles - increased from 10
-    if (util.ventilation?.recuperation) base += 12; // Unit, filters, controls - increased from 8
+    // Ventilation
+    if (util.ventilation?.forced) base += 10;
+    if (util.ventilation?.recuperation) base += 8;
   }
 
   // Finishing
@@ -335,25 +344,40 @@ function calculateMinimumItems(wizardData: any): number {
     }
   }
 
-  // Windows & Doors - each needs window + sills + slopes + sealing + installation
+  // Windows & Doors - balanced multipliers
   if (wizardData.openings) {
-    base += (wizardData.openings.windows?.count || 0) * 5; // Increased from 2 to 5
-    base += (wizardData.openings.doors?.entrance || 0) * 6; // Increased from 2 to 6 (door + frame + trim + lock + handles + installation)
-    base += (wizardData.openings.doors?.interior || 0) * 4; // Increased from 1.5 to 4
+    const windows = Math.min(wizardData.openings.windows?.count || 0, 40);
+    const entranceDoors = Math.min(wizardData.openings.doors?.entrance || 0, 5);
+    const interiorDoors = Math.min(wizardData.openings.doors?.interior || 0, 30);
+
+    base += windows * 3; // window + sills + slopes
+    base += entranceDoors * 4;
+    base += interiorDoors * 2;
+
+    console.log(`🚪 Openings: +${windows * 3 + entranceDoors * 4 + interiorDoors * 2} items`);
   }
 
   // If no openings specified but it's a house, assume minimum windows/doors
   if ((wizardData.objectType === 'house' || wizardData.objectType === 'townhouse') && !wizardData.openings) {
     const estimatedWindows = Math.ceil(area / 20); // ~1 window per 20m²
     const estimatedDoors = 3 + Math.floor(area / 50); // 3 entrance + 1 per 50m² interior
-    base += estimatedWindows * 5;
-    base += estimatedDoors * 4;
-    console.log(`📊 No openings specified, estimated: ${estimatedWindows} windows, ${estimatedDoors} doors → +${estimatedWindows * 5 + estimatedDoors * 4} items`);
+    base += estimatedWindows * 3;
+    base += estimatedDoors * 2;
+    console.log(`📊 No openings specified, estimated: ${estimatedWindows} windows, ${estimatedDoors} doors → +${estimatedWindows * 3 + estimatedDoors * 2} items`);
   }
 
   const finalMin = Math.round(base);
-  console.log(`✅ FINAL calculated minimum: ${finalMin} items`);
-  return finalMin;
+
+  // CRITICAL: Cap maximum to prevent AI overload
+  // AI cannot generate 500+ items in one response due to token limits
+  const cappedMin = Math.min(finalMin, 300);
+
+  if (finalMin > 300) {
+    console.log(`⚠️ Calculated ${finalMin} items but CAPPING to 300 (AI token limit)`);
+  }
+
+  console.log(`✅ FINAL calculated minimum: ${cappedMin} items (raw: ${finalMin})`);
+  return cappedMin;
 }
 
 function buildWizardContext(wizardData: any): string {
@@ -1784,7 +1808,7 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
           } as unknown as import("@google/generative-ai").Tool],
           generationConfig: {
             temperature: 0.3,
-            maxOutputTokens: 16000, // Increase to allow more items (default is too low)
+            maxOutputTokens: 30000, // Increased to max (32768 is absolute max, 30k is safe)
           },
         });
 
