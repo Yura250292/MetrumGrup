@@ -1,9 +1,22 @@
 /* Admin Light Theme */
 
 .admin-light {
-  background: #F9FAFB;
-  color: #111827;
+  background: #F9FAFB !important;
+  color: #111827 !important;
   min-height: 100vh;
+}
+
+/* Force light background on all admin elements */
+.admin-light * {
+  border-color: #E5E7EB;
+}
+
+.admin-light main {
+  background: #F9FAFB !important;
+}
+
+.admin-light > div {
+  background: #F9FAFB !important;
 }
 
 /* Desktop layout improvements */
@@ -210,4 +223,27 @@
 .admin-light *:focus-visible {
   outline: 2px solid #3B82F6 !important;
   outline-offset: 2px;
+}
+
+/* Page title sections - light theme */
+.admin-light [class*="titleSection"],
+.admin-light .page-header {
+  background: linear-gradient(135deg, rgba(249, 250, 251, 0.9) 0%, rgba(243, 244, 246, 0.9) 100%) !important;
+  border: 1px solid #E5E7EB !important;
+}
+
+/* Stat cards in light mode */
+.admin-light [class*="mesh"] {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%) !important;
+  border: 1px solid #E5E7EB !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* Navigation section labels with pearlescent hints */
+.admin-light nav p[class*="uppercase"] {
+  background: linear-gradient(90deg, #6B7280 0%, #9CA3AF 50%, #6B7280 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 700;
 }

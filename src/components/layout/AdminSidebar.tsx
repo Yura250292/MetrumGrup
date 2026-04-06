@@ -90,37 +90,42 @@ export function AdminSidebar() {
 
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
 
-  // Color theme configurations for navigation items
+  // Color theme configurations for navigation items - Pearlescent gradients
   const colorThemes = {
     blue: {
-      active: "admin-dark:bg-gradient-to-r admin-dark:from-blue-500/20 admin-dark:to-green-500/20 admin-dark:shadow-neon-blue-soft admin-light:bg-blue-50 admin-light:border admin-light:border-blue-200",
-      icon: "admin-dark:text-blue-400 admin-light:text-blue-600",
-      text: "admin-dark:text-blue-100 admin-light:text-blue-900",
-      hover: "admin-dark:hover:bg-blue-500/10 admin-light:hover:bg-blue-50",
+      // Головне - Red pearlescent
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-blue-500/20 admin-dark:to-green-500/20 admin-dark:shadow-neon-blue-soft admin-light:bg-gradient-to-br admin-light:from-red-400 admin-light:via-rose-500 admin-light:to-pink-500 admin-light:shadow-lg admin-light:shadow-red-300/50",
+      icon: "admin-dark:text-blue-400 admin-light:text-white",
+      text: "admin-dark:text-blue-100 admin-light:text-white",
+      hover: "admin-dark:hover:bg-blue-500/10 admin-light:hover:shadow-xl admin-light:hover:shadow-red-400/60 admin-light:hover:scale-[1.02]",
     },
     purple: {
-      active: "admin-dark:bg-gradient-to-r admin-dark:from-purple-500/20 admin-dark:to-violet-500/20 admin-dark:shadow-[0_0_20px_rgba(168,85,247,0.15)] admin-light:bg-purple-50 admin-light:border admin-light:border-purple-200",
-      icon: "admin-dark:text-purple-400 admin-light:text-purple-600",
-      text: "admin-dark:text-purple-100 admin-light:text-purple-900",
-      hover: "admin-dark:hover:bg-purple-500/10 admin-light:hover:bg-purple-50",
+      // Фінанси - Green pearlescent
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-purple-500/20 admin-dark:to-violet-500/20 admin-dark:shadow-[0_0_20px_rgba(168,85,247,0.15)] admin-light:bg-gradient-to-br admin-light:from-emerald-400 admin-light:via-green-500 admin-light:to-teal-500 admin-light:shadow-lg admin-light:shadow-green-300/50",
+      icon: "admin-dark:text-purple-400 admin-light:text-white",
+      text: "admin-dark:text-purple-100 admin-light:text-white",
+      hover: "admin-dark:hover:bg-purple-500/10 admin-light:hover:shadow-xl admin-light:hover:shadow-green-400/60 admin-light:hover:scale-[1.02]",
     },
     orange: {
-      active: "admin-dark:bg-gradient-to-r admin-dark:from-orange-500/20 admin-dark:to-amber-500/20 admin-dark:shadow-[0_0_20px_rgba(251,146,60,0.15)] admin-light:bg-orange-50 admin-light:border admin-light:border-orange-200",
-      icon: "admin-dark:text-orange-400 admin-light:text-orange-600",
-      text: "admin-dark:text-orange-100 admin-light:text-orange-900",
-      hover: "admin-dark:hover:bg-orange-500/10 admin-light:hover:bg-orange-50",
+      // Ресурси - Blue pearlescent
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-orange-500/20 admin-dark:to-amber-500/20 admin-dark:shadow-[0_0_20px_rgba(251,146,60,0.15)] admin-light:bg-gradient-to-br admin-light:from-blue-400 admin-light:via-cyan-500 admin-light:to-sky-500 admin-light:shadow-lg admin-light:shadow-blue-300/50",
+      icon: "admin-dark:text-orange-400 admin-light:text-white",
+      text: "admin-dark:text-orange-100 admin-light:text-white",
+      hover: "admin-dark:hover:bg-orange-500/10 admin-light:hover:shadow-xl admin-light:hover:shadow-blue-400/60 admin-light:hover:scale-[1.02]",
     },
     cyan: {
-      active: "admin-dark:bg-gradient-to-r admin-dark:from-cyan-500/20 admin-dark:to-teal-500/20 admin-dark:shadow-[0_0_20px_rgba(34,211,238,0.15)] admin-light:bg-cyan-50 admin-light:border admin-light:border-cyan-200",
-      icon: "admin-dark:text-cyan-400 admin-light:text-cyan-600",
-      text: "admin-dark:text-cyan-100 admin-light:text-cyan-900",
-      hover: "admin-dark:hover:bg-cyan-500/10 admin-light:hover:bg-cyan-50",
+      // Контент - Yellow pearlescent
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-cyan-500/20 admin-dark:to-teal-500/20 admin-dark:shadow-[0_0_20px_rgba(34,211,238,0.15)] admin-light:bg-gradient-to-br admin-light:from-amber-400 admin-light:via-yellow-500 admin-light:to-orange-400 admin-light:shadow-lg admin-light:shadow-yellow-300/50",
+      icon: "admin-dark:text-cyan-400 admin-light:text-white",
+      text: "admin-dark:text-cyan-100 admin-light:text-white",
+      hover: "admin-dark:hover:bg-cyan-500/10 admin-light:hover:shadow-xl admin-light:hover:shadow-yellow-400/60 admin-light:hover:scale-[1.02]",
     },
     red: {
-      active: "admin-dark:bg-gradient-to-r admin-dark:from-red-500/20 admin-dark:to-pink-500/20 admin-dark:shadow-[0_0_20px_rgba(239,68,68,0.15)] admin-light:bg-red-50 admin-light:border admin-light:border-red-200",
-      icon: "admin-dark:text-red-400 admin-light:text-red-600",
-      text: "admin-dark:text-red-100 admin-light:text-red-900",
-      hover: "admin-dark:hover:bg-red-500/10 admin-light:hover:bg-red-50",
+      // Система - Purple pearlescent
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-red-500/20 admin-dark:to-pink-500/20 admin-dark:shadow-[0_0_20px_rgba(239,68,68,0.15)] admin-light:bg-gradient-to-br admin-light:from-purple-400 admin-light:via-violet-500 admin-light:to-fuchsia-500 admin-light:shadow-lg admin-light:shadow-purple-300/50",
+      icon: "admin-dark:text-red-400 admin-light:text-white",
+      text: "admin-dark:text-red-100 admin-light:text-white",
+      hover: "admin-dark:hover:bg-red-500/10 admin-light:hover:shadow-xl admin-light:hover:shadow-purple-400/60 admin-light:hover:scale-[1.02]",
     },
   };
 
