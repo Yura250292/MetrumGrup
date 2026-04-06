@@ -2,8 +2,8 @@
 
 /* All admin pages get dark background */
 .admin-dark {
-  background: #0F0F0F;
-  color: #FAFAF9;
+  background: #0F0F0F !important;
+  color: #FAFAF9 !important;
   min-height: 100vh;
 }
 
@@ -13,7 +13,25 @@
     max-width: 1800px;
     margin-left: auto;
     margin-right: auto;
+    background: #0F0F0F !important;
   }
+}
+
+/* Force dark background on main content */
+.admin-dark main {
+  background: #0F0F0F !important;
+  color: #FAFAF9 !important;
+}
+
+/* All sections and divs */
+.admin-dark section,
+.admin-dark div:not([class*="sidebar"]):not([class*="nav"]) {
+  color: #E5E7EB;
+}
+
+/* Dashboard sections */
+.admin-dark main > div {
+  background: transparent !important;
 }
 
 /* Override Card components to dark theme */

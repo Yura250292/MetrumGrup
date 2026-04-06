@@ -13,10 +13,60 @@
 
 .admin-light main {
   background: #F9FAFB !important;
+  color: #111827 !important;
 }
 
 .admin-light > div {
   background: #F9FAFB !important;
+}
+
+/* Dashboard and page sections */
+.admin-light [class*="bg-"],
+.admin-light div[class*="gradient"] {
+  background: #FFFFFF !important;
+  color: #111827 !important;
+}
+
+/* Page title sections with emoji */
+.admin-light div[class*="rounded"],
+.admin-light section {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
+  color: #111827 !important;
+}
+
+/* Dashboard header with emoji */
+.admin-light main > div:first-child {
+  background: linear-gradient(135deg, #F9FAFB 0%, #FFFFFF 100%) !important;
+  border: 1px solid #E5E7EB !important;
+  color: #111827 !important;
+}
+
+/* All headings in light mode */
+.admin-light h1,
+.admin-light h2,
+.admin-light h3 {
+  color: #111827 !important;
+}
+
+/* All paragraphs and text */
+.admin-light p,
+.admin-light span:not([class*="gradient"]) {
+  color: #374151 !important;
+}
+
+/* Section titles like "Останні проєкти" */
+.admin-light [class*="text-"] {
+  color: #111827 !important;
+}
+
+/* Links */
+.admin-light a {
+  color: #3B82F6 !important;
+}
+
+.admin-light a:hover {
+  color: #2563EB !important;
 }
 
 /* Desktop layout improvements */
@@ -301,10 +351,37 @@
 }
 
 /* Stat cards in light mode */
-.admin-light [class*="mesh"] {
+.admin-light [class*="mesh"],
+.admin-light [class*="stat"],
+.admin-light [class*="Stat"],
+.admin-light [class*="compact"] {
   background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%) !important;
   border: 1px solid #E5E7EB !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08) !important;
+  color: #111827 !important;
+}
+
+/* Stat card values */
+.admin-light [class*="mesh"] *,
+.admin-light [class*="stat"] *,
+.admin-light [class*="Stat"] *,
+.admin-light [class*="compact"] * {
+  color: #111827 !important;
+}
+
+/* Project cards */
+.admin-light [class*="project"],
+.admin-light [class*="Project"] {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
+  color: #111827 !important;
+}
+
+/* Dark sections in light mode */
+.admin-light [style*="background"][style*="#"],
+.admin-light [style*="bg-"] {
+  background: #FFFFFF !important;
+  color: #111827 !important;
 }
 
 /* Navigation section labels with pearlescent hints */
