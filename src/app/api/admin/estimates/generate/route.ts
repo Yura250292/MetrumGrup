@@ -1226,8 +1226,14 @@ export async function POST(request: NextRequest) {
         ? `\n\n${TEMPLATE_PROMPTS[template]}\n\n`
         : "";
 
-    // Load drawing reading guide for visual analysis
-    const drawingGuide = imageParts.length > 0 ? await loadDrawingGuide() : "";
+    // Load drawing reading guide for visual analysis (PDF or images)
+    const drawingGuide = (imageParts.length > 0 || pdfParts.length > 0) ? await loadDrawingGuide() : "";
+
+    if (pdfParts.length > 0 && drawingGuide) {
+      console.log(`📚 DRAWING_READING_GUIDE loaded for ${pdfParts.length} PDF files (${(drawingGuide.length / 1024).toFixed(1)}KB)`);
+    } else if (pdfParts.length > 0 && !drawingGuide) {
+      console.warn(`⚠️ WARNING: ${pdfParts.length} PDF files but NO drawing guide loaded!`);
+    }
 
     // Build wizard context FIRST for highest priority
     const wizardContext = buildWizardContext(wizardData);
