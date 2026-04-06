@@ -4005,6 +4005,174 @@ export default function AIEstimatePage() {
         setWizardStep={setWizardStep}
         onComplete={handleWizardComplete}
       />
+
+      {/* Pre-Analysis Modal */}
+      {showPreAnalysis && preAnalysisData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-2xl font-bold">🔍 AI проаналізував ваші файли</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Перевірте чи правильно AI зрозумів що потрібно будувати
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setShowPreAnalysis(false)}>
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+
+              {/* Summary */}
+              <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h3 className="font-semibold mb-2">📋 Загальна інформація:</h3>
+                <p className="text-sm">{preAnalysisData.summary}</p>
+                {preAnalysisData.confidence && (
+                  <div className="mt-2">
+                    <Badge variant={preAnalysisData.confidence === 'high' ? 'default' : preAnalysisData.confidence === 'medium' ? 'secondary' : 'destructive'}>
+                      Впевненість: {preAnalysisData.confidence === 'high' ? 'Висока' : preAnalysisData.confidence === 'medium' ? 'Середня' : 'Низька'}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+
+              {/* Grid with details */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {/* Building */}
+                {preAnalysisData.building && (
+                  <Card className="p-4">
+                    <h4 className="font-semibold mb-2 flex items-center gap-2">
+                      🏠 Будівля
+                    </h4>
+                    <div className="text-sm space-y-1">
+                      <p>Поверхів: <strong>{preAnalysisData.building.floors}</strong></p>
+                      <p>Площа: <strong>{preAnalysisData.building.totalArea}</strong></p>
+                      {preAnalysisData.building.currentState && (
+                        <p>Стан: <strong>{preAnalysisData.building.currentState}</strong></p>
+                      )}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Rooms */}
+                {preAnalysisData.rooms && (
+                  <Card className="p-4">
+                    <h4 className="font-semibold mb-2">🚪 Приміщення</h4>
+                    <div className="text-sm space-y-1">
+                      {preAnalysisData.rooms.bedrooms > 0 && <p>Спальні: <strong>{preAnalysisData.rooms.bedrooms}</strong></p>}
+                      {preAnalysisData.rooms.bathrooms > 0 && <p>Санвузли: <strong>{preAnalysisData.rooms.bathrooms}</strong></p>}
+                      {preAnalysisData.rooms.kitchen > 0 && <p>Кухня: <strong>{preAnalysisData.rooms.kitchen}</strong></p>}
+                      {preAnalysisData.rooms.living > 0 && <p>Вітальня: <strong>{preAnalysisData.rooms.living}</strong></p>}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Electrical */}
+                {preAnalysisData.electrical && (
+                  <Card className="p-4">
+                    <h4 className="font-semibold mb-2">⚡ Електрика</h4>
+                    <div className="text-sm space-y-1">
+                      <p>Розетки: <strong>{preAnalysisData.electrical.outlets}</strong></p>
+                      <p>Вимикачі: <strong>{preAnalysisData.electrical.switches}</strong></p>
+                      <p>Світильники: <strong>{preAnalysisData.electrical.lights}</strong></p>
+                    </div>
+                  </Card>
+                )}
+
+                {/* Plumbing */}
+                {preAnalysisData.plumbing && (
+                  <Card className="p-4">
+                    <h4 className="font-semibold mb-2">💧 Сантехніка</h4>
+                    <div className="text-sm space-y-1">
+                      {preAnalysisData.plumbing.toilets > 0 && <p>Унітази: <strong>{preAnalysisData.plumbing.toilets}</strong></p>}
+                      {preAnalysisData.plumbing.sinks > 0 && <p>Умивальники: <strong>{preAnalysisData.plumbing.sinks}</strong></p>}
+                      {preAnalysisData.plumbing.baths > 0 && <p>Ванни: <strong>{preAnalysisData.plumbing.baths}</strong></p>}
+                      {preAnalysisData.plumbing.showers > 0 && <p>Душові: <strong>{preAnalysisData.plumbing.showers}</strong></p>}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Heating */}
+                {preAnalysisData.heating && (
+                  <Card className="p-4">
+                    <h4 className="font-semibold mb-2">🔥 Опалення</h4>
+                    <div className="text-sm space-y-1">
+                      {preAnalysisData.heating.radiators > 0 && <p>Радіатори: <strong>{preAnalysisData.heating.radiators}</strong></p>}
+                      {preAnalysisData.heating.underfloor && <p>Тепла підлога: <strong>{preAnalysisData.heating.underfloorArea || 'Так'}</strong></p>}
+                    </div>
+                  </Card>
+                )}
+
+                {/* Windows & Doors */}
+                {(preAnalysisData.windows || preAnalysisData.doors) && (
+                  <Card className="p-4">
+                    <h4 className="font-semibold mb-2">🪟 Вікна/Двері</h4>
+                    <div className="text-sm space-y-1">
+                      {preAnalysisData.windows?.count > 0 && <p>Вікна: <strong>{preAnalysisData.windows.count}</strong></p>}
+                      {preAnalysisData.doors?.entrance > 0 && <p>Вхідні двері: <strong>{preAnalysisData.doors.entrance}</strong></p>}
+                      {preAnalysisData.doors?.interior > 0 && <p>Внутрішні двері: <strong>{preAnalysisData.doors.interior}</strong></p>}
+                    </div>
+                  </Card>
+                )}
+              </div>
+
+              {/* Discrepancies */}
+              {preAnalysisData.discrepancies && preAnalysisData.discrepancies.length > 0 && (
+                <div className="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                  <h4 className="font-semibold mb-2 text-orange-900">⚠️ Розбіжності з wizard:</h4>
+                  <ul className="text-sm space-y-1 text-orange-800">
+                    {preAnalysisData.discrepancies.map((d: string, i: number) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {preAnalysisData.warnings && preAnalysisData.warnings.length > 0 && (
+                <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <h4 className="font-semibold mb-2 text-yellow-900">💡 Попередження:</h4>
+                  <ul className="text-sm space-y-1 text-yellow-800">
+                    {preAnalysisData.warnings.map((w: string, i: number) => (
+                      <li key={i}>{w}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Recommendation */}
+              {preAnalysisData.recommendation && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <h4 className="font-semibold mb-2 text-green-900">💬 Рекомендація:</h4>
+                  <p className="text-sm text-green-800">{preAnalysisData.recommendation}</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-between items-center pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowPreAnalysis(false)}>
+                  Переглянути wizard
+                </Button>
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={() => {
+                    setShowPreAnalysis(false);
+                    setShowWizard(true);
+                  }}>
+                    Виправити дані
+                  </Button>
+                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => {
+                    setShowPreAnalysis(false);
+                    generate();
+                  }}>
+                    <Check className="mr-2 h-4 w-4" /> Все правильно → Генерувати
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
