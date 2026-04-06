@@ -2033,6 +2033,7 @@ function WizardStep8_Finishing({ data, setData }: { data: WizardData; setData: (
 // Townhouse-specific step (after general info for townhouses)
 function WizardStepTownhouse({ data, setData }: { data: WizardData; setData: (d: WizardData) => void }) {
   const townhouseData = data.townhouseData || {
+    currentState: 'shell' as const,
     adjacentWalls: 1,
     isEndUnit: false,
     sharedUtilities: false,
