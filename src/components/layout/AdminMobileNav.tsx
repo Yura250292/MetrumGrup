@@ -18,17 +18,17 @@ export function AdminMobileNav() {
 
   const colorThemes = {
     blue: {
-      active: "bg-gradient-to-r from-blue-500/20 to-green-500/20 shadow-neon-blue-soft",
-      icon: "text-blue-400",
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-blue-500/20 admin-dark:to-green-500/20 admin-dark:shadow-neon-blue-soft admin-light:bg-blue-100",
+      icon: "admin-dark:text-blue-400 admin-light:text-blue-600",
     },
     purple: {
-      active: "bg-gradient-to-r from-purple-500/20 to-violet-500/20 shadow-[0_0_20px_rgba(168,85,247,0.15)]",
-      icon: "text-purple-400",
+      active: "admin-dark:bg-gradient-to-r admin-dark:from-purple-500/20 admin-dark:to-violet-500/20 admin-dark:shadow-[0_0_20px_rgba(168,85,247,0.15)] admin-light:bg-purple-100",
+      icon: "admin-dark:text-purple-400 admin-light:text-purple-600",
     },
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-white/10 bg-gradient-to-r from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl md:hidden safe-area-pb shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t backdrop-blur-xl md:hidden safe-area-pb shadow-lg transition-colors admin-dark:border-white/10 admin-dark:bg-gradient-to-r admin-dark:from-gray-900/95 admin-dark:via-black/95 admin-dark:to-gray-900/95 admin-light:border-gray-200 admin-light:bg-white/95">
       <div className="flex h-16 items-center justify-around px-2">
         {navItems.map((item) => {
           const isActive =
@@ -45,12 +45,12 @@ export function AdminMobileNav() {
               className={cn(
                 "flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition-all duration-200",
                 isActive
-                  ? `text-white ${theme.active}`
-                  : "text-gray-300 hover:bg-white/10 hover:text-white"
+                  ? `admin-dark:text-white admin-light:text-gray-900 ${theme.active}`
+                  : "admin-dark:text-gray-300 admin-dark:hover:bg-white/10 admin-dark:hover:text-white admin-light:text-gray-600 admin-light:hover:bg-gray-100 admin-light:hover:text-gray-900"
               )}
             >
               <item.icon className={cn("h-5 w-5", isActive ? theme.icon : "")} />
-              <span className="text-[11px] font-medium">{item.label}</span>
+              <span className="text-[12px] font-semibold">{item.label}</span>
             </Link>
           );
         })}
@@ -58,10 +58,10 @@ export function AdminMobileNav() {
         {/* Logout button */}
         <button
           onClick={() => signOut({ callbackUrl: "/login" })}
-          className="flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition-all duration-200 text-gray-400 hover:bg-white/10 hover:text-white active:bg-white/20"
+          className="flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition-all duration-200 admin-dark:text-gray-400 admin-dark:hover:bg-white/10 admin-dark:hover:text-white admin-light:text-gray-600 admin-light:hover:bg-gray-100 admin-light:hover:text-gray-900 active:scale-95"
         >
           <LogOut className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Вийти</span>
+          <span className="text-[11px] font-semibold">Вийти</span>
         </button>
       </div>
     </nav>

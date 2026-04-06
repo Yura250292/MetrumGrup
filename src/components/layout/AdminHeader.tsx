@@ -36,17 +36,17 @@ export function AdminHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-gradient-to-r from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl px-6 shadow-lg">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b backdrop-blur-xl px-6 shadow-sm transition-colors admin-dark:border-white/10 admin-dark:bg-gradient-to-r admin-dark:from-gray-900/95 admin-dark:via-black/95 admin-dark:to-gray-900/95 admin-light:border-gray-200 admin-light:bg-white/95">
       <div className="flex items-center gap-2 text-sm">
         {breadcrumbs.map((crumb, index) => (
           <div key={crumb.href} className="flex items-center gap-2">
-            {index > 0 && <span className="text-gray-500">/</span>}
+            {index > 0 && <span className="admin-dark:text-gray-500 admin-light:text-gray-400">/</span>}
             {index === breadcrumbs.length - 1 ? (
-              <span className="font-medium text-white">{crumb.label}</span>
+              <span className="font-semibold text-[15px] admin-dark:text-white admin-light:text-gray-900">{crumb.label}</span>
             ) : (
               <Link
                 href={crumb.href}
-                className="text-gray-400 hover:text-white transition-colors"
+                className="text-[15px] admin-dark:text-gray-400 admin-dark:hover:text-white admin-light:text-gray-600 admin-light:hover:text-gray-900 transition-colors"
               >
                 {crumb.label}
               </Link>
@@ -55,7 +55,7 @@ export function AdminHeader() {
         ))}
       </div>
 
-      <button className="relative rounded-lg p-2 text-gray-400 hover:bg-white/10 hover:text-white transition-colors">
+      <button className="relative rounded-lg p-2 transition-colors admin-dark:text-gray-400 admin-dark:hover:bg-white/10 admin-dark:hover:text-white admin-light:text-gray-600 admin-light:hover:bg-gray-100 admin-light:hover:text-gray-900">
         <Bell className="h-5 w-5" />
       </button>
     </header>

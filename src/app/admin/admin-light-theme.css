@@ -1,0 +1,213 @@
+/* Admin Light Theme */
+
+.admin-light {
+  background: #F9FAFB;
+  color: #111827;
+  min-height: 100vh;
+}
+
+/* Desktop layout improvements */
+@media (min-width: 768px) {
+  .admin-light main {
+    max-width: 1800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+/* Override Card components to light theme */
+.admin-light [class*="card"],
+.admin-light [class*="Card"],
+.admin-light .card {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
+  color: #111827 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+  transition: all 0.3s ease;
+}
+
+.admin-light [class*="card"]:hover,
+.admin-light [class*="Card"]:hover,
+.admin-light .card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+  border-color: #D1D5DB !important;
+}
+
+/* Light text colors */
+.admin-light h1,
+.admin-light h2,
+.admin-light h3,
+.admin-light h4,
+.admin-light h5,
+.admin-light h6 {
+  color: #111827 !important;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.admin-light p {
+  color: #374151;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.admin-light [class*="muted-foreground"],
+.admin-light .text-muted-foreground {
+  color: #6B7280 !important;
+}
+
+.admin-light label {
+  color: #374151 !important;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.admin-light strong,
+.admin-light b {
+  color: #111827 !important;
+  font-weight: 600;
+}
+
+/* Tables */
+.admin-light table {
+  color: #111827;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.admin-light thead {
+  background: #F9FAFB !important;
+  border-bottom: 2px solid #E5E7EB !important;
+}
+
+.admin-light thead th {
+  font-weight: 600 !important;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  padding: 0.875rem 1rem !important;
+  color: #6B7280 !important;
+}
+
+.admin-light tbody tr {
+  border-bottom: 1px solid #F3F4F6 !important;
+  transition: all 0.2s ease;
+}
+
+.admin-light tbody tr:hover {
+  background: #F9FAFB !important;
+}
+
+.admin-light td {
+  color: #374151 !important;
+  padding: 0.75rem 1rem !important;
+  font-size: 0.9375rem;
+}
+
+/* Input fields */
+.admin-light input,
+.admin-light textarea,
+.admin-light select {
+  background: #FFFFFF !important;
+  border-color: #D1D5DB !important;
+  color: #111827 !important;
+}
+
+.admin-light input::placeholder,
+.admin-light textarea::placeholder {
+  color: #9CA3AF !important;
+}
+
+.admin-light input:focus,
+.admin-light textarea:focus,
+.admin-light select:focus {
+  border-color: #3B82F6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+/* Buttons */
+.admin-light button[class*="primary"],
+.admin-light button.bg-primary {
+  background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%) !important;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  border: none !important;
+  color: white !important;
+}
+
+.admin-light button[class*="secondary"] {
+  background: #F3F4F6 !important;
+  border: 1px solid #D1D5DB !important;
+  color: #374151 !important;
+}
+
+.admin-light button[class*="outline"] {
+  border: 1px solid #D1D5DB !important;
+  color: #374151 !important;
+  background: transparent !important;
+}
+
+/* Dialogs and Modals */
+.admin-light [role="dialog"],
+.admin-light [class*="dialog"] {
+  background: #FFFFFF !important;
+  border: 1px solid #E5E7EB !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Dividers */
+.admin-light hr {
+  border-color: #E5E7EB !important;
+}
+
+/* Links */
+.admin-light a {
+  color: #3B82F6;
+}
+
+.admin-light a:hover {
+  color: #2563EB;
+}
+
+/* Status indicators */
+.admin-light .bg-green-100 {
+  background: #D1FAE5 !important;
+  color: #065F46 !important;
+  border: 1px solid #A7F3D0;
+}
+
+.admin-light .bg-blue-100 {
+  background: #DBEAFE !important;
+  color: #1E40AF !important;
+  border: 1px solid #BFDBFE;
+}
+
+.admin-light .bg-yellow-100 {
+  background: #FEF3C7 !important;
+  color: #92400E !important;
+  border: 1px solid #FDE68A;
+}
+
+.admin-light .bg-red-100 {
+  background: #FEE2E2 !important;
+  color: #991B1B !important;
+  border: 1px solid #FECACA;
+}
+
+/* Specific component fixes */
+.admin-light [class*="bg-muted"] {
+  background: #F9FAFB !important;
+}
+
+.admin-light [class*="bg-card"] {
+  background: #FFFFFF !important;
+}
+
+.admin-light [class*="bg-background"] {
+  background: #F9FAFB !important;
+}
+
+/* Better focus states */
+.admin-light *:focus-visible {
+  outline: 2px solid #3B82F6 !important;
+  outline-offset: 2px;
+}
