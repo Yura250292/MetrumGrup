@@ -180,10 +180,16 @@ async function generateWithAnthropic(
 function calculateMinimumItems(wizardData: any): number {
   if (!wizardData) return 50;
 
-  let base = 40;
+  let base = 60; // Increased from 40 to 60
   const area = parseFloat(wizardData.totalArea || '100');
 
-  // Base calculation by area
+  // More aggressive area-based calculation
+  // Rule: 1.5 items per m² minimum (realistic for full house)
+  base = Math.max(base, Math.floor(area * 1.5));
+
+  console.log(`📐 Base minimum from area (${area}m² × 1.5): ${Math.floor(area * 1.5)}`);
+
+  // Additional items by area tiers
   if (area > 100) base += 30;
   if (area > 150) base += 50;
   if (area > 200) base += 70;
@@ -274,33 +280,39 @@ function calculateMinimumItems(wizardData: any): number {
     if (comm.surveillance) base += 12;
   }
 
-  // Utilities (for all types)
+  // Utilities (for all types) - INCREASED multipliers for more detail
   if (wizardData.utilities) {
     const util = wizardData.utilities;
 
-    // Electrical
+    // Electrical - much more items per point
+    // Each outlet needs: outlet, backbox, cable, breaker → 4 items
     if (util.electrical) {
-      base += (util.electrical.outlets || 0) * 2;
-      base += (util.electrical.switches || 0) * 2;
-      base += (util.electrical.lightPoints || 0) * 2;
-      if (util.electrical.power === 'three_phase') base += 10;
+      base += (util.electrical.outlets || 0) * 4; // Increased from 2 to 4
+      base += (util.electrical.switches || 0) * 3; // Increased from 2 to 3
+      base += (util.electrical.lightPoints || 0) * 3; // Increased from 2 to 3
+      if (util.electrical.power === 'three_phase') base += 15; // Increased from 10
+      base += 20; // Base electrical items (panel, main breaker, wiring, etc)
     }
 
-    // Heating
+    // Heating - each radiator needs pipes, fittings, valves
     if (util.heating) {
-      if (util.heating.type && util.heating.type !== 'none') base += 15;
-      base += (util.heating.radiators || 0) * 3;
-      if (util.heating.underfloor) base += 15;
+      if (util.heating.type && util.heating.type !== 'none') {
+        base += 25; // Base heating items (boiler, expansion tank, pump, etc) - increased from 15
+      }
+      base += (util.heating.radiators || 0) * 5; // Increased from 3 - each radiator needs valves, brackets, pipes
+      if (util.heating.underfloor) base += 25; // Increased from 15 - collectors, manifolds, pipes, insulation
     }
 
-    // Water & sewerage
-    if (util.water?.coldWater) base += 8;
-    if (util.water?.hotWater) base += 8;
-    if (util.sewerage?.pumpNeeded) base += 5;
+    // Water & sewerage - more items
+    if (util.water?.coldWater) base += 15; // Pipes, fittings, valves - increased from 8
+    if (util.water?.hotWater) base += 15; // Increased from 8
+    if (util.water?.boilerType && util.water.boilerType !== 'none') base += 10; // Boiler + connections
+    if (util.sewerage?.type) base += 12; // Pipes, fittings - increased from implicit
+    if (util.sewerage?.pumpNeeded) base += 8; // Increased from 5
 
-    // Ventilation
-    if (util.ventilation?.forced) base += 10;
-    if (util.ventilation?.recuperation) base += 8;
+    // Ventilation - more detailed
+    if (util.ventilation?.forced) base += 15; // Fans, ducts, grilles - increased from 10
+    if (util.ventilation?.recuperation) base += 12; // Unit, filters, controls - increased from 8
   }
 
   // Finishing
@@ -323,14 +335,25 @@ function calculateMinimumItems(wizardData: any): number {
     }
   }
 
-  // Windows & Doors
+  // Windows & Doors - each needs window + sills + slopes + sealing + installation
   if (wizardData.openings) {
-    base += (wizardData.openings.windows?.count || 0) * 2;
-    base += (wizardData.openings.doors?.entrance || 0) * 2;
-    base += (wizardData.openings.doors?.interior || 0) * 1.5;
+    base += (wizardData.openings.windows?.count || 0) * 5; // Increased from 2 to 5
+    base += (wizardData.openings.doors?.entrance || 0) * 6; // Increased from 2 to 6 (door + frame + trim + lock + handles + installation)
+    base += (wizardData.openings.doors?.interior || 0) * 4; // Increased from 1.5 to 4
   }
 
-  return Math.round(base);
+  // If no openings specified but it's a house, assume minimum windows/doors
+  if ((wizardData.objectType === 'house' || wizardData.objectType === 'townhouse') && !wizardData.openings) {
+    const estimatedWindows = Math.ceil(area / 20); // ~1 window per 20m²
+    const estimatedDoors = 3 + Math.floor(area / 50); // 3 entrance + 1 per 50m² interior
+    base += estimatedWindows * 5;
+    base += estimatedDoors * 4;
+    console.log(`📊 No openings specified, estimated: ${estimatedWindows} windows, ${estimatedDoors} doors → +${estimatedWindows * 5 + estimatedDoors * 4} items`);
+  }
+
+  const finalMin = Math.round(base);
+  console.log(`✅ FINAL calculated minimum: ${finalMin} items`);
+  return finalMin;
 }
 
 function buildWizardContext(wizardData: any): string {
@@ -922,27 +945,37 @@ export async function POST(request: NextRequest) {
     const wizardData = wizardDataStr ? JSON.parse(wizardDataStr) : null;
 
     // Dynamic minimum items calculation based on template and area
-    const minItemsByTemplate: Record<string, number> = {
-      'foundation': 25,
-      'shell': 60,
-      'turnkey': 80,
-      'house_full': 150,
-      'apartment_rough': 50,
-      'custom': 50
-    };
+    // Calculate minimum items based on wizard data (smart calculation)
+    let calculatedMin: number;
 
-    const areaNum = parseFloat(area) || 100;
-    const baseMin = minItemsByTemplate[template] || 50;
+    if (wizardData) {
+      calculatedMin = calculateMinimumItems(wizardData);
+      console.log('✅ Using SMART calculation from wizard data');
+    } else {
+      // Fallback to old template-based calculation
+      const minItemsByTemplate: Record<string, number> = {
+        'foundation': 25,
+        'shell': 60,
+        'turnkey': 80,
+        'house_full': 150,
+        'apartment_rough': 50,
+        'custom': 50
+      };
 
-    // Dynamic calculation - for house_full scale with area
-    const calculatedMin = template === 'house_full'
-      ? Math.max(baseMin, Math.floor(areaNum * 1.2))
-      : baseMin;
+      const areaNum = parseFloat(area) || 100;
+      const baseMin = minItemsByTemplate[template] || 50;
+
+      calculatedMin = template === 'house_full'
+        ? Math.max(baseMin, Math.floor(areaNum * 1.2))
+        : baseMin;
+
+      console.log('⚠️ Using OLD template-based calculation (no wizard)');
+    }
 
     console.log('📊 Wizard Data:', wizardData ? 'Присутній' : 'Відсутній');
     console.log('📐 Calculated Min Items:', calculatedMin);
     console.log('🏗️ Template:', template);
-    console.log('📏 Area:', areaNum, 'm²');
+    console.log('📏 Area:', area, 'm²');
 
     if (files.length === 0) {
       return NextResponse.json({ error: "Завантажте хоча б один файл" }, { status: 400 });
@@ -1606,6 +1639,63 @@ ${wizardContext ? `
 
 Якщо НІ на будь-що - ПОВТОРИ генерацію з більшою деталізацією!
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚨🚨🚨 КРИТИЧНА ВИМОГА - ПРОЧИТАЙ ЦЕ ПЕРЕД ГЕНЕРАЦІЄЮ! 🚨🚨🚨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**МІНІМУМ ПОЗИЦІЙ: ${calculatedMin}**
+
+Це НЕ рекомендація - це ОБОВ'ЯЗКОВА вимога!
+
+Якщо ти згенеруєш МЕНШЕ ${calculatedMin} позицій:
+❌ Кошторис буде ВІДХИЛЕНО
+❌ Клієнт НЕ отримає повну інформацію
+❌ Компанія втратить гроші на недооціненні проекту
+
+**ЯК ДОСЯГТИ ${calculatedMin} ПОЗИЦІЙ:**
+
+1. **НЕ об'єднуй матеріали:**
+   ❌ ПОГАНО: "Штукатурка (стартова + фінішна)" - 1 позиція
+   ✅ ДОБРЕ: "Штукатурка стартова Knauf HP Start 30кг" + "Шпаклівка фінішна Knauf HP Finish 25кг" - 2 позиції
+
+2. **Розбивай на підтипи:**
+   ❌ ПОГАНО: "Розетки" - 1 позиція
+   ✅ ДОБРЕ: "Розетка одинарна" + "Розетка двомісна" + "Підрозетник" + "Кабель NYM 3x2.5" - 4 позиції
+
+3. **Додавай всі компоненти системи:**
+   Наприклад, для опалення:
+   - Котел газовий (марка, модель, потужність)
+   - Радіатори (кожен тип окремо)
+   - Труби (різні діаметри окремо)
+   - Фітинги (різні типи)
+   - Термостати
+   - Колектор
+   - Група безпеки
+   - Розширювальний бак
+   - Циркуляційний насос
+   - Кріплення
+   - Ізоляція труб
+   Це вже 10+ позицій для ОДНІЄЇ системи!
+
+4. **Додавай допоміжні матеріали:**
+   - Ґрунтовки (перед кожним етапом)
+   - Клеї (різні типи)
+   - Серпянка, кутники, профілі
+   - Кріплення (саморізи, дюбелі, анкери)
+   - Плівки (гідроізоляція, пароізоляція)
+
+5. **Розбивай роботи по приміщеннях:**
+   Якщо є 3 санвузли - вказуй матеріали для КОЖНОГО окремо!
+
+**ПЕРЕД ВІДПРАВКОЮ ВІДПОВІДІ:**
+
+Порахуй РЕАЛЬНУ кількість позицій:
+sections[0].items.length + sections[1].items.length + sections[2].items.length + ... = ???
+
+Якщо результат < ${calculatedMin} → ДОДАЙ ще ${Math.ceil(calculatedMin * 0.3)} позицій!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
 # ФОРМАТ ВІДПОВІДІ (тільки JSON, без іншого тексту):
 {
   "title": "Назва кошторису",
@@ -1692,6 +1782,10 @@ ${wizardContext ? `
           tools: [{
             googleSearch: {},
           } as unknown as import("@google/generative-ai").Tool],
+          generationConfig: {
+            temperature: 0.3,
+            maxOutputTokens: 16000, // Increase to allow more items (default is too low)
+          },
         });
 
         const parts: (string | { inlineData: { data: string; mimeType: string } })[] = [prompt];
