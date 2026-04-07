@@ -183,10 +183,10 @@ async function generateWithAnthropic(
 function calculateMinimumItems(wizardData: any, isCommercial: boolean = false): number {
   if (!wizardData) return 50;
 
-  // Commercial projects need much more items
+  // Commercial projects need much more items (phased generation)
   if (isCommercial) {
-    console.log('🏪 Commercial project - using higher base minimum (300 items, will iterate)');
-    return 300; // Start with 300, iterations will add more for full coverage
+    console.log('🏪 Commercial project - Phase 1 minimum (150 items), iterations add Phase 2-3');
+    return 150; // Phase 1: 150 items, total target 400-500+ across phases
   }
 
   let base = 60;
@@ -1442,10 +1442,10 @@ export async function POST(request: NextRequest) {
       console.log(`🏪 COMMERCIAL PROJECT DETECTED! ${hasATB ? '(ATB supermarket)' : '(Generic commercial)'}`);
 
       // Override minimum items for commercial projects
-      // Note: 300 is more realistic for single AI response (~100KB JSON)
-      // Iterations will add more to reach full coverage
-      calculatedMin = 300;
-      console.log(`🏪 Updated calculatedMin to 300 for commercial project (will iterate to add more)`);
+      // Phase 1: 150 items (core systems), then iterations add Phase 2-3
+      // Total target: 400-500+ items across all phases
+      calculatedMin = 150; // Phase 1 minimum
+      console.log(`🏪 Updated calculatedMin to 150 for Phase 1 (iterations will add Phase 2-3 for total 400-500+)`);
     }
 
     // Build wizard context with commercial flag
@@ -1860,9 +1860,31 @@ ${sectionsText}
 
 ## КРИТИЧНО ВАЖЛИВА ВИМОГА - КІЛЬКІСТЬ ПОЗИЦІЙ:
 
-**МІНІМУМ для цього проекту: ${calculatedMin} позицій**
+${(isCommercialProject || hasATB) ? `
+🏪 **КОМЕРЦІЙНИЙ ПРОЕКТ - ПОЕТАПНА ГЕНЕРАЦІЯ:**
 
-${template === 'house_full' ? `
+**Загальна ціль: 400-500+ позицій** (для повного комерційного кошторису)
+
+**Твоє завдання ЗАРАЗ: згенеруй ФАЗУ 1 (150-200 позицій)**
+
+📋 **ФАЗА 1 - Основні системи та роботи (150-200 позицій):**
+- Будівельні роботи (фундамент, стіни, дах, перекриття): 40-50 позицій
+- Промислове холодильне обладнання: 20-30 позицій
+- Електрика потужна (трансформатор, ГРЩ, кабелі, розетки): 30-40 позицій
+- HVAC (вентиляція, кондиціювання): 20-30 позицій
+- Протипожежні системи (сигналізація, пожежогасіння): 20-30 позицій
+- Водопостачання та каналізація: 10-15 позицій
+
+⚠️ **НЕ намагайся згенерувати ВСІ 500 позицій зараз!**
+Це призведе до обриву JSON. Зроби якісну Фазу 1 (150-200 позицій),
+наступні ітерації додадуть Фазу 2 (оздоблення, благоустрій) та Фазу 3 (деталі).
+
+**МІНІМУМ для ЦІЄЇ фази: 150 позицій, ОПТИМАЛЬНО: 180-200 позицій**
+
+` : `**МІНІМУМ для цього проекту: ${calculatedMin} позицій**
+`}
+
+${template === 'house_full' && !(isCommercialProject || hasATB) ? `
 **РОЗБИВКА ПО КАТЕГОРІЯХ (орієнтовно):**
 - Фундамент та нульовий цикл: 15-25 позицій
 - Стіни та перегородки: 20-35 позицій
@@ -1883,6 +1905,17 @@ ${template === 'house_full' ? `
 - Кожен розмір, товщина, специфікація — окрема позиція
 
 ⚠️⚠️⚠️ КРИТИЧНО ВАЖЛИВО ⚠️⚠️⚠️
+
+${(isCommercialProject || hasATB) ? `
+**МІНІМУМ для ФАЗИ 1: 150 позицій, ОПТИМАЛЬНО: 180-200 позицій**
+
+ПЕРЕД ВІДПОВІДДЮ ПОРАХУЙ: sections[0].items.length + sections[1].items.length + ... >= 150
+Якщо < 150 → ДОДАЙ ЩЕ ПОЗИЦІЙ!
+Якщо > 200 → ЗУПИНИСЬ, наступна ітерація додасть більше!
+
+Фокус на ЯКІСТЬ, а не на кількість. Краще 180 якісних позицій зараз,
+ніж 500 поганих або обірваний JSON.
+` : `
 **АБСОЛЮТНИЙ МІНІМУМ: ${calculatedMin} позицій**
 
 Якщо ти згенеруєш менше ${calculatedMin} позицій - це НЕПРИЙНЯТНО!
@@ -1890,6 +1923,7 @@ ${template === 'house_full' ? `
 
 ПЕРЕД ВІДПОВІДДЮ ПОРАХУЙ: sections[0].items.length + sections[1].items.length + ... >= ${calculatedMin}
 Якщо НІ - ДОДАЙ ЩЕ ПОЗИЦІЙ!
+`}
 
 # СТАНДАРТИ ЯКОСТІ (на основі реальних проєктів Metrum Group):
 
@@ -2445,14 +2479,49 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
       iterationHistory.push(`Iteration ${iterationCount}: ${totalItems} → target ${calculatedMin}`);
 
       // Build supplementary prompt
+      const isCommercialIteration = isCommercialProject || hasATB;
       const supplementPrompt = `
 # ДОДАТКОВА ГЕНЕРАЦІЯ ПОЗИЦІЙ (Ітерація ${iterationCount})
 
+${isCommercialIteration && iterationCount === 1 ? `
+🏪 **КОМЕРЦІЙНИЙ ПРОЕКТ - ФАЗА 2: Оздоблення та благоустрій**
+
+Фаза 1 згенерована (${totalItems} позицій - основні системи).
+Тепер додай **ФАЗУ 2 (150-200 позицій):**
+
+📋 **ФАЗА 2 - Оздоблення та благоустрій (150-200 позицій):**
+- Оздоблення торгового залу (стіни, підлога, стеля): 40-50 позицій
+- Санвузли комерційні (для відвідувачів + персонал): 20-30 позицій
+- Касова зона та обладнання: 15-20 позицій
+- Системи безпеки (відеоспостереження, контроль доступу): 20-25 позицій
+- Вантажна зона (рампа, ворота, освітлення): 15-20 позицій
+- Благоустрій зовнішній (парковка, доріжки, огорожа, освітлення): 30-40 позицій
+- Вивіски та зовнішня реклама: 10-15 позицій
+
+**Згенеруй 150-200 якісних позицій для Фази 2.**
+
+` : isCommercialIteration && iterationCount === 2 ? `
+🏪 **КОМЕРЦІЙНИЙ ПРОЕКТ - ФАЗА 3: Фінальні деталі**
+
+Фази 1+2 згенеровані (${totalItems} позицій).
+Тепер додай **ФАЗУ 3 (100-150 позицій) - фінальні деталі:**
+
+📋 **ФАЗА 3 - Деталі та резерви (100-150 позицій):**
+- Дрібні електромонтажні роботи (розетки додаткові, світильники): 20-30 позицій
+- Сантехнічна арматура та з'єднання: 15-20 позицій
+- Фурнітура (ручки, замки, петлі, доводчики): 15-20 позицій
+- Витратні матеріали (герметики, клеї, саморізи, дюбелі): 20-30 позицій
+- Лакофарбові матеріали (ґрунтовки, фарби різних зон): 15-20 позицій
+- Додаткове обладнання (полиці, стелажі, вішаки): 15-25 позицій
+
+**Згенеруй 100-150 якісних позицій для завершення кошторису.**
+
+` : `
 Ти вже згенерував початковий кошторис з ${totalItems} позиціями.
 Але потрібно МІНІМУМ ${calculatedMin} позицій.
 
 **БРАКУЄ: ${gap} позицій!**
-
+`}
 Твоє завдання: ДОДАЙ ще ${gap} позицій до ІСНУЮЧИХ секцій кошторису.
 
 ## ПОТОЧНИЙ КОШТОРИС:
