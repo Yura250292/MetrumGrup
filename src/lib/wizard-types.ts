@@ -7,6 +7,7 @@ export type WorkScope =
   | 'foundation_walls'
   | 'foundation_walls_roof'
   | 'full_cycle'
+  | 'reconstruction'  // Демонтаж + нове будівництво (для комерційних)
   | 'renovation';
 
 export type RenovationStage =
@@ -168,6 +169,16 @@ export interface WizardData {
   // Для комерційного приміщення
   commercialData?: {
     purpose: 'shop' | 'restaurant' | 'warehouse' | 'production' | 'showroom' | 'other';
+
+    // Поточний стан (для нового будівництва / реконструкції)
+    currentState?:
+      | 'greenfield' // Чиста ділянка (будівництво з нуля)
+      | 'existing_building' // Існуюча будівля (потрібен демонтаж)
+      | 'existing_renovation'; // Існуюче приміщення (тільки ремонт)
+
+    // Чи потрібен демонтаж існуючої будівлі?
+    demolitionRequired?: boolean;
+    demolitionDescription?: string; // Опис що саме демонтувати
 
     // Промислова специфікація
     floor: {

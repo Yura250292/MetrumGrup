@@ -452,6 +452,12 @@ function WizardStep1_WorkScope({ data, setData }: { data: WizardData; setData: (
         { value: 'foundation_walls_roof' as WorkScope, label: 'Коробка з дахом', icon: '🏠', desc: 'Фундамент, стіни та дах' },
         { value: 'full_cycle' as WorkScope, label: 'Повний цикл', icon: '✨', desc: 'Від фундаменту до оздоблення' },
       ];
+    } else if (data.objectType === 'commercial') {
+      return [
+        { value: 'full_cycle' as WorkScope, label: 'Будівництво з нуля', icon: '🏗️', desc: 'Нове будівництво під ключ (фундамент, стіни, дах, комунікації, оздоблення)' },
+        { value: 'reconstruction' as WorkScope, label: 'Реконструкція', icon: '🔄', desc: 'Демонтаж існуючої будівлі + нове будівництво' },
+        { value: 'renovation' as WorkScope, label: 'Ремонт', icon: '🔨', desc: 'Ремонт та оздоблення існуючого приміщення' },
+      ];
     } else {
       return [
         { value: 'renovation' as WorkScope, label: 'Ремонт', icon: '🔨', desc: 'Ремонт та оздоблення приміщення' },
@@ -2381,6 +2387,75 @@ function WizardStepCommercial({ data, setData }: { data: WizardData; setData: (d
           🏭 <strong>Комерційне приміщення:</strong> Спеціальні вимоги для бізнесу
         </p>
       </div>
+
+      {/* Current State - для нового будівництва / реконструкції */}
+      {(data.workScope === 'full_cycle' || data.workScope === 'reconstruction') && (
+        <div>
+          <label className="block text-sm font-medium mb-2">Поточний стан об'єкта</label>
+          <div className="grid grid-cols-1 gap-3">
+            {[
+              { value: 'greenfield', label: 'Чиста ділянка', icon: '🟢', desc: 'Будівництво з нуля на пустій ділянці' },
+              { value: 'existing_building', label: 'Існуюча будівля', icon: '🏢', desc: 'Є стара будівля (потрібен демонтаж + нове будівництво)' },
+            ].map((option) => (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer",
+                  commercialData.currentState === option.value && "border-primary bg-primary/5"
+                )}
+              >
+                <span className="text-2xl">{option.icon}</span>
+                <div className="flex-1">
+                  <input
+                    type="radio"
+                    name="currentState"
+                    value={option.value}
+                    checked={commercialData.currentState === option.value}
+                    onChange={(e) => updateCommercial({ currentState: e.target.value as any })}
+                    className="sr-only"
+                  />
+                  <div className="font-medium">{option.label}</div>
+                  <div className="text-xs text-muted-foreground mt-1">{option.desc}</div>
+                </div>
+                {commercialData.currentState === option.value && <Check className="h-5 w-5 text-primary" />}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Demolition details - якщо existing_building */}
+      {commercialData.currentState === 'existing_building' && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 space-y-3">
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={commercialData.demolitionRequired !== false}
+              onChange={(e) => updateCommercial({ demolitionRequired: e.target.checked })}
+              className="mt-1"
+            />
+            <div>
+              <div className="font-medium text-sm">Потрібен демонтаж існуючої будівлі</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Повний демонтаж старої будівлі перед новим будівництвом
+              </div>
+            </div>
+          </label>
+
+          {commercialData.demolitionRequired !== false && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Опис демонтажних робіт (опціонально)</label>
+              <textarea
+                value={commercialData.demolitionDescription || ''}
+                onChange={(e) => updateCommercial({ demolitionDescription: e.target.value })}
+                className="w-full px-4 py-2 border rounded-lg"
+                rows={3}
+                placeholder="Наприклад: Демонтаж одноповерхової цегляної будівлі 400 м², вивіз сміття, планування ділянки"
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       <div>
         <label className="block text-sm font-medium mb-2">Призначення приміщення</label>

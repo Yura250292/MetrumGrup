@@ -749,6 +749,48 @@ function buildWizardContext(wizardData: any, isCommercial: boolean = false): str
 
     context += `- Призначення: ${purposeLabels[comm.purpose] || comm.purpose}\n`;
 
+    // Current state and demolition (for new construction / reconstruction)
+    if (comm.currentState) {
+      const currentStateLabels: Record<string, string> = {
+        greenfield: 'Чиста ділянка (будівництво з нуля)',
+        existing_building: 'Існуюча будівля (потрібен демонтаж)',
+        existing_renovation: 'Існуюче приміщення (тільки ремонт)'
+      };
+
+      context += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      context += `### ⚠️⚠️⚠️ КРИТИЧНО ВАЖЛИВО - ПОТОЧНИЙ СТАН ⚠️⚠️⚠️\n`;
+      context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      context += `**Поточний стан:** ${currentStateLabels[comm.currentState] || comm.currentState}\n`;
+
+      if (comm.currentState === 'greenfield') {
+        context += `\n🟢 **ЦЕ ЧИСТА ДІЛЯНКА - БУДІВНИЦТВО З НУЛЯ!**\n\n`;
+        context += `**ОБОВ'ЯЗКОВО ВКЛЮЧИ:**\n`;
+        context += `✅ Підготовка ділянки (планування, розмітка)\n`;
+        context += `✅ Повний цикл будівництва (фундамент, стіни, дах, комунікації, оздоблення)\n`;
+        context += `✅ Всі комерційні системи (холодильне обладнання, потужна електрика, HVAC, протипожежні)\n`;
+        context += `❌ НЕ ДОДАВАЙ демонтажні роботи - будівлі немає!\n`;
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      } else if (comm.currentState === 'existing_building') {
+        context += `\n🏢 **Є ІСНУЮЧА БУДІВЛЯ!**\n\n`;
+
+        if (comm.demolitionRequired !== false) {
+          context += `🚨 **ДЕМОНТАЖ ДОЗВОЛЕНИЙ:**\n`;
+          if (comm.demolitionDescription) {
+            context += `**Опис демонтажу:** ${comm.demolitionDescription}\n\n`;
+          } else {
+            context += `**Повний демонтаж існуючої будівлі** перед новим будівництвом\n\n`;
+          }
+          context += `**ОБОВ'ЯЗКОВО ВКЛЮЧИ:**\n`;
+          context += `1️⃣ **Демонтажні роботи:** розбирання будівлі, вивіз сміття, планування ділянки\n`;
+          context += `2️⃣ **Нове будівництво:** фундамент, стіни, дах, комунікації, оздоблення\n`;
+          context += `3️⃣ **Комерційні системи:** всі обов'язкові для магазину/супермаркету\n`;
+        } else {
+          context += `❌ **ДЕМОНТАЖ ЗАБОРОНЕНО** - будівля залишається\n`;
+        }
+        context += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      }
+    }
+
     if (comm.floor) {
       context += `- Тип підлоги: ${comm.floor.type === 'industrial' ? 'Промислова' : 'Стандартна'}\n`;
       if (comm.floor.coating) {
