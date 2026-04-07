@@ -3788,7 +3788,7 @@ export default function AIEstimatePage() {
           </div>
 
           {/* Sections */}
-          {estimate.sections.map((section, sIdx) => (
+          {estimate.sections && estimate.sections.length > 0 ? estimate.sections.map((section, sIdx) => (
             <Card key={sIdx} className="overflow-hidden">
               <div className="flex items-center justify-between w-full px-5 py-4 bg-muted/10">
                 <div className="flex items-center gap-3 flex-1">
@@ -4007,7 +4007,11 @@ export default function AIEstimatePage() {
                 </div>
               )}
             </Card>
-          ))}
+          )) : (
+            <Card className="p-8 text-center text-muted-foreground">
+              <p>Кошторис не містить секцій. Спробуйте згенерувати знову.</p>
+            </Card>
+          )}
 
           {/* Add section button */}
           <Button
