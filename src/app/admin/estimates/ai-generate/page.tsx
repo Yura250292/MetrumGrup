@@ -4326,8 +4326,8 @@ export default function AIEstimatePage() {
                     <h3 className="text-lg font-semibold mb-4">📂 Класифікація завантажених файлів</h3>
 
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {preAnalysisData.classification.byType.map((typeGroup: any) => (
-                        <Card key={typeGroup.type} className={cn(
+                      {preAnalysisData.classification.byType.map((typeGroup: any, index: number) => (
+                        <Card key={`${typeGroup.type}-${index}`} className={cn(
                           "p-4 border-2",
                           typeGroup.type === 'geological' ? 'border-orange-500 bg-orange-50' :
                           typeGroup.type === 'site_plan' || typeGroup.type === 'topography' ? 'border-green-500 bg-green-50' :
