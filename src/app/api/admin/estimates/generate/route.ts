@@ -8,6 +8,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { TEMPLATE_PROMPTS } from "@/lib/estimate-prompts";
 import { validateEstimate, formatValidationReport } from "@/lib/estimate-validation";
 import { generateMaterialsContext } from "@/lib/materials-database";
+import { generateWorkItemsContext } from "@/lib/work-items-database";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 import fs from "fs/promises";
 import path from "path";
@@ -1392,6 +1393,10 @@ export async function POST(request: NextRequest) {
     const materialsContext = generateMaterialsContext(relevantCategories);
     console.log(`💰 Materials database context: ${(materialsContext.length / 1024).toFixed(1)}KB, categories: ${relevantCategories?.join(', ') || 'all'}`);
 
+    // Build work items context (labor/installation prices)
+    const workItemsContext = generateWorkItemsContext(relevantCategories);
+    console.log(`💼 Work items database context: ${(workItemsContext.length / 1024).toFixed(1)}KB, categories: ${relevantCategories?.join(', ') || 'all'}`);
+
     // Build specification context if available
     const specificationContext = specificationData
       ? generateSpecificationContext(specificationData)
@@ -1508,6 +1513,49 @@ ${materialsContext}
    - АБО використай схожий матеріал з бази як орієнтир
 
 3. **ПЕРЕВІРКА:** Якщо твоя ціна відрізняється від бази > 20% → ти ПОМИЛЯЄШСЯ!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}
+
+${workItemsContext ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💼💼💼 БАЗА РОБІТ З РЕАЛЬНИМИ ЦІНАМИ 💼💼💼
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${workItemsContext}
+
+**🚨 КРИТИЧНО ВАЖЛИВО - ОБОВ'ЯЗКОВЕ ДОДАВАННЯ РОБІТ 🚨**
+
+1. **ДЛЯ КОЖНОГО МАТЕРІАЛУ ДОДАЙ РОБОТУ З МОНТАЖУ!**
+   - Газоблок 100 шт → "Кладка стін з газоблоку" (1850 грн/м³)
+   - Електропровід 50 м → "Прокладка електропроводки" (45 грн/м.п.)
+   - Плитка 20 м² → "Укладання плитки на підлогу" (380 грн/м²)
+   - Ламінат 30 м² → "Укладання ламінату" (180 грн/м²)
+
+2. **ВИКОРИСТОВУЙ ЦІНИ З БАЗИ РОБІТ!**
+   - Встановлення розетки = 180 грн/шт (НЕ 50 грн!)
+   - Укладання плитки = 380 грн/м² (НЕ 150 грн!)
+   - Штукатурка стін = 180 грн/м² (НЕ 80 грн!)
+
+3. **ОБОВ'ЯЗКОВІ РОБОТИ ЩО ЧАСТО ЗАБУВАЮТЬ:**
+   - Земляні роботи (риття котловану/траншей)
+   - Опалубка для фундаменту
+   - В'язка арматури
+   - Заливка бетону
+   - Монтаж опалубки
+   - Вивіз сміття
+
+4. **ПЕРЕВІРКА:** Якщо в кошторисі є матеріали але НЕМАЄ робіт з монтажу → ти ПОМИЛЯЄШСЯ!
+
+**ПРИКЛАД ПРАВИЛЬНОГО КОШТОРИСУ:**
+```
+❌ НЕПРАВИЛЬНО (тільки матеріали):
+- Газоблок AEROC 300×200×600: 100 шт × 89 грн = 8,900 грн
+
+✅ ПРАВИЛЬНО (матеріали + роботи):
+- Газоблок AEROC 300×200×600: 100 шт × 89 грн = 8,900 грн
+- Кладка стін з газоблоку: 3.6 м³ × 1,850 грн = 6,660 грн
+```
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}
