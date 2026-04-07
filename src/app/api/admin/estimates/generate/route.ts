@@ -1737,6 +1737,61 @@ ${hasATB ? `
    - Пішохідні доріжки, бордюри: 300,000-600,000 ₴
    - Благоустрій, озеленення: 400,000-800,000 ₴
    - Огорожа та ворота (по периметру): 500,000-1,000,000 ₴
+
+   **B. ФІКСОВАНІ РОЗРАХУНКИ ДЛЯ СТАБІЛЬНОСТІ ТЕНДЕРА:**
+
+   🎯 **КРИТИЧНО: Використовуй ЦІ ТОЧНІ формули для кількостей!**
+   Це забезпечить стабільність кошторису (±5 млн замість ±40 млн)
+
+   **Площа проекту з документів: ${parsedData?.sitePlan?.area || area || '1426'} м²**
+
+   **РОЗРАХУНОК ХОЛОДИЛЬНОГО ОБЛАДНАННЯ (на базі торгової площі):**
+   - Торгова площа ≈ 60% від загальної = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6))} м²
+   - Холодильні вітрини: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 50)} шт** (1 вітрина на 50 м² торгової площі)
+     × 120,000 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 50) * 120000} ₴
+   - Морозильні лари: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 80)} шт** (1 лар на 80 м²)
+     × 100,000 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 80) * 100000} ₴
+   - Холодильні камери: **ТОЧНО 4 шт** (стандарт для АТБ: молоко, м'ясо, риба, овочі)
+     × 300,000 ₴ = 1,200,000 ₴
+   - Морозильні камери: **ТОЧНО 3 шт** (заморожені продукти, морозиво, напівфабрикати)
+     × 400,000 ₴ = 1,200,000 ₴
+   - Компресорне обладнання: **ТОЧНО 1 комплект** = 1,500,000 ₴
+
+   **РОЗРАХУНОК ЕЛЕКТРИКИ (на базі загальної площі):**
+   - Загальна потужність: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.35))} кВт** (0.35 кВт/м² для супермаркету)
+   - Трансформаторна підстанція: **ТОЧНО 1 шт** (${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.35))} кВА) = 2,200,000 ₴
+   - Генератор резервний: **ТОЧНО 1 шт** (${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.35) * 0.3)} кВт) = 900,000 ₴
+   - Світильники LED торговий зал: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 4)} шт** (1 світильник на 4 м²)
+     × 2,500 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 4) * 2500} ₴
+   - Розетки силові: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 10)} шт** (1 розетка на 10 м²)
+     × 350 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 10) * 350} ₴
+
+   **РОЗРАХУНОК HVAC (на базі об'єму приміщення):**
+   - Висота торгового залу: 4.5 м
+   - Об'єм торгового залу: ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) * 4.5)} м³
+   - Приточно-витяжна установка: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) * 4.5 / 1000)} м³/год** = 2,800,000 ₴
+   - VRF система кондиціювання: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426') * 0.6) / 30)} кВт** (180 Вт/м²)
+     = 2,200,000 ₴
+
+   **РОЗРАХУНОК ПРОТИПОЖЕЖНИХ СИСТЕМ:**
+   - Спринклери: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 10)} шт** (1 спринклер на 10 м²)
+     × 1,200 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 10) * 1200} ₴
+   - Пожежні датчики: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 15)} шт** (1 датчик на 15 м²)
+     × 800 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 15) * 800} ₴
+   - Протипожежні двері: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 100)} шт** (згідно евакуаційних вимог)
+     × 25,000 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 100) * 25000} ₴
+
+   **РОЗРАХУНОК ПАРКОВКИ:**
+   - Місць: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 25)} шт** (1 місце на 25 м² торгової площі, згідно ДБН)
+   - Площа парковки: ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 25) * 25} м² (25 м² на місце)
+   - Асфальтування: ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 25) * 25} м² × 1,800 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 25) * 25 * 1800} ₴
+
+   **РОЗРАХУНОК СИСТЕМ БЕЗПЕКИ:**
+   - Камери відеоспостереження: **ТОЧНО ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 30)} шт** (1 камера на 30 м²)
+     × 12,000 ₴ = ${Math.round((parseFloat(parsedData?.sitePlan?.area || area || '1426')) / 30) * 12000} ₴
+
+   ⚠️ **ВИКОРИСТОВУЙ ЦІ ТОЧНІ КІЛЬКОСТІ!** Не вигадуй свої - це формули для тендера!
+   Ціни можна коригувати в межах ±10%, але кількості ФІКСОВАНІ!
    - Дренаж та зливова каналізація: 300,000-600,000 ₴
    **ВСЬОГО БЛАГОУСТРІЙ: 3,400,000-6,800,000 ₴**
 
