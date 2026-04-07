@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
+import { parsePDF } from "@/lib/pdf-helper";
 import { classifyDocuments, groupByType } from '@/lib/document-classifier';
 import { DocumentType } from '@/lib/document-types';
 import { SitePlanParser } from '@/lib/parsers/site-plan-parser';
@@ -60,8 +61,7 @@ export async function POST(request: NextRequest) {
 
       for (const doc of sitePlanDocs) {
         const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const pdfParse = await import("pdf-parse");
-        const data = await (pdfParse as any).default(buffer);
+        const data = await parsePDF(buffer);
         texts.push(data.text);
       }
 
@@ -80,8 +80,7 @@ export async function POST(request: NextRequest) {
 
       for (const doc of geologicalDocs) {
         const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const pdfParse = await import("pdf-parse");
-        const data = await (pdfParse as any).default(buffer);
+        const data = await parsePDF(buffer);
         texts.push(data.text);
       }
 
@@ -103,8 +102,7 @@ export async function POST(request: NextRequest) {
 
       for (const doc of reviewDocs) {
         const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const pdfParse = await import("pdf-parse");
-        const data = await (pdfParse as any).default(buffer);
+        const data = await parsePDF(buffer);
         texts.push(data.text);
       }
 
