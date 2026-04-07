@@ -30,7 +30,8 @@ import {
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { createFileBatches, calculateProgress, formatFileSize, type UploadProgress } from "@/lib/batch-upload";
-import { generateEngineeringReport, generateQuickSummary } from "@/lib/engineering-report";
+// import { generateEngineeringReport, generateQuickSummary } from "@/lib/engineering-report"; // Temporarily disabled
+import { generateQuickSummary } from "@/lib/engineering-report";
 import { PROJECT_TEMPLATES } from "@/lib/constants";
 import { WizardData, ObjectType, WorkScope, RenovationStage } from "@/lib/wizard-types";
 
@@ -2689,8 +2690,8 @@ export default function AIEstimatePage() {
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
   const [accumulatedAnalysis, setAccumulatedAnalysis] = useState<any>(null);
 
-  // Engineering report state
-  const [engineeringReport, setEngineeringReport] = useState<string | null>(null);
+  // Engineering report state (temporarily disabled)
+  // const [engineeringReport, setEngineeringReport] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [wizardData, setWizardData] = useState<WizardData>({
     // Step 0: Object Type
@@ -2940,25 +2941,26 @@ export default function AIEstimatePage() {
 
       setPreAnalysisData(combinedResult);
 
-      // Генеруємо інженерний звіт
-      console.log('📊 Generating engineering report...');
-      setIsGeneratingReport(true);
+      // TODO: Генеруємо інженерний звіт (temporarily disabled - endpoint not implemented)
+      // console.log('📊 Generating engineering report...');
+      // setIsGeneratingReport(true);
 
-      try {
-        const report = await generateEngineeringReport({
-          classification: combinedResult.classification,
-          parsedData: combinedResult.parsedData || {},
-          filesAnalyzed: combinedResult.filesAnalyzed,
-        });
+      // try {
+      //   const report = await generateEngineeringReport({
+      //     classification: combinedResult.classification,
+      //     parsedData: combinedResult.parsedData || {},
+      //     filesAnalyzed: combinedResult.filesAnalyzed,
+      //   });
 
-        setEngineeringReport(report);
-        console.log('✅ Engineering report generated');
-      } catch (reportError) {
-        console.error('Failed to generate engineering report:', reportError);
-        // Не блокуємо показ результатів, навіть якщо звіт не згенерувався
-      } finally {
-        setIsGeneratingReport(false);
-      }
+      //   setEngineeringReport(report);
+      //   console.log('✅ Engineering report generated');
+      // } catch (reportError) {
+      //   console.error('Failed to generate engineering report:', reportError);
+      //   // Не блокуємо показ результатів, навіть якщо звіт не згенерувався
+      // } finally {
+      //   setIsGeneratingReport(false);
+      // }
+      setIsGeneratingReport(false); // Keep it disabled for now
 
       setShowPreAnalysis(true);
 
@@ -4315,48 +4317,7 @@ export default function AIEstimatePage() {
                 </Card>
               )}
 
-              {engineeringReport && !isGeneratingReport && (
-                <Card className="mb-6 border-2 border-blue-500">
-                  <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
-                    <div className="flex items-center justify-between mb-4">
-                      <h3 className="text-xl font-bold text-blue-900">
-                        🎯 Інженерний звіт та рекомендації
-                      </h3>
-                      <Badge className="bg-blue-600 text-white">AI Generated</Badge>
-                    </div>
-
-                    <div className="prose prose-sm max-w-none">
-                      <div
-                        className="bg-white p-6 rounded-lg border border-blue-200"
-                        dangerouslySetInnerHTML={{
-                          __html: engineeringReport
-                            .replace(/\n/g, '<br/>')
-                            .replace(/^## (.+)$/gm, '<h3 class="text-lg font-bold mt-4 mb-2 text-gray-900">$1</h3>')
-                            .replace(/^# (.+)$/gm, '<h2 class="text-xl font-bold mt-6 mb-3 text-gray-900">$1</h2>')
-                            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                            .replace(/- \[ \] (.+)/g, '<div class="flex items-start gap-2 ml-4"><input type="checkbox" disabled class="mt-1"/> <span>$1</span></div>')
-                            .replace(/- \[x\] (.+)/g, '<div class="flex items-start gap-2 ml-4"><input type="checkbox" checked disabled class="mt-1"/> <span>$1</span></div>')
-                            .replace(/^- (.+)$/gm, '<li class="ml-4">$1</li>')
-                            .replace(/🚨/g, '<span class="text-red-600 font-bold">🚨</span>')
-                            .replace(/⚠️/g, '<span class="text-orange-600">⚠️</span>')
-                            .replace(/✅/g, '<span class="text-green-600">✅</span>')
-                        }}
-                      />
-                    </div>
-
-                    {/* Quick summary badges */}
-                    {preAnalysisData.parsedData && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {generateQuickSummary(preAnalysisData.parsedData).map((insight, i) => (
-                          <Badge key={i} variant="outline" className="text-xs py-1 px-3">
-                            {insight}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </Card>
-              )}
+              {/* Engineering report temporarily disabled - endpoint not implemented */}
 
               {/* NEW: Document Classification Display */}
               {preAnalysisData.classification && (

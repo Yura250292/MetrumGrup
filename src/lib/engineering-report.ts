@@ -143,14 +143,16 @@ ${parsedData.photos ? `
     });
 
     if (!response.ok) {
-      throw new Error('Failed to generate report');
+      const errorText = await response.text();
+      console.error('Report generation failed:', response.status, errorText);
+      throw new Error(`Failed to generate report: ${response.status} ${errorText.substring(0, 200)}`);
     }
 
     const data = await response.json();
     return data.report;
   } catch (error) {
     console.error('Error generating engineering report:', error);
-    return 'Помилка генерації звіту. Спробуйте ще раз.';
+    return `Помилка генерації звіту: ${error instanceof Error ? error.message : 'Невідома помилка'}. Спробуйте ще раз.`;
   }
 }
 
