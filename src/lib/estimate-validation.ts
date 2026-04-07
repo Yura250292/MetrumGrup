@@ -505,6 +505,101 @@ function validateWizardCompliance(
       });
     }
   }
+
+  // NEW: Geological validation
+  if (context.parsedData?.geological) {
+    const geo = context.parsedData.geological;
+
+    // Check if drainage is in estimate when groundwater is high
+    if (geo.groundwaterLevel !== null && geo.groundwaterLevel < 2) {
+      const hasDrainage = estimate.sections?.some((s: any) =>
+        s.items?.some((item: any) =>
+          item.name?.toLowerCase().includes('дренаж') ||
+          item.name?.toLowerCase().includes('drainage')
+        )
+      );
+
+      if (!hasDrainage) {
+        warnings.push({
+          type: 'WARNING',
+          code: 'MISSING_DRAINAGE',
+          message: `⚠️ КРИТИЧНО: Геологічний звіт показує високий УГВ (${geo.groundwaterLevel} м), але в кошторисі немає дренажної системи!`,
+        });
+      }
+    }
+
+    // Check if foundation type matches recommendation
+    if (geo.recommendedFoundation) {
+      const hasCorrectFoundation = estimate.sections?.some((s: any) =>
+        s.items?.some((item: any) =>
+          item.name?.toLowerCase().includes(geo.recommendedFoundation.toLowerCase())
+        )
+      );
+
+      if (!hasCorrectFoundation) {
+        warnings.push({
+          type: 'WARNING',
+          code: 'FOUNDATION_TYPE_MISMATCH',
+          message: `Геологія рекомендує ${geo.recommendedFoundation} фундамент, але в кошторисі його не знайдено`,
+        });
+      }
+    }
+  }
+
+  // NEW: Site plan validation
+  if (context.parsedData?.sitePlan) {
+    const site = context.parsedData.sitePlan;
+
+    // Check if earthworks are in estimate when elevation difference is significant
+    if (site.elevationDifference && site.elevationDifference > 1) {
+      const hasEarthworks = estimate.sections?.some((s: any) =>
+        s.title?.toLowerCase().includes('земля') ||
+        s.items?.some((item: any) =>
+          item.name?.toLowerCase().includes('земля') ||
+          item.name?.toLowerCase().includes('планування')
+        )
+      );
+
+      if (!hasEarthworks) {
+        warnings.push({
+          type: 'WARNING',
+          code: 'MISSING_EARTHWORKS',
+          message: `Перепад висот ${site.elevationDifference.toFixed(2)} м, але в кошторисі немає земляних робіт`,
+        });
+      }
+    }
+
+    // Check if utility connections are in estimate
+    if (!site.existingUtilities.water || !site.existingUtilities.sewerage) {
+      const hasUtilityConnection = estimate.sections?.some((s: any) =>
+        s.items?.some((item: any) =>
+          item.name?.toLowerCase().includes('підключення') ||
+          item.name?.toLowerCase().includes('зовнішні мережі')
+        )
+      );
+
+      if (!hasUtilityConnection) {
+        warnings.push({
+          type: 'WARNING',
+          code: 'MISSING_UTILITY_CONNECTIONS',
+          message: `На ділянці відсутні комунікації, але в кошторисі немає підключення до зовнішніх мереж`,
+        });
+      }
+    }
+  }
+
+  // NEW: Review validation
+  if (context.parsedData?.review) {
+    const review = context.parsedData.review;
+
+    if (review.criticalCount > 0) {
+      warnings.push({
+        type: 'WARNING',
+        code: 'CRITICAL_REVIEW_COMMENTS',
+        message: `Є ${review.criticalCount} критичних зауважень з рецензії. Переконайтесь що всі враховані в кошторисі`,
+      });
+    }
+  }
 }
 
 function getEmptyStats(): EstimateStats {

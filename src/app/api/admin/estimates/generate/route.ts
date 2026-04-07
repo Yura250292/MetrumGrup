@@ -1065,31 +1065,110 @@ export async function POST(request: NextRequest) {
 
     console.log(`📊 Extraction summary: ${textParts.length} text files, ${imageParts.length} images, ${pdfParts.length} PDFs`);
 
-    // Classify files: plans vs specifications
-    const planFiles: File[] = [];
-    const specFiles: File[] = [];
+    // NEW: Classify files with enhanced classifier
+    const { classifyDocuments, groupByType } = await import('@/lib/document-classifier');
+    const { DocumentType } = await import('@/lib/document-types');
 
-    for (const file of files) {
-      const name = file.name.toLowerCase();
-      // Detect specification files by name keywords or size
-      const isSpec =
-        name.includes('специф') ||
-        name.includes('spec') ||
-        name.includes('технолог') ||
-        name.includes('інструкц') ||
-        name.includes('instruction') ||
-        name.includes('вимог') ||
-        name.includes('requirement') ||
-        file.size > 10 * 1024 * 1024; // Files > 10MB are likely detailed specs
+    const classified = classifyDocuments(files);
+    const grouped = groupByType(classified);
 
-      if (isSpec) {
-        specFiles.push(file);
-      } else {
-        planFiles.push(file);
+    console.log(`📂 Classified ${files.length} files:`);
+    grouped.forEach((docs, type) => {
+      console.log(`   - ${type}: ${docs.length} files`);
+    });
+
+    // Get plan and spec files for backward compatibility
+    const planFiles: File[] = (grouped.get(DocumentType.ARCHITECTURAL_PLAN) || []).map(d => d.file);
+    const specFiles: File[] = (grouped.get(DocumentType.SPECIFICATION) || []).map(d => d.file);
+
+    // NEW: Parse each document type
+    const parsedData: Record<string, any> = {};
+
+    // 1. Site Plans / Topography
+    const sitePlanDocs = [
+      ...(grouped.get(DocumentType.SITE_PLAN) || []),
+      ...(grouped.get(DocumentType.TOPOGRAPHY) || [])
+    ];
+
+    if (sitePlanDocs.length > 0) {
+      console.log(`🗺️  Processing ${sitePlanDocs.length} site plan(s)...`);
+      const { SitePlanParser } = await import('@/lib/parsers/site-plan-parser');
+      const parser = new SitePlanParser();
+      const texts: string[] = [];
+
+      for (const doc of sitePlanDocs) {
+        const buffer = Buffer.from(await doc.file.arrayBuffer());
+        const pdfParse = await import("pdf-parse");
+        const data = await (pdfParse as any).default(buffer);
+        texts.push(data.text);
+      }
+
+      const allText = texts.join('\n\n---\n\n');
+      parsedData.sitePlan = parser.parse(allText);
+      console.log(`   ✓ Site plan parsed: ${parsedData.sitePlan.summary}`);
+    }
+
+    // 2. Geological Reports
+    const geologicalDocs = grouped.get(DocumentType.GEOLOGICAL_REPORT) || [];
+
+    if (geologicalDocs.length > 0) {
+      console.log(`🪨 Processing ${geologicalDocs.length} geological report(s)...`);
+      const { GeologicalParser } = await import('@/lib/parsers/geological-parser');
+      const parser = new GeologicalParser();
+      const texts: string[] = [];
+
+      for (const doc of geologicalDocs) {
+        const buffer = Buffer.from(await doc.file.arrayBuffer());
+        const pdfParse = await import("pdf-parse");
+        const data = await (pdfParse as any).default(buffer);
+        texts.push(data.text);
+      }
+
+      const allText = texts.join('\n\n---\n\n');
+      parsedData.geological = parser.parse(allText);
+      console.log(`   ✓ Geological data: ${parsedData.geological.summary}`);
+      if (parsedData.geological.warnings.length > 0) {
+        console.warn(`   ⚠️  ${parsedData.geological.warnings.length} geological warnings`);
       }
     }
 
-    console.log(`📂 Classified: ${planFiles.length} plan files, ${specFiles.length} specification files`);
+    // 3. Project Reviews
+    const reviewDocs = grouped.get(DocumentType.PROJECT_REVIEW) || [];
+
+    if (reviewDocs.length > 0) {
+      console.log(`📝 Processing ${reviewDocs.length} project review(s)...`);
+      const { ProjectReviewParser } = await import('@/lib/parsers/review-parser');
+      const parser = new ProjectReviewParser();
+      const texts: string[] = [];
+
+      for (const doc of reviewDocs) {
+        const buffer = Buffer.from(await doc.file.arrayBuffer());
+        const pdfParse = await import("pdf-parse");
+        const data = await (pdfParse as any).default(buffer);
+        texts.push(data.text);
+      }
+
+      const allText = texts.join('\n\n---\n\n');
+      parsedData.review = parser.parse(allText);
+      console.log(`   ✓ Review parsed: ${parsedData.review.summary}`);
+      if (parsedData.review.criticalCount > 0) {
+        console.warn(`   🚨 ${parsedData.review.criticalCount} critical comments!`);
+      }
+    }
+
+    // 4. Site Photos
+    const photoDocs = grouped.get(DocumentType.SITE_PHOTOS) || [];
+
+    if (photoDocs.length > 0) {
+      console.log(`📸 Processing ${photoDocs.length} site photo(s)...`);
+      const { SitePhotosHandler } = await import('@/lib/parsers/site-photos-handler');
+      const handler = new SitePhotosHandler();
+      const photoFiles = photoDocs.map(d => d.file);
+      parsedData.photos = handler.analyze(photoFiles);
+      console.log(`   ✓ Photos: ${parsedData.photos.summary}`);
+    }
+
+    console.log(`📂 Classification complete: ${planFiles.length} plan files, ${specFiles.length} specification files`);
 
     // Process specification files
     let specificationData: any = null;
@@ -1322,6 +1401,46 @@ export async function POST(request: NextRequest) {
       console.log(`   - ${specificationData.materials.length} materials, ${specificationData.methods.length} methods, ${specificationData.requirements.filter((r: any) => r.critical).length} critical requirements`);
     }
 
+    // NEW: Build contexts from new document types
+    let sitePlanContext = '';
+    let geologicalContext = '';
+    let reviewContext = '';
+    let photosContext = '';
+
+    if (parsedData?.sitePlan) {
+      const { SitePlanParser } = await import('@/lib/parsers/site-plan-parser');
+      const sitePlanParser = new SitePlanParser();
+      sitePlanContext = sitePlanParser.generateContext(parsedData.sitePlan);
+      console.log(`🗺️  Site plan context: ${(sitePlanContext.length / 1024).toFixed(1)}KB`);
+    }
+
+    if (parsedData?.geological) {
+      const { GeologicalParser } = await import('@/lib/parsers/geological-parser');
+      const geologicalParser = new GeologicalParser();
+      geologicalContext = geologicalParser.generateContext(parsedData.geological);
+      console.log(`🪨 Geological context: ${(geologicalContext.length / 1024).toFixed(1)}KB`);
+      if (parsedData.geological.warnings.length > 0) {
+        console.warn(`   ⚠️  ${parsedData.geological.warnings.length} critical geological warnings`);
+      }
+    }
+
+    if (parsedData?.review) {
+      const { ProjectReviewParser } = await import('@/lib/parsers/review-parser');
+      const reviewParser = new ProjectReviewParser();
+      reviewContext = reviewParser.generateContext(parsedData.review);
+      console.log(`📝 Review context: ${(reviewContext.length / 1024).toFixed(1)}KB`);
+      if (parsedData.review.criticalCount > 0) {
+        console.warn(`   🚨 ${parsedData.review.criticalCount} critical review comments!`);
+      }
+    }
+
+    if (parsedData?.photos) {
+      const { SitePhotosHandler } = await import('@/lib/parsers/site-photos-handler');
+      const photosHandler = new SitePhotosHandler();
+      photosContext = photosHandler.generateContext(parsedData.photos);
+      console.log(`📸 Photos context: ${(photosContext.length / 1024).toFixed(1)}KB`);
+    }
+
     // Build prompt
     const prompt = `# РОЛЬ
 Ти — головний кошторисник із 20-річним досвідом будівельної компанії "Metrum Group" у Львові, Україна.
@@ -1414,6 +1533,46 @@ ${specificationContext}
    ${specificationData?.requirements?.filter((r: any) => r.critical).slice(0, 5).map((r: any) => `   - ${r.requirement}`).join('\n') || '   - Див. вимоги вище'}
 
 4. **КІЛЬКОСТІ:** Якщо в специфікації вказано кількість (наприклад "250 м") → використовуй ЦЮ кількість!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}
+
+${sitePlanContext ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🗺️🗺️🗺️ ПЛАН ЗЕМЕЛЬНОЇ ДІЛЯНКИ ТА ТОПОГРАФІЯ 🗺️🗺️🗺️
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${sitePlanContext}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}
+
+${geologicalContext ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🪨🪨🪨 ГЕОЛОГІЧНИЙ ЗВІТ - КРИТИЧНІ ВИМОГИ 🪨🪨🪨
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${geologicalContext}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}
+
+${reviewContext ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝📝📝 РЕЦЕНЗІЯ ЕКСПЕРТА - ОБОВ'ЯЗКОВІ ВИПРАВЛЕННЯ 📝📝📝
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${reviewContext}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+` : ''}
+
+${photosContext ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📸📸📸 ФОТО БУДІВЕЛЬНОГО МАЙДАНЧИКА 📸📸📸
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${photosContext}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ` : ''}

@@ -3,6 +3,12 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
+import { classifyDocuments, groupByType } from '@/lib/document-classifier';
+import { DocumentType } from '@/lib/document-types';
+import { SitePlanParser } from '@/lib/parsers/site-plan-parser';
+import { GeologicalParser } from '@/lib/parsers/geological-parser';
+import { ProjectReviewParser } from '@/lib/parsers/review-parser';
+import { SitePhotosHandler } from '@/lib/parsers/site-photos-handler';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -25,31 +31,101 @@ export async function POST(request: NextRequest) {
 
     console.log(`📋 PRE-ANALYSIS: ${files.length} files, wizard: ${!!wizardData}`);
 
-    // Classify files: plans vs specifications
-    const planFiles: File[] = [];
-    const specFiles: File[] = [];
+    // NEW: Classify files with enhanced classifier
+    const classified = classifyDocuments(files);
+    const grouped = groupByType(classified);
 
-    for (const file of files) {
-      const name = file.name.toLowerCase();
-      // Detect specification files by name keywords
-      const isSpec =
-        name.includes('специф') ||
-        name.includes('spec') ||
-        name.includes('технолог') ||
-        name.includes('інструкц') ||
-        name.includes('instruction') ||
-        name.includes('вимог') ||
-        name.includes('requirement') ||
-        file.size > 10 * 1024 * 1024; // Files > 10MB are likely detailed specs
+    console.log(`📂 Classified ${files.length} files:`);
+    grouped.forEach((docs, type) => {
+      console.log(`   - ${type}: ${docs.length} files`);
+    });
 
-      if (isSpec) {
-        specFiles.push(file);
-      } else {
-        planFiles.push(file);
+    // Get plan and spec files for backward compatibility
+    const planFiles: File[] = (grouped.get(DocumentType.ARCHITECTURAL_PLAN) || []).map(d => d.file);
+    const specFiles: File[] = (grouped.get(DocumentType.SPECIFICATION) || []).map(d => d.file);
+
+    // NEW: Parse each document type
+    const parsedData: Record<string, any> = {};
+
+    // 1. Site Plans / Topography
+    const sitePlanDocs = [
+      ...(grouped.get(DocumentType.SITE_PLAN) || []),
+      ...(grouped.get(DocumentType.TOPOGRAPHY) || [])
+    ];
+
+    if (sitePlanDocs.length > 0) {
+      console.log(`🗺️  Processing ${sitePlanDocs.length} site plan(s)...`);
+      const parser = new SitePlanParser();
+      const texts: string[] = [];
+
+      for (const doc of sitePlanDocs) {
+        const buffer = Buffer.from(await doc.file.arrayBuffer());
+        const pdfParse = await import("pdf-parse");
+        const data = await (pdfParse as any).default(buffer);
+        texts.push(data.text);
+      }
+
+      const allText = texts.join('\n\n---\n\n');
+      parsedData.sitePlan = parser.parse(allText);
+      console.log(`   ✓ Site plan parsed: ${parsedData.sitePlan.summary}`);
+    }
+
+    // 2. Geological Reports
+    const geologicalDocs = grouped.get(DocumentType.GEOLOGICAL_REPORT) || [];
+
+    if (geologicalDocs.length > 0) {
+      console.log(`🪨 Processing ${geologicalDocs.length} geological report(s)...`);
+      const parser = new GeologicalParser();
+      const texts: string[] = [];
+
+      for (const doc of geologicalDocs) {
+        const buffer = Buffer.from(await doc.file.arrayBuffer());
+        const pdfParse = await import("pdf-parse");
+        const data = await (pdfParse as any).default(buffer);
+        texts.push(data.text);
+      }
+
+      const allText = texts.join('\n\n---\n\n');
+      parsedData.geological = parser.parse(allText);
+      console.log(`   ✓ Geological data: ${parsedData.geological.summary}`);
+      if (parsedData.geological.warnings.length > 0) {
+        console.warn(`   ⚠️  ${parsedData.geological.warnings.length} geological warnings`);
       }
     }
 
-    console.log(`📂 Classified: ${planFiles.length} plans, ${specFiles.length} specifications`);
+    // 3. Project Reviews
+    const reviewDocs = grouped.get(DocumentType.PROJECT_REVIEW) || [];
+
+    if (reviewDocs.length > 0) {
+      console.log(`📝 Processing ${reviewDocs.length} project review(s)...`);
+      const parser = new ProjectReviewParser();
+      const texts: string[] = [];
+
+      for (const doc of reviewDocs) {
+        const buffer = Buffer.from(await doc.file.arrayBuffer());
+        const pdfParse = await import("pdf-parse");
+        const data = await (pdfParse as any).default(buffer);
+        texts.push(data.text);
+      }
+
+      const allText = texts.join('\n\n---\n\n');
+      parsedData.review = parser.parse(allText);
+      console.log(`   ✓ Review parsed: ${parsedData.review.summary}`);
+      if (parsedData.review.criticalCount > 0) {
+        console.warn(`   🚨 ${parsedData.review.criticalCount} critical comments!`);
+      }
+    }
+
+    // 4. Site Photos
+    const photoDocs = grouped.get(DocumentType.SITE_PHOTOS) || [];
+
+    if (photoDocs.length > 0) {
+      console.log(`📸 Processing ${photoDocs.length} site photo(s)...`);
+      const handler = new SitePhotosHandler();
+      const photoFiles = photoDocs.map(d => d.file);
+      parsedData.photos = handler.analyze(photoFiles);
+      console.log(`   ✓ Photos: ${parsedData.photos.summary}`);
+    }
 
     // Extract plan PDF content (for visual analysis)
     const pdfParts: Array<{ data: string; mimeType: string; name: string }> = [];
@@ -331,6 +407,16 @@ ${wizardSummary}
       filesAnalyzed: files.length,
       planFiles: planFiles.length,
       specFiles: specFiles.length,
+      classification: {
+        total: files.length,
+        byType: Array.from(grouped.entries()).map(([type, docs]) => ({
+          type,
+          count: docs.length,
+          files: docs.map(d => d.file.name),
+          confidence: docs.map(d => d.classification.confidence)
+        }))
+      },
+      parsedData, // NEW: All parsed data from new document types
       specification: specificationData
         ? {
             summary: specificationData.summary,

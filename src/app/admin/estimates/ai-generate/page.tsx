@@ -107,6 +107,24 @@ function formatSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function getDocumentTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    'site_plan': '🗺️ План ділянки',
+    'topography': '🗺️ Топографія',
+    'geological': '🪨 Геологія',
+    'review': '📝 Рецензія',
+    'photos': '📸 Фото',
+    'master_plan': '📊 Генплан',
+    'landscaping': '🌳 Благоустрій',
+    'networks': '🔌 Схеми мереж',
+    'specification': '📚 Специфікація',
+    'architectural_plan': '📐 План',
+    'unknown': '❓ Невідомо'
+  };
+
+  return labels[type] || type;
+}
+
 // Компонент для відображення результатів верифікації
 function VerificationResults({ result }: { result: any }) {
   if (!result?.verification) return null;
@@ -4052,6 +4070,149 @@ export default function AIEstimatePage() {
                   <X className="h-5 w-5" />
                 </Button>
               </div>
+
+              {/* NEW: Document Classification Display */}
+              {preAnalysisData.classification && (
+                <Card className="mb-6">
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold mb-4">📂 Класифікація завантажених файлів</h3>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {preAnalysisData.classification.byType.map((typeGroup: any) => (
+                        <Card key={typeGroup.type} className={cn(
+                          "p-4 border-2",
+                          typeGroup.type === 'geological' ? 'border-orange-500 bg-orange-50' :
+                          typeGroup.type === 'site_plan' || typeGroup.type === 'topography' ? 'border-green-500 bg-green-50' :
+                          typeGroup.type === 'review' ? 'border-red-500 bg-red-50' :
+                          typeGroup.type === 'photos' ? 'border-blue-500 bg-blue-50' :
+                          'border-gray-300'
+                        )}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold">
+                              {getDocumentTypeLabel(typeGroup.type)}
+                            </span>
+                            <Badge>{typeGroup.count}</Badge>
+                          </div>
+
+                          <div className="text-xs space-y-1">
+                            {typeGroup.files.map((fileName: string, idx: number) => (
+                              <div key={idx} className="flex items-center gap-2">
+                                <span className="truncate">{fileName}</span>
+                                {typeGroup.confidence[idx] < 0.7 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {Math.round(typeGroup.confidence[idx] * 100)}%
+                                  </Badge>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* NEW: Parsed Data Display */}
+              {preAnalysisData.parsedData && (
+                <Card className="mb-6">
+                  <div className="p-6">
+                    <h3 className="text-lg font-semibold mb-4">📊 Витягнуті дані з документів</h3>
+
+                    <div className="space-y-4">
+                      {/* Site Plan */}
+                      {preAnalysisData.parsedData.sitePlan && (
+                        <div className="p-4 border rounded-lg bg-green-50">
+                          <h4 className="font-semibold mb-2">🗺️ План ділянки</h4>
+                          <div className="text-sm space-y-1">
+                            {preAnalysisData.parsedData.sitePlan.area && (
+                              <p><strong>Площа:</strong> {preAnalysisData.parsedData.sitePlan.area} м²</p>
+                            )}
+                            {preAnalysisData.parsedData.sitePlan.elevationDifference && (
+                              <p className={cn(
+                                "font-semibold",
+                                preAnalysisData.parsedData.sitePlan.elevationDifference > 2 && "text-orange-600"
+                              )}>
+                                <strong>Перепад висот:</strong> {preAnalysisData.parsedData.sitePlan.elevationDifference.toFixed(2)} м
+                                {preAnalysisData.parsedData.sitePlan.elevationDifference > 2 && " ⚠️ Потрібні земляні роботи!"}
+                              </p>
+                            )}
+                            <p><strong>Комунікації:</strong></p>
+                            <ul className="ml-4 list-disc">
+                              <li>Водопровід: {preAnalysisData.parsedData.sitePlan.existingUtilities.water ? '✅' : '❌'}</li>
+                              <li>Каналізація: {preAnalysisData.parsedData.sitePlan.existingUtilities.sewerage ? '✅' : '❌'}</li>
+                              <li>Електрика: {preAnalysisData.parsedData.sitePlan.existingUtilities.electricity ? '✅' : '❌'}</li>
+                              <li>Газ: {preAnalysisData.parsedData.sitePlan.existingUtilities.gas ? '✅' : '❌'}</li>
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Geological */}
+                      {preAnalysisData.parsedData.geological && (
+                        <div className="p-4 border rounded-lg bg-orange-50">
+                          <h4 className="font-semibold mb-2">🪨 Геологія</h4>
+                          <div className="text-sm space-y-1">
+                            {preAnalysisData.parsedData.geological.groundwaterLevel && (
+                              <p className={cn(
+                                "font-semibold",
+                                preAnalysisData.parsedData.geological.groundwaterLevel < 2 && "text-red-600"
+                              )}>
+                                <strong>УГВ:</strong> {preAnalysisData.parsedData.geological.groundwaterLevel} м
+                                {preAnalysisData.parsedData.geological.groundwaterLevel < 2 && " 🚨 Високий!"}
+                              </p>
+                            )}
+                            {preAnalysisData.parsedData.geological.recommendedFoundation && (
+                              <p><strong>Фундамент:</strong> {preAnalysisData.parsedData.geological.recommendedFoundation}</p>
+                            )}
+                            {preAnalysisData.parsedData.geological.warnings && preAnalysisData.parsedData.geological.warnings.length > 0 && (
+                              <div className="mt-2 p-2 bg-red-100 border border-red-300 rounded">
+                                <p className="font-semibold text-red-800">Попередження:</p>
+                                <ul className="ml-4 list-disc text-red-700">
+                                  {preAnalysisData.parsedData.geological.warnings.slice(0, 3).map((w: string, i: number) => (
+                                    <li key={i}>{w}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Review */}
+                      {preAnalysisData.parsedData.review && (
+                        <div className="p-4 border rounded-lg bg-red-50">
+                          <h4 className="font-semibold mb-2">📝 Рецензія</h4>
+                          <div className="text-sm space-y-1">
+                            <p><strong>Всього зауважень:</strong> {preAnalysisData.parsedData.review.totalComments}</p>
+                            <p className="font-semibold text-red-600">
+                              <strong>Критичних:</strong> {preAnalysisData.parsedData.review.criticalCount}
+                            </p>
+                            {preAnalysisData.parsedData.review.criticalCount > 0 && (
+                              <p className="text-xs text-red-700">
+                                ⚠️ AI обов'язково врахує критичні зауваження в кошторисі
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Photos */}
+                      {preAnalysisData.parsedData.photos && (
+                        <div className="p-4 border rounded-lg bg-blue-50">
+                          <h4 className="font-semibold mb-2">📸 Фото місцевості</h4>
+                          <p className="text-sm">
+                            <strong>Завантажено:</strong> {preAnalysisData.parsedData.photos.photoCount} фото
+                          </p>
+                          <p className="text-xs text-blue-700 mt-1">
+                            AI проаналізує фото для визначення підготовки майданчика
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {/* Summary */}
               <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
