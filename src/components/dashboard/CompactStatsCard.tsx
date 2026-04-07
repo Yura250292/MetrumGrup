@@ -19,21 +19,21 @@ export function CompactStatsCard({
   className,
 }: CompactStatsCardProps) {
   const variants = {
-    blue: "bg-mesh-blue shadow-neon-blue",
-    green: "bg-mesh-green shadow-neon-green",
-    gray: "bg-glass-dark border-white/20",
+    blue: "admin-dark:bg-mesh-blue admin-dark:shadow-neon-blue admin-light:bg-gradient-to-br admin-light:from-blue-50 admin-light:to-blue-100 admin-light:border admin-light:border-blue-200 admin-light:shadow-lg",
+    green: "admin-dark:bg-mesh-green admin-dark:shadow-neon-green admin-light:bg-gradient-to-br admin-light:from-green-50 admin-light:to-green-100 admin-light:border admin-light:border-green-200 admin-light:shadow-lg",
+    gray: "admin-dark:bg-glass-dark admin-dark:border-white/20 admin-light:bg-gradient-to-br admin-light:from-gray-50 admin-light:to-gray-100 admin-light:border admin-light:border-gray-200 admin-light:shadow-lg",
   };
 
   const iconVariants = {
-    blue: "bg-green-500 shadow-neon-green",
-    green: "bg-blue-500 shadow-neon-blue",
-    gray: "bg-gradient-to-br from-amber-400 via-amber-500 to-amber-600 shadow-neon-amber",
+    blue: "admin-dark:bg-green-500 admin-dark:shadow-neon-green admin-light:bg-gradient-to-br admin-light:from-blue-500 admin-light:to-blue-600 admin-light:shadow-lg admin-light:shadow-blue-300/50",
+    green: "admin-dark:bg-blue-500 admin-dark:shadow-neon-blue admin-light:bg-gradient-to-br admin-light:from-green-500 admin-light:to-green-600 admin-light:shadow-lg admin-light:shadow-green-300/50",
+    gray: "admin-dark:bg-gradient-to-br admin-dark:from-amber-400 admin-dark:via-amber-500 admin-dark:to-amber-600 admin-dark:shadow-neon-amber admin-light:bg-gradient-to-br admin-light:from-gray-500 admin-light:to-gray-600 admin-light:shadow-lg admin-light:shadow-gray-300/50",
   };
 
   const textVariants = {
-    blue: "text-blue-100",
-    green: "text-emerald-100",
-    gray: "text-gray-200",
+    blue: "admin-dark:text-blue-100 admin-light:text-blue-700",
+    green: "admin-dark:text-emerald-100 admin-light:text-green-700",
+    gray: "admin-dark:text-gray-200 admin-light:text-gray-700",
   };
 
   return (
@@ -64,7 +64,7 @@ export function CompactStatsCard({
         </div>
 
         {/* Value - centered */}
-        <p className="text-2xl font-bold text-white tracking-tight">
+        <p className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900 tracking-tight">
           {value}
         </p>
 
@@ -75,7 +75,7 @@ export function CompactStatsCard({
 
         {/* Optional Description - centered */}
         {description && (
-          <p className="text-[11px] text-gray-300 leading-tight">
+          <p className="text-[11px] admin-dark:text-gray-300 admin-light:text-gray-600 leading-tight">
             {description}
           </p>
         )}

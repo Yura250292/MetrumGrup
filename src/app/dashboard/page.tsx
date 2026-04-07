@@ -40,14 +40,14 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#0F0F0F] pb-20 md:pb-6">
+    <div className="min-h-screen admin-dark:bg-[#0F0F0F] admin-light:bg-gray-50 pb-20 md:pb-6 transition-colors">
       {/* Header with gradient */}
-      <div className="bg-gradient-to-r from-gray-800 via-gray-900 to-black border-b border-white/10 shadow-neon-top">
+      <div className="admin-dark:bg-gradient-to-r admin-dark:from-gray-800 admin-dark:via-gray-900 admin-dark:to-black admin-dark:border-white/10 admin-dark:shadow-neon-top admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-white admin-light:to-green-50 border-b admin-light:border-gray-200 admin-light:shadow-sm transition-colors">
         <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900">
             Вітаємо, {session.user.name?.split(" ")[0]}!
           </h1>
-          <p className="mt-1 text-sm text-gray-400">
+          <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
             Огляд ваших проєктів
           </p>
         </div>
@@ -88,9 +88,9 @@ export default async function DashboardPage() {
 
         {/* Projects Section */}
         <div className="pt-2">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-semibold text-white">Ваші проєкти</h2>
-            <span className="text-sm text-gray-400">{projects.length}</span>
+          <div className="flex items-center justify-between mb-3 px-1">
+            <h2 className="text-lg font-bold admin-dark:text-white admin-light:text-gray-900">Ваші проєкти</h2>
+            <span className="text-sm font-medium admin-dark:text-gray-400 admin-light:text-gray-600">{projects.length}</span>
           </div>
 
           {projects.length > 0 ? (
@@ -119,10 +119,10 @@ export default async function DashboardPage() {
               })}
             </div>
           ) : (
-            <div className="rounded-xl border border-gray-800 bg-glass-dark backdrop-blur-md p-12 text-center">
-              <FolderKanban className="mx-auto h-12 w-12 text-gray-600" />
-              <h3 className="mt-4 text-lg font-medium text-white">Немає проєктів</h3>
-              <p className="mt-1 text-sm text-gray-400">
+            <div className="rounded-xl border admin-dark:border-gray-800 admin-dark:bg-glass-dark admin-light:border-gray-200 admin-light:bg-white backdrop-blur-md p-12 text-center admin-light:shadow-md transition-colors">
+              <FolderKanban className="mx-auto h-12 w-12 admin-dark:text-gray-600 admin-light:text-gray-400" />
+              <h3 className="mt-4 text-lg font-medium admin-dark:text-white admin-light:text-gray-900">Немає проєктів</h3>
+              <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
                 Ваші проєкти з&apos;являться тут після створення менеджером.
               </p>
             </div>
