@@ -388,11 +388,19 @@ ${wizardSummary}
 
     console.log(`🤖 Calling Gemini for pre-analysis...`);
     const result = await geminiModel.generateContent(parts);
-    const responseText = result.response.text();
+    let responseText = result.response.text();
 
-    // Parse JSON
-    const jsonMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, responseText];
-    const jsonStr = (jsonMatch[1] || responseText).trim();
+    // Clean up response: remove markdown code blocks
+    responseText = responseText
+      .replace(/^```json\s*/i, '')  // Remove opening ```json
+      .replace(/^```\s*/i, '')      // Remove opening ```
+      .replace(/\s*```\s*$/i, '')   // Remove closing ```
+      .trim();
+
+    // Find JSON object (look for { ... })
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const jsonStr = jsonMatch ? jsonMatch[0] : responseText;
+
     const analysis = JSON.parse(jsonStr);
 
     console.log(`✅ Pre-analysis complete`);

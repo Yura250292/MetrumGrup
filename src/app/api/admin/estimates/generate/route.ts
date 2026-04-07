@@ -1398,6 +1398,10 @@ export async function POST(request: NextRequest) {
 
     if (isCommercialProject || hasATB) {
       console.log(`🏪 COMMERCIAL PROJECT DETECTED! ${hasATB ? '(ATB supermarket)' : '(Generic commercial)'}`);
+
+      // Override minimum items for commercial projects
+      calculatedMin = 500;
+      console.log(`🏪 Updated calculatedMin to 500 for commercial project`);
     }
 
     // Build wizard context with commercial flag

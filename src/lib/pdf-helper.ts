@@ -8,10 +8,23 @@
  */
 export async function parsePDF(buffer: Buffer): Promise<{ text: string; numpages?: number }> {
   try {
-    // Dynamic import pdf-parse each time
+    // Dynamic import pdf-parse
     const pdfParse = await import('pdf-parse');
-    // pdf-parse exports the function directly in ESM
-    const parseFn = (pdfParse as any).default || pdfParse;
+
+    // Try different export patterns
+    let parseFn;
+    if (typeof pdfParse === 'function') {
+      parseFn = pdfParse;
+    } else if (typeof (pdfParse as any).default === 'function') {
+      parseFn = (pdfParse as any).default;
+    } else if (typeof (pdfParse as any).default?.default === 'function') {
+      parseFn = (pdfParse as any).default.default;
+    } else {
+      // Fallback: return empty
+      console.error('PDF parse error: Could not find parse function in module');
+      return { text: '', numpages: 0 };
+    }
+
     const data = await parseFn(buffer);
     return { text: data.text, numpages: data.numpages };
   } catch (error) {
