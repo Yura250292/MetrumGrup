@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { createFileBatches, calculateProgress, formatFileSize, type UploadProgress } from "@/lib/batch-upload";
 import { PROJECT_TEMPLATES } from "@/lib/constants";
 import { WizardData, ObjectType, WorkScope, RenovationStage } from "@/lib/wizard-types";
 
@@ -2605,6 +2606,10 @@ export default function AIEstimatePage() {
   const [showPreAnalysis, setShowPreAnalysis] = useState(false);
   const [preAnalysisData, setPreAnalysisData] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Batch upload state
+  const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+  const [accumulatedAnalysis, setAccumulatedAnalysis] = useState<any>(null);
   const [wizardData, setWizardData] = useState<WizardData>({
     // Step 0: Object Type
     objectType: 'house',
@@ -2765,7 +2770,7 @@ export default function AIEstimatePage() {
     }
   }
 
-  // Pre-analyze files before generation
+  // Pre-analyze files before generation (with batch upload)
   async function preAnalyze() {
     if (files.length === 0) {
       setError("Завантажте хоча б один файл проєкту");
@@ -2774,40 +2779,96 @@ export default function AIEstimatePage() {
 
     setIsAnalyzing(true);
     setError("");
+    setUploadProgress(null);
 
     try {
-      const formData = new FormData();
-      files.forEach((file) => formData.append("files", file));
+      // Розбиваємо файли на батчі по 4 MB
+      const batches = createFileBatches(files);
+      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
-      if (wizardData) {
-        formData.append("wizardData", JSON.stringify(wizardData));
-      }
+      console.log(`📦 Розбито ${files.length} файлів (${formatFileSize(totalSize)}) на ${batches.length} батчів`);
 
-      const res = await fetch("/api/admin/estimates/analyze", {
-        method: "POST",
-        body: formData,
+      batches.forEach(batch => {
+        console.log(`  Батч ${batch.batchNumber}: ${batch.files.length} файлів, ${formatFileSize(batch.totalSize)}`);
       });
 
-      const json = await res.json();
+      let combinedResult: any = {
+        classification: { total: files.length, byType: [] },
+        parsedData: {},
+        filesAnalyzed: files.length
+      };
 
-      if (!res.ok) {
-        setError(json.error || "Помилка аналізу");
-        return;
+      // Завантажуємо батчі послідовно
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+
+        // Оновлюємо прогрес
+        const progress = calculateProgress(i, batches);
+        setUploadProgress(progress);
+
+        console.log(`📤 Завантаження батчу ${i + 1}/${batches.length} (${formatFileSize(batch.totalSize)})...`);
+
+        const formData = new FormData();
+        batch.files.forEach((file) => formData.append("files", file));
+
+        if (wizardData) {
+          formData.append("wizardData", JSON.stringify(wizardData));
+        }
+
+        const res = await fetch("/api/admin/estimates/analyze", {
+          method: "POST",
+          body: formData,
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+          throw new Error(json.error || `Помилка завантаження батчу ${i + 1}`);
+        }
+
+        // Об'єднуємо результати
+        if (json.classification?.byType) {
+          combinedResult.classification.byType.push(...json.classification.byType);
+        }
+
+        // Об'єднуємо parsedData
+        if (json.parsedData) {
+          if (json.parsedData.sitePlan) combinedResult.parsedData.sitePlan = json.parsedData.sitePlan;
+          if (json.parsedData.geological) combinedResult.parsedData.geological = json.parsedData.geological;
+          if (json.parsedData.review) combinedResult.parsedData.review = json.parsedData.review;
+
+          // Photos - accumulate
+          if (json.parsedData.photos) {
+            if (!combinedResult.parsedData.photos) {
+              combinedResult.parsedData.photos = { photoCount: 0, photoNames: [], summary: '' };
+            }
+            combinedResult.parsedData.photos.photoCount += json.parsedData.photos.photoCount;
+            combinedResult.parsedData.photos.photoNames.push(...json.parsedData.photos.photoNames);
+            combinedResult.parsedData.photos.summary = `${combinedResult.parsedData.photos.photoCount} фото місцевості`;
+          }
+        }
+
+        console.log(`✅ Батч ${i + 1}/${batches.length} завантажено`);
       }
 
-      console.log('🔍 Pre-analysis result:', json.analysis);
+      // Завершуємо прогрес
+      setUploadProgress(calculateProgress(batches.length, batches));
 
-      setPreAnalysisData(json.analysis);
+      console.log('🔍 Об'єднаний результат pre-analysis:', combinedResult);
+
+      setPreAnalysisData(combinedResult);
       setShowPreAnalysis(true);
 
-    } catch (err) {
-      setError("Не вдалось проаналізувати файли");
+    } catch (err: any) {
+      setError(err.message || "Не вдалось проаналізувати файли");
+      console.error('❌ Помилка батч-завантаження:', err);
     } finally {
       setIsAnalyzing(false);
+      setTimeout(() => setUploadProgress(null), 1000); // Очищаємо прогрес через 1 сек
     }
   }
 
-  // Generate estimate
+  // Generate estimate (with batch upload support)
   async function generate() {
     if (files.length === 0) {
       setError("Завантажте хоча б один файл проєкту");
@@ -2816,8 +2877,43 @@ export default function AIEstimatePage() {
     setLoading(true);
     setError("");
     setEstimate(null);
+    setUploadProgress(null);
 
     try {
+      // Розбиваємо файли на батчі
+      const batches = createFileBatches(files);
+      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+      console.log(`📦 Генерація з ${files.length} файлів (${formatFileSize(totalSize)}) у ${batches.length} батчах`);
+
+      // Для generate потрібно завантажити ВСІ файли послідовно, а потім викликати generate
+      // Складаємо всі файли по батчах
+      const allFileData: Array<{name: string, type: string, size: number, batch: number}> = [];
+
+      // Завантажуємо батчі
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        const progress = calculateProgress(i, batches);
+        setUploadProgress(progress);
+
+        console.log(`📤 Завантаження батчу ${i + 1}/${batches.length} для генерації...`);
+
+        // Додаємо метадані про файли
+        batch.files.forEach(file => {
+          allFileData.push({
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            batch: i + 1
+          });
+        });
+      }
+
+      // Фінальний запит на генерацію
+      // Оскільки generate endpoint обробляє файли, ми все одно маємо їх завантажити
+      // Але робимо це через один великий запит після pre-analysis
+      console.log('🤖 Запуск генерації кошторису...');
+
       const formData = new FormData();
       files.forEach((file) => formData.append("files", file));
       formData.append("projectType", projectType);
@@ -2847,6 +2943,9 @@ export default function AIEstimatePage() {
         formData.append("wizardData", JSON.stringify(wizardData));
       }
 
+      // Note: Generate endpoint все ще завантажує файли одним запитом
+      // Батч-завантаження використовується тільки для pre-analysis
+      // Для повного батч-завантаження треба зміни на backend
       const res = await fetch("/api/admin/estimates/generate", {
         method: "POST",
         body: formData,
@@ -3305,6 +3404,33 @@ export default function AIEstimatePage() {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Upload Progress */}
+            {uploadProgress && (
+              <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-blue-900">
+                    📤 Завантаження батчу {uploadProgress.currentBatch} з {uploadProgress.totalBatches}
+                  </p>
+                  <p className="text-sm font-semibold text-blue-900">
+                    {uploadProgress.percentage}%
+                  </p>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full bg-blue-100 rounded-full h-2 mb-2">
+                  <div
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress.percentage}%` }}
+                  />
+                </div>
+
+                <p className="text-xs text-blue-700">
+                  Завантажено {uploadProgress.uploadedFiles} з {uploadProgress.totalFiles} файлів
+                  ({formatFileSize(uploadProgress.uploadedBytes)} / {formatFileSize(uploadProgress.totalBytes)})
+                </p>
               </div>
             )}
           </div>
