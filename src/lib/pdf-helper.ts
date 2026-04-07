@@ -3,23 +3,19 @@
  * Вирішує проблеми з динамічним імпортом pdf-parse
  */
 
-let pdfParseInstance: any = null;
-
 /**
  * Парсить PDF файл і витягує текст
  */
-export async function parsePDF(buffer: Buffer): Promise<{ text: string }> {
-  // Lazy load pdf-parse тільки один раз
-  if (!pdfParseInstance) {
-    const pdfModule = await import('pdf-parse');
-    pdfParseInstance = pdfModule.default || pdfModule;
-  }
-
+export async function parsePDF(buffer: Buffer): Promise<{ text: string; numpages?: number }> {
   try {
-    const data = await pdfParseInstance(buffer);
-    return { text: data.text };
+    // Dynamic import pdf-parse each time
+    const pdfParse = await import('pdf-parse');
+    // pdf-parse exports the function directly in ESM
+    const parseFn = (pdfParse as any).default || pdfParse;
+    const data = await parseFn(buffer);
+    return { text: data.text, numpages: data.numpages };
   } catch (error) {
     console.error('PDF parse error:', error);
-    return { text: '' };
+    return { text: '', numpages: 0 };
   }
 }
