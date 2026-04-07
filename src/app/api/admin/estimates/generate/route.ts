@@ -2535,7 +2535,23 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
     "overheadPercent": 15,
     "overheadCost": 0.00,
     "totalBeforeDiscount": 0.00,
-    "recommendations": "Конкретні рекомендації по оптимізації бюджету"${(isCommercialProject || hasATB) ? `,
+    "recommendations": "Конкретні рекомендації по оптимізації бюджету"
+  }
+}
+
+${(isCommercialProject || hasATB) ? `
+**🎯 ОБОВ'ЯЗКОВО ДЛЯ КОМЕРЦІЙНОГО/ТЕНДЕРНОГО ПРОЕКТУ:**
+
+Додай додаткову секцію "tenderAnalysis" всередині "summary" (після "recommendations"):
+
+{
+  "summary": {
+    "materialsCost": 0.00,
+    "laborCost": 0.00,
+    "overheadPercent": 15,
+    "overheadCost": 0.00,
+    "totalBeforeDiscount": 0.00,
+    "recommendations": "...",
     "tenderAnalysis": {
       "basePrice": 0.00,
       "priceCorridorMin": 0.00,
@@ -2543,17 +2559,14 @@ sections[0].items.length + sections[1].items.length + sections[2].items.length +
       "priceCorridorMax": 0.00,
       "contingencyReserve10": 0.00,
       "contingencyReserve15": 0.00,
-      "tenderStrategy": "Рекомендація для входу в тендер (діапазон)",
+      "tenderStrategy": "Входити з пропозицією XXX-XXX млн ₴",
       "criticalThreshold": 0.00,
-      "notes": "Додаткові примітки для тендерної стратегії"
-    }` : ''}
+      "notes": "Додаткові примітки"
+    }
   }
 }
 
-${(isCommercialProject || hasATB) ? `
-**🎯 ОБОВ'ЯЗКОВО ДЛЯ КОМЕРЦІЙНОГО/ТЕНДЕРНОГО ПРОЕКТУ:**
-
-Додай секцію "tenderAnalysis" в "summary" з розрахунками:
+Розрахунки для tenderAnalysis:
 - basePrice: totalBeforeDiscount (базова ціна)
 - priceCorridorMin: basePrice (мінімум = база без знижки)
 - priceCorridorRecommended: basePrice × 1.10 (рекомендована = база + 10%)
