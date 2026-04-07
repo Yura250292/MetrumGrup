@@ -353,6 +353,8 @@ function EstimateWizardModal({
 
           {/* Commercial-specific step */}
           {wizardStep === 3 && wizardData.objectType === 'commercial' && <WizardStepCommercial data={wizardData} setData={setWizardData} />}
+          {wizardStep === 4 && wizardData.objectType === 'commercial' && <WizardStep7_Utilities data={wizardData} setData={setWizardData} />}
+          {wizardStep === 5 && wizardData.objectType === 'commercial' && <WizardStep8_Finishing data={wizardData} setData={setWizardData} />}
 
           {/* Navigation */}
           <div className="flex justify-between mt-8 pt-6 border-t">
