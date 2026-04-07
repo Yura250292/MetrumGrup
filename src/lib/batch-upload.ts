@@ -2,7 +2,10 @@
  * Утиліти для батч-завантаження файлів (для обходу Vercel 4.5MB ліміту)
  */
 
-export const MAX_BATCH_SIZE = 4 * 1024 * 1024; // 4 MB на батч
+// Локально немає ліміту, на production - 4MB
+export const MAX_BATCH_SIZE = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+  ? 500 * 1024 * 1024  // 500 MB для локального (практично без batching)
+  : 4 * 1024 * 1024;   // 4 MB для production Vercel
 
 export interface FileBatch {
   files: File[];
