@@ -8,27 +8,19 @@
  */
 export async function parsePDF(buffer: Buffer): Promise<{ text: string; numpages?: number }> {
   try {
-    // Dynamic import pdf-parse
+    // Dynamic import pdf-parse (it's a CommonJS module)
     const pdfParse = await import('pdf-parse');
 
-    // Try different export patterns
-    let parseFn;
-    if (typeof pdfParse === 'function') {
-      parseFn = pdfParse;
-    } else if (typeof (pdfParse as any).default === 'function') {
-      parseFn = (pdfParse as any).default;
-    } else if (typeof (pdfParse as any).default?.default === 'function') {
-      parseFn = (pdfParse as any).default.default;
-    } else {
-      // Fallback: return empty
-      console.error('PDF parse error: Could not find parse function in module');
-      return { text: '', numpages: 0 };
-    }
+    // pdf-parse exports as default in CommonJS
+    // In ESM dynamic import, it becomes pdfParse.default
+    const parseFn = (pdfParse as any).default || pdfParse;
 
+    // Call the parser
     const data = await parseFn(buffer);
-    return { text: data.text, numpages: data.numpages };
+    return { text: data.text || '', numpages: data.numpages || 0 };
   } catch (error) {
     console.error('PDF parse error:', error);
+    // Return empty instead of failing completely
     return { text: '', numpages: 0 };
   }
 }

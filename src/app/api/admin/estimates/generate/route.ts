@@ -185,8 +185,8 @@ function calculateMinimumItems(wizardData: any, isCommercial: boolean = false): 
 
   // Commercial projects need much more items
   if (isCommercial) {
-    console.log('🏪 Commercial project - using higher base minimum (500 items)');
-    return 500; // Commercial supermarkets have 500+ line items minimum
+    console.log('🏪 Commercial project - using higher base minimum (300 items, will iterate)');
+    return 300; // Start with 300, iterations will add more for full coverage
   }
 
   let base = 60;
@@ -1442,8 +1442,10 @@ export async function POST(request: NextRequest) {
       console.log(`🏪 COMMERCIAL PROJECT DETECTED! ${hasATB ? '(ATB supermarket)' : '(Generic commercial)'}`);
 
       // Override minimum items for commercial projects
-      calculatedMin = 500;
-      console.log(`🏪 Updated calculatedMin to 500 for commercial project`);
+      // Note: 300 is more realistic for single AI response (~100KB JSON)
+      // Iterations will add more to reach full coverage
+      calculatedMin = 300;
+      console.log(`🏪 Updated calculatedMin to 300 for commercial project (will iterate to add more)`);
     }
 
     // Build wizard context with commercial flag
