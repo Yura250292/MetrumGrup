@@ -10,6 +10,7 @@ import { validateEstimate, formatValidationReport } from "@/lib/estimate-validat
 import { generateMaterialsContext } from "@/lib/materials-database";
 import { generateWorkItemsContext } from "@/lib/work-items-database";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
+import { parsePDF } from "@/lib/pdf-helper";
 import fs from "fs/promises";
 import path from "path";
 
@@ -37,9 +38,7 @@ async function extractFileContent(file: File): Promise<string | { text: string; 
   if (fileName.endsWith(".pdf")) {
     try {
       // Extract text content
-      const pdfModule = await import("pdf-parse");
-      const pdfParse = (pdfModule as unknown as { default: (buf: Buffer) => Promise<{ text: string }> }).default || pdfModule;
-      const data = await (pdfParse as (buf: Buffer) => Promise<{ text: string }>)(buffer);
+      const data = await parsePDF(buffer);
 
       // For Gemini: send PDF directly as it supports native PDF parsing
       // This is more reliable than image conversion
@@ -1099,8 +1098,7 @@ export async function POST(request: NextRequest) {
 
       for (const doc of sitePlanDocs) {
         const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const pdfParse = await import("pdf-parse");
-        const data = await (pdfParse as any).default(buffer);
+        const data = await parsePDF(buffer);
         texts.push(data.text);
       }
 
@@ -1120,8 +1118,7 @@ export async function POST(request: NextRequest) {
 
       for (const doc of geologicalDocs) {
         const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const pdfParse = await import("pdf-parse");
-        const data = await (pdfParse as any).default(buffer);
+        const data = await parsePDF(buffer);
         texts.push(data.text);
       }
 
@@ -1144,8 +1141,7 @@ export async function POST(request: NextRequest) {
 
       for (const doc of reviewDocs) {
         const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const pdfParse = await import("pdf-parse");
-        const data = await (pdfParse as any).default(buffer);
+        const data = await parsePDF(buffer);
         texts.push(data.text);
       }
 
@@ -1181,9 +1177,7 @@ export async function POST(request: NextRequest) {
         try {
           if (file.name.endsWith('.pdf')) {
             const buffer = Buffer.from(await file.arrayBuffer());
-            const pdfModule = await import("pdf-parse");
-            const pdfParse = (pdfModule as any).default || pdfModule;
-            const data = await pdfParse(buffer);
+            const data = await parsePDF(buffer);
             specificationTexts.push(`[SPECIFICATION: ${file.name}]\n${data.text}`);
             console.log(`  ✓ ${file.name}: ${data.numpages} pages, ${data.text.length} chars`);
           } else if (file.name.endsWith('.txt') || file.name.endsWith('.md')) {
