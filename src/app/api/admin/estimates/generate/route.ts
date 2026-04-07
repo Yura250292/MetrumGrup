@@ -2683,7 +2683,15 @@ ${(isCommercialProject || hasATB) ? `
       // Extract JSON from potential markdown code blocks
       const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
       const jsonStr = (jsonMatch[1] || text).trim();
-      estimateData = JSON.parse(jsonStr);
+      let parsed = JSON.parse(jsonStr);
+
+      // Handle case where AI returns an array instead of object
+      if (Array.isArray(parsed)) {
+        console.log('⚠️ AI returned array, extracting first element');
+        estimateData = parsed[0] || {};
+      } else {
+        estimateData = parsed;
+      }
 
       // Log generated estimate stats
       totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
@@ -2701,6 +2709,22 @@ ${(isCommercialProject || hasATB) ? `
       console.log('📝 AI Generated Estimate:', JSON.stringify(stats));
       console.log('Section breakdown:', estimateData.sections?.map((s: any) =>
         `${s.title}: ${s.items?.length || 0} items`).join(', '));
+
+      // DEBUG: Write to file for inspection
+      const fs = require('fs');
+      const debugPath = '/tmp/metrum-debug.json';
+      fs.writeFileSync(debugPath, JSON.stringify({
+        timestamp: new Date().toISOString(),
+        stats,
+        aiResponse: text.substring(0, 5000), // First 5000 chars
+        estimateStructure: {
+          hasTitle: !!estimateData.title,
+          hasSections: !!estimateData.sections,
+          sectionsCount: estimateData.sections?.length || 0,
+          sectionTitles: estimateData.sections?.map((s: any) => s.title) || []
+        }
+      }, null, 2));
+      console.log(`🐛 Debug info written to ${debugPath}`);
 
     } catch (parseError) {
       return NextResponse.json({
@@ -2874,10 +2898,15 @@ ${JSON.stringify(estimateData, null, 2)}
         // Parse supplementary response
         const supplementMatch = supplementText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, supplementText];
         const supplementJson = (supplementMatch[1] || supplementText).trim();
-        const supplementData = JSON.parse(supplementJson);
+        let supplementParsed = JSON.parse(supplementJson);
 
-        // Update estimate data
-        estimateData = supplementData;
+        // Handle case where AI returns an array instead of object
+        if (Array.isArray(supplementParsed)) {
+          console.log('⚠️ AI returned array in iteration, extracting first element');
+          estimateData = supplementParsed[0] || {};
+        } else {
+          estimateData = supplementParsed;
+        }
 
         // Recalculate total items
         totalItems = estimateData.sections?.reduce((sum: number, section: any) =>
