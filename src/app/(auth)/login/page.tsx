@@ -61,83 +61,62 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* Top header bar */}
-      <header className="flex h-14 items-center justify-between px-5 border-b border-border/50 bg-white lg:bg-dark lg:border-white/10 shrink-0 z-10">
-        <Link href="/" className="flex items-center">
-          <img src="/images/metrum-logo.svg" alt="Metrum Group" className="h-6 w-auto lg:invert" />
-        </Link>
-        <div className="flex items-center gap-4">
-          <a href="tel:+380677430101" className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground lg:text-white/60 hover:text-foreground lg:hover:text-white transition-colors">
-            <Phone className="h-3 w-3" />
-            067 743 01 01
-          </a>
-          <Link
-            href="/"
-            className="rounded-full border border-border lg:border-white/20 px-4 py-1.5 text-xs font-medium text-muted-foreground lg:text-white/70 hover:bg-muted lg:hover:bg-white/10 transition-colors"
-          >
-            На головну
-          </Link>
-        </div>
-      </header>
-
-      <div className="flex flex-1">
-      {/* Left panel - branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-dark relative overflow-hidden items-center justify-center">
-        <div className="absolute inset-0 opacity-[0.03]"
+    <div className="flex min-h-screen">
+      {/* Left panel - branding (Desktop only) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-500 via-blue-600 to-cyan-600 relative overflow-hidden items-center justify-center p-16">
+        <div className="absolute inset-0 opacity-10"
           style={{
             backgroundImage: "radial-gradient(circle at 1px 1px, white 1px, transparent 0)",
             backgroundSize: "48px 48px",
           }}
         />
-        <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-bl from-primary/10 to-transparent" />
-        <div className="relative px-16 max-w-lg">
-          <div className="flex items-center mb-10">
-            <img src="/images/metrum-logo.svg" alt="Metrum Group" className="h-8 w-auto invert" />
+        <div className="relative max-w-lg text-center">
+          {/* Logo */}
+          <div className="flex items-center justify-center mb-12">
+            <div className="bg-white rounded-3xl p-8 shadow-2xl">
+              <img src="/images/metrum-logo.svg" alt="Metrum Group" className="h-16 w-auto" />
+            </div>
           </div>
-          <h2 className="text-3xl font-bold text-white leading-tight">
-            Ваш особистий
-            <br />
-            <span className="gradient-text">кабінет управління</span>
-          </h2>
-          <p className="mt-4 text-white/40 leading-relaxed">
-            Відстежуйте прогрес будівництва, переглядайте фінанси та фотозвіти
-            вашого проєкту в реальному часі.
+
+          <h1 className="text-6xl font-bold text-white mb-6 leading-tight">
+            Metrum Group
+          </h1>
+          <p className="text-xl text-blue-100 leading-relaxed">
+            Професійне управління будівельними проєктами
           </p>
-          <div className="mt-12 grid grid-cols-3 gap-6 text-center">
-            {[
-              { value: "12+", label: "млн $ продажів" },
-              { value: "3000+", label: "угод" },
-              { value: "200k+", label: "м² ремонту" },
-            ].map((s) => (
-              <div key={s.label}>
-                <p className="text-xl font-bold text-white">{s.value}</p>
-                <p className="text-[10px] text-white/30 mt-0.5">{s.label}</p>
-              </div>
-            ))}
-          </div>
         </div>
       </div>
 
       {/* Right panel - form */}
-      <div className="flex flex-1 items-center justify-center px-5 bg-muted/30">
-        <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold">Вхід до системи</h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Введіть дані вашого облікового запису
+      <div className="flex flex-1 items-center justify-center px-6 bg-gradient-to-b from-slate-900 to-slate-800">
+        <div className="w-full max-w-md">
+          {/* Mobile logo */}
+          <div className="lg:hidden flex flex-col items-center mb-12">
+            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-3xl p-8 shadow-2xl mb-6">
+              <img src="/images/metrum-logo.svg" alt="Metrum Group" className="h-12 w-auto brightness-0 invert" />
+            </div>
+            <h1 className="text-4xl font-bold text-white mb-2">Metrum Group</h1>
+            <p className="text-sm text-slate-400">Система управління проєктами</p>
+          </div>
+
+          <div className="w-full max-w-md">
+          {/* Desktop header */}
+          <div className="hidden lg:block mb-10">
+            <h2 className="text-5xl font-bold text-slate-100 mb-3">Вітаємо!</h2>
+            <p className="text-base text-slate-400">
+              Увійдіть до свого акаунту
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+              <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
                 {error}
               </div>
             )}
 
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
+              <label htmlFor="email" className="mb-2 block text-sm font-semibold text-slate-200">
                 Email
               </label>
               <input
@@ -145,15 +124,15 @@ function LoginForm() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
+                placeholder="your@email.com"
                 required
                 autoFocus
-                className="w-full rounded-xl border border-border bg-white px-4 py-3 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-5 py-3.5 text-base text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium">
+              <label htmlFor="password" className="mb-2 block text-sm font-semibold text-slate-200">
                 Пароль
               </label>
               <div className="relative">
@@ -164,43 +143,52 @@ function LoginForm() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full rounded-xl border border-border bg-white px-4 py-3 pr-11 text-sm outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/10"
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 px-5 py-3.5 pr-12 text-base text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 transition-colors"
                 >
                   {showPassword ? (
-                    <EyeOff className="h-4 w-4" />
+                    <EyeOff className="h-5 w-5" />
                   ) : (
-                    <Eye className="h-4 w-4" />
+                    <Eye className="h-5 w-5" />
                   )}
                 </button>
               </div>
             </div>
 
+            <div className="flex items-center justify-between pt-1">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" className="w-5 h-5 rounded border-slate-700 bg-slate-800 text-blue-500 focus:ring-blue-500/20" />
+                <span className="text-sm text-slate-400">Запам'ятати мене</span>
+              </label>
+              <Link href="/forgot-password" className="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">
+                Забули пароль?
+              </Link>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50 transition-all duration-200 hover:shadow-lg hover:shadow-primary/25 mt-2"
+              className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 py-4 text-base font-bold text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all duration-200 shadow-lg shadow-blue-500/25 mt-4"
             >
               {loading ? "Вхід..." : "Увійти"}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
+          <div className="mt-8 flex items-center gap-4">
+            <div className="h-px flex-1 bg-slate-700"></div>
+            <span className="text-sm text-slate-500">або</span>
+            <div className="h-px flex-1 bg-slate-700"></div>
+          </div>
+
+          <p className="mt-8 text-center text-sm text-slate-400">
             Немає акаунту?{" "}
-            <Link href="/register" className="text-primary hover:underline font-medium">
+            <Link href="/register" className="font-semibold text-blue-400 hover:text-blue-300 transition-colors">
               Зареєструватися
             </Link>
-          </p>
-
-          <p className="mt-8 text-center text-xs text-muted-foreground">
-            Проблеми з доступом?{" "}
-            <a href="tel:+380677430101" className="text-primary hover:underline font-medium">
-              Зателефонуйте нам
-            </a>
           </p>
         </div>
       </div>

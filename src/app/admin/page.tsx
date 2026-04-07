@@ -62,49 +62,52 @@ export default async function AdminDashboardPage() {
   const revenue = Number(totalRevenue._sum.amount || 0);
 
   return (
-    <div className="min-h-screen admin-dark:bg-[#0F0F0F] admin-light:bg-gray-50 pb-6">
-      {/* Header with gradient */}
-      <div className="admin-dark:bg-gradient-to-r admin-dark:from-gray-800 admin-dark:via-gray-900 admin-dark:to-black admin-dark:border-white/10 admin-dark:shadow-neon-top admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-white admin-light:to-purple-50 border-b admin-light:border-gray-200">
-        <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900">
-            🎨 Дашборд
-          </h1>
-          <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
-            Огляд активності компанії
-          </p>
-        </div>
+    <div className="min-h-screen admin-dark:bg-black admin-light:bg-gray-50 pb-20 md:pb-6">
+      {/* Mobile/Desktop Header */}
+      <div className="admin-dark:bg-black admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-blue-100 admin-light:to-cyan-50 border-b admin-dark:border-transparent admin-light:border-gray-200 md:px-10 md:py-6 px-6 py-6">
+        <h1 className="text-3xl md:text-4xl font-bold admin-dark:text-white admin-light:text-blue-900">
+          Вітаємо, Адміністратор!
+        </h1>
+        <p className="mt-1.5 text-base admin-dark:text-gray-400 admin-light:text-gray-600">
+          Управління компанією
+        </p>
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-6">
-        {/* Stats Grid - 2x2 на мобільному */}
-        <div className="grid grid-cols-2 gap-3">
-          <CompactStatsCard
-            title="Проєкти"
-            value={String(projectsCount)}
-            description={`${activeProjectsCount} активних`}
-            icon={FolderKanban}
-            variant="blue"
-          />
-          <CompactStatsCard
-            title="Клієнти"
-            value={String(clientsCount)}
-            icon={Users}
-            variant="green"
-          />
-          <CompactStatsCard
-            title="Кошториси"
-            value={String(estimatesCount)}
-            icon={Calculator}
-            variant="gray"
-          />
-          <CompactStatsCard
-            title="Дохід"
-            value={formatCurrency(revenue)}
-            description="сплачено"
-            icon={TrendingUp}
-            variant="green"
-          />
+      <div className="p-6 md:p-10 space-y-8">
+        {/* Stats Grid - 2x2 на мобільному, 4 в ряд на десктопі */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+          {/* Projects Card */}
+          <div className="admin-dark:bg-gradient-to-br admin-dark:from-blue-500 admin-dark:to-cyan-500 admin-light:bg-gradient-to-br admin-light:from-blue-500 admin-light:to-cyan-500 rounded-2xl p-6 shadow-xl admin-dark:shadow-blue-500/20 admin-light:shadow-blue-500/20">
+            <FolderKanban className="h-10 w-10 text-white mb-4" />
+            <p className="text-5xl font-bold text-white mb-2">{projectsCount}</p>
+            <p className="text-sm font-semibold text-blue-100 mb-1">Проєкти</p>
+            <p className="text-xs text-blue-200">{activeProjectsCount} активних</p>
+          </div>
+
+          {/* Clients Card */}
+          <div className="admin-dark:bg-gradient-to-br admin-dark:from-green-500 admin-dark:to-emerald-600 admin-light:bg-gradient-to-br admin-light:from-green-500 admin-light:to-emerald-600 rounded-2xl p-6 shadow-xl admin-dark:shadow-green-500/20 admin-light:shadow-green-500/20">
+            <Users className="h-10 w-10 text-white mb-4" />
+            <p className="text-5xl font-bold text-white mb-2">{clientsCount}</p>
+            <p className="text-sm font-semibold text-green-100 mb-1">Клієнти</p>
+            <p className="text-xs text-green-200">активних облікових записів</p>
+          </div>
+
+          {/* Estimates Card */}
+          <div className="admin-dark:bg-gradient-to-br admin-dark:from-amber-500 admin-dark:to-yellow-500 admin-light:bg-gradient-to-br admin-light:from-amber-500 admin-light:to-yellow-500 rounded-2xl p-6 shadow-xl admin-dark:shadow-amber-500/20 admin-light:shadow-amber-500/20">
+            <Calculator className="h-10 w-10 text-white mb-4" />
+            <p className="text-5xl font-bold text-white mb-2">{estimatesCount}</p>
+            <p className="text-sm font-semibold text-amber-100 mb-1">Кошториси</p>
+            <p className="text-xs text-amber-200">створено</p>
+          </div>
+
+          {/* Revenue Card */}
+          <div className="admin-dark:bg-gradient-to-br admin-dark:from-purple-600 admin-dark:to-indigo-600 admin-light:bg-gradient-to-br admin-light:from-purple-600 admin-light:to-indigo-600 rounded-2xl p-6 shadow-xl admin-dark:shadow-purple-600/20 admin-light:shadow-purple-600/20">
+            <TrendingUp className="h-10 w-10 text-white mb-4" />
+            <p className="text-4xl md:text-5xl font-bold text-white mb-2">{formatCurrency(revenue)}</p>
+            <p className="text-sm font-semibold text-purple-100 mb-1">Дохід</p>
+            <p className="text-xs text-purple-200">сплачено</p>
+          </div>
         </div>
 
         {/* Recent Projects */}
