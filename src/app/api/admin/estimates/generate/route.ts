@@ -423,7 +423,7 @@ function buildWizardContext(wizardData: any): string {
   };
 
   context += `### Тип проекту:\n`;
-  context += `- Об'єкт: **${objectTypeLabels[wizardData.objectType] || wizardData.objectType}**\n`;
+  context += `- Об\'єкт: **${objectTypeLabels[wizardData.objectType] || wizardData.objectType}**\n`;
   context += `- Обсяг робіт: **${workScopeLabels[wizardData.workScope] || wizardData.workScope}**\n`;
   context += `- Загальна площа: **${wizardData.totalArea} м²**\n`;
   if (wizardData.floors) context += `- Поверхів: ${wizardData.floors}\n`;
