@@ -1082,7 +1082,9 @@ export async function POST(request: NextRequest) {
       // Download all files from R2 by key
       const downloadPromises = r2Keys.map(async (r2File) => {
         const buffer = await downloadFileFromR2(r2File.key);
-        const blob = new Blob([buffer], { type: r2File.mimeType });
+        // Convert Buffer to Uint8Array for Blob compatibility
+        const uint8Array = new Uint8Array(buffer);
+        const blob = new Blob([uint8Array], { type: r2File.mimeType });
         return new File([blob], r2File.originalName, { type: r2File.mimeType });
       });
 
