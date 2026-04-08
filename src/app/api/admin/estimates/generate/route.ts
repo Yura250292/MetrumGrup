@@ -256,6 +256,249 @@ async function generateWithAnthropic(
   return jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : fullText;
 }
 
+// NEW: Gemini Analysis Phase for Pipeline
+async function analyzeWithGemini(
+  textParts: string[],
+  imageParts: { inlineData: { data: string; mimeType: string } }[],
+  pdfParts: Array<{ data: string; mimeType: string; name: string }>,
+  wizardData: any
+): Promise<string> {
+  console.log('📊 Phase 1: Gemini Analysis...');
+
+  const analysisPrompt = `# ЗАВДАННЯ: Аналіз проектної документації
+
+Ти — експерт з будівництва. Проаналізуй всі надані документи і витягни СТРУКТУРОВАНІ дані.
+
+## Що аналізувати:
+
+### 1. Архітектурні плани (креслення):
+- Кількість розеток, вимикачів, світильників
+- Площі приміщень (м²)
+- Кількість дверей, вікон
+- Довжини стін, перегородок
+- Сантехнічні прилади (ванна, душ, унітаз, раковина)
+- Опалення (радіатори, тепла підлога)
+
+### 2. Геологічний звіт (якщо є):
+- Рівень підземних вод (УГВ, м)
+- Тип ґрунту
+- Несуча здатність
+- Рекомендований тип фундаменту
+
+### 3. План земельної ділянки (якщо є):
+- Площа ділянки (м²)
+- Перепад висот (м)
+- Існуючі комунікації (вода, каналізація, електрика, газ)
+- Існуючі споруди на ділянці
+
+### 4. Рецензія експерта (якщо є):
+- Критичні зауваження (що ОБОВ'ЯЗКОВО треба додати/виправити)
+- Важливі зауваження
+
+### 5. Специфікації (якщо є):
+- Конкретні марки матеріалів
+- Вимоги до обладнання
+
+### 6. Фото місцевості (якщо є):
+- Рельєф (рівний, схил, нерівний)
+- Перешкоди (дерева, старі споруди)
+- Стан підїздів
+
+## ВАЖЛИВО - ЦІНИ МАТЕРІАЛІВ:
+
+**Використовуй Google Search для пошуку АКТУАЛЬНИХ цін (${new Date().getFullYear()} рік):**
+
+1. Для КОЖНОГО основного матеріалу зроби Google Search:
+   - Цемент М500 (ціна за 50 кг мішок)
+   - Цегла червона (ціна за 1000 шт)
+   - Блоки газобетон (ціна за м³)
+   - Арматура (ціна за тонну)
+   - Профнастил (ціна за м²)
+   - Гіпсокартон (ціна за лист)
+   - І т.д.
+
+2. Шукай в українських магазинах:
+   - Епіцентр (epicentrk.ua)
+   - Будмаркет (budmarket.com.ua)
+   - Леруа Мерлен (leroymerlin.ua)
+   - OBI (obi.ua)
+   - Нова Лінія (novalinia.ua)
+
+3. Для кожної ціни вказуй:
+   - Магазин
+   - Дата перевірки
+   - URL пошукового запиту
+
+## Формат відповіді (JSON):
+
+\`\`\`json
+{
+  "plans": {
+    "totalArea": 150,
+    "rooms": [
+      {"name": "Вітальня", "area": 25.5},
+      {"name": "Спальня 1", "area": 18.0}
+    ],
+    "electrical": {
+      "outlets": 45,
+      "switches": 20,
+      "lightPoints": 30,
+      "outdoorLighting": true
+    },
+    "plumbing": {
+      "toilets": 2,
+      "sinks": 3,
+      "bathtubs": 1,
+      "showers": 1
+    },
+    "heating": {
+      "radiators": 8,
+      "underfloorHeating": true,
+      "underfloorArea": 50
+    },
+    "doors": {
+      "interior": 8,
+      "entrance": 1
+    },
+    "windows": {
+      "count": 12,
+      "totalArea": 35
+    },
+    "walls": {
+      "exterior": 80,
+      "interior": 45
+    }
+  },
+
+  "geology": {
+    "groundwaterLevel": 2.5,
+    "soilType": "Глина",
+    "bearingCapacity": 2.0,
+    "recommendedFoundation": "Стрічковий",
+    "warnings": ["Високий УГВ - потрібен дренаж"]
+  },
+
+  "sitePlan": {
+    "area": 1200,
+    "elevationDifference": 3.5,
+    "utilities": {
+      "water": true,
+      "sewerage": false,
+      "electricity": true,
+      "gas": false
+    },
+    "existingStructures": ["Старий сарай", "5 дерев"],
+    "accessRoad": "грунтова"
+  },
+
+  "review": {
+    "criticalComments": [
+      "Додати контур заземлення для всіх розеток",
+      "Посилити фундамент згідно геології"
+    ],
+    "importantComments": [
+      "Рекомендовано використати цегла М150",
+      "Додати вентиляцію в санвузлах"
+    ]
+  },
+
+  "specifications": {
+    "materials": [
+      {"category": "Цемент", "specification": "ПЦ М500 Д0", "unit": "т"},
+      {"category": "Цегла", "specification": "Рядова М125 250×120×65", "unit": "тис.шт"}
+    ]
+  },
+
+  "prices": {
+    "materials": [
+      {
+        "name": "Цемент ПЦ М500 (мішок 50 кг)",
+        "price": 285,
+        "unit": "шт",
+        "source": "Епіцентр",
+        "date": "${new Date().toISOString().split('T')[0]}",
+        "searchUrl": "https://www.google.com/search?q=цемент+м500+ціна+епіцентр+${new Date().getFullYear()}"
+      },
+      {
+        "name": "Цегла червона М125",
+        "price": 9500,
+        "unit": "тис.шт",
+        "source": "Будмаркет",
+        "date": "${new Date().toISOString().split('T')[0]}",
+        "searchUrl": "https://www.google.com/search?q=цегла+червона+ціна+будмаркет+${new Date().getFullYear()}"
+      }
+    ]
+  },
+
+  "photos": {
+    "terrain": "Нерівний, схил на північ",
+    "obstacles": ["2 великі дерева біля входу", "Старий паркан"],
+    "access": "Грунтова дорога 3м ширини, потребує укріплення"
+  }
+}
+\`\`\`
+
+**КРИТИЧНО ВАЖЛИВО:**
+1. ВСІ числові значення (кількості, площі, розміри) - з креслень
+2. ВСІ ціни матеріалів - з Google Search (${new Date().getFullYear()} рік)
+3. Для кожної ціни - джерело і дата
+4. Якщо даних немає - пиши null або [] (порожній масив)
+
+Повертай ТІЛЬКИ JSON без додаткового тексту!`;
+
+  const geminiModel = genAI.getGenerativeModel({
+    model: "gemini-3-flash-preview",
+    tools: [{
+      googleSearch: {},
+    } as unknown as import("@google/generative-ai").Tool],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 30000,
+      responseMimeType: "application/json",
+    },
+  });
+
+  const parts: (string | { inlineData: { data: string; mimeType: string } })[] = [analysisPrompt];
+
+  // Add wizard data context
+  if (wizardData) {
+    parts.push(`\n\n## ДАНІ З WIZARD:\n${JSON.stringify(wizardData, null, 2)}`);
+  }
+
+  // Add text from files
+  if (textParts.length > 0) {
+    parts.push(`\n\n## ТЕКСТ З ФАЙЛІВ:\n${textParts.join("\n\n")}`);
+  }
+
+  // Add PDFs directly (Gemini native support)
+  if (pdfParts.length > 0) {
+    console.log(`  📑 Adding ${pdfParts.length} PDF files for Gemini analysis`);
+    for (const pdf of pdfParts) {
+      parts.push({
+        inlineData: {
+          data: pdf.data,
+          mimeType: pdf.mimeType,
+        }
+      });
+    }
+  }
+
+  // Add images (no size limit!)
+  if (imageParts.length > 0) {
+    console.log(`  🖼️  Adding ${imageParts.length} images for Gemini analysis`);
+    parts.push(...imageParts);
+  }
+
+  const result = await geminiModel.generateContent(parts);
+  const response = result.response;
+  const analysisJSON = response.text();
+
+  console.log('✅ Gemini analysis completed');
+  console.log(`  📊 Analysis size: ${(analysisJSON.length / 1024).toFixed(1)} KB`);
+
+  return analysisJSON;
+}
+
 function calculateMinimumItems(wizardData: any, isCommercial: boolean = false): number {
   if (!wizardData) return 50;
 
@@ -2907,6 +3150,69 @@ ${(isCommercialProject || hasATB) ? `
     let text = "";
 
     switch (model) {
+      case "pipeline":
+        // NEW: Pipeline approach - Gemini analysis → Claude generation
+        console.log("🔄 Використовуємо PIPELINE: Gemini (аналіз) → Claude (генерація)");
+
+        // Phase 1: Gemini Analysis
+        let analysisData: any;
+        try {
+          const analysisJSON = await analyzeWithGemini(textParts, imageParts, pdfParts, wizardData);
+          analysisData = JSON.parse(analysisJSON);
+          console.log("✅ Phase 1 (Gemini): Аналіз завершено");
+        } catch (analysisError) {
+          console.error("❌ Gemini analysis error:", analysisError);
+          return NextResponse.json(
+            {
+              error: "Помилка аналізу з Gemini",
+              details: analysisError instanceof Error ? analysisError.message : String(analysisError)
+            },
+            { status: 500 }
+          );
+        }
+
+        // Phase 2: Claude Generation with analyzed data
+        if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === "") {
+          return NextResponse.json(
+            { error: "ANTHROPIC_API_KEY не налаштований" },
+            { status: 500 }
+          );
+        }
+
+        console.log("🧠 Phase 2 (Claude): Генерація кошторису...");
+
+        // Build enriched prompt with Gemini's analysis
+        const enrichedPrompt = `${prompt}
+
+# АНАЛІЗ ВІД GEMINI (Phase 1):
+
+${JSON.stringify(analysisData, null, 2)}
+
+**ВИКОРИСТОВУЙ ЦІ ДАНІ для генерації кошторису:**
+- Всі кількості (розетки, вимикачі, двері) - з аналізу
+- Всі площі - з аналізу
+- Ціни матеріалів - з аналізу (вже перевірені через Google Search)
+- Зауваження з рецензії - ОБОВ'ЯЗКОВО врахуй
+- Геологічні вимоги (дренаж, тип фундаменту) - ОБОВ'ЯЗКОВО врахуй
+
+Генеруй кошторис на основі цих даних!`;
+
+        try {
+          // Use Claude WITHOUT images (Gemini already analyzed them)
+          text = await generateWithAnthropic(enrichedPrompt, textParts.join("\n\n"), []);
+          console.log("✅ Phase 2 (Claude): Генерація завершена");
+        } catch (claudeError) {
+          console.error("❌ Claude generation error:", claudeError);
+          return NextResponse.json(
+            {
+              error: "Помилка генерації з Claude",
+              details: claudeError instanceof Error ? claudeError.message : String(claudeError)
+            },
+            { status: 500 }
+          );
+        }
+        break;
+
       case "openai":
         if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === "") {
           return NextResponse.json(

@@ -2652,7 +2652,7 @@ export default function AIEstimatePage() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(WORK_CATEGORIES.map(c => c.id)) // За замовчуванням всі категорії вибрані
   );
-  const [selectedGenerationModel, setSelectedGenerationModel] = useState<"gemini" | "openai" | "anthropic">("gemini");
+  const [selectedGenerationModel, setSelectedGenerationModel] = useState<"gemini" | "openai" | "anthropic" | "pipeline">("pipeline");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -3643,17 +3643,38 @@ export default function AIEstimatePage() {
             </h3>
             <select
               value={selectedGenerationModel}
-              onChange={(e) => setSelectedGenerationModel(e.target.value as "gemini" | "openai" | "anthropic")}
+              onChange={(e) => setSelectedGenerationModel(e.target.value as "gemini" | "openai" | "anthropic" | "pipeline")}
               className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
             >
+              <option value="pipeline">🔄 Pipeline (Gemini аналіз + Claude генерація) — РЕКОМЕНДОВАНО</option>
               <option value="gemini">✨ Google Gemini 3 Flash (З пошуком цін через Google Search)</option>
               <option value="openai">🤖 OpenAI GPT-4o (Швидка та точна)</option>
               <option value="anthropic">🧠 Anthropic Claude Opus 4 (Найкращий аналіз документів)</option>
             </select>
-            <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
-              <Info className="w-3 h-3" />
-              Gemini має доступ до Google Search для актуальних цін матеріалів з українських магазинів
-            </p>
+            {selectedGenerationModel === "pipeline" && (
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-900 font-medium mb-1">🔄 Pipeline Mode — Найкращий результат!</p>
+                <p className="text-xs text-blue-700">
+                  <strong>Phase 1 (Gemini):</strong> Аналіз усіх файлів + пошук цін через Google Search<br />
+                  <strong>Phase 2 (Claude):</strong> Генерація детального кошторису на основі аналізу
+                </p>
+                <p className="text-xs text-blue-600 mt-2">
+                  ✅ Немає ліміту на розмір файлів • ✅ Актуальні ціни • ✅ Найточніший результат
+                </p>
+              </div>
+            )}
+            {selectedGenerationModel === "gemini" && (
+              <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                Gemini має доступ до Google Search для актуальних цін матеріалів з українських магазинів
+              </p>
+            )}
+            {selectedGenerationModel === "anthropic" && (
+              <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
+                <Info className="w-3 h-3" />
+                ⚠️ Увага: Anthropic має ліміт 5 MB на кожне зображення. Для великих файлів використовуйте Gemini або Pipeline.
+              </p>
+            )}
           </Card>
 
           {/* Project Template Selection - REMOVED: Wizard replaces this */}
