@@ -2693,6 +2693,18 @@ export default function AIEstimatePage() {
   // Engineering report state (temporarily disabled)
   // const [engineeringReport, setEngineeringReport] = useState<string | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+  // Chunked generation state
+  const [isChunkedGenerating, setIsChunkedGenerating] = useState(false);
+  const [chunkedProgress, setChunkedProgress] = useState<{
+    phase: number | string;
+    status: 'analyzing' | 'generating' | 'complete' | 'error';
+    message: string;
+    progress: number;
+    data?: any;
+  } | null>(null);
+  const [chunkedSections, setChunkedSections] = useState<any[]>([]);
+
   const [wizardData, setWizardData] = useState<WizardData>({
     // Step 0: Object Type
     objectType: 'house',
@@ -3217,6 +3229,186 @@ export default function AIEstimatePage() {
       setError("Не вдалось з'єднатись з сервером");
     } finally {
       setLoading(false);
+    }
+  }
+
+  // Chunked generation with SSE streaming
+  async function generateChunked() {
+    if (files.length === 0) {
+      setError("Завантажте хоча б один файл проєкту");
+      return;
+    }
+
+    setIsChunkedGenerating(true);
+    setError("");
+    setEstimate(null);
+    setChunkedProgress(null);
+    setChunkedSections([]);
+    setUploadProgress(null);
+
+    try {
+      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+      console.log(`🔄 Chunked generation: ${files.length} files (${formatFileSize(totalSize)})`);
+
+      const formData = new FormData();
+
+      // Check if we need R2 (production and large files)
+      const isProduction = window.location.hostname !== 'localhost' &&
+                          window.location.hostname !== '127.0.0.1';
+
+      if (isProduction && totalSize > 4 * 1024 * 1024) {
+        console.log('📤 Production: Uploading to R2...');
+
+        // Get presigned URLs
+        const filesMetadata = files.map(f => ({
+          name: f.name,
+          type: f.type,
+          size: f.size
+        }));
+
+        const presignedResponse = await fetch("/api/admin/estimates/presigned-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ files: filesMetadata }),
+        });
+
+        if (!presignedResponse.ok) {
+          throw new Error("Failed to get presigned URLs");
+        }
+
+        const { presignedUrls } = await presignedResponse.json();
+
+        // Upload files directly to R2
+        const uploadPromises = files.map(async (file, index) => {
+          const presignedData = presignedUrls[index];
+          const uploadResponse = await fetch(presignedData.uploadUrl, {
+            method: 'PUT',
+            body: file,
+            headers: { 'Content-Type': file.type },
+          });
+
+          if (!uploadResponse.ok) {
+            throw new Error(`Failed to upload ${file.name}`);
+          }
+
+          return {
+            key: presignedData.key,
+            originalName: file.name,
+            mimeType: file.type,
+            size: file.size,
+          };
+        });
+
+        const uploadedFiles = await Promise.all(uploadPromises);
+        formData.append("r2Keys", JSON.stringify(uploadedFiles));
+      } else {
+        // Localhost or small files: send directly
+        files.forEach((file) => formData.append("files", file));
+      }
+
+      // Add wizard data if available
+      if (wizardData) {
+        const enrichedWizardData = {
+          ...wizardData,
+          specialRequirements: [
+            ...(wizardData.specialRequirements || []),
+            projectNotes
+          ].filter(Boolean).join('\n')
+        };
+        formData.append("wizardData", JSON.stringify(enrichedWizardData));
+      }
+
+      formData.append("projectNotes", projectNotes);
+
+      // Call the chunked generation endpoint with POST
+      const response = await fetch("/api/admin/estimates/generate-chunked", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      // Read the SSE stream
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error("No response body");
+      }
+
+      let collectedSections: any[] = [];
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const text = decoder.decode(value);
+        const lines = text.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            try {
+              const update = JSON.parse(data);
+              console.log('📡 Chunked update:', update);
+
+              setChunkedProgress(update);
+
+              // Store completed sections
+              if (update.data?.section) {
+                collectedSections.push(update.data.section);
+                setChunkedSections(collectedSections);
+              }
+
+              // Final complete
+              if (update.phase === 'final' && update.status === 'complete') {
+                console.log('✅ Chunked generation complete!', update.data);
+
+                // Build final estimate from all collected sections
+                const finalEstimate: EstimateData = {
+                  title: `Кошторис ${update.data.estimateNumber || ''}`,
+                  description: "Згенеровано по секціях (Gemini + Claude + OpenAI)",
+                  sections: collectedSections.map((section) => ({
+                    title: section.title,
+                    items: section.items.map((item: any) => ({
+                      description: item.description,
+                      unit: item.unit,
+                      quantity: item.quantity,
+                      unitPrice: item.unitPrice,
+                      laborCost: item.laborCost || 0,
+                      totalCost: item.totalCost,
+                      priceSource: null,
+                      priceNote: null
+                    })),
+                    sectionTotal: section.items.reduce((sum: number, item: any) => sum + item.totalCost, 0)
+                  }))
+                };
+
+                setEstimate(finalEstimate);
+                setIsChunkedGenerating(false);
+
+                // Show success message
+                console.log(`🎉 Estimate created: ID ${update.data.estimateId}`);
+              }
+
+              // Handle error
+              if (update.status === 'error') {
+                setError(update.message || 'Помилка генерації');
+                setIsChunkedGenerating(false);
+              }
+            } catch (e) {
+              console.error('Failed to parse update:', e);
+            }
+          }
+        }
+      }
+
+    } catch (err) {
+      console.error('Chunked generation error:', err);
+      setError(err instanceof Error ? err.message : 'Помилка генерації');
+      setIsChunkedGenerating(false);
     }
   }
 
@@ -3808,25 +4000,110 @@ export default function AIEstimatePage() {
             </div>
           )}
 
-          {/* Generate button */}
-          <Button
-            onClick={generate}
-            disabled={loading || files.length === 0 || (!wizardCompleted && selectedCategories.size === 0)}
-            size="lg"
-            className="w-full h-14 text-base gap-3"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" />
-                AI аналізує файли... Це може зайняти 15-30 секунд
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-5 w-5" />
-                Згенерувати кошторис ({files.length} файл{files.length > 1 ? "ів" : ""})
-              </>
+          {/* Generate buttons */}
+          <div className="space-y-3">
+            {/* CHUNKED Generation (NEW - Recommended for large projects) */}
+            <Button
+              onClick={generateChunked}
+              disabled={loading || isChunkedGenerating || files.length === 0}
+              size="lg"
+              className="w-full h-14 text-base gap-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            >
+              {isChunkedGenerating ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {chunkedProgress?.message || 'Генерація...'}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5" />
+                  🔄 Генерувати по секціях (Gemini + Claude + OpenAI)
+                  <Badge variant="secondary" className="ml-auto bg-green-100 text-green-700">
+                    Рекомендовано для великих проектів
+                  </Badge>
+                </>
+              )}
+            </Button>
+
+            {/* Regular Generation */}
+            <Button
+              onClick={generate}
+              disabled={loading || isChunkedGenerating || files.length === 0 || (!wizardCompleted && selectedCategories.size === 0)}
+              size="lg"
+              variant="outline"
+              className="w-full h-14 text-base gap-3"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  AI аналізує файли... Це може зайняти 15-30 секунд
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5" />
+                  Звичайна генерація ({files.length} файл{files.length > 1 ? "ів" : ""})
+                </>
+              )}
+            </Button>
+
+            <p className="text-xs text-muted-foreground text-center">
+              💡 Для проектів &gt;30 MB рекомендуємо "Генерувати по секціях"
+            </p>
+
+            {/* Chunked Generation Progress */}
+            {isChunkedGenerating && chunkedProgress && (
+              <Card className="p-6 bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200">
+                <div className="space-y-4">
+                  {/* Phase indicator */}
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">
+                      {chunkedProgress.phase === 0 && '📦 Підготовка'}
+                      {chunkedProgress.phase === 1 && '🔍 Аналіз документів'}
+                      {chunkedProgress.phase === 2 && '🏗️ Генерація: Фундамент'}
+                      {chunkedProgress.phase === 3 && '⚡ Генерація: Електрика'}
+                      {chunkedProgress.phase === 4 && '🚰 Генерація: Сантехніка'}
+                      {chunkedProgress.phase === 5 && '🎨 Генерація: Оздоблення'}
+                      {chunkedProgress.phase === 'final' && '🎉 Завершення'}
+                    </h3>
+                    <Badge variant="secondary" className="text-lg px-3 py-1">
+                      {chunkedProgress.progress}%
+                    </Badge>
+                  </div>
+
+                  {/* Progress bar */}
+                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500 ease-out"
+                      style={{ width: `${chunkedProgress.progress}%` }}
+                    />
+                  </div>
+
+                  {/* Status message */}
+                  <p className="text-sm text-muted-foreground">
+                    {chunkedProgress.message}
+                  </p>
+
+                  {/* Completed sections */}
+                  {chunkedSections.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                      <h4 className="text-sm font-semibold">Згенеровано секцій: {chunkedSections.length}</h4>
+                      <div className="space-y-1">
+                        {chunkedSections.map((section, idx) => (
+                          <div key={idx} className="flex items-center gap-2 text-xs">
+                            <Check className="h-4 w-4 text-green-600" />
+                            <span className="font-medium">{section.title}</span>
+                            <span className="text-muted-foreground">
+                              ({section.items?.length || 0} позицій)
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </Card>
             )}
-          </Button>
+          </div>
         </div>
       ) : (
         /* ════════ RESULT STATE ════════ */
