@@ -4392,6 +4392,27 @@ export default function AIEstimatePage() {
             ))}
           </div>
 
+          {/* Analysis Summary - Звіт інженера */}
+          {(estimate as any).analysisSummary && (
+            <Card className="p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-primary/20 p-2">
+                  <Info className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-base mb-3 text-primary">
+                    📋 Звіт інженера про аналіз проекту
+                  </h3>
+                  <div className="prose prose-sm max-w-none">
+                    <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
+                      {(estimate as any).analysisSummary}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Sections */}
           {estimate.sections && estimate.sections.length > 0 ? estimate.sections.map((section, sIdx) => (
             <Card key={sIdx} className="overflow-hidden">

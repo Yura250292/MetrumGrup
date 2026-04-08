@@ -51,6 +51,7 @@ export interface EstimateData {
     agent: string;
     message: string;
   }>;
+  analysisSummary?: string; // Звіт інженера про аналіз проекту
 }
 
 /**
@@ -234,6 +235,16 @@ export class EstimateOrchestrator {
     console.log(`   Materials: ${materialsCost.toFixed(0)} ₴, Labor: ${laborCost.toFixed(0)} ₴`);
     console.log(`   Validation issues: ${validationIssues.length} (${validationIssues.filter(i => i.severity === 'error').length} errors)`);
 
+    // Генерація звіту інженера про аналіз
+    onProgress({
+      phase: 'final',
+      status: 'generating',
+      message: '📝 Підготовка звіту інженера...',
+      progress: 98,
+    });
+
+    const analysisSummary = await this.generateAnalysisSummary(sections, validationIssues);
+
     return {
       title: `AI Кошторис (${this.mode === 'multi-agent' ? 'Multi-Agent' : this.mode === 'openai' ? 'OpenAI' : 'Gemini'})`,
       sections,
@@ -243,6 +254,98 @@ export class EstimateOrchestrator {
         totalBeforeDiscount,
       },
       validationIssues: validationIssues.length > 0 ? validationIssues : undefined,
+      analysisSummary,
     };
+  }
+
+  /**
+   * Генерація звіту інженера про аналіз проекту
+   */
+  private async generateAnalysisSummary(
+    sections: EstimateSection[],
+    validationIssues: Array<{ severity: string; agent: string; message: string }>
+  ): Promise<string> {
+    try {
+      const OpenAI = (await import('openai')).default;
+      const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+      // Підготувати інформацію про секції
+      const sectionsInfo = sections.map(s => ({
+        title: s.title,
+        itemsCount: s.items.length,
+        total: s.sectionTotal,
+        keyItems: s.items.slice(0, 3).map(item => `${item.description} (${item.quantity} ${item.unit})`)
+      }));
+
+      const prompt = `Ти - головний інженер-кошторисник. Склади КОРОТКИЙ звіт про проаналізований проект.
+
+ПРОАНАЛІЗОВАНІ ДОКУМЕНТИ:
+${this.config.documents.plans ? `- Креслення: ${this.config.documents.plans.length} файлів` : ''}
+${this.config.documents.specifications ? `- Специфікації: ${this.config.documents.specifications.length} файлів` : ''}
+${this.config.documents.geology ? `- Геологічні дані: є` : ''}
+${this.config.documents.sitePhotos ? `- Фото об'єкта: ${this.config.documents.sitePhotos.length} шт` : ''}
+
+ПАРАМЕТРИ З WIZARD:
+${JSON.stringify(this.config.wizardData, null, 2)}
+
+ЗГЕНЕРОВАНІ СЕКЦІЇ:
+${sectionsInfo.map(s => `- ${s.title}: ${s.itemsCount} позицій, ${s.total.toFixed(0)} ₴`).join('\n')}
+
+ВИЯВЛЕНІ ПРОБЛЕМИ:
+${validationIssues.length > 0 ? validationIssues.map(i => `- [${i.severity}] ${i.message}`).join('\n') : 'Немає критичних проблем'}
+
+ТВОЄ ЗАВДАННЯ:
+Напиши звіт (3-5 абзаців) для замовника, який ЗРОЗУМІЛО пояснює:
+
+1. **ЩО ПРОАНАЛІЗОВАНО:**
+   - Які документи опрацьовано
+   - Які ключові параметри витягнуто (площа, поверхи, матеріали тощо)
+   - Що було зрозуміло з документації
+
+2. **ЯК ФОРМУВАВСЯ КОШТОРИС:**
+   - На основі яких даних
+   - Які системи включено (фундамент, стіни, електрика тощо)
+   - Чи всі секції охоплені
+
+3. **НА ЩО ЗВЕРНУТИ УВАГУ:**
+   - Чи є недостатньо інформації в якихось розділах
+   - Які припущення зроблено
+   - Що варто уточнити перед початком робіт
+
+СТИЛЬ:
+- Професійно, але зрозуміло
+- Конкретні цифри і факти
+- Без загальних фраз
+- Максимум 500 слів
+
+ФОРМАТ:
+Простий текст з абзацами (без markdown заголовків).`;
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'system',
+            content: 'Ти - досвідчений інженер-кошторисник, який пояснює технічні деталі зрозумілою мовою.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      const summary = response.choices[0]?.message?.content || 'Звіт недоступний';
+
+      console.log(`📝 Analysis summary generated: ${summary.length} characters`);
+
+      return summary;
+
+    } catch (error) {
+      console.error('Error generating analysis summary:', error);
+      return 'На жаль, не вдалось згенерувати звіт інженера.';
+    }
   }
 }
