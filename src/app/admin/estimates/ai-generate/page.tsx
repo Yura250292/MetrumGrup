@@ -2648,7 +2648,7 @@ export default function AIEstimatePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [projectType, setProjectType] = useState("ремонт квартири");
   const [area, setArea] = useState("");
-  const [notes, setNotes] = useState("");
+  const [projectNotes, setProjectNotes] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(WORK_CATEGORIES.map(c => c.id)) // За замовчуванням всі категорії вибрані
   );
@@ -3015,20 +3015,54 @@ export default function AIEstimatePage() {
       }
 
       // Фінальний запит на генерацію
-      // Оскільки generate endpoint обробляє файли, ми все одно маємо їх завантажити
-      // Але робимо це через один великий запит після pre-analysis
+      // На production: спочатку завантажуємо файли в R2, потім передаємо URLs
+      // На localhost: відправляємо файли напряму
       console.log('🤖 Запуск генерації кошторису...');
 
       const formData = new FormData();
-      files.forEach((file) => formData.append("files", file));
+
+      // Перевірка чи потрібно використовувати R2 (production)
+      const isProduction = window.location.hostname !== 'localhost' &&
+                          window.location.hostname !== '127.0.0.1';
+
+      if (isProduction && totalSize > 10 * 1024 * 1024) { // Якщо > 10MB на production
+        console.log('📤 Production mode: Uploading files to R2 first...');
+
+        // Крок 1: Завантажуємо файли в R2
+        const r2FormData = new FormData();
+        files.forEach((file) => r2FormData.append("files", file));
+
+        const r2Response = await fetch("/api/admin/estimates/upload-r2", {
+          method: "POST",
+          body: r2FormData,
+        });
+
+        if (!r2Response.ok) {
+          const errorData = await r2Response.json();
+          setError(`Помилка завантаження файлів: ${errorData.message || 'Unknown error'}`);
+          return;
+        }
+
+        const r2Data = await r2Response.json();
+        console.log(`✅ Uploaded ${r2Data.totalFiles} files to R2`);
+
+        // Крок 2: Передаємо R2 URLs в generate endpoint
+        formData.append("r2Files", JSON.stringify(r2Data.files));
+      } else {
+        // Localhost або невеликі файли: відправляємо напряму
+        console.log('📁 Direct mode: Sending files directly');
+        files.forEach((file) => formData.append("files", file));
+      }
+
       formData.append("projectType", projectType);
       formData.append("area", area);
-      formData.append("notes", notes);
+      formData.append("notes", projectNotes);
       formData.append("categories", Array.from(selectedCategories).join(","));
       formData.append("model", selectedGenerationModel);
       formData.append("template", selectedTemplate);
 
       // Add wizard data (always, if available - not just when completed)
+      // ВАЖЛИВО: Об'єднуємо projectNotes з wizardData.specialRequirements
       if (wizardData) {
         console.log('📝 Sending wizard data:', JSON.stringify(wizardData, null, 2));
 
@@ -3045,7 +3079,26 @@ export default function AIEstimatePage() {
           wizardCompleted
         });
 
-        formData.append("wizardData", JSON.stringify(wizardData));
+        // НОВИЙ КОД: Об'єднати projectNotes з specialRequirements
+        const enrichedWizardData = {
+          ...wizardData,
+          specialRequirements: [
+            wizardData.specialRequirements,
+            projectNotes.trim() ? `\n\n=== ДОДАТКОВА ІНФОРМАЦІЯ ВІД ІНЖЕНЕРА ===\n${projectNotes.trim()}` : ''
+          ].filter(Boolean).join('\n')
+        };
+
+        if (projectNotes.trim()) {
+          console.log('📝 Project notes added to wizardData.specialRequirements');
+        }
+
+        formData.append("wizardData", JSON.stringify(enrichedWizardData));
+      } else if (projectNotes.trim()) {
+        // Якщо wizard не заповнений, але є projectNotes - створити мінімальний wizardData
+        console.log('📝 Creating minimal wizardData with projectNotes only');
+        formData.append("wizardData", JSON.stringify({
+          specialRequirements: projectNotes.trim()
+        }));
       }
 
       // Note: Generate endpoint все ще завантажує файли одним запитом
@@ -3607,14 +3660,63 @@ export default function AIEstimatePage() {
                 />
               </div>
               <div>
-                <label className="mb-1.5 block text-sm font-medium">Додаткові побажання</label>
+                <label className="mb-1.5 block text-sm font-medium">
+                  📋 Вся відома інформація про проект
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    (комунікації, стан ділянки, побажання клієнта)
+                  </span>
+                </label>
                 <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Наприклад: преміум матеріали, теплий пол у всіх кімнатах, два санвузли..."
+                  value={projectNotes}
+                  onChange={(e) => setProjectNotes(e.target.value)}
+                  rows={8}
+                  maxLength={3000}
+                  placeholder={`Введіть всю відому інформацію про проект:
+
+🔌 КОМУНІКАЦІЇ:
+- Чи є комунікації під землею? (газ, каналізація, електрика)
+- Чи підведена вода до ділянки? Від якої відстані?
+- Чи підведене світло до ділянки?
+
+🌍 СТАН ДІЛЯНКИ:
+- Тип грунту: глина, пісок, камінь, змішаний
+- Схили, нерівності ділянки
+- Рівень грунтових вод (високий/низький)
+- Особливості ділянки
+
+👤 ПОБАЖАННЯ КЛІЄНТА:
+- Бажані матеріали (преміум/стандарт/економ)
+- Особливі вимоги
+- Інші нюанси
+
+📸 ДОДАТКОВА ІНФОРМАЦІЯ:
+- З телефонної розмови з клієнтом
+- З виїзду на об'єкт
+- З фото об'єкту
+- З додаткових документів
+
+Приклад:
+"Комунікації НЕ підведені. Воду треба тягнути 50 метрів від вулиці. Світло є. Грунт глинистий, потрібен дренаж. Клієнт хоче паркетну дошку замість ламінату у всіх кімнатах."`}
                   className="w-full rounded-xl border border-border bg-white px-4 py-2.5 text-sm outline-none focus:border-primary resize-none transition-colors"
                 />
+                <div className="mt-1.5 flex items-start gap-2 text-xs text-muted-foreground">
+                  <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                  <p>
+                    💡 <strong>Чим більше деталей ви вкажете, тим точніший буде кошторис.</strong> AI враховує всю цю інформацію при розрахунку. Особливо важливо вказати інформацію про комунікації - це дуже впливає на вартість.
+                  </p>
+                </div>
+                <div className="mt-1 flex justify-between text-xs">
+                  <span className={cn(
+                    "text-muted-foreground",
+                    projectNotes.length > 2700 && "text-orange-600 font-medium",
+                    projectNotes.length === 3000 && "text-red-600 font-bold"
+                  )}>
+                    {projectNotes.length} / 3000 символів
+                  </span>
+                  {projectNotes.length > 2700 && (
+                    <span className="text-orange-600">⚠️ Близько до ліміту</span>
+                  )}
+                </div>
               </div>
             </div>
           </Card>

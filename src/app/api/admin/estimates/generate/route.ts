@@ -11,6 +11,7 @@ import { generateMaterialsContext } from "@/lib/materials-database";
 import { generateWorkItemsContext } from "@/lib/work-items-database";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 import { parsePDF } from "@/lib/pdf-helper";
+import { shouldUseR2 } from "@/lib/r2-client";
 import fs from "fs/promises";
 import path from "path";
 
@@ -25,6 +26,26 @@ async function loadDrawingGuide(): Promise<string> {
     console.error("Failed to load drawing guide:", error);
     return ""; // Return empty if file not found (won't break generation)
   }
+}
+
+// Download file from URL (for R2 signed URLs)
+async function downloadFileFromURL(url: string, fileName: string, mimeType: string): Promise<File> {
+  console.log(`📥 Downloading from URL: ${fileName}`);
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download ${fileName}: ${response.status} ${response.statusText}`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const blob = new Blob([arrayBuffer], { type: mimeType });
+
+  // Convert Blob to File
+  const file = new File([blob], fileName, { type: mimeType });
+
+  console.log(`   ✅ Downloaded: ${fileName} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+
+  return file;
 }
 
 // Note: PDF to image conversion removed - Gemini can read PDFs natively!
@@ -1040,7 +1061,37 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const files = formData.getAll("files") as File[];
+
+    // Support for R2 uploaded files (production) or direct files (localhost)
+    const r2FilesStr = formData.get("r2Files") as string || null;
+    let files: File[] = [];
+
+    if (r2FilesStr) {
+      // R2 mode: download files from R2 URLs
+      console.log('📦 R2 mode: Downloading files from R2...');
+      const r2Files = JSON.parse(r2FilesStr) as Array<{
+        url: string;
+        originalName: string;
+        mimeType: string;
+        size: number;
+      }>;
+
+      console.log(`   ${r2Files.length} files in R2`);
+
+      // Download all files from R2
+      const downloadPromises = r2Files.map(r2File =>
+        downloadFileFromURL(r2File.url, r2File.originalName, r2File.mimeType)
+      );
+
+      files = await Promise.all(downloadPromises);
+
+      console.log(`✅ Downloaded ${files.length} files from R2`);
+    } else {
+      // Direct mode: use files from FormData
+      files = formData.getAll("files") as File[];
+      console.log('📁 Direct mode: Using files from FormData');
+    }
+
     const projectId = formData.get("projectId") as string;
     const projectType = formData.get("projectType") as string || "ремонт";
     const area = formData.get("area") as string || "";
@@ -2125,6 +2176,48 @@ ${photosContext}
 - Тип проєкту: ${projectType}
 - Площа (від користувача): ${area || "НЕ ВКАЗАНО — визначи з документів або оціни"}
 - Додаткові примітки: ${additionalNotes || "немає"}
+
+${wizardData?.specialRequirements ? `
+╔════════════════════════════════════════════════════════════════════╗
+║  🔍 КРИТИЧНА ІНФОРМАЦІЯ ВІД ІНЖЕНЕРА ПРО ПРОЕКТ                   ║
+╚════════════════════════════════════════════════════════════════════╝
+
+${wizardData.specialRequirements}
+
+⚠️⚠️⚠️ ЦЯ ІНФОРМАЦІЯ ДУЖЕ ВАЖЛИВА! ОБОВ'ЯЗКОВО ВРАХУЙ ЇЇ! ⚠️⚠️⚠️
+
+📋 ІНСТРУКЦІЇ ЯК ВИКОРИСТОВУВАТИ:
+
+1. Комунікації НЕ підведені / Потрібно підвести:
+   → ДОДАЙ позиції прокладки комунікацій
+   → Врахуй відстань (якщо вказана)
+   → Додай земляні роботи під комунікації
+
+2. Немає води / Воду треба тягнути X метрів:
+   → ДОДАЙ труби водопостачання (відповідної довжини)
+   → ДОДАЙ земляні роботи під траншею
+   → ДОДАЙ вводи та запірну арматуру
+
+3. Немає світла / Електрику треба підвести:
+   → ДОДАЙ кабель живлення (SIP або ВВГ)
+   → ДОДАЙ електрощит вводу
+   → ДОДАЙ опору/стовп (якщо потрібно)
+
+4. Інформація про грунт (глина, схили, високі води):
+   → Глина: посилений дренаж
+   → Схили: підпірні конструкції
+   → Високі води: посилена гідроізоляція
+
+5. Побажання щодо матеріалів:
+   → ВИКОРИСТОВУЙ саме ці матеріали в кошторисі
+   → НЕ замінюй на дешевші альтернативи
+
+6. Явно написане заборонене/обов'язкове:
+   → ТОЧНО ДОТРИМУЙСЯ цих вказівок
+
+╔════════════════════════════════════════════════════════════════════╗
+` : ''}
+
 - Локація: Львів, Україна
 - Валюта: гривня (₴, UAH)
 ${templateSpecificPrompt}
