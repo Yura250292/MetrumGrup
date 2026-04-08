@@ -321,8 +321,35 @@ ${additionalInfo}
             await prisma.estimateItem.createMany({
               data: itemsToCreate
             });
+
+            // Оновити totalAmount секції після додавання items
+            const sectionTotal = itemsToCreate.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
+            await prisma.estimateSection.update({
+              where: { id: createdSection.id },
+              data: { totalAmount: sectionTotal }
+            });
           }
         }
+
+        // Перерахувати загальну суму кошторису
+        const updatedEstimate = await prisma.estimate.findUnique({
+          where: { id: refinedEstimate.id },
+          include: {
+            sections: true,
+            items: true
+          }
+        });
+
+        const totalAmount = updatedEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+        // Оновити totalAmount кошторису
+        await prisma.estimate.update({
+          where: { id: refinedEstimate.id },
+          data: {
+            totalAmount: totalAmount,
+            finalAmount: totalAmount
+          }
+        });
 
         sendUpdate({
           phase: 'final',
@@ -334,8 +361,8 @@ ${additionalInfo}
             oldTotalAmount: existingEstimate.totalAmount,
             newEstimateId: refinedEstimate.id,
             newEstimateNumber: refinedEstimate.number,
-            newTotalAmount: refinedEstimate.totalAmount,
-            difference: Number(refinedEstimate.totalAmount) - Number(existingEstimate.totalAmount),
+            newTotalAmount: totalAmount,
+            difference: Number(totalAmount) - Number(existingEstimate.totalAmount),
             sectionsCount: newEstimateData.sections.length,
           }
         });

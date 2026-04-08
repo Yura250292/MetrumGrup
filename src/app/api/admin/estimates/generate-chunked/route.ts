@@ -292,7 +292,33 @@ export async function POST(request: NextRequest) {
               await prisma.estimateItem.createMany({
                 data: itemsToCreate
               });
+
+              // Оновити totalAmount секції після додавання items
+              const sectionTotal = itemsToCreate.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
+              await prisma.estimateSection.update({
+                where: { id: createdSection.id },
+                data: { totalAmount: sectionTotal }
+              });
             }
+          }
+
+          // Перерахувати загальну суму кошторису після створення всіх items
+          const finalEstimate = await prisma.estimate.findUnique({
+            where: { id: estimate.id },
+            include: { items: true, sections: true }
+          });
+
+          const actualTotalAmount = finalEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+          // Оновити totalAmount якщо відрізняється
+          if (actualTotalAmount !== Number(estimate.totalAmount)) {
+            await prisma.estimate.update({
+              where: { id: estimate.id },
+              data: {
+                totalAmount: actualTotalAmount,
+                finalAmount: actualTotalAmount
+              }
+            });
           }
 
           sendUpdate({
@@ -303,7 +329,7 @@ export async function POST(request: NextRequest) {
             data: {
               estimateId: estimate.id,
               estimateNumber: estimate.number,
-              totalAmount: estimate.totalAmount,
+              totalAmount: actualTotalAmount,
               sectionsCount: estimateData.sections.length,
               validationIssues: estimateData.validationIssues,
             }
@@ -492,7 +518,33 @@ export async function POST(request: NextRequest) {
             await prisma.estimateItem.createMany({
               data: itemsToCreate
             });
+
+            // Оновити totalAmount секції після додавання items
+            const sectionTotal = itemsToCreate.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
+            await prisma.estimateSection.update({
+              where: { id: createdSection.id },
+              data: { totalAmount: sectionTotal }
+            });
           }
+        }
+
+        // Перерахувати загальну суму кошторису після створення всіх items
+        const finalEstimate = await prisma.estimate.findUnique({
+          where: { id: estimate.id },
+          include: { items: true, sections: true }
+        });
+
+        const actualTotalAmount = finalEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
+
+        // Оновити totalAmount якщо відрізняється
+        if (actualTotalAmount !== Number(estimate.totalAmount)) {
+          await prisma.estimate.update({
+            where: { id: estimate.id },
+            data: {
+              totalAmount: actualTotalAmount,
+              finalAmount: actualTotalAmount
+            }
+          });
         }
 
         sendUpdate({
@@ -503,7 +555,7 @@ export async function POST(request: NextRequest) {
           data: {
             estimateId: estimate.id,
             estimateNumber: estimate.number,
-            totalAmount: estimate.totalAmount,
+            totalAmount: actualTotalAmount,
             sectionsCount: sections.length
           }
         });

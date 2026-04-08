@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail, Plus, Upload, FileText, Image as ImageIcon, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
@@ -98,6 +98,12 @@ export default function EstimateDetailPage({
   const [exporting, setExporting] = useState<string | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  const [supplementModalOpen, setSupplementModalOpen] = useState(false);
+  const [supplementInfo, setSupplementInfo] = useState("");
+  const [supplementFiles, setSupplementFiles] = useState<File[]>([]);
+  const [supplementing, setSupplementing] = useState(false);
+  const [supplementProgress, setSupplementProgress] = useState<{ message: string; progress: number } | null>(null);
+  const [supplementError, setSupplementError] = useState("");
   const [approvals, setApprovals] = useState<any[]>([]);
 
   // Financial form state
@@ -295,6 +301,106 @@ export default function EstimateDetailPage({
     }
   }
 
+  // Supplement estimate with additional files/data
+  async function supplementEstimate() {
+    if (!supplementInfo.trim() && supplementFiles.length === 0) {
+      setSupplementError("Додайте текст або файли для доповнення кошторису");
+      return;
+    }
+
+    setSupplementing(true);
+    setSupplementError("");
+    setSupplementProgress(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("additionalInfo", supplementInfo);
+
+      // Upload files to R2 if any
+      let r2Keys: any[] = [];
+      if (supplementFiles.length > 0) {
+        const uploadFormData = new FormData();
+        supplementFiles.forEach(file => {
+          uploadFormData.append("files", file);
+        });
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Не вдалось завантажити файли");
+        }
+
+        const uploadData = await uploadRes.json();
+        r2Keys = uploadData.r2Keys || [];
+      }
+
+      formData.append("r2Keys", JSON.stringify(r2Keys));
+      formData.append("regenerateAll", "true");
+
+      // Call refine API
+      const response = await fetch(`/api/admin/estimates/${id}/refine`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Помилка доповнення кошторису");
+      }
+
+      // Stream progress
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const text = decoder.decode(value);
+          const lines = text.split('\n\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                setSupplementProgress({
+                  message: data.message,
+                  progress: data.progress || 0
+                });
+
+                if (data.status === 'complete' && data.data) {
+                  // Success
+                  alert(`✅ Кошторис успішно доповнено!\n\nСтара вартість: ${formatCurrency(data.data.oldTotalAmount)}\nНова вартість: ${formatCurrency(data.data.newTotalAmount)}\nЗміна: ${formatCurrency(data.data.difference)}`);
+
+                  // Redirect to new estimate
+                  window.location.href = `/admin/estimates/${data.data.newEstimateId}`;
+                  return;
+                } else if (data.status === 'error') {
+                  throw new Error(data.message);
+                }
+              } catch (e) {
+                console.error('Error parsing SSE:', e);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setSupplementError(err instanceof Error ? err.message : "Не вдалось доповнити кошторис");
+    } finally {
+      setSupplementing(false);
+    }
+  }
+
+  function formatFileSize(bytes: number): string {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+
   if (!estimate) return <div className="p-8 text-muted-foreground">Завантаження...</div>;
 
   return (
@@ -348,6 +454,17 @@ export default function EstimateDetailPage({
               <FileSpreadsheet className="h-4 w-4" />
             )}
             Excel
+          </Button>
+
+          {/* Supplement estimate button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSupplementModalOpen(true)}
+            className="border-orange-500/30 text-orange-600 hover:bg-orange-50"
+          >
+            <Plus className="h-4 w-4" />
+            Доповнити кошторис
           </Button>
 
           {/* Send to client button - only for approved estimates */}
@@ -783,6 +900,172 @@ export default function EstimateDetailPage({
                     <>
                       <CheckCircle className="h-4 w-4" />
                       Застосувати
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Supplement Modal */}
+      {supplementModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Plus className="h-5 w-5 text-orange-600" />
+                    Доповнити кошторис новими даними
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Додайте нову інформацію або файли для регенерації кошторису
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setSupplementModalOpen(false);
+                    setSupplementInfo("");
+                    setSupplementFiles([]);
+                    setSupplementProgress(null);
+                    setSupplementError("");
+                  }}
+                  disabled={supplementing}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {supplementError && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-destructive/80">{supplementError}</p>
+                  </div>
+                </div>
+              )}
+
+              {supplementProgress && (
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium">{supplementProgress.message}</span>
+                  </div>
+                  <div className="w-full bg-primary/20 rounded-full h-2">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${supplementProgress.progress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{supplementProgress.progress}%</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Додаткова інформація</label>
+                <textarea
+                  value={supplementInfo}
+                  onChange={(e) => setSupplementInfo(e.target.value)}
+                  placeholder="Опишіть що було пропущено або які зміни потрібні..."
+                  className="w-full min-h-[150px] rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  disabled={supplementing}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Нові файли (опційно)</label>
+                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setSupplementFiles(Array.from(e.target.files));
+                      }
+                    }}
+                    className="hidden"
+                    id="supplement-file-input"
+                    disabled={supplementing}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => document.getElementById('supplement-file-input')?.click()}
+                    disabled={supplementing}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Завантажити файли
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    PDF, фото креслень, специфікації
+                  </p>
+                </div>
+
+                {supplementFiles.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    <p className="text-sm font-medium">Вибрані файли:</p>
+                    {supplementFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                        <div className="flex items-center gap-2">
+                          {file.type.startsWith('image/') ? (
+                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({formatFileSize(file.size)})
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSupplementFiles(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          disabled={supplementing}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSupplementModalOpen(false);
+                    setSupplementInfo("");
+                    setSupplementFiles([]);
+                    setSupplementProgress(null);
+                    setSupplementError("");
+                  }}
+                  disabled={supplementing}
+                >
+                  Скасувати
+                </Button>
+                <Button
+                  onClick={supplementEstimate}
+                  disabled={supplementing || (!supplementInfo.trim() && supplementFiles.length === 0)}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {supplementing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Обробка...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" />
+                      Доповнити кошторис
                     </>
                   )}
                 </Button>
