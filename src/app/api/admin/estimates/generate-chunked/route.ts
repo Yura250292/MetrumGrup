@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
             data: {
               title: "Тимчасовий проект (генерація по секціях)",
               description: "Автоматично створений проект для кошторису",
-              status: "PLANNING",
+              status: "DRAFT",
               clientId: session.user.id, // Use current user as client temporarily
               managerId: session.user.id,
             }
