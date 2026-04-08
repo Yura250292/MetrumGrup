@@ -2917,7 +2917,24 @@ ${(isCommercialProject || hasATB) ? `
           );
         }
         console.log("🧠 Використовуємо Anthropic Claude Opus 4...");
-        text = await generateWithAnthropic(prompt, textParts.join("\n\n"), imageParts);
+        try {
+          text = await generateWithAnthropic(prompt, textParts.join("\n\n"), imageParts);
+          console.log("✅ Anthropic generation completed successfully");
+        } catch (anthropicError) {
+          console.error("❌ Anthropic generation error:", anthropicError);
+          console.error("Error details:", {
+            name: anthropicError instanceof Error ? anthropicError.name : 'Unknown',
+            message: anthropicError instanceof Error ? anthropicError.message : String(anthropicError),
+            stack: anthropicError instanceof Error ? anthropicError.stack : undefined
+          });
+          return NextResponse.json(
+            {
+              error: "Помилка генерації з Anthropic Claude",
+              details: anthropicError instanceof Error ? anthropicError.message : String(anthropicError)
+            },
+            { status: 500 }
+          );
+        }
         break;
 
       default: // "gemini"
