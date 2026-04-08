@@ -150,10 +150,22 @@ async function generateWithAnthropic(
   // Build content with vision support
   const messageContent: any[] = [{ type: "text", text: userContent }];
 
-  // Add images for Claude vision
+  // Add images for Claude vision (with 5 MB limit check)
   if (imageParts.length > 0) {
     console.log(`  🖼️  Adding ${imageParts.length} images to Anthropic request`);
+
+    const ANTHROPIC_IMAGE_LIMIT = 5 * 1024 * 1024; // 5 MB
+
     for (const img of imageParts) {
+      // Check image size (base64 to bytes: length * 0.75)
+      const estimatedBytes = img.inlineData.data.length * 0.75;
+
+      if (estimatedBytes > ANTHROPIC_IMAGE_LIMIT) {
+        console.warn(`⚠️  Image exceeds 5 MB (${(estimatedBytes / 1024 / 1024).toFixed(2)} MB) - skipping for Anthropic`);
+        console.warn(`   Claude has 5 MB limit per image. Consider using Gemini for large files.`);
+        continue; // Skip this image
+      }
+
       messageContent.push({
         type: "image",
         source: {
@@ -163,6 +175,8 @@ async function generateWithAnthropic(
         }
       });
     }
+
+    console.log(`  ✅ Added ${messageContent.length - 1} images (within 5 MB limit)`);
   }
 
   // Use streaming for long-running requests (>10 minutes)
