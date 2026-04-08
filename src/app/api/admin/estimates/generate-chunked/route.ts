@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
         // Extract content from files
         const textParts: string[] = [];
         const pdfParts: Array<{ data: string; mimeType: string }> = [];
+        const imageParts: Array<{ data: string; mimeType: string; name: string }> = [];
 
         sendUpdate({
           phase: 1,
@@ -90,7 +91,9 @@ export async function POST(request: NextRequest) {
         });
 
         for (const file of files) {
-          if (file.name.toLowerCase().endsWith('.pdf')) {
+          const fileName = file.name.toLowerCase();
+
+          if (fileName.endsWith('.pdf')) {
             const buffer = Buffer.from(await file.arrayBuffer());
 
             // For large PDFs, send directly
@@ -103,6 +106,14 @@ export async function POST(request: NextRequest) {
               const pdfData = await parsePDF(buffer);
               textParts.push(`[${file.name}]\n${pdfData.text}`);
             }
+          } else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.webp')) {
+            // Process images for Gemini Vision
+            const buffer = Buffer.from(await file.arrayBuffer());
+            imageParts.push({
+              data: buffer.toString('base64'),
+              mimeType: file.type,
+              name: file.name
+            });
           }
         }
 
@@ -114,7 +125,8 @@ export async function POST(request: NextRequest) {
           data: {
             filesAnalyzed: files.length,
             textExtracted: textParts.length,
-            pdfsProcessed: pdfParts.length
+            pdfsProcessed: pdfParts.length,
+            imagesProcessed: imageParts.length
           }
         });
 
@@ -130,6 +142,7 @@ export async function POST(request: NextRequest) {
           "Фундамент",
           textParts,
           pdfParts,
+          imageParts,
           wizardData
         );
 
@@ -153,6 +166,7 @@ export async function POST(request: NextRequest) {
           "Електромонтажні роботи",
           textParts,
           pdfParts,
+          imageParts,
           wizardData
         );
 
@@ -235,6 +249,7 @@ export async function POST(request: NextRequest) {
           projectId = tempProject.id;
         }
 
+        // Create estimate and sections first (without items)
         const estimate = await prisma.estimate.create({
           data: {
             number: `EST-${Date.now()}`,
@@ -247,38 +262,54 @@ export async function POST(request: NextRequest) {
               create: sections.map((section, index) => ({
                 title: section.title,
                 sortOrder: index,
-                items: {
-                  create: section.items
-                    .filter((item: any) =>
-                      item.description &&
-                      item.quantity != null &&
-                      item.unitPrice != null
-                    )
-                    .map((item: any, itemIndex: number) => {
-                      const quantity = Number(item.quantity);
-                      const unitPrice = Number(item.unitPrice);
-                      const laborCost = Number(item.laborCost || 0);
-                      const totalCost = Number(item.totalCost || 0);
-
-                      // Calculate amount (total cost)
-                      const amount = totalCost > 0 ? totalCost : (quantity * unitPrice + laborCost);
-
-                      return {
-                        description: item.description,
-                        quantity: quantity,
-                        unit: item.unit || "шт",
-                        unitPrice: unitPrice,
-                        laborRate: 0,
-                        laborHours: 0,
-                        amount: amount,
-                        sortOrder: itemIndex,
-                      };
-                    })
-                }
               }))
             }
+          },
+          include: {
+            sections: { orderBy: { sortOrder: "asc" } }
           }
         });
+
+        // Then create items for each section with explicit estimateId and sectionId
+        for (let sIdx = 0; sIdx < sections.length; sIdx++) {
+          const section = sections[sIdx];
+          const createdSection = estimate.sections[sIdx];
+
+          const itemsToCreate = section.items
+            .filter((item: any) =>
+              item.description &&
+              item.quantity != null &&
+              item.unitPrice != null
+            )
+            .map((item: any, itemIndex: number) => {
+              const quantity = Number(item.quantity);
+              const unitPrice = Number(item.unitPrice);
+              const laborCost = Number(item.laborCost || 0);
+              const totalCost = Number(item.totalCost || 0);
+
+              // Calculate amount (total cost)
+              const amount = totalCost > 0 ? totalCost : (quantity * unitPrice + laborCost);
+
+              return {
+                description: item.description,
+                quantity: quantity,
+                unit: item.unit || "шт",
+                unitPrice: unitPrice,
+                laborRate: 0,
+                laborHours: 0,
+                amount: amount,
+                sortOrder: itemIndex,
+                estimateId: estimate.id,
+                sectionId: createdSection.id,
+              };
+            });
+
+          if (itemsToCreate.length > 0) {
+            await prisma.estimateItem.createMany({
+              data: itemsToCreate
+            });
+          }
+        }
 
         sendUpdate({
           phase: 'final',
@@ -322,6 +353,7 @@ async function generateSectionWithGemini(
   sectionName: string,
   textParts: string[],
   pdfParts: Array<{ data: string; mimeType: string }>,
+  imageParts: Array<{ data: string; mimeType: string; name: string }>,
   wizardData: any
 ) {
   const model = genAI.getGenerativeModel({
@@ -365,6 +397,13 @@ async function generateSectionWithGemini(
 
   for (const pdf of pdfParts) {
     parts.push({ inlineData: { data: pdf.data, mimeType: pdf.mimeType } });
+  }
+
+  for (const image of imageParts) {
+    parts.push({
+      inlineData: { data: image.data, mimeType: image.mimeType },
+      text: `Фото будмайданчика: ${image.name}`
+    });
   }
 
   const result = await model.generateContent(parts);
