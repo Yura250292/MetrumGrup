@@ -17,6 +17,10 @@ import path from "path";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+// Vercel config - increase timeout for large file processing
+export const maxDuration = 300; // 5 minutes (requires Vercel Pro plan)
+export const runtime = 'nodejs';
+
 // Load drawing reading guide for AI
 async function loadDrawingGuide(): Promise<string> {
   try {
