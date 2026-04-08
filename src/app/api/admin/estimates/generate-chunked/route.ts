@@ -246,19 +246,25 @@ export async function POST(request: NextRequest) {
             sections: {
               create: sections.map((section, index) => ({
                 title: section.title,
-                description: section.description || "",
                 sortOrder: index,
                 items: {
-                  create: section.items.map((item: any, itemIndex: number) => ({
-                    description: item.description,
-                    quantity: item.quantity,
-                    unit: item.unit,
-                    unitPrice: item.unitPrice,
-                    laborCost: item.laborCost,
-                    totalCost: item.totalCost,
-                    sortOrder: itemIndex,
-                    notes: item.notes || "",
-                  }))
+                  create: section.items
+                    .filter((item: any) =>
+                      item.description &&
+                      item.quantity != null &&
+                      item.unitPrice != null &&
+                      item.laborCost != null
+                    )
+                    .map((item: any, itemIndex: number) => ({
+                      description: item.description,
+                      quantity: item.quantity,
+                      unit: item.unit || "шт",
+                      unitPrice: item.unitPrice,
+                      laborCost: item.laborCost,
+                      totalCost: item.totalCost || (item.quantity * item.unitPrice + item.laborCost),
+                      sortOrder: itemIndex,
+                      notes: item.notes || "",
+                    }))
                 }
               }))
             }
@@ -320,6 +326,16 @@ async function generateSectionWithGemini(
 
   const prompt = `Згенеруй розділ кошторису "${sectionName}" на основі документів.
 
+КРИТИЧНО ВАЖЛИВО:
+- Всі поля ОБОВ'ЯЗКОВІ! Не пропускай жодне поле!
+- Всі числа мають бути > 0 (не null, не undefined, не 0)
+- description - завжди заповнена назва роботи
+- quantity - кількість (число > 0)
+- unit - одиниця виміру (м², м³, шт, м.п., т, компл)
+- unitPrice - ціна за одиницю (грн)
+- laborCost - вартість робіт (грн)
+- totalCost - загальна вартість (quantity * unitPrice + laborCost)
+
 Верни JSON:
 {
   "title": "${sectionName}",
@@ -327,11 +343,11 @@ async function generateSectionWithGemini(
   "items": [
     {
       "description": "назва роботи",
-      "quantity": 0,
+      "quantity": 10,
       "unit": "м²",
-      "unitPrice": 0,
-      "laborCost": 0,
-      "totalCost": 0
+      "unitPrice": 500,
+      "laborCost": 200,
+      "totalCost": 5200
     }
   ]
 }`;
@@ -399,13 +415,25 @@ async function generateSectionWithOpenAI(
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  const prompt = `Згенеруй розділ кошторису "${sectionName}".
+  const prompt = `Згенеруй розділ кошторису "${sectionName}" на основі документів.
+
+ВАЖЛИВО: Всі поля ОБОВ'ЯЗКОВІ! Не використовуй null або undefined!
 
 Верни JSON:
 {
   "title": "${sectionName}",
   "totalCost": 0,
-  "items": [...]
+  "items": [
+    {
+      "description": "назва роботи",
+      "quantity": 10,
+      "unit": "м²",
+      "unitPrice": 500,
+      "laborCost": 200,
+      "totalCost": 5200,
+      "notes": ""
+    }
+  ]
 }
 
 Контекст:
