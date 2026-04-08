@@ -78,3 +78,35 @@ export async function PATCH(
 
   return NextResponse.json({ data: estimate });
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user) return unauthorizedResponse();
+
+  // Only SUPER_ADMIN and MANAGER can delete estimates
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
+    return forbiddenResponse();
+  }
+
+  try {
+    // Delete estimate and all related data (cascade delete in Prisma schema)
+    await prisma.estimate.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Кошторис успішно видалено"
+    });
+  } catch (error) {
+    console.error("Error deleting estimate:", error);
+    return NextResponse.json(
+      { error: "Помилка при видаленні кошторису" },
+      { status: 500 }
+    );
+  }
+}

@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { FileDown, FileSpreadsheet, Mail, Loader2 } from "lucide-react";
+import { FileDown, FileSpreadsheet, Mail, Loader2, Trash2 } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 interface EstimateActionsProps {
   estimateId: string;
@@ -12,8 +13,10 @@ interface EstimateActionsProps {
 }
 
 export function EstimateActions({ estimateId, estimateNumber, status, clientName }: EstimateActionsProps) {
+  const router = useRouter();
   const [exporting, setExporting] = useState<string | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function exportEstimate(format: "pdf" | "excel", e: React.MouseEvent) {
     e.preventDefault();
@@ -64,6 +67,38 @@ export function EstimateActions({ estimateId, estimateNumber, status, clientName
     }
   }
 
+  async function deleteEstimate(e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!confirm(`Ви впевнені що хочете ВИДАЛИТИ кошторис ${estimateNumber}?\n\nЦю дію неможливо скасувати!`)) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const response = await fetch(`/api/admin/estimates/${estimateId}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to delete");
+      }
+
+      const data = await response.json();
+      alert(data.message || "Кошторис успішно видалено!");
+
+      // Refresh the page to update the list
+      router.refresh();
+    } catch (error) {
+      console.error("Delete error:", error);
+      alert(error instanceof Error ? error.message : "Помилка видалення кошторису");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   return (
     <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
       <Button
@@ -110,6 +145,20 @@ export function EstimateActions({ estimateId, estimateNumber, status, clientName
           )}
         </Button>
       )}
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={deleteEstimate}
+        disabled={deleting}
+        title="Видалити кошторис"
+        className="h-10 w-10 p-0 flex items-center justify-center admin-dark:text-red-400 admin-dark:hover:bg-red-500/10 admin-light:text-red-600 admin-light:hover:bg-red-50"
+      >
+        {deleting ? (
+          <Loader2 className="h-5 w-5 animate-spin" />
+        ) : (
+          <Trash2 className="h-5 w-5" />
+        )}
+      </Button>
     </div>
   );
 }
