@@ -224,9 +224,10 @@ export async function POST(request: NextRequest) {
           const tempProject = await prisma.project.create({
             data: {
               title: "Тимчасовий проект (генерація по секціях)",
+              slug: `temp-chunked-${Date.now()}`,
               description: "Автоматично створений проект для кошторису",
               status: "DRAFT",
-              clientId: session.user.id, // Use current user as client temporarily
+              clientId: session.user.id,
               managerId: session.user.id,
             }
           });
