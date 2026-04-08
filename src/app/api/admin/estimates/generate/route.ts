@@ -190,17 +190,26 @@ async function generateWithAnthropic(
     let addedCount = 0;
     let skippedCount = 0;
 
-    for (const img of imageParts) {
+    for (let i = 0; i < imageParts.length; i++) {
+      const img = imageParts[i];
+
       // Decode base64 to get EXACT byte size
       const decodedBuffer = Buffer.from(img.inlineData.data, 'base64');
       const exactBytes = decodedBuffer.length;
+      const sizeMB = (exactBytes / 1024 / 1024).toFixed(2);
+
+      console.log(`  📏 Image ${i + 1}/${imageParts.length}: ${sizeMB} MB (${exactBytes} bytes)`);
 
       if (exactBytes > ANTHROPIC_IMAGE_LIMIT) {
         skippedCount++;
-        console.warn(`⚠️  Image #${skippedCount} exceeds 5 MB (${(exactBytes / 1024 / 1024).toFixed(2)} MB) - SKIPPING`);
-        console.warn(`   → Claude has strict 5 MB limit. Use Gemini for large files (no limit).`);
+        console.warn(`  ⚠️  Image ${i + 1} EXCEEDS 5 MB (${sizeMB} MB) - SKIPPING`);
+        console.warn(`     → Anthropic limit: ${ANTHROPIC_IMAGE_LIMIT} bytes (5 MB)`);
+        console.warn(`     → This image: ${exactBytes} bytes (${sizeMB} MB)`);
+        console.warn(`     → Use Gemini model for large files (no size limit)`);
         continue; // Skip this image
       }
+
+      console.log(`  ✅ Image ${i + 1} OK (${sizeMB} MB < 5 MB) - adding to request`);
 
       messageContent.push({
         type: "image",
