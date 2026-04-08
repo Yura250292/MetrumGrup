@@ -246,6 +246,7 @@ export async function POST(request: NextRequest) {
                 create: estimateData.sections.map((section, index) => ({
                   title: section.title,
                   sortOrder: index,
+                  totalAmount: section.sectionTotal || 0,
                 }))
               }
             },
