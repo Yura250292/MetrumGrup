@@ -452,3 +452,38 @@ export async function isProjectVectorized(projectId: string): Promise<boolean> {
 
   return result.length > 0 && result[0].processing_status === 'completed';
 }
+
+/**
+ * Видалити всі вектори проекту (для ревекторизації)
+ */
+export async function deleteProjectVectors(projectId: string): Promise<void> {
+  console.log(`🗑️ Видалення старих векторів проекту ${projectId}...`);
+
+  // Видалити вектори
+  await prisma.$executeRawUnsafe(`
+    DELETE FROM project_vectors
+    WHERE project_id = $1
+  `, projectId);
+
+  // Оновити статус
+  await prisma.$executeRawUnsafe(`
+    UPDATE project_parsed_content
+    SET processing_status = 'pending'
+    WHERE project_id = $1
+  `, projectId);
+
+  console.log(`✅ Видалено вектори проекту ${projectId}`);
+}
+
+/**
+ * Отримати список вже векторизованих файлів проекту
+ */
+export async function getVectorizedFiles(projectId: string): Promise<string[]> {
+  const result = await prisma.$queryRawUnsafe<any[]>(`
+    SELECT DISTINCT file_name
+    FROM project_vectors
+    WHERE project_id = $1
+  `, projectId);
+
+  return result.map(r => r.file_name);
+}

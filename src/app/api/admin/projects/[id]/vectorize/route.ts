@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
-import { vectorizeProject, isProjectVectorized } from "@/lib/rag/vectorizer";
+import { vectorizeProject, isProjectVectorized, deleteProjectVectors, getVectorizedFiles } from "@/lib/rag/vectorizer";
 import { downloadFileFromR2 } from "@/lib/r2-client";
 import { prisma } from "@/lib/prisma";
 
@@ -52,12 +52,17 @@ export async function POST(
           progress: 0
         });
 
+        const formData = await request.formData();
+        const r2KeysStr = formData.get("r2Keys") as string;
+        const forceRevectorize = formData.get("force") === "true";
+
         // Перевірити чи вже векторизований
         const alreadyVectorized = await isProjectVectorized(projectId);
-        if (alreadyVectorized) {
+
+        if (alreadyVectorized && !forceRevectorize) {
           sendUpdate({
             status: 'complete',
-            message: '✅ Проект вже векторизований!',
+            message: '✅ Проект вже векторизований! Використай force=true для ревекторизації',
             progress: 100,
             data: { alreadyVectorized: true }
           });
@@ -65,15 +70,29 @@ export async function POST(
           return;
         }
 
+        // Якщо force=true і проект вже векторизований - видалити старі вектори
+        if (alreadyVectorized && forceRevectorize) {
+          sendUpdate({
+            status: 'analyzing',
+            message: '🗑️ Видалення старих векторів для ревекторизації...',
+            progress: 2
+          });
+
+          await deleteProjectVectors(projectId);
+
+          sendUpdate({
+            status: 'analyzing',
+            message: '✅ Старі вектори видалено. Починаю ревекторизацію...',
+            progress: 5
+          });
+        }
+
         // Отримати всі файли проекту з R2
         sendUpdate({
           status: 'analyzing',
           message: '📦 Завантаження файлів з R2...',
-          progress: 5
+          progress: 7
         });
-
-        const formData = await request.formData();
-        const r2KeysStr = formData.get("r2Keys") as string;
 
         if (!r2KeysStr) {
           throw new Error("Не знайдено файлів проекту");
@@ -91,18 +110,50 @@ export async function POST(
           };
         });
 
-        const files = await Promise.all(downloadPromises);
+        const allFiles = await Promise.all(downloadPromises);
+
+        // Фільтрувати тільки нові файли (якщо не force)
+        let filesToVectorize = allFiles;
+        let skippedFiles: string[] = [];
+
+        if (alreadyVectorized && !forceRevectorize) {
+          const vectorizedFileNames = await getVectorizedFiles(projectId);
+
+          filesToVectorize = allFiles.filter(f => !vectorizedFileNames.includes(f.fileName));
+          skippedFiles = allFiles
+            .filter(f => vectorizedFileNames.includes(f.fileName))
+            .map(f => f.fileName);
+
+          if (skippedFiles.length > 0) {
+            sendUpdate({
+              status: 'analyzing',
+              message: `⏭️ Пропущено ${skippedFiles.length} вже векторизованих файлів`,
+              progress: 8
+            });
+          }
+        }
+
+        if (filesToVectorize.length === 0) {
+          sendUpdate({
+            status: 'complete',
+            message: '✅ Всі файли вже векторизовані!',
+            progress: 100,
+            data: { alreadyVectorized: true, skippedFiles }
+          });
+          controller.close();
+          return;
+        }
 
         sendUpdate({
           status: 'analyzing',
-          message: `✅ Завантажено ${files.length} файлів`,
+          message: `✅ Завантажено ${allFiles.length} файлів (${filesToVectorize.length} нових)`,
           progress: 10
         });
 
-        // Векторизувати проект
+        // Векторизувати тільки нові файли
         const result = await vectorizeProject(
           projectId,
-          files,
+          filesToVectorize,
           (message, progress) => {
             sendUpdate({
               status: progress < 100 ? 'vectorizing' : 'complete',
