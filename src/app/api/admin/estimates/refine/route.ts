@@ -114,7 +114,7 @@ ${engineerPrompt}
       }
     } else if (model === "gemini") {
       const geminiModel = genAI.getGenerativeModel({
-        model: "gemini-3-flash-preview",
+        model: "gemini-1.5-flash-preview",
       });
 
       const result = await geminiModel.generateContent([

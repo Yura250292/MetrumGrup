@@ -69,7 +69,7 @@ export class DemolitionAgent extends BaseAgent {
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-3-flash",
+        model: "gemini-1.5-flash",
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 8000,
