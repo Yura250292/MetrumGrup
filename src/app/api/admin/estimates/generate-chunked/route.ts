@@ -7,6 +7,7 @@ import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { downloadFileFromR2 } from "@/lib/r2-client";
 import { parsePDF } from "@/lib/pdf-helper";
+import { EstimateOrchestrator, GenerationMode } from "@/lib/agents/orchestrator";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -130,6 +131,127 @@ export async function POST(request: NextRequest) {
           }
         });
 
+        // Check for multi-agent mode
+        const mode = (formData.get("mode") as GenerationMode) || "gemini+openai";
+
+        if (mode === "multi-agent") {
+          // NEW MULTI-AGENT MODE
+          console.log("🤖 Using Multi-Agent mode with Orchestrator");
+
+          // Отримати projectId
+          let projectId = formData.get("projectId") as string | null;
+
+          const orchestrator = new EstimateOrchestrator({
+            mode: 'multi-agent',
+            projectId: projectId || undefined, // Для RAG
+            wizardData,
+            documents: {
+              plans: textParts,
+              specifications: textParts,
+              geology: textParts.find(t => t.toLowerCase().includes('геолог')),
+              sitePhotos: imageParts.map(img => img.name),
+            },
+            projectNotes: projectNotesStr,
+          });
+
+          const estimateData = await orchestrator.generate((update) => {
+            sendUpdate(update as ChunkUpdate);
+          });
+
+          // Save to database
+          if (!projectId) {
+            const tempProject = await prisma.project.create({
+              data: {
+                title: "Тимчасовий проект (Multi-Agent)",
+                slug: `temp-multiagent-${Date.now()}`,
+                description: "Автоматично створений проект для кошторису",
+                status: "DRAFT",
+                clientId: session.user.id,
+                managerId: session.user.id,
+              }
+            });
+            projectId = tempProject.id;
+          }
+
+          const estimate = await prisma.estimate.create({
+            data: {
+              number: `EST-${Date.now()}`,
+              title: estimateData.title,
+              projectId: projectId,
+              totalAmount: estimateData.summary.totalBeforeDiscount || 0,
+              finalAmount: estimateData.summary.totalBeforeDiscount || 0,
+              createdById: session.user.id,
+              sections: {
+                create: estimateData.sections.map((section, index) => ({
+                  title: section.title,
+                  sortOrder: index,
+                }))
+              }
+            },
+            include: {
+              sections: { orderBy: { sortOrder: "asc" } }
+            }
+          });
+
+          // Create items for each section
+          for (let sIdx = 0; sIdx < estimateData.sections.length; sIdx++) {
+            const section = estimateData.sections[sIdx];
+            const createdSection = estimate.sections[sIdx];
+
+            const itemsToCreate = section.items
+              .filter((item: any) =>
+                item.description &&
+                item.quantity != null &&
+                item.unitPrice != null
+              )
+              .map((item: any, itemIndex: number) => {
+                const quantity = Number(item.quantity);
+                const unitPrice = Number(item.unitPrice);
+                const laborCost = Number(item.laborCost || 0);
+                const totalCost = Number(item.totalCost || 0);
+
+                const amount = totalCost > 0 ? totalCost : (quantity * unitPrice + laborCost);
+
+                return {
+                  description: item.description,
+                  quantity: quantity,
+                  unit: item.unit || "шт",
+                  unitPrice: unitPrice,
+                  laborRate: 0,
+                  laborHours: 0,
+                  amount: amount,
+                  sortOrder: itemIndex,
+                  estimateId: estimate.id,
+                  sectionId: createdSection.id,
+                };
+              });
+
+            if (itemsToCreate.length > 0) {
+              await prisma.estimateItem.createMany({
+                data: itemsToCreate
+              });
+            }
+          }
+
+          sendUpdate({
+            phase: 'final',
+            status: 'complete',
+            message: '🎉 Multi-Agent кошторис готовий!',
+            progress: 100,
+            data: {
+              estimateId: estimate.id,
+              estimateNumber: estimate.number,
+              totalAmount: estimate.totalAmount,
+              sectionsCount: estimateData.sections.length,
+              validationIssues: estimateData.validationIssues,
+            }
+          });
+
+          controller.close();
+          return;
+        }
+
+        // ORIGINAL MODE: Gemini + OpenAI
         // PHASE 2: Generate Foundation (Gemini)
         sendUpdate({
           phase: 2,
