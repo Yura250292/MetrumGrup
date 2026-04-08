@@ -248,13 +248,21 @@ export async function POST(request: NextRequest) {
             projectId = tempProject.id;
           }
 
+          const materialsCost = estimateData.summary.materialsCost || 0;
+          const laborCost = estimateData.summary.laborCost || 0;
+          const totalBeforeDiscount = estimateData.summary.totalBeforeDiscount || 0;
+          const overheadCost = totalBeforeDiscount - materialsCost - laborCost;
+
           const estimate = await prisma.estimate.create({
             data: {
               number: `EST-${Date.now()}`,
               title: estimateData.title,
               projectId: projectId,
-              totalAmount: estimateData.summary.totalBeforeDiscount || 0,
-              finalAmount: estimateData.summary.totalBeforeDiscount || 0,
+              totalAmount: totalBeforeDiscount,
+              finalAmount: totalBeforeDiscount,
+              totalMaterials: materialsCost,
+              totalLabor: laborCost,
+              totalOverhead: overheadCost,
               createdById: session.user.id,
               sections: {
                 create: estimateData.sections.map((section, index) => ({
@@ -456,6 +464,19 @@ export async function POST(request: NextRequest) {
 
         const totalAmount = sections.reduce((sum, s) => sum + s.totalCost, 0);
 
+        // Розрахувати матеріали, роботи, накладні
+        let totalMaterials = 0;
+        let totalLabor = 0;
+
+        sections.forEach(section => {
+          section.items.forEach((item: any) => {
+            totalMaterials += Number(item.quantity || 0) * Number(item.unitPrice || 0);
+            totalLabor += Number(item.laborCost || 0);
+          });
+        });
+
+        const totalOverhead = totalAmount - totalMaterials - totalLabor;
+
         let projectId = formData.get("projectId") as string | null;
 
         // If no projectId provided, create a temporary project
@@ -481,6 +502,9 @@ export async function POST(request: NextRequest) {
             projectId: projectId,
             totalAmount,
             finalAmount: totalAmount,
+            totalMaterials,
+            totalLabor,
+            totalOverhead,
             createdById: session.user.id,
             sections: {
               create: sections.map((section, index) => ({
