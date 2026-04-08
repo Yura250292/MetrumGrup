@@ -310,8 +310,7 @@ async function generateSectionWithGemini(
   wizardData: any
 ) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash-exp",
-    tools: [{ googleSearch: {} } as any],
+    model: "gemini-3-flash-preview",
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 8000,
