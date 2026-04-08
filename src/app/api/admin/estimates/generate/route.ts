@@ -142,7 +142,10 @@ async function generateWithAnthropic(
     throw new Error("ANTHROPIC_API_KEY не налаштований");
   }
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: 600000, // 10 minutes timeout
+  });
 
   // Build content with vision support
   const messageContent: any[] = [{ type: "text", text: userContent }];
@@ -162,22 +165,30 @@ async function generateWithAnthropic(
     }
   }
 
-  const message = await anthropic.messages.create({
+  // Use streaming for long-running requests (>10 minutes)
+  console.log('🔄 Using streaming for Anthropic (prevents 10-min timeout)');
+
+  let fullText = '';
+  const stream = await anthropic.messages.create({
     model: "claude-opus-4-20250514",
     max_tokens: 16000, // Збільшено для більшої кількості позицій
     temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
     system: systemPrompt,
     messages: [{ role: "user", content: messageContent }],
+    stream: true, // Enable streaming to avoid 10-minute timeout
   });
 
-  const content = message.content[0];
-  if (content.type === "text") {
-    // Claude може повертати JSON в markdown блоках
-    const text = content.text;
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/) || text.match(/\{[\s\S]*\}/);
-    return jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : text;
+  // Collect streamed chunks
+  for await (const messageStreamEvent of stream) {
+    if (messageStreamEvent.type === 'content_block_delta' &&
+        messageStreamEvent.delta.type === 'text_delta') {
+      fullText += messageStreamEvent.delta.text;
+    }
   }
-  return "{}";
+
+  // Parse JSON from response
+  const jsonMatch = fullText.match(/```json\n([\s\S]*?)\n```/) || fullText.match(/\{[\s\S]*\}/);
+  return jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : fullText;
 }
 
 function calculateMinimumItems(wizardData: any, isCommercial: boolean = false): number {
