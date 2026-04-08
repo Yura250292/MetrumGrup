@@ -252,19 +252,28 @@ export async function POST(request: NextRequest) {
                     .filter((item: any) =>
                       item.description &&
                       item.quantity != null &&
-                      item.unitPrice != null &&
-                      item.laborCost != null
+                      item.unitPrice != null
                     )
-                    .map((item: any, itemIndex: number) => ({
-                      description: item.description,
-                      quantity: item.quantity,
-                      unit: item.unit || "шт",
-                      unitPrice: item.unitPrice,
-                      laborCost: item.laborCost,
-                      totalCost: item.totalCost || (item.quantity * item.unitPrice + item.laborCost),
-                      sortOrder: itemIndex,
-                      notes: item.notes || "",
-                    }))
+                    .map((item: any, itemIndex: number) => {
+                      const quantity = Number(item.quantity);
+                      const unitPrice = Number(item.unitPrice);
+                      const laborCost = Number(item.laborCost || 0);
+                      const totalCost = Number(item.totalCost || 0);
+
+                      // Calculate amount (total cost)
+                      const amount = totalCost > 0 ? totalCost : (quantity * unitPrice + laborCost);
+
+                      return {
+                        description: item.description,
+                        quantity: quantity,
+                        unit: item.unit || "шт",
+                        unitPrice: unitPrice,
+                        laborRate: 0,
+                        laborHours: 0,
+                        amount: amount,
+                        sortOrder: itemIndex,
+                      };
+                    })
                 }
               }))
             }
