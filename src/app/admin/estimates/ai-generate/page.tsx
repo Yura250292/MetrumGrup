@@ -3025,29 +3025,71 @@ export default function AIEstimatePage() {
       const isProduction = window.location.hostname !== 'localhost' &&
                           window.location.hostname !== '127.0.0.1';
 
-      if (isProduction && totalSize > 10 * 1024 * 1024) { // Якщо > 10MB на production
-        console.log('📤 Production mode: Uploading files to R2 first...');
+      if (isProduction && totalSize > 4 * 1024 * 1024) { // Якщо > 4MB на production (Vercel ліміт)
+        console.log('📤 Production mode: Direct upload to R2 from browser...');
 
-        // Крок 1: Завантажуємо файли в R2
-        const r2FormData = new FormData();
-        files.forEach((file) => r2FormData.append("files", file));
+        try {
+          // Крок 1: Отримуємо presigned URLs для завантаження
+          console.log('🔑 Getting presigned URLs...');
+          const filesMetadata = files.map(f => ({
+            name: f.name,
+            type: f.type,
+            size: f.size
+          }));
 
-        const r2Response = await fetch("/api/admin/estimates/upload-r2", {
-          method: "POST",
-          body: r2FormData,
-        });
+          const presignedResponse = await fetch("/api/admin/estimates/presigned-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: filesMetadata }),
+          });
 
-        if (!r2Response.ok) {
-          const errorData = await r2Response.json();
-          setError(`Помилка завантаження файлів: ${errorData.message || 'Unknown error'}`);
+          if (!presignedResponse.ok) {
+            const errorData = await presignedResponse.json();
+            setError(`Помилка отримання presigned URLs: ${errorData.message || 'Unknown error'}`);
+            return;
+          }
+
+          const { presignedUrls } = await presignedResponse.json();
+          console.log(`✅ Got ${presignedUrls.length} presigned URLs`);
+
+          // Крок 2: Завантажуємо кожен файл НАПРЯМУ в R2 з браузера (обхід Vercel ліміту!)
+          console.log('📤 Uploading files directly to R2...');
+          const uploadPromises = files.map(async (file, index) => {
+            const presignedData = presignedUrls[index];
+
+            // PUT request напряму в R2
+            const uploadResponse = await fetch(presignedData.uploadUrl, {
+              method: 'PUT',
+              body: file,
+              headers: {
+                'Content-Type': file.type,
+              },
+            });
+
+            if (!uploadResponse.ok) {
+              throw new Error(`Failed to upload ${file.name}: ${uploadResponse.status}`);
+            }
+
+            console.log(`   ✅ Uploaded: ${file.name}`);
+
+            return {
+              key: presignedData.key,
+              originalName: file.name,
+              mimeType: file.type,
+              size: file.size,
+            };
+          });
+
+          const uploadedFiles = await Promise.all(uploadPromises);
+          console.log(`✅ All ${uploadedFiles.length} files uploaded to R2`);
+
+          // Крок 3: Передаємо ключі файлів в generate endpoint
+          formData.append("r2Keys", JSON.stringify(uploadedFiles));
+        } catch (uploadError) {
+          console.error('❌ R2 upload error:', uploadError);
+          setError(`Помилка завантаження в R2: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
           return;
         }
-
-        const r2Data = await r2Response.json();
-        console.log(`✅ Uploaded ${r2Data.totalFiles} files to R2`);
-
-        // Крок 2: Передаємо R2 URLs в generate endpoint
-        formData.append("r2Files", JSON.stringify(r2Data.files));
       } else {
         // Localhost або невеликі файли: відправляємо напряму
         console.log('📁 Direct mode: Sending files directly');

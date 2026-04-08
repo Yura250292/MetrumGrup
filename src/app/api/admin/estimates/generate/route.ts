@@ -11,7 +11,7 @@ import { generateMaterialsContext } from "@/lib/materials-database";
 import { generateWorkItemsContext } from "@/lib/work-items-database";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 import { parsePDF } from "@/lib/pdf-helper";
-import { shouldUseR2 } from "@/lib/r2-client";
+import { shouldUseR2, downloadFileFromR2 } from "@/lib/r2-client";
 import fs from "fs/promises";
 import path from "path";
 
@@ -1063,12 +1063,35 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
 
     // Support for R2 uploaded files (production) or direct files (localhost)
-    const r2FilesStr = formData.get("r2Files") as string || null;
+    const r2KeysStr = formData.get("r2Keys") as string || null;
+    const r2FilesStr = formData.get("r2Files") as string || null; // Legacy support
     let files: File[] = [];
 
-    if (r2FilesStr) {
-      // R2 mode: download files from R2 URLs
-      console.log('📦 R2 mode: Downloading files from R2...');
+    if (r2KeysStr) {
+      // R2 mode (NEW): download files from R2 by keys
+      console.log('📦 R2 mode: Downloading files from R2 by keys...');
+      const r2Keys = JSON.parse(r2KeysStr) as Array<{
+        key: string;
+        originalName: string;
+        mimeType: string;
+        size: number;
+      }>;
+
+      console.log(`   ${r2Keys.length} files in R2`);
+
+      // Download all files from R2 by key
+      const downloadPromises = r2Keys.map(async (r2File) => {
+        const buffer = await downloadFileFromR2(r2File.key);
+        const blob = new Blob([buffer], { type: r2File.mimeType });
+        return new File([blob], r2File.originalName, { type: r2File.mimeType });
+      });
+
+      files = await Promise.all(downloadPromises);
+
+      console.log(`✅ Downloaded ${files.length} files from R2`);
+    } else if (r2FilesStr) {
+      // R2 mode (LEGACY): download files from R2 URLs
+      console.log('📦 R2 mode (legacy): Downloading files from R2 URLs...');
       const r2Files = JSON.parse(r2FilesStr) as Array<{
         url: string;
         originalName: string;

@@ -172,3 +172,43 @@ export function shouldUseR2(): boolean {
 
   return isProduction && isR2Configured();
 }
+
+/**
+ * Генерує presigned URL для прямого завантаження з браузера в R2
+ * (обхід Vercel 4.5MB ліміту)
+ */
+export async function createPresignedUploadUrl(
+  fileName: string,
+  fileType: string,
+  estimateId?: string
+): Promise<{ uploadUrl: string; key: string }> {
+  // Генеруємо унікальний ключ
+  const timestamp = Date.now();
+  const randomId = Math.random().toString(36).substring(7);
+  const prefix = estimateId ? `estimates/${estimateId}` : 'temp';
+  const key = `${prefix}/${timestamp}-${randomId}-${fileName}`;
+
+  console.log(`🔑 Creating presigned URL for: ${key}`);
+
+  // Створюємо presigned URL для PUT запиту
+  const command = new PutObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+    ContentType: fileType,
+    Metadata: {
+      originalName: fileName,
+      uploadedAt: new Date().toISOString(),
+    },
+  });
+
+  const uploadUrl = await getSignedUrl(r2Client, command, {
+    expiresIn: 3600, // 1 година
+  });
+
+  console.log(`   ✅ Presigned URL created for: ${key}`);
+
+  return {
+    uploadUrl,
+    key,
+  };
+}
