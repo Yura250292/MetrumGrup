@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail, Plus, Upload, FileText, Image as ImageIcon, AlertCircle } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail, Plus, Upload, FileText, Image as ImageIcon, AlertCircle, Info } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
@@ -57,6 +57,7 @@ type Estimate = {
   discount: number;
   finalAmount: number;
   notes: string | null;
+  analysisSummary: string | null;
   profitMarginMaterials: number | null;
   profitMarginLabor: number | null;
   profitMarginOverall: number;
@@ -518,6 +519,27 @@ export default function EstimateDetailPage({
         </TabsList>
 
         <TabsContent value="details" className="space-y-4">
+          {/* Analysis Summary - Звіт інженера */}
+          {estimate.analysisSummary && (
+            <Card className="p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-primary/20 p-2">
+                  <Info className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-base mb-3 text-primary">
+                    📋 Звіт інженера про аналіз проекту
+                  </h3>
+                  <div className="prose prose-sm max-w-none">
+                    <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
+                      {estimate.analysisSummary}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Sections with items */}
           {estimate.sections.map((section) => (
         <Card key={section.id} className="mb-4 overflow-hidden">

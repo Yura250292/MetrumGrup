@@ -215,6 +215,38 @@ export abstract class BaseAgent {
   }
 
   /**
+   * Отримати контекст про реальні ціни будівництва
+   */
+  protected getPriceContext(context: AgentContext): string {
+    const area = context.wizardData?.totalArea || context.wizardData?.area || 0;
+    const buildingType = context.wizardData?.buildingType || 'commercial';
+
+    if (!area) {
+      return '';
+    }
+
+    return `
+⚠️ ВАЖЛИВО - МАСШТАБ ПРОЕКТУ ТА РЕАЛЬНІ ЦІНИ:
+
+Площа проекту: ${area} м²
+Тип будівлі: ${buildingType}
+
+РЕАЛЬНІ ЦІНИ БУДІВНИЦТВА В УКРАЇНІ (2024-2026):
+- Комерційна нерухомість: 35,000-120,000 ₴/м² (типово ~65,000 ₴/м²)
+- Житлова нерухомість: 20,000-100,000 ₴/м² (типово ~40,000 ₴/м²)
+- Промислові об'єкти: 25,000-80,000 ₴/м² (типово ~45,000 ₴/м²)
+- Склади: 15,000-50,000 ₴/м² (типово ~28,000 ₴/м²)
+
+ДЛЯ ЦЬОГО ПРОЕКТУ (${area} м² ${buildingType}):
+Очікувана ЗАГАЛЬНА вартість: ${buildingType === 'commercial' ? Math.round(area * 65000).toLocaleString() : Math.round(area * 40000).toLocaleString()} ₴
+Це орієнтир для ВСЬОГО кошторису разом (всі розділи).
+
+ТВІЙ РОЗДІЛ повинен складати адекватну частку від цієї суми!
+Не занижуй ціни - використовуй реальні ринкові ціни 2024-2026 року.
+`;
+  }
+
+  /**
    * Побудувати промпт для AI моделі
    */
   protected async buildPrompt(context: AgentContext): Promise<string> {
@@ -224,7 +256,11 @@ export abstract class BaseAgent {
     // Отримати автоматично витягнуті дані
     const extractedData = await this.getExtractedData(context);
 
+    // Отримати контекст про реальні ціни
+    const priceContext = this.getPriceContext(context);
+
     return `${this.config.systemPrompt}
+${priceContext}
 
 КОНТЕКСТ ПРОЕКТУ:
 ${this.buildContextBlock(context, extractedData)}

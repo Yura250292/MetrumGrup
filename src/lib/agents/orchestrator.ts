@@ -14,6 +14,7 @@ import { PlumbingAgent } from './plumbing-agent';
 import { FireSafetyAgent } from './fire-safety-agent';
 import { FinishingAgent } from './finishing-agent';
 import { CrossValidator } from './cross-validator';
+import { validateTotalCost, applyScalingIfNeeded } from './price-validator';
 
 export type GenerationMode = 'gemini' | 'openai' | 'multi-agent';
 
@@ -110,7 +111,7 @@ export class EstimateOrchestrator {
   async generate(
     onProgress: (update: ProgressUpdate) => void
   ): Promise<EstimateData> {
-    const sections: EstimateSection[] = [];
+    let sections: EstimateSection[] = [];
     const totalAgents = this.agents.length;
     const validationIssues: Array<{
       severity: 'error' | 'warning' | 'info';
@@ -190,6 +191,49 @@ export class EstimateOrchestrator {
           progress: Math.floor(progress * 0.9),
         });
       }
+    }
+
+    // Валідація цін та масштабування якщо потрібно
+    onProgress({
+      phase: 'price-validation',
+      status: 'generating',
+      message: '💰 Перевірка реалістичності цін...',
+      progress: 92,
+    });
+
+    const priceValidation = validateTotalCost(sections, this.config.wizardData);
+
+    if (!priceValidation.isValid) {
+      console.warn('⚠️ Ціни виглядають нереалістично:');
+      priceValidation.warnings.forEach(w => console.warn(`   ${w}`));
+      priceValidation.suggestions.forEach(s => console.log(`   💡 ${s}`));
+
+      // Спробувати автоматично виправити
+      const scalingResult = applyScalingIfNeeded(sections, this.config.wizardData);
+
+      if (scalingResult.scaled) {
+        sections = scalingResult.sections;
+
+        validationIssues.push({
+          severity: 'warning',
+          agent: 'PriceValidator',
+          message: `Ціни були автоматично скореговані (коефіцієнт ${scalingResult.factor.toFixed(2)}x) для відповідності ринковим реаліям`
+        });
+
+        onProgress({
+          phase: 'price-validation',
+          status: 'complete',
+          message: `✅ Ціни скореговані (×${scalingResult.factor.toFixed(2)})`,
+          progress: 94,
+        });
+      }
+    } else {
+      onProgress({
+        phase: 'price-validation',
+        status: 'complete',
+        message: '✅ Ціни в межах норми',
+        progress: 94,
+      });
     }
 
     // Фінальна валідація

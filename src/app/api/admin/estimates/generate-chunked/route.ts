@@ -263,6 +263,7 @@ export async function POST(request: NextRequest) {
               totalMaterials: materialsCost,
               totalLabor: laborCost,
               totalOverhead: overheadCost,
+              analysisSummary: (estimateData as any).analysisSummary || null,
               createdById: session.user.id,
               sections: {
                 create: estimateData.sections.map((section, index) => ({
