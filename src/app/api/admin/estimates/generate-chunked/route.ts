@@ -217,10 +217,12 @@ export async function POST(request: NextRequest) {
 
         const totalAmount = sections.reduce((sum, s) => sum + s.totalCost, 0);
 
+        const projectId = formData.get("projectId") as string | null;
+
         const estimate = await prisma.estimate.create({
           data: {
             estimateNumber: `EST-${Date.now()}`,
-            projectId: formData.get("projectId") as string || null,
+            projectId: projectId || undefined,
             totalAmount,
             finalAmount: totalAmount,
             createdById: session.user.id,
