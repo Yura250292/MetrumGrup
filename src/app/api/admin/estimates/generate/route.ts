@@ -1438,20 +1438,67 @@ export async function POST(request: NextRequest) {
     const imageParts: { inlineData: { data: string; mimeType: string } }[] = [];
     const pdfParts: Array<{ data: string; mimeType: string; name: string }> = [];
 
-    console.log('📂 Processing files...');
-    for (const file of files) {
-      const content = await extractFileContent(file);
+    console.log('📂 Processing files in parallel (faster)...');
+
+    // OPTIMIZATION: Process all files in parallel instead of sequentially
+    const fileProcessingPromises = files.map(async (file) => {
+      try {
+        // OPTIMIZATION: Skip text extraction for very large PDFs (>15 MB) - just send PDF directly
+        const isLargePDF = file.name.toLowerCase().endsWith('.pdf') && file.size > 15 * 1024 * 1024;
+
+        if (isLargePDF) {
+          console.log(`  ⚡ Large PDF detected: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB) - skipping text extraction, sending directly`);
+          const buffer = Buffer.from(await file.arrayBuffer());
+          const pdfBase64 = buffer.toString('base64');
+          return {
+            type: 'pdf-only',
+            pdfData: {
+              data: pdfBase64,
+              mimeType: 'application/pdf',
+              name: file.name
+            }
+          };
+        }
+
+        const content = await extractFileContent(file);
+        return { type: 'normal', content, fileName: file.name };
+      } catch (error) {
+        console.error(`  ❌ Error processing ${file.name}:`, error);
+        return { type: 'error', fileName: file.name };
+      }
+    });
+
+    const processedFiles = await Promise.all(fileProcessingPromises);
+
+    // Collect results
+    for (const result of processedFiles) {
+      if (result.type === 'error') {
+        console.log(`  ⚠️ Skipped ${result.fileName} due to processing error`);
+        continue;
+      }
+
+      if (result.type === 'pdf-only') {
+        pdfParts.push(result.pdfData);
+        console.log(`  ✅ ${result.pdfData.name}: Large PDF added directly`);
+        continue;
+      }
+
+      const { content, fileName } = result;
 
       // Handle PDF files (returns object with text, images, and PDF data)
       if (typeof content === 'object' && 'text' in content && 'pdfs' in content) {
-        // Add PDF text content
-        textParts.push(content.text);
-        console.log(`  📄 PDF text: ${file.name} (${content.text.length} chars)`);
+        // Add PDF text content (only if not too long)
+        if (content.text.length < 500000) {
+          textParts.push(content.text);
+          console.log(`  📄 PDF text: ${fileName} (${content.text.length} chars)`);
+        } else {
+          console.log(`  ⚠️ PDF text too long: ${fileName} (${content.text.length} chars) - skipping text, using PDF directly`);
+        }
 
-        // Add PDF files for native Gemini processing (Gemini can read PDFs directly!)
+        // Add PDF files for native Gemini processing
         if (content.pdfs && content.pdfs.length > 0) {
           pdfParts.push(...content.pdfs);
-          console.log(`  📑 PDF file: ${file.name} (${(content.pdfs[0].data.length / 1024).toFixed(1)} KB base64) - будеGemini може читати PDF нативно!`);
+          console.log(`  📑 PDF file: ${fileName} (${(content.pdfs[0].data.length / 1024).toFixed(1)} KB base64)`);
         }
 
         // Add images if any (fallback for non-Gemini models)
@@ -1464,24 +1511,19 @@ export async function POST(request: NextRequest) {
               }
             });
           }
-          console.log(`  🖼️  PDF images: ${file.name} (${content.images.length} pages as fallback)`);
+          console.log(`  🖼️  PDF images: ${fileName} (${content.images.length} pages)`);
         }
       }
       // Handle regular image files
       else if (typeof content === 'string' && content.startsWith("__IMAGE__:")) {
         const [, base64, mimeType] = content.split(":");
         imageParts.push({ inlineData: { data: base64, mimeType } });
-        console.log(`  🖼️  Image: ${file.name} (${(base64.length / 1024).toFixed(1)} KB base64)`);
+        console.log(`  🖼️  Image: ${fileName} (${(base64.length / 1024).toFixed(1)} KB)`);
       }
       // Handle text files (Excel, CSV, TXT, etc.)
       else if (typeof content === 'string') {
         textParts.push(content);
-        const textLength = content.length;
-        const lines = content.split('\n').length;
-        console.log(`  📄 Text: ${file.name} (${textLength} chars, ${lines} lines)`);
-        if (textLength < 100) {
-          console.log(`    ⚠️ WARNING: Very short content from ${file.name}`);
-        }
+        console.log(`  📄 Text: ${fileName} (${content.length} chars)`);
       }
     }
 
@@ -1513,38 +1555,27 @@ export async function POST(request: NextRequest) {
     // Advanced document classification and parsing moved to pipeline mode only
     // TODO: Re-enable for pipeline mode after fixing stability issues
 
-    // Process specification files
+    // OPTIMIZATION: Use already extracted text instead of re-parsing
+    // Process specification files (use textParts that were already extracted)
     let specificationData: any = null;
     if (specFiles.length > 0) {
-      console.log(`📚 Processing ${specFiles.length} specification files...`);
-      const specificationTexts: string[] = [];
+      console.log(`📚 Parsing ${specFiles.length} specification files from already extracted text...`);
 
-      for (const file of specFiles) {
+      // Use textParts that already contain spec text
+      const specTexts = textParts.filter(text =>
+        text.includes('[SPECIFICATION:') || text.includes('специф') || text.includes('spec')
+      );
+
+      if (specTexts.length > 0) {
+        const allSpecText = specTexts.join('\n\n---\n\n');
         try {
-          if (file.name.endsWith('.pdf')) {
-            const buffer = Buffer.from(await file.arrayBuffer());
-            const data = await parsePDF(buffer);
-            specificationTexts.push(`[SPECIFICATION: ${file.name}]\n${data.text}`);
-            console.log(`  ✓ ${file.name}: ${data.numpages} pages, ${data.text.length} chars`);
-          } else if (file.name.endsWith('.txt') || file.name.endsWith('.md')) {
-            const text = await file.text();
-            specificationTexts.push(`[SPECIFICATION: ${file.name}]\n${text}`);
-            console.log(`  ✓ ${file.name}: ${text.length} chars`);
-          }
+          specificationData = parseSpecificationText(allSpecText);
+          console.log(`  ✓ Parsed: ${specificationData.materials.length} materials, ${specificationData.methods.length} methods`);
         } catch (e) {
-          console.error(`  ✗ ${file.name}: extraction failed`, e);
+          console.error(`  ✗ Specification parsing failed:`, e);
         }
-      }
-
-      // Parse specifications
-      if (specificationTexts.length > 0) {
-        const allSpecText = specificationTexts.join('\n\n---\n\n');
-        specificationData = parseSpecificationText(allSpecText);
-        console.log(`📊 Parsed specification data:`);
-        console.log(`   - Materials: ${specificationData.materials.length}`);
-        console.log(`   - Methods: ${specificationData.methods.length}`);
-        console.log(`   - Requirements: ${specificationData.requirements.length}`);
-        console.log(`   - Critical requirements: ${specificationData.requirements.filter((r: any) => r.critical).length}`);
+      } else {
+        console.log(`  ⚠️ No specification text found in extracted content`);
       }
     }
 
