@@ -254,7 +254,7 @@ async function analyzeImageWithGemini(
   siteCondition?: ExtractedProjectData['siteCondition'];
 }> {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.0-flash',
+    model: 'gemini-3-flash',
   });
 
   const prompt = `Проаналізуй це фото будівельного об'єкта.
@@ -316,7 +316,7 @@ async function extractDataFromPDF(
   fileName: string
 ): Promise<Partial<ExtractedProjectData>> {
   const model = genAI.getGenerativeModel({
-    model: 'gemini-3.0-flash',
+    model: 'gemini-3-flash',
     generationConfig: {
       responseMimeType: 'application/json'
     }
