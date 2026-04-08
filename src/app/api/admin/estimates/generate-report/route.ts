@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     console.log('📊 Generating engineering report...');
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash-preview",
+      model: "gemini-3-flash-preview-preview",
       generationConfig: {
         temperature: 0.7,
         maxOutputTokens: 4000,
