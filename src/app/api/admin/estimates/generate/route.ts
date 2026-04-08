@@ -152,17 +152,21 @@ async function generateWithAnthropic(
 
   // Add images for Claude vision (with 5 MB limit check)
   if (imageParts.length > 0) {
-    console.log(`  🖼️  Adding ${imageParts.length} images to Anthropic request`);
+    console.log(`  🖼️  Processing ${imageParts.length} images for Anthropic request`);
 
-    const ANTHROPIC_IMAGE_LIMIT = 5 * 1024 * 1024; // 5 MB
+    const ANTHROPIC_IMAGE_LIMIT = 5 * 1024 * 1024; // 5 MB strict limit
+    let addedCount = 0;
+    let skippedCount = 0;
 
     for (const img of imageParts) {
-      // Check image size (base64 to bytes: length * 0.75)
-      const estimatedBytes = img.inlineData.data.length * 0.75;
+      // Decode base64 to get EXACT byte size
+      const decodedBuffer = Buffer.from(img.inlineData.data, 'base64');
+      const exactBytes = decodedBuffer.length;
 
-      if (estimatedBytes > ANTHROPIC_IMAGE_LIMIT) {
-        console.warn(`⚠️  Image exceeds 5 MB (${(estimatedBytes / 1024 / 1024).toFixed(2)} MB) - skipping for Anthropic`);
-        console.warn(`   Claude has 5 MB limit per image. Consider using Gemini for large files.`);
+      if (exactBytes > ANTHROPIC_IMAGE_LIMIT) {
+        skippedCount++;
+        console.warn(`⚠️  Image #${skippedCount} exceeds 5 MB (${(exactBytes / 1024 / 1024).toFixed(2)} MB) - SKIPPING`);
+        console.warn(`   → Claude has strict 5 MB limit. Use Gemini for large files (no limit).`);
         continue; // Skip this image
       }
 
@@ -174,9 +178,15 @@ async function generateWithAnthropic(
           data: img.inlineData.data
         }
       });
+      addedCount++;
     }
 
-    console.log(`  ✅ Added ${messageContent.length - 1} images (within 5 MB limit)`);
+    console.log(`  ✅ Added ${addedCount} images, skipped ${skippedCount} (5 MB limit)`);
+
+    if (skippedCount > 0) {
+      console.warn(`  ⚠️  WARNING: ${skippedCount} image(s) skipped due to size. Estimate quality may be reduced.`);
+      console.warn(`  💡 TIP: Use Gemini model for projects with large images (no 5 MB limit).`);
+    }
   }
 
   // Use streaming for long-running requests (>10 minutes)
