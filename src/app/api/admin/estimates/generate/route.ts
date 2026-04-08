@@ -2546,11 +2546,10 @@ ${drawingGuide}
    - ❌ ЗАБОРОНЕНО використовувати застарілі ціни!
 
 **2. Приклади ПРАВИЛЬНИХ пошукових запитів:**
-   ```
+
    Google Search: "штукатурка knauf mp-75 30кг ціна україна"
    Google Search: "газоблок 100х200х600 aeroc ціна львів"
    Google Search: "металочерепиця монтеррей ціна за м2 2025"
-   ```
 
 **3. Для priceSource використовуй пошуковий URL:**
    - ✅ https://epicentrk.ua/search/?q=штукатурка+MP-75+30кг
@@ -2564,9 +2563,8 @@ ${drawingGuide}
    - Дату актуальності (${new Date().getFullYear()})
 
 **Приклад правильного priceNote:**
-```
+
 "priceNote": "Knauf MP-75 30кг, 385₴ (Epicentr, ${new Date().toLocaleDateString('uk-UA', { month: 'short', year: 'numeric' })})"
-```
 
 **🔥 ЯКЩО НЕ ЗНАЙШОВ ЦІНУ - НЕ ВИГАДУЙ! Постав 0 і напиши "Ціна потребує уточнення"**
 
