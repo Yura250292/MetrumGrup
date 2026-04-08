@@ -20,6 +20,13 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 // Vercel config - increase timeout for large file processing
 export const maxDuration = 300; // 5 minutes (requires Vercel Pro plan)
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic'; // Ensure no caching
+
+// Alternative: using config object (more explicit)
+export const config = {
+  maxDuration: 300,
+  runtime: 'nodejs',
+};
 
 // Load drawing reading guide for AI
 async function loadDrawingGuide(): Promise<string> {
