@@ -2669,6 +2669,13 @@ export default function AIEstimatePage() {
   const [saving, setSaving] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [projects, setProjects] = useState<Array<{ id: string; title: string; client: { name: string } }>>([]);
+  const [supplementModalOpen, setSupplementModalOpen] = useState(false);
+  const [supplementInfo, setSupplementInfo] = useState("");
+  const [supplementFiles, setSupplementFiles] = useState<File[]>([]);
+  const [supplementing, setSupplementing] = useState(false);
+  const [supplementProgress, setSupplementProgress] = useState<{ message: string; progress: number } | null>(null);
+  const supplementFileInputRef = useRef<HTMLInputElement>(null);
+  const [savedEstimateId, setSavedEstimateId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -3694,11 +3701,111 @@ export default function AIEstimatePage() {
         return;
       }
 
-      // Success - redirect to estimate details
+      // Success - save ID and redirect to estimate details
+      setSavedEstimateId(json.data.id);
       router.push(`/admin/estimates/${json.data.id}`);
     } catch (err) {
       setError("Не вдалось з'єднатись з сервером");
       setSaving(false);
+    }
+  }
+
+  // Supplement estimate with additional data
+  async function supplementEstimate() {
+    if (!savedEstimateId) {
+      setError("Спочатку збережіть кошторис");
+      return;
+    }
+
+    if (!supplementInfo.trim() && supplementFiles.length === 0) {
+      setError("Додайте текст або файли для доповнення кошторису");
+      return;
+    }
+
+    setSupplementing(true);
+    setError("");
+    setSupplementProgress(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("additionalInfo", supplementInfo);
+
+      // Upload supplement files to R2 if any
+      let r2Keys: any[] = [];
+      if (supplementFiles.length > 0) {
+        const uploadFormData = new FormData();
+        supplementFiles.forEach(file => {
+          uploadFormData.append("files", file);
+        });
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: uploadFormData,
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error("Не вдалось завантажити файли");
+        }
+
+        const uploadData = await uploadRes.json();
+        r2Keys = uploadData.r2Keys || [];
+      }
+
+      formData.append("r2Keys", JSON.stringify(r2Keys));
+      formData.append("regenerateAll", "true");
+
+      // Call refine API with SSE
+      const response = await fetch(`/api/admin/estimates/${savedEstimateId}/refine`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Помилка доповнення кошторису");
+      }
+
+      // Stream progress updates
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const text = decoder.decode(value);
+          const lines = text.split('\n\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                setSupplementProgress({
+                  message: data.message,
+                  progress: data.progress || 0
+                });
+
+                if (data.status === 'complete' && data.data) {
+                  // Success - show results
+                  alert(`✅ Кошторис успішно доповнено!\n\nСтара вартість: ${formatCurrency(data.data.oldTotalAmount)}\nНова вартість: ${formatCurrency(data.data.newTotalAmount)}\nЗміна: ${formatCurrency(data.data.difference)}`);
+
+                  // Redirect to new estimate
+                  router.push(`/admin/estimates/${data.data.newEstimateId}`);
+                  return;
+                } else if (data.status === 'error') {
+                  throw new Error(data.message);
+                }
+              } catch (e) {
+                console.error('Error parsing SSE:', e);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не вдалось доповнити кошторис");
+    } finally {
+      setSupplementing(false);
     }
   }
 
@@ -4133,6 +4240,20 @@ export default function AIEstimatePage() {
                 className="border-primary/30 text-primary hover:bg-primary/10"
               >
                 <Sparkles className="h-4 w-4" /> Редагувати через AI
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (!savedEstimateId) {
+                    alert('Спочатку збережіть кошторис, щоб потім його доповнити');
+                    return;
+                  }
+                  setSupplementModalOpen(true);
+                }}
+                className="border-orange-500/30 text-orange-600 hover:bg-orange-50"
+                title="Додати нові дані і регенерувати кошторис"
+              >
+                <Plus className="h-4 w-4" /> Доповнити кошторис
               </Button>
               <Button
                 variant="outline"
@@ -4709,6 +4830,176 @@ export default function AIEstimatePage() {
                     <>
                       <Check className="h-4 w-4" />
                       Зберегти кошторис
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* ════════ SUPPLEMENT MODAL ════════ */}
+      {supplementModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Plus className="h-5 w-5 text-orange-600" />
+                    Доповнити кошторис новими даними
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Додайте нову інформацію або файли для регенерації кошторису
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setSupplementModalOpen(false);
+                    setSupplementInfo("");
+                    setSupplementFiles([]);
+                    setSupplementProgress(null);
+                    setError("");
+                  }}
+                  disabled={supplementing}
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {error && (
+                <div className="rounded-lg bg-destructive/10 border border-destructive/20 p-3">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-destructive/80">{error}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Progress indicator */}
+              {supplementProgress && (
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-4">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span className="text-sm font-medium">{supplementProgress.message}</span>
+                  </div>
+                  <div className="w-full bg-primary/20 rounded-full h-2">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-300"
+                      style={{ width: `${supplementProgress.progress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">{supplementProgress.progress}%</p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Додаткова інформація</label>
+                <textarea
+                  value={supplementInfo}
+                  onChange={(e) => setSupplementInfo(e.target.value)}
+                  placeholder="Опишіть що було пропущено або які зміни потрібні:&#10;&#10;Наприклад:&#10;- Додати електропроводку для кондиціонерів&#10;- Врахувати теплу підлогу у ванній&#10;- Додати систему пожежогасіння&#10;- Збільшити товщину утеплення на 50мм"
+                  className="w-full min-h-[150px] rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  disabled={supplementing}
+                />
+                <p className="text-xs text-muted-foreground">
+                  AI проаналізує існуючий кошторис та додасть нові позиції на основі вашої інформації
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Нові файли (опційно)</label>
+                <div className="border-2 border-dashed border-border rounded-lg p-4 text-center">
+                  <input
+                    ref={supplementFileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => {
+                      if (e.target.files) {
+                        setSupplementFiles(Array.from(e.target.files));
+                      }
+                    }}
+                    className="hidden"
+                    disabled={supplementing}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => supplementFileInputRef.current?.click()}
+                    disabled={supplementing}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Завантажити файли
+                  </Button>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    PDF, фото креслень, специфікації (макс. 50 MB на файл)
+                  </p>
+                </div>
+
+                {supplementFiles.length > 0 && (
+                  <div className="space-y-2 mt-3">
+                    <p className="text-sm font-medium">Вибрані файли:</p>
+                    {supplementFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                        <div className="flex items-center gap-2">
+                          {file.type.startsWith('image/') ? (
+                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <FileText className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          <span className="text-sm">{file.name}</span>
+                          <span className="text-xs text-muted-foreground">
+                            ({formatFileSize(file.size)})
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => {
+                            setSupplementFiles(prev => prev.filter((_, i) => i !== idx));
+                          }}
+                          disabled={supplementing}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end pt-4 border-t">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSupplementModalOpen(false);
+                    setSupplementInfo("");
+                    setSupplementFiles([]);
+                    setSupplementProgress(null);
+                    setError("");
+                  }}
+                  disabled={supplementing}
+                >
+                  Скасувати
+                </Button>
+                <Button
+                  onClick={supplementEstimate}
+                  disabled={supplementing || (!supplementInfo.trim() && supplementFiles.length === 0)}
+                  className="bg-orange-600 hover:bg-orange-700 text-white"
+                >
+                  {supplementing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Обробка...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4" />
+                      Доповнити кошторис
                     </>
                   )}
                 </Button>

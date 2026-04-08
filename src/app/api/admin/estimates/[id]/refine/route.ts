@@ -142,9 +142,10 @@ export async function POST(
 Загальна вартість: ${existingEstimate.totalAmount} ₴
 
 ПОТОЧНІ СЕКЦІЇ:
-${existingEstimate.sections.map(s => `
-  ${s.title}: ${s.totalAmount} ₴ (${s.items.length} позицій)
-`).join('\n')}
+${existingEstimate.sections.map(s => {
+  const sectionTotal = s.items.reduce((sum, item) => sum + Number(item.amount), 0);
+  return `  ${s.title}: ${sectionTotal} ₴ (${s.items.length} позицій)`;
+}).join('\n')}
 
 ДОДАТКОВА ІНФОРМАЦІЯ ВІД ІНЖЕНЕРА:
 ${additionalInfo}
@@ -164,6 +165,13 @@ ${textParts.join('\n\n')}
         const orchestrator = new EstimateOrchestrator({
           mode: 'multi-agent',
           projectId: existingEstimate.projectId,
+          wizardData: {
+            objectType: 'other',
+            workScope: 'full',
+            renovationStage: 'full',
+            hasGeology: !!additionalInfo.toLowerCase().includes('геологія'),
+            hasSpecifications: textParts.length > 0,
+          },
           documents: {
             plans: [existingContext, ...textParts],
             specifications: textParts,
