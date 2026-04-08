@@ -221,7 +221,8 @@ export async function POST(request: NextRequest) {
 
         const estimate = await prisma.estimate.create({
           data: {
-            estimateNumber: `EST-${Date.now()}`,
+            number: `EST-${Date.now()}`,
+            title: "Кошторис (генерація по секціях)",
             projectId: projectId || undefined,
             totalAmount,
             finalAmount: totalAmount,
@@ -255,7 +256,7 @@ export async function POST(request: NextRequest) {
           progress: 100,
           data: {
             estimateId: estimate.id,
-            estimateNumber: estimate.estimateNumber,
+            estimateNumber: estimate.number,
             totalAmount: estimate.totalAmount,
             sectionsCount: sections.length
           }
