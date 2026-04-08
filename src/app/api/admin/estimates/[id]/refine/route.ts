@@ -16,6 +16,7 @@ import { EstimateOrchestrator } from "@/lib/agents/orchestrator";
 import { downloadFileFromR2 } from "@/lib/r2-client";
 import { parsePDF } from "@/lib/pdf-helper";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { vectorizeProject } from "@/lib/rag/vectorizer";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -133,6 +134,64 @@ export async function POST(
             message: `✅ Завантажено ${r2Keys.length} файлів`,
             progress: 30
           });
+
+          // 🔍 Векторизувати нові файли і додати до проекту
+          sendUpdate({
+            phase: 0,
+            status: 'analyzing',
+            message: '🧮 Векторизація нових файлів для майбутнього використання...',
+            progress: 35
+          });
+
+          const filesToVectorize = r2Keys.map((r2File: any) => ({
+            buffer: Buffer.from(''), // Will be downloaded again in vectorizer
+            fileName: r2File.originalName,
+            mimeType: r2File.mimeType
+          }));
+
+          try {
+            // Download files for vectorization
+            const filesWithBuffers = await Promise.all(
+              r2Keys.map(async (r2File: any) => {
+                const buffer = await downloadFileFromR2(r2File.key);
+                return {
+                  buffer: Buffer.from(buffer),
+                  fileName: r2File.originalName,
+                  mimeType: r2File.mimeType
+                };
+              })
+            );
+
+            // Vectorize new files (they will be added incrementally to existing vectors)
+            await vectorizeProject(
+              existingEstimate.projectId,
+              filesWithBuffers,
+              (message, progress) => {
+                sendUpdate({
+                  phase: 0,
+                  status: 'analyzing',
+                  message: `🧮 ${message}`,
+                  progress: 35 + Math.floor(progress * 0.1) // 35-45%
+                });
+              }
+            );
+
+            sendUpdate({
+              phase: 0,
+              status: 'analyzing',
+              message: '✅ Нові файли додані до векторної БД!',
+              progress: 45
+            });
+          } catch (vectorError) {
+            console.error('Vectorization error (non-critical):', vectorError);
+            // Continue even if vectorization fails
+            sendUpdate({
+              phase: 0,
+              status: 'analyzing',
+              message: '⚠️ Векторизація не вдалась, але продовжуємо генерацію',
+              progress: 45
+            });
+          }
         }
 
         // Побудувати контекст з існуючого кошторису + нові дані
@@ -158,7 +217,7 @@ ${textParts.join('\n\n')}
           phase: 1,
           status: 'generating',
           message: '🤖 Регенерація кошторису з новими даними...',
-          progress: 40
+          progress: 50
         });
 
         // Регенерувати через Multi-Agent orchestrator
@@ -193,7 +252,7 @@ ${additionalInfo}
             phase: update.phase,
             status: update.status as any,
             message: update.message,
-            progress: 40 + Math.floor((update.progress || 0) * 0.5)
+            progress: 50 + Math.floor((update.progress || 0) * 0.4) // 50-90%
           });
         });
 
