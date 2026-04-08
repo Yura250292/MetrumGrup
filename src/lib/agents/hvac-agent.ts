@@ -70,7 +70,7 @@ export class HvacAgent extends BaseAgent {
 
     try {
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-3.0-flash",
         generationConfig: {
           temperature: 0.1,
           maxOutputTokens: 8000,
