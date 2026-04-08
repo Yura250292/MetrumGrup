@@ -1487,107 +1487,31 @@ export async function POST(request: NextRequest) {
 
     console.log(`📊 Extraction summary: ${textParts.length} text files, ${imageParts.length} images, ${pdfParts.length} PDFs`);
 
-    // NEW: Classify files with enhanced classifier
-    const { classifyDocuments, groupByType } = await import('@/lib/document-classifier');
-    const { DocumentType } = await import('@/lib/document-types');
+    // Simple file classification (old method - reliable)
+    const planFiles: File[] = [];
+    const specFiles: File[] = [];
 
-    const classified = classifyDocuments(files);
-    const grouped = groupByType(classified);
+    for (const file of files) {
+      const name = file.name.toLowerCase();
+      const isSpec =
+        name.includes('специф') || name.includes('spec') ||
+        name.includes('технолог') || name.includes('інструкц') ||
+        file.size > 10 * 1024 * 1024; // > 10 MB
 
-    console.log(`📂 Classified ${files.length} files:`);
-    grouped.forEach((docs, type) => {
-      console.log(`   - ${type}: ${docs.length} files`);
-    });
+      if (isSpec) {
+        specFiles.push(file);
+      } else {
+        planFiles.push(file);
+      }
+    }
 
-    // Get plan and spec files for backward compatibility
-    const planFiles: File[] = (grouped.get(DocumentType.ARCHITECTURAL_PLAN) || []).map(d => d.file);
-    const specFiles: File[] = (grouped.get(DocumentType.SPECIFICATION) || []).map(d => d.file);
+    console.log(`📂 Classification: ${planFiles.length} plan files, ${specFiles.length} specification files`);
 
-    // NEW: Parse each document type
+    // Parsed data for pipeline mode (will be populated in pipeline case)
     const parsedData: Record<string, any> = {};
 
-    // 1. Site Plans / Topography
-    const sitePlanDocs = [
-      ...(grouped.get(DocumentType.SITE_PLAN) || []),
-      ...(grouped.get(DocumentType.TOPOGRAPHY) || [])
-    ];
-
-    if (sitePlanDocs.length > 0) {
-      console.log(`🗺️  Processing ${sitePlanDocs.length} site plan(s)...`);
-      const { SitePlanParser } = await import('@/lib/parsers/site-plan-parser');
-      const parser = new SitePlanParser();
-      const texts: string[] = [];
-
-      for (const doc of sitePlanDocs) {
-        const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const data = await parsePDF(buffer);
-        texts.push(data.text);
-      }
-
-      const allText = texts.join('\n\n---\n\n');
-      parsedData.sitePlan = parser.parse(allText);
-      console.log(`   ✓ Site plan parsed: ${parsedData.sitePlan.summary}`);
-    }
-
-    // 2. Geological Reports
-    const geologicalDocs = grouped.get(DocumentType.GEOLOGICAL_REPORT) || [];
-
-    if (geologicalDocs.length > 0) {
-      console.log(`🪨 Processing ${geologicalDocs.length} geological report(s)...`);
-      const { GeologicalParser } = await import('@/lib/parsers/geological-parser');
-      const parser = new GeologicalParser();
-      const texts: string[] = [];
-
-      for (const doc of geologicalDocs) {
-        const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const data = await parsePDF(buffer);
-        texts.push(data.text);
-      }
-
-      const allText = texts.join('\n\n---\n\n');
-      parsedData.geological = parser.parse(allText);
-      console.log(`   ✓ Geological data: ${parsedData.geological.summary}`);
-      if (parsedData.geological.warnings.length > 0) {
-        console.warn(`   ⚠️  ${parsedData.geological.warnings.length} geological warnings`);
-      }
-    }
-
-    // 3. Project Reviews
-    const reviewDocs = grouped.get(DocumentType.PROJECT_REVIEW) || [];
-
-    if (reviewDocs.length > 0) {
-      console.log(`📝 Processing ${reviewDocs.length} project review(s)...`);
-      const { ProjectReviewParser } = await import('@/lib/parsers/review-parser');
-      const parser = new ProjectReviewParser();
-      const texts: string[] = [];
-
-      for (const doc of reviewDocs) {
-        const buffer = Buffer.from(await doc.file.arrayBuffer());
-        const data = await parsePDF(buffer);
-        texts.push(data.text);
-      }
-
-      const allText = texts.join('\n\n---\n\n');
-      parsedData.review = parser.parse(allText);
-      console.log(`   ✓ Review parsed: ${parsedData.review.summary}`);
-      if (parsedData.review.criticalCount > 0) {
-        console.warn(`   🚨 ${parsedData.review.criticalCount} critical comments!`);
-      }
-    }
-
-    // 4. Site Photos
-    const photoDocs = grouped.get(DocumentType.SITE_PHOTOS) || [];
-
-    if (photoDocs.length > 0) {
-      console.log(`📸 Processing ${photoDocs.length} site photo(s)...`);
-      const { SitePhotosHandler } = await import('@/lib/parsers/site-photos-handler');
-      const handler = new SitePhotosHandler();
-      const photoFiles = photoDocs.map(d => d.file);
-      parsedData.photos = handler.analyze(photoFiles);
-      console.log(`   ✓ Photos: ${parsedData.photos.summary}`);
-    }
-
-    console.log(`📂 Classification complete: ${planFiles.length} plan files, ${specFiles.length} specification files`);
+    // Advanced document classification and parsing moved to pipeline mode only
+    // TODO: Re-enable for pipeline mode after fixing stability issues
 
     // Process specification files
     let specificationData: any = null;
