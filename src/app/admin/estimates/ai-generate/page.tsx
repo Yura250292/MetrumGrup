@@ -2652,7 +2652,7 @@ export default function AIEstimatePage() {
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
     new Set(WORK_CATEGORIES.map(c => c.id)) // За замовчуванням всі категорії вибрані
   );
-  const [selectedGenerationModel, setSelectedGenerationModel] = useState<"gemini" | "openai" | "anthropic" | "pipeline">("pipeline");
+  const [selectedGenerationModel, setSelectedGenerationModel] = useState<"gemini" | "openai" | "anthropic" | "pipeline">("gemini");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
