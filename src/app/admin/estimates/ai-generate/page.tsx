@@ -4017,7 +4017,7 @@ export default function AIEstimatePage() {
               ) : (
                 <>
                   <Sparkles className="h-5 w-5" />
-                  🔄 Генерувати по секціях (Gemini + Claude + OpenAI)
+                  🔄 Генерувати по секціях (Gemini + OpenAI)
                   <Badge variant="secondary" className="ml-auto bg-green-100 text-green-700">
                     Рекомендовано для великих проектів
                   </Badge>
@@ -4058,11 +4058,11 @@ export default function AIEstimatePage() {
                   <div className="flex items-center justify-between">
                     <h3 className="text-lg font-semibold">
                       {chunkedProgress.phase === 0 && '📦 Підготовка'}
-                      {chunkedProgress.phase === 1 && '🔍 Аналіз документів'}
-                      {chunkedProgress.phase === 2 && '🏗️ Генерація: Фундамент'}
-                      {chunkedProgress.phase === 3 && '⚡ Генерація: Електрика'}
-                      {chunkedProgress.phase === 4 && '🚰 Генерація: Сантехніка'}
-                      {chunkedProgress.phase === 5 && '🎨 Генерація: Оздоблення'}
+                      {chunkedProgress.phase === 1 && '🔍 Gemini: Аналіз документів'}
+                      {chunkedProgress.phase === 2 && '🏗️ Gemini: Фундамент'}
+                      {chunkedProgress.phase === 3 && '⚡ Gemini: Електрика'}
+                      {chunkedProgress.phase === 4 && '🚰 OpenAI: Сантехніка'}
+                      {chunkedProgress.phase === 5 && '🎨 OpenAI: Оздоблення'}
                       {chunkedProgress.phase === 'final' && '🎉 Завершення'}
                     </h3>
                     <Badge variant="secondary" className="text-lg px-3 py-1">

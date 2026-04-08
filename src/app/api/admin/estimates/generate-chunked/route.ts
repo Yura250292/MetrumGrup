@@ -118,17 +118,18 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // PHASE 2: Generate Foundation (Claude)
+        // PHASE 2: Generate Foundation (Gemini)
         sendUpdate({
           phase: 2,
           status: 'generating',
-          message: '🏗️ Claude генерує розділ "Фундамент"...',
+          message: '🏗️ Gemini генерує розділ "Фундамент"...',
           progress: 40
         });
 
-        const foundationSection = await generateSectionWithClaude(
+        const foundationSection = await generateSectionWithGemini(
           "Фундамент",
-          textParts.join("\n\n"),
+          textParts,
+          pdfParts,
           wizardData
         );
 
@@ -185,15 +186,15 @@ export async function POST(request: NextRequest) {
           data: { section: plumbingSection }
         });
 
-        // PHASE 5: Generate Finishing (Claude)
+        // PHASE 5: Generate Finishing (OpenAI)
         sendUpdate({
           phase: 5,
           status: 'generating',
-          message: '🎨 Claude генерує розділ "Оздоблення"...',
+          message: '🎨 OpenAI генерує розділ "Оздоблення"...',
           progress: 95
         });
 
-        const finishingSection = await generateSectionWithClaude(
+        const finishingSection = await generateSectionWithOpenAI(
           "Оздоблювальні роботи",
           textParts.join("\n\n"),
           wizardData
