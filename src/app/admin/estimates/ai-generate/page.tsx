@@ -3652,15 +3652,26 @@ export default function AIEstimatePage() {
               <option value="anthropic">🧠 Anthropic Claude Opus 4 (Найкращий аналіз документів)</option>
             </select>
             {selectedGenerationModel === "pipeline" && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-900 font-medium mb-1">🔄 Pipeline Mode — Найкращий результат!</p>
-                <p className="text-xs text-blue-700">
-                  <strong>Phase 1 (Gemini):</strong> Аналіз усіх файлів + пошук цін через Google Search<br />
-                  <strong>Phase 2 (Claude):</strong> Генерація детального кошторису на основі аналізу
+              <div className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-300 rounded-lg space-y-2">
+                <p className="text-sm text-blue-900 font-semibold flex items-center gap-2">
+                  🔄 Pipeline Mode
+                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Рекомендовано</span>
                 </p>
-                <p className="text-xs text-blue-600 mt-2">
-                  ✅ Немає ліміту на розмір файлів • ✅ Актуальні ціни • ✅ Найточніший результат
-                </p>
+                <div className="space-y-1.5 text-xs">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-600 font-semibold min-w-[60px]">Phase 1:</span>
+                    <span className="text-gray-700">Gemini аналізує файли + шукає ціни через Google Search</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-purple-600 font-semibold min-w-[60px]">Phase 2:</span>
+                    <span className="text-gray-700">Claude генерує детальний кошторис на основі аналізу</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <span className="text-xs bg-white/60 px-2 py-1 rounded border border-blue-200 text-blue-700">✅ Без ліміту розміру</span>
+                  <span className="text-xs bg-white/60 px-2 py-1 rounded border border-blue-200 text-blue-700">✅ Актуальні ціни</span>
+                  <span className="text-xs bg-white/60 px-2 py-1 rounded border border-blue-200 text-blue-700">✅ Найточніше</span>
+                </div>
               </div>
             )}
             {selectedGenerationModel === "gemini" && (
