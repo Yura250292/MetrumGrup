@@ -151,9 +151,14 @@ export async function POST(
 
           try {
             // Download files for vectorization
+            console.log(`📥 Завантаження ${r2Keys.length} файлів з R2 для векторизації...`);
+
             const filesWithBuffers = await Promise.all(
               r2Keys.map(async (r2File: any) => {
+                console.log(`📥 Завантаження файлу: ${r2File.originalName} (${r2File.mimeType})`);
                 const buffer = await downloadFileFromR2(r2File.key);
+                console.log(`✅ Завантажено: ${r2File.originalName}, розмір: ${buffer.length} bytes`);
+
                 return {
                   buffer: Buffer.from(buffer),
                   fileName: r2File.originalName,
@@ -162,11 +167,15 @@ export async function POST(
               })
             );
 
+            console.log(`🧮 Початок векторизації ${filesWithBuffers.length} файлів...`);
+            console.log('Типи файлів:', filesWithBuffers.map(f => `${f.fileName} (${f.mimeType})`));
+
             // Vectorize new files (they will be added incrementally to existing vectors)
             await vectorizeProject(
               existingEstimate.projectId,
               filesWithBuffers,
               (message, progress) => {
+                console.log(`[Векторизація ${progress}%] ${message}`);
                 sendUpdate({
                   phase: 0,
                   status: 'analyzing',
@@ -176,6 +185,8 @@ export async function POST(
               }
             );
 
+            console.log('✅ Векторизація завершена успішно!');
+
             sendUpdate({
               phase: 0,
               status: 'analyzing',
@@ -183,14 +194,19 @@ export async function POST(
               progress: 45
             });
           } catch (vectorError) {
-            console.error('Vectorization error (non-critical):', vectorError);
-            // Continue even if vectorization fails
+            console.error('❌ КРИТИЧНА ПОМИЛКА ВЕКТОРИЗАЦІЇ:', vectorError);
+            console.error('Stack trace:', vectorError instanceof Error ? vectorError.stack : 'N/A');
+
+            // ПОКАЗАТИ ПОМИЛКУ КОРИСТУВАЧУ
             sendUpdate({
               phase: 0,
               status: 'analyzing',
-              message: '⚠️ Векторизація не вдалась, але продовжуємо генерацію',
+              message: `❌ Помилка векторизації: ${vectorError instanceof Error ? vectorError.message : 'Unknown'}`,
               progress: 45
             });
+
+            // НЕ продовжувати якщо векторизація провалилась
+            throw new Error(`Векторизація провалилась: ${vectorError instanceof Error ? vectorError.message : 'Unknown error'}`);
           }
         }
 

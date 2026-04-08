@@ -89,8 +89,23 @@ export async function vectorizeProject(
 
       if (file.mimeType === 'application/pdf') {
         // PDF → текст + chunking
+        console.log(`📄 Обробка PDF: ${file.fileName}, розмір: ${file.buffer.length} bytes`);
+
         const pdfData = await parsePDF(file.buffer);
+        console.log(`📄 PDF текст витягнуто: ${pdfData.text.length} символів, сторінок: ${pdfData.numpages}`);
+
+        if (!pdfData.text || pdfData.text.length < 50) {
+          console.error(`⚠️ PDF ${file.fileName} порожній або занадто малий! Текст: "${pdfData.text.substring(0, 100)}"`);
+          throw new Error(`PDF файл ${file.fileName} не містить тексту або не вдалось його прочитати`);
+        }
+
         const chunks = chunkText(pdfData.text, 512, 50);
+        console.log(`📄 PDF розбито на ${chunks.length} chunks`);
+
+        if (chunks.length === 0) {
+          console.error(`⚠️ PDF ${file.fileName} не вдалось розбити на chunks!`);
+          throw new Error(`PDF файл ${file.fileName} не вдалось обробити`);
+        }
 
         chunks.forEach((chunk, idx) => {
           allChunks.push({
@@ -102,7 +117,9 @@ export async function vectorizeProject(
         });
 
         // Витягти структуровані дані з PDF
+        console.log(`🤖 Аналіз PDF через Gemini: ${file.fileName}`);
         const pdfExtractedData = await extractDataFromPDF(pdfData.text, file.fileName);
+        console.log(`✅ PDF дані витягнуто:`, Object.keys(pdfExtractedData));
         extractedData = { ...extractedData, ...pdfExtractedData };
 
       } else if (file.mimeType.startsWith('image/')) {

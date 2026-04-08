@@ -157,9 +157,14 @@ export async function POST(request: NextRequest) {
               });
 
               // Підготувати файли для векторизації
+              console.log(`📥 Завантаження ${r2Keys.length} файлів для векторизації...`);
+
               const filesForVectorization = await Promise.all(
                 r2Keys.map(async (r2File: any) => {
+                  console.log(`📥 Завантаження: ${r2File.originalName} (${r2File.mimeType})`);
                   const buffer = await downloadFileFromR2(r2File.key);
+                  console.log(`✅ Завантажено: ${r2File.originalName}, ${buffer.length} bytes`);
+
                   return {
                     buffer,
                     fileName: r2File.originalName,
@@ -168,21 +173,30 @@ export async function POST(request: NextRequest) {
                 })
               );
 
-              // Векторизувати проект
-              await vectorizeProject(
-                projectId,
-                filesForVectorization,
-                (message, progress) => {
-                  sendUpdate({
-                    phase: 0,
-                    status: 'analyzing',
-                    message: `🔍 ${message}`,
-                    progress: 12 + Math.floor(progress * 0.18) // 12-30%
-                  });
-                }
-              );
+              console.log(`🧮 Типи файлів для векторизації:`, filesForVectorization.map(f => `${f.fileName} (${f.mimeType}, ${f.buffer.length}b)`));
 
-              console.log(`✅ Проект ${projectId} успішно векторизовано!`);
+              // Векторизувати проект
+              try {
+                await vectorizeProject(
+                  projectId,
+                  filesForVectorization,
+                  (message, progress) => {
+                    console.log(`[Векторизація ${progress}%] ${message}`);
+                    sendUpdate({
+                      phase: 0,
+                      status: 'analyzing',
+                      message: `🔍 ${message}`,
+                      progress: 12 + Math.floor(progress * 0.18) // 12-30%
+                    });
+                  }
+                );
+
+                console.log(`✅ Проект ${projectId} успішно векторизовано!`);
+              } catch (vectorError) {
+                console.error(`❌ КРИТИЧНА ПОМИЛКА ВЕКТОРИЗАЦІЇ:`, vectorError);
+                console.error('Stack:', vectorError instanceof Error ? vectorError.stack : 'N/A');
+                throw new Error(`Векторизація провалилась: ${vectorError instanceof Error ? vectorError.message : 'Unknown'}`);
+              }
 
               sendUpdate({
                 phase: 0,
