@@ -1471,7 +1471,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      if (result.type === 'pdf-only') {
+      if (result.type === 'pdf-only' && result.pdfData) {
         pdfParts.push(result.pdfData);
         console.log(`  ✅ ${result.pdfData.name}: Large PDF added directly`);
         continue;
