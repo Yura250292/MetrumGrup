@@ -217,13 +217,27 @@ export async function POST(request: NextRequest) {
 
         const totalAmount = sections.reduce((sum, s) => sum + s.totalCost, 0);
 
-        const projectId = formData.get("projectId") as string | null;
+        let projectId = formData.get("projectId") as string | null;
+
+        // If no projectId provided, create a temporary project
+        if (!projectId) {
+          const tempProject = await prisma.project.create({
+            data: {
+              title: "Тимчасовий проект (генерація по секціях)",
+              description: "Автоматично створений проект для кошторису",
+              status: "PLANNING",
+              clientId: session.user.id, // Use current user as client temporarily
+              managerId: session.user.id,
+            }
+          });
+          projectId = tempProject.id;
+        }
 
         const estimate = await prisma.estimate.create({
           data: {
             number: `EST-${Date.now()}`,
             title: "Кошторис (генерація по секціях)",
-            projectId: projectId || undefined,
+            projectId: projectId,
             totalAmount,
             finalAmount: totalAmount,
             createdById: session.user.id,
