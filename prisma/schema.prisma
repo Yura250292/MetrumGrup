@@ -155,7 +155,7 @@ model EstimateSection {
   id          String         @id @default(cuid())
   title       String
   sortOrder   Int            @default(0)
-  totalAmount Decimal        @default(0) @db.Decimal(12, 2)
+  totalAmount Decimal        @default(0) @db.Decimal(12, 2) @map("total_amount")
   estimateId  String
   items       EstimateItem[]
   estimate    Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)

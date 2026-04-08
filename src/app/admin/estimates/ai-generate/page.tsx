@@ -3246,6 +3246,49 @@ export default function AIEstimatePage() {
       return;
     }
 
+    // 🔍 Перевірити чи проект вже векторизований
+    if (selectedProjectId) {
+      try {
+        const statusRes = await fetch(`/api/admin/projects/${selectedProjectId}/vectorize`);
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+
+          if (statusData.vectorized) {
+            const userChoice = window.confirm(
+              `📦 Цей проект вже векторизований!\n\n` +
+              `Векторизовано: ${new Date(statusData.processedAt).toLocaleString('uk-UA')}\n\n` +
+              `Виберіть дію:\n` +
+              `• OK - Використати існуючі дані (рекомендовано)\n` +
+              `• Скасувати - Ревекторизувати з нуля (повільніше)\n\n` +
+              `Примітка: Нові файли будуть автоматично додані до векторної БД`
+            );
+
+            if (!userChoice) {
+              // User wants to re-vectorize
+              const confirmRevectorize = window.confirm(
+                `⚠️ Ревекторизація займе час\n\n` +
+                `Ви впевнені що хочете видалити існуючі дані і векторизувати заново?\n\n` +
+                `Це потрібно тільки якщо структура проекту кардинально змінилась.`
+              );
+
+              if (confirmRevectorize) {
+                console.log('🔄 User chose to re-vectorize from scratch');
+                // Will force re-vectorization in the API
+              } else {
+                // Cancel generation
+                return;
+              }
+            } else {
+              console.log('✅ User chose to use existing vectorized data');
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to check vectorization status:', err);
+        // Continue with generation anyway
+      }
+    }
+
     setIsChunkedGenerating(true);
     setError("");
     setEstimate(null);
