@@ -729,10 +729,8 @@ async function generateSectionWithGemini(
   }
 
   for (const image of imageParts) {
-    parts.push({
-      inlineData: { data: image.data, mimeType: image.mimeType },
-      text: `Фото будмайданчика: ${image.name}`
-    });
+    parts.push({ text: `Фото будмайданчика: ${image.name}` });
+    parts.push({ inlineData: { data: image.data, mimeType: image.mimeType } });
   }
 
   const result = await model.generateContent(parts);

@@ -323,3 +323,131 @@ export function getDateForProzorroFilter(monthsAgo: number): string {
   date.setMonth(date.getMonth() - monthsAgo);
   return date.toISOString();
 }
+
+/**
+ * Генерувати текстовий звіт про знайдені Prozorro тендери для звіту інженера
+ */
+export function generateProzorroReport(
+  matches: Array<{
+    tender: ProzorroTender;
+    score: number;
+    reasons: string[];
+  }>
+): string {
+  if (matches.length === 0) {
+    return '';
+  }
+
+  const lines: string[] = [
+    '',
+    '═══════════════════════════════════════════════════════',
+    '📊 АНАЛІЗ КОНКУРЕНТНИХ ТЕНДЕРІВ PROZORRO',
+    '═══════════════════════════════════════════════════════',
+    '',
+    `Знайдено ${matches.length} схожих тендерів на платформі публічних закупівель Prozorro.`,
+    'Нижче наведено порівняльний аналіз цін та умов виконання аналогічних проектів:',
+    '',
+  ];
+
+  matches.forEach((match, index) => {
+    const { tender, score, reasons } = match;
+    const awardedAmount = tender.awards?.find(a => a.status === 'active')?.value.amount;
+    const datePublished = new Date(tender.datePublished).toLocaleDateString('uk-UA', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+
+    lines.push(`${index + 1}. ${tender.title}`);
+    lines.push(`   ${'─'.repeat(60)}`);
+    lines.push(`   • Замовник: ${tender.procuringEntity.name}`);
+    lines.push(`   • Код ЄДРПОУ: ${tender.procuringEntity.identifier.id}`);
+    lines.push(`   • Дата оголошення: ${datePublished}`);
+    lines.push(`   • Статус: ${getTenderStatusLabel(tender.status)}`);
+    lines.push('');
+
+    // Бюджет
+    if (awardedAmount) {
+      lines.push(`   💰 ЦІНА ПЕРЕМОЖЦЯ: ${formatCurrency(awardedAmount)}`);
+      lines.push(`      (початковий бюджет: ${formatCurrency(tender.value.amount)})`);
+      const saving = tender.value.amount - awardedAmount;
+      if (saving > 0) {
+        const savingPercent = (saving / tender.value.amount) * 100;
+        lines.push(`      Економія: ${formatCurrency(saving)} (-${savingPercent.toFixed(1)}%)`);
+      }
+    } else {
+      lines.push(`   💰 Бюджет: ${formatCurrency(tender.value.amount)}`);
+    }
+    lines.push('');
+
+    // Категорія
+    lines.push(`   • Категорія (CPV): ${tender.classification.id} - ${tender.classification.description}`);
+
+    // Схожість
+    lines.push(`   • Схожість з поточним проектом: ${score}%`);
+    if (reasons.length > 0) {
+      lines.push(`   • Фактори схожості:`);
+      reasons.forEach(reason => {
+        lines.push(`     - ${reason}`);
+      });
+    }
+    lines.push('');
+
+    // Опис (якщо є)
+    if (tender.description && tender.description.length > 0) {
+      const shortDescription = tender.description.slice(0, 200);
+      lines.push(`   📝 Опис: ${shortDescription}${tender.description.length > 200 ? '...' : ''}`);
+      lines.push('');
+    }
+
+    // Посилання
+    lines.push(`   🔗 Детальна інформація: https://prozorro.gov.ua/tender/${tender.id}`);
+    lines.push('');
+  });
+
+  // Підсумок
+  lines.push('═══════════════════════════════════════════════════════');
+  lines.push('📈 ВИСНОВКИ ТА РЕКОМЕНДАЦІЇ');
+  lines.push('═══════════════════════════════════════════════════════');
+  lines.push('');
+
+  // Статистика цін
+  const prices = matches
+    .map(m => m.tender.awards?.find(a => a.status === 'active')?.value.amount || m.tender.value.amount)
+    .filter(p => p > 0);
+
+  if (prices.length > 0) {
+    const minPrice = Math.min(...prices);
+    const maxPrice = Math.max(...prices);
+    const avgPrice = prices.reduce((sum, p) => sum + p, 0) / prices.length;
+
+    lines.push('Порівняльний аналіз цін:');
+    lines.push(`• Мінімальна ціна: ${formatCurrency(minPrice)}`);
+    lines.push(`• Максимальна ціна: ${formatCurrency(maxPrice)}`);
+    lines.push(`• Середня ціна: ${formatCurrency(avgPrice)}`);
+    lines.push(`• Діапазон цін: ${formatCurrency(maxPrice - minPrice)} (±${(((maxPrice - minPrice) / avgPrice) * 50).toFixed(1)}%)`);
+    lines.push('');
+  }
+
+  lines.push('Рекомендації:');
+  lines.push('1. Використовуйте наведені дані для валідації вашого кошторису');
+  lines.push('2. Перевірте детальні специфікації тендерів-переможців для оптимізації позицій');
+  lines.push('3. Зверніть увагу на фактори економії у завершених тендерах');
+  lines.push('4. Врахуйте регіональні та часові відмінності при порівнянні цін');
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+/**
+ * Отримати читабельний статус тендера
+ */
+function getTenderStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    'active': '🟢 Активний',
+    'complete': '✅ Завершений',
+    'cancelled': '🔴 Скасований',
+    'unsuccessful': '⚠️ Неуспішний',
+  };
+  return labels[status] || status;
+}

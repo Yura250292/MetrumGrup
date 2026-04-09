@@ -4493,6 +4493,27 @@ export default function AIEstimatePage() {
             </Card>
           )}
 
+          {/* Prozorro Analysis - Звіт про конкурентні тендери */}
+          {(estimate as any).prozorroAnalysis && (
+            <Card className="p-5 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-blue-500/20 p-2">
+                  <ExternalLink className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-base mb-3 text-blue-700">
+                    📊 Аналіз конкурентних тендерів Prozorro
+                  </h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="text-xs leading-relaxed whitespace-pre-wrap text-foreground/90 font-mono bg-white/60 p-4 rounded-lg border border-blue-200 overflow-x-auto">
+                      {(estimate as any).prozorroAnalysis}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {/* Prozorro Tender Search */}
           {checkProzorro && savedEstimateId && (
             <ProzorroTenderSearch

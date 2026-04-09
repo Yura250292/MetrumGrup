@@ -51,6 +51,7 @@ export async function GET(
       unifiedTaxAmount: true,
       pdfoAmount: true,
       analysisSummary: true,
+      prozorroAnalysis: true,
       project: { select: { title: true, client: { select: { name: true } } } },
       createdBy: { select: { name: true } },
       sections: {

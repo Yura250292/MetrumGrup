@@ -58,6 +58,7 @@ type Estimate = {
   finalAmount: number;
   notes: string | null;
   analysisSummary: string | null;
+  prozorroAnalysis: string | null;
   profitMarginMaterials: number | null;
   profitMarginLabor: number | null;
   profitMarginOverall: number;
@@ -534,6 +535,27 @@ export default function EstimateDetailPage({
                     <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
                       {estimate.analysisSummary}
                     </p>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          {/* Prozorro Analysis - Звіт про конкурентні тендери */}
+          {estimate.prozorroAnalysis && (
+            <Card className="p-5 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50 mb-6">
+              <div className="flex items-start gap-3">
+                <div className="rounded-lg bg-blue-500/20 p-2">
+                  <ExternalLink className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-base mb-3 text-blue-700">
+                    📊 Аналіз конкурентних тендерів Prozorro
+                  </h3>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="text-xs leading-relaxed whitespace-pre-wrap text-foreground/90 font-mono bg-white/60 p-4 rounded-lg border border-blue-200 overflow-x-auto">
+                      {estimate.prozorroAnalysis}
+                    </pre>
                   </div>
                 </div>
               </div>

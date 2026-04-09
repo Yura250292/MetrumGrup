@@ -7,6 +7,7 @@ import {
   extractSearchAttributes,
   calculateSimilarity,
   getDateForProzorroFilter,
+  generateProzorroReport,
 } from '@/lib/prozorro-matcher';
 import { WizardData } from '@/lib/wizard-types';
 
@@ -119,14 +120,26 @@ export async function POST(request: NextRequest) {
     if (matches.length > 0) {
       await saveMatchesToDB(estimateId, matches);
 
-      // Оновити estimate
+      // Генерувати текстовий звіт для інженера
+      const prozorroReport = generateProzorroReport(
+        matches.map(m => ({
+          tender: m.tender,
+          score: m.similarityScore,
+          reasons: m.matchReasons,
+        }))
+      );
+
+      // Оновити estimate з Prozorro аналізом
       await prisma.estimate.update({
         where: { id: estimateId },
         data: {
           prozorroChecked: true,
           prozorroCheckedAt: new Date(),
+          prozorroAnalysis: prozorroReport,
         },
       });
+
+      console.log(`✅ Збережено Prozorro аналіз до estimate ${estimateId}`);
     }
 
     return NextResponse.json({
