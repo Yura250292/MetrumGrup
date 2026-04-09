@@ -300,50 +300,70 @@ export class MasterEstimateAgent {
     const sectionsToGenerate = this.selectSections(context);
     console.log(`📋 Will generate ${sectionsToGenerate.length} sections`);
 
-    const allSections: EstimateSection[] = [];
     const allWarnings: string[] = [];
+    const sectionResults: (EstimateSection | null)[] = new Array(sectionsToGenerate.length).fill(null);
 
-    // Генеруємо кожну секцію окремо з повним контекстом
-    for (let i = 0; i < sectionsToGenerate.length; i++) {
-      const spec = sectionsToGenerate[i];
+    // 🚀 Паралельна генерація батчами по 3 секції
+    // Це укладається в Vercel maxDuration=300s (замість послідовних ~5+ хв)
+    const BATCH_SIZE = 3;
 
-      onProgress?.({
-        sectionIndex: i,
-        totalSections: sectionsToGenerate.length,
-        sectionTitle: spec.title,
-        itemsGenerated: 0,
-        status: 'generating',
-      });
+    for (let batchStart = 0; batchStart < sectionsToGenerate.length; batchStart += BATCH_SIZE) {
+      const batch = sectionsToGenerate.slice(batchStart, batchStart + BATCH_SIZE);
 
-      try {
-        console.log(`\n🔨 [${i + 1}/${sectionsToGenerate.length}] Generating section: ${spec.title}`);
+      console.log(`\n🚀 Batch ${Math.floor(batchStart / BATCH_SIZE) + 1}: paralle generation of ${batch.length} sections`);
 
-        const section = await this.generateSection(spec, context, allSections);
-        allSections.push(section);
-
-        console.log(`   ✅ ${section.items.length} items, ${section.sectionTotal.toFixed(0)} ₴`);
-
+      // Сповіщаємо UI про початок батчу
+      batch.forEach((spec, idx) => {
         onProgress?.({
-          sectionIndex: i,
-          totalSections: sectionsToGenerate.length,
-          sectionTitle: spec.title,
-          itemsGenerated: section.items.length,
-          status: 'complete',
-        });
-
-      } catch (error) {
-        console.error(`❌ Failed to generate section "${spec.title}":`, error);
-        allWarnings.push(`Помилка генерації секції "${spec.title}": ${error instanceof Error ? error.message : 'Unknown'}`);
-
-        onProgress?.({
-          sectionIndex: i,
+          sectionIndex: batchStart + idx,
           totalSections: sectionsToGenerate.length,
           sectionTitle: spec.title,
           itemsGenerated: 0,
-          status: 'error',
+          status: 'generating',
         });
-      }
+      });
+
+      // Запускаємо всі секції батчу паралельно
+      const batchPromises = batch.map(async (spec, idx) => {
+        const sectionIndex = batchStart + idx;
+        try {
+          console.log(`🔨 [${sectionIndex + 1}/${sectionsToGenerate.length}] Generating: ${spec.title}`);
+
+          // Передаємо порожній previousSections — секції незалежні
+          const section = await this.generateSection(spec, context, []);
+          sectionResults[sectionIndex] = section;
+
+          console.log(`   ✅ ${section.items.length} items, ${section.sectionTotal.toFixed(0)} ₴`);
+
+          onProgress?.({
+            sectionIndex,
+            totalSections: sectionsToGenerate.length,
+            sectionTitle: spec.title,
+            itemsGenerated: section.items.length,
+            status: 'complete',
+          });
+
+          return section;
+        } catch (error) {
+          console.error(`❌ Failed to generate section "${spec.title}":`, error);
+          allWarnings.push(`Помилка генерації секції "${spec.title}": ${error instanceof Error ? error.message : 'Unknown'}`);
+
+          onProgress?.({
+            sectionIndex,
+            totalSections: sectionsToGenerate.length,
+            sectionTitle: spec.title,
+            itemsGenerated: 0,
+            status: 'error',
+          });
+          return null;
+        }
+      });
+
+      await Promise.all(batchPromises);
     }
+
+    // Зібрати всі успішні секції в правильному порядку
+    const allSections: EstimateSection[] = sectionResults.filter((s): s is EstimateSection => s !== null);
 
     // Збагатити всі секції цінами з Prozorro
     console.log(`\n💰 Enriching all sections with Prozorro prices...`);

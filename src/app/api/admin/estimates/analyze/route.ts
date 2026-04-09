@@ -14,9 +14,15 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
+// Будуємо endpoint з ACCOUNT_ID для уникнення дубльованої конфігурації
+const R2_ACCOUNT_ID_ANALYZE = process.env.R2_ACCOUNT_ID || '';
+const COMPUTED_ENDPOINT_ANALYZE = R2_ACCOUNT_ID_ANALYZE
+  ? `https://${R2_ACCOUNT_ID_ANALYZE}.r2.cloudflarestorage.com`
+  : process.env.R2_ENDPOINT;
+
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: process.env.R2_ENDPOINT,
+  endpoint: COMPUTED_ENDPOINT_ANALYZE,
   forcePathStyle: true, // Уникнути TLS помилки на R2
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',

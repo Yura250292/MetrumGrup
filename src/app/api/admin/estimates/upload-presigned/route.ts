@@ -3,9 +3,18 @@ import { auth } from '@/lib/auth';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+// 🆕 Будуємо endpoint з ACCOUNT_ID щоб не дублювати конфігурацію
+// (раніше була плутанина між R2_ENDPOINT та R2_ACCOUNT_ID)
+const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
+const COMPUTED_ENDPOINT = R2_ACCOUNT_ID
+  ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  : process.env.R2_ENDPOINT;
+
+console.log(`🔧 R2 Config: account=${R2_ACCOUNT_ID.slice(0, 8)}..., endpoint=${COMPUTED_ENDPOINT}`);
+
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: process.env.R2_ENDPOINT,
+  endpoint: COMPUTED_ENDPOINT,
   forcePathStyle: true, // Уникнути TLS помилки на R2
   credentials: {
     accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
