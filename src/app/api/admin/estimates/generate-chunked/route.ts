@@ -36,10 +36,23 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       const sendUpdate = (update: ChunkUpdate) => {
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(update)}\n\n`)
-        );
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(update)}\n\n`)
+          );
+        } catch (e) {
+          // Connection closed, ignore
+        }
       };
+
+      // 🆕 Heartbeat кожні 15 секунд щоб з'єднання не закрилось через idle timeout
+      const heartbeatInterval = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+        } catch (e) {
+          clearInterval(heartbeatInterval);
+        }
+      }, 15000);
 
       try {
         const formData = await request.formData();
@@ -691,6 +704,7 @@ export async function POST(request: NextRequest) {
           }
         });
 
+        clearInterval(heartbeatInterval);
         controller.close();
 
       } catch (error) {
@@ -700,6 +714,7 @@ export async function POST(request: NextRequest) {
           status: 'error',
           message: error instanceof Error ? error.message : "Невідома помилка",
         });
+        clearInterval(heartbeatInterval);
         controller.close();
       }
     },
@@ -708,8 +723,9 @@ export async function POST(request: NextRequest) {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-cache, no-transform", // no-transform щоб Vercel/CDN не буферизували
       "Connection": "keep-alive",
+      "X-Accel-Buffering": "no", // Вимкнути буферизацію проксі
     },
   });
 }

@@ -425,6 +425,7 @@ export class MasterEstimateAgent {
 
   /**
    * Генерувати одну секцію з повним контекстом
+   * З жорстким таймаутом 60 секунд
    */
   private async generateSection(
     spec: SectionSpec,
@@ -434,16 +435,30 @@ export class MasterEstimateAgent {
     const systemPrompt = this.getSectionSystemPrompt(spec);
     const userPrompt = this.buildSectionPrompt(spec, context, previousSections);
 
-    const completion = await this.openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1, // Низька для точності
-      max_tokens: 16000, // 16K на секцію = 40-80 позицій
-    });
+    // 🆕 Жорсткий таймаут 60s через AbortController
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn(`⏱️ Section "${spec.title}" timeout after 60s — aborting`);
+      abortController.abort();
+    }, 60000);
+
+    let completion;
+    try {
+      completion = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1, // Низька для точності
+        max_tokens: 8000, // Зменшено з 16K → 8K для швидшої генерації (~30-50 позицій)
+      }, {
+        signal: abortController.signal,
+      });
+    } finally {
+      clearTimeout(timeoutId);
+    }
 
     const responseText = completion.choices[0]?.message?.content || '{}';
     const parsed = JSON.parse(responseText);
