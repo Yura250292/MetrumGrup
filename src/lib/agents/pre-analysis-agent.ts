@@ -148,29 +148,30 @@ export class PreAnalysisAgent {
    * 1️⃣ Аналіз Wizard Data
    */
   private analyzeWizardData(wizardData: WizardData): PreAnalysisResult['wizardAnalysis'] {
-    const totalArea = parseFloat(wizardData.totalArea || '0');
+    const wd = wizardData as any;
+    const totalArea = parseFloat(wd.totalArea || '0');
 
     const keyParameters: Record<string, any> = {
-      objectType: wizardData.objectType,
+      objectType: wd.objectType,
       totalArea,
     };
 
     // Додаткові параметри залежно від типу об'єкта
-    if (wizardData.objectType === 'apartment') {
-      keyParameters.rooms = wizardData.apartmentData?.rooms;
-      keyParameters.floor = wizardData.apartmentData?.floor;
-      keyParameters.workScope = wizardData.apartmentData?.workScope;
-    } else if (wizardData.objectType === 'house') {
-      keyParameters.floors = wizardData.houseData?.floors;
-      keyParameters.foundationType = wizardData.houseData?.foundationType;
-      keyParameters.wallMaterial = wizardData.houseData?.wallMaterial;
-    } else if (wizardData.objectType === 'commercial') {
-      keyParameters.purpose = wizardData.commercialData?.purpose;
-      keyParameters.hvac = wizardData.commercialData?.hvac;
+    if (wd.objectType === 'apartment') {
+      keyParameters.rooms = wd.apartmentData?.rooms;
+      keyParameters.floor = wd.apartmentData?.floor;
+      keyParameters.workScope = wd.apartmentData?.workScope;
+    } else if (wd.objectType === 'house') {
+      keyParameters.floors = wd.houseData?.floors;
+      keyParameters.foundationType = wd.houseData?.foundationType;
+      keyParameters.wallMaterial = wd.houseData?.wallMaterial;
+    } else if (wd.objectType === 'commercial') {
+      keyParameters.purpose = wd.commercialData?.purpose;
+      keyParameters.hvac = wd.commercialData?.hvac;
     }
 
     return {
-      objectType: wizardData.objectType || 'unknown',
+      objectType: wd.objectType || 'unknown',
       totalArea,
       floors: keyParameters.floors || 1,
       constructionType: keyParameters.wallMaterial || keyParameters.foundationType,
@@ -511,7 +512,7 @@ export class PreAnalysisAgent {
       query += ` ${wizardData.totalArea}м²`;
     }
 
-    if (wizardData.objectType === 'commercial' && wizardData.commercialData?.purpose === 'shop') {
+    if (wizardData.objectType === 'commercial' && (wizardData as any).commercialData?.purpose === 'shop') {
       query = 'Магазин супермаркет';
     }
 
