@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -34,6 +35,7 @@ import { createFileBatches, calculateProgress, formatFileSize, type UploadProgre
 import { generateQuickSummary } from "@/lib/engineering-report";
 import { PROJECT_TEMPLATES } from "@/lib/constants";
 import { WizardData, ObjectType, WorkScope, RenovationStage } from "@/lib/wizard-types";
+import { ProzorroTenderSearch } from "@/components/admin/ProzorroTenderSearch";
 
 type EstimateItem = {
   description: string;
@@ -254,6 +256,24 @@ function EstimateWizardModal({
   setWizardStep: (step: number) => void;
   onComplete: () => void;
 }) {
+  // Автоматично прокручувати на початок сторінки коли модальне вікно відкривається
+  useEffect(() => {
+    if (isOpen) {
+      // Прокрутити на початок сторінки щоб модальне вікно було видиме
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Заблокувати прокручування body коли модальне вікно відкрите
+      document.body.style.overflow = 'hidden';
+    } else {
+      // Відновити прокручування body
+      document.body.style.overflow = '';
+    }
+
+    // Cleanup
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   // Calculate total steps based on object type and work scope
@@ -2688,6 +2708,9 @@ export default function AIEstimatePage() {
   const [wizardStep, setWizardStep] = useState(0);
   const [wizardCompleted, setWizardCompleted] = useState(false);
 
+  // Prozorro state
+  const [checkProzorro, setCheckProzorro] = useState(true);
+
   // Pre-analysis state
   const [showPreAnalysis, setShowPreAnalysis] = useState(false);
   const [preAnalysisData, setPreAnalysisData] = useState<any>(null);
@@ -4194,6 +4217,22 @@ export default function AIEstimatePage() {
             </div>
           )}
 
+          {/* Prozorro check */}
+          <div className="flex items-center gap-2 p-4 bg-accent/50 rounded-lg border border-border">
+            <Checkbox
+              id="prozorro-check"
+              checked={checkProzorro}
+              onCheckedChange={setCheckProzorro}
+            />
+            <label
+              htmlFor="prozorro-check"
+              className="text-sm cursor-pointer flex items-center gap-1.5"
+            >
+              🔍 Перевірити на Prozorro конкурентів після генерації
+              <span className="text-xs text-muted-foreground">(знайти схожі тендери)</span>
+            </label>
+          </div>
+
           {/* Generate button */}
           <div className="space-y-3">
             {/* MULTI-AGENT Generation (10 спеціалізованих агентів + RAG) */}
@@ -4452,6 +4491,15 @@ export default function AIEstimatePage() {
                 </div>
               </div>
             </Card>
+          )}
+
+          {/* Prozorro Tender Search */}
+          {checkProzorro && savedEstimateId && (
+            <ProzorroTenderSearch
+              estimateId={savedEstimateId}
+              wizardData={wizardData}
+              autoSearch={true}
+            />
           )}
 
           {/* Sections */}
