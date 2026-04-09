@@ -385,29 +385,136 @@ ${ragContext}
 
     // Wizard дані (пріоритетніші за автоматично витягнуті)
     if (context.wizardData) {
-      block += `ДАНІ З WIZARD (введені користувачем):\n`;
+      block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      block += `🎯 ДАНІ З WIZARD (ВВЕДЕНІ КОРИСТУВАЧЕМ - НАЙВИЩИЙ ПРІОРИТЕТ!)\n`;
+      block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
       // Конвертувати площу в число
       const areaRaw = context.wizardData.totalArea || context.wizardData.area;
       const area = areaRaw ? (typeof areaRaw === 'string' ? parseFloat(areaRaw) : areaRaw) : null;
 
       if (area && area > 0 && !isNaN(area)) {
-        block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        block += `🎯 ПЛОЩА ПРОЕКТУ: ${area.toLocaleString()} м²\n`;
-        block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        block += `🏗️ ПЛОЩА ПРОЕКТУ: ${area.toLocaleString()} м²\n`;
       } else {
         block += `⚠️ ПЛОЩА: НЕ ВКАЗАНА (${areaRaw})\n`;
       }
 
-      block += `- Поверхів: ${context.wizardData.floors || 'не вказано'}\n`;
-      block += `- Тип об'єкту: ${context.wizardData.buildingType || 'не вказано'}\n`;
-      if (context.wizardData.foundationType) {
-        block += `- Тип фундаменту: ${context.wizardData.foundationType}\n`;
+      block += `📊 Тип об'єкту: ${context.wizardData.objectType || context.wizardData.buildingType || 'не вказано'}\n`;
+      block += `📐 Поверхів: ${context.wizardData.floors || 'не вказано'}\n`;
+      block += `📏 Висота стелі: ${context.wizardData.ceilingHeight || 'не вказано'}\n`;
+      block += `🔨 Обсяг робіт: ${context.wizardData.workScope || 'не вказано'}\n\n`;
+
+      // Демонтаж
+      const needsDemolition =
+        context.wizardData.houseData?.demolitionRequired ||
+        context.wizardData.townhouseData?.demolitionRequired ||
+        context.wizardData.commercialData?.demolitionRequired ||
+        context.wizardData.renovationData?.workRequired?.demolition ||
+        context.wizardData.workScope === 'reconstruction';
+
+      if (needsDemolition) {
+        block += `🔨 ДЕМОНТАЖ: ПОТРІБЕН\n`;
+        const demolitionDesc =
+          context.wizardData.houseData?.demolitionDescription ||
+          context.wizardData.townhouseData?.demolitionDescription ||
+          context.wizardData.commercialData?.demolitionDescription;
+        if (demolitionDesc) {
+          block += `   Опис: ${demolitionDesc}\n`;
+        }
+      } else {
+        block += `✅ ДЕМОНТАЖ: НЕ ПОТРІБЕН (нова будівля з нуля)\n`;
       }
-      if (context.wizardData.wallMaterial) {
-        block += `- Матеріал стін: ${context.wizardData.wallMaterial}\n`;
-      }
+
       block += `\n`;
+
+      // Стіни (для будинків)
+      if (context.wizardData.houseData?.walls) {
+        block += `🧱 СТІНИ:\n`;
+        block += `   Матеріал: ${context.wizardData.houseData.walls.material}\n`;
+        block += `   Товщина: ${context.wizardData.houseData.walls.thickness} мм\n`;
+        if (context.wizardData.houseData.walls.insulation) {
+          block += `   Утеплення: ${context.wizardData.houseData.walls.insulationType}, ${context.wizardData.houseData.walls.insulationThickness} мм\n`;
+        }
+        block += `\n`;
+      } else if (context.wizardData.wallMaterial) {
+        block += `🧱 Матеріал стін: ${context.wizardData.wallMaterial}\n\n`;
+      }
+
+      // Покрівля (для будинків)
+      if (context.wizardData.houseData?.roof) {
+        block += `🏠 ПОКРІВЛЯ:\n`;
+        block += `   Тип: ${context.wizardData.houseData.roof.type}\n`;
+        block += `   Матеріал: ${context.wizardData.houseData.roof.material}\n`;
+        if (context.wizardData.houseData.roof.pitchAngle) {
+          block += `   Кут нахилу: ${context.wizardData.houseData.roof.pitchAngle}°\n`;
+        }
+        if (context.wizardData.houseData.roof.insulation) {
+          block += `   Утеплення: ${context.wizardData.houseData.roof.insulationThickness} мм\n`;
+        }
+        block += `\n`;
+      }
+
+      // Фундамент (для будинків)
+      if (context.wizardData.houseData?.foundation) {
+        block += `🏗️ ФУНДАМЕНТ:\n`;
+        block += `   Тип: ${context.wizardData.houseData.foundation.type}\n`;
+        block += `   Глибина: ${context.wizardData.houseData.foundation.depth} м\n`;
+        block += `   Армування: ${context.wizardData.houseData.foundation.reinforcement}\n`;
+        if (context.wizardData.houseData.foundation.waterproofing) {
+          block += `   Гідроізоляція: ТАК\n`;
+        }
+        block += `\n`;
+      } else if (context.wizardData.foundationType) {
+        block += `🏗️ Тип фундаменту: ${context.wizardData.foundationType}\n\n`;
+      }
+
+      // Ґрунт та місцевість
+      if (context.wizardData.houseData?.terrain) {
+        block += `🌍 МІСЦЕВІСТЬ:\n`;
+        block += `   Тип ґрунту: ${context.wizardData.houseData.terrain.soilType}\n`;
+        block += `   Ґрунтові води: ${context.wizardData.houseData.terrain.groundwaterDepth}\n`;
+        block += `   Нахил: ${context.wizardData.houseData.terrain.slope}\n`;
+        if (context.wizardData.houseData.terrain.needsDrainage) {
+          block += `   ⚠️ Потрібен дренаж\n`;
+        }
+        block += `\n`;
+      }
+
+      // Комерційна нерухомість
+      if (context.wizardData.commercialData) {
+        block += `🏬 КОМЕРЦІЙНА НЕРУХОМІСТЬ:\n`;
+        block += `   Призначення: ${context.wizardData.commercialData.purpose}\n`;
+        if (context.wizardData.commercialData.currentState) {
+          block += `   Стан: ${context.wizardData.commercialData.currentState}\n`;
+        }
+        if (context.wizardData.commercialData.floor) {
+          block += `   Підлога: ${context.wizardData.commercialData.floor.type}, покриття: ${context.wizardData.commercialData.floor.coating}\n`;
+        }
+        block += `\n`;
+      }
+
+      // Інженерні системи
+      if (context.wizardData.utilities) {
+        block += `⚡ ІНЖЕНЕРНІ СИСТЕМИ:\n`;
+        if (context.wizardData.utilities.electrical) {
+          block += `   Електрика: ${context.wizardData.utilities.electrical.power}, ${context.wizardData.utilities.electrical.capacity || '?'} кВт\n`;
+        }
+        if (context.wizardData.utilities.heating) {
+          block += `   Опалення: ${context.wizardData.utilities.heating.type}\n`;
+        }
+        if (context.wizardData.utilities.water) {
+          block += `   Вода: ${context.wizardData.utilities.water.source}\n`;
+        }
+        block += `\n`;
+      }
+
+      block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      block += `🚨 КРИТИЧНО ВАЖЛИВО:\n`;
+      block += `• ВИКОРИСТОВУЙ ТІЛЬКИ ТІ МАТЕРІАЛИ ЩО ВКАЗАНІ ВИЩЕ!\n`;
+      block += `• НЕ ВИГАДУЙ СВОЇХ МАТЕРІАЛІВ (газоблок, цегла тощо) ЯКЩО ЇХ НЕМАЄ У WIZARD!\n`;
+      block += `• ЯКЩО ДЕМОНТАЖ НЕ ПОТРІБЕН - НЕ ДОДАВАЙ ЖОДНОЇ ПОЗИЦІЇ ДЕМОНТАЖУ!\n`;
+      block += `• ДОТРИМУЙСЯ ВКАЗАНОЇ ПЛОЩІ: ${area ? area.toLocaleString() + ' м²' : 'НЕ ВКАЗАНА'}!\n`;
+      block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
     }
 
     // Документи

@@ -67,11 +67,14 @@ export class EstimateOrchestrator {
     this.mode = config.mode;
     this.config = config;
 
+    // Перевіряємо чи потрібен демонтаж
+    const needsDemolition = this.checkIfDemolitionNeeded(config.wizardData);
+
     // Ініціалізація агентів залежно від режиму
     if (config.mode === 'multi-agent') {
       // MULTI-AGENT: Всі 10 спеціалізованих агентів (Gemini + OpenAI)
       this.agents = [
-        new DemolitionAgent(),      // Gemini
+        ...(needsDemolition ? [new DemolitionAgent()] : []),  // ✅ Тільки якщо потрібен демонтаж
         new EarthworksAgent(),      // Gemini
         new FoundationAgent(),      // OpenAI
         new WallsAgent(),           // OpenAI
@@ -94,7 +97,7 @@ export class EstimateOrchestrator {
     } else {
       // GEMINI ONLY: Тільки Gemini агенти (5 шт)
       this.agents = [
-        new DemolitionAgent(),
+        ...(needsDemolition ? [new DemolitionAgent()] : []),  // ✅ Тільки якщо потрібен демонтаж
         new EarthworksAgent(),
         new RoofingAgent(),
         new HvacAgent(),
@@ -102,7 +105,55 @@ export class EstimateOrchestrator {
       ];
     }
 
-    console.log(`🤖 Orchestrator initialized with ${this.agents.length} agents in ${config.mode} mode`);
+    console.log(`🤖 Orchestrator initialized with ${this.agents.length} agents in ${config.mode} mode ${needsDemolition ? '(з демонтажем)' : '(БЕЗ демонтажу)'}`);
+  }
+
+  /**
+   * Перевіряє чи потрібен демонтаж на основі wizard data
+   */
+  private checkIfDemolitionNeeded(wizardData: any): boolean {
+    if (!wizardData) return false;
+
+    // Для будинку/котеджу
+    if (wizardData.houseData?.demolitionRequired === true) {
+      console.log('✅ Демонтаж потрібен: houseData.demolitionRequired = true');
+      return true;
+    }
+
+    // Для таунхаусу
+    if (wizardData.townhouseData?.demolitionRequired === true) {
+      console.log('✅ Демонтаж потрібен: townhouseData.demolitionRequired = true');
+      return true;
+    }
+
+    // Для комерційної нерухомості
+    if (wizardData.commercialData?.demolitionRequired === true) {
+      console.log('✅ Демонтаж потрібен: commercialData.demolitionRequired = true');
+      return true;
+    }
+
+    // Для реконструкції - завжди потрібен демонтаж
+    if (wizardData.workScope === 'reconstruction') {
+      console.log('✅ Демонтаж потрібен: workScope = reconstruction');
+      return true;
+    }
+
+    // Для існуючої будівлі
+    if (wizardData.houseData?.currentState === 'existing_building' ||
+        wizardData.townhouseData?.currentState === 'existing_building' ||
+        wizardData.commercialData?.currentState === 'existing_building') {
+      console.log('✅ Демонтаж потрібен: currentState = existing_building');
+      return true;
+    }
+
+    // Для ремонту квартири/офісу - якщо є demolition в workRequired
+    if (wizardData.renovationData?.workRequired?.demolition === true) {
+      console.log('✅ Демонтаж потрібен: renovationData.workRequired.demolition = true');
+      return true;
+    }
+
+    console.log('❌ Демонтаж НЕ потрібен (нова будівля без демонтажу)');
+    return false;
   }
 
   /**
@@ -201,6 +252,10 @@ export class EstimateOrchestrator {
       progress: 92,
     });
 
+    // 💾 Зберегти оригінальну ціну ДО масштабування
+    const originalTotal = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
+    let scalingInfo: { scaled: boolean; factor: number; originalTotal: number; reason?: string } | undefined;
+
     const priceValidation = validateTotalCost(sections, this.config.wizardData);
 
     if (!priceValidation.isValid) {
@@ -214,11 +269,22 @@ export class EstimateOrchestrator {
       if (scalingResult.scaled) {
         sections = scalingResult.sections;
 
+        // 📊 Зберегти інформацію про масштабування
+        const scaledTotal = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
+        scalingInfo = {
+          scaled: true,
+          factor: scalingResult.factor,
+          originalTotal: originalTotal,
+          reason: priceValidation.warnings.join('; ')
+        };
+
         validationIssues.push({
           severity: 'warning',
           agent: 'PriceValidator',
           message: `Ціни були автоматично скореговані (коефіцієнт ${scalingResult.factor.toFixed(2)}x) для відповідності ринковим реаліям`
         });
+
+        console.log(`📊 Масштабування: ${originalTotal.toLocaleString()} ₴ → ${scaledTotal.toLocaleString()} ₴`);
 
         onProgress({
           phase: 'price-validation',
@@ -299,6 +365,7 @@ export class EstimateOrchestrator {
       },
       validationIssues: validationIssues.length > 0 ? validationIssues : undefined,
       analysisSummary,
+      scalingInfo, // 📊 Інформація про масштабування цін
     };
   }
 
