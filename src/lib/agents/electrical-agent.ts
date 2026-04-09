@@ -98,7 +98,9 @@ export class ElectricalAgent extends BaseAgent {
   async generate(context: AgentContext): Promise<AgentOutput> {
     console.log(`⚡ ElectricalAgent: Starting generation...`);
 
-    const prompt = await this.buildPrompt(context);
+    // 🆕 Hybrid: deterministic quantities first
+    const engineItems = this.runEngine('electrical', context);
+    const prompt = await this.buildPrompt(context, engineItems);
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -111,6 +113,9 @@ export class ElectricalAgent extends BaseAgent {
 
       const responseText = completion.choices[0]?.message?.content || '{}';
       let output: AgentOutput = JSON.parse(responseText);
+
+      // 🆕 Merge engine items with LLM output (engine wins on quantities)
+      output = this.mergeWithEngine(engineItems, output);
 
       // Перевірити та оновити ціни через Google Search
       console.log(`⚡ ElectricalAgent: Checking prices...`);

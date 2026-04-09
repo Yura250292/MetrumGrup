@@ -8,6 +8,9 @@ import { searchMaterialPrice, searchLaborCost } from '../price-search';
 import { ragSearch, getExtractedProjectData, isProjectVectorized } from '../rag/vectorizer';
 import { findSimilarPrices, getRecommendedPrice, type PriceReference } from '../prozorro-price-reference';
 import type { ProjectFacts } from '../project-facts/types';
+import type { EngineCategory, EngineItem } from '../quantity-engine/types';
+import { formatEngineItemsForPrompt, runQuantityEngine } from '../quantity-engine';
+import { mergeEngineAndLlm } from '../quantity-engine/merge';
 
 export interface AgentConfig {
   name: string;
@@ -72,6 +75,52 @@ export abstract class BaseAgent {
    * Головний метод генерації секції кошторису
    */
   abstract generate(context: AgentContext): Promise<AgentOutput>;
+
+  /**
+   * Запустити quantity engine для категорії агента.
+   * Повертає список детермінованих позицій або порожній масив, якщо
+   * `projectFacts` недоступні чи engine впав.
+   */
+  protected runEngine(
+    category: EngineCategory | null,
+    context: AgentContext
+  ): EngineItem[] {
+    if (!category || !context.projectFacts || !context.wizardData) return [];
+    try {
+      const result = runQuantityEngine(category, {
+        facts: context.projectFacts,
+        wizardData: context.wizardData,
+      });
+      if (result.items.length > 0) {
+        console.log(
+          `🔧 [${this.config.name}] Quantity engine produced ${result.items.length} items for ${category}`
+        );
+      }
+      return result.items;
+    } catch (e) {
+      console.warn(`⚠️ [${this.config.name}] Quantity engine failed:`, e);
+      return [];
+    }
+  }
+
+  /**
+   * Об'єднати детерміновані позиції від engine з відповіддю LLM.
+   * Engine items зберігаються 1:1 (quantity/unit/description), LLM лише
+   * додає net-new позиції та постачає ціни.
+   */
+  protected mergeWithEngine(
+    engineItems: EngineItem[],
+    output: AgentOutput
+  ): AgentOutput {
+    if (engineItems.length === 0) return output;
+    const mergedItems = mergeEngineAndLlm(engineItems, output.items);
+    const newTotal = mergedItems.reduce((s, i) => s + (i.totalCost ?? 0), 0);
+    return {
+      ...output,
+      items: mergedItems,
+      totalCost: newTotal,
+    };
+  }
 
   /**
    * Пошук актуальної ціни через Google Search
@@ -344,9 +393,15 @@ ${buildingType === 'commercial'
   }
 
   /**
-   * Побудувати промпт для AI моделі
+   * Побудувати промпт для AI моделі.
+   *
+   * Якщо передано `engineItems` — додасться блок з детермінованими позиціями
+   * від quantity engine, які LLM зобов'язана зберегти і лише довстановити ціни.
    */
-  protected async buildPrompt(context: AgentContext): Promise<string> {
+  protected async buildPrompt(
+    context: AgentContext,
+    engineItems?: EngineItem[]
+  ): Promise<string> {
     // Отримати RAG контекст (якщо проект векторизований)
     const ragContext = await this.getRagContext(context);
 
@@ -355,6 +410,11 @@ ${buildingType === 'commercial'
 
     // Отримати контекст про реальні ціни
     const priceContext = this.getPriceContext(context);
+
+    // Quantity engine block (опціонально)
+    const engineBlock = engineItems && engineItems.length > 0
+      ? formatEngineItemsForPrompt(engineItems)
+      : '';
 
     return `${this.config.systemPrompt}
 ${priceContext}
@@ -371,7 +431,7 @@ ${this.formatWorkItemsDatabase()}
 ${this.getPreviousSectionsContext(context)}
 
 ${ragContext}
-
+${engineBlock}
 ІНСТРУКЦІЇ:
 1. Використовуй ТІЛЬКИ матеріали з бази або які можна знайти через пошук
 2. Вказуй реалістичні ціни відповідно до бази

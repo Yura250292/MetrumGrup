@@ -78,7 +78,8 @@ export class WallsAgent extends BaseAgent {
   async generate(context: AgentContext): Promise<AgentOutput> {
     console.log(`🧱 WallsAgent: Starting generation...`);
 
-    const prompt = await this.buildPrompt(context);
+    const engineItems = this.runEngine('walls', context);
+    const prompt = await this.buildPrompt(context, engineItems);
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -92,6 +93,7 @@ export class WallsAgent extends BaseAgent {
       const responseText = completion.choices[0]?.message?.content || '{}';
       let output: AgentOutput = JSON.parse(responseText);
 
+      output = this.mergeWithEngine(engineItems, output);
       output = await this.enrichWithPrices(output);
 
       const validationErrors = this.validateOutput(output);

@@ -79,7 +79,8 @@ export class PlumbingAgent extends BaseAgent {
   async generate(context: AgentContext): Promise<AgentOutput> {
     console.log(`🚰 PlumbingAgent: Starting generation...`);
 
-    const prompt = await this.buildPrompt(context);
+    const engineItems = this.runEngine('plumbing', context);
+    const prompt = await this.buildPrompt(context, engineItems);
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -93,6 +94,7 @@ export class PlumbingAgent extends BaseAgent {
       const responseText = completion.choices[0]?.message?.content || '{}';
       let output: AgentOutput = JSON.parse(responseText);
 
+      output = this.mergeWithEngine(engineItems, output);
       output = await this.enrichWithPrices(output);
 
       const validationErrors = this.validateOutput(output);

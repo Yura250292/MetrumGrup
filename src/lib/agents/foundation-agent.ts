@@ -81,7 +81,8 @@ export class FoundationAgent extends BaseAgent {
   async generate(context: AgentContext): Promise<AgentOutput> {
     console.log(`🏗️  FoundationAgent: Starting generation...`);
 
-    const prompt = await this.buildPrompt(context);
+    const engineItems = this.runEngine('foundation', context);
+    const prompt = await this.buildPrompt(context, engineItems);
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -94,6 +95,8 @@ export class FoundationAgent extends BaseAgent {
 
       const responseText = completion.choices[0]?.message?.content || '{}';
       let output: AgentOutput = JSON.parse(responseText);
+
+      output = this.mergeWithEngine(engineItems, output);
 
       // Перевірити та оновити ціни через Google Search
       console.log(`🏗️  FoundationAgent: Checking prices...`);
