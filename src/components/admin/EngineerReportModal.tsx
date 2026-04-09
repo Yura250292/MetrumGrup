@@ -11,6 +11,10 @@ export interface ProzorroProjectInfo {
   budget: number;
   similarity: number;
   itemsCount: number;
+  tenderID?: string;
+  procuringEntity?: string;
+  datePublished?: string;
+  status?: string;
 }
 
 export interface ProzorroAnalysisData {
@@ -171,7 +175,7 @@ export function EngineerReportModal({
                   {prozorroData!.topSimilarProjects && prozorroData!.topSimilarProjects.length > 0 && (
                     <Card className="p-5">
                       <h4 className="font-semibold text-base mb-4 flex items-center gap-2">
-                        🔝 Топ схожих тендерів
+                        🔝 Топ схожих тендерів ({prozorroData!.topSimilarProjects.length})
                       </h4>
                       <div className="space-y-3">
                         {prozorroData!.topSimilarProjects.map((project, idx) => (
@@ -187,13 +191,36 @@ export function EngineerReportModal({
                                 {Math.round(project.similarity)}% схожість
                               </Badge>
                             </div>
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            {project.procuringEntity && (
+                              <p className="text-xs text-muted-foreground mb-2">
+                                🏢 {project.procuringEntity}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
                               <span className="flex items-center gap-1">
                                 💰 <strong className="text-foreground">{formatCurrency(project.budget)}</strong>
                               </span>
-                              <span className="flex items-center gap-1">
-                                📋 <strong className="text-foreground">{project.itemsCount}</strong> позицій
-                              </span>
+                              {project.itemsCount > 0 && (
+                                <span className="flex items-center gap-1">
+                                  📋 <strong className="text-foreground">{project.itemsCount}</strong> позицій
+                                </span>
+                              )}
+                              {project.datePublished && (
+                                <span className="flex items-center gap-1">
+                                  📅 {new Date(project.datePublished).toLocaleDateString('uk-UA')}
+                                </span>
+                              )}
+                              {project.tenderID && (
+                                <a
+                                  href={`https://prozorro.gov.ua/tender/${project.tenderID}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-1 text-blue-600 hover:underline"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                  Відкрити на Prozorro
+                                </a>
+                              )}
                             </div>
                           </div>
                         ))}
