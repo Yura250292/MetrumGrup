@@ -3589,122 +3589,126 @@ export default function AIEstimatePage() {
       }
 
       let collectedSections: any[] = [];
+      let buffer = ''; // 🆕 Буфер для збору неповних SSE messages
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value);
-        const lines = text.split('\n');
+        // Додаємо новий chunk до буфера
+        buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            try {
-              const update = JSON.parse(data);
-              console.log('📡 Chunked update:', update);
+        // Розбиваємо на повні events (роздільник: \n\n)
+        const events = buffer.split('\n\n');
+        // Останній елемент може бути неповним — залишаємо в буфері
+        buffer = events.pop() || '';
 
-              setChunkedProgress(update);
+        for (const event of events) {
+          // Пропускаємо heartbeat (рядки що починаються з ':')
+          if (event.startsWith(':')) continue;
 
-              // Store completed sections
-              if (update.data?.section) {
-                collectedSections.push(update.data.section);
-                setChunkedSections(collectedSections);
-              }
+          // Знаходимо лінію data: усередині event
+          const dataLine = event.split('\n').find(line => line.startsWith('data: '));
+          if (!dataLine) continue;
 
-              // Final complete
-              if (update.phase === 'final' && update.status === 'complete') {
-                console.log('✅ Chunked generation complete!', update.data);
+          const data = dataLine.slice(6);
+          try {
+            const update = JSON.parse(data);
+            console.log('📡 Chunked update:', update);
 
-                // 📊 Зберегти інфо про масштабування якщо є
-                if (update.data?.scalingInfo) {
-                  setScalingInfo(update.data.scalingInfo);
-                  console.log('📊 Scaling info:', update.data.scalingInfo);
-                }
+            setChunkedProgress(update);
 
-                // 🔧 FIX: 3-tier fallback strategy for sections
-                let finalSections: any[] = [];
-
-                if (update.data?.sections && update.data.sections.length > 0) {
-                  // ✅ Primary: Use sections from final update (multi-agent mode with database data)
-                  finalSections = update.data.sections;
-                  console.log(`📦 Using ${finalSections.length} sections from final update`);
-                } else if (collectedSections.length > 0) {
-                  // ✅ Fallback 1: Use incrementally collected sections (old mode compatibility)
-                  finalSections = collectedSections.map((section) => ({
-                    title: section.title,
-                    items: section.items.map((item: any) => ({
-                      description: item.description,
-                      unit: item.unit,
-                      quantity: item.quantity,
-                      unitPrice: item.unitPrice,
-                      laborCost: item.laborCost || 0,
-                      totalCost: item.totalCost,
-                      priceSource: null,
-                      priceNote: null
-                    })),
-                    sectionTotal: section.items.reduce((sum: number, item: any) => sum + item.totalCost, 0)
-                  }));
-                  console.log(`📦 Using ${collectedSections.length} incrementally collected sections`);
-                } else {
-                  // ⚠️ Fallback 2: Fetch from database if nothing available
-                  console.warn('⚠️ No sections available, fetching from database...');
-                  try {
-                    const res = await fetch(`/api/admin/estimates/${update.data.estimateId}`);
-                    if (res.ok) {
-                      const { data } = await res.json();
-                      finalSections = data.sections.map((section: any) => ({
-                        title: section.title,
-                        items: section.items.map((item: any) => ({
-                          description: item.description,
-                          unit: item.unit,
-                          quantity: Number(item.quantity),
-                          unitPrice: Number(item.unitPrice),
-                          laborCost: Number(item.laborRate) * Number(item.laborHours),
-                          totalCost: Number(item.amount),
-                          priceSource: null,
-                          priceNote: null
-                        })),
-                        sectionTotal: Number(section.totalAmount)
-                      }));
-                      console.log(`📦 Fetched ${finalSections.length} sections from database`);
-                    }
-                  } catch (err) {
-                    console.error('❌ Failed to fetch from database:', err);
-                  }
-                }
-
-                // Build final estimate from collected/fetched sections
-                const finalEstimate: EstimateData = {
-                  title: `Кошторис ${update.data.estimateNumber || ''}`,
-                  description: "Згенеровано Master Agent (всі секції одночасно)",
-                  sections: finalSections,
-                  // 🆕 Звіт інженера та аналіз Prozorro з бекенду
-                  ...(update.data.analysisSummary && { analysisSummary: update.data.analysisSummary }),
-                  ...(update.data.prozorroAnalysis && { prozorroAnalysis: update.data.prozorroAnalysis }),
-                  ...(update.data.scalingInfo && { scalingInfo: update.data.scalingInfo }),
-                } as EstimateData;
-
-                // 🔧 FIX: Розрахувати summary (materialsCost, laborCost, totalBeforeDiscount)
-                recalculateSummary(finalEstimate);
-
-                setEstimate(finalEstimate);
-                setIsChunkedGenerating(false);
-
-                // Show success message with statistics
-                const totalItems = finalEstimate.sections.reduce((sum, s) => sum + s.items.length, 0);
-                console.log(`🎉 Estimate created: ID ${update.data.estimateId}`);
-                console.log(`📊 Final stats: ${finalEstimate.sections.length} sections, ${totalItems} items`);
-              }
-
-              // Handle error
-              if (update.status === 'error') {
-                setError(update.message || 'Помилка генерації');
-                setIsChunkedGenerating(false);
-              }
-            } catch (e) {
-              console.error('Failed to parse update:', e);
+            // Store completed sections
+            if (update.data?.section) {
+              collectedSections.push(update.data.section);
+              setChunkedSections(collectedSections);
             }
+
+            // Final complete
+            if (update.phase === 'final' && update.status === 'complete') {
+              console.log('✅ Chunked generation complete!', update.data);
+
+              // 📊 Зберегти інфо про масштабування якщо є
+              if (update.data?.scalingInfo) {
+                setScalingInfo(update.data.scalingInfo);
+                console.log('📊 Scaling info:', update.data.scalingInfo);
+              }
+
+              // 3-tier fallback strategy for sections
+              let finalSections: any[] = [];
+
+              if (update.data?.sections && update.data.sections.length > 0) {
+                finalSections = update.data.sections;
+                console.log(`📦 Using ${finalSections.length} sections from final update`);
+              } else if (collectedSections.length > 0) {
+                finalSections = collectedSections.map((section) => ({
+                  title: section.title,
+                  items: section.items.map((item: any) => ({
+                    description: item.description,
+                    unit: item.unit,
+                    quantity: item.quantity,
+                    unitPrice: item.unitPrice,
+                    laborCost: item.laborCost || 0,
+                    totalCost: item.totalCost,
+                    priceSource: null,
+                    priceNote: null
+                  })),
+                  sectionTotal: section.items.reduce((sum: number, item: any) => sum + item.totalCost, 0)
+                }));
+                console.log(`📦 Using ${collectedSections.length} incrementally collected sections`);
+              } else {
+                console.warn('⚠️ No sections available, fetching from database...');
+                try {
+                  const res = await fetch(`/api/admin/estimates/${update.data.estimateId}`);
+                  if (res.ok) {
+                    const { data } = await res.json();
+                    finalSections = data.sections.map((section: any) => ({
+                      title: section.title,
+                      items: section.items.map((item: any) => ({
+                        description: item.description,
+                        unit: item.unit,
+                        quantity: Number(item.quantity),
+                        unitPrice: Number(item.unitPrice),
+                        laborCost: Number(item.laborRate) * Number(item.laborHours),
+                        totalCost: Number(item.amount),
+                        priceSource: null,
+                        priceNote: null
+                      })),
+                      sectionTotal: Number(section.totalAmount)
+                    }));
+                    console.log(`📦 Fetched ${finalSections.length} sections from database`);
+                  }
+                } catch (err) {
+                  console.error('❌ Failed to fetch from database:', err);
+                }
+              }
+
+              // Build final estimate
+              const finalEstimate: EstimateData = {
+                title: `Кошторис ${update.data.estimateNumber || ''}`,
+                description: "Згенеровано Master Agent (всі секції одночасно)",
+                sections: finalSections,
+                ...(update.data.analysisSummary && { analysisSummary: update.data.analysisSummary }),
+                ...(update.data.prozorroAnalysis && { prozorroAnalysis: update.data.prozorroAnalysis }),
+                ...(update.data.scalingInfo && { scalingInfo: update.data.scalingInfo }),
+              } as EstimateData;
+
+              recalculateSummary(finalEstimate);
+              setEstimate(finalEstimate);
+              setIsChunkedGenerating(false);
+
+              const totalItems = finalEstimate.sections.reduce((sum, s) => sum + s.items.length, 0);
+              console.log(`🎉 Estimate created: ID ${update.data.estimateId}`);
+              console.log(`📊 Final stats: ${finalEstimate.sections.length} sections, ${totalItems} items`);
+            }
+
+            // Handle error
+            if (update.status === 'error') {
+              setError(update.message || 'Помилка генерації');
+              setIsChunkedGenerating(false);
+            }
+          } catch (e) {
+            console.error('Failed to parse update:', e, 'data:', data.slice(0, 200));
           }
         }
       }
