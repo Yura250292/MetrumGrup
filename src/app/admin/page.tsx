@@ -2,6 +2,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { CompactStatsCard } from "@/components/dashboard/CompactStatsCard";
+import { RecentlyCompletedWidget } from "@/components/dashboard/RecentlyCompletedWidget";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from "@/lib/constants";
@@ -155,6 +156,9 @@ export default async function AdminDashboardPage() {
             )}
           </div>
         </div>
+
+        {/* Recently Completed Widget */}
+        <RecentlyCompletedWidget />
 
         {/* Overdue Payments */}
         {overduePayments.length > 0 && (

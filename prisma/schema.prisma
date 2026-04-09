@@ -34,6 +34,10 @@ model User {
   estimateVersions   EstimateVersion[]
   approvalSteps      EstimateApprovalStep[]
   criticalChanges    EstimateCriticalChange[]
+  chatMessages       ChatMessage[]
+  chatParticipations ConversationParticipant[]
+  authoredComments   Comment[]              @relation("CommentAuthor")
+  reactions          Reaction[]
 
   @@map("users")
 }
@@ -68,6 +72,7 @@ model Project {
   stages            ProjectStageRecord[]
   client            User                   @relation("ClientProjects", fields: [clientId], references: [id])
   manager           User?                  @relation("ManagerProjects", fields: [managerId], references: [id])
+  conversation      Conversation?
 
   @@map("projects")
 }
@@ -152,6 +157,7 @@ model Estimate {
   financeReviewedBy     User?             @relation("FinanceReviews", fields: [financeReviewedById], references: [id])
   project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   similarTenders        EstimateTenderMatch[]
+  conversation          Conversation?
 
   @@map("estimates")
 }
@@ -705,6 +711,101 @@ model ProzorroEstimateItem {
   @@index([category])
   @@index([description]) // Для пошуку схожих позицій
   @@map("prozorro_estimate_items")
+}
+
+model Conversation {
+  id            String                    @id @default(cuid())
+  type          ConversationType
+  projectId     String?                   @unique
+  estimateId    String?                   @unique
+  dmKey         String?                   @unique
+  title         String?
+  lastMessageAt DateTime?
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
+  project       Project?                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  estimate      Estimate?                 @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  participants  ConversationParticipant[]
+  messages      ChatMessage[]
+
+  @@index([lastMessageAt])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model ChatMessage {
+  id             String       @id @default(cuid())
+  conversationId String
+  authorId       String
+  body           String       @db.Text
+  createdAt      DateTime     @default(now())
+  editedAt       DateTime?
+  deletedAt      DateTime?
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author         User         @relation(fields: [authorId], references: [id])
+  reactions      Reaction[]
+
+  @@index([conversationId, createdAt])
+  @@map("chat_messages")
+}
+
+model Comment {
+  id         String            @id @default(cuid())
+  entityType CommentEntityType
+  entityId   String
+  authorId   String
+  body       String            @db.Text
+  createdAt  DateTime          @default(now())
+  editedAt   DateTime?
+  deletedAt  DateTime?
+  author     User              @relation("CommentAuthor", fields: [authorId], references: [id])
+  reactions  Reaction[]
+
+  @@index([entityType, entityId, createdAt])
+  @@index([authorId])
+  @@map("comments")
+}
+
+model Reaction {
+  id        String       @id @default(cuid())
+  commentId String?
+  messageId String?
+  userId    String
+  emoji     String
+  createdAt DateTime     @default(now())
+  comment   Comment?     @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  message   ChatMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User         @relation(fields: [userId], references: [id])
+
+  @@unique([commentId, userId, emoji], name: "uniq_comment_reaction")
+  @@unique([messageId, userId, emoji], name: "uniq_message_reaction")
+  @@index([commentId])
+  @@index([messageId])
+  @@map("reactions")
+}
+
+enum CommentEntityType {
+  ESTIMATE
+  PROJECT
+}
+
+enum ConversationType {
+  DM
+  PROJECT
+  ESTIMATE
 }
 
 enum Role {

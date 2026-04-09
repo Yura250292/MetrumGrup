@@ -21,7 +21,10 @@ import {
   ChevronLeft,
   Menu,
   Table,
+  MessageSquare,
+  Activity,
 } from "lucide-react";
+import { useUnreadChatCount } from "@/hooks/useChat";
 
 type NavItem = {
   href: string;
@@ -29,6 +32,7 @@ type NavItem = {
   icon: typeof LayoutDashboard;
   exact?: boolean;
   superAdminOnly?: boolean;
+  showUnreadBadge?: boolean;
 };
 
 type NavGroup = {
@@ -46,6 +50,8 @@ const navGroups: NavGroup[] = [
       { href: "/admin/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin/clients", label: "Клієнти", icon: Users },
+      { href: "/admin/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
+      { href: "/admin/feed", label: "Стрічка", icon: Activity },
     ],
   },
   {
@@ -87,6 +93,7 @@ export function AdminSidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
+  const unreadChatCount = useUnreadChatCount();
 
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
 
@@ -190,13 +197,14 @@ export function AdminSidebar() {
                       ? pathname === item.href
                       : pathname.startsWith(item.href);
 
+                    const badge = item.showUnreadBadge ? unreadChatCount : 0;
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
                         title={collapsed ? item.label : undefined}
                         className={cn(
-                          "flex items-center gap-3 rounded-xl px-3 py-3 text-[16px] transition-all duration-200",
+                          "relative flex items-center gap-3 rounded-xl px-3 py-3 text-[16px] transition-all duration-200",
                           isActive
                             ? `${theme.active} ${theme.text} font-semibold admin-light:!text-gray-900`
                             : "admin-dark:text-gray-300 admin-light:text-gray-700 hover:admin-dark:text-white hover:admin-light:text-gray-900",
@@ -208,7 +216,17 @@ export function AdminSidebar() {
                           "h-5 w-5 flex-shrink-0",
                           isActive ? theme.icon : ""
                         )} />
-                        {!collapsed && <span className="font-medium">{item.label}</span>}
+                        {!collapsed && <span className="font-medium flex-1">{item.label}</span>}
+                        {badge > 0 && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold",
+                              collapsed && "absolute top-1 right-1 min-w-[16px] h-4 text-[10px]"
+                            )}
+                          >
+                            {badge > 99 ? "99+" : badge}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

@@ -14,6 +14,8 @@ import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
 import { EstimateHistoryTimeline } from "@/components/admin/EstimateHistoryTimeline";
 import { ApprovalSignatureCard } from "@/components/admin/ApprovalSignatureCard";
 import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
+import { OpenEstimateChatButton } from "@/components/chat/OpenEstimateChatButton";
+import { CommentThread } from "@/components/collab/CommentThread";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -101,7 +103,7 @@ export default function EstimateDetailPage({
   const [applyingFinance, setApplyingFinance] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
-  const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'history' | 'discussion'>('details');
   const [supplementModalOpen, setSupplementModalOpen] = useState(false);
   const [supplementInfo, setSupplementInfo] = useState("");
   const [supplementFiles, setSupplementFiles] = useState<File[]>([]);
@@ -511,14 +513,16 @@ export default function EstimateDetailPage({
               Надіслати клієнту
             </Button>
           )}
+          <OpenEstimateChatButton estimateId={estimate.id} />
         </div>
       </div>
 
-      {/* Tabs for Details and History */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'details' | 'history')} className="mt-6">
+      {/* Tabs for Details, History and Discussion */}
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'details' | 'history' | 'discussion')} className="mt-6">
         <TabsList className="mb-6">
           <TabsTrigger value="details">Деталі кошторису</TabsTrigger>
           <TabsTrigger value="history">Історія та підписи</TabsTrigger>
+          <TabsTrigger value="discussion">Обговорення</TabsTrigger>
         </TabsList>
 
         <TabsContent value="details" className="space-y-4">
@@ -709,6 +713,10 @@ export default function EstimateDetailPage({
             <h3 className="text-lg font-semibold mb-4">Історія змін</h3>
             <EstimateHistoryTimeline estimateId={estimate.id} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="discussion" className="space-y-4">
+          <CommentThread entityType="ESTIMATE" entityId={estimate.id} />
         </TabsContent>
       </Tabs>
 

@@ -56,6 +56,7 @@ export function forbiddenResponse() {
 export const ADMIN_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];
 export const ESTIMATE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"];
 export const FINANCE_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
+export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
 
 export async function requireAdminRole() {
   const session = await requireAuth();
@@ -68,6 +69,14 @@ export async function requireAdminRole() {
 export async function requireEstimateAccess() {
   const session = await requireAuth();
   if (!ESTIMATE_ROLES.includes(session.user.role)) {
+    throw new Error("Forbidden");
+  }
+  return session;
+}
+
+export async function requireStaffAccess() {
+  const session = await requireAuth();
+  if (!STAFF_ROLES.includes(session.user.role)) {
     throw new Error("Forbidden");
   }
   return session;

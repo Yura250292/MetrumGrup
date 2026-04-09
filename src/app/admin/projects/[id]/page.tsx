@@ -8,6 +8,8 @@ import { ProjectProgressBar } from "@/components/dashboard/ProjectProgressBar";
 import { StageTimeline } from "@/components/dashboard/StageTimeline";
 import { FinancialSummary } from "@/components/dashboard/FinancialSummary";
 import { PaymentScheduleTable } from "@/components/dashboard/PaymentScheduleTable";
+import { OpenProjectChatButton } from "@/components/chat/OpenProjectChatButton";
+import { CommentThread } from "@/components/collab/CommentThread";
 import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
@@ -85,6 +87,7 @@ export default async function AdminProjectDetailPage({
           </div>
         </div>
         <div className="flex gap-2">
+          <OpenProjectChatButton projectId={id} />
           <Link href={`/admin/projects/${id}/photos/new`}>
             <Button variant="outline" size="sm">
               <Camera className="h-4 w-4" />
@@ -241,6 +244,11 @@ export default async function AdminProjectDetailPage({
             </dl>
           </Card>
         </div>
+      </div>
+
+      {/* Discussion */}
+      <div className="mt-6">
+        <CommentThread entityType="PROJECT" entityId={project.id} />
       </div>
     </div>
   );
