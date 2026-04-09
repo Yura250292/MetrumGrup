@@ -9,15 +9,32 @@ export async function POST(request: NextRequest) {
     return forbiddenResponse();
   }
 
-  const { format, estimate } = await request.json();
+  try {
+    const { format, estimate } = await request.json();
 
-  if (format === "excel") {
-    return generateExcel(estimate);
-  } else if (format === "pdf") {
-    return generatePDF(estimate);
+    const totalItems = (estimate?.sections || []).reduce(
+      (sum: number, s: any) => sum + (s.items?.length || 0),
+      0
+    );
+    console.log(`📤 Export ${format}: ${estimate?.sections?.length || 0} sections, ${totalItems} items`);
+
+    if (format === "excel") {
+      return await generateExcel(estimate);
+    } else if (format === "pdf") {
+      return await generatePDF(estimate);
+    }
+
+    return NextResponse.json({ error: "Невідомий формат" }, { status: 400 });
+  } catch (error) {
+    console.error("❌ Export error:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const stack = error instanceof Error ? error.stack : "";
+    console.error("Stack:", stack);
+    return NextResponse.json(
+      { error: "Failed to export", message, stack: stack?.split("\n").slice(0, 5).join("\n") },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ error: "Невідомий формат" }, { status: 400 });
 }
 
 async function generateExcel(estimate: EstimateData) {
@@ -157,22 +174,31 @@ async function generateExcel(estimate: EstimateData) {
   ws.addRow([]);
 
   // ─── SECTIONS WITH ITEMS ───
+  // 🆕 Включаємо outline summary щоб кнопки згортання працювали
+  ws.properties.outlineProperties = {
+    summaryBelow: true,
+    summaryRight: false,
+  };
+
   let globalItemNum = 0;
+  let sectionIdx = 0;
   for (const section of estimate.sections || []) {
-    // Section header
-    const sectionRow = ws.addRow([section.title]);
+    sectionIdx++;
+    // Section header — НЕ groupable (рівень 0)
+    const sectionRow = ws.addRow([`${sectionIdx}. ${section.title}  (${(section.items || []).length} позицій)`]);
     ws.mergeCells(`A${sectionRow.number}:G${sectionRow.number}`);
-    sectionRow.height = 26;
-    sectionRow.getCell(1).font = { name: "Calibri", size: 11, bold: true, color: { argb: "FFFFFFFF" } };
+    sectionRow.height = 28;
+    sectionRow.getCell(1).font = { name: "Calibri", size: 12, bold: true, color: { argb: "FFFFFFFF" } };
     sectionRow.getCell(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: orange } };
     sectionRow.getCell(1).alignment = { vertical: "middle", horizontal: "left", indent: 1 };
     for (let c = 2; c <= 7; c++) {
       sectionRow.getCell(c).fill = { type: "pattern", pattern: "solid", fgColor: { argb: orange } };
     }
 
-    // Column headers
+    // Column headers — groupable (рівень 1)
     const headerTexts = ["№", "Опис матеріалу / роботи", "Од. вим.", "Кількість", "Ціна матеріалу, ₴", "Вартість роботи, ₴", "Разом, ₴"];
     const headerRow = ws.addRow(headerTexts);
+    headerRow.outlineLevel = 1;
     headerRow.height = 22;
     for (let c = 1; c <= 7; c++) {
       const cell = headerRow.getCell(c);
@@ -182,7 +208,7 @@ async function generateExcel(estimate: EstimateData) {
       cell.border = borders;
     }
 
-    // Items
+    // Items — groupable (рівень 1) — згортаються разом з header
     for (let ii = 0; ii < (section.items || []).length; ii++) {
       const item = section.items[ii];
       globalItemNum++;
@@ -198,6 +224,7 @@ async function generateExcel(estimate: EstimateData) {
         item.laborCost,
         item.totalCost,
       ]);
+      itemRow.outlineLevel = 1;
       itemRow.height = 20;
 
       // Style each cell

@@ -9,6 +9,9 @@
     "src/app/api/admin/estimates/generate-chunked/route.ts": {
       "maxDuration": 300
     },
+    "src/app/api/admin/estimates/export/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/admin/projects/[id]/vectorize/route.ts": {
       "maxDuration": 300
     }
