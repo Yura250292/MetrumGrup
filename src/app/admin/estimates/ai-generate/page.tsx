@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -258,25 +259,27 @@ function EstimateWizardModal({
   setWizardStep: (step: number) => void;
   onComplete: () => void;
 }) {
-  // Автоматично прокручувати на початок сторінки коли модальне вікно відкривається
+  // 🆕 Блокування body scroll + Escape для закриття
+  // Прокрутка не потрібна, бо рендер через React Portal у document.body
   useEffect(() => {
-    if (isOpen) {
-      // Прокрутити на початок сторінки щоб модальне вікно було видиме
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-      // Заблокувати прокручування body коли модальне вікно відкрите
-      document.body.style.overflow = 'hidden';
-    } else {
-      // Відновити прокручування body
-      document.body.style.overflow = '';
-    }
+    if (!isOpen) return;
 
-    // Cleanup
-    return () => {
-      document.body.style.overflow = '';
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
     };
-  }, [isOpen]);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
+  if (typeof document === 'undefined') return null;
 
   // Calculate total steps based on object type and work scope
   const calculateTotalSteps = () => {
@@ -316,9 +319,11 @@ function EstimateWizardModal({
   const totalSteps = calculateTotalSteps();
   const progress = ((wizardStep + 1) / totalSteps) * 100;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm pt-8 pb-8 overflow-y-auto">
-      <Card className="w-full max-w-3xl max-h-[85vh] overflow-y-auto my-auto">
+  // 🆕 Render через React Portal — модалка з'являється у document.body,
+  // незалежно від позиції тригера на сторінці. Жодного скролу.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Progress Bar */}
         <div className="h-2 bg-muted">
           <div
@@ -408,7 +413,8 @@ function EstimateWizardModal({
           </div>
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
 
