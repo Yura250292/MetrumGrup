@@ -4106,9 +4106,9 @@ export default function AIEstimatePage() {
   }
 
   // Grand total з різних джерел (залежно від методу генерації)
-  const grandTotal = estimate?.totalAmount ||
+  const grandTotal = (estimate as any)?.totalAmount ||
                      estimate?.summary?.totalBeforeDiscount ||
-                     estimate?.finalAmount ||
+                     (estimate as any)?.finalAmount ||
                      0;
 
   return (
