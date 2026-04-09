@@ -538,7 +538,12 @@ export default function EstimateDetailPage({
                   </div>
                 </div>
                 <Button
-                  onClick={() => setEngineerReportOpen(true)}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setEngineerReportOpen(true);
+                  }}
                   variant="default"
                   size="sm"
                 >

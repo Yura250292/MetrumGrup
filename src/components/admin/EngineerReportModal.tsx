@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -87,15 +89,49 @@ export function EngineerReportModal({
   analysisSummary,
   prozorroAnalysis,
 }: EngineerReportModalProps) {
+  // 🆕 Блокуємо scroll body коли модалка відкрита
+  // + закриття на Escape
+  useEffect(() => {
+    if (!open) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [open, onClose]);
+
   if (!open) return null;
+
+  // SSR safety: portal лише на клієнті
+  if (typeof document === 'undefined') return null;
 
   const prozorroData = parseProzorroData(prozorroAnalysis);
   const hasProzorro = !!prozorroData && prozorroData.similarProjectsFound > 0;
   const hasAnalysis = !!analysisSummary;
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+  // 🆕 Render через React Portal у document.body
+  // Це гарантує що модалка не залежить від батьківського контейнера
+  // і завжди з'являється поверх viewport (без скролу)
+  return createPortal(
+    <div
+      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4"
+      onClick={(e) => {
+        // Закриваємо при кліку на backdrop
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <Card
+        className="w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-start justify-between p-6 border-b">
           <div className="flex items-center gap-3">
@@ -344,11 +380,12 @@ export function EngineerReportModal({
 
         {/* Footer */}
         <div className="border-t p-4 flex justify-end">
-          <Button onClick={onClose} variant="outline">
+          <Button onClick={onClose} variant="outline" type="button">
             Закрити
           </Button>
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
