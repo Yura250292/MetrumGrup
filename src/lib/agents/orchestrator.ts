@@ -53,6 +53,12 @@ export interface EstimateData {
     message: string;
   }>;
   analysisSummary?: string; // Звіт інженера про аналіз проекту
+  scalingInfo?: {
+    scaled: boolean;
+    factor: number;
+    originalTotal: number;
+    reason?: string;
+  };
 }
 
 /**
