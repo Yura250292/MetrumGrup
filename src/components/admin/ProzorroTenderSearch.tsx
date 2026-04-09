@@ -6,15 +6,36 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ExternalLink, Search, AlertCircle } from 'lucide-react';
+import { ExternalLink, Search, AlertCircle, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { WizardData } from '@/lib/wizard-types';
+import { TenderDocuments } from './TenderDocuments';
 
 interface ProzorroTenderSearchProps {
   estimateId: string;
   wizardData?: WizardData;
+  searchQuery?: string;
   autoSearch?: boolean;
   onClose?: () => void;
+}
+
+// CPV код описи
+function getCPVDescription(code: string): string {
+  const descriptions: Record<string, string> = {
+    '45000000': 'Будівельні роботи (загальні)',
+    '45200000': 'Будівельні роботи для будівель',
+    '45210000': 'Будівництво житлових будинків',
+    '45214000': 'Будівництво офісних будівель',
+    '45400000': 'Роботи з оздоблення',
+  };
+
+  // Шукаємо точний збіг або за першими цифрами
+  if (descriptions[code]) return descriptions[code];
+
+  const prefix = code.slice(0, 6) + '0000';
+  if (descriptions[prefix]) return descriptions[prefix];
+
+  return 'Будівельні та монтажні роботи';
 }
 
 interface TenderMatch {
@@ -51,6 +72,7 @@ interface SearchResponse {
 export function ProzorroTenderSearch({
   estimateId,
   wizardData,
+  searchQuery,
   autoSearch = false,
   onClose,
 }: ProzorroTenderSearchProps) {
@@ -73,7 +95,7 @@ export function ProzorroTenderSearch({
       const response = await fetch('/api/admin/estimates/prozorro/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estimateId, wizardData }),
+        body: JSON.stringify({ estimateId, wizardData, searchQuery }),
       });
 
       if (!response.ok) {
@@ -121,20 +143,76 @@ export function ProzorroTenderSearch({
         )}
 
         {searchParams && (
-          <div className="mb-4 p-3 bg-muted rounded-lg text-sm">
-            <p className="font-medium mb-1">Параметри пошуку:</p>
-            <ul className="space-y-1 text-muted-foreground">
-              <li>
-                Бюджет: {formatCurrency(searchParams.budgetRange[0])} -{' '}
-                {formatCurrency(searchParams.budgetRange[1])}
-              </li>
-              <li>Категорія: {searchParams.cpvCode}</li>
-              {searchParams.area && <li>Площа: ~{searchParams.area} м²</li>}
-              {searchParams.keywords.length > 0 && (
-                <li>Ключові слова: {searchParams.keywords.slice(0, 5).join(', ')}</li>
-              )}
-            </ul>
-          </div>
+          <Card className="mb-4 bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                🔍 Параметри пошуку на Prozorro
+              </CardTitle>
+              <CardDescription>
+                Шукаємо схожі завершені тендери за останні 6 місяців
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="grid gap-3">
+                <div className="flex items-start gap-3 p-3 bg-background rounded-lg">
+                  <div className="text-2xl">💰</div>
+                  <div className="flex-1">
+                    <div className="font-medium">Бюджет (±30%)</div>
+                    <div className="text-sm text-muted-foreground">
+                      {formatCurrency(searchParams.budgetRange[0])} - {formatCurrency(searchParams.budgetRange[1])}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 bg-background rounded-lg">
+                  <div className="text-2xl">📋</div>
+                  <div className="flex-1">
+                    <div className="font-medium">CPV Категорія</div>
+                    <div className="text-sm text-muted-foreground">
+                      {searchParams.cpvCode} - {getCPVDescription(searchParams.cpvCode)}
+                    </div>
+                  </div>
+                </div>
+
+                {searchParams.area && (
+                  <div className="flex items-start gap-3 p-3 bg-background rounded-lg">
+                    <div className="text-2xl">📐</div>
+                    <div className="flex-1">
+                      <div className="font-medium">Площа об'єкта</div>
+                      <div className="text-sm text-muted-foreground">
+                        ~{searchParams.area} м² (шукаємо схожі за розміром)
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {searchParams.keywords.length > 0 && (
+                  <div className="flex items-start gap-3 p-3 bg-background rounded-lg">
+                    <div className="text-2xl">🔤</div>
+                    <div className="flex-1">
+                      <div className="font-medium">Ключові слова</div>
+                      <div className="text-sm text-muted-foreground flex flex-wrap gap-1 mt-1">
+                        {searchParams.keywords.slice(0, 8).map((kw, i) => (
+                          <Badge key={i} variant="secondary" className="text-xs">
+                            {kw}
+                          </Badge>
+                        ))}
+                        {searchParams.keywords.length > 8 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{searchParams.keywords.length - 8} ще
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="text-xs text-muted-foreground pt-2 border-t">
+                💡 Тендери ранжуються за схожістю: бюджет (40%), категорія (20%), площа (20%), ключові слова (20%)
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {!loading && matches.length > 0 && (
@@ -160,6 +238,7 @@ export function ProzorroTenderSearch({
 
 function TenderCard({ match }: { match: TenderMatch }) {
   const { tender, similarityScore, matchReasons, prozorroUrl } = match;
+  const [showDocuments, setShowDocuments] = useState(false);
 
   return (
     <div className="border rounded-lg p-4 hover:bg-accent/50 transition-colors">
@@ -209,16 +288,39 @@ function TenderCard({ match }: { match: TenderMatch }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{tender.cpvDescription || `CPV: ${tender.cpvCode}`}</span>
+      <div className="flex items-center justify-between gap-2 mb-3">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShowDocuments(!showDocuments)}
+          className="text-xs"
+        >
+          <FileText className="mr-1.5 h-3.5 w-3.5" />
+          {showDocuments ? 'Сховати документи' : 'Переглянути документи'}
+          {showDocuments ? (
+            <ChevronUp className="ml-1.5 h-3.5 w-3.5" />
+          ) : (
+            <ChevronDown className="ml-1.5 h-3.5 w-3.5" />
+          )}
+        </Button>
         <a
           href={prozorroUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="text-primary underline-offset-4 hover:underline text-xs h-auto p-0 inline-flex items-center"
         >
-          Відкрити на Prozorro <ExternalLink className="ml-1 h-3 w-3" />
+          Prozorro <ExternalLink className="ml-1 h-3 w-3" />
         </a>
+      </div>
+
+      {showDocuments && (
+        <div className="mt-3 pt-3 border-t">
+          <TenderDocuments tenderId={tender.id} />
+        </div>
+      )}
+
+      <div className="text-xs text-muted-foreground">
+        {tender.cpvDescription || `CPV: ${tender.cpvCode}`}
       </div>
     </div>
   );

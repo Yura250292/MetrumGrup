@@ -210,6 +210,15 @@ export async function GET(
   const { id: projectId } = await params;
 
   try {
+    // TEMPORARY FIX: table project_parsed_content doesn't exist after migration
+    // TODO: Restore this table or implement alternative vectorization status check
+    return NextResponse.json({
+      vectorized: false,
+      status: 'not_started',
+      message: 'Vectorization disabled (table migration pending)'
+    });
+
+    /* Original code - commented until table is restored
     const result = await prisma.$queryRawUnsafe<any[]>(`
       SELECT processing_status, processed_at, error_message, extracted_data
       FROM project_parsed_content
@@ -232,6 +241,7 @@ export async function GET(
       errorMessage: data.error_message,
       extractedData: data.extracted_data
     });
+    */
 
   } catch (error) {
     console.error("Помилка перевірки статусу:", error);

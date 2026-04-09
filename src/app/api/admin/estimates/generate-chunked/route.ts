@@ -44,17 +44,19 @@ export async function POST(request: NextRequest) {
       try {
         const formData = await request.formData();
 
-        // Get files from R2
+        // Get files from R2 (optional)
         const r2KeysStr = formData.get("r2Keys") as string;
         const wizardDataStr = formData.get("wizardData") as string;
         const projectNotesStr = formData.get("projectNotes") as string || "";
+        const checkProzorroStr = formData.get("checkProzorro") as string;
+        const prozorroSearchQuery = (formData.get("prozorroSearchQuery") as string) || "";
 
-        if (!r2KeysStr) {
-          throw new Error("No files provided");
-        }
-
-        const r2Keys = JSON.parse(r2KeysStr);
+        // Files are now optional - can generate from wizard data only
+        const r2Keys = r2KeysStr ? JSON.parse(r2KeysStr) : [];
         const wizardData = wizardDataStr ? JSON.parse(wizardDataStr) : null;
+        const checkProzorro = checkProzorroStr === "true";
+
+        console.log(`📋 Generation params: ${r2Keys.length} files, wizardData: ${!!wizardData}, checkProzorro: ${checkProzorro}, prozorroQuery: "${prozorroSearchQuery}"`);
 
         // ⚠️ ВАЛІДАЦІЯ ПЛОЩІ
         if (wizardData) {
@@ -161,12 +163,12 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        // Check for multi-agent mode
+        // Check for multi-agent or master mode
         const mode = (formData.get("mode") as GenerationMode) || "gemini+openai";
 
-        if (mode === "multi-agent") {
-          // NEW MULTI-AGENT MODE
-          console.log("🤖 Using Multi-Agent mode with Orchestrator");
+        if (mode === "multi-agent" || mode === "master") {
+          // ORCHESTRATOR MODE (Multi-Agent or Master)
+          console.log(`🤖 Using ${mode === 'master' ? 'Master Agent' : 'Multi-Agent'} mode with Orchestrator`);
 
           // Отримати projectId
           let projectId = formData.get("projectId") as string | null;
@@ -246,7 +248,7 @@ export async function POST(request: NextRequest) {
           }
 
           const orchestrator = new EstimateOrchestrator({
-            mode: 'multi-agent',
+            mode: mode,
             projectId: projectId || undefined, // Для RAG
             wizardData,
             documents: {
@@ -256,6 +258,7 @@ export async function POST(request: NextRequest) {
               sitePhotos: imageParts.map(img => img.name),
             },
             projectNotes: projectNotesStr,
+            prozorroSearchQuery, // 🆕 Опис для пошуку на Prozorro
           });
 
           const estimateData = await orchestrator.generate((update) => {
@@ -266,8 +269,8 @@ export async function POST(request: NextRequest) {
           if (!projectId) {
             const tempProject = await prisma.project.create({
               data: {
-                title: "Тимчасовий проект (Multi-Agent)",
-                slug: `temp-multiagent-${Date.now()}`,
+                title: `Тимчасовий проект (${mode === 'master' ? 'Master Agent' : 'Multi-Agent'})`,
+                slug: `temp-${mode}-${Date.now()}`,
                 description: "Автоматично створений проект для кошторису",
                 status: "DRAFT",
                 clientId: session.user.id,
@@ -293,6 +296,22 @@ export async function POST(request: NextRequest) {
               totalLabor: laborCost,
               totalOverhead: overheadCost,
               analysisSummary: (estimateData as any).analysisSummary || null,
+              prozorroChecked: !!(estimateData as any).preAnalysisResult?.prozorroAnalysis,
+              prozorroCheckedAt: !!(estimateData as any).preAnalysisResult?.prozorroAnalysis ? new Date() : null,
+              prozorroAnalysis: (() => {
+                const pa = (estimateData as any).preAnalysisResult?.prozorroAnalysis;
+                if (!pa) return null;
+                // Зберігаємо як JSON-string у БД (поле String? @db.Text)
+                return JSON.stringify({
+                  similarProjectsFound: pa.similarProjectsFound || 0,
+                  totalItemsParsed: pa.totalItemsParsed || 0,
+                  averagePriceLevel: pa.averagePriceLevel || 'medium',
+                  topSimilarProjects: pa.topSimilarProjects || [],
+                  priceDatabase: pa.priceDatabase instanceof Map
+                    ? Object.fromEntries(pa.priceDatabase)
+                    : (pa.priceDatabase || {}),
+                });
+              })(),
               createdById: session.user.id,
               sections: {
                 create: estimateData.sections.map((section, index) => ({
@@ -386,7 +405,7 @@ export async function POST(request: NextRequest) {
           sendUpdate({
             phase: 'final',
             status: 'complete',
-            message: '🎉 Multi-Agent кошторис готовий!',
+            message: `🎉 ${mode === 'master' ? 'Master Agent' : 'Multi-Agent'} кошторис готовий!`,
             progress: 100,
             data: {
               estimateId: estimate.id,
@@ -394,6 +413,23 @@ export async function POST(request: NextRequest) {
               totalAmount: actualTotalAmount,
               sectionsCount: estimateData.sections.length,
               validationIssues: estimateData.validationIssues,
+              // 🆕 Звіт інженера та аналіз Prozorro (як об'єкт для модалки)
+              analysisSummary: (estimateData as any).analysisSummary || null,
+              prozorroAnalysis: (() => {
+                const pa = (estimateData as any).preAnalysisResult?.prozorroAnalysis;
+                if (!pa) return null;
+                // Конвертуємо Map → object щоб серіалізувалось у JSON
+                return {
+                  similarProjectsFound: pa.similarProjectsFound || 0,
+                  totalItemsParsed: pa.totalItemsParsed || 0,
+                  averagePriceLevel: pa.averagePriceLevel || 'medium',
+                  topSimilarProjects: pa.topSimilarProjects || [],
+                  priceDatabase: pa.priceDatabase instanceof Map
+                    ? Object.fromEntries(pa.priceDatabase)
+                    : (pa.priceDatabase || {}),
+                };
+              })(),
+              scalingInfo: (estimateData as any).scalingInfo || null,
               // ✅ Add complete sections from database for frontend display
               sections: finalEstimate?.sections.map(section => ({
                 title: section.title,
@@ -560,6 +596,8 @@ export async function POST(request: NextRequest) {
             totalMaterials,
             totalLabor,
             totalOverhead,
+            analysisSummary: null,
+            prozorroChecked: checkProzorro,
             createdById: session.user.id,
             sections: {
               create: sections.map((section, index) => ({
@@ -649,7 +687,7 @@ export async function POST(request: NextRequest) {
             estimateId: estimate.id,
             estimateNumber: estimate.number,
             totalAmount: actualTotalAmount,
-            sectionsCount: sections.length
+            sectionsCount: sections.length,
           }
         });
 

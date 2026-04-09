@@ -14,6 +14,7 @@ import { WizardData } from '@/lib/wizard-types';
 interface SearchRequestBody {
   estimateId: string;
   wizardData?: WizardData;
+  searchQuery?: string; // Опис від користувача для пошуку
   filters?: {
     dateFrom?: string;
     dateTo?: string;
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: SearchRequestBody = await request.json();
-    const { estimateId, wizardData, filters } = body;
+    const { estimateId, wizardData, searchQuery, filters } = body;
 
     // Валідація
     if (!estimateId) {
@@ -73,10 +74,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Витягти атрибути для пошуку
-    const searchAttrs = extractSearchAttributes(estimate, wizardData);
+    const searchAttrs = extractSearchAttributes(estimate, wizardData, searchQuery);
 
     console.log('🔍 Пошук Prozorro тендерів:', {
       estimateId: estimate.id,
+      searchQuery: searchQuery || '(auto)',
       budget: searchAttrs.budgetCenter,
       budgetRange: [searchAttrs.budgetMin, searchAttrs.budgetMax],
       cpvCode: searchAttrs.cpvCode,

@@ -54,7 +54,8 @@ const CPV_CODE_MAPPING: Record<ObjectType, string> = {
  */
 export function extractSearchAttributes(
   estimate: EstimateWithRelations,
-  wizardData?: WizardData
+  wizardData?: WizardData,
+  searchQuery?: string
 ): SearchAttributes {
   const totalAmount = typeof estimate.totalAmount === 'number'
     ? estimate.totalAmount
@@ -75,7 +76,7 @@ export function extractSearchAttributes(
   const cpvCode = objectType ? mapObjectTypeToCPV(objectType) : '45000000'; // Generic construction
 
   // Ключові слова для пошуку
-  const keywords = buildKeywords(estimate, wizardData);
+  const keywords = buildKeywords(estimate, wizardData, searchQuery);
 
   return {
     budgetMin,
@@ -100,9 +101,23 @@ export function mapObjectTypeToCPV(objectType: ObjectType): string {
  */
 export function buildKeywords(
   estimate: EstimateWithRelations,
-  wizardData?: WizardData
+  wizardData?: WizardData,
+  searchQuery?: string
 ): string[] {
   const keywords: string[] = [];
+
+  // 🔥 ПРІОРИТЕТ: Якщо користувач вказав опис пошуку - використовуємо його в першу чергу
+  if (searchQuery && searchQuery.trim().length > 0) {
+    // Розбити на слова і додати як пріоритетні ключові слова
+    const queryWords = searchQuery
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 2);
+
+    keywords.push(...queryWords);
+
+    console.log(`🔍 Користувач вказав пошук: "${searchQuery}" → ${queryWords.length} ключових слів`);
+  }
 
   // З назви кошторису
   if (estimate.title) {
@@ -137,7 +152,7 @@ export function buildKeywords(
   const uniqueKeywords = [...new Set(keywords)]
     .filter(kw => kw.length > 2 && !stopWords.includes(kw));
 
-  return uniqueKeywords.slice(0, 20); // Максимум 20 ключових слів
+  return uniqueKeywords.slice(0, 30); // Збільшено до 30 для searchQuery
 }
 
 /**

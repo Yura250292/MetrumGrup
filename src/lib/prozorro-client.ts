@@ -22,6 +22,17 @@ export interface ProzorroSearchParams {
   offset?: number;                // пагінація
 }
 
+export interface ProzorroDocument {
+  id: string;
+  title: string;
+  url: string;
+  format: string;              // "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  documentType: string;        // "billOfQuantity" (кошторис), "technicalSpecifications", etc
+  datePublished: string;
+  dateModified: string;
+  language?: string;
+}
+
 export interface ProzorroTender {
   id: string;
   title: string;
@@ -50,6 +61,7 @@ export interface ProzorroTender {
     };
     status: 'active' | 'unsuccessful';
   }>;
+  documents?: ProzorroDocument[];  // 📄 Документи тендера
 }
 
 interface ProzorroAPIResponse {
@@ -145,6 +157,83 @@ export class ProzorroClient {
   }
 
   /**
+   * Отримати документи тендера (кошториси, специфікації)
+   */
+  async getTenderDocuments(
+    tenderId: string,
+    filterTypes?: string[]  // ['billOfQuantity', 'technicalSpecifications']
+  ): Promise<ProzorroDocument[]> {
+    console.log(`📄 Отримання документів тендера: ${tenderId}`);
+
+    try {
+      // Отримати повні деталі тендера
+      const tender = await this.getTenderDetails(tenderId);
+
+      if (!tender.documents || tender.documents.length === 0) {
+        console.log(`⚠️ Тендер ${tenderId} не має документів`);
+        return [];
+      }
+
+      // Фільтрувати по типу якщо вказано
+      let documents = tender.documents;
+      if (filterTypes && filterTypes.length > 0) {
+        documents = documents.filter(doc => filterTypes.includes(doc.documentType));
+      }
+
+      console.log(`✅ Знайдено ${documents.length} документів для тендера ${tenderId}`);
+      return documents;
+    } catch (error) {
+      console.error(`❌ Помилка отримання документів тендера ${tenderId}:`, error);
+      throw new Error(`Не вдалося отримати документи: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Отримати тільки кошториси тендера
+   */
+  async getTenderEstimates(tenderId: string): Promise<ProzorroDocument[]> {
+    return this.getTenderDocuments(tenderId, ['billOfQuantity']);
+  }
+
+  /**
+   * Завантажити файл документа
+   */
+  async downloadDocument(documentUrl: string): Promise<{
+    content: ArrayBuffer;
+    contentType: string;
+  }> {
+    console.log(`📥 Завантаження документа: ${documentUrl}`);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT * 3); // Більший timeout для файлів
+
+      const response = await fetch(documentUrl, {
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const content = await response.arrayBuffer();
+      const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+      console.log(`✅ Документ завантажено (${content.byteLength} bytes, ${contentType})`);
+
+      return {
+        content,
+        contentType,
+      };
+    } catch (error) {
+      console.error(`❌ Помилка завантаження документа:`, error);
+      throw new Error(`Не вдалося завантажити документ: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
    * Fetch з retry logic та timeout
    */
   private async fetchWithRetry<T>(url: string, retries = MAX_RETRIES): Promise<T> {
@@ -204,26 +293,32 @@ export class ProzorroClient {
    */
   private async cacheTender(tender: ProzorroTender): Promise<void> {
     try {
+      // ⚠️ Деякі тендери не мають value — пропускаємо їх
+      if (!tender.value || tender.value.amount == null) {
+        console.warn(`⏭️ Тендер ${tender.id} без value, пропускаємо`);
+        return;
+      }
+
       // Витягти ціну переможця (якщо є awards)
-      const awardedAmount = tender.awards?.find(a => a.status === 'active')?.value.amount || null;
+      const awardedAmount = tender.awards?.find(a => a.status === 'active')?.value?.amount || null;
       const awardedDate = awardedAmount ? new Date() : null; // TODO: get real award date
 
       await prisma.prozorroTender.upsert({
         where: { id: tender.id },
         create: {
           id: tender.id,
-          title: tender.title,
+          title: tender.title || 'Без назви',
           description: tender.description || '',
-          status: tender.status,
+          status: tender.status || 'unknown',
           valueAmount: tender.value.amount,
-          valueCurrency: tender.value.currency,
-          vatIncluded: tender.value.valueAddedTaxIncluded,
-          procuringEntityName: tender.procuringEntity.name,
-          procuringEntityCode: tender.procuringEntity.identifier.id,
-          cpvCode: tender.classification.id,
-          cpvDescription: tender.classification.description,
-          datePublished: new Date(tender.datePublished),
-          dateModified: new Date(tender.dateModified),
+          valueCurrency: tender.value.currency || 'UAH',
+          vatIncluded: tender.value.valueAddedTaxIncluded ?? true,
+          procuringEntityName: tender.procuringEntity?.name || 'Невідомо',
+          procuringEntityCode: tender.procuringEntity?.identifier?.id || 'unknown',
+          cpvCode: tender.classification?.id || '00000000',
+          cpvDescription: tender.classification?.description || '',
+          datePublished: tender.datePublished ? new Date(tender.datePublished) : new Date(),
+          dateModified: tender.dateModified ? new Date(tender.dateModified) : new Date(),
           awardedAmount: awardedAmount,
           awardedDate: awardedDate,
           rawData: tender as any,
@@ -231,9 +326,9 @@ export class ProzorroClient {
           lastAccessedAt: new Date(),
         },
         update: {
-          title: tender.title,
+          title: tender.title || 'Без назви',
           description: tender.description || '',
-          status: tender.status,
+          status: tender.status || 'unknown',
           valueAmount: tender.value.amount,
           awardedAmount: awardedAmount,
           awardedDate: awardedDate,

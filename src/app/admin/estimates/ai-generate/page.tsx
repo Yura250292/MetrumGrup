@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { formatCurrency } from "@/lib/utils";
 import {
   ArrowLeft,
@@ -36,6 +37,7 @@ import { generateQuickSummary } from "@/lib/engineering-report";
 import { PROJECT_TEMPLATES } from "@/lib/constants";
 import { WizardData, ObjectType, WorkScope, RenovationStage } from "@/lib/wizard-types";
 import { ProzorroTenderSearch } from "@/components/admin/ProzorroTenderSearch";
+import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
 
 type EstimateItem = {
   description: string;
@@ -2957,6 +2959,7 @@ export default function AIEstimatePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [estimate, setEstimate] = useState<EstimateData | null>(null);
+  const [scalingInfo, setScalingInfo] = useState<any | null>(null); // 📊 Інфо про масштабування
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
   const [editingItem, setEditingItem] = useState<{ s: number; i: number } | null>(null);
   const [editingSectionTitle, setEditingSectionTitle] = useState<number | null>(null);
@@ -2976,6 +2979,7 @@ export default function AIEstimatePage() {
   const [supplementProgress, setSupplementProgress] = useState<{ message: string; progress: number } | null>(null);
   const supplementFileInputRef = useRef<HTMLInputElement>(null);
   const [savedEstimateId, setSavedEstimateId] = useState<string | null>(null);
+  const [engineerReportOpen, setEngineerReportOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -2990,6 +2994,7 @@ export default function AIEstimatePage() {
 
   // Prozorro state
   const [checkProzorro, setCheckProzorro] = useState(true);
+  const [prozorroSearchQuery, setProzorroSearchQuery] = useState("");
 
   // Pre-analysis state
   const [showPreAnalysis, setShowPreAnalysis] = useState(false);
@@ -3549,14 +3554,20 @@ export default function AIEstimatePage() {
 
       formData.append("projectNotes", projectNotes);
 
+      // 🔍 Додати checkProzorro для пошуку конкурентних тендерів
+      formData.append("checkProzorro", checkProzorro.toString());
+      formData.append("prozorroSearchQuery", prozorroSearchQuery);
+      console.log(`🔍 Prozorro checkbox: ${checkProzorro}, query: ${prozorroSearchQuery}`);
+
+      // 🎯 ЗАВЖДИ використовуємо Master Agent (детальна генерація з повним контекстом)
+      formData.append("mode", "master");
+
       // 🔍 Додати projectId для RAG векторизації (якщо вибраний)
       if (selectedProjectId) {
         formData.append("projectId", selectedProjectId);
-        formData.append("mode", "multi-agent"); // Активувати RAG режим
         console.log(`🔍 Using projectId for RAG: ${selectedProjectId}`);
       } else {
-        // Без projectId - звичайний режим
-        formData.append("mode", "gemini+openai");
+        console.log(`🎯 Master Agent mode without projectId (no RAG)`);
       }
 
       // Call the chunked generation endpoint with POST
@@ -3604,6 +3615,12 @@ export default function AIEstimatePage() {
               // Final complete
               if (update.phase === 'final' && update.status === 'complete') {
                 console.log('✅ Chunked generation complete!', update.data);
+
+                // 📊 Зберегти інфо про масштабування якщо є
+                if (update.data?.scalingInfo) {
+                  setScalingInfo(update.data.scalingInfo);
+                  console.log('📊 Scaling info:', update.data.scalingInfo);
+                }
 
                 // 🔧 FIX: 3-tier fallback strategy for sections
                 let finalSections: any[] = [];
@@ -3660,9 +3677,16 @@ export default function AIEstimatePage() {
                 // Build final estimate from collected/fetched sections
                 const finalEstimate: EstimateData = {
                   title: `Кошторис ${update.data.estimateNumber || ''}`,
-                  description: "Згенеровано по секціях (Multi-Agent)",
-                  sections: finalSections
-                };
+                  description: "Згенеровано Master Agent (всі секції одночасно)",
+                  sections: finalSections,
+                  // 🆕 Звіт інженера та аналіз Prozorro з бекенду
+                  ...(update.data.analysisSummary && { analysisSummary: update.data.analysisSummary }),
+                  ...(update.data.prozorroAnalysis && { prozorroAnalysis: update.data.prozorroAnalysis }),
+                  ...(update.data.scalingInfo && { scalingInfo: update.data.scalingInfo }),
+                } as EstimateData;
+
+                // 🔧 FIX: Розрахувати summary (materialsCost, laborCost, totalBeforeDiscount)
+                recalculateSummary(finalEstimate);
 
                 setEstimate(finalEstimate);
                 setIsChunkedGenerating(false);
@@ -4081,7 +4105,11 @@ export default function AIEstimatePage() {
     });
   }
 
-  const grandTotal = estimate?.summary?.totalBeforeDiscount || 0;
+  // Grand total з різних джерел (залежно від методу генерації)
+  const grandTotal = estimate?.totalAmount ||
+                     estimate?.summary?.totalBeforeDiscount ||
+                     estimate?.finalAmount ||
+                     0;
 
   return (
     <div>
@@ -4373,19 +4401,52 @@ export default function AIEstimatePage() {
           )}
 
           {/* Prozorro check */}
-          <div className="flex items-center gap-2 p-4 bg-accent/50 rounded-lg border border-border">
-            <Checkbox
-              id="prozorro-check"
-              checked={checkProzorro}
-              onCheckedChange={setCheckProzorro}
-            />
-            <label
-              htmlFor="prozorro-check"
-              className="text-sm cursor-pointer flex items-center gap-1.5"
-            >
-              🔍 Перевірити на Prozorro конкурентів після генерації
-              <span className="text-xs text-muted-foreground">(знайти схожі тендери)</span>
-            </label>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-4 bg-accent/50 rounded-lg border border-border">
+              <Checkbox
+                id="prozorro-check"
+                checked={checkProzorro}
+                onCheckedChange={setCheckProzorro}
+              />
+              <label
+                htmlFor="prozorro-check"
+                className="text-sm cursor-pointer flex items-center gap-1.5"
+              >
+                🔍 Перевірити на Prozorro конкурентів після генерації
+                <span className="text-xs text-muted-foreground">(знайти схожі тендери)</span>
+              </label>
+            </div>
+
+            {/* Опис для пошуку на Prozorro */}
+            {checkProzorro && (
+              <Card className="p-4 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                      Що шукати на Prozorro?
+                    </h4>
+                  </div>
+
+                  <textarea
+                    value={prozorroSearchQuery}
+                    onChange={(e) => setProzorroSearchQuery(e.target.value)}
+                    placeholder="Наприклад: Магазини АТБ, Супермаркет 1400м², Ремонт офісу тощо"
+                    className="w-full min-h-[100px] p-3 rounded-md border border-blue-300 dark:border-blue-700 bg-white dark:bg-blue-950 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    <p>💡 <strong>Приклади:</strong></p>
+                    <ul className="list-disc list-inside ml-2 space-y-0.5">
+                      <li>"Магазини АТБ" - знайде схожі супермаркети</li>
+                      <li>"Будівництво офісу 500м²" - знайде офісні проекти схожої площі</li>
+                      <li>"Ремонт квартири" - знайде ремонтні роботи в житлових приміщеннях</li>
+                    </ul>
+                    <p className="mt-2">Система шукатиме схожі тендери за вашим описом, бюджетом кошторису (±30%) та площею об'єкта.</p>
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
 
           {/* Generate button */}
@@ -4564,6 +4625,46 @@ export default function AIEstimatePage() {
           {/* Результати верифікації */}
           {verificationResult && <VerificationResults result={verificationResult} />}
 
+          {/* Інформація про масштабування цін */}
+          {scalingInfo?.scaled && (
+            <Alert variant="default" className="border-orange-500 bg-orange-50 dark:bg-orange-950/20">
+              <AlertCircle className="h-4 w-4 text-orange-600" />
+              <AlertTitle className="text-orange-900 dark:text-orange-100">
+                ⚠️ Ціни були автоматично скориговані
+              </AlertTitle>
+              <AlertDescription>
+                <div className="space-y-2 mt-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Початкова сума AI:</span>
+                    <span className="font-semibold text-orange-700 dark:text-orange-300">
+                      {formatCurrency(scalingInfo.originalTotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Скоригована сума:</span>
+                    <span className="font-semibold text-green-700 dark:text-green-300">
+                      {formatCurrency(grandTotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Коефіцієнт масштабування:</span>
+                    <Badge variant="secondary" className="font-mono">
+                      ×{scalingInfo.factor.toFixed(2)}
+                    </Badge>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-orange-200 dark:border-orange-800">
+                    <p className="text-xs text-muted-foreground">
+                      <strong>Причина:</strong> {scalingInfo.reason}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      💡 Система автоматично скоригувала ціни для відповідності ринковим реаліям на основі площі об'єкта та типу робіт.
+                    </p>
+                  </div>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Debug Info */}
           {debugInfo && (
             <Card className={cn("p-4 border-2", debugInfo.status === 'OK' ? 'border-green-500/30 bg-green-50' : 'border-orange-500/30 bg-orange-50')}>
@@ -4627,44 +4728,29 @@ export default function AIEstimatePage() {
             ))}
           </div>
 
-          {/* Analysis Summary - Звіт інженера */}
-          {(estimate as any).analysisSummary && (
-            <Card className="p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/20 p-2">
-                  <Info className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base mb-3 text-primary">
-                    📋 Звіт інженера про аналіз проекту
-                  </h3>
-                  <div className="prose prose-sm max-w-none">
-                    <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
-                      {(estimate as any).analysisSummary}
+          {/* Кнопка "Звіт для інженера" - відкриває модалку з табами */}
+          {((estimate as any).analysisSummary || (estimate as any).prozorroAnalysis) && (
+            <Card className="p-4 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-primary/20 p-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base text-primary">Звіт для інженера</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Аналіз проекту та конкурентні тендери Prozorro
                     </p>
                   </div>
                 </div>
-              </div>
-            </Card>
-          )}
-
-          {/* Prozorro Analysis - Звіт про конкурентні тендери */}
-          {(estimate as any).prozorroAnalysis && (
-            <Card className="p-5 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-500/20 p-2">
-                  <ExternalLink className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base mb-3 text-blue-700">
-                    📊 Аналіз конкурентних тендерів Prozorro
-                  </h3>
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="text-xs leading-relaxed whitespace-pre-wrap text-foreground/90 font-mono bg-white/60 p-4 rounded-lg border border-blue-200 overflow-x-auto">
-                      {(estimate as any).prozorroAnalysis}
-                    </pre>
-                  </div>
-                </div>
+                <Button
+                  onClick={() => setEngineerReportOpen(true)}
+                  variant="default"
+                  size="sm"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Відкрити звіт
+                </Button>
               </div>
             </Card>
           )}
@@ -4674,9 +4760,18 @@ export default function AIEstimatePage() {
             <ProzorroTenderSearch
               estimateId={savedEstimateId}
               wizardData={wizardData}
+              searchQuery={prozorroSearchQuery}
               autoSearch={true}
             />
           )}
+
+          {/* Engineer Report Modal */}
+          <EngineerReportModal
+            open={engineerReportOpen}
+            onClose={() => setEngineerReportOpen(false)}
+            analysisSummary={(estimate as any).analysisSummary}
+            prozorroAnalysis={(estimate as any).prozorroAnalysis}
+          />
 
           {/* Sections */}
           {estimate.sections && estimate.sections.length > 0 ? estimate.sections.map((section, sIdx) => (
@@ -4785,18 +4880,27 @@ export default function AIEstimatePage() {
                               ) : (
                                 <div>
                                   <span className="text-sm">{item.description}</span>
+
+                                  {/* Джерело ціни */}
                                   {item.priceSource && (
-                                    <a
-                                      href={item.priceSource}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-1 mt-1 text-[10px] text-primary hover:underline"
-                                    >
-                                      <ExternalLink className="h-2.5 w-2.5" />
-                                      {item.priceNote || "Переглянути ціну"}
-                                    </a>
+                                    <div className="mt-1 flex items-center gap-1.5">
+                                      {item.priceSource.includes('Prozorro') ? (
+                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-green-100 dark:bg-green-950 text-green-700 dark:text-green-300 border-green-300 dark:border-green-700">
+                                          💰 {item.priceSource}
+                                        </Badge>
+                                      ) : item.priceSource.includes('Google') ? (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                                          🔍 {item.priceSource}
+                                        </Badge>
+                                      ) : (
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+                                          📊 {item.priceSource}
+                                        </Badge>
+                                      )}
+                                    </div>
                                   )}
-                                  {!item.priceSource && item.priceNote && (
+
+                                  {item.priceNote && (
                                     <p className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
                                       <Info className="h-2.5 w-2.5" />
                                       {item.priceNote}

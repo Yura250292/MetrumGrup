@@ -6,6 +6,7 @@ import { MaterialWithPrice } from '../materials-database-extended';
 import { WorkItemWithPrice } from '../work-items-database-extended';
 import { searchMaterialPrice, searchLaborCost } from '../price-search';
 import { ragSearch, getExtractedProjectData, isProjectVectorized } from '../rag/vectorizer';
+import { findSimilarPrices, getRecommendedPrice, type PriceReference } from '../prozorro-price-reference';
 
 export interface AgentConfig {
   name: string;
@@ -26,6 +27,7 @@ export interface AgentContext {
     sitePhotos?: string[];
   };
   previousSections?: EstimateSection[];
+  masterContext?: string; // 🆕 Комплексний аналіз всіх даних
 }
 
 export interface EstimateItem {
@@ -35,9 +37,10 @@ export interface EstimateItem {
   unitPrice: number;
   laborCost: number;
   totalCost: number;
-  priceSource: string; // "Google Search (Епіцентр)" або "База матеріалів"
+  priceSource: string; // "Google Search (Епіцентр)" або "База матеріалів" або "Prozorro"
   confidence: number; // 0-1
   notes?: string;
+  prozorroReferences?: PriceReference[]; // 🆕 Посилання на схожі позиції з Prozorro
 }
 
 export interface EstimateSection {
@@ -146,6 +149,53 @@ export abstract class BaseAgent {
       laborRate: fallbackRate,
       confidence: dbWork ? 0.7 : 0.3
     };
+  }
+
+  /**
+   * 🆕 Пошук ціни з Prozorro розпарсених кошторисів
+   * Використовує реальні дані з завершених тендерів
+   */
+  protected async getProzorroPrice(
+    itemDescription: string,
+    unit: string
+  ): Promise<{
+    price: number;
+    source: string;
+    confidence: number;
+    references?: PriceReference[];
+  } | null> {
+    try {
+      const recommendation = await getRecommendedPrice(itemDescription, unit, {
+        maxAge: 12,          // Останні 12 місяців
+        applyInflation: true, // Застосувати інфляцію для старих даних
+        minSimilarity: 65,    // Мінімум 65% схожості
+      });
+
+      if (!recommendation) {
+        return null; // Не знайдено схожих позицій
+      }
+
+      // Мапінг confidence
+      const confidenceMap = {
+        high: 0.9,
+        medium: 0.75,
+        low: 0.6,
+      };
+
+      const source = `Prozorro (${recommendation.statistics.count} тендерів, медіана)`;
+
+      console.log(`💰 Prozorro ціна для "${itemDescription}": ${recommendation.price} ₴ (confidence: ${recommendation.confidence})`);
+
+      return {
+        price: recommendation.price,
+        source,
+        confidence: confidenceMap[recommendation.confidence],
+        references: recommendation.references,
+      };
+    } catch (error) {
+      console.warn(`⚠️ Помилка пошуку Prozorro ціни для "${itemDescription}":`, error);
+      return null;
+    }
   }
 
   /**

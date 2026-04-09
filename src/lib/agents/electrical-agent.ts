@@ -143,7 +143,8 @@ export class ElectricalAgent extends BaseAgent {
   }
 
   /**
-   * Збагатити позиції актуальними цінами через Google Search
+   * Збагатити позиції актуальними цінами через Prozorro та Google Search
+   * ПРІОРИТЕТ: Prozorro (реальні тендери) → Google Search → База даних
    */
   private async enrichWithPrices(output: AgentOutput): Promise<AgentOutput> {
     const enrichedItems = [];
@@ -153,21 +154,40 @@ export class ElectricalAgent extends BaseAgent {
 
       // Якщо ціна вигадана або з низькою впевненістю
       if (!item.priceSource || item.confidence < 0.7) {
-        // Шукаємо актуальну ціну
-        const priceResult = await this.searchPrice(item.description, item.unit);
+        // 🆕 КРОК 1: Спробувати знайти в Prozorro (реальні завершені тендери)
+        const prozorroResult = await this.getProzorroPrice(item.description, item.unit);
 
-        if (priceResult.confidence > item.confidence) {
-          enrichedItem.unitPrice = priceResult.price;
-          enrichedItem.priceSource = priceResult.source;
-          enrichedItem.confidence = priceResult.confidence;
+        if (prozorroResult && prozorroResult.confidence > item.confidence) {
+          enrichedItem.unitPrice = prozorroResult.price;
+          enrichedItem.priceSource = prozorroResult.source;
+          enrichedItem.confidence = prozorroResult.confidence;
+          enrichedItem.prozorroReferences = prozorroResult.references;
 
           // Перерахувати totalCost
           enrichedItem.totalCost = enrichedItem.quantity * enrichedItem.unitPrice + enrichedItem.laborCost;
 
           console.log(
-            `  📊 Updated price for "${item.description}": ` +
-            `${item.unitPrice} → ${priceResult.price} ₴ (${priceResult.source}, conf: ${priceResult.confidence.toFixed(2)})`
+            `  💰 Prozorro price for "${item.description}": ` +
+            `${item.unitPrice} → ${prozorroResult.price} ₴ (${prozorroResult.source}, conf: ${prozorroResult.confidence.toFixed(2)})`
           );
+        }
+        // КРОК 2: Fallback до Google Search
+        else {
+          const priceResult = await this.searchPrice(item.description, item.unit);
+
+          if (priceResult.confidence > item.confidence) {
+            enrichedItem.unitPrice = priceResult.price;
+            enrichedItem.priceSource = priceResult.source;
+            enrichedItem.confidence = priceResult.confidence;
+
+            // Перерахувати totalCost
+            enrichedItem.totalCost = enrichedItem.quantity * enrichedItem.unitPrice + enrichedItem.laborCost;
+
+            console.log(
+              `  📊 Google price for "${item.description}": ` +
+              `${item.unitPrice} → ${priceResult.price} ₴ (${priceResult.source}, conf: ${priceResult.confidence.toFixed(2)})`
+            );
+          }
         }
       }
 

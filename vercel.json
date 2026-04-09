@@ -4,7 +4,13 @@
   "regions": ["fra1"],
   "functions": {
     "src/app/api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 60
+    },
+    "src/app/api/admin/estimates/generate-chunked/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/admin/projects/[id]/vectorize/route.ts": {
+      "maxDuration": 300
     }
   },
   "headers": [

@@ -13,6 +13,7 @@ import { useSession } from "next-auth/react";
 import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
 import { EstimateHistoryTimeline } from "@/components/admin/EstimateHistoryTimeline";
 import { ApprovalSignatureCard } from "@/components/admin/ApprovalSignatureCard";
+import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -96,6 +97,7 @@ export default function EstimateDetailPage({
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [updating, setUpdating] = useState(false);
   const [financeModalOpen, setFinanceModalOpen] = useState(false);
+  const [engineerReportOpen, setEngineerReportOpen] = useState(false);
   const [applyingFinance, setApplyingFinance] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
@@ -520,47 +522,39 @@ export default function EstimateDetailPage({
         </TabsList>
 
         <TabsContent value="details" className="space-y-4">
-          {/* Analysis Summary - Звіт інженера */}
-          {estimate.analysisSummary && (
-            <Card className="p-5 border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-primary/20 p-2">
-                  <Info className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base mb-3 text-primary">
-                    📋 Звіт інженера про аналіз проекту
-                  </h3>
-                  <div className="prose prose-sm max-w-none">
-                    <p className="text-sm leading-relaxed whitespace-pre-line text-foreground/90">
-                      {estimate.analysisSummary}
+          {/* Кнопка "Звіт для інженера" - відкриває модалку з табами */}
+          {(estimate.analysisSummary || estimate.prozorroAnalysis) && (
+            <Card className="p-4 border-primary/30 bg-gradient-to-r from-primary/5 to-primary/10 mb-6">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="rounded-lg bg-primary/20 p-2">
+                    <FileText className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-base text-primary">Звіт для інженера</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Аналіз проекту та конкурентні тендери Prozorro
                     </p>
                   </div>
                 </div>
+                <Button
+                  onClick={() => setEngineerReportOpen(true)}
+                  variant="default"
+                  size="sm"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Відкрити звіт
+                </Button>
               </div>
             </Card>
           )}
 
-          {/* Prozorro Analysis - Звіт про конкурентні тендери */}
-          {estimate.prozorroAnalysis && (
-            <Card className="p-5 border-blue-200 bg-gradient-to-br from-blue-50 to-blue-100/50 mb-6">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-blue-500/20 p-2">
-                  <ExternalLink className="h-5 w-5 text-blue-600" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base mb-3 text-blue-700">
-                    📊 Аналіз конкурентних тендерів Prozorro
-                  </h3>
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="text-xs leading-relaxed whitespace-pre-wrap text-foreground/90 font-mono bg-white/60 p-4 rounded-lg border border-blue-200 overflow-x-auto">
-                      {estimate.prozorroAnalysis}
-                    </pre>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          )}
+          <EngineerReportModal
+            open={engineerReportOpen}
+            onClose={() => setEngineerReportOpen(false)}
+            analysisSummary={estimate.analysisSummary}
+            prozorroAnalysis={estimate.prozorroAnalysis}
+          />
 
           {/* Sections with items */}
           {estimate.sections.map((section) => (

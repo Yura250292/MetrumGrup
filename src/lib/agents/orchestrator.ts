@@ -15,8 +15,10 @@ import { FireSafetyAgent } from './fire-safety-agent';
 import { FinishingAgent } from './finishing-agent';
 import { CrossValidator } from './cross-validator';
 import { validateTotalCost, applyScalingIfNeeded } from './price-validator';
+import { PreAnalysisAgent, type PreAnalysisResult } from './pre-analysis-agent';
+import { MasterEstimateAgent } from './master-estimate-agent';
 
-export type GenerationMode = 'gemini' | 'openai' | 'multi-agent';
+export type GenerationMode = 'gemini' | 'openai' | 'multi-agent' | 'master';
 
 export interface OrchestratorConfig {
   mode: GenerationMode;
@@ -29,6 +31,7 @@ export interface OrchestratorConfig {
     sitePhotos?: string[];
   };
   projectNotes?: string;
+  prozorroSearchQuery?: string; // Опис для пошуку на Prozorro
 }
 
 export interface ProgressUpdate {
@@ -53,6 +56,7 @@ export interface EstimateData {
     message: string;
   }>;
   analysisSummary?: string; // Звіт інженера про аналіз проекту
+  preAnalysisResult?: PreAnalysisResult; // 🆕 Результат комплексного аналізу
   scalingInfo?: {
     scaled: boolean;
     factor: number;
@@ -176,9 +180,155 @@ export class EstimateOrchestrator {
       message: string;
     }> = [];
 
-    console.log(`🚀 Starting generation with ${totalAgents} agents...`);
+    // 🆕 КРОК 0: Комплексний pre-analysis перед генерацією
+    onProgress({
+      phase: 'pre-analysis',
+      status: 'analyzing',
+      message: '🔍 Аналізую всі дані проекту...',
+      progress: 0,
+    });
 
-    for (let i = 0; i < totalAgents; i++) {
+    console.log(`🔍 Starting comprehensive pre-analysis...`);
+
+    const preAnalysisAgent = new PreAnalysisAgent();
+    const preAnalysisResult = await preAnalysisAgent.analyze({
+      wizardData: this.config.wizardData,
+      projectId: this.config.projectId,
+      projectNotes: this.config.projectNotes,
+      documents: this.config.documents,
+      prozorroSearchQuery: this.config.prozorroSearchQuery,
+    });
+
+    console.log(`✅ Pre-analysis complete:`, {
+      wizardAnalyzed: true,
+      documentsFound: preAnalysisResult.documentsAnalysis.hasDocuments,
+      prozorroProjects: preAnalysisResult.prozorroAnalysis.similarProjectsFound,
+      prozorroItems: preAnalysisResult.prozorroAnalysis.totalItemsParsed,
+    });
+
+    onProgress({
+      phase: 'pre-analysis',
+      status: 'complete',
+      message: `✅ Аналіз завершено: ${preAnalysisResult.projectSummary}`,
+      progress: 5,
+      data: {
+        prozorroProjects: preAnalysisResult.prozorroAnalysis.similarProjectsFound,
+        prozorroItems: preAnalysisResult.prozorroAnalysis.totalItemsParsed,
+        recommendations: preAnalysisResult.recommendations,
+        warnings: preAnalysisResult.warnings,
+      },
+    });
+
+    // 🆕 РЕЖИМ MASTER: Один агент генерує ВСЕ одночасно
+    if (this.mode === 'master') {
+      console.log(`🎯 Using MASTER agent mode (single comprehensive generation)`);
+
+      onProgress({
+        phase: 'master-generation',
+        status: 'generating',
+        message: '🎯 Генерація детального кошторису (секція-за-секцією)...',
+        progress: 10,
+      });
+
+      try {
+        const masterAgent = new MasterEstimateAgent();
+
+        const context: AgentContext = {
+          projectId: this.config.projectId,
+          wizardData: this.config.wizardData,
+          documents: this.config.documents,
+          previousSections: [],
+          masterContext: preAnalysisResult.masterContext,
+        };
+
+        // Передаємо progress callback для real-time оновлень по секціях
+        const masterResult = await masterAgent.generate(context, (update) => {
+          const progressPercent = 10 + Math.floor((update.sectionIndex / update.totalSections) * 80);
+
+          if (update.status === 'generating') {
+            onProgress({
+              phase: `master-${update.sectionIndex + 1}`,
+              status: 'generating',
+              message: `🔨 [${update.sectionIndex + 1}/${update.totalSections}] ${update.sectionTitle}...`,
+              progress: progressPercent,
+            });
+          } else if (update.status === 'complete') {
+            onProgress({
+              phase: `master-${update.sectionIndex + 1}`,
+              status: 'complete',
+              message: `✅ [${update.sectionIndex + 1}/${update.totalSections}] ${update.sectionTitle}: ${update.itemsGenerated} позицій`,
+              progress: progressPercent,
+              data: {
+                sectionTitle: update.sectionTitle,
+                itemsCount: update.itemsGenerated,
+              }
+            });
+          } else if (update.status === 'error') {
+            onProgress({
+              phase: `master-${update.sectionIndex + 1}`,
+              status: 'error',
+              message: `❌ ${update.sectionTitle}: помилка`,
+              progress: progressPercent,
+            });
+          }
+        });
+
+        sections = masterResult.sections;
+
+        // Зібрати попередження
+        if (masterResult.warnings && masterResult.warnings.length > 0) {
+          masterResult.warnings.forEach(warning => {
+            validationIssues.push({
+              severity: 'warning',
+              agent: 'MasterAgent',
+              message: warning
+            });
+          });
+        }
+
+        onProgress({
+          phase: 'master-generation',
+          status: 'complete',
+          message: `✅ MasterAgent: ${masterResult.sections.length} секцій, ${masterResult.totalCost.toFixed(0)} ₴`,
+          progress: 90,
+          data: {
+            sectionsGenerated: masterResult.metadata.sectionsGenerated,
+            totalItems: masterResult.metadata.totalItems,
+            prozorroPricesUsed: masterResult.metadata.prozorroPricesUsed,
+            googlePricesUsed: masterResult.metadata.googlePricesUsed,
+          }
+        });
+
+        console.log(`✅ Master generation complete:`, {
+          sections: masterResult.sections.length,
+          items: masterResult.metadata.totalItems,
+          total: masterResult.totalCost,
+          prozorroUsage: masterResult.metadata.prozorroPricesUsed,
+        });
+
+      } catch (error) {
+        console.error(`❌ Error in MasterAgent:`, error);
+
+        validationIssues.push({
+          severity: 'error',
+          agent: 'MasterAgent',
+          message: error instanceof Error ? error.message : 'Unknown error'
+        });
+
+        onProgress({
+          phase: 'master-generation',
+          status: 'error',
+          message: `❌ MasterAgent: помилка генерації`,
+          progress: 90,
+        });
+
+        throw error;
+      }
+    } else {
+      // MULTI-AGENT режим: послідовна генерація секцій
+      console.log(`🚀 Starting generation with ${totalAgents} agents...`);
+
+      for (let i = 0; i < totalAgents; i++) {
       const agent = this.agents[i];
       const agentName = (agent as any).config.name || `Agent ${i + 1}`;
       const progress = ((i + 1) / totalAgents) * 100;
@@ -197,6 +347,7 @@ export class EstimateOrchestrator {
           wizardData: this.config.wizardData,
           documents: this.config.documents,
           previousSections: sections, // Попередні результати
+          masterContext: preAnalysisResult.masterContext, // 🆕 Комплексний аналіз
         };
 
         // Генерувати секцію
@@ -249,6 +400,7 @@ export class EstimateOrchestrator {
         });
       }
     }
+    } // END multi-agent mode
 
     // Валідація цін та масштабування якщо потрібно
     onProgress({
@@ -362,7 +514,7 @@ export class EstimateOrchestrator {
     const analysisSummary = await this.generateAnalysisSummary(sections, validationIssues);
 
     return {
-      title: `AI Кошторис (${this.mode === 'multi-agent' ? 'Multi-Agent' : this.mode === 'openai' ? 'OpenAI' : 'Gemini'})`,
+      title: `AI Кошторис (${this.mode === 'master' ? 'Master Agent' : this.mode === 'multi-agent' ? 'Multi-Agent' : this.mode === 'openai' ? 'OpenAI' : 'Gemini'})`,
       sections,
       summary: {
         materialsCost,
@@ -371,6 +523,7 @@ export class EstimateOrchestrator {
       },
       validationIssues: validationIssues.length > 0 ? validationIssues : undefined,
       analysisSummary,
+      preAnalysisResult, // 🆕 Результат комплексного аналізу
       scalingInfo, // 📊 Інформація про масштабування цін
     };
   }
