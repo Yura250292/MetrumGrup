@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail, Plus, Upload, FileText, Image as ImageIcon, AlertCircle, Info } from "lucide-react";
+import { ArrowLeft, Send, CheckCircle, XCircle, Calculator, Loader2, DollarSign, Percent, Truck, X, FileDown, FileSpreadsheet, Mail, Plus, Upload, FileText, Image as ImageIcon, AlertCircle, Info, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
