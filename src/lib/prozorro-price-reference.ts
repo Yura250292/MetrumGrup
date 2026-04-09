@@ -100,7 +100,7 @@ export async function findSimilarPrices(
     }
 
     // Розрахувати схожість та відфільтрувати
-    const results: PriceReference[] = items
+    const results = (items
       .map(item => {
         const similarity = calculateTextSimilarity(
           itemDescription.toLowerCase(),
@@ -145,14 +145,14 @@ export async function findSimilarPrices(
           similarity,
         };
       })
-      .filter((item): item is PriceReference => item !== null)
+      .filter((item): item is NonNullable<typeof item> => item !== null)
       .sort((a, b) => {
         // Сортувати за схожістю (70%) та свіжістю (30%)
         const scoreA = a.similarity * 0.7 + (1 - a.ageMonths / maxAge) * 30;
         const scoreB = b.similarity * 0.7 + (1 - b.ageMonths / maxAge) * 30;
         return scoreB - scoreA;
       })
-      .slice(0, limit);
+      .slice(0, limit)) as PriceReference[];
 
     console.log(`✅ Повертаємо ${results.length} найкращих збігів`);
 
