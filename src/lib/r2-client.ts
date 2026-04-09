@@ -10,7 +10,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 const ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
 const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
 const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
-const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'metrum-estimates';
+const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'metrum';
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL!;
 
 // R2 endpoint
