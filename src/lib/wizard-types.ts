@@ -206,6 +206,10 @@ export interface WizardData {
       switches: number;
       lightPoints: number;
       outdoorLighting: boolean;
+      // Підключення електрики (для нових будівель)
+      needsConnection?: boolean; // Чи потрібен підвід від вулиці
+      connectionDistance?: number; // Відстань в метрах
+      needsTransformer?: boolean; // Чи потрібна трансформаторна підстанція
     };
 
     // Опалення
@@ -215,6 +219,9 @@ export interface WizardData {
       underfloor?: boolean;
       underfloorArea?: string;
       boilerPower?: number; // кВт
+      // Підключення газу (якщо тип 'gas')
+      needsGasConnection?: boolean; // Чи потрібен підвід газу
+      gasConnectionDistance?: number; // Відстань в метрах
     };
 
     // Водопостачання
@@ -224,12 +231,20 @@ export interface WizardData {
       source: 'central' | 'well' | 'borehole';
       boilerType?: 'gas' | 'electric' | 'none';
       boilerVolume?: number; // літри
+      // Підключення води
+      needsConnection?: boolean; // Чи потрібен підвід від вулиці
+      connectionDistance?: number; // Відстань в метрах
+      needsPump?: boolean; // Чи потрібна насосна станція
     };
 
     // Каналізація
     sewerage: {
       type: 'central' | 'septic' | 'treatment';
       pumpNeeded: boolean;
+      // Підключення каналізації
+      needsConnection?: boolean; // Чи потрібен підвід до вулиці
+      connectionDistance?: number; // Відстань в метрах
+      needsLift?: boolean; // Чи потрібна каналізаційна підіймальна установка
     };
 
     // Вентиляція
@@ -243,9 +258,16 @@ export interface WizardData {
 
   // Оздоблення
   finishing: {
+    // Підготовчі роботи (для квартир/будинків)
+    preparation?: {
+      needsSpackle?: boolean; // Чи потрібна шпаклівка
+      spackleType?: 'basic' | 'full'; // Базова або повна
+      spackleArea?: number; // м²
+    };
+
     // Стіни
     walls: {
-      material: 'paint' | 'wallpaper' | 'tile' | 'panels' | 'mixed';
+      material: 'paint' | 'wallpaper' | 'tile' | 'panels' | 'mixed' | 'industrial_paint' | 'concrete_finish';
       qualityLevel: 'economy' | 'standard' | 'premium';
       tileArea?: number; // м²
     };

@@ -315,8 +315,8 @@ function EstimateWizardModal({
   const progress = ((wizardStep + 1) / totalSteps) * 100;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm pt-8 pb-8 overflow-y-auto">
+      <Card className="w-full max-w-3xl max-h-[85vh] overflow-y-auto my-auto">
         {/* Progress Bar */}
         <div className="h-2 bg-muted">
           <div
@@ -1860,6 +1860,164 @@ function WizardStep7_Utilities({ data, setData }: { data: WizardData; setData: (
           </label>
         </div>
       </div>
+
+      {/* Infrastructure Connections (для нових будівель) */}
+      {(data.objectType === 'house' || data.objectType === 'townhouse' || data.objectType === 'commercial') &&
+        (data.houseData?.currentState === 'greenfield' || data.townhouseData?.currentState === 'greenfield' || data.commercialData?.currentState === 'greenfield') && (
+        <div className="border-2 border-orange-200 rounded-lg p-4 space-y-4 bg-orange-50/50">
+          <div className="flex items-center gap-2 mb-2">
+            <h4 className="font-semibold">🔌 Підключення комунікацій (від вулиці до об'єкта)</h4>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Для нових будівель потрібно врахувати прокладання комунікацій від вуличних мереж
+          </p>
+
+          {/* Electricity Connection */}
+          <div className="bg-white rounded-lg p-3 space-y-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={utilities.electrical.needsConnection || false}
+                onChange={(e) => updateUtilities('electrical', { needsConnection: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium">⚡ Підвід електрики від вулиці</span>
+            </label>
+            {utilities.electrical.needsConnection && (
+              <div className="ml-6 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Відстань (м)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={utilities.electrical.connectionDistance || 0}
+                    onChange={(e) => updateUtilities('electrical', { connectionDistance: parseInt(e.target.value) || 0 })}
+                    className="w-full px-2 py-1 text-sm border rounded"
+                    placeholder="50"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={utilities.electrical.needsTransformer || false}
+                      onChange={(e) => updateUtilities('electrical', { needsTransformer: e.target.checked })}
+                      className="rounded"
+                    />
+                    Потрібна ТП
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Water Connection */}
+          <div className="bg-white rounded-lg p-3 space-y-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={utilities.water.needsConnection || false}
+                onChange={(e) => updateUtilities('water', { needsConnection: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium">💧 Підвід води від вулиці</span>
+            </label>
+            {utilities.water.needsConnection && (
+              <div className="ml-6 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Відстань (м)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={utilities.water.connectionDistance || 0}
+                    onChange={(e) => updateUtilities('water', { connectionDistance: parseInt(e.target.value) || 0 })}
+                    className="w-full px-2 py-1 text-sm border rounded"
+                    placeholder="50"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={utilities.water.needsPump || false}
+                      onChange={(e) => updateUtilities('water', { needsPump: e.target.checked })}
+                      className="rounded"
+                    />
+                    Потрібен насос
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sewerage Connection */}
+          <div className="bg-white rounded-lg p-3 space-y-3">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={utilities.sewerage.needsConnection || false}
+                onChange={(e) => updateUtilities('sewerage', { needsConnection: e.target.checked })}
+                className="rounded"
+              />
+              <span className="text-sm font-medium">🚰 Підвід каналізації до вулиці</span>
+            </label>
+            {utilities.sewerage.needsConnection && (
+              <div className="ml-6 grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium mb-1">Відстань (м)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={utilities.sewerage.connectionDistance || 0}
+                    onChange={(e) => updateUtilities('sewerage', { connectionDistance: parseInt(e.target.value) || 0 })}
+                    className="w-full px-2 py-1 text-sm border rounded"
+                    placeholder="50"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <label className="flex items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={utilities.sewerage.needsLift || false}
+                      onChange={(e) => updateUtilities('sewerage', { needsLift: e.target.checked })}
+                      className="rounded"
+                    />
+                    КНС потрібна
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Gas Connection */}
+          {utilities.heating.type === 'gas' && (
+            <div className="bg-white rounded-lg p-3 space-y-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={utilities.heating.needsGasConnection || false}
+                  onChange={(e) => updateUtilities('heating', { needsGasConnection: e.target.checked })}
+                  className="rounded"
+                />
+                <span className="text-sm font-medium">🔥 Підвід газу від вулиці</span>
+              </label>
+              {utilities.heating.needsGasConnection && (
+                <div className="ml-6">
+                  <label className="block text-xs font-medium mb-1">Відстань (м)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={utilities.heating.gasConnectionDistance || 0}
+                    onChange={(e) => updateUtilities('heating', { gasConnectionDistance: parseInt(e.target.value) || 0 })}
+                    className="w-full px-2 py-1 text-sm border rounded"
+                    placeholder="50"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1882,6 +2040,28 @@ function WizardStep8_Finishing({ data, setData }: { data: WizardData; setData: (
     });
   };
 
+  // Get wall material options based on building type
+  const getWallMaterialOptions = () => {
+    if (data.objectType === 'commercial') {
+      return [
+        { value: 'industrial_paint', label: 'Промислова фарба', desc: 'Водостійка' },
+        { value: 'tile', label: 'Плитка', desc: 'Кераміка/керамограніт' },
+        { value: 'panels', label: 'Панелі ПВХ', desc: 'Швидкий монтаж' },
+        { value: 'concrete_finish', label: 'Бетон', desc: 'Без оздоблення' },
+      ];
+    } else {
+      return [
+        { value: 'paint', label: 'Фарба', desc: 'Класичний варіант' },
+        { value: 'wallpaper', label: 'Шпалери', desc: 'Затишок' },
+        { value: 'tile', label: 'Плитка', desc: 'Ванна/кухня' },
+        { value: 'panels', label: 'Панелі', desc: 'Декоративні' },
+      ];
+    }
+  };
+
+  const wallMaterialOptions = getWallMaterialOptions();
+  const isResidential = ['house', 'townhouse', 'apartment'].includes(data.objectType);
+
   return (
     <div className="space-y-6">
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -1890,19 +2070,119 @@ function WizardStep8_Finishing({ data, setData }: { data: WizardData; setData: (
         </p>
       </div>
 
+      {/* Spackle/Putty work (for residential buildings) */}
+      {isResidential && (
+        <div className="border-2 border-orange-200 bg-orange-50/50 rounded-lg p-4 space-y-3">
+          <h4 className="font-semibold flex items-center gap-2">
+            🔧 Підготовка стін (Шпаклівка)
+          </h4>
+          <p className="text-xs text-muted-foreground">
+            Шпаклювання необхідне перед фарбуванням або поклейкою шпалер
+          </p>
+
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={finishing.preparation?.needsSpackle || false}
+              onChange={(e) => {
+                setData({
+                  ...data,
+                  finishing: {
+                    ...finishing,
+                    preparation: {
+                      ...finishing.preparation,
+                      needsSpackle: e.target.checked,
+                    },
+                  },
+                });
+              }}
+              className="rounded"
+            />
+            <span className="text-sm font-medium">Потрібна шпаклівка стін</span>
+          </label>
+
+          {finishing.preparation?.needsSpackle && (
+            <div className="ml-6 space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-2">Тип шпаклівки</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { value: 'basic', label: 'Базова', desc: 'Вирівнювання нерівностей' },
+                    { value: 'full', label: 'Повна', desc: 'Під фарбу/шпалери' },
+                  ].map((option) => (
+                    <label
+                      key={option.value}
+                      className={cn(
+                        "flex flex-col gap-1 p-2 border rounded-lg cursor-pointer",
+                        finishing.preparation?.spackleType === option.value && "border-primary bg-primary/5"
+                      )}
+                    >
+                      <input
+                        type="radio"
+                        name="spackleType"
+                        value={option.value}
+                        checked={finishing.preparation?.spackleType === option.value}
+                        onChange={(e) => {
+                          setData({
+                            ...data,
+                            finishing: {
+                              ...finishing,
+                              preparation: {
+                                ...finishing.preparation,
+                                spackleType: e.target.value as 'basic' | 'full',
+                              },
+                            },
+                          });
+                        }}
+                        className="sr-only"
+                      />
+                      <span className="text-sm font-semibold">{option.label}</span>
+                      <span className="text-xs text-muted-foreground">{option.desc}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Площа шпаклівки (м²)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={finishing.preparation?.spackleArea || 0}
+                  onChange={(e) => {
+                    setData({
+                      ...data,
+                      finishing: {
+                        ...finishing,
+                        preparation: {
+                          ...finishing.preparation,
+                          spackleArea: parseFloat(e.target.value) || 0,
+                        },
+                      },
+                    });
+                  }}
+                  className="w-full px-3 py-2 border rounded-lg"
+                  placeholder={data.totalArea || "0"}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Walls */}
       <div className="border rounded-lg p-4 space-y-4">
         <h4 className="font-semibold">Стіни</h4>
 
         <div>
-          <label className="block text-sm font-medium mb-2">Основний матеріал</label>
+          <label className="block text-sm font-medium mb-2">
+            Основний матеріал
+            {data.objectType === 'commercial' && (
+              <span className="ml-2 text-xs text-orange-600">(для промислових приміщень)</span>
+            )}
+          </label>
           <div className="grid grid-cols-2 gap-3">
-            {[
-              { value: 'paint', label: 'Фарба', desc: 'Класичний варіант' },
-              { value: 'wallpaper', label: 'Шпалери', desc: 'Затишок' },
-              { value: 'tile', label: 'Плитка', desc: 'Ванна/кухня' },
-              { value: 'panels', label: 'Панелі', desc: 'Декоративні' },
-            ].map((option) => (
+            {wallMaterialOptions.map((option) => (
               <label
                 key={option.value}
                 className={cn(
@@ -2816,14 +3096,17 @@ export default function AIEstimatePage() {
 
   // Wizard complete handler
   const handleWizardComplete = async () => {
-    setShowWizard(false);
     setWizardCompleted(true);
-    setWizardStep(0); // Reset to step 0 (object type selection)
 
     // Sync area from wizard to main form
     if (wizardData.totalArea) {
       setArea(wizardData.totalArea);
     }
+
+    // Close wizard after a brief delay to ensure data is saved
+    setTimeout(() => {
+      setShowWizard(false);
+    }, 100);
 
     // Auto-select all categories and set default template when wizard is completed
     // This ensures backend has necessary data even though UI is hidden
