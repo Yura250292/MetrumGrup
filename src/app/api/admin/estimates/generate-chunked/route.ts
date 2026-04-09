@@ -56,6 +56,35 @@ export async function POST(request: NextRequest) {
         const r2Keys = JSON.parse(r2KeysStr);
         const wizardData = wizardDataStr ? JSON.parse(wizardDataStr) : null;
 
+        // ⚠️ ВАЛІДАЦІЯ ПЛОЩІ
+        if (wizardData) {
+          const areaRaw = wizardData.totalArea || wizardData.area;
+          const area = areaRaw ? (typeof areaRaw === 'string' ? parseFloat(areaRaw) : areaRaw) : 0;
+
+          console.log(`📐 Площа проекту: ${area} м² (raw: ${areaRaw}, type: ${typeof areaRaw})`);
+
+          if (!area || area === 0 || isNaN(area)) {
+            console.error(`❌ КРИТИЧНА ПОМИЛКА: Площа не вказана або = 0`);
+            console.error(`wizardData:`, JSON.stringify(wizardData, null, 2));
+
+            throw new Error(
+              `❌ Не вказано площу проекту! \n` +
+              `Площа обов'язкова для розрахунку кошторису.\n` +
+              `Отримано: "${areaRaw}" (${typeof areaRaw})`
+            );
+          }
+
+          // Конвертувати в число якщо прийшло як string
+          if (typeof wizardData.totalArea === 'string') {
+            wizardData.totalArea = parseFloat(wizardData.totalArea);
+          }
+          if (typeof wizardData.area === 'string') {
+            wizardData.area = parseFloat(wizardData.area);
+          }
+
+          console.log(`✅ Площа проекту валідна: ${wizardData.totalArea || wizardData.area} м²`);
+        }
+
         sendUpdate({
           phase: 0,
           status: 'analyzing',

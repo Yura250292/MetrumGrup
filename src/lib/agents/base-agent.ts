@@ -218,11 +218,21 @@ export abstract class BaseAgent {
    * Отримати контекст про реальні ціни будівництва
    */
   protected getPriceContext(context: AgentContext): string {
-    const area = context.wizardData?.totalArea || context.wizardData?.area || 0;
+    // Конвертувати area в число (може прийти як string)
+    const areaRaw = context.wizardData?.totalArea || context.wizardData?.area || 0;
+    const area = typeof areaRaw === 'string' ? parseFloat(areaRaw) : areaRaw;
     const buildingType = context.wizardData?.buildingType || 'commercial';
 
-    if (!area) {
-      return '';
+    if (!area || area === 0 || isNaN(area)) {
+      return `
+⚠️ КРИТИЧНА ПОМИЛКА - ПЛОЩА НЕ ВКАЗАНА!
+
+Площа проекту = 0 або не вказана.
+БЕЗ ПЛОЩІ НЕМОЖЛИВО РОЗРАХУВАТИ КОШТОРИС!
+
+🚨 НЕ ВИКОРИСТОВУЙ ДЕФОЛТНУ ПЛОЩУ 150м²!
+🚨 Попроси користувача вказати площу проекту.
+`;
     }
 
     return `
@@ -376,7 +386,19 @@ ${ragContext}
     // Wizard дані (пріоритетніші за автоматично витягнуті)
     if (context.wizardData) {
       block += `ДАНІ З WIZARD (введені користувачем):\n`;
-      block += `- Площа: ${context.wizardData.totalArea || 'не вказано'} м²\n`;
+
+      // Конвертувати площу в число
+      const areaRaw = context.wizardData.totalArea || context.wizardData.area;
+      const area = areaRaw ? (typeof areaRaw === 'string' ? parseFloat(areaRaw) : areaRaw) : null;
+
+      if (area && area > 0 && !isNaN(area)) {
+        block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+        block += `🎯 ПЛОЩА ПРОЕКТУ: ${area.toLocaleString()} м²\n`;
+        block += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+      } else {
+        block += `⚠️ ПЛОЩА: НЕ ВКАЗАНА (${areaRaw})\n`;
+      }
+
       block += `- Поверхів: ${context.wizardData.floors || 'не вказано'}\n`;
       block += `- Тип об'єкту: ${context.wizardData.buildingType || 'не вказано'}\n`;
       if (context.wizardData.foundationType) {
