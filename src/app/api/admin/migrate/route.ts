@@ -32,7 +32,9 @@ export async function POST() {
     `);
     console.log('✅ Migration 2: pgvector extension enabled');
 
-    // Migration 3: RAG tables
+    // Migration 3: RAG tables (split into separate commands)
+
+    // Table: project_vectors
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS project_vectors (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
@@ -44,15 +46,24 @@ export async function POST() {
         embedding vector(1536),
         metadata JSONB DEFAULT '{}'::jsonb,
         created_at TIMESTAMPTZ DEFAULT NOW()
-      );
+      )
+    `);
 
+    await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS project_vectors_embedding_idx
         ON project_vectors
-        USING hnsw (embedding vector_cosine_ops);
+        USING hnsw (embedding vector_cosine_ops)
+    `);
 
+    await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS project_vectors_project_id_idx
-        ON project_vectors(project_id);
+        ON project_vectors(project_id)
+    `);
 
+    console.log('✅ Migration 3a: project_vectors table created');
+
+    // Table: project_parsed_content
+    await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS project_parsed_content (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
         project_id TEXT NOT NULL UNIQUE,
@@ -62,8 +73,13 @@ export async function POST() {
         error_message TEXT,
         processed_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT NOW()
-      );
+      )
+    `);
 
+    console.log('✅ Migration 3b: project_parsed_content table created');
+
+    // Table: price_cache
+    await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS price_cache (
         id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
         material_name TEXT NOT NULL,
@@ -75,13 +91,16 @@ export async function POST() {
         cached_at TIMESTAMPTZ DEFAULT NOW(),
         expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '24 hours'),
         UNIQUE(material_name, unit)
-      );
+      )
+    `);
 
+    await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS price_cache_embedding_idx
         ON price_cache
-        USING hnsw (embedding vector_cosine_ops);
+        USING hnsw (embedding vector_cosine_ops)
     `);
-    console.log('✅ Migration 3: RAG tables created');
+
+    console.log('✅ Migration 3c: price_cache table created');
 
     console.log('✅ All migrations completed successfully');
 
