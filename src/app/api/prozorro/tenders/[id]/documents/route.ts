@@ -3,19 +3,13 @@ import { auth } from '@/lib/auth';
 import { unauthorizedResponse, forbiddenResponse } from '@/lib/auth-utils';
 import { prozorroClient } from '@/lib/prozorro-client';
 
-interface RouteParams {
-  params: {
-    id: string;
-  };
-}
-
 /**
  * GET /api/prozorro/tenders/[id]/documents
  * Отримати список документів тендера (кошториси, специфікації)
  */
 export async function GET(
   request: NextRequest,
-  { params }: RouteParams
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -27,7 +21,7 @@ export async function GET(
   }
 
   try {
-    const { id: tenderId } = params;
+    const { id: tenderId } = await params;
     const { searchParams } = new URL(request.url);
     const filterType = searchParams.get('type'); // 'billOfQuantity' or 'all'
 
