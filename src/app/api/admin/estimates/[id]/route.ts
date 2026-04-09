@@ -50,7 +50,7 @@ export async function GET(
       profitTaxAmount: true,
       unifiedTaxAmount: true,
       pdfoAmount: true,
-      // analysisSummary: true, // Temporarily excluded until migration is applied
+      analysisSummary: true,
       project: { select: { title: true, client: { select: { name: true } } } },
       createdBy: { select: { name: true } },
       sections: {

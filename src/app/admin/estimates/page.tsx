@@ -47,7 +47,7 @@ export default async function EstimatesPage() {
       discount: true,
       finalAmount: true,
       createdAt: true,
-      // analysisSummary: true, // Temporarily excluded until migration is applied
+      analysisSummary: true,
       project: { select: { title: true, client: { select: { name: true } } } },
       createdBy: { select: { name: true } },
     },
