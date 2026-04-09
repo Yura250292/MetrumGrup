@@ -159,12 +159,15 @@ export function isR2Configured(): boolean {
  * Використовувати R2 тільки на продакшені
  */
 export function shouldUseR2(): boolean {
+  // ТИМЧАСОВО ВИМКНЕНО через CORS проблеми
+  // TODO: Виправити CORS конфігурацію в Cloudflare R2
+  return false;
+
   // На localhost - не використовуємо R2 (працюємо напряму)
   // На продакшені - використовуємо R2
-  const isProduction = process.env.NODE_ENV === 'production' ||
-                       process.env.VERCEL_ENV === 'production';
-
-  return isProduction && isR2Configured();
+  // const isProduction = process.env.NODE_ENV === 'production' ||
+  //                      process.env.VERCEL_ENV === 'production';
+  // return isProduction && isR2Configured();
 }
 
 /**
