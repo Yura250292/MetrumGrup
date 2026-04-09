@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
         documentTitle,
         documentFormat,
         parseStatus: parseResult.errors.length > 0 ? 'partial' : 'success',
-        parseErrors: parseResult.errors.length > 0 ? parseResult.errors : null,
+        parseErrors: parseResult.errors.length > 0 ? parseResult.errors : undefined,
         totalItems: parseResult.items.length,
         totalAmount: parseResult.totalAmount,
         items: {
