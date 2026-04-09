@@ -48,11 +48,12 @@ export async function POST(request: NextRequest) {
         const key = `uploads/${session.user.id}/${timestamp}_${sanitizedName}`;
 
         // Створюємо команду для PutObject
+        // ВАЖЛИВО: Не вказуємо ContentLength, щоб браузер сам встановив header
         const command = new PutObjectCommand({
           Bucket: BUCKET_NAME,
           Key: key,
           ContentType: file.type,
-          ContentLength: file.size,
+          // ContentLength НЕ вказуємо - інакше підпис не співпаде з браузерним запитом
           Metadata: {
             originalName: file.name,
             uploadedBy: session.user.id,

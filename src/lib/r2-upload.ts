@@ -63,12 +63,13 @@ export async function uploadFilesToR2(
         console.log(`📤 Uploading ${file.name} to R2...`);
 
         // PUT request напряму в R2
+        // ВАЖЛИВО: Не вказуємо Content-Length - браузер додасть автоматично
         const uploadRes = await fetch(upload.url, {
           method: 'PUT',
           body: file,
           headers: {
             'Content-Type': file.type,
-            'Content-Length': file.size.toString(),
+            // Content-Length НЕ вказуємо - браузер додасть сам
           },
         });
 
