@@ -347,18 +347,19 @@ export class PreAnalysisAgent {
 
       const totalItemsParsed = parsedEstimates.reduce((sum: number, est: any) => sum + est.totalItems, 0);
 
-      // 🆕 Збагатити кожен тендер: бюджет, локація, ключ
+      // 🆕 Збагатити кожен тендер: бюджет, локація, реальна схожість
       const enrichedTenders = tenders.map(t => {
         const tenderKey = t.tenderID || t.id || '';
         const parsed = parsedEstimates.find((e: any) => e.tenderId === tenderKey);
         const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
         const budget = awardedAmount || t.value?.amount || 0;
         const location = this.extractLocation(t);
+        const similarity = this.calculateRelevance(t.title || '', searchQuery);
 
         return {
           title: t.title || t.tenderID || 'Без назви',
           budget,
-          similarity: 85,
+          similarity,
           itemsCount: parsed?.totalItems || 0,
           tenderID: t.tenderID || t.id,
           procuringEntity: t.procuringEntity?.name || '',
@@ -367,11 +368,11 @@ export class PreAnalysisAgent {
           city: location.city,
           location: location.full,
         };
-      }).filter(p => p.budget > 0);
+      }).filter(p => p.budget > 0 && p.similarity >= 30); // 🆕 фільтр: тільки релевантні
 
-      // Топ-10 для відображення
+      // Топ-10 за РЕАЛЬНОЮ схожістю (а не за бюджетом)
       const topSimilarProjects = enrichedTenders
-        .sort((a, b) => b.budget - a.budget)
+        .sort((a, b) => b.similarity - a.similarity || b.budget - a.budget)
         .slice(0, 10)
         .map(({ location, ...rest }) => rest); // прибираємо location з топ-списку
 
@@ -673,5 +674,73 @@ export class PreAnalysisAgent {
     const full = [city, street && `вул. ${street}`].filter(Boolean).join(', ') || 'Невідомо';
 
     return { city, full };
+  }
+
+  /**
+   * 🆕 Розрахунок реальної схожості title тендера до пошукового запиту
+   *
+   * Логіка балів:
+   * - Точне співпадіння бренду (АТБ, АТБ-Маркет): +40
+   * - Тип об'єкта (магазин, супермаркет): +20
+   * - Тип робіт що дотичні (будівництво, реконструкція, електропостачання, благоустрій): +15
+   * - Кожне слово з запиту що зустрічається в title: +5
+   *
+   * Penalty (мінус):
+   * - Очевидно нерелевантні теми (теплоцентраль, гранатомет, навчальний...): -100
+   *
+   * Результат: 0..100 (нормалізований)
+   */
+  private calculateRelevance(title: string, searchQuery: string): number {
+    if (!title) return 0;
+
+    const titleLower = title.toLowerCase();
+    const queryLower = searchQuery.toLowerCase();
+
+    let score = 0;
+
+    // 🚫 PENALTY: явно нерелевантні теми → 0
+    const irrelevantPatterns = [
+      'теплоцентрал', 'гранатомет', 'автомат', 'гвинтівк', 'макет навчальний',
+      'тренажерний', 'тренінгов', 'військов', 'озброєн', 'пально-мастильн',
+      'продукти харчуванн', 'мийні засоби', 'канцтовар', 'папір ',
+    ];
+    for (const pattern of irrelevantPatterns) {
+      if (titleLower.includes(pattern)) return 0;
+    }
+
+    // ✅ Бренд (якщо в запиті згадується)
+    if (queryLower.includes('атб')) {
+      if (/атб[\-\s]?маркет|атб[\-\s]маркет|тов\s*[«"]?\s*атб|товариство\s*[«"]?\s*атб/i.test(title)) {
+        score += 50; // повна назва компанії
+      } else if (/\bатб\b|«атб»|"атб"/i.test(title)) {
+        score += 40; // згадка АТБ
+      }
+    }
+
+    // ✅ Тип об'єкта
+    if (/магазин/i.test(title)) score += 20;
+    if (/супермаркет|гіпермаркет/i.test(title)) score += 25;
+    if (/торгов(а|ий|е|их)\s+(центр|приміщенн|зал|об'єкт)/i.test(title)) score += 20;
+    if (/продовольч/i.test(title)) score += 10;
+
+    // ✅ Тип робіт
+    if (/будівництв|нове\s+будівництв/i.test(title)) score += 15;
+    if (/реконструкц/i.test(title)) score += 15;
+    if (/електропостачанн|електромонтаж|електричн/i.test(title)) score += 12;
+    if (/благоустр/i.test(title)) score += 12;
+    if (/тротуар|асфальт|світлофор/i.test(title)) score += 8;
+    if (/підключенн|приєднанн/i.test(title)) score += 10;
+
+    // ✅ Кожне значуще слово з запиту в title (+5)
+    const queryWords = queryLower
+      .split(/[\s,.]+/)
+      .filter(w => w.length > 3 && !['будівництво', 'магазин', 'атб'].includes(w));
+
+    for (const word of queryWords) {
+      if (titleLower.includes(word)) score += 5;
+    }
+
+    // Нормалізація 0..100
+    return Math.min(100, Math.max(0, score));
   }
 }
