@@ -328,7 +328,17 @@ export async function POST(request: NextRequest) {
           // Перерахувати загальну суму кошторису після створення всіх items
           const finalEstimate = await prisma.estimate.findUnique({
             where: { id: estimate.id },
-            include: { items: true, sections: true }
+            include: {
+              items: true,
+              sections: {
+                orderBy: { sortOrder: 'asc' },
+                include: {
+                  items: {
+                    orderBy: { sortOrder: 'asc' }
+                  }
+                }
+              }
+            }
           });
 
           const actualTotalAmount = finalEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
@@ -355,6 +365,21 @@ export async function POST(request: NextRequest) {
               totalAmount: actualTotalAmount,
               sectionsCount: estimateData.sections.length,
               validationIssues: estimateData.validationIssues,
+              // ✅ Add complete sections from database for frontend display
+              sections: finalEstimate?.sections.map(section => ({
+                title: section.title,
+                items: section.items.map(item => ({
+                  description: item.description,
+                  unit: item.unit,
+                  quantity: Number(item.quantity),
+                  unitPrice: Number(item.unitPrice),
+                  laborCost: Number(item.laborRate) * Number(item.laborHours),
+                  totalCost: Number(item.amount),
+                  priceSource: null,
+                  priceNote: null
+                })),
+                sectionTotal: Number(section.totalAmount)
+              })) || []
             }
           });
 

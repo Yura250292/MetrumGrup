@@ -3426,11 +3426,16 @@ export default function AIEstimatePage() {
               if (update.phase === 'final' && update.status === 'complete') {
                 console.log('✅ Chunked generation complete!', update.data);
 
-                // Build final estimate from all collected sections
-                const finalEstimate: EstimateData = {
-                  title: `Кошторис ${update.data.estimateNumber || ''}`,
-                  description: "Згенеровано по секціях (Gemini + Claude + OpenAI)",
-                  sections: collectedSections.map((section) => ({
+                // 🔧 FIX: 3-tier fallback strategy for sections
+                let finalSections: any[] = [];
+
+                if (update.data?.sections && update.data.sections.length > 0) {
+                  // ✅ Primary: Use sections from final update (multi-agent mode with database data)
+                  finalSections = update.data.sections;
+                  console.log(`📦 Using ${finalSections.length} sections from final update`);
+                } else if (collectedSections.length > 0) {
+                  // ✅ Fallback 1: Use incrementally collected sections (old mode compatibility)
+                  finalSections = collectedSections.map((section) => ({
                     title: section.title,
                     items: section.items.map((item: any) => ({
                       description: item.description,
@@ -3443,14 +3448,50 @@ export default function AIEstimatePage() {
                       priceNote: null
                     })),
                     sectionTotal: section.items.reduce((sum: number, item: any) => sum + item.totalCost, 0)
-                  }))
+                  }));
+                  console.log(`📦 Using ${collectedSections.length} incrementally collected sections`);
+                } else {
+                  // ⚠️ Fallback 2: Fetch from database if nothing available
+                  console.warn('⚠️ No sections available, fetching from database...');
+                  try {
+                    const res = await fetch(`/api/admin/estimates/${update.data.estimateId}`);
+                    if (res.ok) {
+                      const { data } = await res.json();
+                      finalSections = data.sections.map((section: any) => ({
+                        title: section.title,
+                        items: section.items.map((item: any) => ({
+                          description: item.description,
+                          unit: item.unit,
+                          quantity: Number(item.quantity),
+                          unitPrice: Number(item.unitPrice),
+                          laborCost: Number(item.laborRate) * Number(item.laborHours),
+                          totalCost: Number(item.amount),
+                          priceSource: null,
+                          priceNote: null
+                        })),
+                        sectionTotal: Number(section.totalAmount)
+                      }));
+                      console.log(`📦 Fetched ${finalSections.length} sections from database`);
+                    }
+                  } catch (err) {
+                    console.error('❌ Failed to fetch from database:', err);
+                  }
+                }
+
+                // Build final estimate from collected/fetched sections
+                const finalEstimate: EstimateData = {
+                  title: `Кошторис ${update.data.estimateNumber || ''}`,
+                  description: "Згенеровано по секціях (Multi-Agent)",
+                  sections: finalSections
                 };
 
                 setEstimate(finalEstimate);
                 setIsChunkedGenerating(false);
 
-                // Show success message
+                // Show success message with statistics
+                const totalItems = finalEstimate.sections.reduce((sum, s) => sum + s.items.length, 0);
                 console.log(`🎉 Estimate created: ID ${update.data.estimateId}`);
+                console.log(`📊 Final stats: ${finalEstimate.sections.length} sections, ${totalItems} items`);
               }
 
               // Handle error
