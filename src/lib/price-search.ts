@@ -23,7 +23,7 @@ export async function searchMaterialPrice(
 ): Promise<PriceSearchResult> {
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview-preview",
+      model: "gemini-3-flash-preview",
       generationConfig: {
         temperature: 0.1,
         responseMimeType: "application/json",
@@ -85,7 +85,7 @@ export async function searchLaborCost(
 ): Promise<{ laborRate: number; confidence: number }> {
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview-preview",
+      model: "gemini-3-flash-preview",
       generationConfig: {
         temperature: 0.1,
         responseMimeType: "application/json",

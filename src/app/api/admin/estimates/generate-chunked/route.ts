@@ -686,7 +686,7 @@ async function generateSectionWithGemini(
   wizardData: any
 ) {
   const model = genAI.getGenerativeModel({
-    model: "gemini-3-flash-preview-preview",
+    model: "gemini-3-flash-preview",
     generationConfig: {
       temperature: 0.1,
       maxOutputTokens: 8000,

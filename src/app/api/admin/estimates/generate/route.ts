@@ -441,7 +441,7 @@ async function analyzeWithGemini(
 Повертай ТІЛЬКИ JSON без додаткового тексту!`;
 
   const geminiModel = genAI.getGenerativeModel({
-    model: "gemini-3-flash-preview-preview",
+    model: "gemini-3-flash-preview",
     tools: [{
       googleSearch: {},
     } as unknown as import("@google/generative-ai").Tool],
@@ -3211,7 +3211,7 @@ ${JSON.stringify(analysisData, null, 2)}
         console.log("✨ Використовуємо Google Gemini з Google Search...");
         // Call Gemini with Google Search grounding for real prices
         const geminiModel = genAI.getGenerativeModel({
-          model: "gemini-3-flash-preview-preview",
+          model: "gemini-3-flash-preview",
           tools: [{
             googleSearch: {},
           } as unknown as import("@google/generative-ai").Tool],
@@ -3460,7 +3460,7 @@ ${JSON.stringify(estimateData, null, 2)}
           default: // gemini
             console.log("✨ Gemini: Generating supplementary items...");
             const geminiModel = genAI.getGenerativeModel({
-              model: "gemini-3-flash-preview-preview",
+              model: "gemini-3-flash-preview",
               generationConfig: {
                 temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
                 maxOutputTokens: 30000,

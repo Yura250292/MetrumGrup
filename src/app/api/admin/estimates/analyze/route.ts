@@ -359,7 +359,7 @@ ${wizardSummary}
 
     // Call Gemini for analysis
     const geminiModel = genAI.getGenerativeModel({
-      model: "gemini-3-flash-preview-preview",
+      model: "gemini-3-flash-preview",
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 8000,
