@@ -170,7 +170,7 @@ function validatePrices(
         errors.push({
           type: 'ERROR',
           code: 'INVALID_PRICE',
-          message: `"${item.name}": ціна ${item.unitPrice} недопустима (має бути > 0)`,
+          message: `"${item.description}": ціна ${item.unitPrice} недопустима (має бути > 0)`,
           section: section.title,
           itemIndex: idx,
         });
@@ -181,7 +181,7 @@ function validatePrices(
         warnings.push({
           type: 'WARNING',
           code: 'SUSPICIOUSLY_LOW_PRICE',
-          message: `"${item.name}": ціна ${item.unitPrice} грн виглядає нереалістично низькою. Перевірте!`,
+          message: `"${item.description}": ціна ${item.unitPrice} грн виглядає нереалістично низькою. Перевірте!`,
           section: section.title,
           itemIndex: idx,
         });
@@ -192,7 +192,7 @@ function validatePrices(
         warnings.push({
           type: 'WARNING',
           code: 'SUSPICIOUSLY_HIGH_PRICE',
-          message: `"${item.name}": ціна ${item.unitPrice} грн виглядає нереалістично високою. Перевірте!`,
+          message: `"${item.description}": ціна ${item.unitPrice} грн виглядає нереалістично високою. Перевірте!`,
           section: section.title,
           itemIndex: idx,
         });
@@ -203,7 +203,7 @@ function validatePrices(
         warnings.push({
           type: 'INFO',
           code: 'ROUND_PRICE',
-          message: `"${item.name}": ціна ${item.unitPrice} грн "кругла". AI міг її вигадати. Перевірте реальну ціну!`,
+          message: `"${item.description}": ціна ${item.unitPrice} грн "кругла". AI міг її вигадати. Перевірте реальну ціну!`,
           section: section.title,
           itemIndex: idx,
         });
@@ -227,7 +227,7 @@ function validateQuantities(
         errors.push({
           type: 'ERROR',
           code: 'INVALID_QUANTITY',
-          message: `"${item.name}": кількість ${item.quantity} недопустима (має бути > 0)`,
+          message: `"${item.description}": кількість ${item.quantity} недопустима (має бути > 0)`,
           section: section.title,
           itemIndex: idx,
         });
@@ -235,13 +235,13 @@ function validateQuantities(
 
       // Перевірка на нереалістично великі кількості
       // Приклад: 500 розеток для 150 м² - явна помилка
-      const name = item.name?.toLowerCase() || '';
+      const name = item.description?.toLowerCase() || '';
 
       if (name.includes('розетк') && item.quantity > area * 0.8) {
         warnings.push({
           type: 'WARNING',
           code: 'EXCESSIVE_QUANTITY',
-          message: `"${item.name}": кількість ${item.quantity} виглядає завеликою для ${area} м² (зазвичай ~0.3-0.5 на м²)`,
+          message: `"${item.description}": кількість ${item.quantity} виглядає завеликою для ${area} м² (зазвичай ~0.3-0.5 на м²)`,
           section: section.title,
           itemIndex: idx,
         });
@@ -251,7 +251,7 @@ function validateQuantities(
         warnings.push({
           type: 'WARNING',
           code: 'EXCESSIVE_QUANTITY',
-          message: `"${item.name}": кількість ${item.quantity} виглядає завеликою для ${area} м² (зазвичай ~0.15-0.2 на м²)`,
+          message: `"${item.description}": кількість ${item.quantity} виглядає завеликою для ${area} м² (зазвичай ~0.15-0.2 на м²)`,
           section: section.title,
           itemIndex: idx,
         });
@@ -261,7 +261,7 @@ function validateQuantities(
         warnings.push({
           type: 'WARNING',
           code: 'EXCESSIVE_QUANTITY',
-          message: `"${item.name}": кількість ${item.quantity} виглядає завеликою для ${area} м²`,
+          message: `"${item.description}": кількість ${item.quantity} виглядає завеликою для ${area} м²`,
           section: section.title,
           itemIndex: idx,
         });
@@ -276,7 +276,7 @@ function validateQuantities(
 
     estimate.sections?.forEach((section: any) => {
       section.items?.forEach((item: any) => {
-        const name = item.name?.toLowerCase() || '';
+        const name = item.description?.toLowerCase() || '';
         if (name.includes('розетк') && !name.includes('підрозетник')) {
           outletsInEstimate += item.quantity || 0;
         }
@@ -299,7 +299,7 @@ function validateDuplicates(estimate: any, warnings: ValidationWarning[]) {
   estimate.sections?.forEach((section: any) => {
     section.items?.forEach((item: any, idx: number) => {
       // Нормалізуємо назву (lowercase, без спецсимволів)
-      const normalizedName = item.name
+      const normalizedName = item.description
         ?.toLowerCase()
         .replace(/[^а-яёa-z0-9\s]/g, '')
         .trim();
@@ -312,7 +312,7 @@ function validateDuplicates(estimate: any, warnings: ValidationWarning[]) {
           warnings.push({
             type: 'WARNING',
             code: 'POSSIBLE_DUPLICATE',
-            message: `"${item.name}": можливий дублікат (схожа назва вже є в кошторисі ${count} раз)`,
+            message: `"${item.description}": можливий дублікат (схожа назва вже є в кошторисі ${count} раз)`,
             section: section.title,
             itemIndex: idx,
           });
@@ -341,7 +341,7 @@ function validateCalculations(
         errors.push({
           type: 'ERROR',
           code: 'CALCULATION_ERROR',
-          message: `"${item.name}": неправильний totalCost. Має бути ${expectedTotal.toFixed(2)}, а є ${actualTotal}`,
+          message: `"${item.description}": неправильний totalCost. Має бути ${expectedTotal.toFixed(2)}, а є ${actualTotal}`,
           section: section.title,
           itemIndex: idx,
         });
@@ -430,12 +430,12 @@ function validateForbiddenItems(
 
       // Перевірка позицій
       section.items?.forEach((item: any, idx: number) => {
-        const itemName = item.name?.toLowerCase() || '';
+        const itemName = item.description?.toLowerCase() || '';
         if (forbiddenKeywords.some((kw) => itemName.includes(kw))) {
           errors.push({
             type: 'CRITICAL',
             code: 'FORBIDDEN_DEMOLITION_ITEM',
-            message: `ЗАБОРОНЕНА ПОЗИЦІЯ: "${item.name}". Користувач вказав що демонтаж НЕ потрібен!`,
+            message: `ЗАБОРОНЕНА ПОЗИЦІЯ: "${item.description}". Користувач вказав що демонтаж НЕ потрібен!`,
             section: section.title,
             itemIndex: idx,
           });
@@ -493,7 +493,7 @@ function validateWizardCompliance(
     const expectedKeywords = materialNames[material] || [];
     const hasMaterial = estimate.sections?.some((s: any) =>
       s.items?.some((item: any) =>
-        expectedKeywords.some((kw) => item.name?.toLowerCase().includes(kw))
+        expectedKeywords.some((kw) => item.description?.toLowerCase().includes(kw))
       )
     );
 
@@ -514,8 +514,8 @@ function validateWizardCompliance(
     if (geo.groundwaterLevel !== null && geo.groundwaterLevel < 2) {
       const hasDrainage = estimate.sections?.some((s: any) =>
         s.items?.some((item: any) =>
-          item.name?.toLowerCase().includes('дренаж') ||
-          item.name?.toLowerCase().includes('drainage')
+          item.description?.toLowerCase().includes('дренаж') ||
+          item.description?.toLowerCase().includes('drainage')
         )
       );
 
@@ -532,7 +532,7 @@ function validateWizardCompliance(
     if (geo.recommendedFoundation) {
       const hasCorrectFoundation = estimate.sections?.some((s: any) =>
         s.items?.some((item: any) =>
-          item.name?.toLowerCase().includes(geo.recommendedFoundation.toLowerCase())
+          item.description?.toLowerCase().includes(geo.recommendedFoundation.toLowerCase())
         )
       );
 
@@ -555,8 +555,8 @@ function validateWizardCompliance(
       const hasEarthworks = estimate.sections?.some((s: any) =>
         s.title?.toLowerCase().includes('земля') ||
         s.items?.some((item: any) =>
-          item.name?.toLowerCase().includes('земля') ||
-          item.name?.toLowerCase().includes('планування')
+          item.description?.toLowerCase().includes('земля') ||
+          item.description?.toLowerCase().includes('планування')
         )
       );
 
@@ -573,8 +573,8 @@ function validateWizardCompliance(
     if (!site.existingUtilities.water || !site.existingUtilities.sewerage) {
       const hasUtilityConnection = estimate.sections?.some((s: any) =>
         s.items?.some((item: any) =>
-          item.name?.toLowerCase().includes('підключення') ||
-          item.name?.toLowerCase().includes('зовнішні мережі')
+          item.description?.toLowerCase().includes('підключення') ||
+          item.description?.toLowerCase().includes('зовнішні мережі')
         )
       );
 

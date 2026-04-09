@@ -3966,7 +3966,9 @@ export default function AIEstimatePage() {
     setError("");
 
     try {
-      // Convert AI estimate format to API format
+      // Pass items to the server in AI format. The /from-ai endpoint runs
+      // them through `normalizeAiItems` so labor breakdown is preserved
+      // (no more client-side `laborCost / 200` heuristic).
       const sectionsForApi = estimate.sections.map((section) => ({
         title: section.title,
         items: section.items.map((item) => ({
@@ -3974,12 +3976,12 @@ export default function AIEstimatePage() {
           unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
-          laborRate: 0, // AI format має laborCost, а не laborRate/laborHours
-          laborHours: item.laborCost > 0 ? item.laborCost / 200 : 0, // Оцінюємо години (припускаємо 200₴/год)
+          laborCost: item.laborCost,
+          totalCost: item.totalCost,
         })),
       }));
 
-      const res = await fetch("/api/admin/estimates", {
+      const res = await fetch("/api/admin/estimates/from-ai", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

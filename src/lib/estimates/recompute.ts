@@ -17,7 +17,7 @@ export async function recomputeEstimateTotals(estimateId: string): Promise<void>
       profitMarginOverall: true,
       taxAmount: true,
       items: {
-        select: { amount: true, materialId: true, laborRate: true, quantity: true },
+        select: { amount: true, laborRate: true, laborHours: true },
       },
     },
   });
@@ -28,15 +28,14 @@ export async function recomputeEstimateTotals(estimateId: string): Promise<void>
     new Decimal(0)
   );
 
-  const totalMaterials = estimate.items.reduce(
-    (sum, item) => (item.materialId ? sum.plus(item.amount) : sum),
+  const totalLabor = estimate.items.reduce(
+    (sum, item) => sum.plus(new Decimal(item.laborRate).times(item.laborHours)),
     new Decimal(0)
   );
 
-  const totalLabor = estimate.items.reduce(
-    (sum, item) => sum.plus(new Decimal(item.laborRate).times(item.quantity)),
-    new Decimal(0)
-  );
+  // Materials = total minus labor. The previous `materialId`-based filter
+  // returned 0 for AI-generated items (no materialId is set on them).
+  const totalMaterials = totalAmount.minus(totalLabor);
 
   const discount = new Decimal(estimate.discount ?? 0);
   const finalAmount = totalAmount.times(new Decimal(1).minus(discount.div(100)));

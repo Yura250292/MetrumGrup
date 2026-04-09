@@ -17,6 +17,9 @@ import { CrossValidator } from './cross-validator';
 import { validateTotalCost, applyScalingIfNeeded } from './price-validator';
 import { PreAnalysisAgent, type PreAnalysisResult } from './pre-analysis-agent';
 import { MasterEstimateAgent } from './master-estimate-agent';
+import { buildProjectFacts } from '../project-facts/builder';
+import type { ProjectFacts } from '../project-facts/types';
+import { getExtractedProjectData } from '../rag/vectorizer';
 
 export type GenerationMode = 'gemini' | 'openai' | 'multi-agent' | 'master';
 
@@ -219,6 +222,31 @@ export class EstimateOrchestrator {
       },
     });
 
+    // 🆕 КРОК 0.5: Побудувати нормалізовані ProjectFacts
+    // Це staging-структура під майбутній deterministic quantity engine.
+    // Поки що ми лише складаємо її і прокидаємо в AgentContext — агенти
+    // можуть починати споживати її поступово.
+    let projectFacts: ProjectFacts | undefined;
+    try {
+      const extracted = this.config.projectId
+        ? await getExtractedProjectData(this.config.projectId)
+        : null;
+      projectFacts = buildProjectFacts({
+        wizardData: this.config.wizardData,
+        extracted,
+      });
+      if (projectFacts.conflicts.length > 0) {
+        console.warn(
+          `[Orchestrator] ProjectFacts conflicts (${projectFacts.conflicts.length}):`,
+          projectFacts.conflicts
+        );
+      } else {
+        console.log(`[Orchestrator] ProjectFacts built (no conflicts)`);
+      }
+    } catch (e) {
+      console.error('[Orchestrator] Failed to build ProjectFacts:', e);
+    }
+
     // 🆕 РЕЖИМ MASTER: Один агент генерує ВСЕ одночасно
     if (this.mode === 'master') {
       console.log(`🎯 Using MASTER agent mode (single comprehensive generation)`);
@@ -239,6 +267,7 @@ export class EstimateOrchestrator {
           documents: this.config.documents,
           previousSections: [],
           masterContext: preAnalysisResult.masterContext,
+          projectFacts,
         };
 
         // Передаємо progress callback для real-time оновлень по секціях
@@ -348,6 +377,7 @@ export class EstimateOrchestrator {
           documents: this.config.documents,
           previousSections: sections, // Попередні результати
           masterContext: preAnalysisResult.masterContext, // 🆕 Комплексний аналіз
+          projectFacts, // 🆕 Нормалізовані факти проекту
         };
 
         // Генерувати секцію

@@ -7,6 +7,7 @@ import { WorkItemWithPrice } from '../work-items-database-extended';
 import { searchMaterialPrice, searchLaborCost } from '../price-search';
 import { ragSearch, getExtractedProjectData, isProjectVectorized } from '../rag/vectorizer';
 import { findSimilarPrices, getRecommendedPrice, type PriceReference } from '../prozorro-price-reference';
+import type { ProjectFacts } from '../project-facts/types';
 
 export interface AgentConfig {
   name: string;
@@ -28,6 +29,7 @@ export interface AgentContext {
   };
   previousSections?: EstimateSection[];
   masterContext?: string; // 🆕 Комплексний аналіз всіх даних
+  projectFacts?: ProjectFacts; // 🆕 Нормалізовані факти проекту з джерелами
 }
 
 export interface EstimateItem {

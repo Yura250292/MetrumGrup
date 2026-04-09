@@ -9,6 +9,7 @@ import { downloadFileFromR2 } from "@/lib/r2-client";
 import { parsePDF } from "@/lib/pdf-helper";
 import { EstimateOrchestrator, GenerationMode } from "@/lib/agents/orchestrator";
 import { vectorizeProject, isProjectVectorized } from "@/lib/rag/vectorizer";
+import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -345,33 +346,13 @@ export async function POST(request: NextRequest) {
             const section = estimateData.sections[sIdx];
             const createdSection = estimate.sections[sIdx];
 
-            const itemsToCreate = section.items
-              .filter((item: any) =>
-                item.description &&
-                item.quantity != null &&
-                item.unitPrice != null
-              )
-              .map((item: any, itemIndex: number) => {
-                const quantity = Number(item.quantity);
-                const unitPrice = Number(item.unitPrice);
-                const laborCost = Number(item.laborCost || 0);
-                const totalCost = Number(item.totalCost || 0);
-
-                const amount = totalCost > 0 ? totalCost : (quantity * unitPrice + laborCost);
-
-                return {
-                  description: item.description,
-                  quantity: quantity,
-                  unit: item.unit || "шт",
-                  unitPrice: unitPrice,
-                  laborRate: 0,
-                  laborHours: 0,
-                  amount: amount,
-                  sortOrder: itemIndex,
-                  estimateId: estimate.id,
-                  sectionId: createdSection.id,
-                };
-              });
+            const normalized = normalizeAiItems(section.items);
+            const itemsToCreate = normalized.map((item, itemIndex) => ({
+              ...item,
+              sortOrder: itemIndex,
+              estimateId: estimate.id,
+              sectionId: createdSection.id,
+            }));
 
             if (itemsToCreate.length > 0) {
               await prisma.estimateItem.createMany({
@@ -631,34 +612,13 @@ export async function POST(request: NextRequest) {
           const section = sections[sIdx];
           const createdSection = estimate.sections[sIdx];
 
-          const itemsToCreate = section.items
-            .filter((item: any) =>
-              item.description &&
-              item.quantity != null &&
-              item.unitPrice != null
-            )
-            .map((item: any, itemIndex: number) => {
-              const quantity = Number(item.quantity);
-              const unitPrice = Number(item.unitPrice);
-              const laborCost = Number(item.laborCost || 0);
-              const totalCost = Number(item.totalCost || 0);
-
-              // Calculate amount (total cost)
-              const amount = totalCost > 0 ? totalCost : (quantity * unitPrice + laborCost);
-
-              return {
-                description: item.description,
-                quantity: quantity,
-                unit: item.unit || "шт",
-                unitPrice: unitPrice,
-                laborRate: 0,
-                laborHours: 0,
-                amount: amount,
-                sortOrder: itemIndex,
-                estimateId: estimate.id,
-                sectionId: createdSection.id,
-              };
-            });
+          const normalized = normalizeAiItems(section.items);
+          const itemsToCreate = normalized.map((item, itemIndex) => ({
+            ...item,
+            sortOrder: itemIndex,
+            estimateId: estimate.id,
+            sectionId: createdSection.id,
+          }));
 
           if (itemsToCreate.length > 0) {
             await prisma.estimateItem.createMany({
