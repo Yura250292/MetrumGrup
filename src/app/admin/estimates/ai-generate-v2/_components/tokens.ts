@@ -1,0 +1,22 @@
+// Design tokens for AI Estimate v2 — mirrors the .pen design system
+export const T = {
+  background: "#0B0F17",
+  panel: "#121826",
+  panelElevated: "#1A2233",
+  panelSoft: "#0F1420",
+  borderSoft: "#222B3D",
+  borderStrong: "#2E3B55",
+  borderAccent: "#3B5BFF",
+  textPrimary: "#F4F6FB",
+  textSecondary: "#A8B3CC",
+  textMuted: "#6B7691",
+  accentPrimary: "#3B5BFF",
+  accentPrimarySoft: "#1D2A66",
+  accentSecondary: "#7C5CFF",
+  success: "#22C58B",
+  successSoft: "#0F2E22",
+  warning: "#F5A524",
+  warningSoft: "#332210",
+  danger: "#F03E3E",
+  dangerSoft: "#321015",
+} as const;
