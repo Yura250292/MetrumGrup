@@ -16,6 +16,7 @@ import { ApprovalSignatureCard } from "@/components/admin/ApprovalSignatureCard"
 import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
 import { OpenEstimateChatButton } from "@/components/chat/OpenEstimateChatButton";
 import { CommentThread } from "@/components/collab/CommentThread";
+import { EditableSectionTable } from "@/components/estimates/EditableSectionTable";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -565,55 +566,30 @@ export default function EstimateDetailPage({
             prozorroAnalysis={estimate.prozorroAnalysis}
           />
 
-          {/* Sections with items */}
+          {/* Sections with editable items */}
           {estimate.sections.map((section) => (
-        <Card key={section.id} className="mb-4 overflow-hidden">
-          <div className="bg-muted/50 px-4 py-2.5">
-            <h3 className="font-medium text-sm">{section.title}</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Позиція</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Од.</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">К-ть</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Ціна</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Робота</th>
-                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Сума</th>
-                </tr>
-              </thead>
-              <tbody>
-                {section.items.map((item) => (
-                  <tr key={item.id} className="border-b last:border-0">
-                    <td className="px-4 py-2.5 text-sm">
-                      {item.description}
-                      {item.material && (
-                        <span className="ml-1 text-xs text-muted-foreground">
-                          ({item.material.sku})
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-muted-foreground">{item.unit}</td>
-                    <td className="px-4 py-2.5 text-sm text-right">{Number(item.quantity)}</td>
-                    <td className="px-4 py-2.5 text-sm text-right">
-                      {formatCurrency(Number(item.unitPrice))}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-right text-muted-foreground">
-                      {Number(item.laborHours) > 0
-                        ? `${Number(item.laborHours)}г × ${formatCurrency(Number(item.laborRate))}`
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2.5 text-sm text-right font-medium">
-                      {formatCurrency(Number(item.amount))}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-      ))}
+            <div key={section.id} className="mb-4">
+              <EditableSectionTable
+                estimateId={estimate.id}
+                sectionId={section.id}
+                sectionTitle={section.title}
+                items={section.items.map((item) => ({
+                  id: item.id,
+                  description: item.description,
+                  unit: item.unit,
+                  quantity: Number(item.quantity),
+                  unitPrice: Number(item.unitPrice),
+                  amount: Number(item.amount),
+                }))}
+                onChanged={() => {
+                  fetch(`/api/admin/estimates/${id}`)
+                    .then((r) => r.json())
+                    .then(({ data }) => setEstimate(data))
+                    .catch(console.error);
+                }}
+              />
+            </div>
+          ))}
 
       {/* Tax Breakdown */}
       {estimate.taxationType && estimate.taxationType !== "CASH" && estimate.taxCalculationDetails && (

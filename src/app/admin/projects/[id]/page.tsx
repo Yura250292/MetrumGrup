@@ -10,6 +10,8 @@ import { FinancialSummary } from "@/components/dashboard/FinancialSummary";
 import { PaymentScheduleTable } from "@/components/dashboard/PaymentScheduleTable";
 import { OpenProjectChatButton } from "@/components/chat/OpenProjectChatButton";
 import { CommentThread } from "@/components/collab/CommentThread";
+import { ProjectEstimatesSection } from "@/components/projects/ProjectEstimatesSection";
+import { ProjectFilesSection } from "@/components/projects/ProjectFilesSection";
 import { PROJECT_STATUS_LABELS, PROJECT_STATUS_COLORS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import Link from "next/link";
@@ -244,6 +246,16 @@ export default async function AdminProjectDetailPage({
             </dl>
           </Card>
         </div>
+      </div>
+
+      {/* Estimates */}
+      <div className="mt-6">
+        <ProjectEstimatesSection projectId={project.id} />
+      </div>
+
+      {/* Project files */}
+      <div className="mt-6">
+        <ProjectFilesSection projectId={project.id} />
       </div>
 
       {/* Discussion */}
