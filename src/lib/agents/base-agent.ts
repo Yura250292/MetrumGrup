@@ -11,6 +11,7 @@ import type { ProjectFacts } from '../project-facts/types';
 import type { EngineCategory, EngineItem } from '../quantity-engine/types';
 import { formatEngineItemsForPrompt, runQuantityEngine } from '../quantity-engine';
 import { mergeEngineAndLlm } from '../quantity-engine/merge';
+import { lookupPrice } from '../price-engine';
 
 export interface AgentConfig {
   name: string;
@@ -105,6 +106,62 @@ export abstract class BaseAgent {
       console.warn(`⚠️ [${this.config.name}] Quantity engine failed:`, e);
       return [];
     }
+  }
+
+  /**
+   * Збагатити позиції секції цінами через price-engine (Plan Stage 4).
+   *
+   * Замінює дублювання `enrichWithPrices` у 5+ агентах єдиним пайплайном:
+   *   catalog → prozorro → scrape (stub) → llm-fallback
+   *
+   * Працює тільки з позиціями, які мають низьку confidence або відсутню
+   * ціну. Підвищувати confidence через "звичайний" пошук уже не дублюємо.
+   */
+  protected async enrichWithPriceEngine(output: AgentOutput): Promise<AgentOutput> {
+    const enriched: EstimateItem[] = [];
+    let updatedCount = 0;
+    for (const item of output.items) {
+      // Skip items that already have a confident price.
+      if (item.priceSource && item.confidence >= 0.75 && item.unitPrice > 0) {
+        enriched.push(item);
+        continue;
+      }
+      try {
+        const priceResult = await lookupPrice({
+          description: item.description,
+          unit: item.unit,
+          canonicalKey: item.engineKey,
+          kind: item.itemType === 'labor' ? 'labor' : 'material',
+        });
+        if (priceResult && priceResult.confidence > (item.confidence ?? 0)) {
+          const updated: EstimateItem = {
+            ...item,
+            unitPrice: priceResult.unitPrice > 0 ? priceResult.unitPrice : item.unitPrice,
+            laborCost: priceResult.laborCost ?? item.laborCost ?? 0,
+            priceSource: priceResult.source,
+            confidence: priceResult.confidence,
+          };
+          updated.totalCost = updated.quantity * updated.unitPrice + (updated.laborCost ?? 0);
+          enriched.push(updated);
+          updatedCount++;
+        } else {
+          enriched.push(item);
+        }
+      } catch (e) {
+        console.warn(
+          `[${this.config.name}] price-engine lookup failed for "${item.description}":`,
+          e
+        );
+        enriched.push(item);
+      }
+    }
+    if (updatedCount > 0) {
+      console.log(
+        `💰 [${this.config.name}] price-engine: enriched ${updatedCount}/${output.items.length} items`
+      );
+    }
+    const newTotal = enriched.reduce((s, i) => s + (i.totalCost ?? 0), 0);
+    return { ...output, items: enriched, totalCost: newTotal };
   }
 
   /**

@@ -117,9 +117,9 @@ export class ElectricalAgent extends BaseAgent {
       // 🆕 Merge engine items with LLM output (engine wins on quantities)
       output = this.mergeWithEngine(engineItems, output);
 
-      // Перевірити та оновити ціни через Google Search
-      console.log(`⚡ ElectricalAgent: Checking prices...`);
-      output = await this.enrichWithPrices(output);
+      // 🆕 Price engine: catalog → prozorro → scrape → llm-fallback (Stage 4)
+      console.log(`⚡ ElectricalAgent: Running price engine...`);
+      output = await this.enrichWithPriceEngine(output);
 
       // Валідація
       const validationErrors = this.validateOutput(output);

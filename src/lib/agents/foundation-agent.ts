@@ -98,9 +98,9 @@ export class FoundationAgent extends BaseAgent {
 
       output = this.mergeWithEngine(engineItems, output);
 
-      // Перевірити та оновити ціни через Google Search
-      console.log(`🏗️  FoundationAgent: Checking prices...`);
-      output = await this.enrichWithPrices(output);
+      // 🆕 Price engine: catalog → prozorro → scrape → llm-fallback (Stage 4)
+      console.log(`🏗️  FoundationAgent: Running price engine...`);
+      output = await this.enrichWithPriceEngine(output);
 
       // Валідація
       const validationErrors = this.validateOutput(output);

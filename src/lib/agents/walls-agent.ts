@@ -94,7 +94,7 @@ export class WallsAgent extends BaseAgent {
       let output: AgentOutput = JSON.parse(responseText);
 
       output = this.mergeWithEngine(engineItems, output);
-      output = await this.enrichWithPrices(output);
+      output = await this.enrichWithPriceEngine(output);
 
       const validationErrors = this.validateOutput(output);
       if (validationErrors.length > 0) {
