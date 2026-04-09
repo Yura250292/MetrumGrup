@@ -4393,7 +4393,7 @@ export default function AIEstimatePage() {
             {/* MULTI-AGENT Generation (10 спеціалізованих агентів + RAG) */}
             <Button
               onClick={generateChunked}
-              disabled={loading || isChunkedGenerating || files.length === 0}
+              disabled={loading || isChunkedGenerating}
               size="lg"
               className="w-full h-16 text-lg gap-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all"
             >
