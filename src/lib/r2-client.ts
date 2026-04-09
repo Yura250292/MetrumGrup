@@ -17,9 +17,12 @@ const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL!;
 const R2_ENDPOINT = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
 
 // S3 Client для R2 (R2 сумісний з S3 API)
+// IMPORTANT: forcePathStyle: true потрібно щоб уникнути TLS помилок
+// (бакет як subdomain не покривається SSL сертифікатом *.r2.cloudflarestorage.com)
 export const r2Client = new S3Client({
   region: 'auto',
   endpoint: R2_ENDPOINT,
+  forcePathStyle: true,
   credentials: {
     accessKeyId: ACCESS_KEY_ID,
     secretAccessKey: SECRET_ACCESS_KEY,
