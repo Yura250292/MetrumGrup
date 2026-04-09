@@ -11,6 +11,7 @@ const ACCOUNT_ID = process.env.R2_ACCOUNT_ID!;
 const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID!;
 const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY!;
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'metrum-estimates';
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL!;
 
 // R2 endpoint
 const R2_ENDPOINT = `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`;
@@ -66,21 +67,14 @@ export async function uploadFileToR2(
 
   await r2Client.send(command);
 
-  // Генеруємо підписану URL (дійсна 1 годину)
-  const getCommand = new GetObjectCommand({
-    Bucket: BUCKET_NAME,
-    Key: key,
-  });
-
-  const signedUrl = await getSignedUrl(r2Client, getCommand, {
-    expiresIn: 3600, // 1 година
-  });
+  // Використовуємо публічний URL (обходимо CORS проблеми)
+  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
 
   console.log(`   ✅ Uploaded: ${key}`);
 
   return {
     key,
-    url: signedUrl,
+    url: publicUrl,
     originalName: file.name,
     size: file.size,
     mimeType: file.type,
@@ -181,7 +175,7 @@ export async function createPresignedUploadUrl(
   fileName: string,
   fileType: string,
   estimateId?: string
-): Promise<{ uploadUrl: string; key: string }> {
+): Promise<{ uploadUrl: string; key: string; publicUrl: string }> {
   // Генеруємо унікальний ключ
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(7);
@@ -205,10 +199,14 @@ export async function createPresignedUploadUrl(
     expiresIn: 3600, // 1 година
   });
 
+  // Публічний URL для читання після завантаження
+  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+
   console.log(`   ✅ Presigned URL created for: ${key}`);
 
   return {
     uploadUrl,
     key,
+    publicUrl,
   };
 }
