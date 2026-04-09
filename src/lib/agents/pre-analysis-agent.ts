@@ -63,8 +63,26 @@ export interface PreAnalysisResult {
       budget: number;
       similarity: number;
       itemsCount: number;
+      tenderID?: string;
+      procuringEntity?: string;
+      datePublished?: string;
+      status?: string;
+      city?: string;
     }>;
     priceDatabase: Map<string, number>; // category → avg price
+    // 🆕 Згруповано за локацією — сума всіх тендерів навколо одного об'єкта
+    aggregatedLocations?: Array<{
+      location: string;       // "Хмельницький" / "Львів, вул. Зарічанська"
+      city: string;
+      totalAmount: number;    // сума всіх тендерів у цій локації
+      tenderCount: number;
+      tenders: Array<{
+        title: string;
+        amount: number;
+        tenderID?: string;
+        status: string;
+      }>;
+    }>;
   };
 
   // Master Context для AI
@@ -277,15 +295,31 @@ export class PreAnalysisAgent {
         searchQuery
       );
 
-      // 🆕 ПОВНОЦІННИЙ ТЕКСТОВИЙ ПОШУК через prozorro.gov.ua
-      // Старий /api/2.5/tenders ігнорує фільтри і повертає тендери з 2015 року
-      const tenders = await prozorroClient.searchTendersByText({
-        text: searchQuery,
-        perPage: 10,
-        status: 'complete', // тільки завершені для відомих фінальних цін
+      // 🆕 MULTI-QUERY ПОШУК — кілька запитів паралельно для повного покриття
+      // Бо приватні компанії типу АТБ не публікують власні тендери,
+      // але всі дотичні роботи (електропостачання, тротуари, благоустрій) — є
+      const multiQueries = this.buildMultiQueries(searchQuery);
+      console.log(`🔍 Multi-query: ${multiQueries.length} паралельних пошуків`);
+
+      const searchResults = await Promise.all(
+        multiQueries.map(q =>
+          prozorroClient.searchTendersByText({
+            text: q,
+            perPage: 20,
+          }).catch(() => [])
+        )
+      );
+
+      // Об'єднуємо та видаляємо дублікати по tenderID
+      const seen = new Set<string>();
+      const tenders = searchResults.flat().filter(t => {
+        const key = t.tenderID || t.id || '';
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
       });
 
-      console.log(`📊 Знайдено ${tenders.length} релевантних тендерів за запитом "${searchQuery}"`);
+      console.log(`📊 Multi-query: знайдено ${tenders.length} унікальних тендерів`);
 
       // Перевірка prisma перед використанням
       if (!prisma) {
@@ -313,28 +347,63 @@ export class PreAnalysisAgent {
 
       const totalItemsParsed = parsedEstimates.reduce((sum: number, est: any) => sum + est.totalItems, 0);
 
-      // Топ схожі проекти — ВСІ тендери з повними даними
-      const topSimilarProjects = tenders
-        .slice(0, 10)
-        .map(t => {
-          const tenderKey = t.tenderID || t.id || '';
-          const parsed = parsedEstimates.find(e => e.tenderId === tenderKey);
-          // Беремо ціну: спершу awarded (фінальна), потім value (стартова)
-          const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
-          const budget = awardedAmount || t.value?.amount || 0;
+      // 🆕 Збагатити кожен тендер: бюджет, локація, ключ
+      const enrichedTenders = tenders.map(t => {
+        const tenderKey = t.tenderID || t.id || '';
+        const parsed = parsedEstimates.find((e: any) => e.tenderId === tenderKey);
+        const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
+        const budget = awardedAmount || t.value?.amount || 0;
+        const location = this.extractLocation(t);
 
-          return {
-            title: t.title || t.tenderID || 'Без назви',
-            budget,
-            similarity: 85, // TODO: розрахувати реальну схожість через embeddings
-            itemsCount: parsed?.totalItems || 0,
-            tenderID: t.tenderID || t.id,
-            procuringEntity: t.procuringEntity?.name || '',
-            datePublished: t.datePublished,
-            status: t.status,
-          };
-        })
-        .filter(p => p.budget > 0);
+        return {
+          title: t.title || t.tenderID || 'Без назви',
+          budget,
+          similarity: 85,
+          itemsCount: parsed?.totalItems || 0,
+          tenderID: t.tenderID || t.id,
+          procuringEntity: t.procuringEntity?.name || '',
+          datePublished: t.datePublished,
+          status: t.status,
+          city: location.city,
+          location: location.full,
+        };
+      }).filter(p => p.budget > 0);
+
+      // Топ-10 для відображення
+      const topSimilarProjects = enrichedTenders
+        .sort((a, b) => b.budget - a.budget)
+        .slice(0, 10)
+        .map(({ location, ...rest }) => rest); // прибираємо location з топ-списку
+
+      // 🆕 Групуємо тендери за локацією (місто) — щоб побачити "сукупний кошторис"
+      // всіх дотичних робіт навколо одного об'єкта (АТБ)
+      const locationGroups = new Map<string, typeof enrichedTenders>();
+      for (const t of enrichedTenders) {
+        const key = t.city || 'Невідомо';
+        if (!locationGroups.has(key)) locationGroups.set(key, []);
+        locationGroups.get(key)!.push(t);
+      }
+
+      const aggregatedLocations = Array.from(locationGroups.entries())
+        .map(([city, tendersInLocation]) => ({
+          location: city,
+          city,
+          totalAmount: tendersInLocation.reduce((sum, t) => sum + t.budget, 0),
+          tenderCount: tendersInLocation.length,
+          tenders: tendersInLocation
+            .sort((a, b) => b.budget - a.budget)
+            .map(t => ({
+              title: t.title,
+              amount: t.budget,
+              tenderID: t.tenderID,
+              status: t.status,
+            })),
+        }))
+        .filter(g => g.tenderCount > 0 && g.city !== 'Невідомо')
+        .sort((a, b) => b.totalAmount - a.totalAmount)
+        .slice(0, 10); // топ-10 локацій за сумарною вартістю
+
+      console.log(`📍 Згруповано за локаціями: ${aggregatedLocations.length} міст`);
 
     // Створити price database за категоріями (з розпарсених)
     const priceDatabase = new Map<string, number>();
@@ -352,13 +421,8 @@ export class PreAnalysisAgent {
       }
     }
 
-    // 🆕 Визначити рівень цін на основі ВСІХ тендерів з валідною ціною
-    // (бюджет беремо з awarded або value)
-    const tenderBudgets = tenders.map(t => {
-      const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
-      return awardedAmount || t.value?.amount || 0;
-    }).filter(b => b > 0);
-
+    // Визначити рівень цін на основі тендерів з валідною ціною
+    const tenderBudgets = enrichedTenders.map(t => t.budget);
     const avgBudget = tenderBudgets.length > 0
       ? tenderBudgets.reduce((sum, b) => sum + b, 0) / tenderBudgets.length
       : 0;
@@ -373,7 +437,7 @@ export class PreAnalysisAgent {
       averagePriceLevel = 'high';
     }
 
-    console.log(`✅ Prozorro: ${tenders.length} тендерів, ${tenderBudgets.length} з ціною, середня ${avgBudget.toFixed(0)} ₴, ${parsedEstimates.length} розпарсено`);
+    console.log(`✅ Prozorro: ${tenders.length} тендерів, ${enrichedTenders.length} з ціною, середня ${avgBudget.toFixed(0)} ₴, ${parsedEstimates.length} розпарсено, ${aggregatedLocations.length} локацій`);
 
     return {
       similarProjectsFound: tenders.length,
@@ -381,6 +445,7 @@ export class PreAnalysisAgent {
       averagePriceLevel,
       topSimilarProjects,
       priceDatabase,
+      aggregatedLocations,
     };
     } catch (error) {
       console.error('❌ Помилка аналізу Prozorro тендерів:', error);
@@ -532,5 +597,81 @@ export class PreAnalysisAgent {
     }
 
     return query;
+  }
+
+  /**
+   * 🆕 Будує кілька варіантів пошукового запиту для широкого покриття
+   *
+   * Приклад: для "Магазин АТБ" повертає:
+   *   - "Магазин АТБ"               (точний)
+   *   - "будівництво магазину АТБ"  (з типом робіт)
+   *   - "АТБ електропостачання"     (інфраструктура)
+   *   - "АТБ благоустрій"           (територія)
+   *   - "АТБ-Маркет"                (юр. назва)
+   */
+  private buildMultiQueries(searchQuery: string): string[] {
+    const trimmed = searchQuery.trim();
+    const queries = new Set<string>([trimmed]);
+
+    // Якщо в запиті згадується "АТБ" — додаємо варіанти
+    if (/АТБ/i.test(trimmed)) {
+      queries.add('будівництво магазину АТБ');
+      queries.add('АТБ-Маркет');
+      queries.add('електропостачання магазину АТБ');
+      queries.add('благоустрій АТБ');
+    }
+    // Якщо згадується "магазин" або "супермаркет"
+    else if (/магазин|супермаркет/i.test(trimmed)) {
+      queries.add(`будівництво ${trimmed}`);
+      queries.add(`електропостачання ${trimmed}`);
+      queries.add(`благоустрій ${trimmed}`);
+    }
+    // Загальне будівництво
+    else {
+      queries.add(`будівництво ${trimmed}`);
+      queries.add(`реконструкція ${trimmed}`);
+    }
+
+    return Array.from(queries).slice(0, 5); // максимум 5 запитів
+  }
+
+  /**
+   * 🆕 Витягує локацію з тендера: спочатку пробує parsing title, потім fallback
+   * на procuringEntity.address
+   */
+  private extractLocation(tender: any): { city?: string; full: string } {
+    const title = (tender.title || '') as string;
+
+    // 1. Місто з тайтлу: "м. Хмельницький", "м.Київ", "в м. Ужгороді"
+    const cityFromTitle = title.match(/м\.\s*([А-ЯЇЄІҐ][А-ЯЇЄІҐа-яїєіґʼ\-]+)/);
+
+    let city = cityFromTitle?.[1];
+
+    // Нормалізуємо словоформи: "Хмельницькому" → "Хмельницький"
+    if (city) {
+      city = city
+        .replace(/ому$/, 'ий')
+        .replace(/ові$/, 'ів')
+        .replace(/і$/, '')
+        .replace(/у$/, '')
+        .replace(/а$/, '');
+    }
+
+    // 2. Якщо нема — fallback на адресу замовника
+    if (!city && tender.procuringEntity?.address?.locality) {
+      const locality = tender.procuringEntity.address.locality as string;
+      // прибираємо префікси типу "село", "місто"
+      city = locality
+        .replace(/^(село|місто|с\.|м\.)\s+/i, '')
+        .trim();
+    }
+
+    // 3. Витягуємо вулицю з тайтлу для повної адреси
+    const streetMatch = title.match(/вул(?:иц[яі])?\.?\s*([А-ЯЇЄІҐ][А-ЯЇЄІҐа-яїєіґʼ\-\s]*?)(?:[,\s]\s*\d|[,;]|$)/);
+    const street = streetMatch?.[1]?.trim();
+
+    const full = [city, street && `вул. ${street}`].filter(Boolean).join(', ') || 'Невідомо';
+
+    return { city, full };
   }
 }

@@ -17,11 +17,25 @@ export interface ProzorroProjectInfo {
   status?: string;
 }
 
+export interface AggregatedLocation {
+  location: string;
+  city: string;
+  totalAmount: number;
+  tenderCount: number;
+  tenders: Array<{
+    title: string;
+    amount: number;
+    tenderID?: string;
+    status: string;
+  }>;
+}
+
 export interface ProzorroAnalysisData {
   similarProjectsFound: number;
   totalItemsParsed: number;
   averagePriceLevel: 'low' | 'medium' | 'high';
   topSimilarProjects: ProzorroProjectInfo[];
+  aggregatedLocations?: AggregatedLocation[];
   priceDatabase?: Record<string, number>;
 }
 
@@ -170,6 +184,70 @@ export function EngineerReportModal({
                       <PriceLevelBadge level={prozorroData!.averagePriceLevel || 'medium'} />
                     </Card>
                   </div>
+
+                  {/* 🆕 Згруповано за локацією — приблизний кошторис всіх дотичних робіт */}
+                  {prozorroData!.aggregatedLocations && prozorroData!.aggregatedLocations.length > 0 && (
+                    <Card className="p-5 border-purple-200 bg-gradient-to-br from-purple-50/50 to-transparent">
+                      <h4 className="font-semibold text-base mb-1 flex items-center gap-2 text-purple-700">
+                        📍 Сукупна вартість робіт за локацією
+                      </h4>
+                      <p className="text-xs text-muted-foreground mb-4">
+                        Сума всіх тендерів навколо одного об'єкта в кожному місті —
+                        приблизний бюджет дотичних робіт (підключення, благоустрій, тротуари тощо)
+                      </p>
+                      <div className="space-y-3">
+                        {prozorroData!.aggregatedLocations.map((loc, idx) => (
+                          <details key={idx} className="border rounded-lg group">
+                            <summary className="p-3 cursor-pointer hover:bg-muted/30 transition-colors flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <span className="text-2xl shrink-0">📍</span>
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-semibold text-sm truncate">{loc.city}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {loc.tenderCount} тендер{loc.tenderCount === 1 ? '' : loc.tenderCount < 5 ? 'и' : 'ів'}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <p className="text-base font-bold text-purple-700">
+                                  {formatCurrency(loc.totalAmount)}
+                                </p>
+                                <p className="text-xs text-muted-foreground">сумарно</p>
+                              </div>
+                            </summary>
+                            <div className="border-t bg-muted/20 p-3 space-y-2">
+                              {loc.tenders.map((t, tIdx) => (
+                                <div key={tIdx} className="flex items-start justify-between gap-3 text-xs py-2 border-b last:border-0">
+                                  <div className="flex-1 min-w-0">
+                                    <p className="line-clamp-2">{t.title}</p>
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <Badge variant="outline" className="text-[10px] py-0">
+                                        {t.status}
+                                      </Badge>
+                                      {t.tenderID && (
+                                        <a
+                                          href={`https://prozorro.gov.ua/tender/${t.tenderID}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-blue-600 hover:underline flex items-center gap-1"
+                                        >
+                                          <ExternalLink className="h-2.5 w-2.5" />
+                                          {t.tenderID}
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <p className="font-medium text-foreground shrink-0">
+                                    {formatCurrency(t.amount)}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ))}
+                      </div>
+                    </Card>
+                  )}
 
                   {/* Топ схожих тендерів */}
                   {prozorroData!.topSimilarProjects && prozorroData!.topSimilarProjects.length > 0 && (

@@ -320,6 +320,7 @@ export async function POST(request: NextRequest) {
                   totalItemsParsed: pa.totalItemsParsed || 0,
                   averagePriceLevel: pa.averagePriceLevel || 'medium',
                   topSimilarProjects: pa.topSimilarProjects || [],
+                  aggregatedLocations: pa.aggregatedLocations || [],
                   priceDatabase: pa.priceDatabase instanceof Map
                     ? Object.fromEntries(pa.priceDatabase)
                     : (pa.priceDatabase || {}),
@@ -437,6 +438,7 @@ export async function POST(request: NextRequest) {
                   totalItemsParsed: pa.totalItemsParsed || 0,
                   averagePriceLevel: pa.averagePriceLevel || 'medium',
                   topSimilarProjects: pa.topSimilarProjects || [],
+                  aggregatedLocations: pa.aggregatedLocations || [],
                   priceDatabase: pa.priceDatabase instanceof Map
                     ? Object.fromEntries(pa.priceDatabase)
                     : (pa.priceDatabase || {}),
