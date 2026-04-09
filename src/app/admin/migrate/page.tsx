@@ -95,9 +95,9 @@ export default function MigratePage() {
 
         {message && (
           <div className={`p-3 rounded-lg mb-4 flex items-start gap-2 ${
-            status === 'success' ? 'bg-green-50 text-green-900' :
-            status === 'error' ? 'bg-red-50 text-red-900' :
-            'bg-blue-50 text-blue-900'
+            status === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-900 dark:text-green-100' :
+            status === 'error' ? 'bg-red-50 dark:bg-red-900/20 text-red-900 dark:text-red-100' :
+            'bg-blue-50 dark:bg-blue-900/20 text-blue-900 dark:text-blue-100'
           }`}>
             {status === 'success' && <CheckCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />}
             {status === 'error' && <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />}
@@ -109,7 +109,7 @@ export default function MigratePage() {
         )}
 
         {dbInfo && (
-          <div className="bg-gray-50 p-3 rounded-lg mb-4 font-mono text-xs">
+          <div className="bg-gray-50 dark:bg-gray-900/50 p-3 rounded-lg mb-4 font-mono text-xs text-gray-900 dark:text-gray-100">
             <div className="mb-2">
               <strong>Table:</strong> {dbInfo.tableName}
             </div>
