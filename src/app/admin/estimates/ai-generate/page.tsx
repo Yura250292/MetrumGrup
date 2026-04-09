@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { createFileBatches, calculateProgress, formatFileSize, type UploadProgress } from "@/lib/batch-upload";
+import { uploadFilesToR2, formatFileSize, type UploadProgress } from "@/lib/r2-upload";
 // import { generateEngineeringReport, generateQuickSummary } from "@/lib/engineering-report"; // Temporarily disabled
 import { generateQuickSummary } from "@/lib/engineering-report";
 import { PROJECT_TEMPLATES } from "@/lib/constants";
@@ -2907,79 +2907,42 @@ export default function AIEstimatePage() {
     setUploadProgress(null);
 
     try {
-      // Розбиваємо файли на батчі по 4 MB
-      const batches = createFileBatches(files);
       const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+      console.log(`🚀 R2 Direct Upload: ${files.length} файлів (${formatFileSize(totalSize)})`);
 
-      console.log(`📦 Розбито ${files.length} файлів (${formatFileSize(totalSize)}) на ${batches.length} батчів`);
-
-      batches.forEach(batch => {
-        console.log(`  Батч ${batch.batchNumber}: ${batch.files.length} файлів, ${formatFileSize(batch.totalSize)}`);
+      // Завантажуємо файли напряму в R2 паралельно
+      const uploadResult = await uploadFilesToR2(files, (progress) => {
+        console.log(`📤 Upload progress: ${progress.uploadedFiles}/${progress.totalFiles} (${progress.percentage}%)`);
       });
 
-      let combinedResult: any = {
-        classification: { total: files.length, byType: [] },
-        parsedData: {},
-        filesAnalyzed: files.length
-      };
-
-      // Завантажуємо батчі послідовно
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-
-        // Оновлюємо прогрес
-        const progress = calculateProgress(i, batches);
-        setUploadProgress(progress);
-
-        console.log(`📤 Завантаження батчу ${i + 1}/${batches.length} (${formatFileSize(batch.totalSize)})...`);
-
-        const formData = new FormData();
-        batch.files.forEach((file) => formData.append("files", file));
-
-        if (wizardData) {
-          formData.append("wizardData", JSON.stringify(wizardData));
-        }
-
-        const res = await fetch("/api/admin/estimates/analyze", {
-          method: "POST",
-          body: formData,
-        });
-
-        const json = await res.json();
-
-        if (!res.ok) {
-          throw new Error(json.error || `Помилка завантаження батчу ${i + 1}`);
-        }
-
-        // Об'єднуємо результати
-        if (json.classification?.byType) {
-          combinedResult.classification.byType.push(...json.classification.byType);
-        }
-
-        // Об'єднуємо parsedData
-        if (json.parsedData) {
-          if (json.parsedData.sitePlan) combinedResult.parsedData.sitePlan = json.parsedData.sitePlan;
-          if (json.parsedData.geological) combinedResult.parsedData.geological = json.parsedData.geological;
-          if (json.parsedData.review) combinedResult.parsedData.review = json.parsedData.review;
-
-          // Photos - accumulate
-          if (json.parsedData.photos) {
-            if (!combinedResult.parsedData.photos) {
-              combinedResult.parsedData.photos = { photoCount: 0, photoNames: [], summary: '' };
-            }
-            combinedResult.parsedData.photos.photoCount += json.parsedData.photos.photoCount;
-            combinedResult.parsedData.photos.photoNames.push(...json.parsedData.photos.photoNames);
-            combinedResult.parsedData.photos.summary = `${combinedResult.parsedData.photos.photoCount} фото місцевості`;
-          }
-        }
-
-        console.log(`✅ Батч ${i + 1}/${batches.length} завантажено`);
+      if (!uploadResult.success) {
+        throw new Error(`Помилка завантаження: ${uploadResult.failed.length} файлів не завантажено`);
       }
 
-      // Завершуємо прогрес
-      setUploadProgress(calculateProgress(batches.length, batches));
+      console.log(`✅ Всі файли завантажено в R2: ${uploadResult.r2Keys.length} файлів`);
 
-      console.log('🔍 Об\'єднаний результат pre-analysis:', combinedResult);
+      // Викликаємо analyze з R2 keys замість файлів
+      const formData = new FormData();
+      formData.append("r2Keys", JSON.stringify(uploadResult.r2Keys));
+
+      if (wizardData) {
+        formData.append("wizardData", JSON.stringify(wizardData));
+      }
+
+      const res = await fetch("/api/admin/estimates/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || "Помилка аналізу файлів");
+      }
+
+      const combinedResult = json;
+
+      console.log('🔍 Pre-analysis complete:', combinedResult);
 
       setPreAnalysisData(combinedResult);
 
@@ -3027,116 +2990,26 @@ export default function AIEstimatePage() {
     setUploadProgress(null);
 
     try {
-      // Розбиваємо файли на батчі
-      const batches = createFileBatches(files);
       const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+      console.log(`🚀 Генерація з ${files.length} файлів (${formatFileSize(totalSize)})`);
 
-      console.log(`📦 Генерація з ${files.length} файлів (${formatFileSize(totalSize)}) у ${batches.length} батчах`);
+      // Завантажуємо всі файли в R2 паралельно
+      console.log('📤 Uploading files to R2...');
+      const uploadResult = await uploadFilesToR2(files, (progress) => {
+        console.log(`📤 Upload: ${progress.uploadedFiles}/${progress.totalFiles} (${progress.percentage}%)`);
+      });
 
-      // Для generate потрібно завантажити ВСІ файли послідовно, а потім викликати generate
-      // Складаємо всі файли по батчах
-      const allFileData: Array<{name: string, type: string, size: number, batch: number}> = [];
-
-      // Завантажуємо батчі
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-        const progress = calculateProgress(i, batches);
-        setUploadProgress(progress);
-
-        console.log(`📤 Завантаження батчу ${i + 1}/${batches.length} для генерації...`);
-
-        // Додаємо метадані про файли
-        batch.files.forEach(file => {
-          allFileData.push({
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            batch: i + 1
-          });
-        });
+      if (!uploadResult.success) {
+        throw new Error(`Upload failed: ${uploadResult.failed.length} files failed`);
       }
 
-      // Фінальний запит на генерацію
-      // На production: спочатку завантажуємо файли в R2, потім передаємо URLs
-      // На localhost: відправляємо файли напряму
-      console.log('🤖 Запуск генерації кошторису...');
+      console.log(`✅ All files uploaded to R2: ${uploadResult.r2Keys.length} files`);
+
+      // Запуск генерації з R2 keys
+      console.log('🤖 Starting estimate generation with R2 files...');
 
       const formData = new FormData();
-
-      // Перевірка чи потрібно використовувати R2 (production)
-      const isProduction = window.location.hostname !== 'localhost' &&
-                          window.location.hostname !== '127.0.0.1';
-
-      if (isProduction && totalSize > 4 * 1024 * 1024) { // Якщо > 4MB на production (Vercel ліміт)
-        console.log('📤 Production mode: Direct upload to R2 from browser...');
-
-        try {
-          // Крок 1: Отримуємо presigned URLs для завантаження
-          console.log('🔑 Getting presigned URLs...');
-          const filesMetadata = files.map(f => ({
-            name: f.name,
-            type: f.type,
-            size: f.size
-          }));
-
-          const presignedResponse = await fetch("/api/admin/estimates/presigned-url", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ files: filesMetadata }),
-          });
-
-          if (!presignedResponse.ok) {
-            const errorData = await presignedResponse.json();
-            setError(`Помилка отримання presigned URLs: ${errorData.message || 'Unknown error'}`);
-            return;
-          }
-
-          const { presignedUrls } = await presignedResponse.json();
-          console.log(`✅ Got ${presignedUrls.length} presigned URLs`);
-
-          // Крок 2: Завантажуємо кожен файл НАПРЯМУ в R2 з браузера (обхід Vercel ліміту!)
-          console.log('📤 Uploading files directly to R2...');
-          const uploadPromises = files.map(async (file, index) => {
-            const presignedData = presignedUrls[index];
-
-            // PUT request напряму в R2
-            const uploadResponse = await fetch(presignedData.uploadUrl, {
-              method: 'PUT',
-              body: file,
-              headers: {
-                'Content-Type': file.type,
-              },
-            });
-
-            if (!uploadResponse.ok) {
-              throw new Error(`Failed to upload ${file.name}: ${uploadResponse.status}`);
-            }
-
-            console.log(`   ✅ Uploaded: ${file.name}`);
-
-            return {
-              key: presignedData.key,
-              originalName: file.name,
-              mimeType: file.type,
-              size: file.size,
-            };
-          });
-
-          const uploadedFiles = await Promise.all(uploadPromises);
-          console.log(`✅ All ${uploadedFiles.length} files uploaded to R2`);
-
-          // Крок 3: Передаємо ключі файлів в generate endpoint
-          formData.append("r2Keys", JSON.stringify(uploadedFiles));
-        } catch (uploadError) {
-          console.error('❌ R2 upload error:', uploadError);
-          setError(`Помилка завантаження в R2: ${uploadError instanceof Error ? uploadError.message : 'Unknown error'}`);
-          return;
-        }
-      } else {
-        // Localhost або невеликі файли: відправляємо напряму
-        console.log('📁 Direct mode: Sending files directly');
-        files.forEach((file) => formData.append("files", file));
-      }
+      formData.append("r2Keys", JSON.stringify(uploadResult.r2Keys));
 
       formData.append("projectType", projectType);
       formData.append("area", area);
@@ -4028,7 +3901,7 @@ export default function AIEstimatePage() {
               <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-sm font-medium text-blue-900">
-                    📤 Завантаження батчу {uploadProgress.currentBatch} з {uploadProgress.totalBatches}
+                    📤 Завантаження файлів у R2...
                   </p>
                   <p className="text-sm font-semibold text-blue-900">
                     {uploadProgress.percentage}%
@@ -4045,7 +3918,6 @@ export default function AIEstimatePage() {
 
                 <p className="text-xs text-blue-700">
                   Завантажено {uploadProgress.uploadedFiles} з {uploadProgress.totalFiles} файлів
-                  ({formatFileSize(uploadProgress.uploadedBytes)} / {formatFileSize(uploadProgress.totalBytes)})
                 </p>
               </div>
             )}

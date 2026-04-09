@@ -10,8 +10,20 @@ import { SitePlanParser } from '@/lib/parsers/site-plan-parser';
 import { GeologicalParser } from '@/lib/parsers/geological-parser';
 import { ProjectReviewParser } from '@/lib/parsers/review-parser';
 import { SitePhotosHandler } from '@/lib/parsers/site-photos-handler';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+const s3Client = new S3Client({
+  region: 'auto',
+  endpoint: process.env.R2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+  },
+});
+
+const BUCKET_NAME = process.env.R2_BUCKET_NAME || '';
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -22,15 +34,49 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const files = formData.getAll("files") as File[];
     const wizardDataStr = formData.get("wizardData") as string;
     const wizardData = wizardDataStr ? JSON.parse(wizardDataStr) : null;
+    const r2KeysStr = formData.get("r2Keys") as string;
+
+    let files: File[] = [];
+
+    // Підтримка двох режимів: прямі файли (legacy) або R2 keys (нове)
+    if (r2KeysStr) {
+      // Новий режим: завантажуємо з R2
+      const r2Keys = JSON.parse(r2KeysStr) as string[];
+      console.log(`📦 Downloading ${r2Keys.length} files from R2...`);
+
+      files = await Promise.all(
+        r2Keys.map(async (key) => {
+          const command = new GetObjectCommand({
+            Bucket: BUCKET_NAME,
+            Key: key,
+          });
+
+          const response = await s3Client.send(command);
+          const buffer = await streamToBuffer(response.Body as any);
+
+          // Витягуємо оригінальну назву з метаданих або з ключа
+          const fileName = response.Metadata?.originalname || key.split('/').pop() || 'file';
+          const mimeType = response.ContentType || 'application/octet-stream';
+
+          // Convert buffer to Uint8Array for compatibility
+          const uint8Array = new Uint8Array(buffer);
+          return new File([uint8Array], fileName, { type: mimeType });
+        })
+      );
+
+      console.log(`✅ Downloaded ${files.length} files from R2`);
+    } else {
+      // Legacy режим: файли передані напряму
+      files = formData.getAll("files") as File[];
+    }
 
     if (files.length === 0) {
       return NextResponse.json({ error: "Завантажте хоча б один файл" }, { status: 400 });
     }
 
-    console.log(`📋 PRE-ANALYSIS: ${files.length} files, wizard: ${!!wizardData}`);
+    console.log(`📋 PRE-ANALYSIS: ${files.length} files, wizard: ${!!wizardData}, source: ${r2KeysStr ? 'R2' : 'direct'}`);
 
     // NEW: Classify files with enhanced classifier
     const classified = classifyDocuments(files);
@@ -441,4 +487,15 @@ ${wizardSummary}
     const message = error instanceof Error ? error.message : "Невідома помилка";
     return NextResponse.json({ error: `Помилка аналізу: ${message}` }, { status: 500 });
   }
+}
+
+/**
+ * Helper: Convert stream to buffer
+ */
+async function streamToBuffer(stream: any): Promise<Buffer> {
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
 }
