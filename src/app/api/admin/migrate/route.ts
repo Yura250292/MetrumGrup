@@ -22,15 +22,19 @@ export async function POST() {
 
     // Migration 1: analysisSummary column
     await prisma.$executeRawUnsafe(`
-      ALTER TABLE "estimates" ADD COLUMN IF NOT EXISTS "analysisSummary" TEXT;
+      ALTER TABLE "estimates" ADD COLUMN IF NOT EXISTS "analysisSummary" TEXT
     `);
     console.log('✅ Migration 1: analysisSummary column added');
 
     // Migration 2: Enable pgvector extension
-    await prisma.$executeRawUnsafe(`
-      CREATE EXTENSION IF NOT EXISTS vector;
-    `);
-    console.log('✅ Migration 2: pgvector extension enabled');
+    try {
+      await prisma.$executeRawUnsafe(`
+        CREATE EXTENSION IF NOT EXISTS vector
+      `);
+      console.log('✅ Migration 2: pgvector extension enabled');
+    } catch (error) {
+      console.log('⚠️  Migration 2: pgvector extension (skipped - may require superuser or already exists)');
+    }
 
     // Migration 3: RAG tables (split into separate commands)
 
