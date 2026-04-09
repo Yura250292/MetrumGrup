@@ -84,6 +84,35 @@ export type ProjectFacts = {
     soilType?: SourcedValue<string>;
   };
 
+  /**
+   * Foundation specs — populated from `wizardData.houseData.foundation` /
+   * townhouseData.houseData.foundation. Optional because apartments / offices
+   * never have it.
+   */
+  foundation?: {
+    type?: SourcedValue<'strip' | 'slab' | 'pile' | 'combined'>;
+    depthM?: SourcedValue<number>;
+    widthM?: SourcedValue<number>;
+    waterproofing?: SourcedValue<boolean>;
+    insulation?: SourcedValue<boolean>;
+    insulationThicknessMm?: SourcedValue<number>;
+    reinforcement?: SourcedValue<'light' | 'standard' | 'heavy'>;
+  };
+
+  /**
+   * Roof specs — same source.
+   */
+  roof?: {
+    type?: SourcedValue<'pitched' | 'flat' | 'mansard' | 'combined'>;
+    material?: SourcedValue<string>;
+    pitchAngleDeg?: SourcedValue<number>;
+    insulation?: SourcedValue<boolean>;
+    insulationThicknessMm?: SourcedValue<number>;
+    attic?: SourcedValue<'cold' | 'warm' | 'living'>;
+    gutterSystem?: SourcedValue<boolean>;
+    roofWindows?: SourcedValue<number>;
+  };
+
   finishing?: {
     tileAreaM2?: SourcedValue<number>;
     laminateAreaM2?: SourcedValue<number>;

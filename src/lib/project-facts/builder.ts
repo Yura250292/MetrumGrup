@@ -265,6 +265,129 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
       }
     : undefined;
 
+  // --- foundation ---
+  const wizardFoundation =
+    wizardData.houseData?.foundation
+    ?? wizardData.townhouseData?.houseData?.foundation;
+  const foundation = wizardFoundation
+    ? {
+        type: wizardFoundation.type
+          ? pickWithConflict<'strip' | 'slab' | 'pile' | 'combined'>(
+              'foundation.type',
+              [{ value: wizardFoundation.type, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        depthM: parseNumeric(wizardFoundation.depth) !== undefined
+          ? pickWithConflict<number>(
+              'foundation.depthM',
+              [{ value: parseNumeric(wizardFoundation.depth)!, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        widthM: parseNumeric(wizardFoundation.width) !== undefined
+          ? pickWithConflict<number>(
+              'foundation.widthM',
+              [{ value: parseNumeric(wizardFoundation.width)!, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        waterproofing: wizardFoundation.waterproofing !== undefined
+          ? pickWithConflict<boolean>(
+              'foundation.waterproofing',
+              [{ value: !!wizardFoundation.waterproofing, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        insulation: wizardFoundation.insulation !== undefined
+          ? pickWithConflict<boolean>(
+              'foundation.insulation',
+              [{ value: !!wizardFoundation.insulation, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        insulationThicknessMm: wizardFoundation.insulationThickness !== undefined
+          ? pickWithConflict<number>(
+              'foundation.insulationThicknessMm',
+              [{ value: wizardFoundation.insulationThickness, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        reinforcement: wizardFoundation.reinforcement
+          ? pickWithConflict<'light' | 'standard' | 'heavy'>(
+              'foundation.reinforcement',
+              [{ value: wizardFoundation.reinforcement, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+      }
+    : undefined;
+
+  // --- roof ---
+  const wizardRoof =
+    wizardData.houseData?.roof
+    ?? wizardData.townhouseData?.houseData?.roof;
+  const roof = wizardRoof
+    ? {
+        type: wizardRoof.type
+          ? pickWithConflict<'pitched' | 'flat' | 'mansard' | 'combined'>(
+              'roof.type',
+              [{ value: wizardRoof.type, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        material: wizardRoof.material
+          ? pickWithConflict<string>(
+              'roof.material',
+              [{ value: wizardRoof.material, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        pitchAngleDeg: wizardRoof.pitchAngle !== undefined
+          ? pickWithConflict<number>(
+              'roof.pitchAngleDeg',
+              [{ value: wizardRoof.pitchAngle, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        insulation: wizardRoof.insulation !== undefined
+          ? pickWithConflict<boolean>(
+              'roof.insulation',
+              [{ value: !!wizardRoof.insulation, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        insulationThicknessMm: wizardRoof.insulationThickness !== undefined
+          ? pickWithConflict<number>(
+              'roof.insulationThicknessMm',
+              [{ value: wizardRoof.insulationThickness, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        attic: wizardRoof.attic
+          ? pickWithConflict<'cold' | 'warm' | 'living'>(
+              'roof.attic',
+              [{ value: wizardRoof.attic, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        gutterSystem: wizardRoof.gutterSystem !== undefined
+          ? pickWithConflict<boolean>(
+              'roof.gutterSystem',
+              [{ value: !!wizardRoof.gutterSystem, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        roofWindows: wizardRoof.roofWindows !== undefined && wizardRoof.roofWindows > 0
+          ? pickWithConflict<number>(
+              'roof.roofWindows',
+              [{ value: wizardRoof.roofWindows, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+      }
+    : undefined;
+
   // --- demolitionRequired ---
   const wizardDemo =
     wizardData.houseData?.demolitionRequired
@@ -294,6 +417,8 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
     plumbing,
     heating,
     geology,
+    foundation,
+    roof,
     finishing,
     demolitionRequired,
     conflicts,

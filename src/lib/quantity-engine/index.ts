@@ -17,6 +17,7 @@ import { plumbingRules } from './rules/plumbing';
 import { finishingRules } from './rules/finishing';
 import { foundationRules } from './rules/foundation';
 import { wallsRules } from './rules/walls';
+import { applyModifiers, buildModifiers } from './modifiers';
 
 const RULES: Record<EngineCategory, (ctx: any) => EngineItem[]> = {
   electrical: electricalRules,
@@ -31,15 +32,19 @@ export function runQuantityEngine(
   input: { facts: ProjectFacts; wizardData: WizardData }
 ): EngineResult {
   const geometry = computeGeometry(input.facts, input.wizardData);
+  const modifiers = buildModifiers(input.facts, input.wizardData);
   const ruleFn = RULES[category];
   if (!ruleFn) {
     return { category, items: [], skippedRules: [] };
   }
-  const items = ruleFn({
+  const rawItems = ruleFn({
     facts: input.facts,
     wizardData: input.wizardData,
     geometry,
+    modifiers,
   });
+  // Apply cross-cutting regional/quality/complexity multipliers (3.4).
+  const items = applyModifiers(rawItems, modifiers);
   return {
     category,
     items,
@@ -78,3 +83,13 @@ ${lines.join('\n')}
 
 export * from './types';
 export { computeGeometry } from './geometry';
+export {
+  buildModifiers,
+  applyModifiers,
+  getDefaultModifiers,
+  type EngineModifiers,
+  type ObjectClass,
+  type WorkScopeClass,
+  type QualityTier,
+  type Complexity,
+} from './modifiers';

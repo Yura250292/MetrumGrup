@@ -185,6 +185,13 @@ model EstimateItem {
   amount              Decimal          @db.Decimal(12, 2)
   isManualOverride    Boolean          @default(false)
   sortOrder           Int              @default(0)
+  // Quantity engine metadata (Phase 3.2).
+  // itemType: 'material' | 'labor' | 'equipment' | 'composite' | null (legacy).
+  itemType            String?
+  // engineKey: stable canonical id (e.g. 'electrical.power_cable') — null for LLM-only items.
+  engineKey           String?
+  // quantityFormula: human-readable trace of the formula that produced quantity.
+  quantityFormula     String?
   estimateId          String
   sectionId           String?
   materialId          String?
@@ -196,6 +203,7 @@ model EstimateItem {
   material            Material?        @relation(fields: [materialId], references: [id])
   section             EstimateSection? @relation(fields: [sectionId], references: [id])
 
+  @@index([engineKey])
   @@map("estimate_items")
 }
 

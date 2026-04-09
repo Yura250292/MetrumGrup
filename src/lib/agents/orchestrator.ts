@@ -20,6 +20,7 @@ import { MasterEstimateAgent } from './master-estimate-agent';
 import { buildProjectFacts } from '../project-facts/builder';
 import type { ProjectFacts } from '../project-facts/types';
 import { getExtractedProjectData } from '../rag/vectorizer';
+import { runAllValidators } from '../validators';
 
 export type GenerationMode = 'gemini' | 'openai' | 'multi-agent' | 'master';
 
@@ -513,6 +514,31 @@ export class EstimateOrchestrator {
 
     const stats = crossValidator.getValidationStats(crossValidationIssues);
     console.log(`📊 Validation stats: ${stats.errors} errors, ${stats.warnings} warnings, ${stats.info} info`);
+
+    // 🆕 Rule-based validators (Plan Stage 7).
+    try {
+      const ruleReport = runAllValidators({
+        estimate: { sections: sections as any },
+        facts: projectFacts,
+        wizardData: this.config.wizardData,
+      });
+      console.log(
+        `🔍 Rule-based validators: ${ruleReport.errorCount} errors, ` +
+        `${ruleReport.warningCount} warnings, ${ruleReport.infoCount} info — ` +
+        `${JSON.stringify(ruleReport.byValidator)}`
+      );
+      for (const issue of ruleReport.issues) {
+        validationIssues.push({
+          severity: issue.severity === 'info' ? 'info' : issue.severity,
+          agent: `RuleValidator/${issue.code}`,
+          message: issue.section
+            ? `[${issue.section}] ${issue.message}`
+            : issue.message,
+        });
+      }
+    } catch (e) {
+      console.error('[Orchestrator] Rule-based validators failed:', e);
+    }
 
     // Розрахувати загальні суми
     const totalBeforeDiscount = sections.reduce((sum, s) => sum + s.sectionTotal, 0);

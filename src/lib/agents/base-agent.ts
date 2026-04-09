@@ -46,6 +46,10 @@ export interface EstimateItem {
   confidence: number; // 0-1
   notes?: string;
   prozorroReferences?: PriceReference[]; // 🆕 Посилання на схожі позиції з Prozorro
+  // 🆕 Quantity engine metadata (Phase 3.2). Persisted to DB.
+  itemType?: 'material' | 'labor' | 'equipment' | 'composite';
+  engineKey?: string;
+  quantityFormula?: string;
 }
 
 export interface EstimateSection {

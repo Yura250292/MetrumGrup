@@ -20,6 +20,10 @@ export type AiItem = {
   unitPrice?: number | string;
   laborCost?: number | string;
   totalCost?: number | string;
+  // Quantity engine metadata (optional). When present, persisted to DB.
+  itemType?: 'material' | 'labor' | 'equipment' | 'composite' | string;
+  engineKey?: string;
+  quantityFormula?: string;
 };
 
 export type NormalizedItem = {
@@ -30,6 +34,9 @@ export type NormalizedItem = {
   laborRate: number;
   laborHours: number;
   amount: number;
+  itemType?: string | null;
+  engineKey?: string | null;
+  quantityFormula?: string | null;
 };
 
 export class InvalidAiItemError extends Error {
@@ -94,6 +101,9 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     laborRate,
     laborHours,
     amount: computed,
+    itemType: item.itemType ? String(item.itemType) : null,
+    engineKey: item.engineKey ? String(item.engineKey) : null,
+    quantityFormula: item.quantityFormula ? String(item.quantityFormula) : null,
   };
 }
 

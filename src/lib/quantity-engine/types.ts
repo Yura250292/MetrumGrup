@@ -10,6 +10,7 @@
 
 import type { ProjectFacts } from '../project-facts/types';
 import type { WizardData } from '../wizard-types';
+import type { EngineModifiers } from './modifiers';
 
 export type EngineCategory =
   | 'electrical'
@@ -48,6 +49,8 @@ export type EngineRuleContext = {
   wizardData: WizardData;
   /** Computed geometry (perimeter, wallArea, ...) — built once per generation. */
   geometry: ProjectGeometry;
+  /** Regional / object-class / quality / complexity multipliers (Phase 3.4). */
+  modifiers: EngineModifiers;
 };
 
 export type ProjectGeometry = {

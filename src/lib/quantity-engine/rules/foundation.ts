@@ -21,17 +21,37 @@ function readNumber(value: unknown): number | undefined {
 
 export function foundationRules(ctx: EngineRuleContext): EngineItem[] {
   const items: EngineItem[] = [];
+  const facts = ctx.facts;
   const wizard = ctx.wizardData;
   const geom = ctx.geometry;
 
-  const foundation =
+  // Prefer ProjectFacts (Phase 3.2 expansion); fall back to raw wizard data.
+  const factsFoundation = facts.foundation;
+  const wizardFoundation =
     wizard.houseData?.foundation
     ?? wizard.townhouseData?.houseData?.foundation;
-  if (!foundation) return items;
+  if (!factsFoundation && !wizardFoundation) return items;
 
-  const type = foundation.type ?? 'strip';
-  const depthM = readNumber(foundation.depth) ?? 1.0;
-  const widthM = readNumber(foundation.width) ?? 0.4;
+  const type =
+    factsFoundation?.type?.value
+    ?? wizardFoundation?.type
+    ?? 'strip';
+  const depthM =
+    factsFoundation?.depthM?.value
+    ?? readNumber(wizardFoundation?.depth)
+    ?? 1.0;
+  const widthM =
+    factsFoundation?.widthM?.value
+    ?? readNumber(wizardFoundation?.width)
+    ?? 0.4;
+  const waterproofing =
+    factsFoundation?.waterproofing?.value
+    ?? wizardFoundation?.waterproofing
+    ?? false;
+  const insulation =
+    factsFoundation?.insulation?.value
+    ?? wizardFoundation?.insulation
+    ?? false;
   const perimeterM = geom.perimeterM;
   const footprintM2 = geom.footprintM2;
 
@@ -103,7 +123,7 @@ export function foundationRules(ctx: EngineRuleContext): EngineItem[] {
   }
 
   // 4. Гідроізоляція (горизонтальна)
-  if (foundation.waterproofing) {
+  if (waterproofing) {
     const wpArea = type === 'slab' ? footprintM2 : perimeterM * widthM * 1.2;
     items.push({
       canonicalKey: 'foundation.waterproofing',
@@ -116,7 +136,7 @@ export function foundationRules(ctx: EngineRuleContext): EngineItem[] {
   }
 
   // 5. Утеплення (XPS під плиту або бічне для стрічки)
-  if (foundation.insulation) {
+  if (insulation) {
     const insArea = type === 'slab' ? footprintM2 : perimeterM * depthM;
     items.push({
       canonicalKey: 'foundation.insulation',

@@ -107,6 +107,10 @@ export function mergeEngineAndLlm(
       priceSource: match?.item?.priceSource ?? 'Quantity Engine (потребує ціну)',
       confidence: Number(match?.item?.confidence ?? 0.5),
       notes: match?.item?.notes ?? `engine: ${eng.canonicalKey}`,
+      // Engine wins on metadata regardless of what LLM said.
+      itemType: eng.itemType === 'composite' ? 'composite' : eng.itemType,
+      engineKey: eng.canonicalKey,
+      quantityFormula: eng.formula,
     });
   }
 

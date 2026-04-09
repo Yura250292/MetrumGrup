@@ -3971,13 +3971,17 @@ export default function AIEstimatePage() {
       // (no more client-side `laborCost / 200` heuristic).
       const sectionsForApi = estimate.sections.map((section) => ({
         title: section.title,
-        items: section.items.map((item) => ({
+        items: section.items.map((item: any) => ({
           description: item.description,
           unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           laborCost: item.laborCost,
           totalCost: item.totalCost,
+          // 🆕 Quantity engine metadata (Phase 3.2) — pass-through.
+          itemType: item.itemType,
+          engineKey: item.engineKey,
+          quantityFormula: item.quantityFormula,
         })),
       }));
 

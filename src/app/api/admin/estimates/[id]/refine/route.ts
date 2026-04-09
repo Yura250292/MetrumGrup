@@ -18,6 +18,8 @@ import { parsePDF } from "@/lib/pdf-helper";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { vectorizeProject } from "@/lib/rag/vectorizer";
 import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
+import { detectImpactedCategories, isSectionImpacted } from "@/lib/refine/section-detector";
+import { computeEstimateDiff, type DiffItem } from "@/lib/refine/diff";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -302,32 +304,103 @@ ${additionalInfo}
           }
         });
 
+        // 🆕 DELTA REFINE (Plan Stage 6):
+        // Detect which sections the user actually wants to refine. Sections
+        // outside that set keep their old items verbatim, so unrelated areas
+        // don't drift across refines.
+        const impactedCategories = regenerateAll
+          ? detectImpactedCategories('') // empty string => all categories
+          : detectImpactedCategories(additionalInfo);
+
+        const oldItemsBySection: Record<string, DiffItem[]> = {};
+        existingEstimate.sections.forEach((s) => {
+          oldItemsBySection[s.title] = s.items.map((it) => ({
+            description: it.description,
+            unit: it.unit,
+            quantity: Number(it.quantity),
+            unitPrice: Number(it.unitPrice),
+            laborCost: Number(it.laborRate) * Number(it.laborHours),
+            amount: Number(it.amount),
+            engineKey: (it as any).engineKey ?? null,
+            itemType: (it as any).itemType ?? null,
+          }));
+        });
+
+        const newItemsBySection: Record<string, DiffItem[]> = {};
+
         // Додати позиції
         for (let sIdx = 0; sIdx < newEstimateData.sections.length; sIdx++) {
           const section = newEstimateData.sections[sIdx];
           const createdSection = refinedEstimate.sections[sIdx];
 
-          const normalized = normalizeAiItems(section.items);
-          const itemsToCreate = normalized.map((item, itemIndex) => ({
-            ...item,
-            sortOrder: itemIndex,
-            estimateId: refinedEstimate.id,
-            sectionId: createdSection.id,
+          // Decide whether to use NEW items (impacted) or OLD items (untouched).
+          const useNewItems = isSectionImpacted(section.title, impactedCategories);
+          let itemsForDb: any[];
+
+          if (useNewItems) {
+            const normalized = normalizeAiItems(section.items);
+            itemsForDb = normalized.map((item, itemIndex) => ({
+              ...item,
+              sortOrder: itemIndex,
+              estimateId: refinedEstimate.id,
+              sectionId: createdSection.id,
+            }));
+            console.log(`🔄 [refine] section "${section.title}" → REGENERATED (${itemsForDb.length} items)`);
+          } else {
+            // Keep old items 1:1.
+            const oldSection = existingEstimate.sections.find((s) => s.title === section.title);
+            itemsForDb = (oldSection?.items ?? []).map((it, itemIndex) => ({
+              description: it.description,
+              quantity: Number(it.quantity),
+              unit: it.unit,
+              unitPrice: Number(it.unitPrice),
+              laborRate: Number(it.laborRate),
+              laborHours: Number(it.laborHours),
+              amount: Number(it.amount),
+              itemType: (it as any).itemType ?? null,
+              engineKey: (it as any).engineKey ?? null,
+              quantityFormula: (it as any).quantityFormula ?? null,
+              sortOrder: itemIndex,
+              estimateId: refinedEstimate.id,
+              sectionId: createdSection.id,
+            }));
+            console.log(`✅ [refine] section "${section.title}" → KEPT (${itemsForDb.length} items, not impacted)`);
+          }
+
+          newItemsBySection[section.title] = itemsForDb.map((it) => ({
+            description: it.description,
+            unit: it.unit,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            laborCost: Number(it.laborRate ?? 0) * Number(it.laborHours ?? 0),
+            amount: Number(it.amount ?? 0),
+            engineKey: it.engineKey ?? null,
+            itemType: it.itemType ?? null,
           }));
 
-          if (itemsToCreate.length > 0) {
-            await prisma.estimateItem.createMany({
-              data: itemsToCreate
-            });
+          if (itemsForDb.length > 0) {
+            await prisma.estimateItem.createMany({ data: itemsForDb });
 
             // Оновити totalAmount секції після додавання items
-            const sectionTotal = itemsToCreate.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
+            const sectionTotal = itemsForDb.reduce((sum: number, item: any) => sum + Number(item.amount), 0);
             await prisma.estimateSection.update({
               where: { id: createdSection.id },
               data: { totalAmount: sectionTotal }
             });
           }
         }
+
+        // Compute item-level diff (after vs before).
+        const allOld: DiffItem[] = Object.values(oldItemsBySection).flat();
+        const allNew: DiffItem[] = Object.values(newItemsBySection).flat();
+        const refineDiff = computeEstimateDiff(allOld, allNew);
+        console.log(
+          `📊 [refine] diff: +${refineDiff.added.length} added, ` +
+          `~${refineDiff.changed.length} changed, ` +
+          `-${refineDiff.removed.length} removed, ` +
+          `=${refineDiff.unchangedCount} unchanged. ` +
+          `Δamount: ${refineDiff.totals.deltaAmount.toFixed(0)} ₴`
+        );
 
         // Перерахувати загальну суму кошторису
         const updatedEstimate = await prisma.estimate.findUnique({
@@ -362,6 +435,21 @@ ${additionalInfo}
             newTotalAmount: totalAmount,
             difference: Number(totalAmount) - Number(existingEstimate.totalAmount),
             sectionsCount: newEstimateData.sections.length,
+            // 🆕 Delta refine summary (Plan Stage 6).
+            refineDiff: {
+              addedCount: refineDiff.added.length,
+              removedCount: refineDiff.removed.length,
+              changedCount: refineDiff.changed.length,
+              unchangedCount: refineDiff.unchangedCount,
+              deltaAmount: refineDiff.totals.deltaAmount,
+              impactedCategories,
+              // Top 20 changes for the UI to surface in a "what changed" panel.
+              changedItems: refineDiff.changed.slice(0, 20).map((c) => ({
+                description: c.description,
+                engineKey: c.engineKey,
+                changes: c.changes,
+              })),
+            },
           }
         });
 
