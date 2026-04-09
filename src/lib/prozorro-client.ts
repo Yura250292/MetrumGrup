@@ -128,6 +128,80 @@ export class ProzorroClient {
   }
 
   /**
+   * 🆕 ПОВНОЦІННИЙ ПОШУК тендерів через prozorro.gov.ua/api/search/tenders
+   *
+   * Це єдиний правильний endpoint для пошуку — старий /api/2.5/tenders
+   * це crawler який повертає всі тендери підряд без фільтрації по тексту/CPV.
+   *
+   * Цей endpoint повертає РЕЛЕВАНТНІ результати з повними даними одразу
+   * (title, value, procuringEntity, tenderID, status).
+   */
+  async searchTendersByText(params: {
+    text: string;
+    page?: number;
+    perPage?: number;
+    status?: string;
+    classification?: string;
+  }): Promise<Array<{
+    id?: string;
+    tenderID: string;
+    title: string;
+    description?: string;
+    value: { amount: number; currency: string; valueAddedTaxIncluded?: boolean };
+    procuringEntity: { name: string; identifier?: any };
+    status: string;
+    datePublished?: string;
+    dateModified?: string;
+    awards?: any[];
+  }>> {
+    console.log(`🔍 Prozorro full-text search: "${params.text}"`);
+
+    try {
+      const body: any = {
+        text: params.text,
+        page: params.page || 1,
+        per_page: params.perPage || 20,
+      };
+
+      if (params.status) {
+        body.status = params.status;
+      }
+      if (params.classification) {
+        body.classification = params.classification;
+      }
+
+      const url = 'https://prozorro.gov.ua/api/search/tenders';
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`Prozorro search failed: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const results = data.data || [];
+
+      console.log(`✅ Prozorro search: ${results.length} results (total: ${data.total || results.length})`);
+
+      return results;
+    } catch (error) {
+      console.error('❌ Помилка повнотекстового пошуку Prozorro:', error);
+      // Не кидаємо помилку — повертаємо пустий масив, щоб pre-analysis міг продовжити
+      return [];
+    }
+  }
+
+  /**
    * Отримати деталі конкретного тендера
    */
   async getTenderDetails(tenderId: string): Promise<ProzorroTender> {

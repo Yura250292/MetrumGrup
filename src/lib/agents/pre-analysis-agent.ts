@@ -262,13 +262,13 @@ export class PreAnalysisAgent {
 
       console.log(`🔍 Prozorro search query: "${searchQuery}"`);
 
-      // Знайти схожі тендери
+      // Атрибути для розрахунків (площа, бюджет)
       const searchAttrs = extractSearchAttributes(
         {
           id: 'temp',
           title: searchQuery,
           description: input.projectNotes || '',
-          totalAmount: 0, // Буде визначено пізніше
+          totalAmount: 0,
           totalMaterials: 0,
           totalLabor: 0,
           sections: [],
@@ -277,28 +277,15 @@ export class PreAnalysisAgent {
         searchQuery
       );
 
-      // Пошук тендерів на Prozorro (повертає короткий формат)
-      const shortTenders = await prozorroClient.searchTenders({
-        classification: searchAttrs.cpvCode,
-        status: 'complete',
-        limit: 10,
+      // 🆕 ПОВНОЦІННИЙ ТЕКСТОВИЙ ПОШУК через prozorro.gov.ua
+      // Старий /api/2.5/tenders ігнорує фільтри і повертає тендери з 2015 року
+      const tenders = await prozorroClient.searchTendersByText({
+        text: searchQuery,
+        perPage: 10,
+        status: 'complete', // тільки завершені для відомих фінальних цін
       });
 
-      console.log(`📊 Знайдено ${shortTenders.length} завершених тендерів на Prozorro`);
-
-      // 🆕 Завантажити повні деталі для кожного тендера паралельно
-      // (короткий формат не містить value, title, documents — потрібен окремий запит)
-      console.log(`📥 Завантаження повних деталей для ${shortTenders.length} тендерів...`);
-
-      const tendersResults = await Promise.allSettled(
-        shortTenders.map(t => prozorroClient.getTenderDetails(t.id))
-      );
-
-      const tenders = tendersResults
-        .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-        .map(r => r.value);
-
-      console.log(`✅ Завантажено ${tenders.length}/${shortTenders.length} повних деталей тендерів`);
+      console.log(`📊 Знайдено ${tenders.length} релевантних тендерів за запитом "${searchQuery}"`);
 
       // Перевірка prisma перед використанням
       if (!prisma) {
@@ -306,50 +293,54 @@ export class PreAnalysisAgent {
         return this.getEmptyProzorroAnalysis();
       }
 
-      // Отримати розпарсені кошториси для цих тендерів
+      // 🆕 Текстовий пошук повертає tenderID (UA-2025-...) як ідентифікатор
+      // Отримати розпарсені кошториси для цих тендерів (якщо є в кеші)
+      const tenderIds: string[] = tenders
+        .map(t => t.tenderID || t.id)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
+
       const parsedEstimates = await prisma.prozorroEstimateData.findMany({
-      where: {
-        tenderId: {
-          in: tenders.map(t => t.id),
+        where: {
+          tenderId: { in: tenderIds },
+          parseStatus: 'success',
         },
-        parseStatus: 'success',
-      },
-      include: {
-        items: true,
-        tender: true,
-      },
-      take: 10,
-    });
+        include: {
+          items: true,
+          tender: true,
+        },
+        take: 10,
+      });
 
-    const totalItemsParsed = parsedEstimates.reduce((sum, est) => sum + est.totalItems, 0);
+      const totalItemsParsed = parsedEstimates.reduce((sum: number, est: any) => sum + est.totalItems, 0);
 
-    // 🆕 Топ схожі проекти — ВСІ тендери з повними даними
-    const topSimilarProjects = tenders
-      .slice(0, 10)
-      .map(t => {
-        const parsed = parsedEstimates.find(e => e.tenderId === t.id);
-        // Беремо ціну: спершу awarded (фінальна), потім value (стартова)
-        const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
-        const budget = awardedAmount || t.value?.amount || 0;
+      // Топ схожі проекти — ВСІ тендери з повними даними
+      const topSimilarProjects = tenders
+        .slice(0, 10)
+        .map(t => {
+          const tenderKey = t.tenderID || t.id || '';
+          const parsed = parsedEstimates.find(e => e.tenderId === tenderKey);
+          // Беремо ціну: спершу awarded (фінальна), потім value (стартова)
+          const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
+          const budget = awardedAmount || t.value?.amount || 0;
 
-        return {
-          title: t.title || t.tenderID || 'Без назви',
-          budget,
-          similarity: 85, // TODO: розрахувати реальну схожість
-          itemsCount: parsed?.totalItems || 0,
-          tenderID: t.tenderID || t.id, // для лінку на Prozorro
-          procuringEntity: t.procuringEntity?.name || '',
-          datePublished: t.datePublished,
-          status: t.status,
-        };
-      })
-      .filter(p => p.budget > 0); // показуємо тільки з відомою ціною
+          return {
+            title: t.title || t.tenderID || 'Без назви',
+            budget,
+            similarity: 85, // TODO: розрахувати реальну схожість через embeddings
+            itemsCount: parsed?.totalItems || 0,
+            tenderID: t.tenderID || t.id,
+            procuringEntity: t.procuringEntity?.name || '',
+            datePublished: t.datePublished,
+            status: t.status,
+          };
+        })
+        .filter(p => p.budget > 0);
 
     // Створити price database за категоріями (з розпарсених)
     const priceDatabase = new Map<string, number>();
 
-    for (const estimate of parsedEstimates) {
-      for (const item of estimate.items) {
+    for (const estimate of parsedEstimates as any[]) {
+      for (const item of (estimate.items || []) as any[]) {
         const category = item.category || 'general';
         const currentAvg = priceDatabase.get(category) || 0;
         const currentCount = priceDatabase.get(`${category}_count`) || 0;
