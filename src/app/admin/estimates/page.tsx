@@ -37,7 +37,17 @@ export default async function EstimatesPage() {
   }
 
   const estimates = await prisma.estimate.findMany({
-    include: {
+    select: {
+      id: true,
+      number: true,
+      title: true,
+      description: true,
+      status: true,
+      totalAmount: true,
+      discount: true,
+      finalAmount: true,
+      createdAt: true,
+      // analysisSummary: true, // Temporarily excluded until migration is applied
       project: { select: { title: true, client: { select: { name: true } } } },
       createdBy: { select: { name: true } },
     },

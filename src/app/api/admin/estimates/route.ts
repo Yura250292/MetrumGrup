@@ -29,7 +29,17 @@ export async function GET(request: NextRequest) {
 
     const estimates = await prisma.estimate.findMany({
       where,
-      include: {
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        description: true,
+        status: true,
+        totalAmount: true,
+        discount: true,
+        finalAmount: true,
+        createdAt: true,
+        // analysisSummary: true, // Temporarily excluded until migration is applied
         project: { select: { title: true, client: { select: { name: true } } } },
         createdBy: { select: { name: true } },
       },
