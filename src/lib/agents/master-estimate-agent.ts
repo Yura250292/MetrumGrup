@@ -12,6 +12,7 @@
  */
 
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AgentContext, EstimateSection, EstimateItem } from './base-agent';
 import { findSimilarPrices } from '../prozorro-price-reference';
 
@@ -276,15 +277,21 @@ const BUILDING_SECTIONS: SectionSpec[] = [
 
 export class MasterEstimateAgent {
   private openai: OpenAI;
+  private gemini: GoogleGenerativeAI;
 
   constructor() {
     if (!process.env.OPENAI_API_KEY) {
       throw new Error("OPENAI_API_KEY not configured");
     }
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error("GEMINI_API_KEY not configured");
+    }
 
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
+
+    this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
 
   /**
@@ -424,8 +431,8 @@ export class MasterEstimateAgent {
   }
 
   /**
-   * Генерувати одну секцію з повним контекстом
-   * З жорстким таймаутом 60 секунд
+   * Генерувати одну секцію з взаємним fallback OpenAI ↔ Gemini
+   * Якщо одна модель зависла/впала за 60с → друга страхує
    */
   private async generateSection(
     spec: SectionSpec,
@@ -435,33 +442,28 @@ export class MasterEstimateAgent {
     const systemPrompt = this.getSectionSystemPrompt(spec);
     const userPrompt = this.buildSectionPrompt(spec, context, previousSections);
 
-    // 🆕 Жорсткий таймаут 60s через AbortController
-    const abortController = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.warn(`⏱️ Section "${spec.title}" timeout after 60s — aborting`);
-      abortController.abort();
-    }, 60000);
+    let parsed: any;
+    let usedModel = 'openai';
 
-    let completion;
+    // 1️⃣ Спроба OpenAI з 60с таймаутом
     try {
-      completion = await this.openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        response_format: { type: "json_object" },
-        temperature: 0.1, // Низька для точності
-        max_tokens: 8000, // Зменшено з 16K → 8K для швидшої генерації (~30-50 позицій)
-      }, {
-        signal: abortController.signal,
-      });
-    } finally {
-      clearTimeout(timeoutId);
-    }
+      console.log(`  🤖 [${spec.title}] Trying OpenAI gpt-4o...`);
+      parsed = await this.callOpenAI(systemPrompt, userPrompt, spec.title);
+    } catch (openaiError) {
+      const errMsg = openaiError instanceof Error ? openaiError.message : 'Unknown';
+      console.warn(`  ⚠️ [${spec.title}] OpenAI failed (${errMsg}) — fallback to Gemini`);
 
-    const responseText = completion.choices[0]?.message?.content || '{}';
-    const parsed = JSON.parse(responseText);
+      // 2️⃣ Fallback на Gemini якщо OpenAI впав/timeout
+      try {
+        parsed = await this.callGemini(systemPrompt, userPrompt, spec.title);
+        usedModel = 'gemini';
+        console.log(`  ✅ [${spec.title}] Gemini fallback succeeded`);
+      } catch (geminiError) {
+        const geminiErrMsg = geminiError instanceof Error ? geminiError.message : 'Unknown';
+        console.error(`  ❌ [${spec.title}] Both models failed. OpenAI: ${errMsg}, Gemini: ${geminiErrMsg}`);
+        throw new Error(`Обидві моделі не змогли згенерувати секцію: OpenAI (${errMsg}), Gemini (${geminiErrMsg})`);
+      }
+    }
 
     const items: EstimateItem[] = (parsed.items || []).map((item: any) => ({
       description: item.description || '',
@@ -470,7 +472,7 @@ export class MasterEstimateAgent {
       unitPrice: Number(item.unitPrice) || 0,
       laborCost: Number(item.laborCost) || 0,
       totalCost: Number(item.totalCost) || (Number(item.quantity) * Number(item.unitPrice) + Number(item.laborCost || 0)),
-      priceSource: item.priceSource || 'AI оцінка',
+      priceSource: item.priceSource || `AI оцінка (${usedModel})`,
       confidence: Number(item.confidence) || 0.7,
       notes: item.notes,
     }));
@@ -482,6 +484,74 @@ export class MasterEstimateAgent {
       items,
       sectionTotal,
     };
+  }
+
+  /**
+   * Виклик OpenAI з таймаутом 60с
+   */
+  private async callOpenAI(
+    systemPrompt: string,
+    userPrompt: string,
+    sectionTitle: string
+  ): Promise<any> {
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.warn(`⏱️ OpenAI [${sectionTitle}] timeout after 60s — aborting`);
+      abortController.abort();
+    }, 60000);
+
+    try {
+      const completion = await this.openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+        max_tokens: 8000,
+      }, {
+        signal: abortController.signal,
+      });
+
+      const responseText = completion.choices[0]?.message?.content || '{}';
+      return JSON.parse(responseText);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Виклик Gemini з таймаутом 60с (як fallback)
+   */
+  private async callGemini(
+    systemPrompt: string,
+    userPrompt: string,
+    sectionTitle: string
+  ): Promise<any> {
+    // Gemini не має нативного AbortSignal, обгортаємо у Promise.race
+    const model = this.gemini.getGenerativeModel({
+      model: "gemini-2.0-flash-exp",
+      generationConfig: {
+        responseMimeType: "application/json",
+        temperature: 0.1,
+        maxOutputTokens: 8000,
+      },
+    });
+
+    // Об'єднуємо system + user в один промпт (Gemini не має ролей як OpenAI)
+    const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}\n\nВідповідь у форматі JSON.`;
+
+    const geminiPromise = model.generateContent(combinedPrompt).then(result => {
+      const text = result.response.text();
+      return JSON.parse(text);
+    });
+
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`Gemini timeout after 60s [${sectionTitle}]`)), 60000)
+    );
+
+    return Promise.race([geminiPromise, timeoutPromise]);
   }
 
   /**
