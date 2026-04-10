@@ -52,7 +52,7 @@ export function TabFinances({
             Графік платежів
           </h2>
           <Link
-            href={`/admin/projects/${projectId}/finances`}
+            href={`/admin-v2/projects/${projectId}/finances`}
             className="flex items-center gap-1.5 text-xs font-semibold transition hover:brightness-125"
             style={{ color: T.accentPrimary }}
           >

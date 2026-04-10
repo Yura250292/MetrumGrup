@@ -28,7 +28,7 @@ export function TabPhotos({
           {totalCount} {totalCount === 1 ? "фото-звіт" : "фото-звітів"}
         </span>
         <Link
-          href={`/admin/projects/${projectId}/photos/new`}
+          href={`/admin-v2/projects/${projectId}/photos/new`}
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white"
           style={{ backgroundColor: T.accentPrimary }}
         >

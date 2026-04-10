@@ -78,7 +78,7 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
           title="Етапи виконання"
           action={
             <Link
-              href={`/admin/projects/${project.id}/stages`}
+              href={`/admin-v2/projects/${project.id}/stages`}
               className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-125"
               style={{ color: T.accentPrimary }}
             >

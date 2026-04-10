@@ -110,7 +110,7 @@ export default async function AdminV2ProjectDetailPage({
 
           <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
             <Link
-              href={`/admin/projects/${project.id}/photos/new`}
+              href={`/admin-v2/projects/${project.id}/photos/new`}
               className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
               style={{
                 backgroundColor: T.panelElevated,
@@ -121,7 +121,7 @@ export default async function AdminV2ProjectDetailPage({
               <Camera size={16} /> Додати фото
             </Link>
             <Link
-              href={`/admin/projects/${project.id}/stages`}
+              href={`/admin-v2/projects/${project.id}/stages`}
               className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
               style={{
                 backgroundColor: T.panelElevated,
