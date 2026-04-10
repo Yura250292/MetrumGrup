@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { uploadFileToR2, deleteFileFromR2, isR2Configured } from "@/lib/r2-client";
-import { FileType } from "@prisma/client";
+import { FileType, type FileCategory, type FileVisibility } from "@prisma/client";
+import { getProjectAccessContext } from "@/lib/projects/access";
 
 export type ProjectFileDTO = {
   id: string;
   type: FileType;
+  category: FileCategory;
+  visibility: FileVisibility;
   name: string;
   url: string;
   r2Key: string | null;
@@ -24,6 +27,8 @@ function detectFileType(mimeType: string): FileType {
 function toDTO(row: {
   id: string;
   type: FileType;
+  category: FileCategory;
+  visibility: FileVisibility;
   name: string;
   url: string;
   r2Key: string | null;
@@ -36,6 +41,8 @@ function toDTO(row: {
   return {
     id: row.id,
     type: row.type,
+    category: row.category,
+    visibility: row.visibility,
     name: row.name,
     url: row.url,
     r2Key: row.r2Key,
@@ -51,6 +58,8 @@ export async function uploadProjectFile(opts: {
   projectId: string;
   uploadedById: string;
   file: File;
+  category?: FileCategory;
+  visibility?: FileVisibility;
 }): Promise<ProjectFileDTO> {
   if (!isR2Configured()) {
     throw new Error("R2 не налаштований. Заповніть R2_* змінні в .env");
@@ -69,6 +78,8 @@ export async function uploadProjectFile(opts: {
       projectId: opts.projectId,
       uploadedById: opts.uploadedById,
       type: detectFileType(opts.file.type),
+      category: opts.category ?? "OTHER",
+      visibility: opts.visibility ?? "TEAM",
       name: opts.file.name,
       url: uploaded.url,
       r2Key: uploaded.key,
@@ -118,9 +129,27 @@ export async function createTextNote(opts: {
   return toDTO(row);
 }
 
-export async function listProjectFiles(projectId: string): Promise<ProjectFileDTO[]> {
+export async function listProjectFiles(
+  projectId: string,
+  currentUserId?: string,
+): Promise<ProjectFileDTO[]> {
+  // Resolve visibility window for the requesting user.
+  // Default (no userId) — full TEAM+CLIENT+INTERNAL list, used in legacy callers.
+  let allowedVisibilities: FileVisibility[] = ["TEAM", "CLIENT", "INTERNAL"];
+  if (currentUserId) {
+    const ctx = await getProjectAccessContext(projectId, currentUserId);
+    if (!ctx || !ctx.canView) return [];
+    if (ctx.isClientOfProject) {
+      allowedVisibilities = ["CLIENT"];
+    } else if (ctx.canViewInternalFiles || ctx.isSuperAdmin) {
+      allowedVisibilities = ["TEAM", "CLIENT", "INTERNAL"];
+    } else {
+      allowedVisibilities = ["TEAM", "CLIENT"];
+    }
+  }
+
   const rows = await prisma.projectFile.findMany({
-    where: { projectId },
+    where: { projectId, visibility: { in: allowedVisibilities } },
     orderBy: { createdAt: "desc" },
     include: {
       uploadedBy: { select: { id: true, name: true } },

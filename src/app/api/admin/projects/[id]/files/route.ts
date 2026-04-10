@@ -34,7 +34,7 @@ export async function GET(
     const { id } = await ctx.params;
     const ok = await canViewProject(id, session.user.id);
     if (!ok) return forbiddenResponse();
-    const files = await listProjectFiles(id);
+    const files = await listProjectFiles(id, session.user.id);
     return NextResponse.json({ files });
   } catch (err) {
     return handleError(err);
@@ -64,10 +64,33 @@ export async function POST(
         );
       }
 
+      const visibilityRaw = formData.get("visibility");
+      const categoryRaw = formData.get("category");
+      const visibility =
+        typeof visibilityRaw === "string" &&
+        ["TEAM", "CLIENT", "INTERNAL"].includes(visibilityRaw)
+          ? (visibilityRaw as "TEAM" | "CLIENT" | "INTERNAL")
+          : undefined;
+      const category =
+        typeof categoryRaw === "string" &&
+        ["PLAN", "CONTRACT", "TECH_DOC", "NOTE", "PHOTO_ATTACHMENT", "OTHER"].includes(
+          categoryRaw,
+        )
+          ? (categoryRaw as
+              | "PLAN"
+              | "CONTRACT"
+              | "TECH_DOC"
+              | "NOTE"
+              | "PHOTO_ATTACHMENT"
+              | "OTHER")
+          : undefined;
+
       const dto = await uploadProjectFile({
         projectId: id,
         uploadedById: session.user.id,
         file,
+        visibility,
+        category,
       });
       return NextResponse.json({ file: dto }, { status: 201 });
     }

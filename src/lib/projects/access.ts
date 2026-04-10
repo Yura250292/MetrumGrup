@@ -54,31 +54,22 @@ async function loadActiveMember(projectId: string, userId: string) {
   });
 }
 
-/** Roles with elevated finance visibility inside a project. */
-const FINANCE_PROJECT_ROLES: ProjectRole[] = [
-  "PROJECT_ADMIN",
-  "PROJECT_MANAGER",
-  "FINANCE",
-];
-
-/** Roles allowed to add/remove team members within a project. */
-const MEMBER_MANAGER_ROLES: ProjectRole[] = ["PROJECT_ADMIN", "PROJECT_MANAGER"];
-
-/** Roles that may upload files (i.e. all members except VIEWER). */
-const UPLOAD_FORBIDDEN_ROLES: ProjectRole[] = ["VIEWER"];
-
 export type ProjectAccessContext = {
   projectId: string;
   userId: string;
   isSuperAdmin: boolean;
   isClientOfProject: boolean;
-  member: { roleInProject: ProjectRole; permissions: unknown } | null;
-  legacyChatParticipant: boolean;
+  member: {
+    roleInProject: ProjectRole;
+    permissions: unknown;
+    effective: EffectivePermissions;
+  } | null;
   canView: boolean;
   canParticipate: boolean;
   canUpload: boolean;
   canManageMembers: boolean;
   canViewFinancials: boolean;
+  canViewInternalFiles: boolean;
 };
 
 export async function getProjectAccessContext(
@@ -95,43 +86,41 @@ export async function getProjectAccessContext(
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isClientOfProject = role === "CLIENT" && project.clientId === userId;
 
-  // LEGACY chat-participant fallback was removed in PR4 once chat sync became
-  // authoritative. Membership is now the only signal for view access.
-  const legacyChatParticipant = false;
+  const effective = member
+    ? resolveMemberPermissions(member.roleInProject, member.permissions)
+    : null;
 
   const canView = isSuperAdmin || isClientOfProject || Boolean(member);
-
   // CLIENT cannot post in team chat / write internal collaboration items.
   const canParticipate = isSuperAdmin || Boolean(member);
-
-  const canUpload =
-    isSuperAdmin ||
-    (Boolean(member) &&
-      !UPLOAD_FORBIDDEN_ROLES.includes(member!.roleInProject));
-
+  const canUpload = isSuperAdmin || (effective?.canUpload ?? false);
   const canManageMembers =
-    isSuperAdmin ||
-    (Boolean(member) && MEMBER_MANAGER_ROLES.includes(member!.roleInProject));
-
+    isSuperAdmin || (effective?.canManageMembers ?? false);
   const canViewFinancials =
     isSuperAdmin ||
     isClientOfProject || // client sees own financial summary
-    (Boolean(member) && FINANCE_PROJECT_ROLES.includes(member!.roleInProject));
+    (effective?.canViewFinancials ?? false);
+  const canViewInternalFiles =
+    isSuperAdmin || (effective?.canViewInternalFiles ?? false);
 
   return {
     projectId,
     userId,
     isSuperAdmin,
     isClientOfProject,
-    member: member
-      ? { roleInProject: member.roleInProject, permissions: member.permissions }
+    member: member && effective
+      ? {
+          roleInProject: member.roleInProject,
+          permissions: member.permissions,
+          effective,
+        }
       : null,
-    legacyChatParticipant,
     canView,
     canParticipate,
     canUpload,
     canManageMembers,
     canViewFinancials,
+    canViewInternalFiles,
   };
 }
 
