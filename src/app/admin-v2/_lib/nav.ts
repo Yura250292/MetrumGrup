@@ -38,9 +38,9 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Головне",
     items: [
       { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true },
-      { href: "/admin/projects", label: "Проєкти", icon: FolderKanban },
+      { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin/projects/dashboard", label: "Огляд проєктів", icon: Table },
-      { href: "/admin/clients", label: "Клієнти", icon: Users },
+      { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
       { href: "/admin/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
       { href: "/admin/feed", label: "Стрічка", icon: Activity },
     ],
@@ -50,7 +50,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       // AI generator already redesigned — point straight to v2
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
-      { href: "/admin/estimates", label: "Кошториси", icon: FileText },
+      { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
       { href: "/admin/materials", label: "Матеріали та ціни", icon: Package },
     ],
   },
@@ -81,7 +81,7 @@ export const NAV_GROUPS: NavGroup[] = [
 // Mobile bottom-nav items
 export const MOBILE_NAV: NavItem[] = [
   { href: "/admin-v2", label: "Головна", icon: LayoutDashboard, exact: true },
-  { href: "/admin/projects", label: "Проєкти", icon: Building2 },
+  { href: "/admin-v2/projects", label: "Проєкти", icon: Building2 },
   { href: "/ai-estimate-v2", label: "AI", icon: Calculator },
   { href: "/admin/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
 ];
@@ -89,6 +89,9 @@ export const MOBILE_NAV: NavItem[] = [
 // Breadcrumb labels — keyed by full path
 export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2": "Дашборд",
+  "/admin-v2/projects": "Проєкти",
+  "/admin-v2/clients": "Клієнти",
+  "/admin-v2/estimates": "Кошториси",
   "/admin": "Дашборд",
   "/admin/projects": "Проєкти",
   "/admin/projects/new": "Новий проєкт",
