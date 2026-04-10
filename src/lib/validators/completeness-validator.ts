@@ -108,6 +108,74 @@ export const completenessValidator: Validator = ({ estimate, facts, wizardData }
     }
   }
 
+  // Concrete → rebar implication. Whenever there's concrete in the estimate,
+  // there should be rebar too (unless it's a screed/leveling layer).
+  // Plan 7.2 example.
+  const hasConcrete = items.some((item) => {
+    const desc = (item.description || '').toLowerCase();
+    return (desc.includes('бетон') || desc.includes('concrete'))
+      && !desc.includes('стяжк');
+  });
+  if (hasConcrete) {
+    if (!hasAny(items, ['арматур', 'rebar', 'сітк'])) {
+      issues.push({
+        severity: 'warning',
+        code: 'CONCRETE_WITHOUT_REBAR',
+        message: 'У кошторисі є бетон, але немає арматури / сітки',
+      });
+    }
+  }
+
+  // Foundation → formwork implication for strip / combined types.
+  const foundationType =
+    facts?.foundation?.type?.value
+    ?? wizardData?.houseData?.foundation?.type
+    ?? wizardData?.townhouseData?.houseData?.foundation?.type;
+  if (foundationType === 'strip' || foundationType === 'combined') {
+    if (!hasAny(items, ['опалубк', 'formwork'])) {
+      issues.push({
+        severity: 'warning',
+        code: 'MISSING_FORMWORK',
+        message: `Тип фундаменту "${foundationType}", але немає опалубки`,
+      });
+    }
+  }
+
+  // Plumbing → hot water → boiler implication.
+  const hasHotWater = wizardData?.utilities?.water?.hotWater;
+  const boilerType = wizardData?.utilities?.water?.boilerType;
+  if (hasHotWater && boilerType && boilerType !== 'none') {
+    if (!hasAny(items, ['бойлер', 'boiler', 'нагрівач води'])) {
+      issues.push({
+        severity: 'warning',
+        code: 'MISSING_BOILER',
+        message: `Передбачено гарячу воду (тип "${boilerType}"), але бойлера немає в кошторисі`,
+      });
+    }
+  }
+
+  // Wall material → mortar / glue implication for masonry.
+  const wallMaterial =
+    wizardData?.houseData?.walls?.material
+    ?? wizardData?.townhouseData?.houseData?.walls?.material;
+  if (wallMaterial === 'gasblock') {
+    if (!hasAny(items, ['клей', 'glue'])) {
+      issues.push({
+        severity: 'warning',
+        code: 'MISSING_GASBLOCK_GLUE',
+        message: 'Стіни з газоблоку, але немає клею для нього',
+      });
+    }
+  } else if (wallMaterial === 'brick') {
+    if (!hasAny(items, ['розчин', 'mortar', 'цементно-піщан'])) {
+      issues.push({
+        severity: 'warning',
+        code: 'MISSING_BRICK_MORTAR',
+        message: 'Цегляні стіни без мурувального розчину',
+      });
+    }
+  }
+
   // Forbidden: demolition items when user said no demolition.
   const demolitionRequired = facts?.demolitionRequired?.value;
   if (demolitionRequired === false) {

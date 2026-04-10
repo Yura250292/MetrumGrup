@@ -1,3 +1,22 @@
+/**
+ * ⚠️ HONEST NAMING NOTE (Plan 4.3)
+ *
+ * This file is named `price-search` but it does NOT actually search anywhere.
+ * It calls Gemini with a prompt that asks the model to "find" prices in named
+ * shops. The model has no real web access; the numbers it returns are LLM
+ * estimates dressed up as search results, with all the hallucination risks
+ * that implies.
+ *
+ * Use `lookupPrice()` from `@/lib/price-engine` instead — it walks the proper
+ * provider chain (catalog → prozorro → scrape → llm) and caps LLM confidence
+ * to make sure these "guessed" prices never override real ones.
+ *
+ * The thin wrapper `llm-price-estimate.ts` re-exports these functions under
+ * an honest name; new code should import from there. This file is kept only
+ * because two existing call sites still use it during the price-engine
+ * transition (base-agent.ts dead helpers and llm-fallback provider).
+ */
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");

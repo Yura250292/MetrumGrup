@@ -38,6 +38,7 @@ model User {
   chatParticipations ConversationParticipant[]
   authoredComments   Comment[]              @relation("CommentAuthor")
   reactions          Reaction[]
+  refineHistory      EstimateRefineHistory[] @relation("RefineHistoryUser")
 
   @@map("users")
 }
@@ -158,8 +159,40 @@ model Estimate {
   project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   similarTenders        EstimateTenderMatch[]
   conversation          Conversation?
+  // Refine history (Stage 6.2)
+  refineHistory         EstimateRefineHistory[] @relation("RefineHistoryEstimate")
+  refinedFromHistory    EstimateRefineHistory[] @relation("RefineHistoryPrevious")
 
   @@map("estimates")
+}
+
+/// Audit trail for delta-refine runs (Plan Stage 6.2).
+/// Each refine produces a new Estimate version + a row here that captures
+/// the diff against the previous version.
+model EstimateRefineHistory {
+  id                  String   @id @default(cuid())
+  estimateId          String
+  previousEstimateId  String?
+  refinedById         String?
+  changeReason        String?
+  impactedCategories  Json?
+  addedCount          Int      @default(0)
+  removedCount        Int      @default(0)
+  changedCount        Int      @default(0)
+  unchangedCount      Int      @default(0)
+  deltaAmount         Decimal  @default(0) @db.Decimal(14, 2)
+  changedItems        Json?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+
+  estimate         Estimate @relation("RefineHistoryEstimate", fields: [estimateId], references: [id], onDelete: Cascade)
+  previousEstimate Estimate? @relation("RefineHistoryPrevious", fields: [previousEstimateId], references: [id], onDelete: SetNull)
+  refinedBy        User?    @relation("RefineHistoryUser", fields: [refinedById], references: [id], onDelete: SetNull)
+
+  @@index([estimateId])
+  @@index([previousEstimateId])
+  @@index([createdAt(sort: Desc)])
+  @@map("estimate_refine_history")
 }
 
 model EstimateSection {

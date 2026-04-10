@@ -98,6 +98,26 @@ export const quantityValidator: Validator = ({ estimate, facts }) => {
     }
   }
 
+  // Sanity: any single м² item should not exceed 5× the total project area.
+  // Catches obvious unit mistakes ("100000 м² плитки" for a 150 м² project).
+  if (area > 0) {
+    items.forEach((item: any, idx: number) => {
+      const unit = (item.unit || '').toLowerCase();
+      const qty = Number(item.quantity ?? 0);
+      if ((unit === 'м²' || unit === 'm²' || unit === 'кв.м' || unit === 'м2') && qty > area * 5) {
+        issues.push({
+          severity: 'warning',
+          code: 'AREA_ITEM_EXCEEDS_PROJECT',
+          message:
+            `"${item.description}": ${qty} м² перевищує 5× площі проекту (${area} м²) — ` +
+            `можлива помилка одиниці виміру`,
+          itemIndex: idx,
+          details: { itemArea: qty, projectArea: area },
+        });
+      }
+    });
+  }
+
   // Item density per m².
   if (area > 0) {
     const totalItems = items.length;

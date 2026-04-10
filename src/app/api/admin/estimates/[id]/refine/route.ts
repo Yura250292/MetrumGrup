@@ -414,6 +414,37 @@ ${additionalInfo}
         });
         const totalAmount = Number(updatedEstimate?.totalAmount ?? 0);
 
+        // 6.2 Persist refine history for audit / review queue.
+        try {
+          await prisma.estimateRefineHistory.create({
+            data: {
+              estimateId: refinedEstimate.id,
+              previousEstimateId: estimateId,
+              refinedById: session.user.id,
+              changeReason: additionalInfo || null,
+              impactedCategories: impactedCategories as any,
+              addedCount: refineDiff.added.length,
+              removedCount: refineDiff.removed.length,
+              changedCount: refineDiff.changed.length,
+              unchangedCount: refineDiff.unchangedCount,
+              deltaAmount: refineDiff.totals.deltaAmount.toFixed(2),
+              // Cap stored items at 50 to keep rows compact; the UI usually
+              // shows top-20 anyway.
+              changedItems: refineDiff.changed.slice(0, 50).map((c) => ({
+                description: c.description,
+                engineKey: c.engineKey,
+                changes: c.changes,
+              })) as any,
+              metadata: {
+                regenerateAll: !!regenerateAll,
+                fileCount: imageParts.length + textParts.length,
+              } as any,
+            },
+          });
+        } catch (e) {
+          console.warn('[refine] failed to persist refine history:', e);
+        }
+
         sendUpdate({
           phase: 'final',
           status: 'complete',
