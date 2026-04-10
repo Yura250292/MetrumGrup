@@ -14,7 +14,7 @@
  * now. Future cleanup can rename it to `llm-price-estimate.ts`.
  */
 
-import { searchMaterialPrice, searchLaborCost } from '../../price-search';
+import { searchMaterialPriceCached, searchLaborCost } from '../../price-search';
 import type { PriceProvider, PriceQuery, PriceResult } from '../types';
 
 const HARD_CONFIDENCE_CAP = 0.5;
@@ -40,7 +40,10 @@ export const llmFallbackProvider: PriceProvider = {
         };
       }
 
-      const result = await searchMaterialPrice(query.description, query.unit);
+      // Use the 24h in-memory cache to avoid hitting Gemini for the same
+      // description twice within a generation run (huge speedup for projects
+      // with many similar items).
+      const result = await searchMaterialPriceCached(query.description, query.unit);
       if (!result || result.averagePrice <= 0) return null;
       const rawConfidence = Math.min(HARD_CONFIDENCE_CAP, result.confidence);
       return {
