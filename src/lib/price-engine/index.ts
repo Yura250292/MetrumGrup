@@ -46,41 +46,6 @@ const DEFAULT_PROVIDERS: PriceProvider[] = [
   llmFallbackProvider,
 ];
 
-/** Timeout per provider lookup. Catalog/scrape are instant, prozorro hits the
- *  DB (~100ms), llm hits Gemini (~1-3s). 10s ceiling protects the function
- *  from a hung Gemini call blocking the whole pricing pass. */
-const PROVIDER_TIMEOUT_MS = 10_000;
-
-function withTimeout<T>(
-  promise: Promise<T | null>,
-  ms: number,
-  label: string
-): Promise<T | null> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      console.warn(`[price-engine] timeout (${ms}ms): ${label}`);
-      resolve(null);
-    }, ms);
-    promise
-      .then((value) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        resolve(value);
-      })
-      .catch((e) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        console.warn(`[price-engine] threw: ${label}`, e);
-        resolve(null);
-      });
-  });
-}
-
 export async function lookupPrice(
   query: PriceQuery,
   options: PriceEngineOptions = {}
@@ -91,11 +56,13 @@ export async function lookupPrice(
   let best: PriceResult | null = null;
 
   for (const provider of providers) {
-    const result = await withTimeout(
-      provider.lookup(query),
-      PROVIDER_TIMEOUT_MS,
-      `${provider.name} for "${query.description}"`
-    );
+    let result: PriceResult | null = null;
+    try {
+      result = await provider.lookup(query);
+    } catch (e) {
+      console.warn(`[price-engine] provider ${provider.name} threw:`, e);
+      continue;
+    }
     if (!result) continue;
 
     if (!best || result.confidence > best.confidence) {

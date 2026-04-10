@@ -117,22 +117,17 @@ export abstract class BaseAgent {
    *   catalog → prozorro → scrape (stub) → llm-fallback
    *
    * Працює тільки з позиціями, які мають низьку confidence або відсутню
-   * ціну. Запити паралелізуються (concurrency 8), щоб ~30 items секції
-   * не тримали Vercel function на 5 хвилинах через послідовні Gemini
-   * виклики у LLM fallback.
+   * ціну. Підвищувати confidence через "звичайний" пошук уже не дублюємо.
    */
   protected async enrichWithPriceEngine(output: AgentOutput): Promise<AgentOutput> {
-    const PRICE_LOOKUP_CONCURRENCY = 8;
-    const startedAt = Date.now();
+    const enriched: EstimateItem[] = [];
     let updatedCount = 0;
-    let lookedUpCount = 0;
-
-    const processOne = async (item: EstimateItem): Promise<EstimateItem> => {
+    for (const item of output.items) {
       // Skip items that already have a confident price.
       if (item.priceSource && item.confidence >= 0.75 && item.unitPrice > 0) {
-        return item;
+        enriched.push(item);
+        continue;
       }
-      lookedUpCount++;
       try {
         const priceResult = await lookupPrice({
           description: item.description,
@@ -150,37 +145,22 @@ export abstract class BaseAgent {
             priceSourceType: priceResult.sourceType as EstimateItem['priceSourceType'],
           };
           updated.totalCost = updated.quantity * updated.unitPrice + (updated.laborCost ?? 0);
+          enriched.push(updated);
           updatedCount++;
-          return updated;
+        } else {
+          enriched.push(item);
         }
-        return item;
       } catch (e) {
         console.warn(
           `[${this.config.name}] price-engine lookup failed for "${item.description}":`,
           e
         );
-        return item;
-      }
-    };
-
-    // Bounded concurrency: spawn N workers that pull from a shared index.
-    const items = output.items;
-    const enriched: EstimateItem[] = new Array(items.length);
-    let cursor = 0;
-    async function worker() {
-      while (cursor < items.length) {
-        const idx = cursor++;
-        enriched[idx] = await processOne(items[idx]);
+        enriched.push(item);
       }
     }
-    const workerCount = Math.min(PRICE_LOOKUP_CONCURRENCY, items.length);
-    await Promise.all(Array.from({ length: workerCount }, worker));
-
-    const elapsedMs = Date.now() - startedAt;
-    if (lookedUpCount > 0) {
+    if (updatedCount > 0) {
       console.log(
-        `💰 [${this.config.name}] price-engine: enriched ${updatedCount}/${lookedUpCount} ` +
-        `(of ${items.length} items) in ${elapsedMs}ms (concurrency=${workerCount})`
+        `💰 [${this.config.name}] price-engine: enriched ${updatedCount}/${output.items.length} items`
       );
     }
     const newTotal = enriched.reduce((s, i) => s + (i.totalCost ?? 0), 0);
