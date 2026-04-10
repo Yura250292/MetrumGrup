@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { T } from "./_components/tokens";
 import { SetupDesktop } from "./_components/setup-desktop";
 import { ResultDesktop } from "./_components/result-desktop";
+import { SetupMobile } from "./_components/setup-mobile";
+import { ResultMobile } from "./_components/result-mobile";
 import { WizardModal } from "./_components/wizard";
 import { PreAnalysisModal } from "./_components/pre-analysis";
 import { RefinePanel } from "./_components/refine-panel";
@@ -11,39 +14,64 @@ import { SaveDialog } from "./_components/save-dialog";
 import { SupplementPanel } from "./_components/supplement-panel";
 import { useAiEstimateController } from "./_lib/use-controller";
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
+  return isMobile;
+}
+
 export default function AiEstimateV2Page() {
   const controller = useAiEstimateController();
+  const isMobile = useIsMobile();
 
   const showResult = controller.estimate !== null;
 
   return (
     <div className="min-h-screen w-full" style={{ backgroundColor: T.background }}>
-      <div className="flex justify-center overflow-x-auto">
-        {showResult ? <ResultDesktop controller={controller} /> : <SetupDesktop controller={controller} />}
+      <div className="flex justify-center">
+        {showResult ? (
+          isMobile ? (
+            <ResultMobile controller={controller} />
+          ) : (
+            <ResultDesktop controller={controller} />
+          )
+        ) : isMobile ? (
+          <SetupMobile controller={controller} />
+        ) : (
+          <SetupDesktop controller={controller} />
+        )}
       </div>
 
       {/* Generation overlay */}
       {controller.isChunkedGenerating && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: "rgba(7, 10, 17, 0.92)" }}
         >
           <div
-            className="flex w-full max-w-[640px] flex-col gap-6 rounded-3xl p-10"
+            className="flex w-full max-w-[640px] flex-col gap-6 rounded-3xl p-8 sm:p-10"
             style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
           >
             <div className="flex items-center gap-4">
               <div
-                className="flex h-14 w-14 items-center justify-center rounded-2xl"
+                className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-2xl"
                 style={{ backgroundColor: T.accentPrimarySoft }}
               >
                 <Sparkles size={28} style={{ color: T.accentPrimary }} />
               </div>
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 min-w-0">
                 <div className="text-[10px] font-bold tracking-wider" style={{ color: T.accentPrimary }}>
                   AI ГЕНЕРАЦІЯ
                 </div>
-                <div className="text-xl font-bold" style={{ color: T.textPrimary }}>
+                <div className="text-lg sm:text-xl font-bold truncate" style={{ color: T.textPrimary }}>
                   {controller.chunkedProgress?.message || "Працюємо над кошторисом…"}
                 </div>
               </div>

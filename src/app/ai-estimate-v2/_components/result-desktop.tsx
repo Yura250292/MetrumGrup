@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Wand,
@@ -13,6 +14,10 @@ import {
   TriangleAlert,
   Scaling,
   Loader2,
+  Pencil,
+  Trash2,
+  Check,
+  X,
 } from "lucide-react";
 import { T } from "./tokens";
 import { ConfidenceBadge, ScoreDial } from "./primitives";
@@ -33,7 +38,7 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
   const criticalIssues = issues.filter((i) => (i.severity ?? "").toLowerCase().includes("crit"));
 
   return (
-    <div className="w-[1440px] flex-shrink-0" style={{ backgroundColor: T.background, color: T.textPrimary }}>
+    <div className="w-full max-w-[1440px]" style={{ backgroundColor: T.background, color: T.textPrimary }}>
       {/* Top bar */}
       <header
         className="flex h-16 items-center justify-between border-b px-8"
@@ -82,7 +87,7 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
       </header>
 
       {/* Hero strip */}
-      <section className="flex items-center gap-12 px-12 py-9">
+      <section className="flex flex-wrap items-center gap-12 px-12 py-9">
         <div className="flex flex-col gap-1.5">
           <span className="text-[11px] font-bold tracking-widest" style={{ color: T.textMuted }}>
             ЗАГАЛЬНИЙ КОШТОРИС
@@ -96,8 +101,8 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
             </span>
           )}
         </div>
-        <div className="h-24 w-px" style={{ backgroundColor: T.borderSoft }} />
-        <div className="flex flex-1 items-center gap-4">
+        <div className="hidden lg:block h-24 w-px" style={{ backgroundColor: T.borderSoft }} />
+        <div className="flex flex-1 flex-wrap items-center gap-4">
           <KpiPill label="Секції" value={String(sectionCount)} />
           <KpiPill label="Позиції" value={String(itemCount)} />
           <KpiPill
@@ -109,9 +114,9 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
       </section>
 
       {/* Workspace */}
-      <section className="flex items-start gap-8 px-12 pb-14">
+      <section className="flex flex-col xl:flex-row items-start gap-8 px-12 pb-14">
         {/* Sections column */}
-        <div className="flex flex-1 flex-col gap-4" style={{ gap: 18 }}>
+        <div className="flex flex-1 flex-col gap-4 min-w-0 w-full" style={{ gap: 18 }}>
           {estimate.sections.map((section, sIdx) => (
             <SectionBlock
               key={`section-${sIdx}`}
@@ -120,21 +125,25 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
               expanded={controller.expandedSections.has(sIdx)}
               onToggle={() => controller.toggleSection(sIdx)}
               issues={issues}
+              controller={controller}
             />
           ))}
 
-          {estimate.sections.length === 0 && (
-            <div
-              className="rounded-2xl p-8 text-center"
-              style={{ backgroundColor: T.panel, border: `1px dashed ${T.borderSoft}`, color: T.textMuted }}
-            >
-              Кошторис ще не містить секцій
-            </div>
-          )}
+          <button
+            onClick={controller.addSection}
+            className="rounded-2xl py-4 text-sm font-medium"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px dashed ${T.borderSoft}`,
+              color: T.textMuted,
+            }}
+          >
+            + Додати секцію
+          </button>
         </div>
 
         {/* Insights sidebar */}
-        <aside className="flex w-[380px] flex-col gap-4">
+        <aside className="flex w-full xl:w-[380px] flex-col gap-4 flex-shrink-0">
           {/* Summary */}
           <div
             className="flex flex-col gap-4 rounded-2xl p-6"
@@ -221,10 +230,10 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
               </div>
             ) : (
               <div className="flex flex-col gap-2">
-                {criticalIssues.slice(0, 2).map((issue, i) => (
+                {criticalIssues.slice(0, 3).map((issue, i) => (
                   <IssueRow key={`crit-${i}`} issue={issue} tone="danger" />
                 ))}
-                {lowConfIssues.slice(0, 2).map((issue, i) => (
+                {lowConfIssues.slice(0, 3).map((issue, i) => (
                   <IssueRow key={`warn-${i}`} issue={issue} tone="warning" />
                 ))}
               </div>
@@ -277,41 +286,110 @@ function SectionBlock({
   expanded,
   onToggle,
   issues,
+  controller,
 }: {
   section: EstimateSection;
   idx: number;
   expanded: boolean;
   onToggle: () => void;
   issues: VerificationIssue[];
+  controller: AiEstimateController;
 }) {
   const sectionItems = section.items.length;
   const sectionConfidence = issues.find((i) => i.location?.includes(section.title));
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(section.title);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editingTitle) titleInputRef.current?.focus();
+  }, [editingTitle]);
+
+  const saveTitle = () => {
+    if (titleDraft.trim()) controller.updateSectionTitle(idx, titleDraft.trim());
+    setEditingTitle(false);
+  };
 
   return (
     <div className="flex flex-col rounded-2xl" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
-      <button
-        onClick={onToggle}
+      <div
         className="flex items-center justify-between gap-4 rounded-t-2xl border-b px-6 py-4"
         style={{ backgroundColor: T.panelElevated, borderColor: T.borderSoft }}
       >
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-3.5 min-w-0 flex-1">
           <div
-            className="flex h-9 w-9 items-center justify-center rounded-lg"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg"
             style={{ backgroundColor: T.accentPrimarySoft }}
           >
             <Layers size={18} style={{ color: T.accentPrimary }} />
           </div>
-          <div className="flex flex-col gap-0.5 text-left">
-            <span className="text-sm font-semibold" style={{ color: T.textPrimary }}>
-              {String(idx + 1).padStart(2, "0")} · {section.title}
-            </span>
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+            {editingTitle ? (
+              <div className="flex items-center gap-2">
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveTitle();
+                    if (e.key === "Escape") {
+                      setTitleDraft(section.title);
+                      setEditingTitle(false);
+                    }
+                  }}
+                  className="rounded-md bg-transparent px-2 py-1 text-sm font-semibold outline-none"
+                  style={{ color: T.textPrimary, border: `1px solid ${T.borderAccent}` }}
+                />
+                <button onClick={saveTitle}>
+                  <Check size={16} style={{ color: T.success }} />
+                </button>
+                <button
+                  onClick={() => {
+                    setTitleDraft(section.title);
+                    setEditingTitle(false);
+                  }}
+                >
+                  <X size={16} style={{ color: T.danger }} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={onToggle}
+                className="text-left text-sm font-semibold truncate"
+                style={{ color: T.textPrimary }}
+              >
+                {String(idx + 1).padStart(2, "0")} · {section.title}
+              </button>
+            )}
             <span className="text-[11px]" style={{ color: T.textMuted }}>
               {sectionItems} {sectionItems === 1 ? "позиція" : "позицій"}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <ConfidenceBadge value={sectionConfidence ? "Потребує перевірки" : "Без зауважень"} tone={sectionConfidence ? "warning" : "success"} />
+        <div className="flex items-center gap-3 flex-shrink-0">
+          <button
+            onClick={() => {
+              setTitleDraft(section.title);
+              setEditingTitle(true);
+            }}
+            className="rounded-md p-1.5"
+            title="Редагувати назву"
+          >
+            <Pencil size={14} style={{ color: T.textMuted }} />
+          </button>
+          <button
+            onClick={() => {
+              if (confirm(`Видалити секцію "${section.title}"?`)) controller.deleteSection(idx);
+            }}
+            className="rounded-md p-1.5"
+            title="Видалити секцію"
+          >
+            <Trash2 size={14} style={{ color: T.textMuted }} />
+          </button>
+          <ConfidenceBadge
+            value={sectionConfidence ? "Потребує перевірки" : "Без зауважень"}
+            tone={sectionConfidence ? "warning" : "success"}
+          />
           <div className="flex flex-col items-end gap-0.5">
             <span className="text-base font-bold" style={{ color: T.textPrimary }}>
               {formatUAH(section.sectionTotal)}
@@ -320,31 +398,52 @@ function SectionBlock({
               проміжний підсумок
             </span>
           </div>
-          {expanded ? (
-            <ChevronUp size={18} style={{ color: T.textMuted }} />
-          ) : (
-            <ChevronDown size={18} style={{ color: T.textMuted }} />
-          )}
+          <button onClick={onToggle}>
+            {expanded ? (
+              <ChevronUp size={18} style={{ color: T.textMuted }} />
+            ) : (
+              <ChevronDown size={18} style={{ color: T.textMuted }} />
+            )}
+          </button>
         </div>
-      </button>
+      </div>
 
-      {expanded && section.items.length > 0 && (
-        <div className="flex flex-col px-3 pt-2 pb-4">
+      {expanded && (
+        <div className="flex flex-col px-3 pt-2 pb-4 overflow-x-auto">
           <div
-            className="grid grid-cols-[32px_1fr_80px_80px_120px_140px_120px] items-center gap-3 rounded-lg px-3 py-2.5"
+            className="grid grid-cols-[32px_1fr_70px_70px_110px_130px_40px] items-center gap-3 rounded-lg px-3 py-2.5 min-w-[800px]"
             style={{ backgroundColor: T.panelSoft }}
           >
             <Th>#</Th>
             <Th>ПОЗИЦІЯ</Th>
             <Th>ОД.</Th>
             <Th>К-СТЬ</Th>
-            <Th>ЦІНА ЗА ОД.</Th>
+            <Th>ЦІНА</Th>
             <Th>СУМА</Th>
-            <Th>ДЖЕРЕЛО</Th>
+            <Th>ДІЇ</Th>
           </div>
           {section.items.map((item, iIdx) => (
-            <Row key={`item-${idx}-${iIdx}`} idx={iIdx + 1} item={item} striped={iIdx % 2 === 1} />
+            <Row
+              key={`item-${idx}-${iIdx}`}
+              idx={iIdx + 1}
+              item={item}
+              striped={iIdx % 2 === 1}
+              onChange={(patch) => controller.updateItem(idx, iIdx, patch)}
+              onDelete={() => controller.deleteItem(idx, iIdx)}
+            />
           ))}
+
+          <button
+            onClick={() => controller.addItem(idx)}
+            className="mt-2 rounded-lg px-3 py-2.5 text-xs font-medium min-w-[800px]"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px dashed ${T.borderSoft}`,
+              color: T.textMuted,
+            }}
+          >
+            + Додати позицію
+          </button>
         </div>
       )}
     </div>
@@ -359,10 +458,104 @@ function Th({ children }: { children: React.ReactNode }) {
   );
 }
 
-function Row({ idx, item, striped }: { idx: number; item: EstimateItem; striped: boolean }) {
+function Row({
+  idx,
+  item,
+  striped,
+  onChange,
+  onDelete,
+}: {
+  idx: number;
+  item: EstimateItem;
+  striped: boolean;
+  onChange: (patch: Partial<EstimateItem>) => void;
+  onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    description: item.description,
+    unit: item.unit,
+    quantity: String(item.quantity),
+    unitPrice: String(item.unitPrice),
+  });
+
+  const save = () => {
+    onChange({
+      description: draft.description,
+      unit: draft.unit,
+      quantity: Number(draft.quantity) || 0,
+      unitPrice: Number(draft.unitPrice) || 0,
+    });
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div
+        className="grid grid-cols-[32px_1fr_70px_70px_110px_130px_40px] items-center gap-3 border-b px-3 py-3 min-w-[800px]"
+        style={{
+          backgroundColor: T.accentPrimarySoft,
+          borderColor: T.borderSoft,
+        }}
+      >
+        <span className="text-xs font-medium" style={{ color: T.textMuted }}>
+          {String(idx).padStart(2, "0")}
+        </span>
+        <input
+          value={draft.description}
+          onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+          className="rounded-md bg-transparent px-2 py-1 text-[13px] outline-none"
+          style={{ color: T.textPrimary, border: `1px solid ${T.borderAccent}` }}
+        />
+        <input
+          value={draft.unit}
+          onChange={(e) => setDraft((d) => ({ ...d, unit: e.target.value }))}
+          className="rounded-md bg-transparent px-2 py-1 text-xs outline-none"
+          style={{ color: T.textSecondary, border: `1px solid ${T.borderAccent}` }}
+        />
+        <input
+          value={draft.quantity}
+          onChange={(e) => setDraft((d) => ({ ...d, quantity: e.target.value }))}
+          inputMode="numeric"
+          className="rounded-md bg-transparent px-2 py-1 text-xs outline-none"
+          style={{ color: T.textSecondary, border: `1px solid ${T.borderAccent}` }}
+        />
+        <input
+          value={draft.unitPrice}
+          onChange={(e) => setDraft((d) => ({ ...d, unitPrice: e.target.value }))}
+          inputMode="numeric"
+          className="rounded-md bg-transparent px-2 py-1 text-xs outline-none"
+          style={{ color: T.textSecondary, border: `1px solid ${T.borderAccent}` }}
+        />
+        <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+          {formatUAH(Number(draft.quantity) * Number(draft.unitPrice))}
+        </span>
+        <div className="flex items-center gap-1">
+          <button onClick={save} title="Зберегти">
+            <Check size={14} style={{ color: T.success }} />
+          </button>
+          <button
+            onClick={() => {
+              setDraft({
+                description: item.description,
+                unit: item.unit,
+                quantity: String(item.quantity),
+                unitPrice: String(item.unitPrice),
+              });
+              setEditing(false);
+            }}
+            title="Скасувати"
+          >
+            <X size={14} style={{ color: T.danger }} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
-      className="grid grid-cols-[32px_1fr_80px_80px_120px_140px_120px] items-center gap-3 border-b px-3 py-3.5"
+      className="grid grid-cols-[32px_1fr_70px_70px_110px_130px_40px] items-center gap-3 border-b px-3 py-3.5 min-w-[800px] group"
       style={{
         backgroundColor: striped ? T.panelSoft : "transparent",
         borderColor: T.borderSoft,
@@ -371,12 +564,12 @@ function Row({ idx, item, striped }: { idx: number; item: EstimateItem; striped:
       <span className="text-xs font-medium" style={{ color: T.textMuted }}>
         {String(idx).padStart(2, "0")}
       </span>
-      <div className="flex flex-col gap-0.5">
-        <span className="text-[13px] font-medium" style={{ color: T.textPrimary }}>
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <span className="text-[13px] font-medium truncate" style={{ color: T.textPrimary }}>
           {item.description}
         </span>
         {(item.priceSource || item.priceNote) && (
-          <span className="text-[11px]" style={{ color: T.textMuted }}>
+          <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
             {[item.priceSource, item.priceNote].filter(Boolean).join(" · ")}
           </span>
         )}
@@ -393,9 +586,14 @@ function Row({ idx, item, striped }: { idx: number; item: EstimateItem; striped:
       <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
         {formatUAH(item.totalCost)}
       </span>
-      <span className="text-[10px]" style={{ color: T.textMuted }}>
-        {item.priceSourceType || "AI"}
-      </span>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+        <button onClick={() => setEditing(true)} title="Редагувати">
+          <Pencil size={12} style={{ color: T.textMuted }} />
+        </button>
+        <button onClick={onDelete} title="Видалити">
+          <Trash2 size={12} style={{ color: T.textMuted }} />
+        </button>
+      </div>
     </div>
   );
 }

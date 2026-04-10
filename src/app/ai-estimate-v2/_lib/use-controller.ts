@@ -489,6 +489,70 @@ export function useAiEstimateController() {
     []
   );
 
+  const addItem = useCallback((sIdx: number) => {
+    setEstimate((prev) => {
+      if (!prev) return prev;
+      const sections = [...prev.sections];
+      const newItem: EstimateItem = {
+        description: "Нова позиція",
+        unit: "шт",
+        quantity: 1,
+        unitPrice: 0,
+        laborCost: 0,
+        totalCost: 0,
+      };
+      sections[sIdx] = {
+        ...sections[sIdx],
+        items: [...sections[sIdx].items, newItem],
+      };
+      return recalculateSummary({ ...prev, sections });
+    });
+  }, []);
+
+  const deleteItem = useCallback((sIdx: number, iIdx: number) => {
+    setEstimate((prev) => {
+      if (!prev) return prev;
+      const sections = [...prev.sections];
+      const items = sections[sIdx].items.filter((_, i) => i !== iIdx);
+      sections[sIdx] = {
+        ...sections[sIdx],
+        items,
+        sectionTotal: items.reduce((sum, it) => sum + (it.totalCost || 0), 0),
+      };
+      return recalculateSummary({ ...prev, sections });
+    });
+  }, []);
+
+  const updateSectionTitle = useCallback((sIdx: number, title: string) => {
+    setEstimate((prev) => {
+      if (!prev) return prev;
+      const sections = [...prev.sections];
+      sections[sIdx] = { ...sections[sIdx], title };
+      return { ...prev, sections };
+    });
+  }, []);
+
+  const addSection = useCallback(() => {
+    setEstimate((prev) => {
+      if (!prev) return prev;
+      const sections = [
+        ...prev.sections,
+        { title: "Нова секція", items: [], sectionTotal: 0 },
+      ];
+      // Auto-expand the new section
+      setExpandedSections((set) => new Set([...set, sections.length - 1]));
+      return { ...prev, sections };
+    });
+  }, []);
+
+  const deleteSection = useCallback((sIdx: number) => {
+    setEstimate((prev) => {
+      if (!prev) return prev;
+      const sections = prev.sections.filter((_, i) => i !== sIdx);
+      return recalculateSummary({ ...prev, sections });
+    });
+  }, []);
+
   /* -------------------------------------------------------------------- */
   /* Refine                                                               */
   /* -------------------------------------------------------------------- */
@@ -772,6 +836,11 @@ export function useAiEstimateController() {
     expandedSections,
     toggleSection,
     updateItem,
+    addItem,
+    deleteItem,
+    updateSectionTitle,
+    addSection,
+    deleteSection,
 
     // verification
     verificationResult,
