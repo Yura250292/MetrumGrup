@@ -83,7 +83,7 @@ export default async function AdminV2ProjectsPage() {
             return (
               <Link
                 key={project.id}
-                href={`/admin/projects/${project.id}`}
+                href={`/admin-v2/projects/${project.id}`}
                 className="flex flex-col gap-4 rounded-2xl p-6 transition hover:brightness-125"
                 style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
               >

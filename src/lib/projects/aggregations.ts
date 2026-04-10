@@ -37,6 +37,14 @@ export async function listProjectsWithAggregations(
       include: {
         client: { select: { name: true } },
         manager: { select: { id: true, name: true, avatar: true, role: true } },
+        members: {
+          where: { isActive: true },
+          include: {
+            user: {
+              select: { id: true, name: true, avatar: true, role: true },
+            },
+          },
+        },
         conversation: {
           include: {
             participants: {
@@ -63,12 +71,21 @@ export async function listProjectsWithAggregations(
 
   return Promise.all(
     projects.map(async (project) => {
-      // Build team: manager + chat participants (deduped by user.id)
+      // Build team primarily from ProjectMember (active). Fallback to chat
+      // participants for projects that have not yet been backfilled — this
+      // dual-read keeps PR1 deployable without simultaneous backfill.
       const teamMap = new Map<string, TeamMember>();
       if (project.manager) {
         teamMap.set(project.manager.id, project.manager);
       }
-      if (project.conversation) {
+      if (project.members.length > 0) {
+        for (const m of project.members) {
+          if (!teamMap.has(m.user.id)) {
+            teamMap.set(m.user.id, m.user);
+          }
+        }
+      } else if (project.conversation) {
+        // LEGACY fallback — removed once backfill complete (PR4).
         for (const p of project.conversation.participants) {
           if (!teamMap.has(p.user.id)) {
             teamMap.set(p.user.id, p.user);

@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { ProjectStage } from "@prisma/client";
+import { canUploadProjectFiles } from "@/lib/projects/access";
 
 export async function POST(
   request: NextRequest,
@@ -11,9 +12,10 @@ export async function POST(
   const { id: projectId } = await params;
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
-    return forbiddenResponse();
-  }
+  // Allow any active project member who has upload rights (engineers, foremen,
+  // managers) to file a photo report. SUPER_ADMIN bypass handled in access.ts.
+  const allowed = await canUploadProjectFiles(projectId, session.user.id);
+  if (!allowed) return forbiddenResponse();
 
   const body = await request.json();
   const { title, description, stage, images } = body;

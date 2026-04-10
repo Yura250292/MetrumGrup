@@ -232,7 +232,7 @@ export default async function AdminV2ProjectsDashboardPage() {
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         <Link
-                          href={`/admin/projects/${p.id}`}
+                          href={`/admin-v2/projects/${p.id}`}
                           className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
                           style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
                         >

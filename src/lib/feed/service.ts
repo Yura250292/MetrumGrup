@@ -5,7 +5,8 @@ export type FeedKind =
   | "photo_report"
   | "estimate_approved"
   | "comment"
-  | "chat_message";
+  | "chat_message"
+  | "member_change";
 
 export type FeedActor = {
   id: string;
@@ -45,8 +46,14 @@ export async function listFeed(opts: { limit?: number } = {}): Promise<{
   const limit = opts.limit ?? 20;
   const fetchLimit = Math.max(limit * 2, 10); // pull extra from each source
 
-  const [completionActs, photoReports, approvedEstimates, comments, chatMessages] =
-    await Promise.all([
+  const [
+    completionActs,
+    photoReports,
+    approvedEstimates,
+    comments,
+    chatMessages,
+    memberEvents,
+  ] = await Promise.all([
       prisma.completionAct.findMany({
         take: fetchLimit,
         orderBy: { createdAt: "desc" },
@@ -101,6 +108,18 @@ export async function listFeed(opts: { limit?: number } = {}): Promise<{
               },
             },
           },
+        },
+      }),
+      prisma.auditLog.findMany({
+        where: {
+          entity: "ProjectMember",
+          projectId: { not: null },
+        },
+        take: fetchLimit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          project: { select: { id: true, title: true, slug: true } },
         },
       }),
     ]);
@@ -232,6 +251,34 @@ export async function listFeed(opts: { limit?: number } = {}): Promise<{
       actor: msg.author,
       link: `/admin/chat/${msg.conversationId}`,
       preview: previewBody(msg.body),
+    });
+  }
+
+  for (const ev of memberEvents) {
+    if (!ev.project) continue;
+    const action = ev.action;
+    const newData = (ev.newData as { roleInProject?: string } | null) ?? null;
+    const oldData = (ev.oldData as { roleInProject?: string } | null) ?? null;
+    let title = "Зміна команди";
+    if (action === "CREATE") title = "Учасника додано до проєкту";
+    else if (action === "DELETE") title = "Учасника видалено з проєкту";
+    else if (action === "UPDATE")
+      title = `Роль учасника змінено${
+        oldData?.roleInProject && newData?.roleInProject
+          ? `: ${oldData.roleInProject} → ${newData.roleInProject}`
+          : ""
+      }`;
+    items.push({
+      id: `member_change:${ev.id}`,
+      kind: "member_change",
+      title,
+      subtitle: null,
+      createdAt: ev.createdAt,
+      project: ev.project,
+      actor: ev.user
+        ? { id: ev.user.id, name: ev.user.name, avatar: ev.user.avatar }
+        : null,
+      link: `/admin-v2/projects/${ev.projectId}?tab=team`,
     });
   }
 

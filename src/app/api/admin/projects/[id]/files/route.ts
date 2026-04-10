@@ -9,6 +9,10 @@ import {
   listProjectFiles,
   uploadProjectFile,
 } from "@/lib/projects/files-service";
+import {
+  canUploadProjectFiles,
+  canViewProject,
+} from "@/lib/projects/access";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -26,8 +30,10 @@ export async function GET(
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireStaffAccess();
+    const session = await requireStaffAccess();
     const { id } = await ctx.params;
+    const ok = await canViewProject(id, session.user.id);
+    if (!ok) return forbiddenResponse();
     const files = await listProjectFiles(id);
     return NextResponse.json({ files });
   } catch (err) {
@@ -42,6 +48,8 @@ export async function POST(
   try {
     const session = await requireStaffAccess();
     const { id } = await ctx.params;
+    const allowed = await canUploadProjectFiles(id, session.user.id);
+    if (!allowed) return forbiddenResponse();
 
     const contentType = request.headers.get("content-type") ?? "";
 

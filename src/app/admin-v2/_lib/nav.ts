@@ -93,6 +93,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/projects/dashboard": "Огляд проєктів",
   "/admin-v2/clients": "Клієнти",
   "/admin-v2/estimates": "Кошториси",
+  // Dynamic [id] segments — handled by header fallback
   "/admin-v2/materials": "Матеріали та ціни",
   "/admin-v2/resources/equipment": "Техніка",
   "/admin-v2/resources/warehouse": "Склад",

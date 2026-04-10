@@ -1,6 +1,31 @@
 import { prisma } from "@/lib/prisma";
 import { CommentEntityType } from "@prisma/client";
 import { createMentionNotifications, parseMentionedIds } from "@/lib/notifications/create";
+import { canParticipateInProject, canViewProject } from "@/lib/projects/access";
+
+/**
+ * Resolve the project that owns a comment entity. Used to funnel comment
+ * permission checks through the canonical project access layer.
+ *  - PROJECT comments: entityId IS the project id
+ *  - ESTIMATE comments: lookup estimate.projectId
+ */
+async function resolveCommentProjectId(
+  entityType: CommentEntityType,
+  entityId: string,
+): Promise<string | null> {
+  if (entityType === "PROJECT") {
+    const p = await prisma.project.findUnique({ where: { id: entityId }, select: { id: true } });
+    return p?.id ?? null;
+  }
+  if (entityType === "ESTIMATE") {
+    const e = await prisma.estimate.findUnique({
+      where: { id: entityId },
+      select: { projectId: true },
+    });
+    return e?.projectId ?? null;
+  }
+  return null;
+}
 
 export const ALLOWED_REACTIONS = ["👍", "❤️", "✅", "⚠️", "💯", "👀"] as const;
 export type AllowedReaction = (typeof ALLOWED_REACTIONS)[number];
@@ -51,6 +76,11 @@ export async function listComments(
   entityId: string,
   currentUserId: string
 ) {
+  const projectId = await resolveCommentProjectId(entityType, entityId);
+  if (projectId) {
+    const ok = await canViewProject(projectId, currentUserId);
+    if (!ok) throw new Error("Forbidden");
+  }
   const rows = await prisma.comment.findMany({
     where: { entityType, entityId, deletedAt: null },
     orderBy: { createdAt: "asc" },
@@ -99,6 +129,14 @@ export async function postComment(
       select: { id: true },
     });
     if (!exists) throw new Error("Проєкт не знайдено");
+  }
+
+  // Centralized access check: posting requires active project membership
+  // (CLIENT viewers cannot author internal comments).
+  const projectId = await resolveCommentProjectId(entityType, entityId);
+  if (projectId) {
+    const allowed = await canParticipateInProject(projectId, authorId);
+    if (!allowed) throw new Error("Forbidden");
   }
 
   const comment = await prisma.comment.create({

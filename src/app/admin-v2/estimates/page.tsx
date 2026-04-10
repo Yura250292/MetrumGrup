@@ -135,7 +135,7 @@ export default async function AdminV2EstimatesPage() {
             {estimates.map((est, i) => (
               <Link
                 key={est.id}
-                href={`/admin/estimates/${est.id}`}
+                href={`/admin-v2/estimates/${est.id}`}
                 className="flex items-center gap-4 px-6 py-4 transition hover:brightness-125"
                 style={{
                   backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",

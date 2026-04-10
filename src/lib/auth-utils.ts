@@ -81,3 +81,18 @@ export async function requireStaffAccess() {
   }
   return session;
 }
+
+/**
+ * Project-scoped access guard. Throws "Forbidden" if user is neither
+ * SUPER_ADMIN, the project's CLIENT, nor an active ProjectMember (with the
+ * legacy chat-participant fallback while backfill is rolling out).
+ */
+export async function requireProjectAccess(projectId: string) {
+  const session = await requireAuth();
+  const { canViewProject } = await import("@/lib/projects/access");
+  const ok = await canViewProject(projectId, session.user.id);
+  if (!ok) {
+    throw new Error("Forbidden");
+  }
+  return session;
+}

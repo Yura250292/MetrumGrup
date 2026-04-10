@@ -5,6 +5,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { slugify } from "@/lib/utils";
 import { auditLog } from "@/lib/audit";
 import { ProjectStage } from "@prisma/client";
+import { addProjectMember } from "@/lib/projects/members-service";
 
 const STAGE_ORDER: ProjectStage[] = [
   "DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER",
@@ -88,6 +89,20 @@ export async function POST(request: NextRequest) {
     },
     include: { stages: true },
   });
+
+  // Auto-add manager as PROJECT_MANAGER member
+  if (project.managerId) {
+    try {
+      await addProjectMember({
+        projectId: project.id,
+        userId: project.managerId,
+        roleInProject: "PROJECT_MANAGER",
+        invitedById: session.user.id,
+      });
+    } catch (err) {
+      console.error("Failed to auto-add manager as project member:", err);
+    }
+  }
 
   await auditLog({
     userId: session.user.id,

@@ -39,6 +39,8 @@ model User {
   authoredComments   Comment[]              @relation("CommentAuthor")
   reactions          Reaction[]
   refineHistory      EstimateRefineHistory[] @relation("RefineHistoryUser")
+  projectMemberships ProjectMember[]        @relation("ProjectMemberUser")
+  invitedMembers     ProjectMember[]        @relation("ProjectMemberInviter")
 
   @@map("users")
 }
@@ -74,8 +76,30 @@ model Project {
   client            User                   @relation("ClientProjects", fields: [clientId], references: [id])
   manager           User?                  @relation("ManagerProjects", fields: [managerId], references: [id])
   conversation      Conversation?
+  members           ProjectMember[]
 
   @@map("projects")
+}
+
+model ProjectMember {
+  id            String      @id @default(cuid())
+  projectId     String
+  userId        String
+  roleInProject ProjectRole
+  permissions   Json?
+  joinedAt      DateTime    @default(now())
+  leftAt        DateTime?
+  invitedById   String?
+  isActive      Boolean     @default(true)
+
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("ProjectMemberInviter", fields: [invitedById], references: [id])
+
+  @@unique([projectId, userId])
+  @@index([userId, isActive])
+  @@index([projectId, roleInProject])
+  @@map("project_members")
 }
 
 model ProjectStageRecord {
@@ -344,22 +368,42 @@ model PhotoReportImage {
 }
 
 model ProjectFile {
-  id           String   @id @default(cuid())
-  type         FileType
-  name         String
-  url          String
-  r2Key        String?
-  textContent  String?  @db.Text
-  size         Int
-  mimeType     String
-  createdAt    DateTime @default(now())
-  projectId    String
-  uploadedById String
-  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  id               String          @id @default(cuid())
+  type             FileType
+  category         FileCategory    @default(OTHER)
+  visibility       FileVisibility  @default(TEAM)
+  name             String
+  url              String
+  r2Key            String?
+  textContent      String?         @db.Text
+  size             Int
+  mimeType         String
+  linkedEntityType String?
+  linkedEntityId   String?
+  createdAt        DateTime        @default(now())
+  projectId        String
+  uploadedById     String
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy       User            @relation(fields: [uploadedById], references: [id])
 
   @@index([projectId, createdAt])
+  @@index([projectId, visibility])
   @@map("project_files")
+}
+
+enum FileCategory {
+  PLAN
+  CONTRACT
+  TECH_DOC
+  NOTE
+  PHOTO_ATTACHMENT
+  OTHER
+}
+
+enum FileVisibility {
+  TEAM
+  CLIENT
+  INTERNAL
 }
 
 model Equipment {
@@ -867,6 +911,16 @@ enum Role {
   ENGINEER
   FINANCIER
   USER
+}
+
+enum ProjectRole {
+  PROJECT_ADMIN
+  PROJECT_MANAGER
+  ENGINEER
+  FOREMAN
+  FINANCE
+  PROCUREMENT
+  VIEWER
 }
 
 enum ProjectStatus {

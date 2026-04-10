@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
+import { addProjectMember, deactivateMember } from "@/lib/projects/members-service";
 
 export async function GET(
   _request: NextRequest,
@@ -47,6 +48,15 @@ export async function PATCH(
   const body = await request.json();
   const { title, description, address, status, currentStage, stageProgress, managerId, totalBudget, totalPaid, startDate, expectedEndDate, actualEndDate } = body;
 
+  // Read previous managerId to know if we need to sync ProjectMember
+  const previous = await prisma.project.findUnique({
+    where: { id },
+    select: { managerId: true },
+  });
+  if (!previous) {
+    return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  }
+
   const updateData: Record<string, unknown> = {};
   if (title !== undefined) updateData.title = title;
   if (description !== undefined) updateData.description = description;
@@ -65,6 +75,28 @@ export async function PATCH(
     where: { id },
     data: updateData,
   });
+
+  // Sync ProjectMember when manager changed
+  if (managerId !== undefined) {
+    const newManagerId = managerId || null;
+    if (previous.managerId !== newManagerId) {
+      try {
+        if (previous.managerId) {
+          await deactivateMember(id, previous.managerId);
+        }
+        if (newManagerId) {
+          await addProjectMember({
+            projectId: id,
+            userId: newManagerId,
+            roleInProject: "PROJECT_MANAGER",
+            invitedById: session.user.id,
+          });
+        }
+      } catch (err) {
+        console.error("Failed to sync project manager membership:", err);
+      }
+    }
+  }
 
   await auditLog({
     userId: session.user.id,

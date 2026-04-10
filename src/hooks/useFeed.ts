@@ -7,7 +7,8 @@ export type FeedKind =
   | "photo_report"
   | "estimate_approved"
   | "comment"
-  | "chat_message";
+  | "chat_message"
+  | "member_change";
 
 export type FeedActor = {
   id: string;

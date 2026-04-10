@@ -9,6 +9,7 @@ import {
   FileText,
   MessageSquare,
   Loader2,
+  Users,
 } from "lucide-react";
 import { useFeed, type FeedKind, type FeedItem } from "@/hooks/useFeed";
 import { formatCurrency } from "@/lib/utils";
@@ -61,6 +62,12 @@ const KIND_META: Record<
     label: "Чат",
     bg: T.panelElevated,
     fg: T.textSecondary,
+  },
+  member_change: {
+    icon: Users,
+    label: "Команда",
+    bg: T.accentPrimarySoft,
+    fg: T.accentPrimary,
   },
 };
 

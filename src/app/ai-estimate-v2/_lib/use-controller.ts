@@ -649,7 +649,7 @@ export function useAiEstimateController() {
         return;
       }
       setSavedEstimateId(json.data.id);
-      router.push(`/admin/estimates/${json.data.id}`);
+      router.push(`/admin-v2/estimates/${json.data.id}`);
     } catch (err) {
       setError("Не вдалось зʼєднатись з сервером");
     } finally {
@@ -731,7 +731,7 @@ export function useAiEstimateController() {
                     `Нова вартість: ${formatCurrency(data.data.newTotalAmount)}\n` +
                     `Зміна: ${formatCurrency(data.data.difference)}`
                 );
-                router.push(`/admin/estimates/${data.data.newEstimateId}`);
+                router.push(`/admin-v2/estimates/${data.data.newEstimateId}`);
                 return;
               } else if (data.status === "error") {
                 throw new Error(data.message);

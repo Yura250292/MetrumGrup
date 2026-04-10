@@ -149,7 +149,7 @@ export default async function AdminV2Dashboard() {
               {recentProjects.map((project) => (
                 <Link
                   key={project.id}
-                  href={`/admin/projects/${project.id}`}
+                  href={`/admin-v2/projects/${project.id}`}
                   className="flex items-center gap-3 rounded-xl p-3.5 transition hover:brightness-125"
                   style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
                 >

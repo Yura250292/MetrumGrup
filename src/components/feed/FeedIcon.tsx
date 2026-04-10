@@ -6,6 +6,7 @@ import {
   FileCheck,
   MessageCircle,
   MessageSquare,
+  Users,
 } from "lucide-react";
 import type { FeedKind } from "@/hooks/useFeed";
 
@@ -32,6 +33,10 @@ const ICON_CONFIG: Record<
   chat_message: {
     Icon: MessageSquare,
     gradient: "from-pink-500 to-rose-500",
+  },
+  member_change: {
+    Icon: Users,
+    gradient: "from-indigo-500 to-blue-500",
   },
 };
 

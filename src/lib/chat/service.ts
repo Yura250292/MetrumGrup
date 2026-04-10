@@ -2,6 +2,11 @@ import { prisma } from "@/lib/prisma";
 import { STAFF_ROLES } from "@/lib/auth-utils";
 import { Prisma } from "@prisma/client";
 import { createMentionNotifications } from "@/lib/notifications/create";
+import {
+  syncProjectConversationParticipants,
+  syncEstimateConversationParticipants,
+} from "@/lib/chat/sync";
+import { canParticipateInProject } from "@/lib/projects/access";
 
 type ReactionGroup = {
   emoji: string;
@@ -37,6 +42,32 @@ async function assertParticipant(conversationId: string, userId: string) {
     where: { conversationId_userId: { conversationId, userId } },
   });
   if (!participant) throw new Error("Forbidden");
+
+  // For PROJECT/ESTIMATE conversations, also enforce project-level membership.
+  // This catches the race where a user is removed from the team between
+  // opening the chat and posting a message — without this they could keep
+  // posting until their participant row was reaped by sync.
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      type: true,
+      projectId: true,
+      estimate: { select: { projectId: true } },
+    },
+  });
+  if (conv) {
+    const projectId =
+      conv.type === "PROJECT"
+        ? conv.projectId
+        : conv.type === "ESTIMATE"
+          ? conv.estimate?.projectId ?? null
+          : null;
+    if (projectId) {
+      const allowed = await canParticipateInProject(projectId, userId);
+      if (!allowed) throw new Error("Forbidden");
+    }
+  }
+
   return participant;
 }
 
@@ -77,20 +108,25 @@ export async function getOrCreateProjectChannel(projectId: string, currentUserId
   });
   if (!project) throw new Error("Проєкт не знайдено");
 
+  // Access check — only members or SUPER_ADMIN may open the channel.
+  const allowed = await canParticipateInProject(projectId, currentUserId);
+  if (!allowed) throw new Error("Forbidden");
+
   const conversation = await prisma.conversation.upsert({
     where: { projectId },
     create: {
       type: "PROJECT",
       projectId,
       title: project.title,
-      participants: {
-        create: [{ userId: currentUserId }],
-      },
     },
     update: {},
   });
 
-  // Ensure current user is a participant (idempotent)
+  // Sync participants from ProjectMember (single source of truth).
+  await syncProjectConversationParticipants(projectId);
+
+  // Ensure SUPER_ADMIN who isn't a member but explicitly opens the channel
+  // becomes a participant for this session.
   await prisma.conversationParticipant.upsert({
     where: {
       conversationId_userId: {
