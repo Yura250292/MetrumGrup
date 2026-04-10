@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState, DragEvent, ChangeEvent } from "react";
 import {
   Layers,
   Sparkles,
@@ -23,24 +24,51 @@ import {
   Settings2,
   Ellipsis,
   ChevronRight,
+  X,
+  Loader2,
 } from "lucide-react";
 import { T } from "./tokens";
-import {
-  BtnPrimary,
-  BtnSecondary,
-  BtnGhost,
-  BtnIconOnly,
-  MetricPill,
-  FileTile,
-  ChecklistItem,
-  SourceStatusCard,
-  InputField,
-  SelectField,
-  SectionCard,
-  ScoreDial,
-} from "./primitives";
+import { BtnGhost, BtnIconOnly, MetricPill, ChecklistItem, SourceStatusCard, ScoreDial } from "./primitives";
+import { formatBytes } from "../_lib/format";
+import type { AiEstimateController } from "../_lib/use-controller";
 
-export function SetupDesktop() {
+function getFileIcon(name: string) {
+  const ext = name.split(".").pop()?.toLowerCase() || "";
+  if (ext === "pdf") return FileText;
+  if (["xlsx", "xls", "csv"].includes(ext)) return FileSpreadsheet;
+  if (["jpg", "jpeg", "png", "webp", "zip"].includes(ext)) return ImageIcon;
+  return FileText;
+}
+
+export function SetupDesktop({ controller }: { controller: AiEstimateController }) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const totalSize = controller.files.reduce((sum, f) => sum + f.size, 0);
+  const filesReady = controller.files.length > 0;
+  const paramsReady = controller.area.trim() !== "";
+
+  function onDrop(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    const dropped = Array.from(e.dataTransfer.files);
+    if (dropped.length > 0) controller.addFiles(dropped);
+  }
+  function onDragOver(e: DragEvent<HTMLDivElement>) {
+    e.preventDefault();
+    setIsDragging(true);
+  }
+  function onFileChange(e: ChangeEvent<HTMLInputElement>) {
+    if (!e.target.files) return;
+    const picked = Array.from(e.target.files);
+    if (picked.length > 0) controller.addFiles(picked);
+    e.target.value = "";
+  }
+
+  const isBusy = controller.isAnalyzing || controller.isChunkedGenerating;
+  const readiness =
+    (filesReady ? 50 : 0) + (controller.wizardCompleted ? 30 : 0) + (paramsReady ? 20 : 0);
+
   return (
     <div className="w-[1440px] flex-shrink-0" style={{ backgroundColor: T.background, color: T.textPrimary }}>
       {/* Top app bar */}
@@ -113,8 +141,8 @@ export function SetupDesktop() {
           </div>
         </div>
         <div className="flex items-start gap-3">
-          <MetricPill label="Сер. секцій" value="24" />
-          <MetricPill label="Сер. точність" value="94%" />
+          <MetricPill label="Файли" value={String(controller.files.length)} />
+          <MetricPill label="Розмір" value={controller.files.length ? formatBytes(totalSize) : "—"} />
           <MetricPill label="Час до чернетки" value="~3 хв" />
         </div>
       </section>
@@ -125,10 +153,13 @@ export function SetupDesktop() {
         <div className="flex flex-1 flex-col gap-5">
           {/* Dropzone */}
           <div
-            className="flex flex-col items-center gap-4 rounded-2xl p-8"
+            onDrop={onDrop}
+            onDragOver={onDragOver}
+            onDragLeave={() => setIsDragging(false)}
+            className="flex flex-col items-center gap-4 rounded-2xl p-8 transition"
             style={{
-              backgroundColor: T.panel,
-              border: `1px dashed ${T.borderSoft}`,
+              backgroundColor: isDragging ? T.accentPrimarySoft : T.panel,
+              border: `1px dashed ${isDragging ? T.accentPrimary : T.borderSoft}`,
             }}
           >
             <div
@@ -144,48 +175,112 @@ export function SetupDesktop() {
               PDF, креслення, фото, ВВР, специфікації — до 64 МБ на файл. AI парсить і звіряє кожен документ.
             </div>
             <div className="flex gap-3 pt-2">
-              <BtnPrimary icon={FolderOpen}>Обрати файли</BtnPrimary>
-              <BtnGhost>Використати приклад</BtnGhost>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isBusy}
+                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+                style={{ backgroundColor: T.accentPrimary }}
+              >
+                <FolderOpen size={16} /> Обрати файли
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.xlsx,.xls,.csv,.jpg,.jpeg,.png,.webp,.zip"
+                className="hidden"
+                onChange={onFileChange}
+              />
             </div>
+            {controller.uploadProgress && (
+              <div className="mt-2 text-xs" style={{ color: T.accentPrimary }}>
+                Завантаження: {controller.uploadProgress.uploadedFiles}/{controller.uploadProgress.totalFiles} (
+                {controller.uploadProgress.percentage}%)
+              </div>
+            )}
           </div>
 
           {/* Files added */}
-          <SectionCard>
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
-                  Документи проєкту
-                </span>
-                <span
-                  className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-                  style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+          {filesReady && (
+            <div
+              className="rounded-2xl p-6"
+              style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+            >
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
+                    Документи проєкту
+                  </span>
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[11px] font-medium"
+                    style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+                  >
+                    {controller.files.length} {controller.files.length === 1 ? "файл" : "файлів"} ·{" "}
+                    {formatBytes(totalSize)}
+                  </span>
+                </div>
+                <button
+                  onClick={controller.clearFiles}
+                  className="text-xs font-medium"
+                  style={{ color: T.textMuted }}
                 >
-                  3 файли · 12.4 МБ
-                </span>
+                  Очистити
+                </button>
               </div>
-              <span className="text-xs font-medium" style={{ color: T.accentPrimary }}>
-                Групувати за типом ▾
-              </span>
+              <div className="grid grid-cols-3 gap-3">
+                {controller.files.map((file, i) => {
+                  const Icon = getFileIcon(file.name);
+                  return (
+                    <div
+                      key={`${file.name}-${i}`}
+                      className="flex items-center gap-3 rounded-xl p-3.5"
+                      style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
+                    >
+                      <div
+                        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: T.accentPrimarySoft }}
+                      >
+                        <Icon size={20} style={{ color: T.accentPrimary }} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold" style={{ color: T.textPrimary }}>
+                          {file.name}
+                        </div>
+                        <div className="text-[11px]" style={{ color: T.textMuted }}>
+                          {formatBytes(file.size)}
+                        </div>
+                      </div>
+                      <button onClick={() => controller.removeFile(i)} aria-label="Видалити">
+                        <X size={16} style={{ color: T.textMuted }} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <FileTile icon={FileText} name="плани-2-поверх.pdf" meta="4.2 МБ · креслення" />
-              <FileTile icon={FileSpreadsheet} name="специфікації-v3.pdf" meta="3.8 МБ · ВВР" />
-              <FileTile icon={ImageIcon} name="фото-обʼєкт.zip" meta="4.4 МБ · 18 фото" />
-            </div>
-          </SectionCard>
+          )}
 
           {/* Wizard promo */}
-          <SectionCard accent>
+          <div
+            className="rounded-2xl p-6"
+            style={{
+              backgroundColor: T.panel,
+              border: `1px solid ${controller.wizardCompleted ? T.borderSoft : T.borderAccent}`,
+            }}
+          >
             <div className="flex items-center gap-6">
               <div className="flex flex-1 flex-col gap-2.5">
                 <span
                   className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider"
                   style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
                 >
-                  <Sparkles size={12} /> РЕЖИМ З МАЙСТРОМ
+                  <Sparkles size={12} />{" "}
+                  {controller.wizardCompleted ? "МАЙСТЕР ЗАВЕРШЕНО" : "РЕЖИМ З МАЙСТРОМ"}
                 </span>
                 <div className="text-lg font-bold" style={{ color: T.textPrimary }}>
-                  Запустіть майстер для ~3× кращої точності
+                  {controller.wizardCompleted
+                    ? "Майстер заповнено — точність максимальна"
+                    : "Запустіть майстер для ~3× кращої точності"}
                 </div>
                 <p className="text-[13px] leading-relaxed" style={{ color: T.textSecondary }}>
                   5 коротких кроків про геометрію, матеріали, конструктив та оздоблення. Майстер покращує обсяги,
@@ -204,14 +299,26 @@ export function SetupDesktop() {
                 </div>
               </div>
               <div className="flex w-[200px] flex-col items-center gap-3">
-                <ScoreDial value={60} size={120} color={T.accentPrimary} bigLabel="3 / 5" label="кроків готово" />
-                <BtnPrimary icon={ArrowRight}>Продовжити</BtnPrimary>
+                <ScoreDial
+                  value={controller.wizardCompleted ? 100 : 0}
+                  size={120}
+                  color={controller.wizardCompleted ? T.success : T.accentPrimary}
+                  bigLabel={controller.wizardCompleted ? "✓" : "0 / 5"}
+                  label={controller.wizardCompleted ? "готово" : "кроків"}
+                />
+                <button
+                  onClick={controller.openWizard}
+                  className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
+                  style={{ backgroundColor: T.accentPrimary }}
+                >
+                  {controller.wizardCompleted ? "Редагувати" : "Запустити майстер"} <ArrowRight size={16} />
+                </button>
               </div>
             </div>
-          </SectionCard>
+          </div>
 
           {/* Project parameters */}
-          <SectionCard>
+          <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
             <div className="mb-4 flex items-center justify-between">
               <div className="flex flex-col gap-1">
                 <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
@@ -229,40 +336,69 @@ export function SetupDesktop() {
               </span>
             </div>
             <div className="flex gap-4">
-              <InputField label="Площа проєкту" value="320 м²" icon={Square} className="flex-1" />
-              <SelectField label="Режим генерації" value="З майстром" icon={Sparkles} className="flex-1" />
-            </div>
-            <div className="mt-4 flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
-                Нотатки проєкту
-              </span>
-              <div
-                className="rounded-xl px-4 py-3.5"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
-              >
-                <p className="text-[13px] leading-relaxed" style={{ color: T.textSecondary }}>
-                  Двоповерхова житлова прибудова, монолітна плита, лише внутрішнє оздоблення…
-                </p>
-                <div className="mt-2 flex gap-1.5">
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-                    style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-                  >
-                    Бетон C25/30
-                  </span>
-                  <span
-                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
-                    style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-                  >
-                    320 м²
-                  </span>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
+                  Площа проєкту, м²
+                </label>
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3.5 py-3"
+                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
+                >
+                  <Square size={16} style={{ color: T.textMuted }} />
+                  <input
+                    value={controller.area}
+                    onChange={(e) => controller.setArea(e.target.value)}
+                    placeholder="напр. 320"
+                    inputMode="numeric"
+                    className="flex-1 bg-transparent text-sm outline-none"
+                    style={{ color: T.textPrimary }}
+                  />
                 </div>
               </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
+                  Модель генерації
+                </label>
+                <select
+                  value={controller.selectedGenerationModel}
+                  onChange={(e) =>
+                    controller.setSelectedGenerationModel(e.target.value as "gemini" | "openai" | "anthropic" | "pipeline")
+                  }
+                  className="rounded-xl px-3.5 py-3 text-sm font-medium outline-none"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderAccent}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  <option value="gemini">Gemini</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="anthropic">Anthropic</option>
+                  <option value="pipeline">Pipeline</option>
+                </select>
+              </div>
             </div>
-          </SectionCard>
+            <div className="mt-4 flex flex-col gap-1.5">
+              <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
+                Нотатки проєкту
+              </label>
+              <textarea
+                value={controller.projectNotes}
+                onChange={(e) => controller.setProjectNotes(e.target.value)}
+                placeholder="Опишіть особливості проєкту, обмеження, побажання…"
+                rows={4}
+                className="rounded-xl px-4 py-3.5 text-[13px] leading-relaxed outline-none resize-none"
+                style={{
+                  backgroundColor: T.panelSoft,
+                  border: `1px solid ${T.borderStrong}`,
+                  color: T.textPrimary,
+                }}
+              />
+            </div>
+          </div>
 
           {/* Data sources */}
-          <SectionCard>
+          <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
             <div className="mb-4 flex items-center justify-between">
               <div className="flex flex-col gap-1">
                 <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
@@ -272,42 +408,85 @@ export function SetupDesktop() {
                   Внутрішні документи · RAG памʼять · Ринковий контекст Prozorro
                 </span>
               </div>
-              <span className="text-xs font-medium" style={{ color: T.accentPrimary }}>
-                Розширені ▾
-              </span>
+              <label className="flex items-center gap-2 text-xs font-medium" style={{ color: T.accentPrimary }}>
+                <input
+                  type="checkbox"
+                  checked={controller.checkProzorro}
+                  onChange={(e) => controller.setCheckProzorro(e.target.checked)}
+                />
+                Перевіряти Prozorro
+              </label>
             </div>
             <div className="flex flex-col gap-2.5">
-              <SourceStatusCard icon={FileText} title="Внутрішні документи" meta="3 файли проіндексовано · готово" />
-              <SourceStatusCard icon={Database} title="RAG памʼять" meta="Підключено · 8 проєктів-референсів" />
-              <SourceStatusCard icon={Globe} title="Ринок Prozorro" meta="Активно · 142 свіжі тендери" />
+              <SourceStatusCard
+                icon={FileText}
+                title="Внутрішні документи"
+                meta={controller.files.length ? `${controller.files.length} файлів додано` : "Немає файлів"}
+              />
+              <SourceStatusCard icon={Database} title="RAG памʼять" meta="Підключено · референси" />
+              <SourceStatusCard
+                icon={Globe}
+                title="Ринок Prozorro"
+                meta={controller.checkProzorro ? "Активно" : "Вимкнено"}
+              />
             </div>
-          </SectionCard>
+          </div>
+
+          {controller.error && (
+            <div
+              className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
+              style={{ backgroundColor: T.dangerSoft, border: `1px solid ${T.danger}`, color: T.danger }}
+            >
+              <Info size={16} className="mt-0.5 flex-shrink-0" />
+              <div className="flex-1">{controller.error}</div>
+              <button onClick={controller.clearError}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sidebar */}
         <aside className="flex w-[380px] flex-col gap-4">
-          {/* Readiness */}
-          <SectionCard>
+          <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
             <div className="mb-3.5 flex items-center justify-between">
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
                   ГОТОВНІСТЬ
                 </span>
                 <span className="text-base font-semibold" style={{ color: T.textPrimary }}>
-                  Майже готово до генерації
+                  {filesReady && controller.wizardCompleted
+                    ? "Готово до генерації"
+                    : filesReady
+                      ? "Майже готово"
+                      : "Додайте файли"}
                 </span>
               </div>
-              <ScoreDial value={80} size={48} bigLabel="80%" />
+              <ScoreDial value={readiness} size={48} bigLabel={`${readiness}%`} />
             </div>
             <div className="flex flex-col gap-2">
-              <ChecklistItem icon={Check} title="Файли завантажено" meta="3 PDF · 12.4 МБ" />
-              <ChecklistItem icon={Check} title="Параметри додані" meta="320 м² · 2 чіпи" />
-              <ChecklistItem icon={Timer} title="Майстер 3 / 5" meta="Опціонально, але рекомендовано" state="warning" />
-              <ChecklistItem icon={Check} title="Джерела даних підключені" meta="Внутрішні · RAG · Prozorro" />
+              <ChecklistItem
+                icon={filesReady ? Check : Timer}
+                title="Файли завантажено"
+                meta={filesReady ? `${controller.files.length} · ${formatBytes(totalSize)}` : "Натисніть або перетягніть"}
+                state={filesReady ? "done" : "warning"}
+              />
+              <ChecklistItem
+                icon={paramsReady ? Check : Timer}
+                title="Параметри проєкту"
+                meta={paramsReady ? `${controller.area} м²` : "Площа не вказана"}
+                state={paramsReady ? "done" : "warning"}
+              />
+              <ChecklistItem
+                icon={controller.wizardCompleted ? Check : Timer}
+                title="Майстер"
+                meta={controller.wizardCompleted ? "Завершено" : "Опціонально, але рекомендовано"}
+                state={controller.wizardCompleted ? "done" : "warning"}
+              />
+              <ChecklistItem icon={Check} title="Джерела даних" meta="Внутрішні · RAG · Prozorro" />
             </div>
-          </SectionCard>
+          </div>
 
-          {/* CTA stack */}
           <div
             className="flex flex-col gap-4 rounded-2xl p-6"
             style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderAccent}` }}
@@ -317,19 +496,23 @@ export function SetupDesktop() {
                 ОЧІКУВАННЯ ВІД ГЕНЕРАЦІЇ
               </span>
               <div className="flex gap-2">
-                <ExpectCell label="Режим" value="Майстер" />
-                <ExpectCell label="Агенти" value="6 активних" />
+                <ExpectCell label="Режим" value={controller.wizardCompleted ? "Майстер" : "Швидкий"} />
+                <ExpectCell label="Модель" value={controller.selectedGenerationModel} />
                 <ExpectCell label="ETA" value="~3 хв" />
               </div>
             </div>
             <button
-              className="flex w-full items-center justify-center gap-2.5 rounded-xl px-5 py-4 text-[15px] font-bold text-white transition hover:brightness-110"
+              disabled={!filesReady || isBusy}
+              onClick={controller.runPreAnalysis}
+              className="flex w-full items-center justify-center gap-2.5 rounded-xl px-5 py-4 text-[15px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <Sparkles size={18} /> Згенерувати AI кошторис
+              {controller.isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
+              {controller.isAnalyzing ? "Аналізуємо файли…" : "Згенерувати AI кошторис"}
             </button>
             <button
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold transition hover:brightness-110"
+              disabled={!filesReady}
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold transition hover:brightness-110 disabled:opacity-50"
               style={{ backgroundColor: T.panel, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}
             >
               <Eye size={16} /> Попередній перегляд
@@ -345,8 +528,7 @@ export function SetupDesktop() {
             </div>
           </div>
 
-          {/* Next steps */}
-          <SectionCard>
+          <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
             <div className="mb-3 text-[13px] font-semibold" style={{ color: T.textPrimary }}>
               Що відбудеться після генерації
             </div>
@@ -355,7 +537,7 @@ export function SetupDesktop() {
               <NextStep n="2" title="Поетапна генерація" meta="Секції створюються паралельно" />
               <NextStep n="3" title="Верифікація" meta="Інженерна перевірка та оцінка впевненості" />
             </div>
-          </SectionCard>
+          </div>
         </aside>
       </section>
     </div>
@@ -364,10 +546,7 @@ export function SetupDesktop() {
 
 function ExpectCell({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className="flex flex-1 flex-col gap-0.5 rounded-lg px-3 py-2.5"
-      style={{ backgroundColor: T.panel }}
-    >
+    <div className="flex flex-1 flex-col gap-0.5 rounded-lg px-3 py-2.5" style={{ backgroundColor: T.panel }}>
       <span className="text-[10px]" style={{ color: T.textMuted }}>
         {label}
       </span>
@@ -382,7 +561,7 @@ function NextStep({ n, title, meta }: { n: string; title: string; meta: string }
   return (
     <div className="flex items-start gap-2.5">
       <div
-        className="flex h-5.5 w-5.5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+        className="flex flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
         style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, width: 22, height: 22 }}
       >
         {n}
