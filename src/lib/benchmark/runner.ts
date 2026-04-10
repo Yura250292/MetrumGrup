@@ -69,7 +69,10 @@ function normalizeAiJson(json: any): NormalisedSnapshot {
       total += itemTotal;
       itemCount++;
       if (item.priceSource) pricedCount++;
-      if (Number(item.confidence ?? 1) < 0.75) lowConf++;
+      // Treat null/undefined confidence as "unknown", not "low".
+      if (item.confidence !== null && item.confidence !== undefined) {
+        if (Number(item.confidence) < 0.75) lowConf++;
+      }
       materials += qty * price;
       labor += labourCost;
     }
