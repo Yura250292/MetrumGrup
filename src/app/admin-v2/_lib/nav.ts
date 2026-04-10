@@ -39,41 +39,41 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true },
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
-      { href: "/admin/projects/dashboard", label: "Огляд проєктів", icon: Table },
+      { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
+      // Chat is too complex to redesign in v2 — keep legacy link
       { href: "/admin/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
-      { href: "/admin/feed", label: "Стрічка", icon: Activity },
+      { href: "/admin-v2/feed", label: "Стрічка", icon: Activity },
     ],
   },
   {
     label: "Фінанси",
     items: [
-      // AI generator already redesigned — point straight to v2
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
-      { href: "/admin/materials", label: "Матеріали та ціни", icon: Package },
+      { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
     ],
   },
   {
     label: "Ресурси",
     items: [
-      { href: "/admin/resources/equipment", label: "Техніка", icon: Truck },
-      { href: "/admin/resources/warehouse", label: "Склад", icon: Warehouse },
-      { href: "/admin/resources/workers", label: "Бригади", icon: HardHat },
+      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck },
+      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse },
+      { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat },
     ],
   },
   {
     label: "Контент",
     items: [
-      { href: "/admin/cms/portfolio", label: "Портфоліо", icon: Globe },
-      { href: "/admin/cms/news", label: "Новини", icon: Globe },
+      { href: "/admin-v2/cms/portfolio", label: "Портфоліо", icon: Globe },
+      { href: "/admin-v2/cms/news", label: "Новини", icon: Globe },
     ],
   },
   {
     label: "Система",
     items: [
-      { href: "/admin/users", label: "Користувачі", icon: Users, superAdminOnly: true },
-      { href: "/admin/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
+      { href: "/admin-v2/users", label: "Користувачі", icon: Users, superAdminOnly: true },
+      { href: "/admin-v2/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
     ],
   },
 ];
@@ -90,8 +90,18 @@ export const MOBILE_NAV: NavItem[] = [
 export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2": "Дашборд",
   "/admin-v2/projects": "Проєкти",
+  "/admin-v2/projects/dashboard": "Огляд проєктів",
   "/admin-v2/clients": "Клієнти",
   "/admin-v2/estimates": "Кошториси",
+  "/admin-v2/materials": "Матеріали та ціни",
+  "/admin-v2/resources/equipment": "Техніка",
+  "/admin-v2/resources/warehouse": "Склад",
+  "/admin-v2/resources/workers": "Бригади",
+  "/admin-v2/cms/portfolio": "Портфоліо",
+  "/admin-v2/cms/news": "Новини",
+  "/admin-v2/users": "Користувачі",
+  "/admin-v2/settings": "Налаштування",
+  "/admin-v2/feed": "Стрічка",
   "/admin": "Дашборд",
   "/admin/projects": "Проєкти",
   "/admin/projects/new": "Новий проєкт",
