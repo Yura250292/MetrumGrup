@@ -110,6 +110,21 @@ export async function runBenchmark(
     }
   }
 
+  // 2b. Sanity check: wizardData.totalArea must match verifiedFacts.totalAreaM2.
+  // This catches cases where someone updates the wizard hint without re-reading
+  // the PDF, which would silently feed wrong inputs to the AI generator.
+  if (testCase.verifiedFacts?.totalAreaM2 && testCase.wizardData.totalArea) {
+    const verified = testCase.verifiedFacts.totalAreaM2;
+    const wizard = testCase.wizardData.totalArea;
+    const diff = Math.abs(wizard - verified) / verified;
+    if (diff > 0.05) {
+      warnings.push(
+        `wizardData.totalArea (${wizard} m²) disagrees with verifiedFacts ` +
+        `(${verified} m²) by ${(diff * 100).toFixed(1)}% — re-check the PDF`
+      );
+    }
+  }
+
   // 3. Obtain AI snapshot (if any).
   let aiSnapshot: NormalisedSnapshot | null = null;
   if (options.aiEstimateJsonPath) {

@@ -46,6 +46,15 @@ const args = process.argv.slice(2).reduce<Record<string, string | true>>((acc, a
       const result = await runBenchmark(c, { aiEstimateJsonPath: aiPath });
       results.push(result);
 
+      if (c.verifiedFacts) {
+        const f = c.verifiedFacts;
+        console.log('Verified facts (from PDF):');
+        console.log(`  area         ${f.totalAreaM2} m²` + (f.ceilingHeightMm ? `, height ${f.ceilingHeightMm} mm` : ''));
+        if (f.roomCount !== undefined) console.log(`  rooms        ${f.roomCount}` + (f.bathroomCount !== undefined ? ` (incl. ${f.bathroomCount} bathroom)` : ''));
+        if (f.designStudio) console.log(`  studio       ${f.designStudio}`);
+        if (f.demolitionRequired !== undefined) console.log(`  demolition   ${f.demolitionRequired ? 'yes' : 'no'}`);
+      }
+
       console.log('Reference:');
       console.log(`  format       ${result.reference.format}`);
       console.log(`  grand total  ${result.reference.grandTotal.toLocaleString('uk-UA')} ₴`);
