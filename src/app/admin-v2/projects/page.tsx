@@ -44,7 +44,7 @@ export default async function AdminV2ProjectsPage() {
           </p>
         </div>
         <Link
-          href="/admin/projects/new"
+          href="/admin-v2/projects/new"
           className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
           style={{ backgroundColor: T.accentPrimary }}
         >
@@ -243,7 +243,7 @@ function EmptyState() {
         Створіть перший проєкт, щоб почати роботу
       </span>
       <Link
-        href="/admin/projects/new"
+        href="/admin-v2/projects/new"
         className="mt-2 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white"
         style={{ backgroundColor: T.accentPrimary }}
       >

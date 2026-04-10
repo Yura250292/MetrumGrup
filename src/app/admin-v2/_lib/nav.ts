@@ -90,9 +90,11 @@ export const MOBILE_NAV: NavItem[] = [
 export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2": "Дашборд",
   "/admin-v2/projects": "Проєкти",
+  "/admin-v2/projects/new": "Новий проєкт",
   "/admin-v2/projects/dashboard": "Огляд проєктів",
   "/admin-v2/clients": "Клієнти",
   "/admin-v2/estimates": "Кошториси",
+  "/admin-v2/estimates/new": "Новий кошторис",
   // Dynamic [id] segments — handled by header fallback
   "/admin-v2/materials": "Матеріали та ціни",
   "/admin-v2/resources/equipment": "Техніка",

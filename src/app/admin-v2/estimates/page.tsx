@@ -71,7 +71,7 @@ export default async function AdminV2EstimatesPage() {
             <Sparkles size={16} /> AI генератор
           </Link>
           <Link
-            href="/admin/estimates/new"
+            href="/admin-v2/estimates/new"
             className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition hover:brightness-125"
             style={{
               backgroundColor: T.panelElevated,
@@ -270,7 +270,7 @@ function EmptyState() {
           <Sparkles size={16} /> AI генератор
         </Link>
         <Link
-          href="/admin/estimates/new"
+          href="/admin-v2/estimates/new"
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
           style={{
             backgroundColor: T.panelElevated,
