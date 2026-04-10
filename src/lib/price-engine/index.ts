@@ -46,39 +46,6 @@ const DEFAULT_PROVIDERS: PriceProvider[] = [
   llmFallbackProvider,
 ];
 
-/** Per-provider timeout. Catalog/scrape are instant, prozorro is ~100ms,
- *  llm is 1-3s in the happy case but can hang on Gemini overload. 8s ceiling
- *  per provider × 4 providers = 32s worst case per item, vs the unbounded
- *  multi-minute hangs we used to see. */
-const PROVIDER_TIMEOUT_MS = 8_000;
-
-/** Wrap a provider call so a hung Gemini doesn't block the whole pricing pass. */
-async function callWithTimeout(
-  provider: PriceProvider,
-  query: PriceQuery
-): Promise<PriceResult | null> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      provider.lookup(query),
-      new Promise<null>((resolve) => {
-        timer = setTimeout(() => {
-          console.warn(
-            `[price-engine] timeout (${PROVIDER_TIMEOUT_MS}ms): ${provider.name} ` +
-            `for "${query.description}"`
-          );
-          resolve(null);
-        }, PROVIDER_TIMEOUT_MS);
-      }),
-    ]);
-  } catch (e) {
-    console.warn(`[price-engine] provider ${provider.name} threw:`, e);
-    return null;
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
 export async function lookupPrice(
   query: PriceQuery,
   options: PriceEngineOptions = {}
@@ -89,7 +56,13 @@ export async function lookupPrice(
   let best: PriceResult | null = null;
 
   for (const provider of providers) {
-    const result = await callWithTimeout(provider, query);
+    let result: PriceResult | null = null;
+    try {
+      result = await provider.lookup(query);
+    } catch (e) {
+      console.warn(`[price-engine] provider ${provider.name} threw:`, e);
+      continue;
+    }
     if (!result) continue;
 
     if (!best || result.confidence > best.confidence) {
