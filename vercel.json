@@ -1,5 +1,5 @@
 {
-  "buildCommand": "prisma generate && next build",
+  "buildCommand": "(prisma migrate deploy || echo '⚠ migrate deploy failed, continuing with build') && prisma generate && next build",
   "framework": "nextjs",
   "regions": ["fra1"],
   "functions": {
