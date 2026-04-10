@@ -3982,6 +3982,10 @@ export default function AIEstimatePage() {
           itemType: item.itemType,
           engineKey: item.engineKey,
           quantityFormula: item.quantityFormula,
+          // 🆕 Price engine metadata (Stage 8 backend prep) — pass-through.
+          priceSource: item.priceSource,
+          priceSourceType: item.priceSourceType,
+          confidence: item.confidence,
         })),
       }));
 

@@ -10,6 +10,7 @@ import { parsePDF } from "@/lib/pdf-helper";
 import { EstimateOrchestrator, GenerationMode } from "@/lib/agents/orchestrator";
 import { vectorizeProject, isProjectVectorized } from "@/lib/rag/vectorizer";
 import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
+import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -368,7 +369,9 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Перерахувати загальну суму кошторису після створення всіх items
+          // 7.3 Summary reconciliation: server is the source of truth for
+          // totalAmount/totalMaterials/totalLabor/finalAmount.
+          await recomputeEstimateTotals(estimate.id);
           const finalEstimate = await prisma.estimate.findUnique({
             where: { id: estimate.id },
             include: {
@@ -383,19 +386,7 @@ export async function POST(request: NextRequest) {
               }
             }
           });
-
-          const actualTotalAmount = finalEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
-
-          // Оновити totalAmount якщо відрізняється
-          if (actualTotalAmount !== Number(estimate.totalAmount)) {
-            await prisma.estimate.update({
-              where: { id: estimate.id },
-              data: {
-                totalAmount: actualTotalAmount,
-                finalAmount: actualTotalAmount
-              }
-            });
-          }
+          const actualTotalAmount = Number(finalEstimate?.totalAmount ?? 0);
 
           sendUpdate({
             phase: 'final',
@@ -634,24 +625,14 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Перерахувати загальну суму кошторису після створення всіх items
+        // 7.3 Summary reconciliation: server is the source of truth.
+        await recomputeEstimateTotals(estimate.id);
         const finalEstimate = await prisma.estimate.findUnique({
           where: { id: estimate.id },
           include: { items: true, sections: true }
         });
 
-        const actualTotalAmount = finalEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
-
-        // Оновити totalAmount якщо відрізняється
-        if (actualTotalAmount !== Number(estimate.totalAmount)) {
-          await prisma.estimate.update({
-            where: { id: estimate.id },
-            data: {
-              totalAmount: actualTotalAmount,
-              finalAmount: actualTotalAmount
-            }
-          });
-        }
+        const actualTotalAmount = Number(finalEstimate?.totalAmount ?? 0);
 
         sendUpdate({
           phase: 'final',

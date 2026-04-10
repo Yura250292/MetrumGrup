@@ -24,6 +24,10 @@ export type AiItem = {
   itemType?: 'material' | 'labor' | 'equipment' | 'composite' | string;
   engineKey?: string;
   quantityFormula?: string;
+  // Price engine metadata (Stage 8 backend prep). When present, persisted to DB.
+  priceSource?: string;
+  priceSourceType?: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual' | string;
+  confidence?: number | string;
 };
 
 export type NormalizedItem = {
@@ -37,6 +41,9 @@ export type NormalizedItem = {
   itemType?: string | null;
   engineKey?: string | null;
   quantityFormula?: string | null;
+  priceSource?: string | null;
+  priceSourceType?: string | null;
+  confidence?: number | null;
 };
 
 export class InvalidAiItemError extends Error {
@@ -93,6 +100,10 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     );
   }
 
+  const confidence = item.confidence !== undefined && item.confidence !== null
+    ? Math.max(0, Math.min(1, Number(item.confidence)))
+    : null;
+
   return {
     description,
     quantity,
@@ -104,6 +115,9 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     itemType: item.itemType ? String(item.itemType) : null,
     engineKey: item.engineKey ? String(item.engineKey) : null,
     quantityFormula: item.quantityFormula ? String(item.quantityFormula) : null,
+    priceSource: item.priceSource ? String(item.priceSource) : null,
+    priceSourceType: item.priceSourceType ? String(item.priceSourceType) : null,
+    confidence: confidence !== null && Number.isFinite(confidence) ? confidence : null,
   };
 }
 

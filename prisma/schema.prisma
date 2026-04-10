@@ -192,6 +192,13 @@ model EstimateItem {
   engineKey           String?
   // quantityFormula: human-readable trace of the formula that produced quantity.
   quantityFormula     String?
+  // Price engine metadata (Stage 8 backend prep).
+  // priceSource: human-readable source label, e.g. "Внутрішній каталог (Епіцентр)".
+  priceSource         String?
+  // priceSourceType: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual' | null.
+  priceSourceType     String?
+  // confidence: 0..1, weighted by source priority.
+  confidence          Decimal?         @db.Decimal(4, 3)
   estimateId          String
   sectionId           String?
   materialId          String?
@@ -204,6 +211,7 @@ model EstimateItem {
   section             EstimateSection? @relation(fields: [sectionId], references: [id])
 
   @@index([engineKey])
+  @@index([confidence])
   @@map("estimate_items")
 }
 

@@ -137,6 +137,9 @@ export function mergeEngineAndLlm(
       confidence: Number(item.confidence ?? 0.5),
       notes: item.notes,
       prozorroReferences: item.prozorroReferences,
+      // Net-new LLM items get the 'llm' source type so the UI can show
+      // a "needs review" badge until something more authoritative replaces them.
+      priceSourceType: item.priceSourceType ?? 'llm',
     });
   }
 

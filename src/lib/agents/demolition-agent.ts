@@ -81,8 +81,8 @@ export class DemolitionAgent extends BaseAgent {
       const responseText = result.response.text();
       let output: AgentOutput = JSON.parse(responseText);
 
-      // Збагатити цінами
-      output = await this.enrichWithPrices(output);
+      // Збагатити цінами через price engine (Stage 4)
+      output = await this.enrichWithPriceEngine(output);
 
       // Валідація
       const validationErrors = this.validateOutput(output);
@@ -109,37 +109,4 @@ export class DemolitionAgent extends BaseAgent {
     }
   }
 
-  private async enrichWithPrices(output: AgentOutput): Promise<AgentOutput> {
-    const enrichedItems = [];
-
-    for (const item of output.items) {
-      let enrichedItem = { ...item };
-
-      if (!item.priceSource || item.confidence < 0.7) {
-        const priceResult = await this.searchPrice(item.description, item.unit);
-
-        if (priceResult.confidence > item.confidence) {
-          enrichedItem.unitPrice = priceResult.price;
-          enrichedItem.priceSource = priceResult.source;
-          enrichedItem.confidence = priceResult.confidence;
-          enrichedItem.totalCost = enrichedItem.quantity * enrichedItem.unitPrice + enrichedItem.laborCost;
-
-          console.log(
-            `  📊 Updated price for "${item.description}": ` +
-            `${item.unitPrice} → ${priceResult.price} ₴ (${priceResult.source})`
-          );
-        }
-      }
-
-      enrichedItems.push(enrichedItem);
-    }
-
-    const newTotal = enrichedItems.reduce((sum, item) => sum + item.totalCost, 0);
-
-    return {
-      ...output,
-      items: enrichedItems,
-      totalCost: newTotal
-    };
-  }
 }

@@ -20,6 +20,7 @@ import { vectorizeProject } from "@/lib/rag/vectorizer";
 import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
 import { detectImpactedCategories, isSectionImpacted } from "@/lib/refine/section-detector";
 import { computeEstimateDiff, type DiffItem } from "@/lib/refine/diff";
+import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -402,7 +403,8 @@ ${additionalInfo}
           `Δamount: ${refineDiff.totals.deltaAmount.toFixed(0)} ₴`
         );
 
-        // Перерахувати загальну суму кошторису
+        // 7.3 Summary reconciliation: server is the source of truth.
+        await recomputeEstimateTotals(refinedEstimate.id);
         const updatedEstimate = await prisma.estimate.findUnique({
           where: { id: refinedEstimate.id },
           include: {
@@ -410,17 +412,7 @@ ${additionalInfo}
             items: true
           }
         });
-
-        const totalAmount = updatedEstimate?.items.reduce((sum, item) => sum + Number(item.amount), 0) || 0;
-
-        // Оновити totalAmount кошторису
-        await prisma.estimate.update({
-          where: { id: refinedEstimate.id },
-          data: {
-            totalAmount: totalAmount,
-            finalAmount: totalAmount
-          }
-        });
+        const totalAmount = Number(updatedEstimate?.totalAmount ?? 0);
 
         sendUpdate({
           phase: 'final',

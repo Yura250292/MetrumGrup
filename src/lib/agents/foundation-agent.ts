@@ -129,45 +129,4 @@ export class FoundationAgent extends BaseAgent {
     }
   }
 
-  /**
-   * Збагатити позиції актуальними цінами через Google Search
-   */
-  private async enrichWithPrices(output: AgentOutput): Promise<AgentOutput> {
-    const enrichedItems = [];
-
-    for (const item of output.items) {
-      let enrichedItem = { ...item };
-
-      // Якщо ціна вигадана або з низькою впевненістю
-      if (!item.priceSource || item.confidence < 0.7) {
-        // Шукаємо актуальну ціну
-        const priceResult = await this.searchPrice(item.description, item.unit);
-
-        if (priceResult.confidence > item.confidence) {
-          enrichedItem.unitPrice = priceResult.price;
-          enrichedItem.priceSource = priceResult.source;
-          enrichedItem.confidence = priceResult.confidence;
-
-          // Перерахувати totalCost
-          enrichedItem.totalCost = enrichedItem.quantity * enrichedItem.unitPrice + enrichedItem.laborCost;
-
-          console.log(
-            `  📊 Updated price for "${item.description}": ` +
-            `${item.unitPrice} → ${priceResult.price} ₴ (${priceResult.source}, conf: ${priceResult.confidence.toFixed(2)})`
-          );
-        }
-      }
-
-      enrichedItems.push(enrichedItem);
-    }
-
-    // Перерахувати загальну суму
-    const newTotal = enrichedItems.reduce((sum, item) => sum + item.totalCost, 0);
-
-    return {
-      ...output,
-      items: enrichedItems,
-      totalCost: newTotal
-    };
-  }
 }

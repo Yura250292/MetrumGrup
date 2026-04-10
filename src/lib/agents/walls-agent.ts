@@ -120,32 +120,4 @@ export class WallsAgent extends BaseAgent {
     }
   }
 
-  private async enrichWithPrices(output: AgentOutput): Promise<AgentOutput> {
-    const enrichedItems = [];
-
-    for (const item of output.items) {
-      let enrichedItem = { ...item };
-
-      if (!item.priceSource || item.confidence < 0.7) {
-        const priceResult = await this.searchPrice(item.description, item.unit);
-
-        if (priceResult.confidence > item.confidence) {
-          enrichedItem.unitPrice = priceResult.price;
-          enrichedItem.priceSource = priceResult.source;
-          enrichedItem.confidence = priceResult.confidence;
-          enrichedItem.totalCost = enrichedItem.quantity * enrichedItem.unitPrice + enrichedItem.laborCost;
-        }
-      }
-
-      enrichedItems.push(enrichedItem);
-    }
-
-    const newTotal = enrichedItems.reduce((sum, item) => sum + item.totalCost, 0);
-
-    return {
-      ...output,
-      items: enrichedItems,
-      totalCost: newTotal
-    };
-  }
 }

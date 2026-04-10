@@ -51,6 +51,8 @@ export interface EstimateItem {
   itemType?: 'material' | 'labor' | 'equipment' | 'composite';
   engineKey?: string;
   quantityFormula?: string;
+  // 🆕 Price engine metadata (Stage 8 backend prep). Persisted to DB.
+  priceSourceType?: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual';
 }
 
 export interface EstimateSection {
@@ -140,6 +142,7 @@ export abstract class BaseAgent {
             laborCost: priceResult.laborCost ?? item.laborCost ?? 0,
             priceSource: priceResult.source,
             confidence: priceResult.confidence,
+            priceSourceType: priceResult.sourceType as EstimateItem['priceSourceType'],
           };
           updated.totalCost = updated.quantity * updated.unitPrice + (updated.laborCost ?? 0);
           enriched.push(updated);
