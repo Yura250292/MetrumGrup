@@ -31,33 +31,56 @@ export type ProjectWithAggregations = {
 export async function listProjectsWithAggregations(
   currentUserId: string
 ): Promise<ProjectWithAggregations[]> {
-  const [projects, commentCounts] = await Promise.all([
-    prisma.project.findMany({
-      orderBy: { updatedAt: "desc" },
+  // HOTFIX: production may not have project_members migration applied yet.
+  // If `members` include fails, fall back to a query without it. The team
+  // building logic below already has a chat-participants fallback path.
+  const baseInclude = {
+    client: { select: { name: true } },
+    manager: { select: { id: true, name: true, avatar: true, role: true } },
+    conversation: {
       include: {
-        client: { select: { name: true } },
-        manager: { select: { id: true, name: true, avatar: true, role: true } },
-        members: {
-          where: { isActive: true },
+        participants: {
           include: {
             user: {
               select: { id: true, name: true, avatar: true, role: true },
             },
           },
         },
-        conversation: {
-          include: {
-            participants: {
-              include: {
-                user: {
-                  select: { id: true, name: true, avatar: true, role: true },
-                },
+      },
+    },
+  };
+
+  const fetchProjects = async () => {
+    try {
+      return await prisma.project.findMany({
+        orderBy: { updatedAt: "desc" },
+        include: {
+          ...baseInclude,
+          members: {
+            where: { isActive: true },
+            include: {
+              user: {
+                select: { id: true, name: true, avatar: true, role: true },
               },
             },
           },
         },
-      },
-    }),
+      });
+    } catch (err) {
+      console.warn(
+        "[aggregations] members include failed, falling back without ProjectMember:",
+        err
+      );
+      const projects = await prisma.project.findMany({
+        orderBy: { updatedAt: "desc" },
+        include: baseInclude,
+      });
+      return projects.map((p) => ({ ...p, members: [] as any[] }));
+    }
+  };
+
+  const [projects, commentCounts] = await Promise.all([
+    fetchProjects(),
     prisma.comment.groupBy({
       by: ["entityId"],
       where: { entityType: "PROJECT", deletedAt: null },
