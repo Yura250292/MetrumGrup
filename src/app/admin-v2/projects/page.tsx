@@ -1,28 +1,71 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { listProjectsWithAggregations } from "@/lib/projects/aggregations";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { PROJECT_STATUS_LABELS, STAGE_LABELS } from "@/lib/constants";
 import {
   FolderKanban,
   Plus,
-  ArrowRight,
   MapPin,
-  MessageSquare,
-  MessagesSquare,
-  Wallet,
+  Users,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  FileCheck,
+  Building2,
 } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 export const dynamic = "force-dynamic";
 
+type ExtraInfo = {
+  estimatesCount: number;
+  hasApprovedEstimate: boolean;
+  expectedEndDate: Date | null;
+  coverImage: string | null;
+};
+
 export default async function AdminV2ProjectsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  // 1) Reuse existing aggregations (team / status / progress / budget / address)
   const projects = await listProjectsWithAggregations(session.user.id);
+
+  // 2) Extra fields not in aggregations: estimates count + approved flag + end date + cover photo
+  const extrasMap = new Map<string, ExtraInfo>();
+  if (projects.length > 0) {
+    const ids = projects.map((p) => p.id);
+    const extras = await prisma.project.findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        expectedEndDate: true,
+        estimates: {
+          select: { id: true, status: true },
+        },
+        photoReports: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          include: { images: { take: 1, select: { url: true } } },
+        },
+      },
+    });
+    for (const e of extras) {
+      const approved = e.estimates.some(
+        (es) => es.status === "APPROVED" || es.status === "FINANCE_REVIEW"
+      );
+      extrasMap.set(e.id, {
+        estimatesCount: e.estimates.length,
+        hasApprovedEstimate: approved,
+        expectedEndDate: e.expectedEndDate,
+        coverImage: e.photoReports[0]?.images[0]?.url ?? null,
+      });
+    }
+  }
 
   const totalBudget = projects.reduce((sum, p) => sum + p.totalBudget, 0);
   const totalPaid = projects.reduce((sum, p) => sum + p.totalPaid, 0);
@@ -69,109 +112,218 @@ export default async function AdminV2ProjectsPage() {
         />
       </section>
 
-      {/* List */}
-      <section className="flex flex-col gap-3">
-        {projects.length === 0 ? (
-          <EmptyState />
-        ) : (
-          projects.map((project) => {
-            const paidPercent =
-              project.totalBudget > 0
-                ? Math.min(100, Math.round((project.totalPaid / project.totalBudget) * 100))
-                : 0;
-
+      {/* Card grid */}
+      {projects.length === 0 ? (
+        <EmptyState />
+      ) : (
+        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+          {projects.map((project) => {
+            const extra = extrasMap.get(project.id) ?? {
+              estimatesCount: 0,
+              hasApprovedEstimate: false,
+              expectedEndDate: null,
+              coverImage: null,
+            };
             return (
-              <Link
+              <ProjectCard
                 key={project.id}
-                href={`/admin-v2/projects/${project.id}`}
-                className="flex flex-col gap-4 rounded-2xl p-6 transition hover:brightness-125"
-                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-              >
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="flex flex-1 flex-col gap-1.5 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-base font-bold truncate" style={{ color: T.textPrimary }}>
-                        {project.title}
-                      </span>
-                      <StatusBadge status={project.status} />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-[12px]" style={{ color: T.textMuted }}>
-                      <span className="font-medium" style={{ color: T.textSecondary }}>
-                        {project.client.name}
-                      </span>
-                      {project.manager && (
-                        <>
-                          <span>·</span>
-                          <span>Менеджер: {project.manager.name}</span>
-                        </>
-                      )}
-                      {project.address && (
-                        <>
-                          <span>·</span>
-                          <span className="flex items-center gap-1 truncate">
-                            <MapPin size={12} /> {project.address}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <ArrowRight size={18} style={{ color: T.textMuted }} className="flex-shrink-0 mt-1" />
-                </div>
-
-                {/* Stage progress */}
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span style={{ color: T.textMuted }}>
-                      Етап:{" "}
-                      <span style={{ color: T.textSecondary }}>{STAGE_LABELS[project.currentStage]}</span>
-                    </span>
-                    <span className="font-bold" style={{ color: T.accentPrimary }}>
-                      {project.stageProgress}%
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: T.panelSoft }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${project.stageProgress}%`, backgroundColor: T.accentPrimary }}
-                    />
-                  </div>
-                </div>
-
-                {/* Footer row: budget + activity */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                  <div className="flex items-center gap-3 text-[11px]" style={{ color: T.textMuted }}>
-                    <span className="flex items-center gap-1.5">
-                      <Wallet size={13} style={{ color: T.success }} />
-                      <span style={{ color: T.textSecondary }}>{formatCurrency(project.totalPaid)}</span>
-                      <span>/</span>
-                      <span>{formatCurrency(project.totalBudget)}</span>
-                      <span className="font-bold" style={{ color: T.success }}>
-                        ({paidPercent}%)
-                      </span>
-                    </span>
-                    {project.commentCount > 0 && (
-                      <span className="flex items-center gap-1">
-                        <MessagesSquare size={12} /> {project.commentCount}
-                      </span>
-                    )}
-                    {project.unreadChatCount > 0 && (
-                      <span className="flex items-center gap-1 font-bold" style={{ color: T.accentPrimary }}>
-                        <MessageSquare size={12} /> {project.unreadChatCount} нових
-                      </span>
-                    )}
-                  </div>
-                  {project.startDate && (
-                    <span className="text-[11px]" style={{ color: T.textMuted }}>
-                      Старт: {formatDateShort(project.startDate)}
-                    </span>
-                  )}
-                </div>
-              </Link>
+                project={project}
+                extra={extra}
+              />
             );
-          })
-        )}
-      </section>
+          })}
+        </section>
+      )}
     </div>
+  );
+}
+
+/* -------------------- Card -------------------- */
+
+function ProjectCard({
+  project,
+  extra,
+}: {
+  project: Awaited<ReturnType<typeof listProjectsWithAggregations>>[number];
+  extra: ExtraInfo;
+}) {
+  const teamCount = project.team.length;
+  const isActive = project.status === "ACTIVE";
+  const isDraft = project.status === "DRAFT";
+
+  return (
+    <Link
+      href={`/admin-v2/projects/${project.id}`}
+      className="group flex flex-col overflow-hidden rounded-2xl transition hover:brightness-110"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      {/* Cover image / placeholder */}
+      <div
+        className="relative aspect-[16/9] flex items-center justify-center overflow-hidden"
+        style={{ backgroundColor: T.panelElevated }}
+      >
+        {extra.coverImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={extra.coverImage}
+            alt={project.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <Building2 size={56} style={{ color: T.borderStrong }} />
+          </div>
+        )}
+        {/* Status pill in top-right corner */}
+        <div className="absolute top-3 right-3">
+          <StatusBadge status={project.status} />
+        </div>
+        {/* Title overlay at bottom */}
+        <div
+          className="absolute bottom-0 left-0 right-0 p-4"
+          style={{
+            background: `linear-gradient(to top, ${T.panel}f0 0%, ${T.panel}90 50%, transparent 100%)`,
+          }}
+        >
+          <h3
+            className="text-base font-bold leading-tight line-clamp-2"
+            style={{ color: T.textPrimary }}
+          >
+            {project.title}
+          </h3>
+        </div>
+      </div>
+
+      {/* Card body */}
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        {/* Status checks row */}
+        <div className="flex flex-wrap gap-2">
+          <CheckChip
+            icon={isActive ? CheckCircle2 : Clock}
+            label={isActive ? "Активний" : isDraft ? "Чернетка" : PROJECT_STATUS_LABELS[project.status]}
+            tone={isActive ? "success" : isDraft ? "warning" : "muted"}
+          />
+          <CheckChip
+            icon={extra.hasApprovedEstimate ? CheckCircle2 : FileCheck}
+            label={
+              extra.hasApprovedEstimate
+                ? "Кошторис затверджено"
+                : extra.estimatesCount > 0
+                  ? `${extra.estimatesCount} кошторисів`
+                  : "Без кошторису"
+            }
+            tone={
+              extra.hasApprovedEstimate
+                ? "success"
+                : extra.estimatesCount > 0
+                  ? "warning"
+                  : "muted"
+            }
+          />
+        </div>
+
+        {/* Address */}
+        {project.address && (
+          <div className="flex items-start gap-2">
+            <MapPin size={14} style={{ color: T.textMuted }} className="mt-0.5 flex-shrink-0" />
+            <span className="text-[12px] leading-snug line-clamp-2" style={{ color: T.textSecondary }}>
+              {project.address}
+            </span>
+          </div>
+        )}
+
+        {/* Stage progress */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span style={{ color: T.textMuted }}>
+              {STAGE_LABELS[project.currentStage]}
+            </span>
+            <span className="font-bold" style={{ color: T.accentPrimary }}>
+              {project.stageProgress}%
+            </span>
+          </div>
+          <div
+            className="h-2 w-full overflow-hidden rounded-full"
+            style={{ backgroundColor: T.panelSoft }}
+          >
+            <div
+              className="h-full rounded-full transition-all"
+              style={{
+                width: `${project.stageProgress}%`,
+                backgroundColor:
+                  project.stageProgress >= 80
+                    ? T.success
+                    : project.stageProgress >= 30
+                      ? T.accentPrimary
+                      : T.warning,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Footer: people + dates */}
+        <div
+          className="flex items-center justify-between gap-2 pt-2 border-t"
+          style={{ borderColor: T.borderSoft }}
+        >
+          {/* People */}
+          <div className="flex items-center gap-1.5">
+            <div
+              className="flex h-6 w-6 items-center justify-center rounded-full"
+              style={{ backgroundColor: T.accentPrimarySoft }}
+            >
+              <Users size={11} style={{ color: T.accentPrimary }} />
+            </div>
+            <span className="text-[11px] font-semibold" style={{ color: T.textSecondary }}>
+              {teamCount} {teamCount === 1 ? "учасник" : "учасників"}
+            </span>
+          </div>
+
+          {/* Dates */}
+          {(project.startDate || extra.expectedEndDate) && (
+            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textMuted }}>
+              <Calendar size={11} />
+              <span>
+                {project.startDate ? formatDateShort(project.startDate) : "—"}
+                {" — "}
+                {extra.expectedEndDate ? formatDateShort(extra.expectedEndDate) : "—"}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  );
+}
+
+/* -------------------- Atoms -------------------- */
+
+function CheckChip({
+  icon: Icon,
+  label,
+  tone,
+}: {
+  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+  label: string;
+  tone: "success" | "warning" | "muted";
+}) {
+  const colors: Record<typeof tone, { bg: string; fg: string }> = {
+    success: { bg: T.successSoft, fg: T.success },
+    warning: { bg: T.warningSoft, fg: T.warning },
+    muted: { bg: T.panelElevated, fg: T.textMuted },
+  };
+  const c = colors[tone];
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold"
+      style={{ backgroundColor: c.bg, color: c.fg }}
+    >
+      <Icon size={11} style={{ color: c.fg }} />
+      {label}
+    </span>
   );
 }
 
@@ -216,8 +368,12 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
   const c = colors[status] ?? colors.DRAFT;
   return (
     <span
-      className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0"
-      style={{ backgroundColor: c.bg, color: c.fg }}
+      className="rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wide"
+      style={{
+        backgroundColor: c.bg,
+        color: c.fg,
+        boxShadow: `0 2px 8px rgba(0,0,0,0.4)`,
+      }}
     >
       {label}
     </span>
