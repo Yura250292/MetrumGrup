@@ -30,7 +30,9 @@ const nextConfig: NextConfig = {
       // Clients
       { source: "/admin/clients", destination: "/admin-v2/clients", permanent: false },
 
-      // Estimates (NOTE: /admin/estimates/ai-generate stays — it has its own /ai-estimate-v2 route)
+      // Estimates — order matters! Specific paths first, dynamic :id last.
+      // AI generator legacy URL → v2 prototype (must come before :id catch-all)
+      { source: "/admin/estimates/ai-generate", destination: "/ai-estimate-v2", permanent: false },
       { source: "/admin/estimates", destination: "/admin-v2/estimates", permanent: false },
       { source: "/admin/estimates/new", destination: "/admin-v2/estimates/new", permanent: false },
       { source: "/admin/estimates/:id", destination: "/admin-v2/estimates/:id", permanent: false },
@@ -53,9 +55,6 @@ const nextConfig: NextConfig = {
 
       // Feed
       { source: "/admin/feed", destination: "/admin-v2/feed", permanent: false },
-
-      // AI Estimate generator legacy URL → v2 prototype
-      { source: "/admin/estimates/ai-generate", destination: "/ai-estimate-v2", permanent: false },
 
       // NOT redirected (legacy stays as fallback — no v2 equivalent yet):
       // - /admin/chat/*               (chat redesign deferred)
