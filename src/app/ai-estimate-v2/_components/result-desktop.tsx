@@ -33,9 +33,13 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
   const sectionCount = estimate.sections.length;
   const itemCount = estimate.sections.reduce((sum, s) => sum + s.items.length, 0);
   const verifyScore = verification?.overallScore;
+  const verifyStatus = (verification as any)?.status as string | undefined;
+  const verifyUnavailable = verifyStatus === "unavailable";
   const issues: VerificationIssue[] = verification?.issues ?? [];
   const lowConfIssues = issues.filter((i) => (i.severity ?? "").toLowerCase().includes("warn"));
-  const criticalIssues = issues.filter((i) => (i.severity ?? "").toLowerCase().includes("crit"));
+  const criticalIssues = issues.filter(
+    (i) => (i.severity ?? "").toLowerCase().includes("crit") || (i.severity ?? "").toLowerCase() === "error"
+  );
 
   return (
     <div className="w-full max-w-[1440px]" style={{ backgroundColor: T.background, color: T.textPrimary }}>
@@ -220,6 +224,22 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
                 style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
               >
                 <Loader2 size={14} className="animate-spin" /> Аналізуємо кошторис…
+              </div>
+            ) : verifyUnavailable ? (
+              <div
+                className="rounded-lg px-3 py-2.5 text-xs leading-relaxed"
+                style={{ backgroundColor: T.warningSoft ?? T.panelSoft, color: T.warning ?? T.textMuted }}
+              >
+                ⚠ Автоматична верифікація недоступна — OpenAI повернув помилку
+                (можливо вичерпано квоту). Кошторис створено, але не перевірено.
+                Запустіть верифікацію ще раз пізніше або перевірте позиції вручну.
+              </div>
+            ) : !verification ? (
+              <div
+                className="rounded-lg px-3 py-2.5 text-xs"
+                style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+              >
+                Верифікація ще не запускалась
               </div>
             ) : criticalIssues.length === 0 && lowConfIssues.length === 0 ? (
               <div

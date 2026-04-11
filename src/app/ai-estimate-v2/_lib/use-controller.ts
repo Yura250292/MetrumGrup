@@ -257,9 +257,17 @@ export function useAiEstimateController() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ estimate: data }),
       });
-      if (!res.ok) return;
-      const result = await res.json();
-      setVerificationResult(result);
+      const result = await res.json().catch(() => null);
+      if (!res.ok || !result) return;
+
+      // Legacy API returns { verification: {...} }, while V2 UI expects the
+      // inner object directly.
+      const normalized =
+        result.verification && typeof result.verification === "object"
+          ? result.verification
+          : result;
+
+      setVerificationResult(normalized);
     } catch (err) {
       console.error("Verification error:", err);
     } finally {
@@ -320,8 +328,16 @@ export function useAiEstimateController() {
       }
 
       // wizardData (always include, merge projectNotes into specialRequirements)
+      const resolvedArea =
+        (wizardData as any)?.totalArea ||
+        (wizardData as any)?.area ||
+        area ||
+        "";
+
       const enrichedWizard = {
         ...wizardData,
+        totalArea: resolvedArea,
+        area: resolvedArea,
         specialRequirements: [
           (wizardData as any).specialRequirements,
           projectNotes.trim()
@@ -421,6 +437,15 @@ export function useAiEstimateController() {
                 } catch (err) {
                   console.error("Failed to fetch from DB:", err);
                 }
+              }
+
+              if (finalSections.length === 0) {
+                setError(
+                  update.message ||
+                    "Генерація завершилась без жодної валідної позиції. Перевір секції з помилками у progress."
+                );
+                setIsChunkedGenerating(false);
+                return;
               }
 
               const finalEstimate = recalculateSummary({
@@ -772,7 +797,26 @@ export function useAiEstimateController() {
           a.download = `koshtorys-metrum.${format === "excel" ? "xlsx" : "pdf"}`;
           a.click();
           URL.revokeObjectURL(url);
+        } else {
+          // Surface server error to the user instead of silently failing.
+          let detail = `HTTP ${res.status}`;
+          try {
+            const errBody = await res.json();
+            if (errBody?.message) detail += `: ${errBody.message}`;
+            else if (errBody?.error) detail += `: ${errBody.error}`;
+          } catch {
+            try {
+              const text = await res.text();
+              if (text) detail += `: ${text.slice(0, 200)}`;
+            } catch {}
+          }
+          console.error(`Export ${format} failed:`, detail);
+          setError(`Експорт ${format.toUpperCase()} не вдався — ${detail}`);
         }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Невідома помилка";
+        console.error(`Export ${format} threw:`, err);
+        setError(`Експорт ${format.toUpperCase()} впав з помилкою: ${msg}`);
       } finally {
         setExporting(null);
       }
