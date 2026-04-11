@@ -20,6 +20,12 @@ export function electricalRules(ctx: EngineRuleContext): EngineItem[] {
   const switches = facts.electrical?.switches?.value ?? 0;
   const lightPoints = facts.electrical?.lightPoints?.value ?? 0;
   const area = ctx.geometry.totalAreaM2;
+  const power = facts.electrical?.power?.value;
+  const capacityKw = facts.electrical?.capacityKw?.value ?? 0;
+  const needsConnection = facts.electrical?.needsConnection?.value ?? false;
+  const connectionDistanceM = facts.electrical?.connectionDistanceM?.value ?? 0;
+  const needsTransformer = facts.electrical?.needsTransformer?.value ?? false;
+  const outdoorLighting = facts.electrical?.outdoorLighting?.value ?? false;
 
   // 1. Підрозетники (outlets + switches + light point boxes)
   const boxes = outlets + switches + lightPoints;
@@ -140,6 +146,78 @@ export function electricalRules(ctx: EngineRuleContext): EngineItem[] {
       itemType: 'composite',
       formula: 'area * 12',
       inputs: { area },
+    });
+  }
+
+  // 10. Підведення електрики від мережі (для нових будівель)
+  if (needsConnection && connectionDistanceM > 0) {
+    const cableSize = power === 'three_phase' ? '4×16' : '3×16';
+    items.push({
+      canonicalKey: 'electrical.service_cable',
+      description: `Підвідний кабель ${cableSize} мм² (від стовпа до щита)`,
+      quantity: round(connectionDistanceM * 1.10),
+      unit: 'м',
+      itemType: 'material',
+      formula: 'connectionDistance × 1.10 запас',
+      inputs: { connectionDistanceM },
+    });
+    items.push({
+      canonicalKey: 'electrical.service_install_labor',
+      description: 'Робота: прокладання підвідного кабелю + підключення',
+      quantity: round(connectionDistanceM),
+      unit: 'м',
+      itemType: 'labor',
+    });
+    items.push({
+      canonicalKey: 'electrical.meter_box',
+      description: 'Електролічильник + бокс зовнішній на стовпі',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'material',
+    });
+  }
+
+  // 11. Трансформаторна підстанція (для великих об'єктів — комерції/виробництва)
+  if (needsTransformer) {
+    items.push({
+      canonicalKey: 'electrical.transformer',
+      description: 'Трансформаторна підстанція 10/0.4 кВ',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'equipment',
+    });
+  }
+
+  // 12. Підвищена потужність / трифазне підключення (більше кабелю + щит)
+  if (power === 'three_phase' && capacityKw > 0) {
+    const cableM = round(area * 0.5);
+    items.push({
+      canonicalKey: 'electrical.three_phase_cable',
+      description: `Кабель силовий 4×6 мм² (трифаза, ${capacityKw} кВт)`,
+      quantity: cableM,
+      unit: 'м',
+      itemType: 'material',
+      inputs: { area, capacityKw },
+    });
+  }
+
+  // 13. Зовнішнє освітлення
+  if (outdoorLighting && area > 0) {
+    const fixturesCount = Math.max(4, Math.ceil(area / 50));
+    items.push({
+      canonicalKey: 'electrical.outdoor_fixture',
+      description: 'Світильник вуличний LED 30W IP65',
+      quantity: fixturesCount,
+      unit: 'шт',
+      itemType: 'material',
+      formula: 'max(4, area/50)',
+    });
+    items.push({
+      canonicalKey: 'electrical.outdoor_cable',
+      description: 'Кабель зовнішній ВВГнгд 3×1.5 (зовнішнє освітлення)',
+      quantity: round(fixturesCount * 15),
+      unit: 'м',
+      itemType: 'material',
     });
   }
 

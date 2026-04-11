@@ -431,22 +431,47 @@ export class MasterEstimateAgent {
   }
 
   /**
-   * Вибрати які секції генерувати на основі wizard data
+   * Вибрати які секції генерувати на основі wizard data.
+   *
+   * Логіка:
+   * - renovation / finishing → ремонт без важких конструкцій
+   * - apartment / office → квартирний/офісний фронт без земляних/фундаменту/покрівлі
+   * - commercial без fireRating → можна пропустити протипожежну
+   * - house без extras (basement/attic/garage) → не додаємо окрему секцію (її і так немає)
    */
   private selectSections(context: AgentContext): SectionSpec[] {
     const wizardData = context.wizardData;
     const workScope = wizardData?.workScope;
     const objectType = wizardData?.objectType;
 
-    // Для ремонту/оздоблення — пропускаємо земляні/фундамент/стіни/покрівлю
+    let sections = [...BUILDING_SECTIONS];
+
+    // 1. Ремонт/оздоблення — без важких конструкцій
     if (workScope === 'renovation' || workScope === 'finishing') {
-      return BUILDING_SECTIONS.filter(s =>
+      sections = sections.filter(s =>
         !['Земляні роботи', 'Фундамент', 'Стіни та конструкції', 'Покрівля'].includes(s.title)
       );
     }
 
-    // Для нового будівництва — всі секції
-    return BUILDING_SECTIONS;
+    // 2. Квартира/офіс — апріорі не мають земляних/фундаменту/покрівлі
+    if (objectType === 'apartment' || objectType === 'office') {
+      sections = sections.filter(s =>
+        !['Земляні роботи', 'Фундамент', 'Покрівля'].includes(s.title)
+      );
+    }
+
+    // 3. Комерція без fireRating — пропускаємо протипожежну
+    if (objectType === 'commercial' && wizardData?.commercialData?.fireRating === false) {
+      sections = sections.filter(s => s.title !== 'Протипожежна система');
+    }
+
+    // 4. Не-комерція без явного fireRating → також без протипожежної
+    //    (для приватних будинків/квартир спринклерна система не потрібна)
+    if (objectType !== 'commercial') {
+      sections = sections.filter(s => s.title !== 'Протипожежна система');
+    }
+
+    return sections;
   }
 
   /**
@@ -659,22 +684,206 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
       prompt += '\n\n';
     }
 
-    // Wizard data
+    // Wizard data — детально, бо КОЖНЕ поле має впливати на кошторис
+    const wd = context.wizardData;
     prompt += `## ПАРАМЕТРИ ПРОЕКТУ\n`;
-    prompt += `- Площа: ${context.wizardData.totalArea} м²\n`;
-    prompt += `- Тип об'єкта: ${context.wizardData.objectType}\n`;
+    prompt += `- Тип об'єкта: ${wd.objectType}\n`;
+    prompt += `- Обсяг робіт: ${wd.workScope}\n`;
+    prompt += `- Площа: ${wd.totalArea} м²\n`;
+    if (wd.floors) prompt += `- Поверхів: ${wd.floors}\n`;
+    if (wd.ceilingHeight) prompt += `- Висота стелі: ${wd.ceilingHeight} м\n`;
+    if (wd.budgetRange) prompt += `- Бюджетний клас: ${wd.budgetRange}\n`;
 
-    if (context.wizardData.objectType === 'commercial') {
-      const cd = context.wizardData.commercialData;
-      if (cd?.purpose) prompt += `- Призначення: ${cd.purpose}\n`;
-      if (cd?.floors) prompt += `- Поверхів: ${cd.floors}\n`;
-      if (cd?.hvac) prompt += `- Холодильне обладнання: так\n`;
+    // 🏠 Будинок / таунхаус — повна геометрія + фундамент + стіни + дах
+    if ((wd.objectType === 'house' || wd.objectType === 'townhouse') && wd.houseData) {
+      const hd = wd.houseData;
+      prompt += `\n## ДАНІ ПРО БУДИНОК\n`;
+      prompt += `- Поточний стан: ${hd.currentState}\n`;
+      if (hd.demolitionRequired) {
+        prompt += `- Потрібен демонтаж: ${hd.demolitionDescription || 'так (опис не надано)'}\n`;
+      }
+      if (hd.terrain) {
+        prompt += `- Грунт: ${hd.terrain.soilType}, ґрунтові води: ${hd.terrain.groundwaterDepth}, рельєф: ${hd.terrain.slope}\n`;
+        if (hd.terrain.needsExcavation) prompt += `- Потрібні земляні роботи: так\n`;
+        if (hd.terrain.needsDrainage) prompt += `- Потрібен дренаж: так\n`;
+      }
+      if (hd.foundation) {
+        prompt += `- Фундамент: ${hd.foundation.type}, глибина ${hd.foundation.depth}м, ширина ${hd.foundation.width}м, армування: ${hd.foundation.reinforcement}\n`;
+        if (hd.foundation.waterproofing) prompt += `- Гідроізоляція фундаменту: так\n`;
+        if (hd.foundation.insulation) {
+          prompt += `- Утеплення фундаменту: ${hd.foundation.insulationThickness ?? 50}мм XPS\n`;
+        }
+      }
+      if (hd.walls) {
+        prompt += `- Стіни: ${hd.walls.material}, товщина ${hd.walls.thickness}мм\n`;
+        if (hd.walls.insulation) {
+          prompt += `- Утеплення стін: ${hd.walls.insulationType ?? 'mineral'} ${hd.walls.insulationThickness ?? 100}мм\n`;
+        }
+        prompt += `- Перегородки: ${hd.walls.partitionMaterial}\n`;
+        if (hd.walls.hasLoadBearing) prompt += `- Несучі стіни: так\n`;
+      }
+      if (hd.roof) {
+        prompt += `- Дах: ${hd.roof.type}, ${hd.roof.material}`;
+        if (hd.roof.pitchAngle) prompt += `, кут ${hd.roof.pitchAngle}°`;
+        prompt += `\n`;
+        if (hd.roof.insulation) {
+          prompt += `- Утеплення даху: ${hd.roof.insulationThickness ?? 150}мм\n`;
+        }
+        prompt += `- Горище: ${hd.roof.attic}\n`;
+        if (hd.roof.gutterSystem) prompt += `- Водостічна система: так\n`;
+        if (hd.roof.roofWindows && hd.roof.roofWindows > 0) {
+          prompt += `- Мансардних вікон: ${hd.roof.roofWindows} шт\n`;
+        }
+      }
+      if (hd.hasGarage) prompt += `- Гараж: ${hd.garageArea ?? '?'}м² (${hd.garageType ?? 'attached'})\n`;
+      if (hd.hasBasement) prompt += `- Підвал: ${hd.basementArea ?? '?'}м²\n`;
+      if (hd.hasAttic) prompt += `- Мансарда: ${hd.atticArea ?? '?'}м²\n`;
     }
 
-    if (context.wizardData.houseData) {
-      const hd = context.wizardData.houseData;
-      if (hd.floors) prompt += `- Поверхів: ${hd.floors}\n`;
-      if (hd.rooms) prompt += `- Кімнат: ${hd.rooms}\n`;
+    // 🏢 Квартира / офіс — реновація з детальним переліком робіт
+    if ((wd.objectType === 'apartment' || wd.objectType === 'office') && wd.renovationData) {
+      const rd = wd.renovationData;
+      prompt += `\n## ДАНІ ПРО РЕНОВАЦІЮ\n`;
+      prompt += `- Поточний етап: ${rd.currentStage}\n`;
+      if (rd.rooms) {
+        prompt += `- Кімнати: ${rd.rooms.bedrooms} спалень, ${rd.rooms.bathrooms} санвузлів, кухня: ${rd.rooms.kitchen}, вітальня: ${rd.rooms.living}, інше: ${rd.rooms.other}\n`;
+      }
+      if (rd.existing) {
+        const existingDone = Object.entries(rd.existing).filter(([_, v]) => v).map(([k]) => k);
+        if (existingDone.length > 0) {
+          prompt += `- Вже зроблено (НЕ повторювати!): ${existingDone.join(', ')}\n`;
+        }
+      }
+      if (rd.workRequired) {
+        const workNeeded = Object.entries(rd.workRequired)
+          .filter(([_, v]) => v && v !== 'none')
+          .map(([k, v]) => typeof v === 'string' ? `${k}=${v}` : k);
+        if (workNeeded.length > 0) {
+          prompt += `- Потрібні роботи: ${workNeeded.join(', ')}\n`;
+        }
+      }
+      if (rd.layoutChange) prompt += `- Зміна планування: так\n`;
+      if (rd.newPartitions) {
+        prompt += `- Нові перегородки: ${rd.newPartitionsLength ?? '?'} м.п.\n`;
+      }
+    }
+
+    // 🏭 Комерція — повна специфіка
+    if (wd.objectType === 'commercial' && wd.commercialData) {
+      const cd = wd.commercialData;
+      prompt += `\n## ДАНІ ПРО КОМЕРЦІЙНИЙ ОБ'ЄКТ\n`;
+      prompt += `- Призначення: ${cd.purpose}\n`;
+      if (cd.currentState) prompt += `- Поточний стан: ${cd.currentState}\n`;
+      if (cd.demolitionRequired) {
+        prompt += `- Потрібен демонтаж: ${cd.demolitionDescription || 'так'}\n`;
+      }
+      if (cd.floor) {
+        prompt += `- Підлога: ${cd.floor.type}`;
+        if (cd.floor.coating) prompt += `, покриття ${cd.floor.coating}`;
+        if (cd.floor.loadCapacity) prompt += `, навантаження ${cd.floor.loadCapacity} кг/м²`;
+        if (cd.floor.antiStatic) prompt += `, антистатика`;
+        prompt += `\n`;
+      }
+      if (cd.fireRating) prompt += `- Протипожежна система: обов'язково (спринклери, сповіщення, евакуація)\n`;
+      if (cd.hvac) prompt += `- Промислова вентиляція: так\n`;
+      if (cd.heavyDutyElectrical) prompt += `- Промислова електрика (3-фази, висока потужність): так\n`;
+      if (cd.accessControl) prompt += `- Контроль доступу: так\n`;
+      if (cd.surveillance) prompt += `- Відеоспостереження: так\n`;
+    }
+
+    // ⚡ Інженерні системи — для всіх типів
+    if (wd.utilities) {
+      const u = wd.utilities;
+      prompt += `\n## ІНЖЕНЕРНІ СИСТЕМИ\n`;
+      if (u.electrical) {
+        prompt += `- Електрика: ${u.electrical.power}`;
+        if (u.electrical.capacity) prompt += `, ${u.electrical.capacity} кВт`;
+        prompt += `, розеток: ${u.electrical.outlets}, вимикачів: ${u.electrical.switches}, точок освітлення: ${u.electrical.lightPoints}\n`;
+        if (u.electrical.outdoorLighting) prompt += `- Вуличне освітлення: так\n`;
+        if (u.electrical.needsConnection) {
+          prompt += `- Потрібно підключення електрики (відстань ${u.electrical.connectionDistance ?? '?'} м)\n`;
+        }
+        if (u.electrical.needsTransformer) prompt += `- Потрібна трансформаторна підстанція\n`;
+      }
+      if (u.heating) {
+        prompt += `- Опалення: ${u.heating.type}`;
+        if (u.heating.boilerPower) prompt += `, котел ${u.heating.boilerPower} кВт`;
+        if (u.heating.radiators) prompt += `, ${u.heating.radiators} радіаторів`;
+        prompt += `\n`;
+        if (u.heating.underfloor) {
+          prompt += `- Тепла підлога: ${u.heating.underfloorArea ?? '?'} м²\n`;
+        }
+        if (u.heating.needsGasConnection) {
+          prompt += `- Потрібно підключення газу (відстань ${u.heating.gasConnectionDistance ?? '?'} м)\n`;
+        }
+      }
+      if (u.water) {
+        const ws: string[] = [];
+        if (u.water.coldWater) ws.push('холодна');
+        if (u.water.hotWater) ws.push('гаряча');
+        prompt += `- Вода: ${ws.join(' + ') || 'немає'}, джерело: ${u.water.source}\n`;
+        if (u.water.boilerType && u.water.boilerType !== 'none') {
+          prompt += `- Бойлер: ${u.water.boilerType}${u.water.boilerVolume ? ` ${u.water.boilerVolume}л` : ''}\n`;
+        }
+        if (u.water.needsConnection) {
+          prompt += `- Потрібно підключення води (відстань ${u.water.connectionDistance ?? '?'} м)\n`;
+        }
+        if (u.water.needsPump) prompt += `- Потрібна насосна станція\n`;
+      }
+      if (u.sewerage) {
+        prompt += `- Каналізація: ${u.sewerage.type}\n`;
+        if (u.sewerage.needsLift) prompt += `- Потрібна каналізаційна підіймальна установка\n`;
+        if (u.sewerage.pumpNeeded) prompt += `- Потрібен фекальний насос\n`;
+      }
+      if (u.ventilation) {
+        const v: string[] = [];
+        if (u.ventilation.natural) v.push('природна');
+        if (u.ventilation.forced) v.push('примусова');
+        if (u.ventilation.recuperation) v.push('рекуперація');
+        if (v.length) prompt += `- Вентиляція: ${v.join(', ')}\n`;
+      }
+    }
+
+    // 🎨 Оздоблення
+    if (wd.finishing) {
+      const f = wd.finishing;
+      prompt += `\n## ОЗДОБЛЕННЯ\n`;
+      if (f.walls) {
+        prompt += `- Стіни: ${f.walls.material}, клас ${f.walls.qualityLevel}`;
+        if (f.walls.tileArea) prompt += `, плитка ${f.walls.tileArea} м²`;
+        prompt += `\n`;
+      }
+      if (f.flooring) {
+        const floors: string[] = [];
+        if (f.flooring.tile) floors.push(`плитка ${f.flooring.tile}м²`);
+        if (f.flooring.laminate) floors.push(`ламінат ${f.flooring.laminate}м²`);
+        if (f.flooring.parquet) floors.push(`паркет ${f.flooring.parquet}м²`);
+        if (f.flooring.vinyl) floors.push(`вініл ${f.flooring.vinyl}м²`);
+        if (f.flooring.carpet) floors.push(`ковролін ${f.flooring.carpet}м²`);
+        if (f.flooring.epoxy) floors.push(`епоксид ${f.flooring.epoxy}м²`);
+        if (floors.length) prompt += `- Підлога: ${floors.join(', ')}\n`;
+      }
+      if (f.ceiling) {
+        prompt += `- Стеля: ${f.ceiling.type}, рівнів: ${f.ceiling.levels}, освітлення: ${f.ceiling.lighting}\n`;
+      }
+    }
+
+    // 🚪 Вікна та двері
+    if (wd.openings) {
+      const o = wd.openings;
+      prompt += `\n## ВІКНА ТА ДВЕРІ\n`;
+      if (o.windows) {
+        prompt += `- Вікна: ${o.windows.count} шт`;
+        if (o.windows.totalArea) prompt += ` (${o.windows.totalArea} м²)`;
+        prompt += `, ${o.windows.type}, склопакет: ${o.windows.glazing}\n`;
+      }
+      if (o.doors) {
+        prompt += `- Двері: вхідних ${o.doors.entrance}, міжкімнатних ${o.doors.interior}, тип: ${o.doors.type}\n`;
+      }
+    }
+
+    if (wd.specialRequirements) {
+      prompt += `\n## ОСОБЛИВІ ВИМОГИ\n${wd.specialRequirements}\n`;
     }
 
     // Вже згенеровані секції (щоб не дублювати)

@@ -183,6 +183,28 @@ export function useAiEstimateController() {
     []
   );
 
+  /**
+   * Set a deeply nested wizard field by dotted path.
+   * Example: setNestedWizard("houseData.foundation.depth", "2.5")
+   *
+   * Creates intermediate objects as needed so the wizard can populate
+   * `houseData.walls.material` even if `houseData` was undefined.
+   */
+  const setNestedWizard = useCallback((path: string, value: unknown) => {
+    setWizardData((prev) => {
+      const parts = path.split(".");
+      const next: any = { ...prev };
+      let cursor: any = next;
+      for (let i = 0; i < parts.length - 1; i++) {
+        const key = parts[i];
+        cursor[key] = cursor[key] && typeof cursor[key] === "object" ? { ...cursor[key] } : {};
+        cursor = cursor[key];
+      }
+      cursor[parts[parts.length - 1]] = value;
+      return next as WizardData;
+    });
+  }, []);
+
   const openWizard = useCallback(() => {
     setWizardStep(0);
     setWizardOpen(true);
@@ -852,6 +874,7 @@ export function useAiEstimateController() {
     // wizard
     wizardData,
     updateWizardData,
+    setNestedWizard,
     wizardOpen,
     openWizard,
     closeWizard,

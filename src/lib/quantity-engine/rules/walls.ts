@@ -144,6 +144,76 @@ export function wallsRules(ctx: EngineRuleContext): EngineItem[] {
     });
   }
 
+  // 3b. Внутрішні перегородки. Площа орієнтовно = floorArea × 0.4 (середній коефіцієнт
+  // для офісу/будинку — приблизно 40% площі підлоги припадає на перегородки).
+  const partitionMaterial = walls.partitionMaterial;
+  if (partitionMaterial && partitionMaterial !== 'same') {
+    const partitionArea = round(geom.totalAreaM2 * 0.4);
+    if (partitionMaterial === 'gypsum') {
+      items.push({
+        canonicalKey: 'walls.partition_gkl',
+        description: 'Гіпсокартон вологостійкий 12.5мм (перегородки)',
+        quantity: round(partitionArea * 2 * 1.10), // 2 шари + 10% запас
+        unit: 'м²',
+        itemType: 'material',
+        formula: 'partitionArea × 2 шари × 1.10',
+        inputs: { partitionArea },
+      });
+      items.push({
+        canonicalKey: 'walls.partition_profile',
+        description: 'Профіль металевий CW/UW для ГКЛ-перегородок',
+        quantity: round(partitionArea * 2.4),
+        unit: 'м',
+        itemType: 'material',
+        formula: 'partitionArea × 2.4 м/м²',
+      });
+      items.push({
+        canonicalKey: 'walls.partition_insulation',
+        description: 'Мінеральна вата 50мм у перегородки',
+        quantity: round(partitionArea * 1.05),
+        unit: 'м²',
+        itemType: 'material',
+      });
+      items.push({
+        canonicalKey: 'walls.partition_labor',
+        description: 'Робота: монтаж ГКЛ-перегородок',
+        quantity: partitionArea,
+        unit: 'м²',
+        itemType: 'labor',
+      });
+    } else if (partitionMaterial === 'gasblock') {
+      items.push({
+        canonicalKey: 'walls.partition_gasblock',
+        description: 'Газоблок 100мм для перегородок',
+        quantity: round(partitionArea * GASBLOCK_PIECES_PER_M2 * 0.5 * WASTE.gasblock),
+        unit: 'шт',
+        itemType: 'material',
+      });
+      items.push({
+        canonicalKey: 'walls.partition_labor',
+        description: 'Робота: мурування перегородок з газоблоку',
+        quantity: partitionArea,
+        unit: 'м²',
+        itemType: 'labor',
+      });
+    } else if (partitionMaterial === 'brick') {
+      items.push({
+        canonicalKey: 'walls.partition_brick',
+        description: 'Цегла керамічна (перегородки 1/2 цегли)',
+        quantity: round(partitionArea * 52 * WASTE.brick), // половинна кладка
+        unit: 'шт',
+        itemType: 'material',
+      });
+      items.push({
+        canonicalKey: 'walls.partition_labor',
+        description: 'Робота: мурування цегляних перегородок',
+        quantity: partitionArea,
+        unit: 'м²',
+        itemType: 'labor',
+      });
+    }
+  }
+
   // 4. Робота — мурування / монтаж стін
   items.push({
     canonicalKey: 'walls.masonry_labor',

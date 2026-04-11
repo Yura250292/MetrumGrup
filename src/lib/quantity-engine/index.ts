@@ -17,6 +17,11 @@ import { plumbingRules } from './rules/plumbing';
 import { finishingRules } from './rules/finishing';
 import { foundationRules } from './rules/foundation';
 import { wallsRules } from './rules/walls';
+import { roofingRules } from './rules/roofing';
+import { hvacRules } from './rules/hvac';
+import { openingsRules } from './rules/openings';
+import { extrasRules } from './rules/extras';
+import { commercialRules } from './rules/commercial';
 import { applyModifiers, buildModifiers } from './modifiers';
 
 const RULES: Record<EngineCategory, (ctx: any) => EngineItem[]> = {
@@ -25,6 +30,11 @@ const RULES: Record<EngineCategory, (ctx: any) => EngineItem[]> = {
   finishing: finishingRules,
   foundation: foundationRules,
   walls: wallsRules,
+  roofing: roofingRules,
+  hvac: hvacRules,
+  openings: openingsRules,
+  extras: extrasRules,
+  commercial: commercialRules,
 };
 
 export function runQuantityEngine(

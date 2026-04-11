@@ -147,25 +147,53 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
   );
 
   // --- walls ---
-  const wallsMaterial = wizardData.houseData?.walls?.material
-    ?? wizardData.townhouseData?.houseData?.walls?.material;
+  const wizardWalls = wizardData.houseData?.walls
+    ?? wizardData.townhouseData?.houseData?.walls;
   const ragWallMaterial = extracted?.wallMaterial;
   const wallMaterialValue = pickWithConflict<string>(
     'walls.material',
     [
-      wallsMaterial ? { value: wallsMaterial, source: 'wizard' as FactSource } : undefined,
+      wizardWalls?.material ? { value: wizardWalls.material, source: 'wizard' as FactSource } : undefined,
       ragWallMaterial ? { value: ragWallMaterial, source: 'rag' as FactSource } : undefined,
     ],
     conflicts
   );
-
-  const wallsThicknessRaw = wizardData.houseData?.walls?.thickness
-    ?? wizardData.townhouseData?.houseData?.walls?.thickness;
-  const wallsThickness = parseNumeric(wallsThicknessRaw);
+  const wallsThickness = parseNumeric(wizardWalls?.thickness);
   const wallThicknessValue = wallsThickness !== undefined
     ? pickWithConflict<number>(
         'walls.thicknessMm',
         [{ value: wallsThickness, source: 'wizard' as FactSource }],
+        conflicts
+      )
+    : undefined;
+  const wallInsulation = wizardWalls?.insulation !== undefined
+    ? pickWithConflict<boolean>('walls.insulation', [{ value: !!wizardWalls.insulation, source: 'wizard' as FactSource }], conflicts)
+    : undefined;
+  const wallInsulationType = wizardWalls?.insulationType
+    ? pickWithConflict<'foam' | 'mineral' | 'ecowool'>(
+        'walls.insulationType',
+        [{ value: wizardWalls.insulationType, source: 'wizard' as FactSource }],
+        conflicts
+      )
+    : undefined;
+  const wallInsulationThickness = wizardWalls?.insulationThickness !== undefined
+    ? pickWithConflict<number>(
+        'walls.insulationThicknessMm',
+        [{ value: wizardWalls.insulationThickness, source: 'wizard' as FactSource }],
+        conflicts
+      )
+    : undefined;
+  const wallLoadBearing = wizardWalls?.hasLoadBearing !== undefined
+    ? pickWithConflict<boolean>(
+        'walls.hasLoadBearing',
+        [{ value: !!wizardWalls.hasLoadBearing, source: 'wizard' as FactSource }],
+        conflicts
+      )
+    : undefined;
+  const wallPartition = wizardWalls?.partitionMaterial
+    ? pickWithConflict<'gasblock' | 'brick' | 'gypsum' | 'same'>(
+        'walls.partitionMaterial',
+        [{ value: wizardWalls.partitionMaterial, source: 'wizard' as FactSource }],
         conflicts
       )
     : undefined;
@@ -174,30 +202,79 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
   const el = wizardData.utilities?.electrical;
   const electrical = el
     ? {
+        power: el.power
+          ? pickWithConflict<'single_phase' | 'three_phase'>('electrical.power', [{ value: el.power, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        capacityKw: el.capacity && el.capacity > 0
+          ? pickWithConflict<number>('electrical.capacityKw', [{ value: el.capacity, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
         outlets: el.outlets > 0
-          ? pickWithConflict<number>('electrical.outlets', [{ value: el.outlets, source: 'wizard' }], conflicts)
+          ? pickWithConflict<number>('electrical.outlets', [{ value: el.outlets, source: 'wizard' as FactSource }], conflicts)
           : undefined,
         switches: el.switches > 0
-          ? pickWithConflict<number>('electrical.switches', [{ value: el.switches, source: 'wizard' }], conflicts)
+          ? pickWithConflict<number>('electrical.switches', [{ value: el.switches, source: 'wizard' as FactSource }], conflicts)
           : undefined,
         lightPoints: el.lightPoints > 0
-          ? pickWithConflict<number>('electrical.lightPoints', [{ value: el.lightPoints, source: 'wizard' }], conflicts)
+          ? pickWithConflict<number>('electrical.lightPoints', [{ value: el.lightPoints, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        outdoorLighting: el.outdoorLighting !== undefined
+          ? pickWithConflict<boolean>('electrical.outdoorLighting', [{ value: !!el.outdoorLighting, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        needsConnection: el.needsConnection !== undefined
+          ? pickWithConflict<boolean>('electrical.needsConnection', [{ value: !!el.needsConnection, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        connectionDistanceM: el.connectionDistance && el.connectionDistance > 0
+          ? pickWithConflict<number>('electrical.connectionDistanceM', [{ value: el.connectionDistance, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        needsTransformer: el.needsTransformer !== undefined
+          ? pickWithConflict<boolean>('electrical.needsTransformer', [{ value: !!el.needsTransformer, source: 'wizard' as FactSource }], conflicts)
           : undefined,
       }
     : undefined;
 
-  // --- plumbing (water + sewerage points are not directly modeled in wizard,
-  //     but coldWater/hotWater + sewerage type give us at least booleans we
-  //     can convert into "has at least 1 point" inferred values).
+  // --- plumbing ---
   const water = wizardData.utilities?.water;
   const sewerage = wizardData.utilities?.sewerage;
   const plumbing = (water || sewerage)
     ? {
+        coldWater: water?.coldWater !== undefined
+          ? pickWithConflict<boolean>('plumbing.coldWater', [{ value: !!water.coldWater, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        hotWater: water?.hotWater !== undefined
+          ? pickWithConflict<boolean>('plumbing.hotWater', [{ value: !!water.hotWater, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        source: water?.source
+          ? pickWithConflict<'central' | 'well' | 'borehole'>('plumbing.source', [{ value: water.source, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        boilerType: water?.boilerType
+          ? pickWithConflict<'gas' | 'electric' | 'none'>('plumbing.boilerType', [{ value: water.boilerType, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        boilerVolumeL: water?.boilerVolume && water.boilerVolume > 0
+          ? pickWithConflict<number>('plumbing.boilerVolumeL', [{ value: water.boilerVolume, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        needsConnection: water?.needsConnection !== undefined
+          ? pickWithConflict<boolean>('plumbing.needsConnection', [{ value: !!water.needsConnection, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        connectionDistanceM: water?.connectionDistance && water.connectionDistance > 0
+          ? pickWithConflict<number>('plumbing.connectionDistanceM', [{ value: water.connectionDistance, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        needsPump: water?.needsPump !== undefined
+          ? pickWithConflict<boolean>('plumbing.needsPump', [{ value: !!water.needsPump, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
         waterPoints: water?.coldWater
-          ? pickWithConflict<number>('plumbing.waterPoints', [{ value: 1, source: 'inferred' }], conflicts)
+          ? pickWithConflict<number>('plumbing.waterPoints', [{ value: 1, source: 'inferred' as FactSource }], conflicts)
           : undefined,
         sewerPoints: sewerage
-          ? pickWithConflict<number>('plumbing.sewerPoints', [{ value: 1, source: 'inferred' }], conflicts)
+          ? pickWithConflict<number>('plumbing.sewerPoints', [{ value: 1, source: 'inferred' as FactSource }], conflicts)
+          : undefined,
+        sewerageType: sewerage?.type
+          ? pickWithConflict<'central' | 'septic' | 'treatment'>('plumbing.sewerageType', [{ value: sewerage.type, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        sewerPumpNeeded: sewerage?.pumpNeeded !== undefined
+          ? pickWithConflict<boolean>('plumbing.sewerPumpNeeded', [{ value: !!sewerage.pumpNeeded, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        sewerNeedsLift: sewerage?.needsLift !== undefined
+          ? pickWithConflict<boolean>('plumbing.sewerNeedsLift', [{ value: !!sewerage.needsLift, source: 'wizard' as FactSource }], conflicts)
           : undefined,
       }
     : undefined;
@@ -207,13 +284,38 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
   const heating = ht
     ? {
         type: ht.type
-          ? pickWithConflict<string>('heating.type', [{ value: ht.type, source: 'wizard' }], conflicts)
+          ? pickWithConflict<string>('heating.type', [{ value: ht.type, source: 'wizard' as FactSource }], conflicts)
           : undefined,
         radiators: ht.radiators && ht.radiators > 0
-          ? pickWithConflict<number>('heating.radiators', [{ value: ht.radiators, source: 'wizard' }], conflicts)
+          ? pickWithConflict<number>('heating.radiators', [{ value: ht.radiators, source: 'wizard' as FactSource }], conflicts)
           : undefined,
         underfloorAreaM2: parseNumeric(ht.underfloorArea) !== undefined
-          ? pickWithConflict<number>('heating.underfloorAreaM2', [{ value: parseNumeric(ht.underfloorArea)!, source: 'wizard' }], conflicts)
+          ? pickWithConflict<number>('heating.underfloorAreaM2', [{ value: parseNumeric(ht.underfloorArea)!, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        boilerPowerKw: ht.boilerPower && ht.boilerPower > 0
+          ? pickWithConflict<number>('heating.boilerPowerKw', [{ value: ht.boilerPower, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        needsGasConnection: ht.needsGasConnection !== undefined
+          ? pickWithConflict<boolean>('heating.needsGasConnection', [{ value: !!ht.needsGasConnection, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        gasConnectionDistanceM: ht.gasConnectionDistance && ht.gasConnectionDistance > 0
+          ? pickWithConflict<number>('heating.gasConnectionDistanceM', [{ value: ht.gasConnectionDistance, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+      }
+    : undefined;
+
+  // --- ventilation ---
+  const vent = wizardData.utilities?.ventilation;
+  const ventilation = vent
+    ? {
+        natural: vent.natural !== undefined
+          ? pickWithConflict<boolean>('ventilation.natural', [{ value: !!vent.natural, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        forced: vent.forced !== undefined
+          ? pickWithConflict<boolean>('ventilation.forced', [{ value: !!vent.forced, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        recuperation: vent.recuperation !== undefined
+          ? pickWithConflict<boolean>('ventilation.recuperation', [{ value: !!vent.recuperation, source: 'wizard' as FactSource }], conflicts)
           : undefined,
       }
     : undefined;
@@ -251,16 +353,211 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
     : undefined;
 
   // --- finishing ---
-  const tileArea = parseNumeric(wizardData.finishing?.walls?.tileArea)
-    ?? parseNumeric(wizardData.finishing?.flooring?.tile);
-  const laminate = parseNumeric(wizardData.finishing?.flooring?.laminate);
-  const finishing = (tileArea !== undefined || laminate !== undefined)
+  const fin = wizardData.finishing;
+  const tileWallArea = parseNumeric(fin?.walls?.tileArea);
+  const tileFloorArea = parseNumeric(fin?.flooring?.tile);
+  const tileArea = tileWallArea !== undefined && tileFloorArea !== undefined
+    ? tileWallArea + tileFloorArea
+    : (tileWallArea ?? tileFloorArea);
+  const laminate = parseNumeric(fin?.flooring?.laminate);
+  const parquet = parseNumeric(fin?.flooring?.parquet);
+  const vinyl = parseNumeric(fin?.flooring?.vinyl);
+  const carpet = parseNumeric(fin?.flooring?.carpet);
+  const epoxy = parseNumeric(fin?.flooring?.epoxy);
+  const finishing = (tileArea !== undefined || laminate !== undefined || parquet !== undefined ||
+                     vinyl !== undefined || carpet !== undefined || epoxy !== undefined ||
+                     fin?.walls?.material || fin?.ceiling?.type)
     ? {
+        wallMaterial: fin?.walls?.material
+          ? pickWithConflict<string>('finishing.wallMaterial', [{ value: fin.walls.material, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        qualityLevel: fin?.walls?.qualityLevel
+          ? pickWithConflict<'economy' | 'standard' | 'premium'>(
+              'finishing.qualityLevel',
+              [{ value: fin.walls.qualityLevel, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
         tileAreaM2: tileArea !== undefined
           ? pickWithConflict<number>('finishing.tileAreaM2', [{ value: tileArea, source: 'wizard' as FactSource }], conflicts)
           : undefined,
         laminateAreaM2: laminate !== undefined
           ? pickWithConflict<number>('finishing.laminateAreaM2', [{ value: laminate, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        parquetAreaM2: parquet !== undefined
+          ? pickWithConflict<number>('finishing.parquetAreaM2', [{ value: parquet, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        vinylAreaM2: vinyl !== undefined
+          ? pickWithConflict<number>('finishing.vinylAreaM2', [{ value: vinyl, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        carpetAreaM2: carpet !== undefined
+          ? pickWithConflict<number>('finishing.carpetAreaM2', [{ value: carpet, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        epoxyAreaM2: epoxy !== undefined
+          ? pickWithConflict<number>('finishing.epoxyAreaM2', [{ value: epoxy, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        ceilingType: fin?.ceiling?.type
+          ? pickWithConflict<'paint' | 'drywall' | 'suspended' | 'stretch'>(
+              'finishing.ceilingType',
+              [{ value: fin.ceiling.type, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        ceilingLevels: fin?.ceiling?.levels !== undefined
+          ? pickWithConflict<number>('finishing.ceilingLevels', [{ value: fin.ceiling.levels, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+      }
+    : undefined;
+
+  // --- openings (windows + doors) ---
+  const op = wizardData.openings;
+  const openings = op
+    ? {
+        windowsCount: op.windows?.count && op.windows.count > 0
+          ? pickWithConflict<number>('openings.windowsCount', [{ value: op.windows.count, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        windowsTotalAreaM2: op.windows?.totalArea && op.windows.totalArea > 0
+          ? pickWithConflict<number>('openings.windowsTotalAreaM2', [{ value: op.windows.totalArea, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        windowsType: op.windows?.type
+          ? pickWithConflict<'plastic' | 'wood' | 'aluminum'>('openings.windowsType', [{ value: op.windows.type, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        windowsGlazing: op.windows?.glazing
+          ? pickWithConflict<'single' | 'double' | 'triple'>('openings.windowsGlazing', [{ value: op.windows.glazing, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        doorsEntrance: op.doors?.entrance && op.doors.entrance > 0
+          ? pickWithConflict<number>('openings.doorsEntrance', [{ value: op.doors.entrance, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        doorsInterior: op.doors?.interior && op.doors.interior > 0
+          ? pickWithConflict<number>('openings.doorsInterior', [{ value: op.doors.interior, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+      }
+    : undefined;
+
+  // --- extras (basement, attic, garage) — house only ---
+  const hd = wizardData.houseData ?? wizardData.townhouseData?.houseData;
+  const hasExtras = hd && (hd.hasBasement || hd.hasAttic || hd.hasGarage);
+  const extras = hasExtras
+    ? {
+        hasBasement: hd!.hasBasement !== undefined
+          ? pickWithConflict<boolean>('extras.hasBasement', [{ value: !!hd!.hasBasement, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        basementAreaM2: parseNumeric(hd!.basementArea) !== undefined
+          ? pickWithConflict<number>('extras.basementAreaM2', [{ value: parseNumeric(hd!.basementArea)!, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        hasAttic: hd!.hasAttic !== undefined
+          ? pickWithConflict<boolean>('extras.hasAttic', [{ value: !!hd!.hasAttic, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        atticAreaM2: parseNumeric(hd!.atticArea) !== undefined
+          ? pickWithConflict<number>('extras.atticAreaM2', [{ value: parseNumeric(hd!.atticArea)!, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        hasGarage: hd!.hasGarage !== undefined
+          ? pickWithConflict<boolean>('extras.hasGarage', [{ value: !!hd!.hasGarage, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        garageAreaM2: parseNumeric(hd!.garageArea) !== undefined
+          ? pickWithConflict<number>('extras.garageAreaM2', [{ value: parseNumeric(hd!.garageArea)!, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        garageType: hd!.garageType
+          ? pickWithConflict<'attached' | 'detached'>('extras.garageType', [{ value: hd!.garageType, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+      }
+    : undefined;
+
+  // --- renovation (apartment / office) ---
+  const rd = wizardData.renovationData;
+  const renovation = rd
+    ? {
+        currentStage: rd.currentStage
+          ? pickWithConflict<'bare_concrete' | 'rough_walls' | 'rough_floor' | 'utilities_installed' | 'ready_for_finish'>(
+              'renovation.currentStage',
+              [{ value: rd.currentStage, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        layoutChange: rd.layoutChange !== undefined
+          ? pickWithConflict<boolean>('renovation.layoutChange', [{ value: !!rd.layoutChange, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        newPartitions: rd.newPartitions !== undefined
+          ? pickWithConflict<boolean>('renovation.newPartitions', [{ value: !!rd.newPartitions, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        newPartitionsLengthM: parseNumeric(rd.newPartitionsLength) !== undefined
+          ? pickWithConflict<number>('renovation.newPartitionsLengthM', [{ value: parseNumeric(rd.newPartitionsLength)!, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        bedrooms: rd.rooms?.bedrooms !== undefined
+          ? pickWithConflict<number>('renovation.bedrooms', [{ value: rd.rooms.bedrooms, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        bathrooms: rd.rooms?.bathrooms !== undefined
+          ? pickWithConflict<number>('renovation.bathrooms', [{ value: rd.rooms.bathrooms, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        kitchen: rd.rooms?.kitchen !== undefined
+          ? pickWithConflict<number>('renovation.kitchen', [{ value: rd.rooms.kitchen, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        living: rd.rooms?.living !== undefined
+          ? pickWithConflict<number>('renovation.living', [{ value: rd.rooms.living, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        other: rd.rooms?.other !== undefined
+          ? pickWithConflict<number>('renovation.other', [{ value: rd.rooms.other, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        workRequired: rd.workRequired
+          ? pickWithConflict<Record<string, boolean>>(
+              'renovation.workRequired',
+              [{ value: rd.workRequired as unknown as Record<string, boolean>, source: 'wizard' as FactSource }],
+              conflicts,
+              () => true // skip equality check for objects
+            )
+          : undefined,
+        existing: rd.existing
+          ? pickWithConflict<Record<string, boolean>>(
+              'renovation.existing',
+              [{ value: rd.existing as unknown as Record<string, boolean>, source: 'wizard' as FactSource }],
+              conflicts,
+              () => true
+            )
+          : undefined,
+      }
+    : undefined;
+
+  // --- commercial ---
+  const cd = wizardData.commercialData;
+  const commercial = cd
+    ? {
+        purpose: cd.purpose
+          ? pickWithConflict<'shop' | 'restaurant' | 'warehouse' | 'production' | 'showroom' | 'other'>(
+              'commercial.purpose',
+              [{ value: cd.purpose, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        currentState: cd.currentState
+          ? pickWithConflict<'greenfield' | 'existing_building' | 'existing_renovation'>(
+              'commercial.currentState',
+              [{ value: cd.currentState, source: 'wizard' as FactSource }],
+              conflicts
+            )
+          : undefined,
+        floorType: cd.floor?.type
+          ? pickWithConflict<string>('commercial.floorType', [{ value: cd.floor.type, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        floorLoadCapacityKgM2: cd.floor?.loadCapacity && cd.floor.loadCapacity > 0
+          ? pickWithConflict<number>('commercial.floorLoadCapacityKgM2', [{ value: cd.floor.loadCapacity, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        floorAntiStatic: cd.floor?.antiStatic !== undefined
+          ? pickWithConflict<boolean>('commercial.floorAntiStatic', [{ value: !!cd.floor.antiStatic, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        fireRating: cd.fireRating !== undefined
+          ? pickWithConflict<boolean>('commercial.fireRating', [{ value: !!cd.fireRating, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        hvac: cd.hvac !== undefined
+          ? pickWithConflict<boolean>('commercial.hvac', [{ value: !!cd.hvac, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        heavyDutyElectrical: cd.heavyDutyElectrical !== undefined
+          ? pickWithConflict<boolean>('commercial.heavyDutyElectrical', [{ value: !!cd.heavyDutyElectrical, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        accessControl: cd.accessControl !== undefined
+          ? pickWithConflict<boolean>('commercial.accessControl', [{ value: !!cd.accessControl, source: 'wizard' as FactSource }], conflicts)
+          : undefined,
+        surveillance: cd.surveillance !== undefined
+          ? pickWithConflict<boolean>('commercial.surveillance', [{ value: !!cd.surveillance, source: 'wizard' as FactSource }], conflicts)
           : undefined,
       }
     : undefined;
@@ -403,24 +700,47 @@ export function buildProjectFacts(input: BuildProjectFactsInput): ProjectFacts {
     ],
     conflicts
   );
+  const wizardDemoDescription =
+    wizardData.houseData?.demolitionDescription
+    ?? wizardData.townhouseData?.demolitionDescription
+    ?? wizardData.commercialData?.demolitionDescription;
+  const demolitionDescription = wizardDemoDescription
+    ? pickWithConflict<string>(
+        'demolitionDescription',
+        [{ value: wizardDemoDescription, source: 'wizard' as FactSource }],
+        conflicts
+      )
+    : undefined;
 
   return {
     objectType,
     area,
     floors,
     ceilingHeight,
-    walls: (wallMaterialValue || wallThicknessValue) ? {
+    walls: (wallMaterialValue || wallThicknessValue || wallInsulation || wallInsulationType ||
+            wallInsulationThickness || wallLoadBearing || wallPartition) ? {
       material: wallMaterialValue,
       thicknessMm: wallThicknessValue,
+      insulation: wallInsulation,
+      insulationType: wallInsulationType,
+      insulationThicknessMm: wallInsulationThickness,
+      hasLoadBearing: wallLoadBearing,
+      partitionMaterial: wallPartition,
     } : undefined,
     electrical,
     plumbing,
     heating,
+    ventilation,
     geology,
     foundation,
     roof,
     finishing,
+    openings,
+    extras,
+    renovation,
+    commercial,
     demolitionRequired,
+    demolitionDescription,
     conflicts,
   };
 }

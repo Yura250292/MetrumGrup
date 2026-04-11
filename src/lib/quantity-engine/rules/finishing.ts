@@ -152,6 +152,123 @@ export function finishingRules(ctx: EngineRuleContext): EngineItem[] {
     });
   }
 
+  // 5b. Паркет
+  const parquetArea = facts.finishing?.parquetAreaM2?.value
+    ?? Number(wizard.finishing?.flooring?.parquet ?? 0)
+    ?? 0;
+  if (parquetArea > 0) {
+    items.push({
+      canonicalKey: 'finishing.parquet_material',
+      description: 'Паркетна дошка дубова 14мм',
+      quantity: round(parquetArea * WASTE.laminate),
+      unit: 'м²',
+      itemType: 'material',
+      inputs: { parquetArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.parquet_underlay',
+      description: 'Пробкова підкладка під паркет',
+      quantity: round(parquetArea * 1.05),
+      unit: 'м²',
+      itemType: 'material',
+    });
+    items.push({
+      canonicalKey: 'finishing.parquet_glue',
+      description: 'Клей для паркету',
+      quantity: round(parquetArea * 1.2),
+      unit: 'кг',
+      itemType: 'material',
+    });
+    items.push({
+      canonicalKey: 'finishing.parquet_install_labor',
+      description: 'Робота: укладання паркету з лакуванням',
+      quantity: parquetArea,
+      unit: 'м²',
+      itemType: 'labor',
+    });
+  }
+
+  // 5c. Вініл LVT
+  const vinylArea = facts.finishing?.vinylAreaM2?.value
+    ?? Number(wizard.finishing?.flooring?.vinyl ?? 0)
+    ?? 0;
+  if (vinylArea > 0) {
+    items.push({
+      canonicalKey: 'finishing.vinyl_material',
+      description: 'Вініл LVT 4мм (комерційний клас)',
+      quantity: round(vinylArea * 1.07),
+      unit: 'м²',
+      itemType: 'material',
+      inputs: { vinylArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.vinyl_glue',
+      description: 'Клей для вінілу',
+      quantity: round(vinylArea * 0.4),
+      unit: 'кг',
+      itemType: 'material',
+    });
+    items.push({
+      canonicalKey: 'finishing.vinyl_install_labor',
+      description: 'Робота: укладання вінілового покриття',
+      quantity: vinylArea,
+      unit: 'м²',
+      itemType: 'labor',
+    });
+  }
+
+  // 5d. Ковролін
+  const carpetArea = facts.finishing?.carpetAreaM2?.value
+    ?? Number(wizard.finishing?.flooring?.carpet ?? 0)
+    ?? 0;
+  if (carpetArea > 0) {
+    items.push({
+      canonicalKey: 'finishing.carpet_material',
+      description: 'Ковролін офісний (комерційний клас 32)',
+      quantity: round(carpetArea * 1.10),
+      unit: 'м²',
+      itemType: 'material',
+      inputs: { carpetArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.carpet_install_labor',
+      description: 'Робота: монтаж килимового покриття',
+      quantity: carpetArea,
+      unit: 'м²',
+      itemType: 'labor',
+    });
+  }
+
+  // 5e. Епоксидна підлога (для commercial industrial)
+  const epoxyArea = facts.finishing?.epoxyAreaM2?.value
+    ?? Number(wizard.finishing?.flooring?.epoxy ?? 0)
+    ?? 0;
+  if (epoxyArea > 0) {
+    items.push({
+      canonicalKey: 'finishing.epoxy_material',
+      description: 'Епоксидне покриття 2-компонентне (промислове)',
+      quantity: round(epoxyArea * 1.5),
+      unit: 'кг',
+      itemType: 'material',
+      formula: 'epoxyArea × 1.5 кг/м²',
+      inputs: { epoxyArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.epoxy_primer',
+      description: 'Грунт епоксидний',
+      quantity: round(epoxyArea * 0.3),
+      unit: 'кг',
+      itemType: 'material',
+    });
+    items.push({
+      canonicalKey: 'finishing.epoxy_install_labor',
+      description: 'Робота: укладання епоксидного покриття',
+      quantity: epoxyArea,
+      unit: 'м²',
+      itemType: 'labor',
+    });
+  }
+
   // 6. Стеля — фарба
   if (ceilingType === 'paint' && ceilingArea > 0) {
     items.push({
@@ -175,6 +292,58 @@ export function finishingRules(ctx: EngineRuleContext): EngineItem[] {
       itemType: 'material',
       formula: 'ceilingArea * 1.10',
       inputs: { ceilingArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.drywall_ceiling_profile',
+      description: 'Профіль металевий + підвіси для стельового ГКЛ',
+      quantity: round(ceilingArea * 1.5),
+      unit: 'м',
+      itemType: 'material',
+    });
+    items.push({
+      canonicalKey: 'finishing.drywall_ceiling_labor',
+      description: 'Робота: монтаж стельового гіпсокартону',
+      quantity: ceilingArea,
+      unit: 'м²',
+      itemType: 'labor',
+    });
+  }
+
+  // 7b. Стеля — підвісна (Армстронг / Грильято)
+  if (ceilingType === 'suspended' && ceilingArea > 0) {
+    items.push({
+      canonicalKey: 'finishing.suspended_ceiling',
+      description: 'Підвісна стеля Армстронг/Грильято з комплектуючими',
+      quantity: round(ceilingArea * 1.05),
+      unit: 'м²',
+      itemType: 'material',
+      inputs: { ceilingArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.suspended_ceiling_labor',
+      description: 'Робота: монтаж підвісної стелі',
+      quantity: ceilingArea,
+      unit: 'м²',
+      itemType: 'labor',
+    });
+  }
+
+  // 7c. Стеля — натяжна
+  if (ceilingType === 'stretch' && ceilingArea > 0) {
+    items.push({
+      canonicalKey: 'finishing.stretch_ceiling',
+      description: 'Натяжна стеля матова (з комплектуючими)',
+      quantity: round(ceilingArea * 1.05),
+      unit: 'м²',
+      itemType: 'material',
+      inputs: { ceilingArea },
+    });
+    items.push({
+      canonicalKey: 'finishing.stretch_ceiling_labor',
+      description: 'Робота: монтаж натяжної стелі',
+      quantity: ceilingArea,
+      unit: 'м²',
+      itemType: 'labor',
     });
   }
 

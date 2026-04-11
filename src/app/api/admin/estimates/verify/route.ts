@@ -11,7 +11,11 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 // Завантажити MD інструкцію
 async function loadInstructions(): Promise<string> {
   const filePath = path.join(process.cwd(), "src/lib/ESTIMATE_INSTRUCTIONS.md");
-  return await fs.readFile(filePath, "utf-8");
+  try {
+    return await fs.readFile(filePath, "utf-8");
+  } catch {
+    return "Використовуй загальні правила перевірки будівельного кошторису: коректність розрахунків, повнота позицій, реалістичність цін, логіка секцій.";
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -186,12 +190,21 @@ ${JSON.stringify(estimateData, null, 2)}
     return NextResponse.json(verificationResult);
   } catch (error: any) {
     console.error("OpenAI verification error:", error);
-    return NextResponse.json(
-      {
-        error: "Помилка верифікації через OpenAI",
-        details: error.message || "Unknown error",
+    return NextResponse.json({
+      verification: {
+        status: "unavailable",
+        overallScore: null,
+        issues: [
+          {
+            severity: "warning",
+            category: "logic",
+            message: "Автоматична верифікація тимчасово недоступна",
+            suggestion: error.message || "Перевірити конфігурацію OpenAI або повторити пізніше",
+          },
+        ],
+        improvements: [],
+        summary: "Кошторис згенеровано, але автоматична верифікація не виконалась.",
       },
-      { status: 500 }
-    );
+    });
   }
 }

@@ -55,7 +55,18 @@ export class InvalidAiItemError extends Error {
 
 function toNumber(value: unknown): number {
   if (value === null || value === undefined || value === '') return 0;
-  const n = typeof value === 'number' ? value : Number(value);
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+  const raw = String(value).trim();
+  if (!raw) return 0;
+
+  // Accept AI-localized numbers like "1 250,50" or "12,5".
+  const normalized = raw
+    .replace(/\s+/g, '')
+    .replace(/₴|грн|uah/gi, '')
+    .replace(',', '.');
+
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : 0;
 }
 

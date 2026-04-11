@@ -127,5 +127,111 @@ export function plumbingRules(ctx: EngineRuleContext): EngineItem[] {
     });
   }
 
+  // 7. Бойлер (нагрівач води) — якщо є гаряча вода і вибраний електро/газ бойлер
+  const boilerType = facts.plumbing?.boilerType?.value;
+  const boilerVolume = facts.plumbing?.boilerVolumeL?.value;
+  if (hasHotWater && boilerType && boilerType !== 'none') {
+    const volume = boilerVolume ?? 100;
+    items.push({
+      canonicalKey: `plumbing.boiler_${boilerType}`,
+      description: `Бойлер ${boilerType === 'gas' ? 'газовий' : 'електричний'} ${volume}л`,
+      quantity: 1,
+      unit: 'шт',
+      itemType: 'equipment',
+      inputs: { boilerType, volume },
+    });
+    items.push({
+      canonicalKey: 'plumbing.boiler_install_labor',
+      description: 'Робота: монтаж + підключення бойлера',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'labor',
+    });
+  }
+
+  // 8. Підведення води від мережі (для нових будівель)
+  const needsWaterConnection = facts.plumbing?.needsConnection?.value ?? false;
+  const waterConnectionDistance = facts.plumbing?.connectionDistanceM?.value ?? 0;
+  if (needsWaterConnection && waterConnectionDistance > 0) {
+    items.push({
+      canonicalKey: 'plumbing.service_pipe',
+      description: 'Підвідна труба ПЕ-100 D32 (від колодязя/центрального водопроводу)',
+      quantity: round(waterConnectionDistance * 1.10),
+      unit: 'м',
+      itemType: 'material',
+      formula: 'connectionDistance × 1.10',
+      inputs: { waterConnectionDistance },
+    });
+    items.push({
+      canonicalKey: 'plumbing.service_install_labor',
+      description: 'Робота: прокладання підвідного водопроводу + земляні роботи',
+      quantity: round(waterConnectionDistance),
+      unit: 'м',
+      itemType: 'labor',
+    });
+  }
+
+  // 9. Насосна станція (для свердловини / колодязя)
+  const needsPump = facts.plumbing?.needsPump?.value ?? false;
+  if (needsPump) {
+    items.push({
+      canonicalKey: 'plumbing.pump_station',
+      description: 'Насосна станція автоматична (для свердловини/колодязя)',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'equipment',
+    });
+    items.push({
+      canonicalKey: 'plumbing.pump_install_labor',
+      description: 'Робота: монтаж + підключення насосної станції',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'labor',
+    });
+  }
+
+  // 10. Каналізаційна підіймальна установка (фекальний насос для підвалу)
+  const needsLift = facts.plumbing?.sewerNeedsLift?.value ?? false;
+  if (needsLift) {
+    items.push({
+      canonicalKey: 'plumbing.sewer_lift',
+      description: 'Каналізаційна підіймальна установка (фекальний насос)',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'equipment',
+    });
+  }
+
+  // 11. Каналізаційний насос (для септика)
+  const sewerPumpNeeded = facts.plumbing?.sewerPumpNeeded?.value ?? false;
+  if (sewerPumpNeeded || sewerageType === 'treatment') {
+    items.push({
+      canonicalKey: 'plumbing.sewer_pump',
+      description: 'Каналізаційний дренажний насос',
+      quantity: 1,
+      unit: 'шт',
+      itemType: 'equipment',
+    });
+  }
+
+  // 12. Септик / станція очищення (для будинків без центральної каналізації)
+  if (sewerageType === 'septic') {
+    items.push({
+      canonicalKey: 'plumbing.septic_tank',
+      description: 'Септик 3-камерний 3 м³',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'equipment',
+    });
+  } else if (sewerageType === 'treatment') {
+    items.push({
+      canonicalKey: 'plumbing.treatment_station',
+      description: 'Станція біологічної очистки (5-7 осіб)',
+      quantity: 1,
+      unit: 'компл',
+      itemType: 'equipment',
+    });
+  }
+
   return items;
 }

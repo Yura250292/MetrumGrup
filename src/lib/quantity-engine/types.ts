@@ -17,9 +17,14 @@ export type EngineCategory =
   | 'plumbing'
   | 'finishing'
   | 'foundation'
-  | 'walls';
+  | 'walls'
+  | 'roofing'
+  | 'hvac'
+  | 'openings'
+  | 'extras'
+  | 'commercial';
 
-export type EngineItemType = 'material' | 'labor' | 'composite';
+export type EngineItemType = 'material' | 'labor' | 'equipment' | 'composite';
 
 /**
  * A single deterministic line item produced by the engine.
