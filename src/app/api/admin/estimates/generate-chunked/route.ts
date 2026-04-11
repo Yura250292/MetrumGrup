@@ -11,6 +11,7 @@ import { EstimateOrchestrator, GenerationMode } from "@/lib/agents/orchestrator"
 import { vectorizeProject, isProjectVectorized } from "@/lib/rag/vectorizer";
 import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
+import { getOrCreateScratchProject } from "@/lib/projects/scratch-project";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
@@ -280,19 +281,11 @@ export async function POST(request: NextRequest) {
             sendUpdate(update as ChunkUpdate);
           });
 
-          // Save to database
+          // Save to database — when no real project is provided we attach the
+          // estimate to a hidden per-user scratch project (slug `temp-…`) so it
+          // never leaks into the user-facing project list.
           if (!projectId) {
-            const tempProject = await prisma.project.create({
-              data: {
-                title: `Тимчасовий проект (${mode === 'master' ? 'Master Agent' : 'Multi-Agent'})`,
-                slug: `temp-${mode}-${Date.now()}`,
-                description: "Автоматично створений проект для кошторису",
-                status: "DRAFT",
-                clientId: session.user.id,
-                managerId: session.user.id,
-              }
-            });
-            projectId = tempProject.id;
+            projectId = await getOrCreateScratchProject(session.user.id);
           }
 
           const materialsCost = estimateData.summary.materialsCost || 0;
@@ -557,19 +550,9 @@ export async function POST(request: NextRequest) {
 
         let projectId = formData.get("projectId") as string | null;
 
-        // If no projectId provided, create a temporary project
+        // If no projectId provided, attach to the hidden per-user scratch project
         if (!projectId) {
-          const tempProject = await prisma.project.create({
-            data: {
-              title: "Тимчасовий проект (генерація по секціях)",
-              slug: `temp-chunked-${Date.now()}`,
-              description: "Автоматично створений проект для кошторису",
-              status: "DRAFT",
-              clientId: session.user.id,
-              managerId: session.user.id,
-            }
-          });
-          projectId = tempProject.id;
+          projectId = await getOrCreateScratchProject(session.user.id);
         }
 
         // Create estimate and sections first (without items)

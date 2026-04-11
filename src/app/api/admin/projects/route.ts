@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const projects = await prisma.project.findMany({
+      // Hide auto-generated AI-estimate scratch projects from the picker
+      where: { slug: { not: { startsWith: "temp-" } } },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

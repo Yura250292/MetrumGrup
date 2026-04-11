@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DeleteProjectButton } from "./_components/delete-project-button";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,8 @@ type ExtraInfo = {
 export default async function AdminV2ProjectsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const isSuperAdmin = session.user.role === "SUPER_ADMIN";
 
   // 1) Reuse existing aggregations (team / status / progress / budget / address)
   const projects = await listProjectsWithAggregations(session.user.id);
@@ -129,6 +132,7 @@ export default async function AdminV2ProjectsPage() {
                 key={project.id}
                 project={project}
                 extra={extra}
+                canDelete={isSuperAdmin}
               />
             );
           })}
@@ -143,9 +147,11 @@ export default async function AdminV2ProjectsPage() {
 function ProjectCard({
   project,
   extra,
+  canDelete,
 }: {
   project: Awaited<ReturnType<typeof listProjectsWithAggregations>>[number];
   extra: ExtraInfo;
+  canDelete: boolean;
 }) {
   const teamCount = project.team.length;
   const isActive = project.status === "ACTIVE";
@@ -178,8 +184,11 @@ function ProjectCard({
           </div>
         )}
         {/* Status pill in top-right corner */}
-        <div className="absolute top-3 right-3">
+        <div className="absolute top-3 right-3 flex items-center gap-2">
           <StatusBadge status={project.status} />
+          {canDelete && (
+            <DeleteProjectButton projectId={project.id} projectTitle={project.title} />
+          )}
         </div>
         {/* Title overlay at bottom */}
         <div

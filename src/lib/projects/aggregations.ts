@@ -50,9 +50,15 @@ export async function listProjectsWithAggregations(
     },
   };
 
+  // Hide auto-generated AI-estimate scratch projects (slug `temp-…`) from
+  // every listing — they are an implementation detail of the chunked
+  // generation flow and should never appear as user-facing projects.
+  const where = { slug: { not: { startsWith: "temp-" } } };
+
   const fetchProjects = async () => {
     try {
       return await prisma.project.findMany({
+        where,
         orderBy: { updatedAt: "desc" },
         include: {
           ...baseInclude,
@@ -72,6 +78,7 @@ export async function listProjectsWithAggregations(
         err
       );
       const projects = await prisma.project.findMany({
+        where,
         orderBy: { updatedAt: "desc" },
         include: baseInclude,
       });
