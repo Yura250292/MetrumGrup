@@ -52,6 +52,8 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
       { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
+      // Finance section not yet ported to v2 — keep legacy link
+      { href: "/admin/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
   {
