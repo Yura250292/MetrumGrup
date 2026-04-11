@@ -87,6 +87,15 @@ export async function PATCH(
   const body = await request.json();
   const { status, discount, notes } = body;
 
+  // Зчитати поточний стан, щоб знати "до" значення для логу історії.
+  const before = await prisma.estimate.findUnique({
+    where: { id },
+    select: { status: true, discount: true, notes: true, totalAmount: true },
+  });
+  if (!before) {
+    return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  }
+
   const updateData: Record<string, unknown> = {};
   if (status !== undefined) {
     updateData.status = status;
@@ -95,11 +104,7 @@ export async function PATCH(
   }
   if (discount !== undefined) {
     updateData.discount = discount;
-    // Recalculate final amount
-    const estimate = await prisma.estimate.findUnique({ where: { id } });
-    if (estimate) {
-      updateData.finalAmount = Number(estimate.totalAmount) * (1 - discount / 100);
-    }
+    updateData.finalAmount = Number(before.totalAmount) * (1 - discount / 100);
   }
   if (notes !== undefined) updateData.notes = notes;
 
@@ -107,6 +112,57 @@ export async function PATCH(
     where: { id },
     data: updateData,
   });
+
+  // Залогувати зміни в історію кошторису. Помилка логування не повинна
+  // валити сам PATCH — обгорнуто в try/catch.
+  try {
+    const logs: Array<{
+      changeType: string;
+      fieldName: string;
+      oldValue: unknown;
+      newValue: unknown;
+    }> = [];
+
+    if (status !== undefined && status !== before.status) {
+      logs.push({
+        changeType: "STATUS_CHANGE",
+        fieldName: "status",
+        oldValue: before.status,
+        newValue: status,
+      });
+    }
+    if (discount !== undefined && Number(discount) !== Number(before.discount ?? 0)) {
+      logs.push({
+        changeType: "DISCOUNT_CHANGE",
+        fieldName: "discount",
+        oldValue: Number(before.discount ?? 0),
+        newValue: Number(discount),
+      });
+    }
+    if (notes !== undefined && notes !== before.notes) {
+      logs.push({
+        changeType: "NOTES_CHANGE",
+        fieldName: "notes",
+        oldValue: before.notes,
+        newValue: notes,
+      });
+    }
+
+    for (const log of logs) {
+      await prisma.estimateCriticalChange.create({
+        data: {
+          estimateId: id,
+          userId: session.user.id,
+          changeType: log.changeType,
+          fieldName: log.fieldName,
+          oldValue: log.oldValue as never,
+          newValue: log.newValue as never,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[estimates/PATCH] failed to log critical change", err);
+  }
 
   return NextResponse.json({ data: estimate });
 }

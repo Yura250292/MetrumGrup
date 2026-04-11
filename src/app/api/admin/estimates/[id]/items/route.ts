@@ -43,6 +43,7 @@ export async function POST(
       unit,
       quantity,
       unitPrice,
+      userId: session.user.id,
     });
 
     return NextResponse.json({ item }, { status: 201 });

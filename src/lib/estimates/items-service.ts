@@ -2,6 +2,40 @@ import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
 import { recomputeEstimateTotals } from "./recompute";
 
+/**
+ * Запис критичної зміни кошторису. Викликається з функцій нижче після
+ * успішного оновлення позиції — щоб вкладка "Історія" показувала, хто
+ * саме і коли виправив ціну/кількість/опис, додав чи видалив позицію.
+ *
+ * Помилка логування не повинна валити саму операцію редагування —
+ * тому обгорнуто в try/catch.
+ */
+async function logCriticalChange(input: {
+  estimateId: string;
+  userId: string;
+  changeType: string;
+  fieldName: string;
+  oldValue?: unknown;
+  newValue?: unknown;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    await prisma.estimateCriticalChange.create({
+      data: {
+        estimateId: input.estimateId,
+        userId: input.userId,
+        changeType: input.changeType,
+        fieldName: input.fieldName,
+        oldValue: input.oldValue === undefined ? undefined : (input.oldValue as never),
+        newValue: input.newValue === undefined ? undefined : (input.newValue as never),
+        metadata: input.metadata === undefined ? undefined : (input.metadata as never),
+      },
+    });
+  } catch (err) {
+    console.error("[items-service] failed to log critical change", err);
+  }
+}
+
 export type EstimateItemDTO = {
   id: string;
   description: string;
@@ -42,10 +76,11 @@ export async function addEstimateItem(opts: {
   unit: string;
   quantity: number;
   unitPrice: number;
+  userId: string;
 }): Promise<EstimateItemDTO> {
   const section = await prisma.estimateSection.findUnique({
     where: { id: opts.sectionId },
-    select: { id: true, estimateId: true },
+    select: { id: true, estimateId: true, title: true },
   });
   if (!section || section.estimateId !== opts.estimateId) {
     throw new Error("Секцію не знайдено");
@@ -57,13 +92,15 @@ export async function addEstimateItem(opts: {
   });
 
   const amount = new Decimal(opts.quantity).times(opts.unitPrice).toFixed(2);
+  const description = opts.description.trim() || "Нова позиція";
+  const unit = opts.unit.trim() || "шт";
 
   const item = await prisma.estimateItem.create({
     data: {
       estimateId: opts.estimateId,
       sectionId: opts.sectionId,
-      description: opts.description.trim() || "Нова позиція",
-      unit: opts.unit.trim() || "шт",
+      description,
+      unit,
       quantity: opts.quantity,
       unitPrice: opts.unitPrice,
       amount,
@@ -72,6 +109,26 @@ export async function addEstimateItem(opts: {
   });
 
   await recomputeEstimateTotals(opts.estimateId);
+
+  await logCriticalChange({
+    estimateId: opts.estimateId,
+    userId: opts.userId,
+    changeType: "ITEM_ADDED",
+    fieldName: "items",
+    newValue: {
+      description,
+      unit,
+      quantity: opts.quantity,
+      unitPrice: opts.unitPrice,
+      amount: Number(amount),
+    },
+    metadata: {
+      itemId: item.id,
+      sectionId: section.id,
+      sectionTitle: section.title,
+    },
+  });
+
   return toDTO(item);
 }
 
@@ -83,31 +140,40 @@ export async function updateEstimateItem(opts: {
     quantity?: number;
     unitPrice?: number;
   };
+  userId: string;
 }): Promise<EstimateItemDTO> {
   const existing = await prisma.estimateItem.findUnique({
     where: { id: opts.itemId },
     select: {
       id: true,
       estimateId: true,
+      description: true,
+      unit: true,
       quantity: true,
       unitPrice: true,
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
 
+  const oldDescription = existing.description;
+  const oldUnit = existing.unit;
+  const oldQuantity = Number(existing.quantity);
+  const oldUnitPrice = Number(existing.unitPrice);
+
+  const newDescription =
+    opts.patch.description !== undefined ? opts.patch.description.trim() : oldDescription;
+  const newUnit = opts.patch.unit !== undefined ? opts.patch.unit.trim() : oldUnit;
   const newQuantity =
-    opts.patch.quantity !== undefined ? opts.patch.quantity : Number(existing.quantity);
+    opts.patch.quantity !== undefined ? opts.patch.quantity : oldQuantity;
   const newUnitPrice =
-    opts.patch.unitPrice !== undefined ? opts.patch.unitPrice : Number(existing.unitPrice);
+    opts.patch.unitPrice !== undefined ? opts.patch.unitPrice : oldUnitPrice;
   const newAmount = new Decimal(newQuantity).times(newUnitPrice).toFixed(2);
 
   const updated = await prisma.estimateItem.update({
     where: { id: opts.itemId },
     data: {
-      ...(opts.patch.description !== undefined && {
-        description: opts.patch.description.trim(),
-      }),
-      ...(opts.patch.unit !== undefined && { unit: opts.patch.unit.trim() }),
+      ...(opts.patch.description !== undefined && { description: newDescription }),
+      ...(opts.patch.unit !== undefined && { unit: newUnit }),
       quantity: newQuantity,
       unitPrice: newUnitPrice,
       amount: newAmount,
@@ -115,16 +181,77 @@ export async function updateEstimateItem(opts: {
   });
 
   await recomputeEstimateTotals(existing.estimateId);
+
+  // Залогувати всі змінені поля окремими записами, щоб timeline міг
+  // показати "Інженер змінив ціну з X на Y" для кожного поля.
+  const changes: Array<{ field: string; oldValue: unknown; newValue: unknown }> = [];
+  if (opts.patch.description !== undefined && newDescription !== oldDescription) {
+    changes.push({ field: "description", oldValue: oldDescription, newValue: newDescription });
+  }
+  if (opts.patch.unit !== undefined && newUnit !== oldUnit) {
+    changes.push({ field: "unit", oldValue: oldUnit, newValue: newUnit });
+  }
+  if (opts.patch.quantity !== undefined && newQuantity !== oldQuantity) {
+    changes.push({ field: "quantity", oldValue: oldQuantity, newValue: newQuantity });
+  }
+  if (opts.patch.unitPrice !== undefined && newUnitPrice !== oldUnitPrice) {
+    changes.push({ field: "unitPrice", oldValue: oldUnitPrice, newValue: newUnitPrice });
+  }
+
+  for (const change of changes) {
+    await logCriticalChange({
+      estimateId: existing.estimateId,
+      userId: opts.userId,
+      changeType: "ITEM_FIELD_CHANGED",
+      fieldName: change.field,
+      oldValue: change.oldValue,
+      newValue: change.newValue,
+      metadata: {
+        itemId: existing.id,
+        itemDescription: newDescription,
+      },
+    });
+  }
+
   return toDTO(updated);
 }
 
-export async function deleteEstimateItem(itemId: string): Promise<void> {
+export async function deleteEstimateItem(
+  itemId: string,
+  opts: { userId: string }
+): Promise<void> {
   const existing = await prisma.estimateItem.findUnique({
     where: { id: itemId },
-    select: { id: true, estimateId: true },
+    select: {
+      id: true,
+      estimateId: true,
+      description: true,
+      unit: true,
+      quantity: true,
+      unitPrice: true,
+      amount: true,
+    },
   });
   if (!existing) throw new Error("Позицію не знайдено");
 
   await prisma.estimateItem.delete({ where: { id: itemId } });
   await recomputeEstimateTotals(existing.estimateId);
+
+  await logCriticalChange({
+    estimateId: existing.estimateId,
+    userId: opts.userId,
+    changeType: "ITEM_REMOVED",
+    fieldName: "items",
+    oldValue: {
+      description: existing.description,
+      unit: existing.unit,
+      quantity: Number(existing.quantity),
+      unitPrice: Number(existing.unitPrice),
+      amount: Number(existing.amount),
+    },
+    metadata: {
+      itemId: existing.id,
+      itemDescription: existing.description,
+    },
+  });
 }

@@ -55,7 +55,7 @@ export async function PATCH(
       patch.unitPrice = p;
     }
 
-    const item = await updateEstimateItem({ itemId, patch });
+    const item = await updateEstimateItem({ itemId, patch, userId: session.user.id });
     return NextResponse.json({ item });
   } catch (err) {
     return handleError(err);
@@ -73,7 +73,7 @@ export async function DELETE(
     }
 
     const { itemId } = await ctx.params;
-    await deleteEstimateItem(itemId);
+    await deleteEstimateItem(itemId, { userId: session.user.id });
     return NextResponse.json({ ok: true });
   } catch (err) {
     return handleError(err);

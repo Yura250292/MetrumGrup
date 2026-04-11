@@ -62,7 +62,13 @@ export function EstimateHistoryTimeline({ estimateId }: EstimateHistoryTimelineP
             type: 'change',
             timestamp: c.createdAt,
             user: c.user,
-            description: getChangeDescription(c.changeType, c.fieldName, c.oldValue, c.newValue),
+            description: getChangeDescription(
+              c.changeType,
+              c.fieldName,
+              c.oldValue,
+              c.newValue,
+              c.metadata,
+            ),
           })),
         ];
 
@@ -187,7 +193,13 @@ function getApprovalDescription(stepType: string, status: string, notes?: string
   return desc;
 }
 
-function getChangeDescription(changeType: string, fieldName: string, oldValue: any, newValue: any) {
+function getChangeDescription(
+  changeType: string,
+  fieldName: string,
+  oldValue: any,
+  newValue: any,
+  metadata?: any,
+) {
   if (changeType === 'STATUS_CHANGE') {
     return `Змінено статус: ${oldValue} → ${newValue}`;
   }
@@ -197,6 +209,44 @@ function getChangeDescription(changeType: string, fieldName: string, oldValue: a
   if (changeType === 'TOTAL_CHANGE') {
     return `Змінено суму: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`;
   }
+  if (changeType === 'NOTES_CHANGE') {
+    return `Оновлено примітки кошторису`;
+  }
+
+  if (changeType === 'ITEM_ADDED') {
+    const desc = newValue?.description ?? metadata?.itemDescription ?? 'позицію';
+    const qty = newValue?.quantity;
+    const unit = newValue?.unit;
+    const price = newValue?.unitPrice;
+    const tail =
+      qty !== undefined && price !== undefined
+        ? ` (${qty} ${unit ?? ''} × ${formatCurrency(price)})`
+        : '';
+    return `Додано позицію: "${desc}"${tail}`;
+  }
+
+  if (changeType === 'ITEM_REMOVED') {
+    const desc = oldValue?.description ?? metadata?.itemDescription ?? 'позицію';
+    return `Видалено позицію: "${desc}"`;
+  }
+
+  if (changeType === 'ITEM_FIELD_CHANGED') {
+    const itemTitle = metadata?.itemDescription ? ` "${metadata.itemDescription}"` : '';
+    if (fieldName === 'unitPrice') {
+      return `Змінено ціну позиції${itemTitle}: ${formatCurrency(oldValue)} → ${formatCurrency(newValue)}`;
+    }
+    if (fieldName === 'quantity') {
+      return `Змінено кількість позиції${itemTitle}: ${oldValue} → ${newValue}`;
+    }
+    if (fieldName === 'unit') {
+      return `Змінено одиницю виміру позиції${itemTitle}: ${oldValue} → ${newValue}`;
+    }
+    if (fieldName === 'description') {
+      return `Змінено опис позиції: "${oldValue}" → "${newValue}"`;
+    }
+    return `Оновлено позицію${itemTitle}: ${fieldName}`;
+  }
+
   return `Оновлено ${fieldName}`;
 }
 

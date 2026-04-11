@@ -54,7 +54,7 @@ export async function GET(
           },
         },
         orderBy: { createdAt: 'desc' },
-        take: 100, // Обмежити до 100 останніх змін
+        take: 500, // Обмежити до 500 останніх змін (item-level правки)
       }),
     ]);
 
