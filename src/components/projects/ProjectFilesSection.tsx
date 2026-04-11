@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   FileText,
   Image as ImageIcon,
@@ -8,11 +9,17 @@ import {
   Trash2,
   Plus,
   Folder,
+  Sparkles,
+  Download,
+  X,
+  Loader2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import {
   useDeleteProjectFile,
+  useDownloadFilesZip,
+  useGenerateEstimateFromFiles,
   useProjectFiles,
   type ProjectFileDTO,
 } from "@/hooks/useProjectFiles";
@@ -43,14 +50,69 @@ function formatDate(iso: string): string {
 }
 
 export function ProjectFilesSection({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const { data: session } = useSession();
   const { data: files, isLoading, error } = useProjectFiles(projectId);
   const deleteFile = useDeleteProjectFile(projectId);
+  const generateEstimate = useGenerateEstimateFromFiles(projectId);
+  const downloadZip = useDownloadFilesZip(projectId);
   const [textModalOpen, setTextModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<ProjectFileDTO | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const currentUserId = session?.user?.id;
   const isAdmin = session?.user?.role && ADMIN_ROLES.includes(session.user.role);
+
+  // Скинути виділення якщо файл був видалений в іншому місці.
+  const validSelectedIds = useMemo(() => {
+    if (!files) return new Set<string>();
+    const fileIds = new Set(files.map((f) => f.id));
+    return new Set([...selectedIds].filter((id) => fileIds.has(id)));
+  }, [files, selectedIds]);
+  const selectedCount = validSelectedIds.size;
+  const allSelected = !!files && files.length > 0 && selectedCount === files.length;
+
+  const toggleOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (!files) return;
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(files.map((f) => f.id)));
+    }
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleGenerateAi = async () => {
+    setActionError(null);
+    try {
+      const { estimateId } = await generateEstimate.mutateAsync({
+        selectedFileIds: [...validSelectedIds],
+      });
+      router.push(`/admin-v2/estimates/${estimateId}`);
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+  };
+
+  const handleDownloadZip = async () => {
+    setActionError(null);
+    try {
+      await downloadZip.mutateAsync({ fileIds: [...validSelectedIds] });
+    } catch (err) {
+      setActionError((err as Error).message);
+    }
+  };
 
   const handleClickFile = (file: ProjectFileDTO) => {
     if (file.mimeType === "text/plain") {
@@ -87,6 +149,57 @@ export function ProjectFilesSection({ projectId }: { projectId: string }) {
 
       <UploadDropZone projectId={projectId} />
 
+      {selectedCount > 0 && (
+        <div
+          className="mt-4 flex items-center gap-2 flex-wrap rounded-lg border border-blue-500/40 admin-dark:bg-blue-500/10 admin-light:bg-blue-50 px-3 py-2"
+          role="toolbar"
+          aria-label="Дії з вибраними файлами"
+        >
+          <span className="text-sm font-semibold admin-dark:text-blue-200 admin-light:text-blue-900">
+            Вибрано: {selectedCount}
+          </span>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="text-xs admin-dark:text-blue-300 admin-light:text-blue-700 hover:underline flex items-center gap-1"
+            title="Зняти виділення"
+          >
+            <X className="h-3 w-3" />
+            Зняти
+          </button>
+          <div className="flex-1" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleDownloadZip}
+            disabled={downloadZip.isPending}
+          >
+            {downloadZip.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            Завантажити (ZIP)
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleGenerateAi}
+            disabled={generateEstimate.isPending}
+          >
+            {generateEstimate.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            AI кошторис
+          </Button>
+        </div>
+      )}
+
+      {actionError && (
+        <p className="mt-2 text-xs text-red-500">Помилка: {actionError}</p>
+      )}
+
       <div className="mt-4 space-y-2">
         {isLoading && (
           <p className="text-sm admin-dark:text-gray-500 admin-light:text-gray-500">
@@ -103,14 +216,38 @@ export function ProjectFilesSection({ projectId }: { projectId: string }) {
             Поки немає файлів. Завантажте перший — він буде доступний для AI генерації кошторису.
           </p>
         )}
+        {!isLoading && files && files.length > 0 && (
+          <label className="flex items-center gap-2 px-2 py-1 text-xs admin-dark:text-gray-400 admin-light:text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleAll}
+              className="h-4 w-4 accent-blue-600"
+            />
+            {allSelected ? "Зняти всі" : "Виділити всі"}
+          </label>
+        )}
         {files?.map((file) => {
           const Icon = fileIcon(file);
           const canDelete = file.uploadedBy.id === currentUserId || isAdmin;
+          const isSelected = validSelectedIds.has(file.id);
           return (
             <div
               key={file.id}
-              className="flex items-center gap-3 rounded-lg border admin-dark:border-white/5 admin-dark:bg-gray-900/40 admin-light:border-gray-100 admin-light:bg-white p-3 group"
+              className={`flex items-center gap-3 rounded-lg border admin-dark:bg-gray-900/40 admin-light:bg-white p-3 group ${
+                isSelected
+                  ? "border-blue-500/60 admin-dark:bg-blue-500/5 admin-light:bg-blue-50/40"
+                  : "admin-dark:border-white/5 admin-light:border-gray-100"
+              }`}
             >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                onChange={() => toggleOne(file.id)}
+                onClick={(e) => e.stopPropagation()}
+                className="h-4 w-4 accent-blue-600 flex-shrink-0"
+                aria-label={`Вибрати ${file.name}`}
+              />
               <button
                 type="button"
                 onClick={() => handleClickFile(file)}

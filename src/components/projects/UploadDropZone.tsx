@@ -63,7 +63,7 @@ export function UploadDropZone({ projectId }: { projectId: string }) {
           Перетягніть файли сюди або клікніть для вибору
         </p>
         <p className="text-xs admin-dark:text-gray-500 admin-light:text-gray-500">
-          Фото, PDF, документи (до ~4 MB)
+          Фото, PDF, документи. Великі файли вантажаться напряму в сховище.
         </p>
         <input
           ref={inputRef}

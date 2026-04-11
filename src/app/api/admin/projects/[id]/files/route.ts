@@ -7,6 +7,7 @@ import {
 import {
   createTextNote,
   listProjectFiles,
+  registerProjectFileFromR2,
   uploadProjectFile,
 } from "@/lib/projects/files-service";
 import {
@@ -114,8 +115,71 @@ export async function POST(
       return NextResponse.json({ file: dto }, { status: 201 });
     }
 
-    // JSON mode (text note)
+    // JSON mode — або реєстрація R2-аплоаду (presigned), або текстова нотатка.
     const json = await request.json();
+
+    // 1) Реєстрація вже залитого в R2 файлу (presigned-URL flow для >4 МБ)
+    if (typeof json.r2Key === "string" && json.r2Key.length > 0) {
+      const visibilityRaw = json.visibility;
+      const categoryRaw = json.category;
+      const visibility =
+        typeof visibilityRaw === "string" &&
+        ["TEAM", "CLIENT", "INTERNAL"].includes(visibilityRaw)
+          ? (visibilityRaw as "TEAM" | "CLIENT" | "INTERNAL")
+          : undefined;
+      const category =
+        typeof categoryRaw === "string" &&
+        ["PLAN", "CONTRACT", "TECH_DOC", "NOTE", "PHOTO_ATTACHMENT", "OTHER"].includes(
+          categoryRaw,
+        )
+          ? (categoryRaw as
+              | "PLAN"
+              | "CONTRACT"
+              | "TECH_DOC"
+              | "NOTE"
+              | "PHOTO_ATTACHMENT"
+              | "OTHER")
+          : undefined;
+
+      const name = typeof json.name === "string" ? json.name : "file";
+      const size = Number.isFinite(Number(json.size)) ? Number(json.size) : 0;
+      const mimeType =
+        typeof json.mimeType === "string" && json.mimeType
+          ? json.mimeType
+          : "application/octet-stream";
+
+      const dto = await registerProjectFileFromR2({
+        projectId: id,
+        uploadedById: session.user.id,
+        r2Key: json.r2Key,
+        name,
+        size,
+        mimeType,
+        visibility,
+        category,
+      });
+
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id },
+          select: { title: true },
+        });
+        await notifyProjectMembers({
+          projectId: id,
+          actorId: session.user.id,
+          type: "PROJECT_FILE_ADDED",
+          title: `Новий файл у проєкті «${project?.title ?? ""}»`,
+          body: dto.name,
+          relatedEntity: "ProjectFile",
+          relatedId: id,
+        });
+      } catch (err) {
+        console.error("[projects/files] notifyProjectMembers failed:", err);
+      }
+      return NextResponse.json({ file: dto }, { status: 201 });
+    }
+
+    // 2) Текстова нотатка
     const title = typeof json.title === "string" ? json.title : "";
     const text = typeof json.text === "string" ? json.text : "";
     if (!text.trim()) {

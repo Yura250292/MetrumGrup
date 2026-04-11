@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
-import { uploadFileToR2, deleteFileFromR2, isR2Configured } from "@/lib/r2-client";
+import {
+  uploadFileToR2,
+  deleteFileFromR2,
+  isR2Configured,
+  createPresignedUploadUrl,
+} from "@/lib/r2-client";
 import { FileType, type FileCategory, type FileVisibility } from "@prisma/client";
 import { getProjectAccessContext } from "@/lib/projects/access";
+
+const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL ?? "";
 
 export type ProjectFileDTO = {
   id: string;
@@ -85,6 +92,85 @@ export async function uploadProjectFile(opts: {
       r2Key: uploaded.key,
       size: opts.file.size,
       mimeType: opts.file.type || "application/octet-stream",
+    },
+    include: {
+      uploadedBy: { select: { id: true, name: true } },
+    },
+  });
+
+  return toDTO(row);
+}
+
+/**
+ * Створити presigned URL для прямого аплоаду файла проекту в R2 з браузера.
+ * Використовується щоб обходити Vercel-овий ~4.5 МБ ліміт на тіло запиту.
+ */
+export async function createProjectFileUploadUrl(opts: {
+  projectId: string;
+  fileName: string;
+  contentType: string;
+}): Promise<{ uploadUrl: string; key: string; publicUrl: string }> {
+  if (!isR2Configured()) {
+    throw new Error("R2 не налаштований. Заповніть R2_* змінні в .env");
+  }
+  const project = await prisma.project.findUnique({
+    where: { id: opts.projectId },
+    select: { id: true },
+  });
+  if (!project) throw new Error("Проєкт не знайдено");
+
+  return createPresignedUploadUrl(
+    opts.fileName,
+    opts.contentType,
+    `projects/${opts.projectId}`,
+  );
+}
+
+/**
+ * Зареєструвати в БД файл, який вже завантажений у R2 через presigned URL.
+ * Альтернатива uploadProjectFile() — без байтів, лише метадані.
+ */
+export async function registerProjectFileFromR2(opts: {
+  projectId: string;
+  uploadedById: string;
+  r2Key: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  category?: FileCategory;
+  visibility?: FileVisibility;
+}): Promise<ProjectFileDTO> {
+  if (!isR2Configured()) {
+    throw new Error("R2 не налаштований. Заповніть R2_* змінні в .env");
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: opts.projectId },
+    select: { id: true },
+  });
+  if (!project) throw new Error("Проєкт не знайдено");
+
+  // Безпека: ключ має належати каталогу цього проекту,
+  // щоб не можна було "приклеїти" чужий об'єкт із бакета.
+  const expectedPrefix = `projects/${opts.projectId}/`;
+  if (!opts.r2Key.startsWith(expectedPrefix)) {
+    throw new Error("Некоректний r2Key для цього проекту");
+  }
+
+  const url = R2_PUBLIC_URL ? `${R2_PUBLIC_URL}/${opts.r2Key}` : "";
+
+  const row = await prisma.projectFile.create({
+    data: {
+      projectId: opts.projectId,
+      uploadedById: opts.uploadedById,
+      type: detectFileType(opts.mimeType),
+      category: opts.category ?? "OTHER",
+      visibility: opts.visibility ?? "TEAM",
+      name: opts.name,
+      url,
+      r2Key: opts.r2Key,
+      size: opts.size,
+      mimeType: opts.mimeType || "application/octet-stream",
     },
     include: {
       uploadedBy: { select: { id: true, name: true } },

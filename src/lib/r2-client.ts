@@ -168,17 +168,28 @@ export function shouldUseR2(): boolean {
 
 /**
  * Генерує presigned URL для прямого завантаження з браузера в R2
- * (обхід Vercel 4.5MB ліміту)
+ * (обхід Vercel 4.5MB ліміту).
+ *
+ * @param fileName  Оригінальна назва файлу (зберігається в кінці ключа)
+ * @param fileType  MIME тип
+ * @param scope     Або рядок з готовим префіксом (наприклад "projects/abc"),
+ *                  або estimateId для зворотньої сумісності з v2-генератором.
  */
 export async function createPresignedUploadUrl(
   fileName: string,
   fileType: string,
-  estimateId?: string
+  scope?: string
 ): Promise<{ uploadUrl: string; key: string; publicUrl: string }> {
-  // Генеруємо унікальний ключ
+  // Генеруємо унікальний ключ.
+  // Якщо префікс уже містить '/', використовуємо його як є; інакше
+  // (legacy виклик з самим estimateId) — обгортаємо в estimates/<id>.
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(7);
-  const prefix = estimateId ? `estimates/${estimateId}` : 'temp';
+  const prefix = !scope
+    ? 'temp'
+    : scope.includes('/')
+      ? scope.replace(/\/+$/, '')
+      : `estimates/${scope}`;
   const key = `${prefix}/${timestamp}-${randomId}-${fileName}`;
 
   console.log(`🔑 Creating presigned URL for: ${key}`);
