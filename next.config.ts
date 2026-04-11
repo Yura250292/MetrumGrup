@@ -56,9 +56,16 @@ const nextConfig: NextConfig = {
       // Feed
       { source: "/admin/feed", destination: "/admin-v2/feed", permanent: false },
 
+      // Chat
+      { source: "/admin/chat", destination: "/admin-v2/chat", permanent: false },
+      { source: "/admin/chat/:conversationId", destination: "/admin-v2/chat/:conversationId", permanent: false },
+
+      // Finance
+      { source: "/admin/finance", destination: "/admin-v2/finance", permanent: false },
+      { source: "/admin/finance/templates", destination: "/admin-v2/finance/templates", permanent: false },
+      { source: "/admin/finance/configure/:id", destination: "/admin-v2/finance/configure/:id", permanent: false },
+
       // NOT redirected (legacy stays as fallback — no v2 equivalent yet):
-      // - /admin/chat/*               (chat redesign deferred)
-      // - /admin/finance/*            (finance section not yet ported)
       // - /admin/migrate              (internal migration tool)
     ];
   },

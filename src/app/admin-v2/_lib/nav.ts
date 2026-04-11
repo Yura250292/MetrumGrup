@@ -41,8 +41,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
-      // Chat is too complex to redesign in v2 — keep legacy link
-      { href: "/admin/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
+      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
       { href: "/admin-v2/feed", label: "Стрічка", icon: Activity },
     ],
   },
@@ -52,8 +51,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
       { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
-      // Finance section not yet ported to v2 — keep legacy link
-      { href: "/admin/finance", label: "Фінансовий облік", icon: Calculator },
+      { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
   {
@@ -85,7 +83,7 @@ export const MOBILE_NAV: NavItem[] = [
   { href: "/admin-v2", label: "Головна", icon: LayoutDashboard, exact: true },
   { href: "/admin-v2/projects", label: "Проєкти", icon: Building2 },
   { href: "/ai-estimate-v2", label: "AI", icon: Calculator },
-  { href: "/admin/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
+  { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
 ];
 
 // Breadcrumb labels — keyed by full path
@@ -107,6 +105,9 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/users": "Користувачі",
   "/admin-v2/settings": "Налаштування",
   "/admin-v2/feed": "Стрічка",
+  "/admin-v2/chat": "Чат",
+  "/admin-v2/finance": "Фінансовий облік",
+  "/admin-v2/finance/templates": "Шаблони",
   "/admin": "Дашборд",
   "/admin/projects": "Проєкти",
   "/admin/projects/new": "Новий проєкт",
