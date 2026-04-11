@@ -34,6 +34,8 @@ export type MasterProgressCallback = (update: {
   sectionTitle: string;
   itemsGenerated: number;
   status: 'generating' | 'complete' | 'error';
+  /** Текст помилки коли status='error'. */
+  error?: string;
 }) => void;
 
 /**
@@ -294,6 +296,20 @@ export class MasterEstimateAgent {
     this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
 
+  private parseAiNumber(value: unknown): number {
+    if (value === null || value === undefined || value === '') return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+    const normalized = String(value)
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/₴|грн|uah/gi, '')
+      .replace(',', '.');
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
   /**
    * Генерувати повний детальний кошторис (секція-за-секцією)
    */
@@ -352,8 +368,10 @@ export class MasterEstimateAgent {
 
           return section;
         } catch (error) {
+          const errMsg = error instanceof Error ? error.message : String(error);
+          const errStack = error instanceof Error && error.stack ? error.stack.split('\n').slice(0, 3).join(' | ') : '';
           console.error(`❌ Failed to generate section "${spec.title}":`, error);
-          allWarnings.push(`Помилка генерації секції "${spec.title}": ${error instanceof Error ? error.message : 'Unknown'}`);
+          allWarnings.push(`Помилка генерації секції "${spec.title}": ${errMsg}`);
 
           onProgress?.({
             sectionIndex,
@@ -361,6 +379,7 @@ export class MasterEstimateAgent {
             sectionTitle: spec.title,
             itemsGenerated: 0,
             status: 'error',
+            error: errStack ? `${errMsg} | ${errStack}` : errMsg,
           });
           return null;
         }
@@ -465,17 +484,25 @@ export class MasterEstimateAgent {
       }
     }
 
-    const items: EstimateItem[] = (parsed.items || []).map((item: any) => ({
+    const items: EstimateItem[] = (parsed.items || []).map((item: any) => {
+      const quantity = this.parseAiNumber(item.quantity);
+      const unitPrice = this.parseAiNumber(item.unitPrice);
+      const laborCost = this.parseAiNumber(item.laborCost);
+      const totalCost = this.parseAiNumber(item.totalCost) || (quantity * unitPrice + laborCost);
+      const confidence = this.parseAiNumber(item.confidence) || 0.7;
+
+      return {
       description: item.description || '',
-      quantity: Number(item.quantity) || 0,
+      quantity,
       unit: item.unit || 'шт',
-      unitPrice: Number(item.unitPrice) || 0,
-      laborCost: Number(item.laborCost) || 0,
-      totalCost: Number(item.totalCost) || (Number(item.quantity) * Number(item.unitPrice) + Number(item.laborCost || 0)),
+      unitPrice,
+      laborCost,
+      totalCost,
       priceSource: item.priceSource || `AI оцінка (${usedModel})`,
-      confidence: Number(item.confidence) || 0.7,
+      confidence,
       notes: item.notes,
-    }));
+      };
+    });
 
     const sectionTotal = items.reduce((sum, item) => sum + item.totalCost, 0);
 

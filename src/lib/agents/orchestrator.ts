@@ -297,8 +297,11 @@ export class EstimateOrchestrator {
             onProgress({
               phase: `master-${update.sectionIndex + 1}`,
               status: 'error',
-              message: `❌ ${update.sectionTitle}: помилка`,
+              message: update.error
+                ? `❌ ${update.sectionTitle}: ${update.error}`
+                : `❌ ${update.sectionTitle}: помилка`,
               progress: progressPercent,
+              data: { error: update.error, sectionTitle: update.sectionTitle },
             });
           }
         });
