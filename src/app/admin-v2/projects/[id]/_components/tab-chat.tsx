@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { MessageSquare, ExternalLink, Users } from "lucide-react";
-import { OpenProjectChatButton } from "@/components/chat/OpenProjectChatButton";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { MessageSquare, ExternalLink, Users, Loader2 } from "lucide-react";
+import { useCreateConversation } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 
 export function TabChat({ projectId }: { projectId: string }) {
   return (
@@ -29,9 +30,7 @@ export function TabChat({ projectId }: { projectId: string }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-          <div className="admin-dark" style={DARK_VARS}>
-            <OpenProjectChatButton projectId={projectId} />
-          </div>
+          <OpenProjectChatV2 projectId={projectId} />
           <Link
             href="/admin-v2/chat"
             className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
@@ -66,5 +65,43 @@ export function TabChat({ projectId }: { projectId: string }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function OpenProjectChatV2({ projectId }: { projectId: string }) {
+  const router = useRouter();
+  const createConversation = useCreateConversation();
+  const [busy, setBusy] = useState(false);
+
+  async function open() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const conv = await createConversation.mutateAsync({
+        type: "PROJECT",
+        projectId,
+      });
+      router.push(`/admin-v2/chat/${conv.id}`);
+    } catch (err) {
+      console.error("Failed to open project chat:", err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={open}
+      disabled={busy || createConversation.isPending}
+      className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+      style={{ backgroundColor: T.accentPrimary }}
+    >
+      {busy || createConversation.isPending ? (
+        <Loader2 size={14} className="animate-spin" />
+      ) : (
+        <MessageSquare size={14} />
+      )}
+      Обговорити проєкт
+    </button>
   );
 }

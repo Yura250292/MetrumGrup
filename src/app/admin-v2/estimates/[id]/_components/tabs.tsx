@@ -8,6 +8,7 @@ import { EstimateHistoryTimeline } from "@/components/admin/EstimateHistoryTimel
 import { CommentThread } from "@/components/collab/CommentThread";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 import type { EstimateController } from "../_lib/use-controller";
 
 const TABS = [
@@ -76,7 +77,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
               className="rounded-2xl p-5"
               style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
             >
-              <div className="admin-dark">
+              <div className="admin-dark" style={DARK_VARS}>
                 <EditableSectionTable
                   estimateId={e.id}
                   sectionId={section.id}
@@ -101,7 +102,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
               className="rounded-2xl p-5"
               style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
             >
-              <div className="admin-dark">
+              <div className="admin-dark" style={DARK_VARS}>
                 <TaxBreakdownCard
                   taxationType={e.taxationType as any}
                   taxBreakdown={{
@@ -185,7 +186,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
             className="rounded-2xl p-5"
             style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
           >
-            <div className="admin-dark">
+            <div className="admin-dark" style={DARK_VARS}>
               <ApprovalSignatureCard approvals={controller.approvals} estimateId={e.id} />
             </div>
           </div>
@@ -193,7 +194,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
             className="rounded-2xl p-5"
             style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
           >
-            <div className="admin-dark">
+            <div className="admin-dark" style={DARK_VARS}>
               <EstimateHistoryTimeline estimateId={e.id} />
             </div>
           </div>
@@ -205,7 +206,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
           className="rounded-2xl p-5"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
-          <div className="admin-dark">
+          <div className="admin-dark" style={DARK_VARS}>
             <CommentThread entityType="ESTIMATE" entityId={e.id} />
           </div>
         </div>

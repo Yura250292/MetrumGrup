@@ -2,6 +2,7 @@
 
 import { User, Mail, Phone } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 import { ProjectTeamSection } from "@/components/projects/ProjectTeamSection";
 
 type Person = { id: string; name: string; email: string; phone: string | null };
@@ -17,7 +18,7 @@ export function TabTeam({
   return (
     <div className="flex flex-col gap-6">
       {/* Real ProjectMember management */}
-      <div className="admin-dark">
+      <div className="admin-dark" style={DARK_VARS}>
         <ProjectTeamSection projectId={projectId} />
       </div>
 

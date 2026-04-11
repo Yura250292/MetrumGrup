@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   ArrowLeft,
   FileDown,
@@ -10,10 +12,11 @@ import {
   Calculator,
   Send,
   Loader2,
+  MessageSquare,
 } from "lucide-react";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
-import { OpenEstimateChatButton } from "@/components/chat/OpenEstimateChatButton";
+import { useCreateConversation } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { EstimateController } from "../_lib/use-controller";
 
@@ -118,12 +121,52 @@ export function EstimateHeader({
               Надіслати
             </button>
           )}
-          <div className="admin-dark">
-            <OpenEstimateChatButton estimateId={e.id} />
-          </div>
+          <ChatButton estimateId={e.id} />
         </div>
       </div>
     </header>
+  );
+}
+
+function ChatButton({ estimateId }: { estimateId: string }) {
+  const router = useRouter();
+  const createConversation = useCreateConversation();
+  const [busy, setBusy] = useState(false);
+
+  async function open() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const conv = await createConversation.mutateAsync({
+        type: "ESTIMATE",
+        estimateId,
+      });
+      router.push(`/admin-v2/chat/${conv.id}`);
+    } catch (err) {
+      console.error("Failed to open estimate chat:", err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={open}
+      disabled={busy || createConversation.isPending}
+      className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+      style={{
+        backgroundColor: T.panelElevated,
+        color: T.textSecondary,
+        border: `1px solid ${T.borderStrong}`,
+      }}
+    >
+      {busy || createConversation.isPending ? (
+        <Loader2 size={14} className="animate-spin" />
+      ) : (
+        <MessageSquare size={14} />
+      )}
+      Чат
+    </button>
   );
 }
 
