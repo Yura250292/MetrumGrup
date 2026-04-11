@@ -109,3 +109,67 @@ export async function PATCH(
 
   return NextResponse.json({ data: project });
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user) return unauthorizedResponse();
+
+  // Тільки SUPER_ADMIN видаляє проекти. MANAGER не отримує право, бо delete
+  // каскадно зносить всі estimates / payments / files / chat / members.
+  if (session.user.role !== "SUPER_ADMIN") {
+    return forbiddenResponse();
+  }
+
+  try {
+    const existing = await prisma.project.findUnique({
+      where: { id },
+      select: { id: true, title: true },
+    });
+    if (!existing) {
+      return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+    }
+
+    // Дві FK на Project не мають onDelete: Cascade у схемі —
+    // inventory_transactions.projectId і audit_logs.projectId. Обидва
+    // nullable, тому просто null-имо їх до delete.
+    await prisma.$transaction(async (tx) => {
+      await tx.inventoryTransaction.updateMany({
+        where: { projectId: id },
+        data: { projectId: null },
+      });
+      // audit_logs модель — використовуємо raw SQL бо назва Prisma-моделі
+      // може відрізнятися від snake_case таблиці.
+      await tx.$executeRaw`UPDATE "audit_logs" SET "projectId" = NULL WHERE "projectId" = ${id}`;
+
+      await tx.project.delete({ where: { id } });
+    });
+
+    await auditLog({
+      userId: session.user.id,
+      action: "DELETE",
+      entity: "Project",
+      entityId: id,
+      oldData: { title: existing.title },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Проєкт успішно видалено",
+    });
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? `Помилка видалення: ${error.message}`
+            : "Помилка видалення проєкту",
+      },
+      { status: 500 }
+    );
+  }
+}
