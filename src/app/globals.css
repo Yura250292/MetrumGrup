@@ -10,6 +10,14 @@
 @custom-variant admin-dark (&:where(.admin-dark, .admin-dark *));
 @custom-variant admin-light (&:where(.admin-light, .admin-light *));
 
+/* Native number input spinners are white-on-white inside dark wrappers
+   (Safari / Chrome). Invert their colors so they stay visible. */
+.admin-dark input[type="number"]::-webkit-inner-spin-button,
+.admin-dark input[type="number"]::-webkit-outer-spin-button {
+  filter: invert(1);
+  opacity: 0.7;
+}
+
 @font-face {
   font-family: "Montserrat";
   font-style: normal;
