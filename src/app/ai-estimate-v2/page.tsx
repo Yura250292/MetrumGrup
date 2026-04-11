@@ -35,8 +35,8 @@ export default function AiEstimateV2Page() {
   const showResult = controller.estimate !== null;
 
   return (
-    <div className="min-h-screen w-full" style={{ backgroundColor: T.background }}>
-      <div className="flex justify-center">
+    <div className="w-full" style={{ backgroundColor: T.background }}>
+      <div className="flex w-full justify-center overflow-x-auto">
         {showResult ? (
           isMobile ? (
             <ResultMobile controller={controller} />

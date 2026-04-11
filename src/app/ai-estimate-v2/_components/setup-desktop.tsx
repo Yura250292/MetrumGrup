@@ -2,7 +2,6 @@
 
 import { useRef, useState, DragEvent, ChangeEvent } from "react";
 import {
-  Layers,
   Sparkles,
   Globe,
   ShieldCheck,
@@ -21,14 +20,12 @@ import {
   Database,
   Eye,
   Info,
-  Settings2,
-  Ellipsis,
   ChevronRight,
   X,
   Loader2,
 } from "lucide-react";
 import { T } from "./tokens";
-import { BtnGhost, BtnIconOnly, MetricPill, ChecklistItem, SourceStatusCard, ScoreDial } from "./primitives";
+import { MetricPill, ChecklistItem, SourceStatusCard, ScoreDial } from "./primitives";
 import { formatBytes } from "../_lib/format";
 import type { AiEstimateController } from "../_lib/use-controller";
 
@@ -70,38 +67,7 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
     (filesReady ? 50 : 0) + (controller.wizardCompleted ? 30 : 0) + (paramsReady ? 20 : 0);
 
   return (
-    <div className="w-[1440px] flex-shrink-0" style={{ backgroundColor: T.background, color: T.textPrimary }}>
-      {/* Top app bar */}
-      <header
-        className="flex h-16 items-center justify-between border-b px-8"
-        style={{ backgroundColor: T.panel, borderColor: T.borderSoft }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg"
-            style={{ backgroundColor: T.accentPrimary }}
-          >
-            <Layers size={18} color="#FFFFFF" />
-          </div>
-          <span className="text-sm font-semibold" style={{ color: T.textPrimary }}>
-            Metrum · AI Кошторис
-          </span>
-          <span className="text-sm" style={{ color: T.textMuted }}>
-            / Адмін
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <BtnGhost icon={Settings2}>Налаштування</BtnGhost>
-          <BtnIconOnly icon={Ellipsis} />
-          <div
-            className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold"
-            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-          >
-            ІШ
-          </div>
-        </div>
-      </header>
-
+    <div className="w-full max-w-[1440px]" style={{ backgroundColor: T.background, color: T.textPrimary }}>
       {/* Hero */}
       <section className="flex items-start justify-between px-12 pt-10 pb-8">
         <div className="flex max-w-3xl flex-col gap-3.5">
