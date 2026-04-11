@@ -13,6 +13,8 @@ import {
   canUploadProjectFiles,
   canViewProject,
 } from "@/lib/projects/access";
+import { notifyProjectMembers } from "@/lib/notifications/create";
+import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -92,6 +94,23 @@ export async function POST(
         visibility,
         category,
       });
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id },
+          select: { title: true },
+        });
+        await notifyProjectMembers({
+          projectId: id,
+          actorId: session.user.id,
+          type: "PROJECT_FILE_ADDED",
+          title: `Новий файл у проєкті «${project?.title ?? ""}»`,
+          body: dto.name,
+          relatedEntity: "ProjectFile",
+          relatedId: id,
+        });
+      } catch (err) {
+        console.error("[projects/files] notifyProjectMembers failed:", err);
+      }
       return NextResponse.json({ file: dto }, { status: 201 });
     }
 
@@ -112,6 +131,23 @@ export async function POST(
       title,
       text,
     });
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id },
+        select: { title: true },
+      });
+      await notifyProjectMembers({
+        projectId: id,
+        actorId: session.user.id,
+        type: "PROJECT_FILE_ADDED",
+        title: `Нова нотатка у проєкті «${project?.title ?? ""}»`,
+        body: dto.name,
+        relatedEntity: "ProjectFile",
+        relatedId: id,
+      });
+    } catch (err) {
+      console.error("[projects/files] notifyProjectMembers failed:", err);
+    }
     return NextResponse.json({ file: dto }, { status: 201 });
   } catch (err) {
     return handleError(err);

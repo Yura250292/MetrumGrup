@@ -1,8 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Bell } from "lucide-react";
 import Link from "next/link";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const breadcrumbMap: Record<string, string> = {
   "/admin": "Дашборд",
@@ -55,9 +55,7 @@ export function AdminHeader() {
         ))}
       </div>
 
-      <button className="relative rounded-lg p-2 transition-colors admin-dark:text-gray-400 admin-dark:hover:bg-white/10 admin-dark:hover:text-white admin-light:text-gray-600 admin-light:hover:bg-gray-100 admin-light:hover:text-gray-900">
-        <Bell className="h-5 w-5" />
-      </button>
+      <NotificationBell variant="v1" />
     </header>
   );
 }

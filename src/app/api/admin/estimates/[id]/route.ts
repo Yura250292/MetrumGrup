@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { notifyProjectMembers } from "@/lib/notifications/create";
 
 export async function GET(
   _request: NextRequest,
@@ -90,7 +91,16 @@ export async function PATCH(
   // Зчитати поточний стан, щоб знати "до" значення для логу історії.
   const before = await prisma.estimate.findUnique({
     where: { id },
-    select: { status: true, discount: true, notes: true, totalAmount: true },
+    select: {
+      status: true,
+      discount: true,
+      notes: true,
+      totalAmount: true,
+      projectId: true,
+      title: true,
+      number: true,
+      project: { select: { title: true } },
+    },
   });
   if (!before) {
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
@@ -162,6 +172,26 @@ export async function PATCH(
     }
   } catch (err) {
     console.error("[estimates/PATCH] failed to log critical change", err);
+  }
+
+  // Notify project members on status change (especially APPROVED).
+  if (status !== undefined && status !== before.status) {
+    try {
+      const isApproval = status === "APPROVED";
+      await notifyProjectMembers({
+        projectId: before.projectId,
+        actorId: session.user.id,
+        type: isApproval ? "PROJECT_ESTIMATE_APPROVED" : "PROJECT_UPDATED",
+        title: isApproval
+          ? `Кошторис ${before.number} затверджено`
+          : `Статус кошторису ${before.number} → ${status}`,
+        body: before.title,
+        relatedEntity: "Estimate",
+        relatedId: id,
+      });
+    } catch (err) {
+      console.error("[estimates/PATCH] notifyProjectMembers failed:", err);
+    }
   }
 
   return NextResponse.json({ data: estimate });

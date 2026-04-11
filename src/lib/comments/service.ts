@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { CommentEntityType } from "@prisma/client";
-import { createMentionNotifications, parseMentionedIds } from "@/lib/notifications/create";
+import {
+  createMentionNotifications,
+  notifyProjectMembers,
+  parseMentionedIds,
+} from "@/lib/notifications/create";
 import { canParticipateInProject, canViewProject } from "@/lib/projects/access";
 
 /**
@@ -163,6 +167,34 @@ export async function postComment(
     relatedEntity: entityType,
     relatedId: entityId,
   });
+
+  // Broadcast to all active project members (skip those already mentioned
+  // to avoid duplicate notifications). Best-effort: a notification failure
+  // must not break comment creation.
+  if (projectId) {
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { title: true },
+      });
+      const mentionedIds = parseMentionedIds(trimmed, authorId);
+      await notifyProjectMembers({
+        projectId,
+        actorId: authorId,
+        type: "PROJECT_COMMENT",
+        title:
+          entityType === "PROJECT"
+            ? `Новий коментар у проєкті «${project?.title ?? ""}»`
+            : `Новий коментар до кошторису у проєкті «${project?.title ?? ""}»`,
+        body: trimmed,
+        relatedEntity: entityType === "PROJECT" ? "Project" : "Estimate",
+        relatedId: entityType === "PROJECT" ? projectId : entityId,
+        excludeUserIds: mentionedIds,
+      });
+    } catch (err) {
+      console.error("[comments/postComment] notifyProjectMembers failed:", err);
+    }
+  }
 
   return {
     id: comment.id,

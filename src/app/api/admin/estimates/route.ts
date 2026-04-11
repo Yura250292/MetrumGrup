@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { getNextEstimateNumber } from "@/lib/document-numbers";
+import { notifyProjectMembers } from "@/lib/notifications/create";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -200,6 +201,24 @@ export async function POST(request: NextRequest) {
       projectId,
       newData: { title, totalAmount: completeEstimate!.totalAmount },
     });
+
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { title: true },
+      });
+      await notifyProjectMembers({
+        projectId,
+        actorId: session.user.id,
+        type: "PROJECT_ESTIMATE_CREATED",
+        title: `Новий кошторис у проєкті «${project?.title ?? ""}»`,
+        body: title,
+        relatedEntity: "Estimate",
+        relatedId: completeEstimate!.id,
+      });
+    } catch (err) {
+      console.error("[estimates/POST] notifyProjectMembers failed:", err);
+    }
 
     return NextResponse.json({ data: completeEstimate }, { status: 201 });
   } catch (error: any) {

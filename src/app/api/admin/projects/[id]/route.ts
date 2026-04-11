@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { addProjectMember, deactivateMember } from "@/lib/projects/members-service";
+import { notifyProjectMembers } from "@/lib/notifications/create";
 
 export async function GET(
   _request: NextRequest,
@@ -51,7 +52,7 @@ export async function PATCH(
   // Read previous managerId to know if we need to sync ProjectMember
   const previous = await prisma.project.findUnique({
     where: { id },
-    select: { managerId: true },
+    select: { managerId: true, status: true, currentStage: true, title: true },
   });
   if (!previous) {
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
@@ -106,6 +107,34 @@ export async function PATCH(
     projectId: id,
     newData: updateData,
   });
+
+  // Notify project members about meaningful changes (status / stage / manager).
+  // Best-effort: failures must not fail the PATCH.
+  try {
+    const changedParts: string[] = [];
+    if (status !== undefined && status !== previous.status) {
+      changedParts.push(`статус → ${status}`);
+    }
+    if (currentStage !== undefined && currentStage !== previous.currentStage) {
+      changedParts.push(`етап → ${currentStage}`);
+    }
+    if (managerId !== undefined && (managerId || null) !== previous.managerId) {
+      changedParts.push("менеджер змінено");
+    }
+    if (changedParts.length > 0) {
+      await notifyProjectMembers({
+        projectId: id,
+        actorId: session.user.id,
+        type: "PROJECT_UPDATED",
+        title: `Оновлено проєкт «${previous.title}»`,
+        body: changedParts.join(", "),
+        relatedEntity: "Project",
+        relatedId: id,
+      });
+    }
+  } catch (err) {
+    console.error("[projects/PATCH] notifyProjectMembers failed:", err);
+  }
 
   return NextResponse.json({ data: project });
 }

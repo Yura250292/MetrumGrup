@@ -10,6 +10,8 @@ import {
 } from "@/lib/projects/members-service";
 import { canManageProjectMembers } from "@/lib/projects/access";
 import { auditLog } from "@/lib/audit";
+import { notifyProjectMembers } from "@/lib/notifications/create";
+import { prisma } from "@/lib/prisma";
 import type { ProjectRole } from "@prisma/client";
 
 const VALID_ROLES: ProjectRole[] = [
@@ -83,6 +85,44 @@ export async function POST(
       projectId: id,
       newData: { userId, roleInProject },
     });
+
+    // Notify: personal "you were added" for the new member, and broadcast
+    // "X joined" to other active members. Best-effort.
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id },
+        select: { title: true },
+      });
+      const projectTitle = project?.title ?? "";
+
+      // Personal notification for the new member.
+      if (userId !== session.user.id) {
+        await prisma.notification.create({
+          data: {
+            userId,
+            type: "PROJECT_MEMBER_ADDED",
+            title: `Вас додано до проєкту «${projectTitle}»`,
+            body: `Роль: ${roleInProject}`,
+            relatedEntity: "Project",
+            relatedId: id,
+          },
+        });
+      }
+
+      // Broadcast to other active members (excluding actor and the new member).
+      await notifyProjectMembers({
+        projectId: id,
+        actorId: session.user.id,
+        type: "PROJECT_MEMBER_ADDED",
+        title: `Новий учасник у проєкті «${projectTitle}»`,
+        body: `${member.user.name} (${roleInProject})`,
+        relatedEntity: "Project",
+        relatedId: id,
+        excludeUserIds: [userId],
+      });
+    } catch (err) {
+      console.error("[projects/members] notifyProjectMembers failed:", err);
+    }
 
     return NextResponse.json({ member }, { status: 201 });
   } catch (err) {

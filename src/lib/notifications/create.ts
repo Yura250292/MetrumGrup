@@ -1,7 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { STAFF_ROLES } from "@/lib/auth-utils";
+import { listActiveMembers } from "@/lib/projects/members-service";
 
 const MENTION_REGEX = /<@([a-z0-9_-]+)>/gi;
+
+export type ProjectNotificationType =
+  | "PROJECT_UPDATED"
+  | "PROJECT_FILE_ADDED"
+  | "PROJECT_PHOTO_REPORT"
+  | "PROJECT_ESTIMATE_CREATED"
+  | "PROJECT_ESTIMATE_APPROVED"
+  | "PROJECT_MEMBER_ADDED"
+  | "PROJECT_COMMENT";
 
 /**
  * Parse <@userId> tags from a body of text and return unique userIds
@@ -62,4 +72,46 @@ export async function createMentionNotifications(opts: {
   });
 
   return validIds.length;
+}
+
+/**
+ * Broadcast a Notification row to every active member of a project,
+ * skipping the actor (the user who caused the change). Used for
+ * project-change events: status updates, file uploads, photo reports,
+ * estimates, member changes, comments.
+ *
+ * Best-effort: callers should wrap in try/catch so a notification
+ * failure does not break the parent write operation.
+ */
+export async function notifyProjectMembers(opts: {
+  projectId: string;
+  actorId: string;
+  type: ProjectNotificationType;
+  title: string;
+  body?: string;
+  relatedEntity: string;
+  relatedId: string;
+  excludeUserIds?: string[];
+}): Promise<number> {
+  const members = await listActiveMembers(opts.projectId);
+  const exclude = new Set<string>([opts.actorId, ...(opts.excludeUserIds ?? [])]);
+  const recipients = members
+    .map((m) => m.user.id)
+    .filter((id) => !exclude.has(id));
+  if (recipients.length === 0) return 0;
+
+  const preview = opts.body ? opts.body.replace(MENTION_REGEX, "@…").trim().slice(0, 160) : null;
+
+  await prisma.notification.createMany({
+    data: recipients.map((userId) => ({
+      userId,
+      type: opts.type,
+      title: opts.title,
+      body: preview,
+      relatedEntity: opts.relatedEntity,
+      relatedId: opts.relatedId,
+    })),
+  });
+
+  return recipients.length;
 }

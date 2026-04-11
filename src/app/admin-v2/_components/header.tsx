@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { BREADCRUMB_MAP } from "../_lib/nav";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export function Header() {
   const pathname = usePathname();
@@ -48,13 +49,10 @@ export function Header() {
         ))}
       </nav>
 
-      <button
-        className="relative rounded-lg p-2 transition hover:brightness-125"
-        style={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
-        title="Сповіщення"
-      >
-        <Bell size={18} />
-      </button>
+      <NotificationBell
+        variant="v2"
+        buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
+      />
     </header>
   );
 }
