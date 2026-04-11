@@ -2,6 +2,7 @@
 
 import { ProjectEstimatesSection } from "@/components/projects/ProjectEstimatesSection";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 
 export function TabEstimates({ projectId }: { projectId: string }) {
   return (
@@ -12,7 +13,7 @@ export function TabEstimates({ projectId }: { projectId: string }) {
       <h2 className="mb-4 text-[13px] font-bold" style={{ color: T.textPrimary }}>
         Кошториси проєкту
       </h2>
-      <div className="admin-dark">
+      <div className="admin-dark" style={DARK_VARS}>
         <ProjectEstimatesSection projectId={projectId} />
       </div>
     </div>

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { MessageSquare, ExternalLink } from "lucide-react";
+import { MessageSquare, ExternalLink, Users } from "lucide-react";
 import { OpenProjectChatButton } from "@/components/chat/OpenProjectChatButton";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 
 export function TabChat({ projectId }: { projectId: string }) {
   return (
@@ -23,14 +24,16 @@ export function TabChat({ projectId }: { projectId: string }) {
             Чат проєкту
           </h3>
           <p className="text-[12px] leading-relaxed" style={{ color: T.textMuted }}>
-            Спілкування команди по поточному проєкту. Натисніть, щоб відкрити чат — він також
-            доступний з основної сторінки чатів.
+            Спілкування команди по поточному проєкту. Учасники чату автоматично
+            синхронізуються з командою проєкту через ProjectMember.
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2 pt-2">
-          <OpenProjectChatButton projectId={projectId} />
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          <div className="admin-dark" style={DARK_VARS}>
+            <OpenProjectChatButton projectId={projectId} />
+          </div>
           <Link
-            href="/admin/chat"
+            href="/admin-v2/chat"
             className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
             style={{
               backgroundColor: T.panelElevated,
@@ -43,12 +46,24 @@ export function TabChat({ projectId }: { projectId: string }) {
         </div>
       </div>
 
+      {/* Hint about team sync */}
       <div
-        className="rounded-2xl p-4 text-[11px] leading-relaxed"
-        style={{ backgroundColor: T.warningSoft, color: T.warning, border: `1px solid ${T.warning}` }}
+        className="flex items-start gap-3 rounded-2xl p-4"
+        style={{
+          backgroundColor: T.accentPrimarySoft,
+          border: `1px solid ${T.accentPrimary}`,
+        }}
       >
-        <strong>Roadmap:</strong> після впровадження ProjectMember чат стане частиною Workspace —
-        учасники чату автоматично синхронізуватимуться з командою проєкту.
+        <Users size={16} style={{ color: T.accentPrimary }} className="mt-0.5 flex-shrink-0" />
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[12px] font-bold" style={{ color: T.accentPrimary }}>
+            Команда чату = команда проєкту
+          </span>
+          <span className="text-[11px] leading-relaxed" style={{ color: T.textSecondary }}>
+            Управляйте складом учасників у вкладці &laquo;Команда&raquo; — зміни
+            автоматично відображаються в чаті.
+          </span>
+        </div>
       </div>
     </div>
   );
