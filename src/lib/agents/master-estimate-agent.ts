@@ -556,9 +556,13 @@ export class MasterEstimateAgent {
     userPrompt: string,
     sectionTitle: string
   ): Promise<any> {
-    // Gemini не має нативного AbortSignal, обгортаємо у Promise.race
+    // Gemini не має нативного AbortSignal, обгортаємо у Promise.race.
+    //
+    // ВАЖЛИВО: модель `gemini-2.0-flash-exp` повертає 404 — Google прибрав
+    // experimental endpoint. Усі інші файли проекту вже використовують
+    // `gemini-3-flash-preview`, тому уніфіковуємось до нього.
     const model = this.gemini.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
+      model: "gemini-3-flash-preview",
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.1,
