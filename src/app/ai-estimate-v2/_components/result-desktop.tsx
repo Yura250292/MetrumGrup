@@ -24,7 +24,7 @@ import { T } from "./tokens";
 import { ConfidenceBadge, ScoreDial } from "./primitives";
 import { formatUAH } from "../_lib/format";
 import type { AiEstimateController } from "../_lib/use-controller";
-import type { EstimateData, EstimateSection, EstimateItem, VerificationIssue } from "../_lib/types";
+import type { EstimateData, EstimateSection, EstimateItem, VerificationIssue, VerificationImprovement } from "../_lib/types";
 
 export function ResultDesktop({ controller }: { controller: AiEstimateController }) {
   const estimate = controller.estimate as EstimateData;
@@ -207,73 +207,16 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
           </div>
 
           {/* Verification */}
-          <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
-            <div className="mb-3.5 flex items-center justify-between">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                  ВЕРИФІКАЦІЯ
-                </span>
-                <span className="text-sm font-semibold" style={{ color: T.textPrimary }}>
-                  Інженерна перевірка
-                </span>
-              </div>
-              <ScoreDial
-                value={verifyScore ?? 0}
-                bigLabel={controller.isVerifying ? "…" : verifyScore != null ? String(Math.round(verifyScore)) : "—"}
-                label="бал"
-                color={
-                  verifyScore == null
-                    ? T.textMuted
-                    : verifyScore >= 80
-                      ? T.success
-                      : verifyScore >= 50
-                        ? T.warning
-                        : T.danger
-                }
-              />
-            </div>
-
-            {controller.isVerifying ? (
-              <div
-                className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs"
-                style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
-              >
-                <Loader2 size={14} className="animate-spin" /> Аналізуємо кошторис…
-              </div>
-            ) : verifyUnavailable ? (
-              <div
-                className="rounded-lg px-3 py-2.5 text-xs leading-relaxed"
-                style={{ backgroundColor: T.warningSoft ?? T.panelSoft, color: T.warning ?? T.textMuted }}
-              >
-                ⚠ Автоматична верифікація недоступна — OpenAI повернув помилку
-                (можливо вичерпано квоту). Кошторис створено, але не перевірено.
-                Запустіть верифікацію ще раз пізніше або перевірте позиції вручну.
-              </div>
-            ) : !verification ? (
-              <div
-                className="rounded-lg px-3 py-2.5 text-xs"
-                style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
-              >
-                Верифікація ще не запускалась
-              </div>
-            ) : criticalIssues.length === 0 && lowConfIssues.length === 0 ? (
-              <div
-                className="rounded-lg px-3 py-2.5 text-xs"
-                style={{ backgroundColor: T.successSoft, color: T.success }}
-              >
-                Зауважень не знайдено
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {criticalIssues.slice(0, 3).map((issue, i) => (
-                  <IssueRow key={`crit-${i}`} issue={issue} tone="danger" />
-                ))}
-                {lowConfIssues.slice(0, 3).map((issue, i) => (
-                  <IssueRow key={`warn-${i}`} issue={issue} tone="warning" />
-                ))}
-              </div>
-            )}
-          </div>
+          <VerificationPanel
+            controller={controller}
+            verification={verification}
+            verifyScore={verifyScore}
+            verifyUnavailable={verifyUnavailable}
+            issues={issues}
+            criticalIssues={criticalIssues}
+            lowConfIssues={lowConfIssues}
+            estimate={estimate}
+          />
 
           {/* Scaling */}
           {controller.scalingInfo && (
@@ -646,23 +589,384 @@ function BreakdownRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function IssueRow({ issue, tone }: { issue: VerificationIssue; tone: "danger" | "warning" }) {
-  const color = tone === "danger" ? T.danger : T.warning;
-  const bg = tone === "danger" ? T.dangerSoft : T.warningSoft;
+// ============================================================
+// VERIFICATION PANEL — detailed verification display
+// ============================================================
+
+const CATEGORY_META: Record<string, { label: string; icon: string; explanation: string }> = {
+  calculation: {
+    label: "Розрахунки",
+    icon: "🔢",
+    explanation: "Перевірка формул: totalCost = quantity × unitPrice + laborCost, суми секцій, загальні підсумки",
+  },
+  pricing: {
+    label: "Ціни",
+    icon: "💰",
+    explanation: "Порівняння цін з ринковими діапазонами 2024-2025, виявлення нульових або нереалістичних цін",
+  },
+  completeness: {
+    label: "Повнота",
+    icon: "📋",
+    explanation: "Чи є всі необхідні позиції: супутні матеріали, роботи до кожного матеріалу, обов'язкові категорії",
+  },
+  logic: {
+    label: "Логіка",
+    icon: "🔗",
+    explanation: "Порядок секцій, дублікати позицій, відповідність структури стандартам",
+  },
+  specifications: {
+    label: "Специфікації",
+    icon: "📐",
+    explanation: "Конкретні марки матеріалів (Knauf, Ceresit), розміри, вага, джерела цін",
+  },
+};
+
+function getScoreExplanation(score: number): string {
+  if (score >= 85) return "Кошторис пройшов усі перевірки. Можна використовувати.";
+  if (score >= 70) return "Є незначні зауваження, але кошторис загалом коректний.";
+  if (score >= 50) return "Знайдено помилки, що потребують уваги перед використанням.";
+  if (score >= 30) return "Є критичні помилки в розрахунках або цінах. Потрібна корекція.";
+  return "Кошторис має серйозні проблеми. Рекомендується перегенерувати або виправити вручну.";
+}
+
+function VerificationPanel({
+  controller,
+  verification,
+  verifyScore,
+  verifyUnavailable,
+  issues,
+  criticalIssues,
+  lowConfIssues,
+  estimate,
+}: {
+  controller: AiEstimateController;
+  verification: any;
+  verifyScore: number | undefined | null;
+  verifyUnavailable: boolean;
+  issues: VerificationIssue[];
+  criticalIssues: VerificationIssue[];
+  lowConfIssues: VerificationIssue[];
+  estimate: EstimateData;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const infoIssues = issues.filter(i => (i.severity ?? "").toLowerCase() === "info");
+  const improvements: VerificationImprovement[] = (verification as any)?.improvements ?? [];
+  const summary: string | undefined = (verification as any)?.summary;
+
+  // Group issues by category
+  const categoryGroups = new Map<string, VerificationIssue[]>();
+  for (const issue of issues) {
+    const cat = issue.category || "other";
+    if (!categoryGroups.has(cat)) categoryGroups.set(cat, []);
+    categoryGroups.get(cat)!.push(issue);
+  }
+
+  // Category stats for mini-badges
+  const categoryStats = Array.from(categoryGroups.entries()).map(([cat, catIssues]) => {
+    const errors = catIssues.filter(i => i.severity === "error" || i.severity === "critical").length;
+    const warnings = catIssues.filter(i => (i.severity ?? "").includes("warn")).length;
+    const meta = CATEGORY_META[cat] || { label: cat, icon: "❓", explanation: "" };
+    return { cat, errors, warnings, total: catIssues.length, ...meta, issues: catIssues };
+  });
+
+  return (
+    <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+      {/* Header + Score */}
+      <div className="mb-3.5 flex items-center justify-between">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+            ВЕРИФІКАЦІЯ
+          </span>
+          <span className="text-sm font-semibold" style={{ color: T.textPrimary }}>
+            Інженерна перевірка
+          </span>
+        </div>
+        <ScoreDial
+          value={verifyScore ?? 0}
+          bigLabel={controller.isVerifying ? "…" : verifyScore != null ? String(Math.round(verifyScore)) : "—"}
+          label="бал"
+          color={
+            verifyScore == null ? T.textMuted
+              : verifyScore >= 80 ? T.success
+                : verifyScore >= 50 ? T.warning
+                  : T.danger
+          }
+        />
+      </div>
+
+      {/* Score explanation */}
+      {verifyScore != null && !controller.isVerifying && !verifyUnavailable && (
+        <div
+          className="rounded-lg px-3 py-2 mb-3 text-[11px] leading-relaxed"
+          style={{
+            backgroundColor: verifyScore >= 80 ? T.successSoft : verifyScore >= 50 ? T.warningSoft : T.dangerSoft,
+            color: verifyScore >= 80 ? T.success : verifyScore >= 50 ? T.warning : T.danger,
+          }}
+        >
+          {getScoreExplanation(verifyScore)}
+        </div>
+      )}
+
+      {/* Loading state */}
+      {controller.isVerifying ? (
+        <div className="flex items-center gap-2 rounded-lg px-3 py-2.5 text-xs"
+          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}>
+          <Loader2 size={14} className="animate-spin" /> Аналізуємо кошторис…
+        </div>
+      ) : verifyUnavailable ? (
+        <div className="rounded-lg px-3 py-2.5 text-xs leading-relaxed"
+          style={{ backgroundColor: T.warningSoft, color: T.warning }}>
+          ⚠ Автоматична верифікація недоступна — OpenAI повернув помилку
+          (можливо вичерпано квоту). Кошторис створено, але не перевірено.
+        </div>
+      ) : !verification ? (
+        <div className="rounded-lg px-3 py-2.5 text-xs"
+          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}>
+          Верифікація ще не запускалась
+        </div>
+      ) : issues.length === 0 ? (
+        <div className="rounded-lg px-3 py-2.5 text-xs"
+          style={{ backgroundColor: T.successSoft, color: T.success }}>
+          ✓ Зауважень не знайдено — кошторис пройшов усі перевірки
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {/* Category breakdown badges */}
+          <div className="flex flex-wrap gap-1.5">
+            {categoryStats.map(({ cat, icon, label, errors, warnings, total }) => {
+              const hasErrors = errors > 0;
+              const color = hasErrors ? T.danger : warnings > 0 ? T.warning : T.success;
+              const bg = hasErrors ? T.dangerSoft : warnings > 0 ? T.warningSoft : T.successSoft;
+              return (
+                <div key={cat} className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium"
+                  style={{ backgroundColor: bg, color }}>
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                  <span className="font-bold">{total}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Critical issues (always shown) */}
+          {criticalIssues.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {criticalIssues.slice(0, expanded ? 10 : 3).map((issue, i) => (
+                <IssueRowDetailed key={`crit-${i}`} issue={issue} tone="danger" estimate={estimate} />
+              ))}
+            </div>
+          )}
+
+          {/* Warning issues */}
+          {lowConfIssues.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {lowConfIssues.slice(0, expanded ? 10 : 2).map((issue, i) => (
+                <IssueRowDetailed key={`warn-${i}`} issue={issue} tone="warning" estimate={estimate} />
+              ))}
+            </div>
+          )}
+
+          {/* Info issues (only when expanded) */}
+          {expanded && infoIssues.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              {infoIssues.slice(0, 5).map((issue, i) => (
+                <IssueRowDetailed key={`info-${i}`} issue={issue} tone="info" estimate={estimate} />
+              ))}
+            </div>
+          )}
+
+          {/* Expand/collapse */}
+          {issues.length > 5 && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="flex items-center justify-center gap-1 rounded-lg py-1.5 text-[11px] font-medium transition-colors hover:opacity-80"
+              style={{ color: T.textMuted }}
+            >
+              {expanded ? (
+                <><ChevronUp size={12} /> Згорнути</>
+              ) : (
+                <><ChevronDown size={12} /> Показати всі {issues.length} зауважень</>
+              )}
+            </button>
+          )}
+
+          {/* Summary */}
+          {summary && expanded && (
+            <div className="rounded-lg px-3 py-2.5 text-[11px] leading-relaxed"
+              style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}>
+              <span className="font-semibold" style={{ color: T.textMuted }}>Висновок: </span>
+              {summary}
+            </div>
+          )}
+
+          {/* Improvements (when expanded) */}
+          {expanded && improvements.length > 0 && (
+            <div className="mt-1">
+              <div className="text-[10px] font-bold tracking-wider mb-1.5" style={{ color: T.textMuted }}>
+                РЕКОМЕНДАЦІЇ
+              </div>
+              <div className="flex flex-col gap-1.5">
+                {improvements.slice(0, 5).map((imp, i) => (
+                  <ImprovementRow key={i} improvement={imp} estimate={estimate} />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// ISSUE ROW — detailed version
+// ============================================================
+
+function IssueRowDetailed({
+  issue,
+  tone,
+  estimate,
+}: {
+  issue: VerificationIssue;
+  tone: "danger" | "warning" | "info";
+  estimate: EstimateData;
+}) {
+  const [open, setOpen] = useState(false);
+  const colorMap = { danger: T.danger, warning: T.warning, info: T.accentPrimary };
+  const bgMap = { danger: T.dangerSoft, warning: T.warningSoft, info: T.accentPrimarySoft };
+  const color = colorMap[tone];
+  const bg = bgMap[tone];
+
+  const cat = issue.category || "";
+  const meta = CATEGORY_META[cat];
+  const msg = issue.message || issue.description || meta?.label || "Зауваження";
+
+  // Build location string from section/item indices
+  let locationStr = issue.location || "";
+  if (!locationStr && issue.sectionIndex != null) {
+    const section = estimate.sections[issue.sectionIndex];
+    if (section) {
+      locationStr = `Секція: ${section.title}`;
+      if (issue.itemIndex != null && section.items[issue.itemIndex]) {
+        locationStr += ` → поз. ${issue.itemIndex + 1}: ${section.items[issue.itemIndex].description.slice(0, 50)}`;
+      }
+    }
+  }
+
+  const hasSuggestion = !!(issue.suggestion || issue.recommendation);
+  const hasExpectedActual = issue.expected != null || issue.actual != null;
+  const hasDetails = hasSuggestion || hasExpectedActual;
+
   return (
     <div
-      className="flex items-start gap-2.5 rounded-lg px-3 py-2.5"
+      className="rounded-lg overflow-hidden"
       style={{ backgroundColor: bg, borderLeft: `3px solid ${color}` }}
     >
-      <TriangleAlert size={14} style={{ color }} className="mt-0.5 flex-shrink-0" />
-      <div className="flex flex-col gap-0.5">
-        <div className="text-xs font-semibold" style={{ color }}>
-          {issue.description || issue.category || "Зауваження"}
-        </div>
-        {issue.location && (
-          <div className="text-[11px]" style={{ color: T.textMuted }}>
-            {issue.location}
+      <button
+        className="flex items-start gap-2.5 px-3 py-2.5 w-full text-left"
+        onClick={() => hasDetails && setOpen(!open)}
+      >
+        <TriangleAlert size={13} style={{ color }} className="mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            {meta && <span className="text-[10px]">{meta.icon}</span>}
+            <span className="text-xs font-semibold" style={{ color }}>{msg}</span>
           </div>
+          {locationStr && (
+            <div className="text-[10px] mt-0.5 truncate" style={{ color: T.textMuted }}>
+              {locationStr}
+            </div>
+          )}
+        </div>
+        {hasDetails && (
+          <ChevronDown
+            size={12}
+            style={{ color: T.textMuted, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }}
+            className="mt-1 flex-shrink-0"
+          />
+        )}
+      </button>
+
+      {/* Expanded details */}
+      {open && hasDetails && (
+        <div className="px-3 pb-2.5 pt-0 flex flex-col gap-1.5"
+          style={{ borderTop: `1px solid ${color}20` }}>
+          {/* Expected vs Actual */}
+          {hasExpectedActual && (
+            <div className="flex gap-3 text-[10px]">
+              {issue.expected != null && (
+                <div>
+                  <span style={{ color: T.textMuted }}>Очікувано: </span>
+                  <span className="font-medium" style={{ color: T.success }}>{String(issue.expected)}</span>
+                </div>
+              )}
+              {issue.actual != null && (
+                <div>
+                  <span style={{ color: T.textMuted }}>Фактично: </span>
+                  <span className="font-medium" style={{ color: T.danger }}>{String(issue.actual)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Suggestion */}
+          {(issue.suggestion || issue.recommendation) && (
+            <div className="text-[10px] leading-relaxed" style={{ color: T.textSecondary }}>
+              <span className="font-semibold" style={{ color: T.textMuted }}>Рекомендація: </span>
+              {issue.suggestion || issue.recommendation}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// IMPROVEMENT ROW
+// ============================================================
+
+function ImprovementRow({
+  improvement,
+  estimate,
+}: {
+  improvement: VerificationImprovement;
+  estimate: EstimateData;
+}) {
+  const typeLabels: Record<string, { label: string; color: string }> = {
+    add: { label: "Додати", color: T.success },
+    modify: { label: "Змінити", color: T.warning },
+    remove: { label: "Видалити", color: T.danger },
+  };
+  const { label, color } = typeLabels[improvement.type || "modify"] || typeLabels.modify;
+
+  let location = "";
+  if (improvement.sectionIndex != null) {
+    const section = estimate.sections[improvement.sectionIndex];
+    if (section) {
+      location = section.title;
+      if (improvement.itemIndex != null && section.items[improvement.itemIndex]) {
+        location += ` → поз. ${improvement.itemIndex + 1}`;
+      }
+    }
+  }
+
+  return (
+    <div className="flex items-start gap-2 rounded-lg px-3 py-2 text-[11px]"
+      style={{ backgroundColor: T.panelSoft }}>
+      <span className="font-bold shrink-0 mt-0.5 rounded px-1.5 py-0.5 text-[9px]"
+        style={{ backgroundColor: `${color}20`, color }}>
+        {label}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div style={{ color: T.textSecondary }}>{improvement.description}</div>
+        {improvement.suggestedChange?.reason && (
+          <div className="mt-0.5" style={{ color: T.textMuted }}>
+            {improvement.suggestedChange.reason}
+          </div>
+        )}
+        {location && (
+          <div className="mt-0.5 text-[10px]" style={{ color: T.textMuted }}>{location}</div>
         )}
       </div>
     </div>

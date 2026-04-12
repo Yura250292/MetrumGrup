@@ -55,18 +55,37 @@ export type ScalingInfo = {
 };
 
 export type VerificationIssue = {
-  severity?: "critical" | "warning" | "info" | string;
-  category?: string;
+  severity?: "critical" | "warning" | "info" | "error" | string;
+  category?: "calculation" | "pricing" | "completeness" | "logic" | "specifications" | string;
   description?: string;
+  message?: string;
+  suggestion?: string;
   recommendation?: string;
   location?: string;
+  expected?: string | number;
+  actual?: string | number;
+  sectionIndex?: number;
+  itemIndex?: number;
+};
+
+export type VerificationImprovement = {
+  type?: "add" | "modify" | "remove";
+  sectionIndex?: number;
+  itemIndex?: number;
+  description?: string;
+  suggestedChange?: {
+    field?: string;
+    oldValue?: any;
+    newValue?: any;
+    reason?: string;
+  };
 };
 
 export type VerificationResult = {
   status?: string;
   overallScore?: number;
   issues?: VerificationIssue[];
-  improvements?: string[];
+  improvements?: VerificationImprovement[];
   summary?: string;
 } | null;
 
