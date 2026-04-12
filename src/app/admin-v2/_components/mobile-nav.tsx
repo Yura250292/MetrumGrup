@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
-import { LogOut } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { MOBILE_NAV, isItemActive } from "../_lib/nav";
 
-export function MobileNav() {
+export function MobileNav({ onOpenDrawer }: { onOpenDrawer: () => void }) {
   const pathname = usePathname();
   const unreadCount = useUnreadChatCount();
 
@@ -29,7 +28,7 @@ export function MobileNav() {
           <Link
             key={item.href}
             href={item.href}
-            className="relative flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition"
+            className="relative flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition tap-highlight-none active:scale-95"
             style={{
               backgroundColor: active ? T.accentPrimarySoft : "transparent",
               color: active ? T.accentPrimary : T.textSecondary,
@@ -49,12 +48,12 @@ export function MobileNav() {
         );
       })}
       <button
-        onClick={() => signOut({ callbackUrl: "/login" })}
-        className="flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition active:scale-95"
+        onClick={onOpenDrawer}
+        className="flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition tap-highlight-none active:scale-95"
         style={{ color: T.textSecondary }}
       >
-        <LogOut size={20} />
-        <span className="text-[11px] font-semibold">Вийти</span>
+        <MoreHorizontal size={20} />
+        <span className="text-[11px] font-semibold">Ще</span>
       </button>
     </nav>
   );

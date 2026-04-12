@@ -6,6 +6,7 @@ import { Plus, MessageSquare, FolderKanban, Calculator } from "lucide-react";
 import { useConversations, type ChatConversation } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { NewConversationDialog } from "./NewConversationDialog";
+import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 function formatTime(iso: string | null) {
   if (!iso) return "";
@@ -55,12 +56,12 @@ function ConversationRow({
 
   return (
     <Link
-      href={`/admin/chat/${conversation.id}`}
-      className={`flex items-start gap-3 px-3 py-3 border-b admin-dark:border-white/5 admin-light:border-gray-100 transition-colors ${
-        isActive
-          ? "admin-dark:bg-blue-500/10 admin-light:bg-blue-50"
-          : "admin-dark:hover:bg-white/5 admin-light:hover:bg-gray-50"
-      }`}
+      href={`/admin-v2/chat/${conversation.id}`}
+      className={`flex items-start gap-3 px-3 py-3 border-b transition-colors tap-highlight-none`}
+      style={{
+        borderColor: T.borderSoft,
+        backgroundColor: isActive ? T.accentPrimarySoft : "transparent",
+      }}
     >
       <div
         className={`relative h-10 w-10 flex-shrink-0 rounded-full flex items-center justify-center text-white text-sm font-semibold ${avatarGradient}`}
@@ -69,19 +70,25 @@ function ConversationRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p className="truncate text-sm font-semibold admin-dark:text-white admin-light:text-gray-900">
+          <p
+            className="truncate text-sm font-semibold"
+            style={{ color: T.textPrimary }}
+          >
             {title}
           </p>
-          <span className="text-[11px] flex-shrink-0 admin-dark:text-gray-500 admin-light:text-gray-500">
+          <span className="text-[11px] flex-shrink-0" style={{ color: T.textMuted }}>
             {formatTime(conversation.lastMessageAt)}
           </span>
         </div>
         <div className="flex items-center justify-between gap-2 mt-0.5">
-          <p className="truncate text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
+          <p className="truncate text-xs" style={{ color: T.textSecondary }}>
             {conversation.lastMessage?.body ?? "Немає повідомлень"}
           </p>
           {conversation.unreadCount > 0 && (
-            <span className="flex-shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-semibold">
+            <span
+              className="flex-shrink-0 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold"
+              style={{ backgroundColor: T.accentPrimary, color: "#FFFFFF" }}
+            >
               {conversation.unreadCount}
             </span>
           )}
@@ -97,8 +104,11 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
 
   return (
     <>
-      <div className="flex items-center justify-between border-b admin-dark:border-white/10 admin-light:border-gray-200 px-4 py-3">
-        <h2 className="text-sm font-bold admin-dark:text-white admin-light:text-gray-900">
+      <div
+        className="flex items-center justify-between border-b px-4 py-3"
+        style={{ borderColor: T.borderSoft }}
+      >
+        <h2 className="text-sm font-bold" style={{ color: T.textPrimary }}>
           Розмови
         </h2>
         <Button size="sm" onClick={() => setDialogOpen(true)}>
@@ -108,14 +118,14 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
       </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {isLoading && (
-          <p className="p-4 text-sm admin-dark:text-gray-500 admin-light:text-gray-500">
+          <p className="p-4 text-sm" style={{ color: T.textMuted }}>
             Завантаження...
           </p>
         )}
         {!isLoading && conversations?.length === 0 && (
           <div className="p-6 text-center">
-            <MessageSquare className="mx-auto h-10 w-10 admin-dark:text-gray-600 admin-light:text-gray-300" />
-            <p className="mt-2 text-sm admin-dark:text-gray-500 admin-light:text-gray-500">
+            <MessageSquare className="mx-auto h-10 w-10" style={{ color: T.textMuted }} />
+            <p className="mt-2 text-sm" style={{ color: T.textMuted }}>
               Поки немає розмов. Натисніть "Нова", щоб почати.
             </p>
           </div>

@@ -3,7 +3,6 @@
 import { MessageSquare } from "lucide-react";
 import { ChatLayout } from "@/components/chat/ChatLayout";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 
 export default function AdminV2ChatIndexPage() {
   return (
@@ -29,8 +28,8 @@ export default function AdminV2ChatIndexPage() {
 
       {/* Chat shell — wraps existing self-contained ChatLayout */}
       <div
-        className="admin-dark rounded-2xl p-1"
-        style={{ ...DARK_VARS, backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        className="rounded-2xl p-1"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
         <ChatLayout activeId={null}>
           <div className="flex flex-1 flex-col items-center justify-center text-center p-8">

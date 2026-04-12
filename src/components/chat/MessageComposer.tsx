@@ -2,12 +2,16 @@
 
 import { useSendMessage } from "@/hooks/useChat";
 import { CommentComposer } from "@/components/collab/CommentComposer";
+import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 export function MessageComposer({ conversationId }: { conversationId: string }) {
   const sendMessage = useSendMessage(conversationId);
 
   return (
-    <div className="border-t admin-dark:border-white/10 admin-light:border-gray-200 px-4 py-3">
+    <div
+      className="border-t px-4 py-3"
+      style={{ borderColor: T.borderSoft }}
+    >
       <CommentComposer
         onSubmit={async (body) => {
           await sendMessage.mutateAsync(body);

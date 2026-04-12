@@ -115,10 +115,10 @@ export default async function AdminV2ProjectDetailPage({
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+          <div className="flex w-full sm:w-auto gap-2 flex-shrink-0">
             <Link
               href={`/admin-v2/projects/${project.id}/photos/new`}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+              className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
               style={{
                 backgroundColor: T.panelElevated,
                 color: T.textPrimary,
@@ -129,7 +129,7 @@ export default async function AdminV2ProjectDetailPage({
             </Link>
             <Link
               href={`/admin-v2/projects/${project.id}/stages`}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
+              className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
               style={{
                 backgroundColor: T.panelElevated,
                 color: T.textPrimary,

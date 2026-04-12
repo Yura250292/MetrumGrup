@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter, usePathname } from "next/navigation";
+import { useRef, useEffect } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -45,6 +46,8 @@ export function ProjectTabs({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLButtonElement>(null);
 
   const current: TabId =
     (TAB_DEFS.find((t) => t.id === activeTab)?.id as TabId) || "overview";
@@ -53,32 +56,55 @@ export function ProjectTabs({
     router.push(`${pathname}?tab=${tab}`, { scroll: false });
   };
 
+  // Auto-scroll active tab into view
+  useEffect(() => {
+    if (activeRef.current) {
+      activeRef.current.scrollIntoView({
+        behavior: "smooth",
+        inline: "center",
+        block: "nearest",
+      });
+    }
+  }, [current]);
+
   return (
     <div className="flex flex-col gap-6">
       {/* Tab nav */}
       <div
-        className="flex gap-1 overflow-x-auto rounded-2xl p-1.5"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        ref={scrollRef}
+        className="flex gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-none -mx-6 px-6 md:mx-0 md:px-0 pb-1 md:pb-0 rounded-none md:rounded-2xl md:p-1.5"
+        style={{
+          backgroundColor: "transparent",
+          WebkitMaskImage: "linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)",
+          maskImage: "linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)",
+        }}
       >
-        {TAB_DEFS.map((tab) => {
-          const Icon = tab.icon;
-          const active = current === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => switchTab(tab.id)}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold whitespace-nowrap transition"
-              style={{
-                backgroundColor: active ? T.accentPrimarySoft : "transparent",
-                color: active ? T.accentPrimary : T.textSecondary,
-                border: `1px solid ${active ? T.borderAccent : "transparent"}`,
-              }}
-            >
-              <Icon size={14} />
-              {tab.label}
-            </button>
-          );
-        })}
+        <div
+          className="flex gap-1 rounded-2xl p-1.5 md:w-full"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          {TAB_DEFS.map((tab) => {
+            const Icon = tab.icon;
+            const active = current === tab.id;
+            return (
+              <button
+                key={tab.id}
+                ref={active ? activeRef : undefined}
+                onClick={() => switchTab(tab.id)}
+                className="flex items-center gap-2 rounded-xl px-4 py-3 md:py-2.5 text-[13px] font-semibold whitespace-nowrap transition snap-start flex-shrink-0 tap-highlight-none active:scale-[0.97]"
+                style={{
+                  backgroundColor: active ? T.accentPrimarySoft : "transparent",
+                  color: active ? T.accentPrimary : T.textSecondary,
+                  border: `1px solid ${active ? T.borderAccent : "transparent"}`,
+                  minHeight: 44,
+                }}
+              >
+                <Icon size={14} />
+                {tab.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Tab content */}

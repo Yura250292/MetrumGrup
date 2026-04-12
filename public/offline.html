@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Офлайн — Metrum Group</title>
   <style>
     * {
@@ -17,8 +17,8 @@
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background: linear-gradient(135deg, #FF8400 0%, #2d5a3d 100%);
-      color: white;
+      background: linear-gradient(135deg, #0B0F17 0%, #121826 100%);
+      color: #F4F6FB;
       padding: 2rem;
       text-align: center;
     }
@@ -28,42 +28,46 @@
     }
 
     h1 {
-      font-size: 3rem;
+      font-size: 2.5rem;
       margin-bottom: 1rem;
       font-weight: 700;
     }
 
     p {
-      font-size: 1.25rem;
-      opacity: 0.9;
+      font-size: 1.125rem;
+      color: #A8B3CC;
       line-height: 1.6;
       margin-bottom: 2rem;
     }
 
     .icon {
-      font-size: 5rem;
+      font-size: 4rem;
       margin-bottom: 1.5rem;
       animation: pulse 2s ease-in-out infinite;
     }
 
     .btn {
       display: inline-block;
-      padding: 0.75rem 2rem;
-      background: rgba(255, 255, 255, 0.2);
-      border: 2px solid rgba(255, 255, 255, 0.5);
-      border-radius: 999px;
+      padding: 0.875rem 2rem;
+      background: #3B5BFF;
+      border: none;
+      border-radius: 12px;
       color: white;
       text-decoration: none;
-      font-weight: 600;
+      font-weight: 700;
       font-size: 1rem;
       transition: all 0.3s ease;
-      backdrop-filter: blur(10px);
+      cursor: pointer;
     }
 
     .btn:hover {
-      background: rgba(255, 255, 255, 0.3);
-      border-color: rgba(255, 255, 255, 0.8);
+      background: #4D6AFF;
       transform: translateY(-2px);
+      box-shadow: 0 4px 20px rgba(59, 91, 255, 0.4);
+    }
+
+    .btn:active {
+      transform: scale(0.97);
     }
 
     @keyframes pulse {
@@ -79,13 +83,13 @@
 
     @media (max-width: 640px) {
       h1 {
-        font-size: 2rem;
+        font-size: 1.75rem;
       }
       p {
         font-size: 1rem;
       }
       .icon {
-        font-size: 3.5rem;
+        font-size: 3rem;
       }
     }
   </style>

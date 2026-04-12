@@ -4,7 +4,6 @@ import { use } from "react";
 import { ChatLayout } from "@/components/chat/ChatLayout";
 import { MessageThread } from "@/components/chat/MessageThread";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 
 export default function AdminV2ChatConversationPage({
   params,
@@ -32,8 +31,8 @@ export default function AdminV2ChatConversationPage({
       </section>
 
       <div
-        className="admin-dark rounded-2xl p-1"
-        style={{ ...DARK_VARS, backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        className="rounded-2xl p-1"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
         <ChatLayout activeId={conversationId}>
           <MessageThread conversationId={conversationId} />

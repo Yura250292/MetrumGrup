@@ -1,5 +1,6 @@
 "use client";
 
+import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ConversationList } from "./ConversationList";
 
 export function ChatLayout({
@@ -14,14 +15,22 @@ export function ChatLayout({
       <div
         className={`${
           activeId ? "hidden md:flex" : "flex"
-        } w-full md:w-80 flex-shrink-0 flex-col rounded-xl border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-gray-900/40 admin-light:bg-white overflow-hidden`}
+        } w-full md:w-80 flex-shrink-0 flex-col rounded-xl overflow-hidden`}
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderSoft}`,
+        }}
       >
         <ConversationList activeId={activeId} />
       </div>
       <div
         className={`${
           activeId ? "flex" : "hidden md:flex"
-        } flex-1 flex-col rounded-xl border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-gray-900/40 admin-light:bg-white overflow-hidden`}
+        } flex-1 flex-col rounded-xl overflow-hidden`}
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderSoft}`,
+        }}
       >
         {children}
       </div>

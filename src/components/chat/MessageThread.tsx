@@ -14,6 +14,7 @@ import {
 import { MessageComposer } from "./MessageComposer";
 import { ReactionBar } from "@/components/collab/ReactionBar";
 import { RenderCommentBody } from "@/components/collab/RenderCommentBody";
+import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 function formatStamp(iso: string) {
   const d = new Date(iso);
@@ -47,20 +48,21 @@ function MessageBubble({
       </div>
       <div className={`flex flex-col max-w-[70%] ${isOwn ? "items-end" : "items-start"}`}>
         {!isOwn && (
-          <span className="text-[11px] mb-0.5 admin-dark:text-gray-400 admin-light:text-gray-600">
+          <span className="text-[11px] mb-0.5" style={{ color: T.textSecondary }}>
             {message.author.name}
           </span>
         )}
         <div
-          className={`rounded-2xl px-3 py-2 text-sm break-words ${
+          className="rounded-2xl px-3 py-2 text-sm break-words"
+          style={
             isOwn
-              ? "bg-blue-600 text-white"
-              : "admin-dark:bg-white/10 admin-dark:text-white admin-light:bg-gray-100 admin-light:text-gray-900"
-          }`}
+              ? { backgroundColor: T.accentPrimary, color: "#FFFFFF" }
+              : { backgroundColor: T.panelElevated, color: T.textPrimary }
+          }
         >
           <RenderCommentBody body={message.body} mentions={[]} />
         </div>
-        <span className="text-[10px] mt-0.5 admin-dark:text-gray-500 admin-light:text-gray-500">
+        <span className="text-[10px] mt-0.5" style={{ color: T.textMuted }}>
           {formatStamp(message.createdAt)}
         </span>
         <div className="mt-1">
@@ -118,8 +120,8 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
     title = conversation.project?.title ?? conversation.title ?? "Канал проєкту";
     Icon = FolderKanban;
     if (conversation.project) {
-      subtitleHref = `/admin/projects/${conversation.project.id}`;
-      subtitleText = "Відкрити проєкт →";
+      subtitleHref = `/admin-v2/projects/${conversation.project.id}`;
+      subtitleText = "Відкрити проєкт \u2192";
     }
   } else if (conversation?.type === "ESTIMATE") {
     title = conversation.estimate
@@ -127,28 +129,36 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
       : conversation.title ?? "Канал кошторису";
     Icon = Calculator;
     if (conversation.estimate) {
-      subtitleHref = `/admin/estimates/${conversation.estimate.id}`;
-      subtitleText = "Відкрити кошторис →";
+      subtitleHref = `/admin-v2/estimates/${conversation.estimate.id}`;
+      subtitleText = "Відкрити кошторис \u2192";
     }
   }
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b admin-dark:border-white/10 admin-light:border-gray-200 px-4 py-3">
+      <div
+        className="flex items-center gap-3 border-b px-4 py-3"
+        style={{ borderColor: T.borderSoft }}
+      >
         <Link
-          href="/admin/chat"
-          className="md:hidden rounded-lg p-1 admin-dark:hover:bg-white/10 admin-light:hover:bg-gray-100"
+          href="/admin-v2/chat"
+          className="md:hidden rounded-lg p-1 transition active:scale-95 tap-highlight-none"
+          style={{ color: T.textSecondary }}
         >
           <ArrowLeft className="h-5 w-5" />
         </Link>
-        <Icon className="h-5 w-5 admin-dark:text-gray-400 admin-light:text-gray-600" />
+        <Icon className="h-5 w-5" style={{ color: T.textSecondary }} />
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold admin-dark:text-white admin-light:text-gray-900">
+          <p className="truncate text-sm font-semibold" style={{ color: T.textPrimary }}>
             {title}
           </p>
           {subtitleHref && subtitleText && (
-            <Link href={subtitleHref} className="text-[11px] text-blue-500 hover:underline">
+            <Link
+              href={subtitleHref}
+              className="text-[11px] hover:underline"
+              style={{ color: T.accentPrimary }}
+            >
               {subtitleText}
             </Link>
           )}
@@ -161,12 +171,12 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
         className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4 space-y-3"
       >
         {isLoading && (
-          <p className="text-center text-sm admin-dark:text-gray-500 admin-light:text-gray-500">
+          <p className="text-center text-sm" style={{ color: T.textMuted }}>
             Завантаження...
           </p>
         )}
         {!isLoading && messages.length === 0 && (
-          <p className="text-center text-sm admin-dark:text-gray-500 admin-light:text-gray-500">
+          <p className="text-center text-sm" style={{ color: T.textMuted }}>
             Поки немає повідомлень. Напишіть перше!
           </p>
         )}

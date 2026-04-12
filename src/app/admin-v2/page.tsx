@@ -260,10 +260,10 @@ export default async function AdminV2Dashboard() {
         className="rounded-2xl p-6"
         style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderAccent}` }}
       >
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl"
+              className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
               style={{ backgroundColor: T.accentPrimarySoft }}
             >
               <Sparkles size={20} style={{ color: T.accentPrimary }} />
@@ -279,7 +279,7 @@ export default async function AdminV2Dashboard() {
           </div>
           <Link
             href="/ai-estimate-v2"
-            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
             style={{ backgroundColor: T.accentPrimary }}
           >
             <Sparkles size={16} /> Згенерувати

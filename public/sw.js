@@ -1,10 +1,11 @@
-const CACHE_NAME = 'metrum-v2.0.0';
-const STATIC_CACHE = 'metrum-static-v2';
-const IMAGE_CACHE = 'metrum-images-v2';
-const API_CACHE = 'metrum-api-v2';
+const CACHE_NAME = 'metrum-v3.0.0';
+const STATIC_CACHE = 'metrum-static-v3';
+const IMAGE_CACHE = 'metrum-images-v3';
+const API_CACHE = 'metrum-api-v3';
 
 const STATIC_ASSETS = [
   '/',
+  '/admin-v2',
   '/offline.html',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
