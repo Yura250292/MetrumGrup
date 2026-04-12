@@ -38,6 +38,8 @@ export type Estimate = {
   notes: string | null;
   analysisSummary: string | null;
   prozorroAnalysis: string | null;
+  structuredReport?: any;
+  bidIntelligence?: any;
   profitMarginMaterials: number | null;
   profitMarginLabor: number | null;
   profitMarginOverall: number;

@@ -564,6 +564,8 @@ export default function EstimateDetailPage({
             onClose={() => setEngineerReportOpen(false)}
             analysisSummary={estimate.analysisSummary}
             prozorroAnalysis={estimate.prozorroAnalysis}
+            structuredReport={(estimate as any).structuredReport}
+            bidIntelligence={(estimate as any).bidIntelligence}
           />
 
           {/* Sections with editable items */}

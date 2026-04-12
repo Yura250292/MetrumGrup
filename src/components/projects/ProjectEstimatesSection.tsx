@@ -149,6 +149,8 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
           onClose={() => setReportFor(null)}
           analysisSummary={reportFor.analysisSummary}
           prozorroAnalysis={reportFor.prozorroAnalysis}
+          structuredReport={(reportFor as any).structuredReport}
+          bidIntelligence={(reportFor as any).bidIntelligence}
         />
       )}
     </div>

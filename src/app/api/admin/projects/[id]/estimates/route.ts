@@ -34,6 +34,8 @@ export async function GET(
         // і одразу віддати дані для модалки без додаткового запиту.
         analysisSummary: true,
         prozorroAnalysis: true,
+        structuredReport: true,
+        bidIntelligence: true,
       },
     });
 

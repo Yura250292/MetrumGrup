@@ -59,7 +59,8 @@ export interface EstimateData {
     agent: string;
     message: string;
   }>;
-  analysisSummary?: string; // Звіт інженера про аналіз проекту
+  analysisSummary?: string; // Звіт інженера про аналіз проекту (plain text fallback)
+  structuredReport?: import('../types/bid-intelligence').StructuredEngineerReport; // Structured execution report v2
   preAnalysisResult?: PreAnalysisResult; // 🆕 Результат комплексного аналізу
   scalingInfo?: {
     scaled: boolean;
@@ -570,7 +571,8 @@ export class EstimateOrchestrator {
       progress: 98,
     });
 
-    const analysisSummary = await this.generateAnalysisSummary(sections, validationIssues);
+    // Генерація структурованого звіту інженера (v2) + plain text fallback
+    const { structuredReport, analysisSummary } = await this.generateStructuredReport(sections, validationIssues);
 
     return {
       title: `AI Кошторис (${this.mode === 'master' ? 'Master Agent' : this.mode === 'multi-agent' ? 'Multi-Agent' : this.mode === 'openai' ? 'OpenAI' : 'Gemini'})`,
@@ -582,23 +584,27 @@ export class EstimateOrchestrator {
       },
       validationIssues: validationIssues.length > 0 ? validationIssues : undefined,
       analysisSummary,
+      structuredReport,
       preAnalysisResult, // 🆕 Результат комплексного аналізу
       scalingInfo, // 📊 Інформація про масштабування цін
     };
   }
 
   /**
-   * Генерація звіту інженера про аналіз проекту
+   * Генерація структурованого звіту інженера (v2)
+   * Повертає structured JSON + plain text fallback
    */
-  private async generateAnalysisSummary(
+  private async generateStructuredReport(
     sections: EstimateSection[],
     validationIssues: Array<{ severity: string; agent: string; message: string }>
-  ): Promise<string> {
+  ): Promise<{
+    structuredReport?: import('../types/bid-intelligence').StructuredEngineerReport;
+    analysisSummary: string;
+  }> {
     try {
       const OpenAI = (await import('openai')).default;
       const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-      // Підготувати інформацію про секції
       const sectionsInfo = sections.map(s => ({
         title: s.title,
         itemsCount: s.items.length,
@@ -606,75 +612,195 @@ export class EstimateOrchestrator {
         keyItems: s.items.slice(0, 3).map(item => `${item.description} (${item.quantity} ${item.unit})`)
       }));
 
-      const prompt = `Ти - головний інженер-кошторисник. Склади КОРОТКИЙ звіт про проаналізований проект.
+      const wd = this.config.wizardData;
+      const totalAmount = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
+
+      const prompt = `Ти - головний інженер-кошторисник. Сформуй СТРУКТУРОВАНИЙ ЗВІТ у форматі JSON.
 
 ПРОАНАЛІЗОВАНІ ДОКУМЕНТИ:
-${this.config.documents.plans ? `- Креслення: ${this.config.documents.plans.length} файлів` : ''}
-${this.config.documents.specifications ? `- Специфікації: ${this.config.documents.specifications.length} файлів` : ''}
-${this.config.documents.geology ? `- Геологічні дані: є` : ''}
-${this.config.documents.sitePhotos ? `- Фото об'єкта: ${this.config.documents.sitePhotos.length} шт` : ''}
+${this.config.documents.plans ? `- Креслення: ${this.config.documents.plans.length} файлів` : "- Креслення: немає"}
+${this.config.documents.specifications ? `- Специфікації: ${this.config.documents.specifications.length} файлів` : "- Специфікації: немає"}
+${this.config.documents.geology ? "- Геологічні дані: є" : "- Геологічні дані: немає"}
+${this.config.documents.sitePhotos ? `- Фото об\u0027єкта: ${this.config.documents.sitePhotos.length} шт` : "- Фото об\u0027єкта: немає"}
 
 ПАРАМЕТРИ З WIZARD:
-${JSON.stringify(this.config.wizardData, null, 2)}
+- Тип об'єкта: ${wd.objectType || 'не вказано'}
+- Площа: ${wd.totalArea || 'не вказано'} м²
+- Поверхи: ${wd.houseData?.floors || wd.apartmentData?.floor || 'не вказано'}
+${wd.objectType === 'commercial' ? `- Призначення: ${wd.commercialData?.purpose || 'не вказано'}` : ''}
+${wd.objectType === 'commercial' ? `- HVAC: ${wd.commercialData?.hvac ? 'так' : 'ні'}` : ''}
+${JSON.stringify(wd, null, 2)}
 
-ЗГЕНЕРОВАНІ СЕКЦІЇ:
+ЗГЕНЕРОВАНІ СЕКЦІЇ КОШТОРИСУ (загальна сума: ${totalAmount.toFixed(0)} ₴):
 ${sectionsInfo.map(s => `- ${s.title}: ${s.itemsCount} позицій, ${s.total.toFixed(0)} ₴`).join('\n')}
 
 ВИЯВЛЕНІ ПРОБЛЕМИ:
 ${validationIssues.length > 0 ? validationIssues.map(i => `- [${i.severity}] ${i.message}`).join('\n') : 'Немає критичних проблем'}
 
-ТВОЄ ЗАВДАННЯ:
-Напиши звіт (3-5 абзаців) для замовника, який ЗРОЗУМІЛО пояснює:
+ЗАВДАННЯ:
+Сформуй JSON-об'єкт зі структурою нижче. Кожне поле обов'язкове.
 
-1. **ЩО ПРОАНАЛІЗОВАНО:**
-   - Які документи опрацьовано
-   - Які ключові параметри витягнуто (площа, поверхи, матеріали тощо)
-   - Що було зрозуміло з документації
+{
+  "projectUnderstanding": {
+    "objectType": "тип об'єкта",
+    "scope": "стислий опис обсягу робіт (1-2 речення)",
+    "area": число або null,
+    "floors": число або null,
+    "keyParameters": { "ключ": "значення", ... },
+    "documentsAnalyzed": ["список документів що аналізувались"]
+  },
+  "assumptions": ["припущення що зроблені при розрахунку (3-7 штук)"],
+  "missingInputs": ["чого бракує для точнішого розрахунку (3-7 штук)"],
+  "executionSequence": [
+    {
+      "order": 1,
+      "name": "Назва етапу",
+      "goal": "Що має бути зроблено",
+      "prerequisites": ["що потрібно до початку"],
+      "estimatedDuration": "орієнтовний термін",
+      "risks": ["ризики цього етапу"],
+      "controlPoints": ["що перевірити після завершення"],
+      "dependsOn": []
+    }
+  ],
+  "preStartChecklist": [
+    { "category": "permits|design|logistics|safety|utilities|other", "item": "опис", "critical": true/false }
+  ],
+  "criticalDependencies": ["критичні залежності між роботами"],
+  "riskWarnings": [
+    { "severity": "high|medium|low", "area": "область ризику", "description": "опис", "mitigation": "як мінімізувати" }
+  ]
+}
 
-2. **ЯК ФОРМУВАВСЯ КОШТОРИС:**
-   - На основі яких даних
-   - Які системи включено (фундамент, стіни, електрика тощо)
-   - Чи всі секції охоплені
-
-3. **НА ЩО ЗВЕРНУТИ УВАГУ:**
-   - Чи є недостатньо інформації в якихось розділах
-   - Які припущення зроблено
-   - Що варто уточнити перед початком робіт
-
-СТИЛЬ:
-- Професійно, але зрозуміло
-- Конкретні цифри і факти
-- Без загальних фраз
-- Максимум 500 слів
-
-ФОРМАТ:
-Простий текст з абзацами (без markdown заголовків).`;
+ВАЖЛИВО:
+- executionSequence має бути РЕАЛІСТИЧНОЮ послідовністю для цього типу об'єкта
+- Для нового будівництва: підготовка → фундамент → коробка → інженерія → оздоблення
+- Для ремонту: демонтаж → інженерія → оздоблення
+- Для комерційного об'єкта: враховуй специфіку (HVAC, холодильне обладнання, торгове обладнання)
+- riskWarnings: мінімум 3 ризики
+- preStartChecklist: мінімум 5 пунктів
+- missingInputs: реальні прогалини з наданих даних`;
 
       const response = await openai.chat.completions.create({
         model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: 'Ти - досвідчений інженер-кошторисник, який пояснює технічні деталі зрозумілою мовою.'
+            content: 'Ти - досвідчений інженер-кошторисник. Відповідай ТІЛЬКИ валідним JSON без markdown.'
           },
-          {
-            role: 'user',
-            content: prompt
-          }
+          { role: 'user', content: prompt }
         ],
-        temperature: 0.7,
-        max_tokens: 1000
+        temperature: 0.5,
+        max_tokens: 3000,
+        response_format: { type: 'json_object' },
       });
 
-      const summary = response.choices[0]?.message?.content || 'Звіт недоступний';
+      const raw = response.choices[0]?.message?.content || '{}';
+      let parsed: any;
 
-      console.log(`📝 Analysis summary generated: ${summary.length} characters`);
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        console.error('Failed to parse structured report JSON');
+        return {
+          analysisSummary: raw,
+        };
+      }
 
-      return summary;
+      // Build StructuredEngineerReport
+      const structuredReport: import('../types/bid-intelligence').StructuredEngineerReport = {
+        version: 2,
+        projectUnderstanding: {
+          objectType: parsed.projectUnderstanding?.objectType || wd.objectType || 'unknown',
+          scope: parsed.projectUnderstanding?.scope || '',
+          area: parsed.projectUnderstanding?.area || (wd.totalArea ? parseFloat(wd.totalArea) : undefined),
+          floors: parsed.projectUnderstanding?.floors,
+          keyParameters: parsed.projectUnderstanding?.keyParameters || {},
+          documentsAnalyzed: parsed.projectUnderstanding?.documentsAnalyzed || [],
+        },
+        assumptions: parsed.assumptions || [],
+        missingInputs: parsed.missingInputs || [],
+        executionSequence: (parsed.executionSequence || []).map((s: any, i: number) => ({
+          order: s.order || i + 1,
+          name: s.name || `Етап ${i + 1}`,
+          goal: s.goal || '',
+          prerequisites: s.prerequisites || [],
+          estimatedDuration: s.estimatedDuration,
+          risks: s.risks || [],
+          controlPoints: s.controlPoints || [],
+          dependsOn: s.dependsOn || [],
+        })),
+        preStartChecklist: (parsed.preStartChecklist || []).map((c: any) => ({
+          category: c.category || 'other',
+          item: c.item || '',
+          critical: c.critical ?? false,
+        })),
+        criticalDependencies: parsed.criticalDependencies || [],
+        riskWarnings: (parsed.riskWarnings || []).map((r: any) => ({
+          severity: r.severity || 'medium',
+          area: r.area || '',
+          description: r.description || '',
+          mitigation: r.mitigation || '',
+        })),
+      };
+
+      // Generate plain text fallback from structured data
+      const plainText = this.structuredReportToPlainText(structuredReport);
+
+      console.log(`📝 Structured report generated: ${structuredReport.executionSequence.length} stages, ${structuredReport.riskWarnings.length} risks`);
+
+      return {
+        structuredReport,
+        analysisSummary: plainText,
+      };
 
     } catch (error) {
-      console.error('Error generating analysis summary:', error);
-      return 'На жаль, не вдалось згенерувати звіт інженера.';
+      console.error('Error generating structured report:', error);
+      return {
+        analysisSummary: 'На жаль, не вдалось згенерувати звіт інженера.',
+      };
     }
+  }
+
+  /**
+   * Конвертувати structured report у plain text для backward compatibility
+   */
+  private structuredReportToPlainText(report: import('../types/bid-intelligence').StructuredEngineerReport): string {
+    const lines: string[] = [];
+
+    lines.push(`Проект: ${report.projectUnderstanding.objectType}, ${report.projectUnderstanding.scope}`);
+    if (report.projectUnderstanding.area) {
+      lines.push(`Площа: ${report.projectUnderstanding.area} м².`);
+    }
+    lines.push('');
+
+    if (report.assumptions.length > 0) {
+      lines.push('Припущення:');
+      report.assumptions.forEach(a => lines.push(`- ${a}`));
+      lines.push('');
+    }
+
+    if (report.missingInputs.length > 0) {
+      lines.push('Що потрібно уточнити:');
+      report.missingInputs.forEach(m => lines.push(`- ${m}`));
+      lines.push('');
+    }
+
+    if (report.executionSequence.length > 0) {
+      lines.push('Рекомендована послідовність робіт:');
+      report.executionSequence.forEach(s => {
+        lines.push(`${s.order}. ${s.name} — ${s.goal}`);
+      });
+      lines.push('');
+    }
+
+    if (report.riskWarnings.length > 0) {
+      lines.push('Ризики:');
+      report.riskWarnings.forEach(r => {
+        lines.push(`- [${r.severity}] ${r.area}: ${r.description}. Мітигація: ${r.mitigation}`);
+      });
+    }
+
+    return lines.join('\n');
   }
 }

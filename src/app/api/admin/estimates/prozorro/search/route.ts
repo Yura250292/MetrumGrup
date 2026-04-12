@@ -2,19 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { unauthorizedResponse, forbiddenResponse } from '@/lib/auth-utils';
-import { ProzorroClient } from '@/lib/prozorro-client';
-import {
-  extractSearchAttributes,
-  calculateSimilarity,
-  getDateForProzorroFilter,
-  generateProzorroReport,
-} from '@/lib/prozorro-matcher';
-import { WizardData } from '@/lib/wizard-types';
+import { bidIntelligenceService } from '@/lib/services/bid-intelligence-service';
+import { generateProzorroReport } from '@/lib/prozorro-matcher';
+import type { BidIntelligenceResult } from '@/lib/types/bid-intelligence';
 
 interface SearchRequestBody {
   estimateId: string;
-  wizardData?: WizardData;
-  searchQuery?: string; // Опис від користувача для пошуку
+  wizardData?: any;
+  searchQuery?: string;
   filters?: {
     dateFrom?: string;
     dateTo?: string;
@@ -25,13 +20,12 @@ interface SearchRequestBody {
 
 /**
  * POST /api/admin/estimates/prozorro/search
- * Пошук схожих тендерів на Prozorro для кошторису
+ * Пошук схожих тендерів через BidIntelligenceService
  */
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
-  // Доступ для SUPER_ADMIN, MANAGER, ENGINEER, FINANCIER
   const allowedRoles = ['SUPER_ADMIN', 'MANAGER', 'ENGINEER', 'FINANCIER'];
   if (!allowedRoles.includes(session.user.role)) {
     return forbiddenResponse();
@@ -41,12 +35,8 @@ export async function POST(request: NextRequest) {
     const body: SearchRequestBody = await request.json();
     const { estimateId, wizardData, searchQuery, filters } = body;
 
-    // Валідація
     if (!estimateId) {
-      return NextResponse.json(
-        { error: 'estimateId is required' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'estimateId is required' }, { status: 400 });
     }
 
     // Отримати кошторис з БД
@@ -56,120 +46,127 @@ export async function POST(request: NextRequest) {
         project: true,
         sections: {
           include: {
-            items: {
-              select: {
-                description: true,
-              },
-            },
+            items: { select: { description: true } },
           },
         },
       },
     });
 
     if (!estimate) {
-      return NextResponse.json(
-        { error: 'Estimate not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Estimate not found' }, { status: 404 });
     }
 
-    // Витягти атрибути для пошуку
-    const searchAttrs = extractSearchAttributes(estimate, wizardData, searchQuery);
+    const totalAmount = Number(estimate.totalAmount);
 
-    console.log('🔍 Пошук Prozorro тендерів:', {
+    console.log('🔍 Prozorro Bid Intelligence search:', {
       estimateId: estimate.id,
       searchQuery: searchQuery || '(auto)',
-      budget: searchAttrs.budgetCenter,
-      budgetRange: [searchAttrs.budgetMin, searchAttrs.budgetMax],
-      cpvCode: searchAttrs.cpvCode,
-      area: searchAttrs.area,
-      keywordsCount: searchAttrs.keywords.length,
+      budget: totalAmount,
     });
 
-    // Пошук на Prozorro
-    const prozorroClient = new ProzorroClient();
-    const dateFrom = filters?.dateFrom || getDateForProzorroFilter(6); // За замовчуванням 6 міс
-    const dateTo = filters?.dateTo;
-
-    const tenders = await prozorroClient.searchTenders({
-      classification: searchAttrs.cpvCode,
-      valueAmount: `>=${searchAttrs.budgetMin},<=${searchAttrs.budgetMax}`,
-      status: 'complete', // Тільки завершені тендери
-      dateModified: `>=${dateFrom}${dateTo ? `,<=${dateTo}` : ''}`,
-      limit: 50, // Отримуємо більше для фільтрації
+    // Виконати BidIntelligence аналіз
+    const biResult: BidIntelligenceResult = await bidIntelligenceService.analyze({
+      estimateAmount: totalAmount,
+      wizardData: wizardData ? {
+        objectType: wizardData.objectType,
+        totalArea: wizardData.totalArea,
+        floors: wizardData.houseData?.floors,
+        commercialData: wizardData.commercialData,
+      } : undefined,
+      searchQuery,
+      estimateTitle: estimate.title,
+      estimateDescription: estimate.description || '',
+      sections: estimate.sections.map(s => ({
+        title: s.title,
+        items: s.items.map(i => ({ description: i.description })),
+      })),
     });
 
-    console.log(`✅ Знайдено ${tenders.length} тендерів на Prozorro`);
+    console.log(`✅ BidIntelligence: ${biResult.allMatches.length} matches, ${biResult.budgetBands[0]?.tenders.length || 0} core`);
 
-    // Розрахувати схожість та ранжувати
-    const matches = tenders
-      .map(tender => {
-        const { score, reasons } = calculateSimilarity(searchAttrs, tender);
-        return {
-          tender,
-          similarityScore: score,
-          matchReasons: reasons,
-          prozorroUrl: `https://prozorro.gov.ua/tender/${tender.id}`,
-        };
-      })
-      .filter(m => m.similarityScore >= (filters?.minScore || 60))
-      .sort((a, b) => b.similarityScore - a.similarityScore)
-      .slice(0, filters?.limit || 10);
+    // Зберегти matches та bid intelligence в БД
+    if (biResult.allMatches.length > 0) {
+      // Clear old matches
+      await prisma.estimateTenderMatch.deleteMany({ where: { estimateId } });
 
-    console.log(`✅ Відфільтровано до ${matches.length} релевантних тендерів`);
+      // Save new matches with budget band info
+      const allBandedTenders = [
+        ...biResult.budgetBands[0]?.tenders.map(t => ({ ...t, band: 'core' })) || [],
+        ...biResult.budgetBands[1]?.tenders.map(t => ({ ...t, band: 'near' })) || [],
+        ...biResult.budgetBands[2]?.tenders.map(t => ({ ...t, band: 'context' })) || [],
+      ];
 
-    // Зберегти результати в БД для кешування
-    if (matches.length > 0) {
-      await saveMatchesToDB(estimateId, matches);
+      for (const match of allBandedTenders.slice(0, 20)) {
+        try {
+          await prisma.estimateTenderMatch.create({
+            data: {
+              estimateId,
+              tenderId: match.tenderID,
+              similarityScore: match.similarityScore,
+              matchReasons: Object.entries(match.scoreBreakdown).map(([k, v]) => `${k}: ${v}`),
+              budgetBand: match.band,
+            },
+          });
+        } catch {
+          // tender might not be cached yet, skip
+        }
+      }
 
-      // Генерувати текстовий звіт для інженера
-      const prozorroReport = generateProzorroReport(
-        matches.map(m => ({
-          tender: m.tender,
-          score: m.similarityScore,
-          reasons: m.matchReasons,
-        }))
-      );
-
-      // Оновити estimate з Prozorro аналізом
+      // Оновити estimate з новими даними
       await prisma.estimate.update({
         where: { id: estimateId },
         data: {
           prozorroChecked: true,
           prozorroCheckedAt: new Date(),
-          prozorroAnalysis: prozorroReport,
+          bidIntelligence: biResult as any,
+          prozorroAnalysis: JSON.stringify({
+            similarProjectsFound: biResult.searchMeta.totalFound,
+            totalItemsParsed: Object.keys(biResult.priceDatabase).length,
+            averagePriceLevel: 'medium',
+            topSimilarProjects: biResult.allMatches.slice(0, 10).map(m => ({
+              title: m.title,
+              budget: m.budget,
+              similarity: m.similarityScore,
+              itemsCount: m.itemsCount,
+              tenderID: m.tenderID,
+              procuringEntity: m.procuringEntity,
+              datePublished: m.datePublished,
+              status: m.status,
+            })),
+            aggregatedLocations: biResult.aggregatedLocations,
+            priceDatabase: biResult.priceDatabase,
+          }),
         },
       });
 
-      console.log(`✅ Збережено Prozorro аналіз до estimate ${estimateId}`);
+      console.log(`✅ Saved bid intelligence for estimate ${estimateId}`);
     }
 
     return NextResponse.json({
-      matches: matches.map(m => ({
+      // Новий формат — bid intelligence
+      bidIntelligence: biResult,
+      // Legacy формат для backward compat
+      matches: biResult.allMatches.slice(0, filters?.limit || 10).map(m => ({
         tender: {
-          id: m.tender.id,
-          title: m.tender.title,
-          description: m.tender.description,
-          status: m.tender.status,
-          valueAmount: m.tender.value.amount,
-          valueCurrency: m.tender.value.currency,
-          procuringEntityName: m.tender.procuringEntity.name,
-          cpvCode: m.tender.classification.id,
-          cpvDescription: m.tender.classification.description,
-          datePublished: m.tender.datePublished,
-          awardedAmount: m.tender.awards?.find(a => a.status === 'active')?.value.amount || null,
+          id: m.tenderID,
+          title: m.title,
+          status: m.status,
+          valueAmount: m.budget,
+          valueCurrency: 'UAH',
+          procuringEntityName: m.procuringEntity,
+          cpvCode: m.cpvCode,
+          datePublished: m.datePublished,
+          awardedAmount: m.awardedAmount || null,
         },
         similarityScore: m.similarityScore,
-        matchReasons: m.matchReasons,
-        prozorroUrl: m.prozorroUrl,
+        matchReasons: Object.entries(m.scoreBreakdown).map(([k, v]) => `${k}: ${v}`),
+        prozorroUrl: `https://prozorro.gov.ua/tender/${m.tenderID}`,
       })),
       searchParams: {
-        budgetRange: [searchAttrs.budgetMin, searchAttrs.budgetMax],
-        cpvCode: searchAttrs.cpvCode,
-        keywords: searchAttrs.keywords,
-        area: searchAttrs.area,
+        budgetRange: [biResult.targetBudget * 0.7, biResult.targetBudget * 1.3],
+        queries: biResult.searchMeta.queries,
       },
-      totalFound: tenders.length,
+      totalFound: biResult.searchMeta.totalFound,
       cached: false,
     });
   } catch (error) {
@@ -181,41 +178,5 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
-  }
-}
-
-/**
- * Зберегти matches в БД для кешування
- */
-async function saveMatchesToDB(
-  estimateId: string,
-  matches: Array<{
-    tender: any;
-    similarityScore: number;
-    matchReasons: string[];
-  }>
-): Promise<void> {
-  try {
-    // Видалити старі matches
-    await prisma.estimateTenderMatch.deleteMany({
-      where: { estimateId },
-    });
-
-    // Створити нові matches
-    for (const match of matches) {
-      await prisma.estimateTenderMatch.create({
-        data: {
-          estimateId,
-          tenderId: match.tender.id,
-          similarityScore: match.similarityScore,
-          matchReasons: match.matchReasons,
-        },
-      });
-    }
-
-    console.log(`✅ Збережено ${matches.length} matches в БД`);
-  } catch (error) {
-    console.error('⚠️ Помилка збереження matches:', error);
-    // Не кидаємо помилку - кешування не критичне
   }
 }

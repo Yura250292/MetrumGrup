@@ -53,6 +53,8 @@ export async function GET(
       pdfoAmount: true,
       analysisSummary: true,
       prozorroAnalysis: true,
+      structuredReport: true,
+      bidIntelligence: true,
       project: { select: { title: true, client: { select: { name: true } } } },
       createdBy: { select: { name: true } },
       sections: {

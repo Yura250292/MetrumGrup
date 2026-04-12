@@ -4796,6 +4796,8 @@ export default function AIEstimatePage() {
             onClose={() => setEngineerReportOpen(false)}
             analysisSummary={(estimate as any).analysisSummary}
             prozorroAnalysis={(estimate as any).prozorroAnalysis}
+            structuredReport={(estimate as any).structuredReport}
+            bidIntelligence={(estimate as any).bidIntelligence}
           />
 
           {/* Sections */}

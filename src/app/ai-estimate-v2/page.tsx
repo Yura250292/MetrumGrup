@@ -116,6 +116,8 @@ export default function AiEstimateV2Page() {
           onClose={controller.closeEngineerReport}
           analysisSummary={controller.estimate.analysisSummary as string | null | undefined}
           prozorroAnalysis={controller.estimate.prozorroAnalysis}
+          structuredReport={(controller.estimate as any).structuredReport}
+          bidIntelligence={(controller.estimate as any).bidIntelligence}
         />
       )}
     </div>

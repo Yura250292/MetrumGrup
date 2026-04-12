@@ -18,6 +18,8 @@ import { findSimilarPrices, getCategoryPriceStats } from '../prozorro-price-refe
 import { ragSearch, isProjectVectorized } from '../rag/vectorizer';
 import { prisma } from '../prisma';
 import OpenAI from 'openai';
+import { bidIntelligenceService } from '../services/bid-intelligence-service';
+import type { BidIntelligenceResult } from '../types/bid-intelligence';
 
 export interface PreAnalysisInput {
   wizardData: WizardData;
@@ -85,6 +87,9 @@ export interface PreAnalysisResult {
     }>;
   };
 
+  // Bid Intelligence (new)
+  bidIntelligence?: BidIntelligenceResult;
+
   // Master Context для AI
   masterContext: string;
 
@@ -123,9 +128,9 @@ export class PreAnalysisAgent {
     console.log('📄 Крок 2/4: Аналіз документів...');
     const documentsAnalysis = await this.analyzeDocuments(input);
 
-    // 3️⃣ Аналіз Prozorro тендерів
-    console.log('💰 Крок 3/4: Аналіз Prozorro тендерів...');
-    const prozorroAnalysis = await this.analyzeProzorroTenders(input);
+    // 3️⃣ Аналіз Prozorro тендерів через BidIntelligenceService
+    console.log('💰 Крок 3/4: Аналіз Prozorro тендерів (Bid Intelligence)...');
+    const { prozorroAnalysis, bidIntelligence } = await this.analyzeProzorroWithBidIntelligence(input);
 
     if (prozorroAnalysis.similarProjectsFound === 0) {
       warnings.push('Не знайдено схожих проектів на Prozorro. Ціни базуватимуться на Google Search та базі даних.');
@@ -156,6 +161,7 @@ export class PreAnalysisAgent {
       wizardAnalysis,
       documentsAnalysis,
       prozorroAnalysis,
+      bidIntelligence,
       masterContext,
       recommendations,
       warnings,
@@ -269,7 +275,74 @@ export class PreAnalysisAgent {
   }
 
   /**
-   * 3️⃣ Аналіз Prozorro тендерів
+   * 3️⃣ Аналіз Prozorro через BidIntelligenceService
+   * Повертає як старий формат (prozorroAnalysis), так і новий (bidIntelligence)
+   */
+  private async analyzeProzorroWithBidIntelligence(
+    input: PreAnalysisInput
+  ): Promise<{
+    prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'];
+    bidIntelligence?: BidIntelligenceResult;
+  }> {
+    try {
+      const wd = input.wizardData as any;
+      const biResult = await bidIntelligenceService.analyze({
+        estimateAmount: 0, // ще не маємо суму до генерації — буде оновлено пост-фактум
+        wizardData: {
+          objectType: wd.objectType,
+          totalArea: wd.totalArea,
+          floors: wd.houseData?.floors,
+          commercialData: wd.commercialData,
+        },
+        searchQuery: input.prozorroSearchQuery,
+        estimateTitle: input.prozorroSearchQuery || '',
+        estimateDescription: input.projectNotes || '',
+      });
+
+      // Map BidIntelligenceResult → old PreAnalysisResult.prozorroAnalysis format
+      const allMatches = biResult.allMatches;
+      const topSimilar = allMatches.slice(0, 10).map(m => ({
+        title: m.title,
+        budget: m.budget,
+        similarity: m.similarityScore,
+        itemsCount: m.itemsCount,
+        tenderID: m.tenderID,
+        procuringEntity: m.procuringEntity,
+        datePublished: m.datePublished,
+        status: m.status,
+        city: m.city,
+      }));
+
+      // Determine price level from budget data
+      const area = wd.totalArea ? parseFloat(wd.totalArea) : 1;
+      const avgBudget = allMatches.length > 0
+        ? allMatches.reduce((sum, m) => sum + m.budget, 0) / allMatches.length
+        : 0;
+      const pricePerSqm = avgBudget / (area || 1);
+      let averagePriceLevel: 'low' | 'medium' | 'high' = 'medium';
+      if (pricePerSqm < 20000) averagePriceLevel = 'low';
+      else if (pricePerSqm > 40000) averagePriceLevel = 'high';
+
+      const prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'] = {
+        similarProjectsFound: biResult.searchMeta.totalFound,
+        totalItemsParsed: Object.keys(biResult.priceDatabase).length,
+        averagePriceLevel,
+        topSimilarProjects: topSimilar,
+        priceDatabase: new Map(Object.entries(biResult.priceDatabase)),
+        aggregatedLocations: biResult.aggregatedLocations,
+      };
+
+      return { prozorroAnalysis, bidIntelligence: biResult };
+    } catch (error) {
+      console.error('❌ BidIntelligence failed, falling back to legacy:', error);
+      // Fallback до старого методу
+      const prozorroAnalysis = await this.analyzeProzorroTenders(input);
+      return { prozorroAnalysis };
+    }
+  }
+
+  /**
+   * Legacy: Аналіз Prozorro тендерів (fallback)
    */
   private async analyzeProzorroTenders(
     input: PreAnalysisInput

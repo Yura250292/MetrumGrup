@@ -75,6 +75,8 @@ export default function AdminV2EstimateDetailPage({
           onClose={() => c.setEngineerReportOpen(false)}
           analysisSummary={c.estimate.analysisSummary}
           prozorroAnalysis={c.estimate.prozorroAnalysis}
+          structuredReport={(c.estimate as any).structuredReport}
+          bidIntelligence={(c.estimate as any).bidIntelligence}
         />
       )}
       {c.financeModalOpen && <FinanceModal controller={c} />}

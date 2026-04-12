@@ -304,6 +304,8 @@ export async function POST(request: NextRequest) {
               totalLabor: laborCost,
               totalOverhead: overheadCost,
               analysisSummary: (estimateData as any).analysisSummary || null,
+              structuredReport: (estimateData as any).structuredReport || undefined,
+              bidIntelligence: (estimateData as any).preAnalysisResult?.bidIntelligence || undefined,
               prozorroChecked: !!(estimateData as any).preAnalysisResult?.prozorroAnalysis,
               prozorroCheckedAt: !!(estimateData as any).preAnalysisResult?.prozorroAnalysis ? new Date() : null,
               prozorroAnalysis: (() => {
@@ -394,6 +396,8 @@ export async function POST(request: NextRequest) {
               validationIssues: estimateData.validationIssues,
               // 🆕 Звіт інженера та аналіз Prozorro (як об'єкт для модалки)
               analysisSummary: (estimateData as any).analysisSummary || null,
+              structuredReport: (estimateData as any).structuredReport || null,
+              bidIntelligence: (estimateData as any).preAnalysisResult?.bidIntelligence || null,
               prozorroAnalysis: (() => {
                 const pa = (estimateData as any).preAnalysisResult?.prozorroAnalysis;
                 if (!pa) return null;
