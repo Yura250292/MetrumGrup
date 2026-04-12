@@ -49,6 +49,36 @@ interface SectionSpec {
   scope: string[]; // Що саме треба включити
 }
 
+/**
+ * Секція демонтажу — додається ТІЛЬКИ коли в wizard обрано
+ * "demolitionRequired: true". Генерується першою, бо демонтаж
+ * фізично передує будь-яким новим роботам і суттєво впливає
+ * на загальний кошторис (може додати 10-30% вартості).
+ */
+const DEMOLITION_SECTION: SectionSpec = {
+  title: 'Демонтажні роботи',
+  description: 'Розбирання існуючих конструкцій, вивезення будівельного сміття, підготовка майданчика під нове будівництво',
+  required: true,
+  minItems: 12,
+  scope: [
+    'Демонтаж покрівлі (зняття покриття, розбирання кроквяної системи)',
+    'Демонтаж перекриттів (плити / дерев\'яні балки)',
+    'Демонтаж несучих стін (цегла/бетон/блоки)',
+    'Демонтаж перегородок',
+    'Демонтаж підлоги та стяжки',
+    'Демонтаж фундаменту (якщо потрібно)',
+    'Демонтаж інженерних мереж (електрика, сантехніка, опалення)',
+    'Демонтаж вікон та дверей',
+    'Демонтаж оздоблення (штукатурка, плитка, підвісні стелі)',
+    'Розбирання сходів',
+    'Навантаження та вивезення будівельного сміття (м³)',
+    'Утилізація будівельних відходів',
+    'Захисне огородження та тимчасові конструкції',
+    'Протипилові заходи (зрошення, завіси)',
+    'Ручне розбирання в складних місцях (біля комунікацій)',
+  ],
+};
+
 const BUILDING_SECTIONS: SectionSpec[] = [
   {
     title: 'Земляні роботи',
@@ -469,6 +499,21 @@ export class MasterEstimateAgent {
     //    (для приватних будинків/квартир спринклерна система не потрібна)
     if (objectType !== 'commercial') {
       sections = sections.filter(s => s.title !== 'Протипожежна система');
+    }
+
+    // 5. Демонтаж — якщо обрано в wizard, додаємо ПЕРШОЮ секцією.
+    //    Перевіряємо всі можливі джерела: houseData, townhouseData,
+    //    commercialData, renovationData, а також currentState.
+    const needsDemolition =
+      wizardData?.houseData?.demolitionRequired === true ||
+      wizardData?.townhouseData?.demolitionRequired === true ||
+      wizardData?.commercialData?.demolitionRequired === true ||
+      wizardData?.renovationData?.demolitionRequired === true ||
+      wizardData?.houseData?.currentState === 'existing_building' ||
+      wizardData?.commercialData?.currentState === 'existing_building';
+
+    if (needsDemolition) {
+      sections = [DEMOLITION_SECTION, ...sections];
     }
 
     return sections;
