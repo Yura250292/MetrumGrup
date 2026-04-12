@@ -16,6 +16,7 @@ import {
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
+import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,12 @@ export default async function AdminV2ProjectDetailPage({
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Cover image upload */}
+      <ProjectCoverUpload
+        projectId={project.id}
+        currentUrl={project.coverImageUrl ?? null}
+      />
+
       {/* Sticky header */}
       <header className="flex flex-col gap-4">
         <Link

@@ -47,6 +47,7 @@ export default async function AdminV2ProjectsPage() {
       select: {
         id: true,
         expectedEndDate: true,
+        coverImageUrl: true,
         estimates: {
           select: { id: true, status: true },
         },
@@ -65,7 +66,7 @@ export default async function AdminV2ProjectsPage() {
         estimatesCount: e.estimates.length,
         hasApprovedEstimate: approved,
         expectedEndDate: e.expectedEndDate,
-        coverImage: e.photoReports[0]?.images[0]?.url ?? null,
+        coverImage: e.coverImageUrl ?? e.photoReports[0]?.images[0]?.url ?? null,
       });
     }
   }

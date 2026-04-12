@@ -29,6 +29,25 @@ export const r2Client = new S3Client({
   },
 });
 
+/**
+ * S3/R2 metadata headers (x-amz-meta-*) дозволяють лише ASCII.
+ * Кирилиця, пробіли з діакритикою тощо ламають запит із помилкою
+ * "Invalid character in header content". encodeURIComponent робить
+ * рядок безпечним для HTTP-заголовків.
+ */
+function safeMetaValue(value: string): string {
+  return encodeURIComponent(value);
+}
+
+/**
+ * R2/S3 ключі технічно підтримують UTF-8, але на практиці не-ASCII
+ * символи у кінці ключа (назва файлу) створюють проблеми з підписами
+ * і CORS. Тому кирилицю в імені файла кодуємо через encodeURIComponent.
+ */
+function safeKeyFileName(name: string): string {
+  return encodeURIComponent(name);
+}
+
 export interface UploadedFile {
   key: string;          // R2 ключ файлу
   url: string;          // Підписана URL для завантаження (дійсна 1 годину)
@@ -48,7 +67,7 @@ export async function uploadFileToR2(
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(7);
   const prefix = estimateId ? `estimates/${estimateId}` : 'temp';
-  const key = `${prefix}/${timestamp}-${randomId}-${file.name}`;
+  const key = `${prefix}/${timestamp}-${randomId}-${safeKeyFileName(file.name)}`;
 
   console.log(`📤 Uploading to R2: ${key} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
 
@@ -63,7 +82,7 @@ export async function uploadFileToR2(
     Body: buffer,
     ContentType: file.type,
     Metadata: {
-      originalName: file.name,
+      originalName: safeMetaValue(file.name),
       uploadedAt: new Date().toISOString(),
     },
   });
@@ -190,7 +209,7 @@ export async function createPresignedUploadUrl(
     : scope.includes('/')
       ? scope.replace(/\/+$/, '')
       : `estimates/${scope}`;
-  const key = `${prefix}/${timestamp}-${randomId}-${fileName}`;
+  const key = `${prefix}/${timestamp}-${randomId}-${safeKeyFileName(fileName)}`;
 
   console.log(`🔑 Creating presigned URL for: ${key}`);
 
@@ -200,7 +219,7 @@ export async function createPresignedUploadUrl(
     Key: key,
     ContentType: fileType,
     Metadata: {
-      originalName: fileName,
+      originalName: safeMetaValue(fileName),
       uploadedAt: new Date().toISOString(),
     },
   });

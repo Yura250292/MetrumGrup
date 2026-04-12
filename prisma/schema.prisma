@@ -51,6 +51,7 @@ model Project {
   slug              String                 @unique
   description       String?
   address           String?
+  coverImageUrl     String?
   status            ProjectStatus          @default(DRAFT)
   currentStage      ProjectStage           @default(DESIGN)
   stageProgress     Int                    @default(0)
