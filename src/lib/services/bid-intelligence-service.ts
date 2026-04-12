@@ -125,7 +125,11 @@ export class BidIntelligenceService {
   private async searchWithMultiQuery(queries: string[]): Promise<RawTender[]> {
     const results = await Promise.all(
       queries.map(q =>
-        prozorroClient.searchTendersByText({ text: q, perPage: 20 }).catch(() => [])
+        prozorroClient.searchTendersByText({
+          text: q,
+          perPage: 20,
+          classification: '45000000', // Construction works CPV
+        }).catch(() => [])
       )
     );
 
@@ -140,7 +144,10 @@ export class BidIntelligenceService {
 
   private buildMultiQueries(searchQuery: string): string[] {
     const trimmed = searchQuery.trim();
-    const queries = new Set<string>([trimmed]);
+    const queries = new Set<string>();
+
+    // Завжди додаємо оригінальний запит
+    queries.add(trimmed);
 
     // Якщо в запиті згадується "АТБ" — додаємо інфраструктурні запити
     if (/АТБ/i.test(trimmed)) {
@@ -150,13 +157,18 @@ export class BidIntelligenceService {
     }
 
     // Додаємо варіант з "будівництво" якщо немає
-    if (!/будівниц/i.test(trimmed) && trimmed.length > 5) {
+    if (!/будівниц|ремонт|монтаж|реконструк/i.test(trimmed) && trimmed.length > 3) {
       queries.add(`будівництво ${trimmed}`);
     }
 
     // Додаємо варіант з "ремонт" для відповідних запитів
     if (/квартир|приміщенн|офіс/i.test(trimmed) && !/ремонт/i.test(trimmed)) {
       queries.add(`ремонт ${trimmed}`);
+    }
+
+    // Додаємо варіант з "капітальний ремонт" для broader coverage
+    if (!/капітальн/i.test(trimmed)) {
+      queries.add(`капітальний ремонт ${trimmed}`);
     }
 
     return Array.from(queries).slice(0, 5);
@@ -222,9 +234,14 @@ export class BidIntelligenceService {
     // Filter: skip irrelevant tenders
     if (scopeSimilarity === 0 && budgetProximity < 15) return null;
 
-    // Penalty for irrelevant categories
-    const penaltyPatterns = /зброя|харчування|продукти|обладнання навчальне|медичне обладнання|автобус|паливо/i;
-    if (penaltyPatterns.test(tender.title || '')) return null;
+    // Penalty for non-construction categories — STRICT filter
+    const nonConstructionPatterns = /зброя|харчування|продукти|обладнання навчальне|медичне обладнання|автобус|паливо|іграшк|ігров|меблі|рекламн|маркетинг|канцеляр|комп'ютер|програмн|ліки|медикамент|продовольч|одяг|взуття|книг|підручник|друкован|прибиранн|прального|пральн|охорон|страхув|аудит|юридич|консультац|навчальн.*послуг|тренінг/i;
+    if (nonConstructionPatterns.test(tender.title || '')) return null;
+
+    // Must be construction-related CPV (45xxxxxx) or at least have some keyword match
+    const tenderCPVPrefix = (tender.classification?.id || '').slice(0, 2);
+    const isConstructionCPV = tenderCPVPrefix === '45';
+    if (!isConstructionCPV && scopeSimilarity < 5) return null;
 
     // 3. Winner price availability (max 10)
     const winnerAvailability = awardedAmount ? 10 : 0;
@@ -252,8 +269,12 @@ export class BidIntelligenceService {
 
     const totalScore = Math.round(budgetProximity + scopeSimilarity + winnerAvailability + region + recency + cpvScore);
 
-    // Minimum threshold
-    if (totalScore < 20) return null;
+    // Minimum threshold — higher when no budget target (pre-analysis phase)
+    const minThreshold = targetBudget > 0 ? 20 : 30;
+    if (totalScore < minThreshold) return null;
+
+    // Must have at least SOME scope match OR strong CPV match for construction
+    if (scopeSimilarity === 0 && cpvScore < 5) return null;
 
     const discount = awardedAmount && budget > 0
       ? -((budget - awardedAmount) / budget * 100)
@@ -320,6 +341,15 @@ export class BidIntelligenceService {
     const core: EnrichedTenderMatch[] = [];
     const near: EnrichedTenderMatch[] = [];
     const context: EnrichedTenderMatch[] = [];
+
+    // Якщо немає target budget — всі тендери йдуть в context
+    if (center <= 0) {
+      return [
+        { label: 'core', range: { min: 0, max: 0 }, percentage: 10, tenders: [] },
+        { label: 'near', range: { min: 0, max: 0 }, percentage: 20, tenders: [] },
+        { label: 'context', range: { min: 0, max: 0 }, percentage: 30, tenders: matches.sort((a, b) => b.similarityScore - a.similarityScore) },
+      ];
+    }
 
     for (const m of matches) {
       const diff = Math.abs(m.budget - center) / center;
@@ -404,15 +434,23 @@ export class BidIntelligenceService {
   // ============================================================
 
   private calculateEntryPrice(winner: WinnerPriceAnalysis, targetBudget: number): EntryPriceRecommendation {
-    if (winner.sampleSize === 0) {
-      // Без даних по переможцях — базуємось на target budget
+    // Якщо немає target budget (pre-analysis фаза) — використовуємо медіану переможців
+    const effectiveBudget = targetBudget > 0
+      ? targetBudget
+      : winner.medianWinnerPrice > 0
+        ? winner.medianWinnerPrice
+        : 0;
+
+    if (winner.sampleSize === 0 || effectiveBudget === 0) {
       return {
-        recommended: { min: targetBudget * 0.90, max: targetBudget * 0.97 },
-        aggressive: { min: targetBudget * 0.82, max: targetBudget * 0.88 },
-        conservative: { min: targetBudget * 0.95, max: targetBudget * 1.02 },
-        basedOnWinnersMedian: 0,
-        basedOnExpectedMedian: targetBudget,
-        basis: 'Немає даних по переможцях — рекомендації базуються на цільовому бюджеті.',
+        recommended: { min: effectiveBudget * 0.90, max: effectiveBudget * 0.97 },
+        aggressive: { min: effectiveBudget * 0.82, max: effectiveBudget * 0.88 },
+        conservative: { min: effectiveBudget * 0.95, max: effectiveBudget * 1.02 },
+        basedOnWinnersMedian: winner.medianWinnerPrice,
+        basedOnExpectedMedian: effectiveBudget,
+        basis: targetBudget === 0
+          ? 'Аналіз ціни входу буде доступний після генерації кошторису (потрібна цільова сума).'
+          : 'Немає даних по переможцях — рекомендації базуються на цільовому бюджеті.',
       };
     }
 
