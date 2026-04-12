@@ -30,6 +30,10 @@ export async function GET(
         createdAt: true,
         updatedAt: true,
         approvedAt: true,
+        // Поля для кнопки "Звіт" — щоб показати її лише коли є що показувати
+        // і одразу віддати дані для модалки без додаткового запиту.
+        analysisSummary: true,
+        prozorroAnalysis: true,
       },
     });
 

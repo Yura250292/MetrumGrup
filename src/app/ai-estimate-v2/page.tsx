@@ -12,6 +12,7 @@ import { PreAnalysisModal } from "./_components/pre-analysis";
 import { RefinePanel } from "./_components/refine-panel";
 import { SaveDialog } from "./_components/save-dialog";
 import { SupplementPanel } from "./_components/supplement-panel";
+import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
 import { useAiEstimateController } from "./_lib/use-controller";
 
 function useIsMobile() {
@@ -109,6 +110,14 @@ export default function AiEstimateV2Page() {
       {controller.refineModalOpen && <RefinePanel controller={controller} />}
       {controller.saveModalOpen && <SaveDialog controller={controller} />}
       {controller.supplementModalOpen && <SupplementPanel controller={controller} />}
+      {controller.engineerReportOpen && controller.estimate && (
+        <EngineerReportModal
+          open={controller.engineerReportOpen}
+          onClose={controller.closeEngineerReport}
+          analysisSummary={controller.estimate.analysisSummary as string | null | undefined}
+          prozorroAnalysis={controller.estimate.prozorroAnalysis}
+        />
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import {
   ChevronUp,
   Download,
   Loader2,
+  FileText,
 } from "lucide-react";
 import { T } from "./tokens";
 import { formatUAH } from "../_lib/format";
@@ -86,6 +87,13 @@ export function ResultMobile({ controller }: { controller: AiEstimateController 
 
       {/* Actions */}
       <section className="flex gap-2 px-5 pb-4">
+        {(estimate.analysisSummary || estimate.prozorroAnalysis) && (
+          <ActionBtn
+            icon={FileText}
+            label="Звіт"
+            onClick={controller.openEngineerReport}
+          />
+        )}
         <ActionBtn icon={Wand} label="Уточнити" onClick={controller.openRefine} />
         <ActionBtn icon={Plus} label="Додати" onClick={controller.openSupplement} />
         <ActionBtn icon={Save} label="Зберегти" primary onClick={controller.openSave} />

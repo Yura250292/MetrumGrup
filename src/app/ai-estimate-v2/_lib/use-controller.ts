@@ -113,6 +113,7 @@ export function useAiEstimateController() {
 
   // ── Refine ──
   const [refineModalOpen, setRefineModalOpen] = useState<boolean>(false);
+  const [engineerReportOpen, setEngineerReportOpen] = useState<boolean>(false);
   const [refinePrompt, setRefinePrompt] = useState<string>("");
   const [refining, setRefining] = useState<boolean>(false);
   const [selectedRefineModel, setSelectedRefineModel] =
@@ -606,6 +607,8 @@ export function useAiEstimateController() {
 
   const openRefine = useCallback(() => setRefineModalOpen(true), []);
   const closeRefine = useCallback(() => setRefineModalOpen(false), []);
+  const openEngineerReport = useCallback(() => setEngineerReportOpen(true), []);
+  const closeEngineerReport = useCallback(() => setEngineerReportOpen(false), []);
 
   const refine = useCallback(async () => {
     if (!estimate) return;
@@ -913,6 +916,11 @@ export function useAiEstimateController() {
     verificationResult,
     isVerifying,
     verify,
+
+    // engineer report (analysis + Prozorro)
+    engineerReportOpen,
+    openEngineerReport,
+    closeEngineerReport,
 
     // refine
     refineModalOpen,

@@ -2,13 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Calculator, Plus, Sparkles } from "lucide-react";
+import { Calculator, Plus, Sparkles, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useProjectEstimates } from "@/hooks/useProjectEstimates";
+import {
+  useProjectEstimates,
+  type ProjectEstimateDTO,
+} from "@/hooks/useProjectEstimates";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { AIGenerateEstimateModal } from "./AIGenerateEstimateModal";
+import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: "bg-gray-100 text-gray-700",
@@ -31,6 +35,7 @@ function formatDate(iso: string): string {
 export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
   const { data: estimates, isLoading, error } = useProjectEstimates(projectId);
   const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [reportFor, setReportFor] = useState<ProjectEstimateDTO | null>(null);
 
   return (
     <div className="rounded-xl border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-gray-900/40 admin-light:bg-white p-4">
@@ -80,36 +85,56 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
             Поки немає кошторисів. Створіть перший вручну або дайте AI зробити це з ваших файлів.
           </p>
         )}
-        {estimates?.map((est) => (
-          <Link key={est.id} href={`/admin/estimates/${est.id}`}>
-            <div className="flex items-center gap-3 rounded-lg border admin-dark:border-white/5 admin-dark:bg-gray-900/40 admin-dark:hover:bg-gray-900/60 admin-light:border-gray-100 admin-light:bg-white admin-light:hover:bg-gray-50 p-3 transition-colors cursor-pointer">
-              <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-white flex-shrink-0">
-                <Calculator className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline gap-2 flex-wrap">
-                  <p className="text-sm font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
-                    {est.number}
-                  </p>
-                  <Badge className={STATUS_COLORS[est.status] ?? ""}>
-                    {ESTIMATE_STATUS_LABELS[est.status as keyof typeof ESTIMATE_STATUS_LABELS] ?? est.status}
-                  </Badge>
+        {estimates?.map((est) => {
+          const hasReport = !!(est.analysisSummary || est.prozorroAnalysis);
+          return (
+            <div
+              key={est.id}
+              className="flex items-center gap-3 rounded-lg border admin-dark:border-white/5 admin-dark:bg-gray-900/40 admin-dark:hover:bg-gray-900/60 admin-light:border-gray-100 admin-light:bg-white admin-light:hover:bg-gray-50 p-3 transition-colors"
+            >
+              <Link
+                href={`/admin/estimates/${est.id}`}
+                className="flex items-center gap-3 flex-1 min-w-0"
+              >
+                <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-white flex-shrink-0">
+                  <Calculator className="h-4 w-4" />
                 </div>
-                <p className="text-xs truncate admin-dark:text-gray-400 admin-light:text-gray-600">
-                  {est.title}
-                </p>
-                <p className="text-[10px] admin-dark:text-gray-500 admin-light:text-gray-500">
-                  {formatDate(est.createdAt)}
-                </p>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <p className="text-sm font-bold admin-dark:text-emerald-400 admin-light:text-emerald-600">
-                  {formatCurrency(Number(est.finalClientPrice || est.totalAmount || 0))}
-                </p>
-              </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <p className="text-sm font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
+                      {est.number}
+                    </p>
+                    <Badge className={STATUS_COLORS[est.status] ?? ""}>
+                      {ESTIMATE_STATUS_LABELS[est.status as keyof typeof ESTIMATE_STATUS_LABELS] ?? est.status}
+                    </Badge>
+                  </div>
+                  <p className="text-xs truncate admin-dark:text-gray-400 admin-light:text-gray-600">
+                    {est.title}
+                  </p>
+                  <p className="text-[10px] admin-dark:text-gray-500 admin-light:text-gray-500">
+                    {formatDate(est.createdAt)}
+                  </p>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold admin-dark:text-emerald-400 admin-light:text-emerald-600">
+                    {formatCurrency(Number(est.finalClientPrice || est.totalAmount || 0))}
+                  </p>
+                </div>
+              </Link>
+              {hasReport && (
+                <button
+                  type="button"
+                  onClick={() => setReportFor(est)}
+                  className="flex items-center gap-1.5 rounded-lg border admin-dark:border-amber-400/30 admin-dark:bg-amber-400/10 admin-dark:text-amber-200 admin-dark:hover:bg-amber-400/20 admin-light:border-amber-300 admin-light:bg-amber-50 admin-light:text-amber-800 admin-light:hover:bg-amber-100 px-2.5 py-1.5 text-[11px] font-semibold flex-shrink-0 transition-colors"
+                  title="Показати звіт інженера + аналіз Prozorro"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  Звіт
+                </button>
+              )}
             </div>
-          </Link>
-        ))}
+          );
+        })}
       </div>
 
       <AIGenerateEstimateModal
@@ -117,6 +142,15 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
         onOpenChange={setAiModalOpen}
         projectId={projectId}
       />
+
+      {reportFor && (
+        <EngineerReportModal
+          open={!!reportFor}
+          onClose={() => setReportFor(null)}
+          analysisSummary={reportFor.analysisSummary}
+          prozorroAnalysis={reportFor.prozorroAnalysis}
+        />
+      )}
     </div>
   );
 }

@@ -12,6 +12,8 @@ export type ProjectEstimateDTO = {
   createdAt: string;
   updatedAt: string;
   approvedAt: string | null;
+  analysisSummary: string | null;
+  prozorroAnalysis: string | null;
 };
 
 const projectEstimatesKey = (projectId: string) =>

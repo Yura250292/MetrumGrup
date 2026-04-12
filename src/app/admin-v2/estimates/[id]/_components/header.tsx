@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   FileDown,
   FileSpreadsheet,
+  FileText,
   Plus,
   Mail,
   Calculator,
@@ -79,6 +80,13 @@ export function EstimateHeader({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+          {(e.analysisSummary || e.prozorroAnalysis) && (
+            <ActionBtn
+              icon={FileText}
+              label="Звіт"
+              onClick={() => controller.setEngineerReportOpen(true)}
+            />
+          )}
           <ActionBtn
             icon={controller.exporting === "pdf" ? Loader2 : FileDown}
             label="PDF"

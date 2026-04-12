@@ -18,6 +18,7 @@ import {
   Trash2,
   Check,
   X,
+  FileText,
 } from "lucide-react";
 import { T } from "./tokens";
 import { ConfidenceBadge, ScoreDial } from "./primitives";
@@ -66,6 +67,20 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {(estimate.analysisSummary || estimate.prozorroAnalysis) && (
+            <button
+              onClick={controller.openEngineerReport}
+              className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium border"
+              style={{
+                color: T.warning,
+                borderColor: T.warning,
+                backgroundColor: T.warningSoft,
+              }}
+              title="Звіт інженера + аналіз Prozorro"
+            >
+              <FileText size={16} /> Звіт
+            </button>
+          )}
           <button
             onClick={controller.openRefine}
             className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium"
