@@ -86,7 +86,7 @@ export default async function AdminV2Dashboard() {
       </section>
 
       {/* KPI grid */}
-      <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           label="ПРОЄКТИ"
           value={String(projectsCount)}
@@ -305,24 +305,24 @@ function KpiCard({
 }) {
   return (
     <div
-      className="flex flex-col gap-2 rounded-2xl p-6"
+      className="flex flex-col gap-1.5 rounded-xl sm:rounded-2xl p-3 sm:p-6"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+        <span className="text-[9px] sm:text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
           {label}
         </span>
         <div
-          className="flex h-9 w-9 items-center justify-center rounded-lg"
+          className="flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-lg"
           style={{ backgroundColor: T.accentPrimarySoft }}
         >
-          <Icon size={18} style={{ color: accent }} />
+          <Icon size={16} style={{ color: accent }} />
         </div>
       </div>
-      <div className="text-3xl md:text-4xl font-bold mt-2" style={{ color: T.textPrimary }}>
+      <div className="text-xl sm:text-3xl md:text-4xl font-bold mt-1 sm:mt-2" style={{ color: T.textPrimary }}>
         {value}
       </div>
-      <div className="text-xs" style={{ color: T.textMuted }}>
+      <div className="text-[10px] sm:text-xs hidden sm:block" style={{ color: T.textMuted }}>
         {sub}
       </div>
     </div>

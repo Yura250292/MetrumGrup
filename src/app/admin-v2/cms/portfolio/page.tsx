@@ -45,7 +45,7 @@ export default async function AdminV2PortfolioPage() {
       {projects.length === 0 ? (
         <EmptyState />
       ) : (
-        <section className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+        <section className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
           {projects.map((p) => (
             <div
               key={p.id}

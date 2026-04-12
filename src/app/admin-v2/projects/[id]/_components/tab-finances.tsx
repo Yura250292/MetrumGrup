@@ -96,7 +96,7 @@ export function TabFinances({
         </div>
 
         {/* Stat cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <StatCard
             icon={Wallet}
             label="Бюджет"
@@ -231,14 +231,14 @@ function StatCard({
 }) {
   return (
     <div
-      className="flex items-center gap-3 rounded-xl p-4"
+      className="flex items-center gap-2 sm:gap-3 rounded-xl p-3 sm:p-4"
       style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
     >
       <div
-        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+        className="flex h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0 items-center justify-center rounded-lg sm:rounded-xl"
         style={{ backgroundColor: T.accentPrimarySoft }}
       >
-        <Icon size={18} style={{ color: accent }} />
+        <Icon size={16} style={{ color: accent }} />
       </div>
       <div className="flex flex-col gap-0 min-w-0">
         <span

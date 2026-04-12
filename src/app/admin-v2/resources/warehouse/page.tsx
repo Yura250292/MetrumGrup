@@ -44,7 +44,7 @@ export default async function AdminV2WarehousePage() {
       </section>
 
       {/* KPI strip */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <section className="grid grid-cols-3 gap-3 sm:gap-4">
         <KpiCard label="ПОЗИЦІЙ" value={String(inventoryItems.length)} sub="на складах" />
         <KpiCard
           label="МАЛО НА СКЛАДІ"
@@ -191,16 +191,16 @@ function KpiCard({
 }) {
   return (
     <div
-      className="flex flex-col gap-1 rounded-2xl p-5"
+      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
-      <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
         {label}
       </span>
-      <span className="text-2xl font-bold mt-1" style={{ color: accent }}>
+      <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1" style={{ color: accent }}>
         {value}
       </span>
-      <span className="text-[11px]" style={{ color: T.textMuted }}>
+      <span className="text-[10px] sm:text-[11px] hidden sm:block" style={{ color: T.textMuted }}>
         {sub}
       </span>
     </div>
