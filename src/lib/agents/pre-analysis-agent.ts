@@ -379,6 +379,7 @@ export class PreAnalysisAgent {
           prozorroClient.searchTendersByText({
             text: q,
             perPage: 20,
+            classification: '45000000', // CPV: будівельні роботи — виключає LED-лампи, меблі, продукти тощо
           }).catch(() => [])
         )
       );
@@ -652,22 +653,38 @@ export class PreAnalysisAgent {
    * Побудувати запит для Prozorro якщо не вказано
    */
   private buildDefaultProzorroQuery(wizardData: WizardData): string {
-    const objectTypeMap: Record<string, string> = {
-      apartment: 'Ремонт квартири',
-      house: 'Будівництво будинку',
-      townhouse: 'Будівництво таунхаусу',
-      commercial: 'Комерційне приміщення',
-      office: 'Офісне приміщення',
+    const workScopeMap: Record<string, string> = {
+      new_construction: 'Будівництво',
+      renovation: 'Капітальний ремонт',
+      finishing: 'Оздоблювальні роботи',
+      reconstruction: 'Реконструкція',
     };
 
-    let query = objectTypeMap[wizardData.objectType] || 'Будівельні роботи';
+    const objectTypeMap: Record<string, string> = {
+      apartment: 'квартири',
+      house: 'житлового будинку',
+      townhouse: 'таунхаусу',
+      commercial: 'комерційного приміщення',
+      office: 'офісного приміщення',
+    };
 
-    if (wizardData.totalArea) {
-      query += ` ${wizardData.totalArea}м²`;
-    }
+    const workPrefix = workScopeMap[wizardData.workScope] || 'Будівництво';
+    const objectSuffix = objectTypeMap[wizardData.objectType] || 'будівлі';
 
-    if (wizardData.objectType === 'commercial' && (wizardData as any).commercialData?.purpose === 'shop') {
-      query = 'Магазин супермаркет';
+    let query = `${workPrefix} ${objectSuffix}`;
+
+    // Комерція з конкретним призначенням — використовуємо його
+    const commercialData = (wizardData as any).commercialData;
+    if (wizardData.objectType === 'commercial' && commercialData?.purpose) {
+      const purposeMap: Record<string, string> = {
+        shop: 'торгівельного приміщення магазину супермаркету',
+        warehouse: 'складського приміщення',
+        restaurant: 'ресторану кафе',
+        factory: 'виробничого приміщення',
+        showroom: 'торгівельного залу',
+      };
+      const purpose = purposeMap[commercialData.purpose] || commercialData.purpose;
+      query = `${workPrefix} ${purpose}`;
     }
 
     return query;
@@ -687,26 +704,30 @@ export class PreAnalysisAgent {
     const trimmed = searchQuery.trim();
     const queries = new Set<string>([trimmed]);
 
-    // Якщо в запиті згадується "АТБ" — додаємо варіанти
+    // Завжди додаємо варіант з "будівництво" якщо немає
+    if (!/будівниц|реконструк|капітальн.*ремонт/i.test(trimmed)) {
+      queries.add(`будівництво ${trimmed}`);
+    }
+
+    // Якщо в запиті згадується "АТБ" — шукаємо саме будівництво торгових об'єктів
     if (/АТБ/i.test(trimmed)) {
-      queries.add('будівництво магазину АТБ');
-      queries.add('АТБ-Маркет');
-      queries.add('електропостачання магазину АТБ');
-      queries.add('благоустрій АТБ');
+      queries.add('будівництво торгівельного приміщення магазину');
+      queries.add('будівництво супермаркету');
+      queries.add('нове будівництво торгового центру');
     }
-    // Якщо згадується "магазин" або "супермаркет"
-    else if (/магазин|супермаркет/i.test(trimmed)) {
-      queries.add(`будівництво ${trimmed}`);
-      queries.add(`електропостачання ${trimmed}`);
-      queries.add(`благоустрій ${trimmed}`);
+    // Магазин / супермаркет — шукаємо будівництво торгових об'єктів
+    else if (/магазин|супермаркет|торгів/i.test(trimmed)) {
+      queries.add('будівництво торгівельного приміщення');
+      queries.add('будівництво супермаркету');
+      queries.add('нове будівництво магазину');
     }
-    // Загальне будівництво
+    // Загальне
     else {
-      queries.add(`будівництво ${trimmed}`);
+      queries.add(`капітальний ремонт ${trimmed}`);
       queries.add(`реконструкція ${trimmed}`);
     }
 
-    return Array.from(queries).slice(0, 5); // максимум 5 запитів
+    return Array.from(queries).slice(0, 5);
   }
 
   /**

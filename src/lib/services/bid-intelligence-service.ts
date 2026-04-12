@@ -146,28 +146,24 @@ export class BidIntelligenceService {
     const trimmed = searchQuery.trim();
     const queries = new Set<string>();
 
-    // Завжди додаємо оригінальний запит
     queries.add(trimmed);
 
-    // Якщо в запиті згадується "АТБ" — додаємо інфраструктурні запити
-    if (/АТБ/i.test(trimmed)) {
-      queries.add('АТБ-Маркет будівництво');
-      queries.add('АТБ електропостачання');
-      queries.add('АТБ благоустрій');
-    }
-
-    // Додаємо варіант з "будівництво" якщо немає
-    if (!/будівниц|ремонт|монтаж|реконструк/i.test(trimmed) && trimmed.length > 3) {
+    // Завжди додаємо "будівництво" якщо немає
+    if (!/будівниц|реконструк|капітальн.*ремонт/i.test(trimmed)) {
       queries.add(`будівництво ${trimmed}`);
     }
 
-    // Додаємо варіант з "ремонт" для відповідних запитів
-    if (/квартир|приміщенн|офіс/i.test(trimmed) && !/ремонт/i.test(trimmed)) {
-      queries.add(`ремонт ${trimmed}`);
+    // АТБ / магазин / супермаркет → шукаємо будівництво торгових об'єктів
+    if (/АТБ/i.test(trimmed)) {
+      queries.add('будівництво торгівельного приміщення магазину');
+      queries.add('будівництво супермаркету');
+    } else if (/магазин|супермаркет|торгів/i.test(trimmed)) {
+      queries.add('будівництво торгівельного приміщення');
+      queries.add('нове будівництво магазину');
     }
 
-    // Додаємо варіант з "капітальний ремонт" для broader coverage
-    if (!/капітальн/i.test(trimmed)) {
+    // Квартира/офіс → ремонт
+    if (/квартир|приміщенн|офіс/i.test(trimmed) && !/ремонт/i.test(trimmed)) {
       queries.add(`капітальний ремонт ${trimmed}`);
     }
 
@@ -175,22 +171,39 @@ export class BidIntelligenceService {
   }
 
   private buildDefaultQuery(input: BidIntelligenceInput): string {
-    const typeMap: Record<string, string> = {
-      apartment: 'Ремонт квартири',
-      house: 'Будівництво будинку',
-      townhouse: 'Будівництво таунхаусу',
-      commercial: 'Комерційне приміщення',
-      office: 'Офісне приміщення',
+    const wd = input.wizardData;
+    const workScopeMap: Record<string, string> = {
+      new_construction: 'Будівництво',
+      renovation: 'Капітальний ремонт',
+      finishing: 'Оздоблювальні роботи',
+      reconstruction: 'Реконструкція',
     };
 
-    let query = typeMap[input.wizardData?.objectType || ''] || 'Будівельні роботи';
+    const objectTypeMap: Record<string, string> = {
+      apartment: 'квартири',
+      house: 'житлового будинку',
+      townhouse: 'таунхаусу',
+      commercial: 'комерційного приміщення',
+      office: 'офісного приміщення',
+    };
 
-    if (input.wizardData?.totalArea) {
-      query += ` ${input.wizardData.totalArea}м²`;
-    }
+    const workPrefix = workScopeMap[wd?.workScope || ''] || 'Будівництво';
+    const objectSuffix = objectTypeMap[wd?.objectType || ''] || 'будівлі';
 
-    if (input.wizardData?.objectType === 'commercial' && input.wizardData?.commercialData?.purpose === 'shop') {
-      query = 'Магазин супермаркет';
+    let query = `${workPrefix} ${objectSuffix}`;
+
+    // Комерція з конкретним призначенням
+    const commercialData = wd?.commercialData;
+    if (wd?.objectType === 'commercial' && commercialData?.purpose) {
+      const purposeMap: Record<string, string> = {
+        shop: 'торгівельного приміщення магазину',
+        warehouse: 'складського приміщення',
+        restaurant: 'ресторану кафе',
+        factory: 'виробничого приміщення',
+        showroom: 'торгівельного залу',
+      };
+      const purpose = purposeMap[commercialData.purpose] || commercialData.purpose;
+      query = `${workPrefix} ${purpose}`;
     }
 
     return query;

@@ -151,6 +151,7 @@ export interface BidIntelligenceInput {
   estimateAmount: number;
   wizardData?: {
     objectType?: string;
+    workScope?: string;
     totalArea?: string;
     floors?: string;
     commercialData?: {
