@@ -218,6 +218,11 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
             estimate={estimate}
           />
 
+          {/* Zero Price Fix Banner */}
+          {(estimate as any).zeroPriceFixResult && (estimate as any).zeroPriceFixResult.totalZeroItems > 0 && (
+            <ZeroPriceFixBanner result={(estimate as any).zeroPriceFixResult} />
+          )}
+
           {/* Scaling */}
           {controller.scalingInfo && (
             <div
@@ -968,6 +973,86 @@ function ImprovementRow({
         {location && (
           <div className="mt-0.5 text-[10px]" style={{ color: T.textMuted }}>{location}</div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// ZERO PRICE FIX BANNER
+// ============================================================
+
+function ZeroPriceFixBanner({ result }: { result: any }) {
+  const [expanded, setExpanded] = useState(false);
+  const fixed = result.fixedItems || [];
+  const unfixed = result.unfixedItems || [];
+  const allFixed = unfixed.length === 0 && fixed.length > 0;
+
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{
+        backgroundColor: allFixed ? T.successSoft : T.warningSoft,
+        border: `1px solid ${allFixed ? T.success : T.warning}`,
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <span className="text-base mt-0.5">
+          {allFixed ? "✅" : "🔍"}
+        </span>
+        <div className="flex-1">
+          <div className="text-xs font-semibold" style={{ color: allFixed ? T.success : T.warning }}>
+            Допошук цін через альтернативну AI модель
+          </div>
+          <div className="text-[11px] leading-relaxed mt-0.5" style={{ color: T.textSecondary }}>
+            {fixed.length > 0
+              ? `Знайдено ціни для ${fixed.length} із ${result.totalZeroItems} позицій з нульовою ціною.`
+              : `Не вдалося знайти ціни для ${result.totalZeroItems} позицій.`
+            }
+            {unfixed.length > 0 && ` ${unfixed.length} позицій потребують ручного введення ціни.`}
+          </div>
+
+          {/* Expandable details */}
+          {(fixed.length > 0 || unfixed.length > 0) && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-[10px] font-medium mt-1.5 flex items-center gap-1"
+              style={{ color: T.textMuted }}
+            >
+              {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              {expanded ? "Згорнути" : "Деталі"}
+            </button>
+          )}
+
+          {expanded && (
+            <div className="mt-2 flex flex-col gap-1.5">
+              {fixed.map((item: any, i: number) => (
+                <div key={`fix-${i}`} className="flex items-start gap-2 text-[10px] rounded px-2 py-1.5"
+                  style={{ backgroundColor: `${T.success}10` }}>
+                  <span style={{ color: T.success }}>✓</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium" style={{ color: T.textPrimary }}>{item.description}</span>
+                    <span style={{ color: T.textMuted }}> → </span>
+                    <span className="font-bold" style={{ color: T.success }}>
+                      {new Intl.NumberFormat('uk-UA', { style: 'currency', currency: 'UAH', maximumFractionDigits: 0 }).format(item.newPrice)}
+                    </span>
+                    <span style={{ color: T.textMuted }}> ({item.source})</span>
+                  </div>
+                </div>
+              ))}
+              {unfixed.map((item: any, i: number) => (
+                <div key={`unfix-${i}`} className="flex items-start gap-2 text-[10px] rounded px-2 py-1.5"
+                  style={{ backgroundColor: `${T.danger}10` }}>
+                  <span style={{ color: T.danger }}>✗</span>
+                  <div className="flex-1 min-w-0">
+                    <span className="font-medium" style={{ color: T.textPrimary }}>{item.description}</span>
+                    <span style={{ color: T.textMuted }}> — {item.reason}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

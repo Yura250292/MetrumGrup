@@ -21,6 +21,7 @@ import { buildProjectFacts } from '../project-facts/builder';
 import type { ProjectFacts } from '../project-facts/types';
 import { getExtractedProjectData } from '../rag/vectorizer';
 import { runAllValidators } from '../validators';
+import { zeroPriceFixer, type ZeroPriceFixResult } from '../services/zero-price-fixer';
 
 export type GenerationMode = 'gemini' | 'openai' | 'multi-agent' | 'master';
 
@@ -62,6 +63,7 @@ export interface EstimateData {
   analysisSummary?: string; // Звіт інженера про аналіз проекту (plain text fallback)
   structuredReport?: import('../types/bid-intelligence').StructuredEngineerReport; // Structured execution report v2
   preAnalysisResult?: PreAnalysisResult; // 🆕 Результат комплексного аналізу
+  zeroPriceFixResult?: ZeroPriceFixResult; // 🆕 Результат допошуку цін
   scalingInfo?: {
     scaled: boolean;
     factor: number;
@@ -544,6 +546,44 @@ export class EstimateOrchestrator {
       console.error('[Orchestrator] Rule-based validators failed:', e);
     }
 
+    // 🆕 Zero Price Fixer — знайти позиції з ціною 0 і спробувати через іншу модель
+    let zeroPriceFixResult: ZeroPriceFixResult | undefined;
+    const zeroCount = sections.reduce((sum, s) => sum + s.items.filter(i => i.unitPrice === 0 && i.quantity > 0).length, 0);
+    if (zeroCount > 0) {
+      onProgress({
+        phase: 'final',
+        status: 'generating',
+        message: `🔍 Допошук цін для ${zeroCount} позицій через альтернативну модель...`,
+        progress: 96,
+      });
+
+      try {
+        const primaryModel = this.mode === 'gemini' ? 'gemini' : 'openai';
+        const wd = this.config.wizardData;
+        zeroPriceFixResult = await zeroPriceFixer.fix(sections, primaryModel as any, {
+          objectType: wd?.objectType,
+          area: wd?.totalArea,
+        });
+
+        if (zeroPriceFixResult.fixedCount > 0) {
+          console.log(`✅ ZeroPriceFixer: виправлено ${zeroPriceFixResult.fixedCount}/${zeroPriceFixResult.totalZeroItems} позицій`);
+
+          // Remove cross-validation "price = 0" errors for fixed items
+          const fixedDescs = new Set(zeroPriceFixResult.fixedItems.map(f => f.description));
+          const beforeLen = validationIssues.length;
+          const filtered = validationIssues.filter(vi =>
+            !(vi.message.includes('Ціна = 0') && fixedDescs.has(vi.message.split(':')[0]?.trim() || ''))
+          );
+          if (filtered.length < beforeLen) {
+            validationIssues.length = 0;
+            validationIssues.push(...filtered);
+          }
+        }
+      } catch (e) {
+        console.error('[ZeroPriceFixer] Failed:', e);
+      }
+    }
+
     // Розрахувати загальні суми
     const totalBeforeDiscount = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
 
@@ -586,6 +626,7 @@ export class EstimateOrchestrator {
       analysisSummary,
       structuredReport,
       preAnalysisResult, // 🆕 Результат комплексного аналізу
+      zeroPriceFixResult, // 🆕 Допошук нульових цін
       scalingInfo, // 📊 Інформація про масштабування цін
     };
   }

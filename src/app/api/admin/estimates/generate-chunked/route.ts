@@ -414,6 +414,7 @@ export async function POST(request: NextRequest) {
                 };
               })(),
               scalingInfo: (estimateData as any).scalingInfo || null,
+              zeroPriceFixResult: (estimateData as any).zeroPriceFixResult || null,
               // ✅ Add complete sections from database for frontend display
               sections: finalEstimate?.sections.map(section => ({
                 title: section.title,

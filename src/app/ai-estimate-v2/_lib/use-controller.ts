@@ -479,6 +479,7 @@ export function useAiEstimateController() {
                 ...(update.data.prozorroAnalysis && { prozorroAnalysis: update.data.prozorroAnalysis }),
                 ...(update.data.structuredReport && { structuredReport: update.data.structuredReport }),
                 ...(update.data.bidIntelligence && { bidIntelligence: update.data.bidIntelligence }),
+                ...(update.data.zeroPriceFixResult && { zeroPriceFixResult: update.data.zeroPriceFixResult }),
                 ...(update.data.scalingInfo && { scalingInfo: update.data.scalingInfo }),
               } as EstimateData);
 
