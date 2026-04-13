@@ -287,15 +287,15 @@ function ProjectCard({
             >
               <Users size={11} style={{ color: T.accentPrimary }} />
             </div>
-            <span className="text-[11px] font-semibold" style={{ color: T.textSecondary }}>
-              {teamCount} {teamCount === 1 ? "учасник" : "учасників"}
+            <span className="text-[11px] font-semibold truncate" style={{ color: T.textSecondary }}>
+              {teamCount} {teamCount === 1 ? "учасник" : "учасн."}
             </span>
           </div>
 
           {/* Dates */}
           {(project.startDate || extra.expectedEndDate) && (
-            <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textMuted }}>
-              <Calendar size={11} />
+            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] truncate" style={{ color: T.textMuted }}>
+              <Calendar size={11} className="flex-shrink-0" />
               <span>
                 {project.startDate ? formatDateShort(project.startDate) : "—"}
                 {" — "}
@@ -328,11 +328,11 @@ function CheckChip({
   const c = colors[tone];
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold"
+      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold max-w-full"
       style={{ backgroundColor: c.bg, color: c.fg }}
     >
-      <Icon size={11} style={{ color: c.fg }} />
-      {label}
+      <span className="flex-shrink-0"><Icon size={11} style={{ color: c.fg }} /></span>
+      <span className="truncate">{label}</span>
     </span>
   );
 }
@@ -350,16 +350,16 @@ function KpiCard({
 }) {
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5"
+      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
-      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textMuted }}>
         {label}
       </span>
-      <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1" style={{ color: accent }}>
+      <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate" style={{ color: accent }}>
         {value}
       </span>
-      <span className="text-[10px] sm:text-[11px] hidden sm:block" style={{ color: T.textMuted }}>
+      <span className="text-[10px] sm:text-[11px] hidden sm:block truncate" style={{ color: T.textMuted }}>
         {sub}
       </span>
     </div>

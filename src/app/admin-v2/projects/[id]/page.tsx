@@ -81,37 +81,34 @@ export default async function AdminV2ProjectDetailPage({
             <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
               ПРОЄКТ #{project.id.slice(0, 8).toUpperCase()}
             </span>
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
               <h1
-                className="text-2xl md:text-3xl font-bold tracking-tight"
+                className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight truncate max-w-full"
                 style={{ color: T.textPrimary }}
               >
                 {project.title}
               </h1>
               <StatusBadge status={project.status} />
             </div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" style={{ color: T.textMuted }}>
-              <span className="flex items-center gap-1">
-                <User size={12} /> {project.client.name}
+            <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]" style={{ color: T.textMuted }}>
+              <span className="flex items-center gap-1 truncate">
+                <User size={12} className="flex-shrink-0" /> {project.client.name}
               </span>
               {project.manager?.name && (
                 <>
                   <span>·</span>
-                  <span className="flex items-center gap-1">
-                    <Briefcase size={12} /> Менеджер: {project.manager.name}
+                  <span className="flex items-center gap-1 truncate">
+                    <Briefcase size={12} className="flex-shrink-0" /> {project.manager.name}
                   </span>
                 </>
               )}
               {project.address && (
-                <>
-                  <span>·</span>
-                  <span className="flex items-center gap-1">
-                    <MapPin size={12} /> {project.address}
-                  </span>
-                </>
+                <span className="flex items-center gap-1 truncate hidden sm:flex">
+                  <MapPin size={12} className="flex-shrink-0" /> {project.address}
+                </span>
               )}
               <span>·</span>
-              <span>Етап: {STAGE_LABELS[project.currentStage]}</span>
+              <span className="truncate">Етап: {STAGE_LABELS[project.currentStage]}</span>
             </div>
           </div>
 
@@ -238,18 +235,18 @@ function KpiPill({
 }) {
   return (
     <div
-      className="flex flex-col gap-1 rounded-xl px-4 py-3"
+      className="flex flex-col gap-1 rounded-xl px-3 sm:px-4 py-3 min-w-0 overflow-hidden"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
-      <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textMuted }}>
         {label.toUpperCase()}
       </span>
-      <div className="flex items-baseline gap-2">
-        <span className="text-lg font-bold" style={{ color: accent }}>
+      <div className="flex items-baseline gap-1 sm:gap-2 min-w-0">
+        <span className="text-base sm:text-lg font-bold truncate" style={{ color: accent }}>
           {value}
         </span>
         {sub && (
-          <span className="text-[11px]" style={{ color: T.textMuted }}>
+          <span className="text-[10px] sm:text-[11px] flex-shrink-0" style={{ color: T.textMuted }}>
             {sub}
           </span>
         )}

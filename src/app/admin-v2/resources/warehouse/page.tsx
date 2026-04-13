@@ -191,16 +191,16 @@ function KpiCard({
 }) {
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5"
+      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
-      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textMuted }}>
         {label}
       </span>
-      <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1" style={{ color: accent }}>
+      <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate" style={{ color: accent }}>
         {value}
       </span>
-      <span className="text-[10px] sm:text-[11px] hidden sm:block" style={{ color: T.textMuted }}>
+      <span className="text-[10px] sm:text-[11px] hidden sm:block truncate" style={{ color: T.textMuted }}>
         {sub}
       </span>
     </div>

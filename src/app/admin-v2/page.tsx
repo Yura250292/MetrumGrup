@@ -77,7 +77,7 @@ export default async function AdminV2Dashboard() {
         <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
           {today.toUpperCase()}
         </span>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: T.textPrimary }}>
+        <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight truncate" style={{ color: T.textPrimary }}>
           Вітаємо, {session.user.name?.split(" ")[0] || "Адміністратор"}
         </h1>
         <p className="text-[15px]" style={{ color: T.textSecondary }}>
@@ -166,12 +166,12 @@ export default async function AdminV2Dashboard() {
                       </span>
                       <StatusBadge status={project.status} />
                     </div>
-                    <div className="flex items-center gap-2 text-[11px]" style={{ color: T.textMuted }}>
-                      <span className="truncate">{project.client?.name}</span>
+                    <div className="flex items-center gap-2 text-[11px] min-w-0" style={{ color: T.textMuted }}>
+                      <span className="truncate flex-shrink min-w-0">{project.client?.name}</span>
                       {project.manager?.name && (
                         <>
-                          <span>·</span>
-                          <span className="truncate">Менеджер: {project.manager.name}</span>
+                          <span className="flex-shrink-0">·</span>
+                          <span className="truncate flex-shrink min-w-0">{project.manager.name}</span>
                         </>
                       )}
                     </div>
@@ -240,8 +240,8 @@ export default async function AdminV2Dashboard() {
                       Дата: {formatDateShort(payment.scheduledDate)}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-0 flex-shrink-0">
-                    <span className="text-[13px] font-bold" style={{ color: T.danger }}>
+                  <div className="flex flex-col items-end gap-0 flex-shrink-0 max-w-[40%]">
+                    <span className="text-[12px] sm:text-[13px] font-bold truncate max-w-full" style={{ color: T.danger }}>
                       {formatCurrency(Number(payment.amount))}
                     </span>
                     <span className="text-[10px]" style={{ color: T.textMuted }}>
@@ -319,7 +319,7 @@ function KpiCard({
           <Icon size={16} style={{ color: accent }} />
         </div>
       </div>
-      <div className="text-xl sm:text-3xl md:text-4xl font-bold mt-1 sm:mt-2" style={{ color: T.textPrimary }}>
+      <div className="text-xl sm:text-3xl md:text-4xl font-bold mt-1 sm:mt-2 truncate" style={{ color: T.textPrimary }}>
         {value}
       </div>
       <div className="text-[10px] sm:text-xs hidden sm:block" style={{ color: T.textMuted }}>

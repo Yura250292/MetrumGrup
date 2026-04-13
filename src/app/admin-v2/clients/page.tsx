@@ -225,9 +225,9 @@ export default function AdminV2ClientsPage() {
                     <span className="truncate">{client.email}</span>
                   </span>
                   {client.phone && (
-                    <span className="flex items-center gap-2">
-                      <Phone size={14} style={{ color: T.success }} />
-                      {client.phone}
+                    <span className="flex items-center gap-2 min-w-0">
+                      <Phone size={14} style={{ color: T.success }} className="flex-shrink-0" />
+                      <span className="truncate">{client.phone}</span>
                     </span>
                   )}
                 </div>
