@@ -63,28 +63,31 @@ export function AiRenderComparisonSlider({
         draggable={false}
       />
 
-      {/* Input (clipped from the left) */}
+      {/* Input (clipped from the left via clip-path) */}
       <div
-        className="absolute inset-0 overflow-hidden"
-        style={{ width: `${position}%` }}
+        className="absolute inset-0"
+        style={{ clipPath: `inset(0 ${100 - position}% 0 0)` }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={inputUrl}
           alt="Original input"
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ width: `${containerRef.current?.offsetWidth ?? 0}px`, maxWidth: "none" }}
           draggable={false}
         />
       </div>
 
       {/* Divider line */}
       <div
-        className="absolute top-0 bottom-0 w-[3px] bg-white shadow-lg z-10"
-        style={{ left: `${position}%`, transform: "translateX(-50%)" }}
+        className="absolute top-0 bottom-0 w-[3px] bg-white z-10"
+        style={{
+          left: `${position}%`,
+          transform: "translateX(-50%)",
+          boxShadow: "0 0 8px rgba(0,0,0,0.4)",
+        }}
       >
         {/* Handle circle */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white shadow-md flex items-center justify-center">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white shadow-lg flex items-center justify-center">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M5 3L2 8L5 13" stroke="#666" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             <path d="M11 3L14 8L11 13" stroke="#666" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />

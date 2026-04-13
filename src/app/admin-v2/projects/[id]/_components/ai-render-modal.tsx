@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { X, ImageIcon, Camera, Sparkles, Upload, Loader2 } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { X, ImageIcon, Camera, Sparkles, Upload, Loader2, AlertTriangle } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { useProjectFiles } from "@/hooks/useProjectFiles";
+import { useProjectFiles, useUploadProjectFile } from "@/hooks/useProjectFiles";
 import { useAiStylePresets, useCreateAiRender, useAiCredits } from "@/hooks/useAiRender";
 import { AiStylePresetPicker } from "./ai-style-preset-picker";
 import type { AiRenderMode } from "@prisma/client";
@@ -30,13 +30,29 @@ export function AiRenderModal({
   const [strength, setStrength] = useState(0.7);
   const [controlnetType, setControlnetType] = useState<string>("lineart");
   const [outputSize, setOutputSize] = useState<{ w: number; h: number }>({ w: 1024, h: 768 });
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const { data: files } = useProjectFiles(projectId);
   const { data: presets } = useAiStylePresets(projectId);
   const { data: credits } = useAiCredits(projectId);
   const createRender = useCreateAiRender(projectId);
+  const uploadFile = useUploadProjectFile(projectId);
 
   const imageFiles = files?.filter((f) => f.mimeType.startsWith("image/")) ?? [];
+
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, []);
+
+  // Clean up object URL on unmount
+  useEffect(() => {
+    return () => {
+      if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
+    };
+  }, [uploadPreviewUrl]);
 
   const handleModeSelect = (m: AiRenderMode) => {
     setMode(m);
@@ -49,6 +65,7 @@ export function AiRenderModal({
     setSelectedFileId(fileId);
     setSelectedFileUrl(fileUrl);
     setUploadedFile(null);
+    if (uploadPreviewUrl) URL.revokeObjectURL(uploadPreviewUrl);
     setUploadPreviewUrl(null);
     setStep("settings");
   };
@@ -56,6 +73,20 @@ export function AiRenderModal({
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith("image/")) {
+      setError("Будь ласка, оберіть зображення (PNG, JPG, WebP)");
+      return;
+    }
+
+    // Validate file size (max 20MB)
+    if (file.size > 20 * 1024 * 1024) {
+      setError("Максимальний розмір файлу — 20 МБ");
+      return;
+    }
+
+    setError(null);
     setUploadedFile(file);
     setUploadPreviewUrl(URL.createObjectURL(file));
     setSelectedFileId(null);
@@ -64,50 +95,60 @@ export function AiRenderModal({
   }, []);
 
   const handleGenerate = async () => {
-    // If user uploaded a new file, first upload to project files
-    let inputFileId = selectedFileId ?? undefined;
-    let inputUrl = selectedFileUrl ?? undefined;
+    try {
+      setError(null);
+      let inputFileId = selectedFileId ?? undefined;
+      let inputUrl = selectedFileUrl ?? undefined;
 
-    if (uploadedFile && !inputFileId) {
-      // Upload via multipart
-      const formData = new FormData();
-      formData.append("file", uploadedFile);
-      const res = await fetch(`/api/admin/projects/${projectId}/files`, {
-        method: "POST",
-        body: formData,
+      // If user uploaded a new file, use the existing hook (handles presigned URLs for large files)
+      if (uploadedFile && !inputFileId) {
+        setIsUploading(true);
+        const uploaded = await uploadFile.mutateAsync(uploadedFile);
+        inputFileId = uploaded.id;
+        inputUrl = uploaded.url;
+        setIsUploading(false);
+      }
+
+      const job = await createRender.mutateAsync({
+        mode,
+        inputFileId,
+        inputUrl,
+        stylePreset: stylePreset ?? undefined,
+        prompt: prompt.trim() || undefined,
+        strength,
+        controlnetType,
+        width: outputSize.w,
+        height: outputSize.h,
       });
-      if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
-      inputFileId = data.file.id;
-      inputUrl = data.file.url;
+
+      onJobCreated(job.id);
+      onClose();
+    } catch (err) {
+      setIsUploading(false);
+      setError(err instanceof Error ? err.message : "Помилка створення рендеру");
     }
-
-    const job = await createRender.mutateAsync({
-      mode,
-      inputFileId,
-      inputUrl,
-      stylePreset: stylePreset ?? undefined,
-      prompt: prompt.trim() || undefined,
-      strength,
-      controlnetType,
-      width: outputSize.w,
-      height: outputSize.h,
-    });
-
-    onJobCreated(job.id);
-    onClose();
   };
 
   const hasInput = !!selectedFileId || !!uploadedFile;
   const previewUrl = uploadPreviewUrl || selectedFileUrl;
   const creditsNeeded = outputSize.w > 1024 || outputSize.h > 1024 ? 2 : 1;
+  const isBusy = isUploading || createRender.isPending;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.7)" }}>
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
       <div
-        className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl p-6"
+        className="relative w-full sm:max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto rounded-t-2xl sm:rounded-2xl p-5 sm:p-6 sm:mx-4"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
+        {/* Drag handle for mobile */}
+        <div className="sm:hidden flex justify-center mb-3">
+          <div className="w-10 h-1 rounded-full" style={{ backgroundColor: T.borderStrong }} />
+        </div>
+
         {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
@@ -116,10 +157,21 @@ export function AiRenderModal({
               AI Візуалізація
             </h2>
           </div>
-          <button onClick={onClose} className="p-1 rounded-lg hover:opacity-70">
+          <button onClick={onClose} className="p-2 -mr-1 rounded-lg hover:opacity-70" style={{ minHeight: 44, minWidth: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={18} style={{ color: T.textMuted }} />
           </button>
         </div>
+
+        {/* Global error */}
+        {error && (
+          <div
+            className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-4 text-[13px]"
+            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+          >
+            <AlertTriangle size={14} />
+            {error}
+          </div>
+        )}
 
         {/* Step: Mode Selection */}
         {step === "mode" && (
@@ -129,10 +181,10 @@ export function AiRenderModal({
             </p>
             <button
               onClick={() => handleModeSelect("SKETCH_TO_RENDER")}
-              className="flex items-center gap-4 rounded-xl p-4 transition-all hover:opacity-90"
-              style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
+              className="flex items-center gap-4 rounded-xl p-4 transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}`, minHeight: 72 }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: T.accentPrimarySoft }}>
+              <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: T.accentPrimarySoft }}>
                 <ImageIcon size={24} style={{ color: T.accentPrimary }} />
               </div>
               <div className="text-left">
@@ -146,10 +198,10 @@ export function AiRenderModal({
             </button>
             <button
               onClick={() => handleModeSelect("PHOTO_RERENDER")}
-              className="flex items-center gap-4 rounded-xl p-4 transition-all hover:opacity-90"
-              style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
+              className="flex items-center gap-4 rounded-xl p-4 transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}`, minHeight: 72 }}
             >
-              <div className="w-12 h-12 rounded-xl flex items-center justify-center" style={{ backgroundColor: T.accentPrimarySoft }}>
+              <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: T.accentPrimarySoft }}>
                 <Camera size={24} style={{ color: T.accentPrimary }} />
               </div>
               <div className="text-left">
@@ -173,7 +225,7 @@ export function AiRenderModal({
               </p>
               <button
                 onClick={() => setStep("mode")}
-                className="text-[12px] font-medium"
+                className="text-[12px] font-medium py-1 px-2"
                 style={{ color: T.accentPrimary }}
               >
                 ← Назад
@@ -182,16 +234,21 @@ export function AiRenderModal({
 
             {/* Upload new */}
             <label
-              className="flex items-center gap-3 rounded-xl p-4 cursor-pointer transition-all hover:opacity-90"
-              style={{ backgroundColor: T.panelElevated, border: `2px dashed ${T.borderStrong}` }}
+              className="flex items-center gap-3 rounded-xl p-4 cursor-pointer transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: T.panelElevated, border: `2px dashed ${T.borderStrong}`, minHeight: 60 }}
             >
               <Upload size={20} style={{ color: T.accentPrimary }} />
-              <span className="text-[13px] font-medium" style={{ color: T.textPrimary }}>
-                Завантажити нове зображення
-              </span>
+              <div>
+                <span className="text-[13px] font-medium block" style={{ color: T.textPrimary }}>
+                  Завантажити нове зображення
+                </span>
+                <span className="text-[11px]" style={{ color: T.textMuted }}>
+                  PNG, JPG, WebP до 20 МБ
+                </span>
+              </div>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/png,image/jpeg,image/webp"
                 className="hidden"
                 onChange={handleFileUpload}
               />
@@ -201,14 +258,14 @@ export function AiRenderModal({
             {imageFiles.length > 0 && (
               <>
                 <p className="text-[12px] font-medium" style={{ color: T.textMuted }}>
-                  Або оберіть з файлів проєкту
+                  Або оберіть з файлів проєкту ({imageFiles.length})
                 </p>
-                <div className="grid grid-cols-3 gap-2 max-h-[250px] overflow-y-auto">
+                <div className="grid grid-cols-3 gap-2 max-h-[250px] overflow-y-auto rounded-xl">
                   {imageFiles.map((file) => (
                     <button
                       key={file.id}
                       onClick={() => handleFileSelect(file.id, file.url)}
-                      className="aspect-square rounded-xl overflow-hidden transition-all hover:ring-2"
+                      className="aspect-square rounded-xl overflow-hidden transition-all hover:ring-2 active:scale-[0.96]"
                       style={{
                         border: `2px solid ${selectedFileId === file.id ? T.accentPrimary : "transparent"}`,
                       }}
@@ -218,6 +275,7 @@ export function AiRenderModal({
                         src={file.url}
                         alt={file.name}
                         className="w-full h-full object-cover"
+                        loading="lazy"
                       />
                     </button>
                   ))}
@@ -236,7 +294,7 @@ export function AiRenderModal({
               </p>
               <button
                 onClick={() => setStep("image")}
-                className="text-[12px] font-medium"
+                className="text-[12px] font-medium py-1 px-2"
                 style={{ color: T.accentPrimary }}
               >
                 ← Назад
@@ -324,11 +382,12 @@ export function AiRenderModal({
                     <button
                       key={size.label}
                       onClick={() => setOutputSize({ w: size.w, h: size.h })}
-                      className="flex-1 rounded-xl py-2 text-[12px] font-medium transition-all"
+                      className="flex-1 rounded-xl py-2.5 text-[12px] font-medium transition-all active:scale-[0.97]"
                       style={{
                         backgroundColor: isSelected ? T.accentPrimarySoft : T.panelElevated,
                         color: isSelected ? T.accentPrimary : T.textSecondary,
                         border: `1px solid ${isSelected ? T.borderAccent : T.borderSoft}`,
+                        minHeight: 44,
                       }}
                     >
                       {size.w}x{size.h}
@@ -338,17 +397,33 @@ export function AiRenderModal({
               </div>
             </div>
 
+            {/* Credits info */}
+            {credits && (
+              <div
+                className="flex items-center justify-between rounded-xl px-3 py-2.5 text-[12px]"
+                style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
+              >
+                <span style={{ color: T.textSecondary }}>Залишок кредитів</span>
+                <span
+                  className="font-bold"
+                  style={{ color: credits.remaining >= creditsNeeded ? T.success : T.danger }}
+                >
+                  {credits.remaining} / {credits.total}
+                </span>
+              </div>
+            )}
+
             {/* Generate button */}
             <button
               onClick={handleGenerate}
-              disabled={!hasInput || createRender.isPending || (credits?.remaining ?? 0) < creditsNeeded}
-              className="flex items-center justify-center gap-2 rounded-xl py-3 text-[14px] font-bold text-white transition-all disabled:opacity-50"
-              style={{ backgroundColor: T.accentPrimary }}
+              disabled={!hasInput || isBusy || (credits?.remaining ?? 0) < creditsNeeded}
+              className="flex items-center justify-center gap-2 rounded-xl py-3.5 text-[14px] font-bold text-white transition-all disabled:opacity-50 active:scale-[0.98]"
+              style={{ backgroundColor: T.accentPrimary, minHeight: 48 }}
             >
-              {createRender.isPending ? (
+              {isBusy ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Генерація...
+                  {isUploading ? "Завантаження файлу..." : "Генерація..."}
                 </>
               ) : (
                 <>
@@ -357,12 +432,6 @@ export function AiRenderModal({
                 </>
               )}
             </button>
-
-            {createRender.isError && (
-              <p className="text-[12px] text-center" style={{ color: T.danger }}>
-                {createRender.error.message}
-              </p>
-            )}
 
             {credits && credits.remaining < creditsNeeded && (
               <p className="text-[12px] text-center" style={{ color: T.warning }}>

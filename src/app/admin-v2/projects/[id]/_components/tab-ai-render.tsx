@@ -8,6 +8,22 @@ import { AiRenderModal } from "./ai-render-modal";
 import { AiRenderResultCard } from "./ai-render-result-card";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
 
+function SkeletonCard() {
+  return (
+    <div
+      className="overflow-hidden rounded-2xl animate-pulse"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <div className="aspect-[4/3]" style={{ backgroundColor: T.panelElevated }} />
+      <div className="p-3 flex flex-col gap-2">
+        <div className="h-4 rounded-lg w-2/3" style={{ backgroundColor: T.panelElevated }} />
+        <div className="h-3 rounded-lg w-1/3" style={{ backgroundColor: T.panelElevated }} />
+        <div className="h-3 rounded-lg w-1/2" style={{ backgroundColor: T.panelElevated }} />
+      </div>
+    </div>
+  );
+}
+
 export function TabAiRender({ projectId }: { projectId: string }) {
   const [showModal, setShowModal] = useState(false);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
@@ -27,9 +43,8 @@ export function TabAiRender({ projectId }: { projectId: string }) {
   const jobs = data?.jobs ?? [];
   const credits = data?.credits;
 
-  const handleRegenerate = (job: AiRenderJobDTO) => {
+  const handleRegenerate = (_job: AiRenderJobDTO) => {
     setShowModal(true);
-    // Could pre-fill modal from job data, for now just open it
   };
 
   const handleJobCreated = (jobId: string) => {
@@ -45,11 +60,13 @@ export function TabAiRender({ projectId }: { projectId: string }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <span className="text-[13px]" style={{ color: T.textMuted }}>
-            {jobs.length} {jobs.length === 1 ? "рендер" : "рендерів"}
-          </span>
+          {!isLoading && (
+            <span className="text-[13px]" style={{ color: T.textMuted }}>
+              {jobs.length} {jobs.length === 1 ? "рендер" : "рендерів"}
+            </span>
+          )}
           {credits && (
             <span
               className="flex items-center gap-1 text-[12px] font-medium rounded-lg px-2 py-1"
@@ -62,30 +79,26 @@ export function TabAiRender({ projectId }: { projectId: string }) {
         </div>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white"
-          style={{ backgroundColor: T.accentPrimary }}
+          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white active:scale-[0.97] transition"
+          style={{ backgroundColor: T.accentPrimary, minHeight: 44 }}
         >
           <Plus size={16} /> Нова візуалізація
         </button>
       </div>
 
-      {/* Loading */}
+      {/* Loading skeletons */}
       {isLoading && (
-        <div
-          className="flex items-center justify-center rounded-2xl py-16"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-        >
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-8 h-8 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: T.accentPrimary, borderTopColor: "transparent" }} />
-            <span className="text-[13px]" style={{ color: T.textMuted }}>Завантаження...</span>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </div>
       )}
 
       {/* Empty state */}
       {!isLoading && jobs.length === 0 && (
         <div
-          className="flex flex-col items-center gap-3 rounded-2xl py-16 text-center"
+          className="flex flex-col items-center gap-3 rounded-2xl py-16 text-center px-4"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
           <Sparkles size={32} style={{ color: T.accentPrimary }} />
@@ -97,8 +110,8 @@ export function TabAiRender({ projectId }: { projectId: string }) {
           </span>
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 rounded-xl px-5 py-2.5 mt-2 text-sm font-bold text-white"
-            style={{ backgroundColor: T.accentPrimary }}
+            className="flex items-center gap-2 rounded-xl px-5 py-2.5 mt-2 text-sm font-bold text-white active:scale-[0.97] transition"
+            style={{ backgroundColor: T.accentPrimary, minHeight: 44 }}
           >
             <Sparkles size={14} /> Створити візуалізацію
           </button>
