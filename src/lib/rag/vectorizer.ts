@@ -5,6 +5,7 @@
 
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import sharp from 'sharp';
 import { parsePDF } from '../pdf-helper';
 import { prisma } from '../prisma';
 
@@ -260,6 +261,39 @@ async function vectorizeChunks(
 }
 
 /**
+ * Compress and resize an image to reduce token usage in Gemini Vision.
+ * Max 1024px on longest side, JPEG quality 80.
+ * Typical savings: 60-80% of original file size.
+ */
+async function compressImageForVision(
+  buffer: Buffer,
+  mimeType: string
+): Promise<{ data: string; mimeType: string }> {
+  try {
+    const compressed = await sharp(buffer)
+      .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+
+    const originalKb = Math.round(buffer.length / 1024);
+    const compressedKb = Math.round(compressed.length / 1024);
+    console.log(`  📸 Image compressed: ${originalKb}KB → ${compressedKb}KB (-${Math.round((1 - compressed.length / buffer.length) * 100)}%)`);
+
+    return {
+      data: compressed.toString('base64'),
+      mimeType: 'image/jpeg',
+    };
+  } catch (e) {
+    // Fallback to original if sharp fails (e.g., unsupported format)
+    console.warn('  ⚠️ Image compression failed, using original:', e);
+    return {
+      data: buffer.toString('base64'),
+      mimeType,
+    };
+  }
+}
+
+/**
  * Аналіз фото через Gemini Vision
  */
 async function analyzeImageWithGemini(
@@ -281,7 +315,9 @@ async function analyzeImageWithGemini(
 2. Тип будівлі (житловий будинок/комерційна будівля/промисловий об'єкт)
 3. Матеріали які видно (цегла/бетон/метал/дерево)
 4. Чи є старі конструкції які треба демонтувати?
-5. Будь-які важливі деталі для кошторису
+5. Приблизні розміри та масштаб (якщо можна оцінити)
+6. Стан фундаменту, стін, даху (якщо видно)
+7. Будь-які важливі деталі для кошторису
 
 ФОРМАТ ВІДПОВІДІ (JSON):
 {
@@ -292,18 +328,25 @@ async function analyzeImageWithGemini(
     "needsDemolition": true/false
   },
   "buildingType": "residential/commercial/industrial",
-  "visibleMaterials": ["цегла", "бетон"]
+  "visibleMaterials": ["цегла", "бетон"],
+  "structuralDetails": "деталі конструкції, пошкодження, знос"
 }`;
+
+  // Compress image to save tokens
+  const compressed = await compressImageForVision(buffer, mimeType);
 
   const result = await model.generateContent([
     prompt,
     {
-      inlineData: {
-        data: buffer.toString('base64'),
-        mimeType
-      }
+      inlineData: compressed,
     }
   ]);
+
+  // Token logging
+  const usage = result.response.usageMetadata;
+  if (usage) {
+    console.log(`  📊 [Vision] gemini: ${usage.promptTokenCount ?? '?'} in + ${usage.candidatesTokenCount ?? '?'} out = ${usage.totalTokenCount ?? '?'} tokens`);
+  }
 
   try {
     const text = result.response.text();
@@ -323,6 +366,70 @@ async function analyzeImageWithGemini(
   return {
     description: result.response.text()
   };
+}
+
+/**
+ * Smart PDF text truncation: keep most relevant sections, skip boilerplate.
+ * For short PDFs (<20K chars) — returns full text.
+ * For long PDFs — keeps first 5K (title/summary) + sections with technical data + last 3K (appendix specs).
+ * Reduces token usage by ~60-70% for large specs while preserving key data.
+ */
+function smartTruncatePdfText(text: string, maxChars: number = 25000): string {
+  if (text.length <= maxChars) return text;
+
+  // Keywords that indicate high-value content for estimate extraction
+  const keyPatterns = [
+    /площ/i, /м²|м2|кв\.м/i, /фундамент/i, /стін/i, /перекрит/i,
+    /покрівл/i, /дах/i, /електрик/i, /сантехнік/i, /опаленн/i,
+    /вентиляц/i, /каналізац/i, /водопровід/i, /бетон/i, /арматур/i,
+    /специфікац/i, /відомість/i, /об'єм/i, /кількість/i,
+    /ВВГ|NYM|PEX|ПВХ/i, /Ø\d/i, /м³|м3|куб\.м/i,
+    /гідроізоляц/i, /утепленн/i, /штукатурк/i,
+  ];
+
+  const lines = text.split('\n');
+  const scoredSections: { start: number; end: number; score: number }[] = [];
+
+  // Score each 10-line block
+  for (let i = 0; i < lines.length; i += 10) {
+    const block = lines.slice(i, i + 10).join('\n');
+    let score = 0;
+    for (const pattern of keyPatterns) {
+      if (pattern.test(block)) score++;
+    }
+    // Numbers with units are high value
+    const numberMatches = block.match(/\d+[\.,]?\d*\s*(м²|м³|м|шт|кг|т|мм|кВт|Вт|л)/g);
+    if (numberMatches) score += numberMatches.length;
+    scoredSections.push({ start: i, end: Math.min(i + 10, lines.length), score });
+  }
+
+  // Always include first 100 lines (title page, table of contents)
+  const firstPart = lines.slice(0, 100).join('\n');
+
+  // Include top-scoring sections
+  const sortedSections = scoredSections
+    .filter(s => s.start >= 100) // skip already-included first part
+    .sort((a, b) => b.score - a.score);
+
+  let result = firstPart + '\n\n[...скорочено...]\n\n';
+  let currentLength = result.length;
+
+  for (const section of sortedSections) {
+    if (section.score === 0) continue;
+    const sectionText = lines.slice(section.start, section.end).join('\n');
+    if (currentLength + sectionText.length > maxChars - 2000) break;
+    result += sectionText + '\n';
+    currentLength += sectionText.length + 1;
+  }
+
+  // Always include last 50 lines (often has specifications/appendix)
+  const lastPart = lines.slice(-50).join('\n');
+  if (currentLength + lastPart.length <= maxChars) {
+    result += '\n[...кінець документу...]\n' + lastPart;
+  }
+
+  console.log(`  📄 PDF smart truncation: ${text.length} → ${result.length} chars (-${Math.round((1 - result.length / text.length) * 100)}%)`);
+  return result;
 }
 
 /**
@@ -397,8 +504,8 @@ async function extractDataFromPDF(
 - Товщини стін/перекриттів
 - Діаметри отворів
 
-ТЕКСТ ДОКУМЕНТУ:
-${text.substring(0, 50000)}
+ТЕКСТ ДОКУМЕНТУ (${text.length > 20000 ? 'скорочено до ключових частин' : 'повний'}):
+${smartTruncatePdfText(text)}
 
 ПОВЕРНИ ДЕТАЛЬНИЙ JSON:
 {
@@ -504,6 +611,13 @@ ${text.substring(0, 50000)}
 
   try {
     const result = await model.generateContent(prompt);
+
+    // Token logging
+    const usage = result.response.usageMetadata;
+    if (usage) {
+      console.log(`  📊 [PDF extract] gemini: ${usage.promptTokenCount ?? '?'} in + ${usage.candidatesTokenCount ?? '?'} out = ${usage.totalTokenCount ?? '?'} tokens`);
+    }
+
     const responseText = result.response.text();
     const data = JSON.parse(responseText);
 

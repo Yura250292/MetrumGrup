@@ -563,6 +563,7 @@ export class EstimateOrchestrator {
         zeroPriceFixResult = await zeroPriceFixer.fix(sections, primaryModel as any, {
           objectType: wd?.objectType,
           area: wd?.totalArea,
+          budgetRange: wd?.budgetRange,
         });
 
         if (zeroPriceFixResult.fixedCount > 0) {

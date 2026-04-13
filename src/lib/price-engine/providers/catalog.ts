@@ -28,6 +28,49 @@ import type { PriceProvider, PriceQuery, PriceResult } from '../types';
 
 const MATCH_THRESHOLD = 0.5;
 
+/**
+ * Map quality tier to brand quality preference.
+ * 'luxury' maps to 'premium' brands (highest available).
+ */
+const TIER_TO_BRAND_QUALITY: Record<string, MaterialWithPrice['brands'][number]['quality']> = {
+  economy: 'economy',
+  standard: 'standard',
+  premium: 'premium',
+  luxury: 'premium',
+};
+
+/**
+ * Select the best brand for a given quality tier.
+ * Falls back to: exact match → closest tier → first brand → null.
+ */
+function selectBrandByQuality(
+  material: MaterialWithPrice,
+  qualityTier?: string
+): MaterialWithPrice['brands'][number] | null {
+  if (material.brands.length === 0) return null;
+  if (!qualityTier) return material.brands[0];
+
+  const targetQuality = TIER_TO_BRAND_QUALITY[qualityTier] ?? 'standard';
+
+  // Exact quality match
+  const exact = material.brands.find((b) => b.quality === targetQuality);
+  if (exact) return exact;
+
+  // Fallback priority for each tier
+  const fallbackOrder: Record<string, string[]> = {
+    economy: ['economy', 'standard', 'premium'],
+    standard: ['standard', 'economy', 'premium'],
+    premium: ['premium', 'standard', 'economy'],
+  };
+  const order = fallbackOrder[targetQuality] ?? ['standard', 'economy', 'premium'];
+  for (const q of order) {
+    const match = material.brands.find((b) => b.quality === q);
+    if (match) return match;
+  }
+
+  return material.brands[0];
+}
+
 function parseDate(s: string | undefined): Date {
   if (!s) return new Date();
   const d = new Date(s);
@@ -119,14 +162,17 @@ export const catalogProvider: PriceProvider = {
 
     const sourceDate = parseDate(material.material.lastUpdated);
     const adj = inflationFactor(sourceDate, targetDate);
-    const adjusted = applyInflation(material.material.averagePrice, adj);
+
+    // Select brand matching the requested quality tier
+    const brand = selectBrandByQuality(material.material, query.qualityTier);
+    const basePrice = brand ? brand.price : material.material.averagePrice;
+    const adjusted = applyInflation(basePrice, adj);
 
     const rawConfidence = Math.min(0.95, material.similarity);
-    const brand = material.material.brands[0];
     return {
       unitPrice: adjusted,
       source: brand
-        ? `Внутрішній каталог (${brand.name}, ${brand.source})`
+        ? `Внутрішній каталог (${brand.name}, ${brand.source}, ${brand.quality})`
         : 'Внутрішній каталог',
       sourceType: 'catalog',
       rawConfidence,
@@ -134,7 +180,7 @@ export const catalogProvider: PriceProvider = {
       sourceDate,
       adjustedDate: adj.applied ? targetDate : undefined,
       inflationFactor: adj.factor,
-      notes: `match=${material.similarity.toFixed(2)} ${material.material.name}`,
+      notes: `match=${material.similarity.toFixed(2)} ${material.material.name}${query.qualityTier ? ` tier=${query.qualityTier}` : ''}`,
     };
   },
 };

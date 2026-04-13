@@ -86,7 +86,7 @@ export class RoofingAgent extends BaseAgent {
       const responseText = result.response.text();
       let output: AgentOutput = JSON.parse(responseText);
 
-      output = await this.enrichWithPriceEngine(output);
+      output = await this.enrichWithPriceEngine(output, context);
 
       const validationErrors = this.validateOutput(output);
       if (validationErrors.length > 0) {

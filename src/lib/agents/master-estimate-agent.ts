@@ -47,6 +47,8 @@ interface SectionSpec {
   required: boolean;
   minItems: number;
   scope: string[]; // Що саме треба включити
+  /** Use gpt-4o-mini for simpler sections to save tokens (~50% cheaper). */
+  useMiniModel?: boolean;
 }
 
 /**
@@ -203,6 +205,7 @@ const BUILDING_SECTIONS: SectionSpec[] = [
     description: 'Припливно-витяжна вентиляція, кондиціонування, опалення, холод',
     required: true,
     minItems: 18,
+    useMiniModel: true,
     scope: [
       'Припливні установки (з рекуператором)',
       'Витяжні установки',
@@ -229,6 +232,7 @@ const BUILDING_SECTIONS: SectionSpec[] = [
     description: 'Водопостачання, каналізація, сантехприлади',
     required: true,
     minItems: 15,
+    useMiniModel: true,
     scope: [
       'Ввід водопроводу ПЕ труба',
       'Колодязь водопровідний',
@@ -254,6 +258,7 @@ const BUILDING_SECTIONS: SectionSpec[] = [
     description: 'Спринклерна система, пожежна сигналізація, димовидалення',
     required: true,
     minItems: 12,
+    useMiniModel: true,
     scope: [
       'Спринклерна система - насосна станція',
       'Труби сталеві для спринклерів',
@@ -275,6 +280,7 @@ const BUILDING_SECTIONS: SectionSpec[] = [
     description: 'Чистове оздоблення: підлоги, стіни, стелі, двері, вікна',
     required: true,
     minItems: 25,
+    useMiniModel: true,
     scope: [
       'Стяжка підлог (ЦПС)',
       'Гідроізоляція підлог (санвузли)',
@@ -383,7 +389,8 @@ export class MasterEstimateAgent {
           console.log(`🔨 [${sectionIndex + 1}/${sectionsToGenerate.length}] Generating: ${spec.title}`);
 
           // Передаємо порожній previousSections — секції незалежні
-          const section = await this.generateSection(spec, context, []);
+          // sectionIndex > 0 gets compact master context to save tokens
+          const section = await this.generateSection(spec, context, [], sectionIndex);
           sectionResults[sectionIndex] = section;
 
           console.log(`   ✅ ${section.items.length} items, ${section.sectionTotal.toFixed(0)} ₴`);
@@ -526,18 +533,20 @@ export class MasterEstimateAgent {
   private async generateSection(
     spec: SectionSpec,
     context: AgentContext,
-    previousSections: EstimateSection[]
+    previousSections: EstimateSection[],
+    sectionIndex: number = 0
   ): Promise<EstimateSection> {
     const systemPrompt = this.getSectionSystemPrompt(spec);
-    const userPrompt = this.buildSectionPrompt(spec, context, previousSections);
+    const userPrompt = this.buildSectionPrompt(spec, context, previousSections, sectionIndex);
 
     let parsed: any;
     let usedModel = 'openai';
 
     // 1️⃣ Спроба OpenAI з 60с таймаутом
+    const useMini = spec.useMiniModel ?? false;
     try {
-      console.log(`  🤖 [${spec.title}] Trying OpenAI gpt-4o...`);
-      parsed = await this.callOpenAI(systemPrompt, userPrompt, spec.title);
+      console.log(`  🤖 [${spec.title}] Trying OpenAI ${useMini ? 'gpt-4o-mini' : 'gpt-4o'}...`);
+      parsed = await this.callOpenAI(systemPrompt, userPrompt, spec.title, useMini);
     } catch (openaiError) {
       const errMsg = openaiError instanceof Error ? openaiError.message : 'Unknown';
       console.warn(`  ⚠️ [${spec.title}] OpenAI failed (${errMsg}) — fallback to Gemini`);
@@ -584,13 +593,16 @@ export class MasterEstimateAgent {
   }
 
   /**
-   * Виклик OpenAI з таймаутом 60с
+   * Виклик OpenAI з таймаутом 60с.
+   * Uses gpt-4o-mini for simple sections to save ~50% per call.
    */
   private async callOpenAI(
     systemPrompt: string,
     userPrompt: string,
-    sectionTitle: string
+    sectionTitle: string,
+    useMiniModel: boolean = false
   ): Promise<any> {
+    const model = useMiniModel ? 'gpt-4o-mini' : 'gpt-4o';
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => {
       console.warn(`⏱️ OpenAI [${sectionTitle}] timeout after 60s — aborting`);
@@ -599,7 +611,7 @@ export class MasterEstimateAgent {
 
     try {
       const completion = await this.openai.chat.completions.create({
-        model: "gpt-4o",
+        model,
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -610,6 +622,12 @@ export class MasterEstimateAgent {
       }, {
         signal: abortController.signal,
       });
+
+      // Token usage logging
+      if (completion.usage) {
+        const u = completion.usage;
+        console.log(`  📊 [${sectionTitle}] ${model}: ${u.prompt_tokens} in + ${u.completion_tokens} out = ${u.total_tokens} tokens`);
+      }
 
       const responseText = completion.choices[0]?.message?.content || '{}';
       return JSON.parse(responseText);
@@ -644,6 +662,11 @@ export class MasterEstimateAgent {
     const combinedPrompt = `${systemPrompt}\n\n---\n\n${userPrompt}\n\nВідповідь у форматі JSON.`;
 
     const geminiPromise = model.generateContent(combinedPrompt).then(result => {
+      // Token usage logging for Gemini
+      const usage = result.response.usageMetadata;
+      if (usage) {
+        console.log(`  📊 [${sectionTitle}] gemini-3-flash: ${usage.promptTokenCount ?? '?'} in + ${usage.candidatesTokenCount ?? '?'} out = ${usage.totalTokenCount ?? '?'} tokens`);
+      }
       const text = result.response.text();
       return JSON.parse(text);
     });
@@ -723,20 +746,57 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
   }
 
   /**
-   * Побудувати user prompt для секції
+   * Create a compact summary of master context (~200-300 tokens instead of 1500-2000).
+   * Used for sections after the first one to save ~19K tokens per estimate.
+   */
+  private compactMasterContext(fullContext: string, wizardData: any): string {
+    const wd = wizardData;
+    let compact = `Проект: ${wd.objectType || '?'}, ${wd.totalArea || '?'}м², ${wd.floors || 1} пов.`;
+    if (wd.budgetRange) compact += `, клас: ${wd.budgetRange}`;
+    if (wd.workScope) compact += `, обсяг: ${wd.workScope}`;
+    compact += `\n`;
+
+    // Extract key numeric facts from master context (area, budget ranges, key materials)
+    const areaMatch = fullContext.match(/площ[аі]\s*[:=]\s*([\d\s,.]+)\s*м/i);
+    if (areaMatch) compact += `Площа з документів: ${areaMatch[1].trim()} м²\n`;
+
+    const budgetMatch = fullContext.match(/бюджет\s*[:=]\s*([\d\s,.₴]+)/i);
+    if (budgetMatch) compact += `Бюджет: ${budgetMatch[1].trim()}\n`;
+
+    // Include Prozorro price hints if present (they're valuable but short)
+    const prozorroLines = fullContext.split('\n').filter(l =>
+      l.includes('Prozorro') || l.includes('prozorro') || l.includes('тендер')
+    );
+    if (prozorroLines.length > 0) {
+      compact += `Prozorro: ${prozorroLines.slice(0, 3).join('; ').substring(0, 300)}\n`;
+    }
+
+    return compact;
+  }
+
+  /**
+   * Побудувати user prompt для секції.
+   * sectionIndex=0 gets full master context, subsequent sections get compact version.
    */
   private buildSectionPrompt(
     spec: SectionSpec,
     context: AgentContext,
-    previousSections: EstimateSection[]
+    previousSections: EstimateSection[],
+    sectionIndex: number = 0
   ): string {
     let prompt = `# ЗАВДАННЯ: Згенерувати детальну секцію "${spec.title}"\n\n`;
 
-    // Master Context з pre-analysis (wizard + документи + Prozorro)
+    // Master Context: full for first section, compact for subsequent
     if (context.masterContext) {
-      prompt += `## КОНТЕКСТ ПРОЕКТУ (pre-analysis)\n`;
-      prompt += context.masterContext;
-      prompt += '\n\n';
+      if (sectionIndex === 0) {
+        prompt += `## КОНТЕКСТ ПРОЕКТУ (pre-analysis)\n`;
+        prompt += context.masterContext;
+        prompt += '\n\n';
+      } else {
+        prompt += `## КОНТЕКСТ ПРОЕКТУ (стислий)\n`;
+        prompt += this.compactMasterContext(context.masterContext, context.wizardData);
+        prompt += '\n\n';
+      }
     }
 
     // Спеціальні вказівки для секції "Демонтажні роботи": AI має розуміти
@@ -781,7 +841,20 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
     prompt += `- Площа: ${wd.totalArea} м²\n`;
     if (wd.floors) prompt += `- Поверхів: ${wd.floors}\n`;
     if (wd.ceilingHeight) prompt += `- Висота стелі: ${wd.ceilingHeight} м\n`;
-    if (wd.budgetRange) prompt += `- Бюджетний клас: ${wd.budgetRange}\n`;
+    if (wd.budgetRange) {
+      const budgetLabels: Record<string, string> = {
+        economy: 'ЕКОНОМ — найдешевші матеріали, бюджетні бренди, мінімальна якість фінішу',
+        standard: 'СТАНДАРТ — середній ціновий сегмент, перевірені бренди',
+        premium: 'ПРЕМІУМ — якісні європейські бренди, підвищена якість фінішу, сертифіковані майстри',
+        luxury: 'ЛЮКС — топові бренди (Grohe, Hansgrohe, Villeroy&Boch, ArcelorMittal), ідеальний фініш, VIP якість',
+      };
+      prompt += `- Бюджетний клас: ${budgetLabels[wd.budgetRange] ?? wd.budgetRange}\n`;
+      prompt += `⚠️ ВАЖЛИВО: Вибирай матеріали та ціни ВІДПОВІДНО до бюджетного класу!\n`;
+      prompt += `  - Для ЕКОНОМ: бюджетні вітчизняні бренди, мінімальні ціни\n`;
+      prompt += `  - Для СТАНДАРТ: середній сегмент, надійні бренди\n`;
+      prompt += `  - Для ПРЕМІУМ: якісні імпортні бренди, ціни вище середнього на 30-50%\n`;
+      prompt += `  - Для ЛЮКС: топові бренди, ціни вище стандарту в 2-3 рази\n\n`;
+    }
 
     // 🏠 Будинок / таунхаус — повна геометрія + фундамент + стіни + дах
     if ((wd.objectType === 'house' || wd.objectType === 'townhouse') && wd.houseData) {

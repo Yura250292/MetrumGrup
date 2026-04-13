@@ -49,6 +49,8 @@ export interface PriceQuery {
   date?: Date;
   /** "material" or "labor" — some providers split price types. */
   kind?: 'material' | 'labor';
+  /** Quality tier from wizard — used to select appropriate brand/grade. */
+  qualityTier?: 'economy' | 'standard' | 'premium' | 'luxury';
 }
 
 export interface PriceResult {

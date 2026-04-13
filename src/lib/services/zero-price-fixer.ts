@@ -47,7 +47,7 @@ export class ZeroPriceFixer {
   async fix(
     sections: EstimateSection[],
     primaryModel: 'openai' | 'gemini' = 'openai',
-    context?: { objectType?: string; area?: string; region?: string }
+    context?: { objectType?: string; area?: string; region?: string; budgetRange?: string }
   ): Promise<ZeroPriceFixResult> {
     // 1. Знайти всі zero-price items
     const zeroItems = this.findZeroPriceItems(sections);
@@ -168,14 +168,18 @@ export class ZeroPriceFixer {
   private async fetchPrices(
     items: ZeroItem[],
     model: 'openai' | 'gemini',
-    context?: { objectType?: string; area?: string; region?: string }
+    context?: { objectType?: string; area?: string; region?: string; budgetRange?: string }
   ): Promise<Array<{ unitPrice: number; confidence: number; reason?: string } | null>> {
     const itemsList = items.map((item, i) =>
       `${i + 1}. "${item.description}" (од.: ${item.unit}, к-сть: ${item.quantity}, секція: ${item.sectionTitle})`
     ).join('\n');
 
+    const budgetLabel = context?.budgetRange
+      ? { economy: 'ЕКОНОМ (найдешевші матеріали)', standard: 'СТАНДАРТ (середній сегмент)', premium: 'ПРЕМІУМ (якісні бренди)', luxury: 'ЛЮКС (топові європейські бренди)' }[context.budgetRange] ?? context.budgetRange
+      : null;
+
     const contextStr = context
-      ? `Тип об'єкта: ${context.objectType || 'будівництво'}, площа: ${context.area || 'невідомо'} м², регіон: ${context.region || 'Україна'}`
+      ? `Тип об'єкта: ${context.objectType || 'будівництво'}, площа: ${context.area || 'невідомо'} м², регіон: ${context.region || 'Україна'}${budgetLabel ? `, клас якості: ${budgetLabel}` : ''}`
       : 'Будівельний кошторис, Україна, 2024-2025';
 
     const prompt = `Ти — експерт з ціноутворення будівельних матеріалів і робіт в Україні.
@@ -184,6 +188,7 @@ export class ZeroPriceFixer {
 
 Для кожної позиції нижче визнач РЕАЛІСТИЧНУ ціну за одиницю в гривнях (₴).
 Ціни мають відповідати ринку України 2024-2025.
+${budgetLabel ? `ВАЖЛИВО: Клас якості проекту — ${budgetLabel}. Вибирай ціни відповідного цінового сегменту.\n` : ''}
 
 Позиції без цін:
 ${itemsList}

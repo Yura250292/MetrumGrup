@@ -82,7 +82,7 @@ export class DemolitionAgent extends BaseAgent {
       let output: AgentOutput = JSON.parse(responseText);
 
       // Збагатити цінами через price engine (Stage 4)
-      output = await this.enrichWithPriceEngine(output);
+      output = await this.enrichWithPriceEngine(output, context);
 
       // Валідація
       const validationErrors = this.validateOutput(output);

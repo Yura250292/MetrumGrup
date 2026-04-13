@@ -48,6 +48,10 @@ export type EngineModifiers = {
   materialMultiplier: number;
   /** Multiplier applied to all labor quantities. */
   laborMultiplier: number;
+  /** Multiplier applied to material unit prices based on quality tier. */
+  materialPriceMultiplier: number;
+  /** Multiplier applied to labor unit prices based on quality tier. */
+  laborPriceMultiplier: number;
 };
 
 const DEFAULT_MODIFIERS: EngineModifiers = {
@@ -57,6 +61,8 @@ const DEFAULT_MODIFIERS: EngineModifiers = {
   complexity: 'standard',
   materialMultiplier: 1.0,
   laborMultiplier: 1.0,
+  materialPriceMultiplier: 1.0,
+  laborPriceMultiplier: 1.0,
 };
 
 function mapObjectClass(t: WizardData['objectType'] | undefined): ObjectClass {
@@ -109,11 +115,38 @@ function inferComplexity(wizard: WizardData): Complexity {
   return 'standard';
 }
 
+/**
+ * Material QUANTITY bump — extra waste/coverage for higher quality finishes.
+ * (Thicker insulation, wider joints, better overlap, etc.)
+ */
 const QUALITY_MATERIAL_BUMP: Record<QualityTier, number> = {
-  economy: 1.0,
+  economy: 0.95,
   standard: 1.0,
-  premium: 1.05,
-  luxury: 1.10,
+  premium: 1.08,
+  luxury: 1.15,
+};
+
+/**
+ * Material PRICE multiplier — reflects brand/grade differences across tiers.
+ * Economy uses budget brands, luxury uses premium European brands.
+ * Real-world gap: economy tile ~340₴/m² vs luxury ~900₴/m² ≈ 2.5-3×.
+ */
+export const QUALITY_PRICE_MULTIPLIER: Record<QualityTier, number> = {
+  economy: 0.75,
+  standard: 1.0,
+  premium: 1.40,
+  luxury: 2.20,
+};
+
+/**
+ * Labor PRICE multiplier by quality tier — premium/luxury require certified
+ * installers, stricter QC, finer tolerances, multiple finish coats, etc.
+ */
+export const QUALITY_LABOR_MULTIPLIER: Record<QualityTier, number> = {
+  economy: 0.85,
+  standard: 1.0,
+  premium: 1.25,
+  luxury: 1.60,
 };
 
 const COMPLEXITY_LABOR_BUMP: Record<Complexity, number> = {
@@ -136,6 +169,8 @@ export function buildModifiers(
 
   let materialMultiplier = QUALITY_MATERIAL_BUMP[qualityTier];
   let laborMultiplier = COMPLEXITY_LABOR_BUMP[complexity];
+  const materialPriceMultiplier = QUALITY_PRICE_MULTIPLIER[qualityTier];
+  const laborPriceMultiplier = QUALITY_LABOR_MULTIPLIER[qualityTier];
 
   if (workScope === 'reconstruction') {
     laborMultiplier *= RECONSTRUCTION_LABOR_BUMP;
@@ -151,6 +186,8 @@ export function buildModifiers(
     complexity,
     materialMultiplier,
     laborMultiplier,
+    materialPriceMultiplier,
+    laborPriceMultiplier,
   };
 }
 
@@ -161,8 +198,11 @@ export function getDefaultModifiers(): EngineModifiers {
 /**
  * Apply modifiers to a list of engine items uniformly. Material rows are
  * scaled by `materialMultiplier`, labor rows by `laborMultiplier`. Composite
- * and equipment rows are left untouched (they are typically headcount or
- * informational items).
+ * and equipment rows are left untouched.
+ *
+ * Note: Price multipliers (materialPriceMultiplier, laborPriceMultiplier) are
+ * NOT applied here because EngineItem doesn't carry prices yet. They are used
+ * downstream by the price engine and enrichWithPriceEngine pipeline.
  */
 export function applyModifiers(
   items: EngineItem[],

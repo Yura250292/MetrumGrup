@@ -12,6 +12,8 @@ import type { EngineCategory, EngineItem } from '../quantity-engine/types';
 import { formatEngineItemsForPrompt, runQuantityEngine } from '../quantity-engine';
 import { mergeEngineAndLlm } from '../quantity-engine/merge';
 import { lookupPrice } from '../price-engine';
+import type { PriceQuery } from '../price-engine/types';
+import { QUALITY_PRICE_MULTIPLIER, QUALITY_LABOR_MULTIPLIER, type QualityTier } from '../quantity-engine/modifiers';
 
 export interface AgentConfig {
   name: string;
@@ -119,7 +121,13 @@ export abstract class BaseAgent {
    * Працює тільки з позиціями, які мають низьку confidence або відсутню
    * ціну. Підвищувати confidence через "звичайний" пошук уже не дублюємо.
    */
-  protected async enrichWithPriceEngine(output: AgentOutput): Promise<AgentOutput> {
+  protected async enrichWithPriceEngine(output: AgentOutput, context?: AgentContext): Promise<AgentOutput> {
+    const qualityTier = context?.wizardData?.budgetRange as QualityTier | undefined;
+    // Price multipliers for non-catalog sources (catalog already selects brand by quality)
+    const matPriceMul = qualityTier ? QUALITY_PRICE_MULTIPLIER[qualityTier] : 1;
+    const labPriceMul = qualityTier ? QUALITY_LABOR_MULTIPLIER[qualityTier] : 1;
+    const round = (n: number) => Math.round(n * 100) / 100;
+
     const enriched: EstimateItem[] = [];
     let updatedCount = 0;
     for (const item of output.items) {
@@ -134,17 +142,31 @@ export abstract class BaseAgent {
           unit: item.unit,
           canonicalKey: item.engineKey,
           kind: item.itemType === 'labor' ? 'labor' : 'material',
+          qualityTier,
         });
         if (priceResult && priceResult.confidence > (item.confidence ?? 0)) {
+          // Apply quality multiplier for non-catalog sources (catalog already
+          // selects the correct brand/grade, so its prices are pre-adjusted).
+          const isCatalog = priceResult.sourceType === 'catalog';
+          let unitPrice = priceResult.unitPrice > 0 ? priceResult.unitPrice : item.unitPrice;
+          let laborCost = priceResult.laborCost ?? item.laborCost ?? 0;
+          if (!isCatalog && qualityTier && qualityTier !== 'standard') {
+            if (item.itemType === 'labor') {
+              laborCost = round(laborCost * labPriceMul);
+              unitPrice = round(unitPrice * labPriceMul);
+            } else {
+              unitPrice = round(unitPrice * matPriceMul);
+            }
+          }
           const updated: EstimateItem = {
             ...item,
-            unitPrice: priceResult.unitPrice > 0 ? priceResult.unitPrice : item.unitPrice,
-            laborCost: priceResult.laborCost ?? item.laborCost ?? 0,
+            unitPrice,
+            laborCost,
             priceSource: priceResult.source,
             confidence: priceResult.confidence,
             priceSourceType: priceResult.sourceType as EstimateItem['priceSourceType'],
           };
-          updated.totalCost = updated.quantity * updated.unitPrice + (updated.laborCost ?? 0);
+          updated.totalCost = round(updated.quantity * updated.unitPrice + (updated.laborCost ?? 0));
           enriched.push(updated);
           updatedCount++;
         } else {

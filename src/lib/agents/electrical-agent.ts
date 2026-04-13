@@ -119,7 +119,7 @@ export class ElectricalAgent extends BaseAgent {
 
       // 🆕 Price engine: catalog → prozorro → scrape → llm-fallback (Stage 4)
       console.log(`⚡ ElectricalAgent: Running price engine...`);
-      output = await this.enrichWithPriceEngine(output);
+      output = await this.enrichWithPriceEngine(output, context);
 
       // Валідація
       const validationErrors = this.validateOutput(output);
