@@ -11,6 +11,7 @@ import {
   Activity,
   Calculator,
   Wallet,
+  Sparkles,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { TabOverview, type ProjectDetailData } from "./tab-overview";
@@ -21,6 +22,7 @@ import { TabPhotos } from "./tab-photos";
 import { TabActivity } from "./tab-activity";
 import { TabEstimates } from "./tab-estimates";
 import { TabFinances } from "./tab-finances";
+import { TabAiRender } from "./tab-ai-render";
 
 const TAB_DEFS = [
   { id: "overview", label: "Огляд", icon: LayoutDashboard },
@@ -31,6 +33,7 @@ const TAB_DEFS = [
   { id: "activity", label: "Активність", icon: Activity },
   { id: "estimates", label: "Кошториси", icon: Calculator },
   { id: "finances", label: "Фінанси", icon: Wallet },
+  { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
 ] as const;
 
 type TabId = (typeof TAB_DEFS)[number]["id"];
@@ -132,6 +135,7 @@ export function ProjectTabs({
             payments={project.payments}
           />
         )}
+        {current === "ai-render" && <TabAiRender projectId={projectId} />}
       </div>
     </div>
   );

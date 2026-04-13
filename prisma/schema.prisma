@@ -31,6 +31,7 @@ model User {
   projectFiles       ProjectFile[]
   clientProjects     Project[]              @relation("ClientProjects")
   managedProjects    Project[]              @relation("ManagerProjects")
+  aiRenderJobs       AiRenderJob[]
   estimateVersions   EstimateVersion[]
   approvalSteps      EstimateApprovalStep[]
   criticalChanges    EstimateCriticalChange[]
@@ -78,6 +79,7 @@ model Project {
   manager           User?                  @relation("ManagerProjects", fields: [managerId], references: [id])
   conversation      Conversation?
   members           ProjectMember[]
+  aiRenderJobs      AiRenderJob[]
 
   @@map("projects")
 }
@@ -400,6 +402,7 @@ enum FileCategory {
   TECH_DOC
   NOTE
   PHOTO_ATTACHMENT
+  AI_VISUALIZATION
   OTHER
 }
 
@@ -1001,10 +1004,105 @@ enum ContentStatus {
   ARCHIVED
 }
 
+enum AiRenderMode {
+  SKETCH_TO_RENDER
+  PHOTO_RERENDER
+}
+
+enum AiRenderStatus {
+  QUEUED
+  PROCESSING
+  UPLOADING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+model AiRenderJob {
+  id              String         @id @default(cuid())
+  projectId       String
+  createdById     String
+
+  mode            AiRenderMode
+  status          AiRenderStatus @default(QUEUED)
+
+  // Input
+  inputFileId     String?
+  inputR2Key      String
+  inputUrl        String
+
+  // AI parameters
+  stylePreset     String?
+  prompt          String?        @db.Text
+  negativePrompt  String?        @db.Text
+  strength        Decimal        @default(0.65) @db.Decimal(3, 2)
+  controlnetType  String?
+  seed            Int?
+  width           Int            @default(1024)
+  height          Int            @default(1024)
+
+  // Output
+  outputR2Key     String?
+  outputUrl       String?
+  outputFileId    String?
+  thumbnailR2Key  String?
+  thumbnailUrl    String?
+
+  // Provider tracking
+  provider        String?
+  externalJobId   String?
+
+  // Timing & errors
+  startedAt       DateTime?
+  completedAt     DateTime?
+  errorMessage    String?
+  durationMs      Int?
+  creditsUsed     Int            @default(1)
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy       User           @relation(fields: [createdById], references: [id])
+
+  @@index([projectId, createdAt])
+  @@index([createdById])
+  @@index([status])
+  @@map("ai_render_jobs")
+}
+
+model AiStylePreset {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  label           String
+  description     String?
+  thumbnailUrl    String?
+  prompt          String   @db.Text
+  negativePrompt  String?  @db.Text
+  category        String   @default("exterior")
+  sortOrder       Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  @@index([category, isActive])
+  @@map("ai_style_presets")
+}
+
+model AiCreditBalance {
+  id              String    @id @default(cuid())
+  totalCredits    Int       @default(100)
+  usedCredits     Int       @default(0)
+  resetAt         DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@map("ai_credit_balances")
+}
+
 enum FileType {
   PHOTO_REPORT
   DOCUMENT
   PLAN
   COMPLETION_ACT
   ESTIMATE
+  AI_RENDER
 }
