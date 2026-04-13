@@ -14,6 +14,9 @@
     },
     "src/app/api/admin/projects/[id]/vectorize/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/admin/projects/[id]/ai-render/route.ts": {
+      "maxDuration": 300
     }
   },
   "headers": [
@@ -43,6 +46,17 @@
     {
       "source": "/home",
       "destination": "/",
+      "permanent": true
+    },
+    {
+      "source": "/:path(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "metrum-grup.biz.ua"
+        }
+      ],
+      "destination": "https://www.metrum-grup.biz.ua/:path",
       "permanent": true
     }
   ]
