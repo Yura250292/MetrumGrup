@@ -477,6 +477,11 @@ export class MasterEstimateAgent {
 
     console.log(`\n✅ MasterAgent complete: ${enrichedSections.length} sections, ${totalItems} items, ${totalCost.toFixed(0)} ₴`);
     console.log(`   Prozorro prices: ${prozorroPricesUsed}, Other: ${googlePricesUsed}`);
+    console.log(`   💰 Розбивка по секціях:`);
+    enrichedSections.forEach(s => {
+      const pct = totalCost > 0 ? ((s.sectionTotal / totalCost) * 100).toFixed(1) : '0';
+      console.log(`      ${s.title}: ${s.sectionTotal.toFixed(0)} ₴ (${pct}%) — ${s.items.length} позицій`);
+    });
 
     return {
       sections: enrichedSections,
@@ -543,10 +548,19 @@ export class MasterEstimateAgent {
       wizardData?.houseData?.currentState === 'existing_building' ||
       wizardData?.commercialData?.currentState === 'existing_building';
 
+    console.log(`📋 [selectSections] objectType=${objectType}, workScope=${workScope}, needsDemolition=${needsDemolition}`);
+    console.log(`   houseData.demolitionRequired=${wizardData?.houseData?.demolitionRequired}, commercialData.demolitionRequired=${wizardData?.commercialData?.demolitionRequired}`);
+    console.log(`   houseData.currentState=${wizardData?.houseData?.currentState}, commercialData.currentState=${wizardData?.commercialData?.currentState}`);
+    console.log(`   demolitionDescription=${wizardData?.houseData?.demolitionDescription || wizardData?.commercialData?.demolitionDescription || 'none'}`);
+
     if (needsDemolition) {
       sections = [DEMOLITION_SECTION, ...sections];
+      console.log(`   ✅ Демонтаж ДОДАНО першою секцією`);
+    } else {
+      console.log(`   ❌ Демонтаж НЕ додано`);
     }
 
+    console.log(`📋 Final sections (${sections.length}): ${sections.map(s => s.title).join(', ')}`);
     return sections;
   }
 
@@ -825,8 +839,6 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
     // масштаб і вартість демонтажу відносно нового будівництва.
     const wd = context.wizardData;
     if (spec.title === 'Демонтажні роботи') {
-      const area = wd.totalArea || 0;
-      const floors = wd.floors || 1;
       const demolDesc =
         wd.houseData?.demolitionDescription ||
         wd.commercialData?.demolitionDescription ||
@@ -834,26 +846,49 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
         '';
       const wallMaterial = wd.houseData?.walls?.material || wd.commercialData?.wallMaterial || 'невідомо';
 
+      // Try to extract demolition area from description (e.g., "40x20 метрів на 2 поверхи")
+      const dimMatch = demolDesc.match(/(\d+)\s*[хx×]\s*(\d+)/i);
+      const floorMatch = demolDesc.match(/(\d+)\s*повер/i);
+      const demolWidth = dimMatch ? parseInt(dimMatch[1]) : 0;
+      const demolLength = dimMatch ? parseInt(dimMatch[2]) : 0;
+      const demolFloors = floorMatch ? parseInt(floorMatch[1]) : (wd.floors || 1);
+      const demolArea = demolWidth && demolLength
+        ? demolWidth * demolLength
+        : (wd.totalArea || 0); // fallback to project area
+      const demolVolume = Math.round(demolArea * demolFloors * 0.6);
+      const estimatedDemolCost = Math.round(demolArea * demolFloors * 2500); // ~2500₴/м² грубо
+
+      console.log(`🏗️ [Демонтаж] desc="${demolDesc}", parsed: ${demolWidth}x${demolLength}=${demolArea}м², ${demolFloors} пов., volume=${demolVolume}м³, est.cost=${estimatedDemolCost}₴`);
+
       prompt += `## ⚠️ ВАЖЛИВО: МАСШТАБ ДЕМОНТАЖНИХ РОБІТ\n`;
       prompt += `Демонтується ІСНУЮЧА БУДІВЛЯ перед новим будівництвом.\n`;
-      prompt += `- Загальна площа будівлі: ${area} м² (${floors} пов.)\n`;
-      prompt += `- Орієнтовний об'єм демонтажу: ${Math.round(area * floors * 0.6)} м³ конструкцій\n`;
+      if (demolWidth && demolLength) {
+        prompt += `- Розміри існуючої будівлі (з опису): ${demolWidth}×${demolLength} = ${demolArea} м² (${demolFloors} поверхів)\n`;
+        prompt += `- ⚠️ Це НЕ площа нового об'єкта (${wd.totalArea} м²), а площа ІСНУЮЧОЇ будівлі під демонтаж!\n`;
+      } else {
+        prompt += `- Площа демонтажу: ~${demolArea} м² (${demolFloors} поверхів)\n`;
+      }
+      prompt += `- Орієнтовний об'єм демонтажу: ${demolVolume} м³ конструкцій\n`;
       prompt += `- Матеріал стін: ${wallMaterial}\n`;
       if (demolDesc) {
-        prompt += `- Опис від замовника: ${demolDesc}\n`;
+        prompt += `- Опис від замовника: "${demolDesc}"\n`;
       }
       prompt += `\n`;
+      prompt += `ОРІЄНТОВНА ВАРТІСТЬ ДЕМОНТАЖУ: ${(estimatedDemolCost / 1000000).toFixed(1)} млн ₴\n`;
+      prompt += `(розрахунок: ${demolArea}м² × ${demolFloors} поверхів × ~2500₴/м² = ${estimatedDemolCost.toLocaleString()} ₴)\n\n`;
       prompt += `ПРАВИЛА РОЗРАХУНКУ ДЕМОНТАЖУ:\n`;
-      prompt += `1. Вартість демонтажу ПОВНОГО розбирання будівлі = 10-15% від вартості нового будівництва аналогічної площі.\n`;
-      prompt += `2. Для будівлі ${area} м² × ${floors} поверхів демонтаж має коштувати МІЛЬЙОНИ гривень, не сотні тисяч.\n`;
+      prompt += `1. Демонтаж 2-поверхової будівлі ${demolArea}м² має коштувати ${(estimatedDemolCost * 0.8 / 1000000).toFixed(1)}-${(estimatedDemolCost * 1.5 / 1000000).toFixed(1)} млн ₴.\n`;
+      prompt += `2. Це МІЛЬЙОНИ гривень, не сотні тисяч!\n`;
       prompt += `3. Обов'язково врахуй:\n`;
-      prompt += `   - Механізований демонтаж (екскаватор з гідромолотом, автокран)\n`;
+      prompt += `   - Механізований демонтаж (екскаватор з гідромолотом: 8000-15000 ₴/зміна)\n`;
+      prompt += `   - Автокран (5000-10000 ₴/зміна)\n`;
       prompt += `   - Ручний демонтаж в складних місцях\n`;
-      prompt += `   - ВЕЛИКІ об'єми вивезення сміття (${Math.round(area * floors * 0.4)}-${Math.round(area * floors * 0.7)} м³)\n`;
-      prompt += `   - Утилізацію на полігоні (коштує ~200-400 ₴/м³)\n`;
-      prompt += `   - Роботу спецтехніки (від 3000-8000 ₴/зміна)\n`;
+      prompt += `   - Вивезення сміття: ${Math.round(demolVolume * 0.7)}-${demolVolume} м³ × 250-400 ₴/м³\n`;
+      prompt += `   - Утилізацію на полігоні\n`;
       prompt += `   - Тимчасове огородження, протипилові заходи\n`;
-      prompt += `4. НЕ занижуй обсяги. Площа демонтажу = площа будівлі.\n`;
+      prompt += `   - Розбирання покрівлі, стін, перекриттів, фундаменту ОКРЕМО\n`;
+      prompt += `4. КОЖЕН конструктивний елемент — ОКРЕМА позиція (дах, стіни, перекриття, фундамент, мережі).\n`;
+      prompt += `5. НЕ занижуй — якщо орієнтир ${(estimatedDemolCost / 1000000).toFixed(1)} млн, а ти рахуєш менше 50% від нього — щось не так.\n`;
       prompt += `\n`;
     }
 
