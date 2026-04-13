@@ -47,17 +47,6 @@
       "source": "/home",
       "destination": "/",
       "permanent": true
-    },
-    {
-      "source": "/:path(.*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "metrum-grup.biz.ua"
-        }
-      ],
-      "destination": "https://www.metrum-grup.biz.ua/:path",
-      "permanent": true
     }
   ]
 }

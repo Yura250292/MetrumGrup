@@ -6,14 +6,15 @@ const WWW_HOST = "www.metrum-grup.biz.ua";
 
 /**
  * Middleware:
- * 1. Non-www → www redirect with proper OPTIONS/preflight handling
- *    (vercel.json redirect handles normal navigation, but browsers
- *     reject 3xx on preflight — middleware handles that case)
+ * 1. Non-www → www redirect (must run before vercel.json redirects
+ *    which can't handle OPTIONS preflight — they return 307 which
+ *    browsers reject on preflight)
  * 2. NextAuth `authorized` callback handles all auth logic
  */
 export default auth((request) => {
   const host = request.headers.get("host") ?? "";
 
+  // Non-www → www redirect for all routes
   if (host === NON_WWW_HOST) {
     // OPTIONS preflight can't follow redirects — respond with CORS headers
     if (request.method === "OPTIONS") {
@@ -28,7 +29,6 @@ export default auth((request) => {
       });
     }
 
-    // For non-preflight requests that somehow bypass vercel.json redirect
     const url = new URL(request.url);
     url.host = WWW_HOST;
     url.protocol = "https:";
@@ -41,10 +41,12 @@ export default auth((request) => {
 
 export const config = {
   matcher: [
-    "/dashboard/:path*",
-    "/admin/:path*",
-    "/admin-v2/:path*",
-    "/login",
-    "/register",
+    /*
+     * Match all paths except static assets.
+     * This is needed so non-www → www redirect works for ALL routes.
+     * For www domain, auth logic only triggers on protected routes
+     * (handled by the `authorized` callback in auth.ts).
+     */
+    "/((?!_next/static|_next/image|favicon\\.ico|manifest\\.json|sw\\.js|workbox-|icons/|robots\\.txt|sitemap).*)",
   ],
 };
