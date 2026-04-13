@@ -5,7 +5,6 @@
 
 import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import sharp from 'sharp';
 import { parsePDF } from '../pdf-helper';
 import { prisma } from '../prisma';
 
@@ -270,7 +269,10 @@ async function compressImageForVision(
   mimeType: string
 ): Promise<{ data: string; mimeType: string }> {
   try {
-    const compressed = await sharp(buffer)
+    // Dynamic import to avoid crashing serverless functions on cold start
+    const sharpModule = await import('sharp');
+    const sharpFn = sharpModule.default;
+    const compressed = await sharpFn(buffer)
       .resize(1024, 1024, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80 })
       .toBuffer();
