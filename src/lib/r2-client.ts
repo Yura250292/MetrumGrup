@@ -40,15 +40,42 @@ function safeMetaValue(value: string): string {
 }
 
 /**
- * R2/S3 ключі підтримують UTF-8. НЕ кодуємо кирилицю в ключі, бо
- * Cloudflare public URL декодує percent-encoded шлях при lookup: якщо
- * ключ містить "%D0%93" (literal), а URL запитує decoded "Г" — отримуємо 404.
- * Замість цього зберігаємо raw UTF-8 в ключі і кодуємо лише в publicUrl.
+ * Transliterate Ukrainian Cyrillic to ASCII for R2 keys.
+ * R2 public URLs have encoding mismatches with UTF-8 keys,
+ * causing 404 for files like "Гірник.png". ASCII keys avoid this.
+ * The original filename is stored separately in DB `name` field.
  */
+const TRANSLIT: Record<string, string> = {
+  а: "a", б: "b", в: "v", г: "h", ґ: "g", д: "d", е: "e", є: "ye",
+  ж: "zh", з: "z", и: "y", і: "i", ї: "yi", й: "y", к: "k", л: "l",
+  м: "m", н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
+  ф: "f", х: "kh", ц: "ts", ч: "ch", ш: "sh", щ: "shch", ь: "",
+  ю: "yu", я: "ya",
+  А: "A", Б: "B", В: "V", Г: "H", Ґ: "G", Д: "D", Е: "E", Є: "Ye",
+  Ж: "Zh", З: "Z", И: "Y", І: "I", Ї: "Yi", Й: "Y", К: "K", Л: "L",
+  М: "M", Н: "N", О: "O", П: "P", Р: "R", С: "S", Т: "T", У: "U",
+  Ф: "F", Х: "Kh", Ц: "Ts", Ч: "Ch", Ш: "Sh", Щ: "Shch", Ь: "",
+  Ю: "Yu", Я: "Ya",
+};
+
 function safeKeyFileName(name: string): string {
-  // Прибираємо лише небезпечні символи для ключів (/, \, .., control chars)
-  // але залишаємо UTF-8 як є.
-  return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
+  const dotIdx = name.lastIndexOf(".");
+  const ext = dotIdx >= 0 ? name.slice(dotIdx).toLowerCase() : "";
+  const base = name.slice(0, dotIdx >= 0 ? dotIdx : undefined);
+
+  // Transliterate Cyrillic, then strip remaining non-ASCII
+  const transliterated = base
+    .split("")
+    .map((ch) => TRANSLIT[ch] ?? ch)
+    .join("");
+  const ascii = transliterated
+    .replace(/[^a-zA-Z0-9_\- ]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+
+  return (ascii || "file") + ext;
 }
 
 export interface UploadedFile {
@@ -98,11 +125,8 @@ export async function uploadFileToR2(
 
   await r2Client.send(command);
 
-  // Використовуємо публічний URL (обходимо CORS проблеми).
-  // Кожен сегмент шляху кодуємо окремо, щоб / залишились, а кирилиця
-  // була коректною у <img src="...">.
-  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
-  const publicUrl = `${R2_PUBLIC_URL}/${encodedKey}`;
+  // Keys are now ASCII-safe (Cyrillic transliterated), so no encoding needed.
+  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
 
   console.log(`   ✅ Uploaded: ${key}`);
 
@@ -240,9 +264,8 @@ export async function createPresignedUploadUrl(
     expiresIn: 3600, // 1 година
   });
 
-  // Публічний URL для читання після завантаження.
-  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
-  const publicUrl = `${R2_PUBLIC_URL}/${encodedKey}`;
+  // Keys are now ASCII-safe, no encoding needed.
+  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
 
   console.log(`   ✅ Presigned URL created for: ${key}`);
 
