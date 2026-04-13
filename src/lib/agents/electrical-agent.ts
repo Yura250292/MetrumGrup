@@ -11,6 +11,11 @@ import OpenAI from 'openai';
 export class ElectricalAgent extends BaseAgent {
   private openai: OpenAI;
 
+  protected buildRagQuery(context: AgentContext): string {
+    const e = context.wizardData?.utilities?.electrical;
+    return `електрика кабель розводка ${e?.power ?? ''} розеток ${e?.outlets ?? ''} вимикачів ${e?.switches ?? ''} щит автомати УЗО освітлення потужність кВт переріз`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Електромонтажні роботи",

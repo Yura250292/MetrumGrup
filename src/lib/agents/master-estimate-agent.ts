@@ -346,6 +346,27 @@ export class MasterEstimateAgent {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
+  private parseItems(parsed: any, usedModel: string): EstimateItem[] {
+    return (parsed.items || []).map((item: any) => {
+      const quantity = this.parseAiNumber(item.quantity);
+      const unitPrice = this.parseAiNumber(item.unitPrice);
+      const laborCost = this.parseAiNumber(item.laborCost);
+      const totalCost = this.parseAiNumber(item.totalCost) || (quantity * unitPrice + laborCost);
+      const confidence = this.parseAiNumber(item.confidence) || 0.7;
+      return {
+        description: item.description || '',
+        quantity,
+        unit: item.unit || 'шт',
+        unitPrice,
+        laborCost,
+        totalCost,
+        priceSource: item.priceSource || `AI оцінка (${usedModel})`,
+        confidence,
+        notes: item.notes,
+      };
+    });
+  }
+
   /**
    * Генерувати повний детальний кошторис (секція-за-секцією)
    */
@@ -382,15 +403,18 @@ export class MasterEstimateAgent {
         });
       });
 
+      // Collect completed sections from previous batches for deduplication
+      const completedSections = sectionResults.filter((s): s is EstimateSection => s !== null);
+
       // Запускаємо всі секції батчу паралельно
       const batchPromises = batch.map(async (spec, idx) => {
         const sectionIndex = batchStart + idx;
         try {
           console.log(`🔨 [${sectionIndex + 1}/${sectionsToGenerate.length}] Generating: ${spec.title}`);
 
-          // Передаємо порожній previousSections — секції незалежні
+          // Pass completed sections from previous batches for dedup context
           // sectionIndex > 0 gets compact master context to save tokens
-          const section = await this.generateSection(spec, context, [], sectionIndex);
+          const section = await this.generateSection(spec, context, completedSections, sectionIndex);
           sectionResults[sectionIndex] = section;
 
           console.log(`   ✅ ${section.items.length} items, ${section.sectionTotal.toFixed(0)} ₴`);
@@ -563,25 +587,23 @@ export class MasterEstimateAgent {
       }
     }
 
-    const items: EstimateItem[] = (parsed.items || []).map((item: any) => {
-      const quantity = this.parseAiNumber(item.quantity);
-      const unitPrice = this.parseAiNumber(item.unitPrice);
-      const laborCost = this.parseAiNumber(item.laborCost);
-      const totalCost = this.parseAiNumber(item.totalCost) || (quantity * unitPrice + laborCost);
-      const confidence = this.parseAiNumber(item.confidence) || 0.7;
+    let items: EstimateItem[] = this.parseItems(parsed, usedModel);
 
-      return {
-      description: item.description || '',
-      quantity,
-      unit: item.unit || 'шт',
-      unitPrice,
-      laborCost,
-      totalCost,
-      priceSource: item.priceSource || `AI оцінка (${usedModel})`,
-      confidence,
-      notes: item.notes,
-      };
-    });
+    // Retry once if section is critically under-filled (less than 50% of minItems)
+    const minThreshold = Math.ceil(spec.minItems * 0.5);
+    if (items.length < minThreshold) {
+      console.warn(`  ⚠️ [${spec.title}] Only ${items.length}/${spec.minItems} items — retrying with Gemini...`);
+      try {
+        const retryParsed = await this.callGemini(systemPrompt, userPrompt + `\n\n⚠️ ПОПЕРЕДНЯ СПРОБА ДАЛА ЛИШЕ ${items.length} ПОЗИЦІЙ. Потрібно МІНІМУМ ${spec.minItems}. Додай БІЛЬШЕ деталей!`, spec.title);
+        const retryItems = this.parseItems(retryParsed, 'gemini');
+        if (retryItems.length > items.length) {
+          console.log(`  ✅ [${spec.title}] Retry: ${retryItems.length} items (was ${items.length})`);
+          items = retryItems;
+        }
+      } catch (e) {
+        console.warn(`  ⚠️ [${spec.title}] Retry failed, keeping original ${items.length} items`);
+      }
+    }
 
     const sectionTotal = items.reduce((sum, item) => sum + item.totalCost, 0);
 
@@ -1006,27 +1028,34 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
       }
     }
 
-    // 🎨 Оздоблення
+    // 🎨 Оздоблення — детальна розбивка з конкретними площами
     if (wd.finishing) {
       const f = wd.finishing;
-      prompt += `\n## ОЗДОБЛЕННЯ\n`;
+      prompt += `\n## ОЗДОБЛЕННЯ (ДЕТАЛЬНО)\n`;
       if (f.walls) {
         prompt += `- Стіни: ${f.walls.material}, клас ${f.walls.qualityLevel}`;
-        if (f.walls.tileArea) prompt += `, плитка ${f.walls.tileArea} м²`;
+        if (f.walls.tileArea) prompt += `, плитка на стінах: ${f.walls.tileArea} м²`;
         prompt += `\n`;
       }
       if (f.flooring) {
-        const floors: string[] = [];
-        if (f.flooring.tile) floors.push(`плитка ${f.flooring.tile}м²`);
-        if (f.flooring.laminate) floors.push(`ламінат ${f.flooring.laminate}м²`);
-        if (f.flooring.parquet) floors.push(`паркет ${f.flooring.parquet}м²`);
-        if (f.flooring.vinyl) floors.push(`вініл ${f.flooring.vinyl}м²`);
-        if (f.flooring.carpet) floors.push(`ковролін ${f.flooring.carpet}м²`);
-        if (f.flooring.epoxy) floors.push(`епоксид ${f.flooring.epoxy}м²`);
-        if (floors.length) prompt += `- Підлога: ${floors.join(', ')}\n`;
+        prompt += `- ПІДЛОГА (використовуй ЦІ площі як quantity для розрахунків):\n`;
+        if (f.flooring.tile) prompt += `  • Плитка: ${f.flooring.tile} м² (клей + затирка + укладання)\n`;
+        if (f.flooring.laminate) prompt += `  • Ламінат: ${f.flooring.laminate} м² (підкладка + укладання)\n`;
+        if (f.flooring.parquet) prompt += `  • Паркет: ${f.flooring.parquet} м² (клей/лаги + укладання + лакування)\n`;
+        if (f.flooring.vinyl) prompt += `  • Вініл: ${f.flooring.vinyl} м² (клей + укладання)\n`;
+        if (f.flooring.carpet) prompt += `  • Ковролін: ${f.flooring.carpet} м² (укладання)\n`;
+        if (f.flooring.epoxy) prompt += `  • Епоксидна підлога: ${f.flooring.epoxy} м² (ґрунт + 2 шари)\n`;
+        const totalFlooring = Object.values(f.flooring).reduce((s: number, v: any) => s + (typeof v === 'number' ? v : 0), 0);
+        if (totalFlooring > 0) prompt += `  ЗАГАЛОМ підлоги: ${totalFlooring} м² (+ стяжка під ВСЮ площу)\n`;
       }
       if (f.ceiling) {
-        prompt += `- Стеля: ${f.ceiling.type}, рівнів: ${f.ceiling.levels}, освітлення: ${f.ceiling.lighting}\n`;
+        prompt += `- Стеля: ${f.ceiling.type}`;
+        if (f.ceiling.levels) prompt += `, рівнів: ${f.ceiling.levels}`;
+        if (f.ceiling.lighting) prompt += `, освітлення: ${f.ceiling.lighting}`;
+        prompt += `\n`;
+      }
+      if (f.preparation?.needsSpackle) {
+        prompt += `- Підготовка: потрібна шпаклівка стін\n`;
       }
     }
 
@@ -1048,12 +1077,16 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
       prompt += `\n## ОСОБЛИВІ ВИМОГИ\n${wd.specialRequirements}\n`;
     }
 
-    // Вже згенеровані секції (щоб не дублювати)
+    // Вже згенеровані секції — перелік позицій для запобігання дублюванню
     if (previousSections.length > 0) {
-      prompt += `\n## ВЖЕ ЗГЕНЕРОВАНІ СЕКЦІЇ (не дублюй!)\n`;
-      previousSections.forEach(s => {
-        prompt += `- ${s.title}: ${s.items.length} позицій, ${s.sectionTotal.toFixed(0)} ₴\n`;
-      });
+      prompt += `\n## ⚠️ ВЖЕ ЗГЕНЕРОВАНІ ПОЗИЦІЇ (НЕ ДУБЛЮЙ!)\n`;
+      prompt += `Наступні позиції вже є в інших секціях. НЕ додавай їх повторно:\n`;
+      for (const s of previousSections) {
+        // Show top items (up to 10 per section to avoid token bloat)
+        const topItems = s.items.slice(0, 10).map(i => i.description).join(', ');
+        prompt += `- [${s.title}]: ${topItems}${s.items.length > 10 ? ` (+${s.items.length - 10} ін.)` : ''}\n`;
+      }
+      prompt += `\n`;
     }
 
     prompt += `\n## ІНСТРУКЦІЯ\n`;

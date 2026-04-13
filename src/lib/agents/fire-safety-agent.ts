@@ -11,6 +11,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export class FireSafetyAgent extends BaseAgent {
+  protected buildRagQuery(context: AgentContext): string {
+    return `протипожежна безпека спринклер пожежна сигналізація димовидалення вогнегасник евакуація вогнезахист`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Протипожежна безпека",

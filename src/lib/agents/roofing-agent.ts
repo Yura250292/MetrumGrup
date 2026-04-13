@@ -11,6 +11,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export class RoofingAgent extends BaseAgent {
+  protected buildRagQuery(context: AgentContext): string {
+    const r = context.wizardData?.houseData?.roof;
+    return `покрівля дах крокви мауерлат обрешітка ${r?.material ?? 'металочерепиця'} утеплення гідроізоляція водостік конек вітрова планка ${r?.type ?? ''} кут нахилу`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Покрівля",

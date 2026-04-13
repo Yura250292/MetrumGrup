@@ -11,6 +11,11 @@ import OpenAI from 'openai';
 export class PlumbingAgent extends BaseAgent {
   private openai: OpenAI;
 
+  protected buildRagQuery(context: AgentContext): string {
+    const w = context.wizardData?.utilities?.water;
+    return `сантехніка водопровід каналізація труби діаметр ${w?.source ?? ''} бойлер змішувач унітаз раковина ${w?.coldWater ? 'холодна вода' : ''} ${w?.hotWater ? 'гаряча вода' : ''} стояк колектор`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Сантехнічні роботи",

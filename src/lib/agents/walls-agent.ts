@@ -11,6 +11,11 @@ import OpenAI from 'openai';
 export class WallsAgent extends BaseAgent {
   private openai: OpenAI;
 
+  protected buildRagQuery(context: AgentContext): string {
+    const hd = context.wizardData?.houseData;
+    return `стіни кладка несучі конструкції перегородки ${hd?.walls?.material ?? 'газоблок'} перекриття колони балки армування перемичка товщина ${hd?.walls?.thickness ?? ''}мм`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Стіни та Конструкції",

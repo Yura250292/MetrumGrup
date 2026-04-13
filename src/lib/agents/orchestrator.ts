@@ -600,6 +600,38 @@ export class EstimateOrchestrator {
       }, 0);
     }, 0);
 
+    // Санітарна перевірка: ₴/м² по типу проекту
+    const totalArea = this.config.wizardData?.totalArea ?? 0;
+    if (totalArea > 0) {
+      const pricePerM2 = totalBeforeDiscount / totalArea;
+      const objectType = this.config.wizardData?.objectType;
+      const workScope = this.config.wizardData?.workScope;
+      // Очікувані діапазони ₴/м² (Україна 2025-2026)
+      const ranges: Record<string, [number, number]> = {
+        'house:full_cycle': [8000, 35000],
+        'house:foundation_only': [2000, 8000],
+        'house:foundation_walls': [4000, 15000],
+        'house:foundation_walls_roof': [5000, 20000],
+        'apartment:renovation': [3000, 15000],
+        'apartment:finishing': [2000, 10000],
+        'office:renovation': [3000, 12000],
+        'commercial:full_cycle': [10000, 45000],
+      };
+      const key = `${objectType}:${workScope}`;
+      const range = ranges[key] ?? [3000, 40000];
+      if (pricePerM2 < range[0] || pricePerM2 > range[1]) {
+        const severity = pricePerM2 < range[0] * 0.5 || pricePerM2 > range[1] * 2 ? 'error' : 'warning';
+        validationIssues.push({
+          severity: severity as any,
+          agent: 'cost-sanity-check',
+          message: `Вартість ${Math.round(pricePerM2)} ₴/м² виходить за межі очікуваного діапазону ${range[0]}-${range[1]} ₴/м² для ${objectType}/${workScope}`,
+        });
+        console.warn(`⚠️ Cost sanity: ${Math.round(pricePerM2)} ₴/м² (expected ${range[0]}-${range[1]})`);
+      } else {
+        console.log(`✅ Cost sanity OK: ${Math.round(pricePerM2)} ₴/м² (range ${range[0]}-${range[1]})`);
+      }
+    }
+
     console.log(`✅ Generation complete: ${sections.length} sections, ${totalBeforeDiscount.toFixed(0)} ₴`);
     console.log(`   Materials: ${materialsCost.toFixed(0)} ₴, Labor: ${laborCost.toFixed(0)} ₴`);
     console.log(`   Validation issues: ${validationIssues.length} (${validationIssues.filter(i => i.severity === 'error').length} errors)`);

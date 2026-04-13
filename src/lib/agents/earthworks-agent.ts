@@ -11,6 +11,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export class EarthworksAgent extends BaseAgent {
+  protected buildRagQuery(context: AgentContext): string {
+    const t = context.wizardData?.houseData?.terrain;
+    return `земляні роботи котлован траншея грунт ${t?.soilType ?? ''} ґрунтові води ${t?.groundwaterDepth ?? ''} дренаж ущільнення зворотня засипка планування`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Земляні роботи",

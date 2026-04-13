@@ -11,6 +11,11 @@ import OpenAI from 'openai';
 export class FinishingAgent extends BaseAgent {
   private openai: OpenAI;
 
+  protected buildRagQuery(context: AgentContext): string {
+    const f = context.wizardData?.finishing;
+    return `оздоблення штукатурка шпаклівка фарба плитка ламінат паркет стяжка підлога стеля гіпсокартон ${f?.walls?.material ?? ''} ${f?.ceiling?.type ?? ''} підвіконня відкоси двері вікна фасад`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Оздоблювальні роботи",

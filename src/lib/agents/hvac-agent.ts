@@ -11,6 +11,12 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export class HvacAgent extends BaseAgent {
+  protected buildRagQuery(context: AgentContext): string {
+    const h = context.wizardData?.utilities?.heating;
+    const v = context.wizardData?.utilities?.ventilation;
+    return `вентиляція опалення кондиціювання повітроводи ${h?.type ?? ''} радіатори котел ${h?.underfloor ? 'тепла підлога' : ''} ${v?.recuperation ? 'рекуператор' : ''} припливна витяжна`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "HVAC (Вентиляція та Опалення)",

@@ -11,6 +11,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 
 export class DemolitionAgent extends BaseAgent {
+  protected buildRagQuery(context: AgentContext): string {
+    return `демонтаж розбирання знесення існуюча будівля вивезення сміття спецтехніка екскаватор утилізація`;
+  }
+
   constructor() {
     const config: AgentConfig = {
       name: "Демонтаж та Підготовка",
