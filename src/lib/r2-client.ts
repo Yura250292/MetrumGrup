@@ -61,12 +61,18 @@ export interface UploadedFile {
  */
 export async function uploadFileToR2(
   file: File,
-  estimateId?: string
+  scope?: string
 ): Promise<UploadedFile> {
-  // Генеруємо унікальний ключ
+  // Генеруємо унікальний ключ.
+  // Якщо scope вже містить '/', використовуємо як є (наприклад "projects/abc");
+  // інакше (legacy виклик з estimateId) — обгортаємо в estimates/<id>.
   const timestamp = Date.now();
   const randomId = Math.random().toString(36).substring(7);
-  const prefix = estimateId ? `estimates/${estimateId}` : 'temp';
+  const prefix = !scope
+    ? 'temp'
+    : scope.includes('/')
+      ? scope.replace(/\/+$/, '')
+      : `estimates/${scope}`;
   const key = `${prefix}/${timestamp}-${randomId}-${safeKeyFileName(file.name)}`;
 
   console.log(`📤 Uploading to R2: ${key} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
@@ -108,11 +114,11 @@ export async function uploadFileToR2(
  */
 export async function uploadFilesToR2(
   files: File[],
-  estimateId?: string
+  scope?: string
 ): Promise<UploadedFile[]> {
   console.log(`📦 Uploading ${files.length} files to R2...`);
 
-  const uploadPromises = files.map(file => uploadFileToR2(file, estimateId));
+  const uploadPromises = files.map(file => uploadFileToR2(file, scope));
   const results = await Promise.all(uploadPromises);
 
   const totalSize = results.reduce((sum, f) => sum + f.size, 0);
