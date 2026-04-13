@@ -51,7 +51,9 @@ export async function GET(
 
 /**
  * DELETE /api/admin/projects/[id]/ai-render/[jobId]
- * Cancel a render job.
+ * Cancel or permanently delete a render job.
+ * - QUEUED/PROCESSING → cancel (set status to CANCELLED)
+ * - COMPLETED/FAILED/CANCELLED → permanently delete from DB
  */
 export async function DELETE(
   _request: NextRequest,
@@ -72,10 +74,14 @@ export async function DELETE(
     }
 
     if (job.status === "QUEUED" || job.status === "PROCESSING") {
+      // Cancel in-progress job
       await prisma.aiRenderJob.update({
         where: { id: jobId },
         data: { status: "CANCELLED", completedAt: new Date() },
       });
+    } else {
+      // Permanently delete finished job
+      await prisma.aiRenderJob.delete({ where: { id: jobId } });
     }
 
     return NextResponse.json({ ok: true });

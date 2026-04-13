@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check } from "lucide-react";
+import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check, Trash2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
 import { AiRenderComparisonSlider } from "./ai-render-comparison-slider";
@@ -18,13 +18,17 @@ const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> =
 export function AiRenderResultCard({
   job,
   onRegenerate,
+  onDelete,
 }: {
   job: AiRenderJobDTO;
   onRegenerate?: (job: AiRenderJobDTO) => void;
+  onDelete?: (jobId: string) => void;
 }) {
   const [showComparison, setShowComparison] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const statusInfo = STATUS_MAP[job.status] ?? STATUS_MAP.QUEUED;
   const isInProgress = job.status === "QUEUED" || job.status === "PROCESSING" || job.status === "UPLOADING";
+  const canDelete = !isInProgress;
 
   return (
     <div
@@ -54,6 +58,15 @@ export function AiRenderResultCard({
           </div>
         )}
 
+        {job.status === "CANCELLED" && (
+          <div className="flex flex-col items-center gap-3 px-4 text-center">
+            <AlertCircle size={32} style={{ color: T.textMuted }} />
+            <span className="text-[12px]" style={{ color: T.textMuted }}>
+              Скасовано
+            </span>
+          </div>
+        )}
+
         {job.status === "COMPLETED" && job.outputUrl && (
           <>
             {showComparison ? (
@@ -77,7 +90,7 @@ export function AiRenderResultCard({
         >
           {isInProgress && <Loader2 size={12} className="animate-spin" style={{ color: statusInfo.color }} />}
           {job.status === "COMPLETED" && <Check size={12} style={{ color: statusInfo.color }} />}
-          {job.status === "FAILED" && <AlertCircle size={12} style={{ color: statusInfo.color }} />}
+          {(job.status === "FAILED" || job.status === "CANCELLED") && <AlertCircle size={12} style={{ color: statusInfo.color }} />}
           <span className="text-[11px] font-semibold" style={{ color: statusInfo.color }}>
             {statusInfo.label}
           </span>
@@ -141,6 +154,28 @@ export function AiRenderResultCard({
               >
                 <RefreshCw size={14} style={{ color: T.accentPrimary }} />
               </button>
+            )}
+            {canDelete && onDelete && (
+              confirmDelete ? (
+                <button
+                  onClick={() => { onDelete(job.id); setConfirmDelete(false); }}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors hover:opacity-80"
+                  style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                  title="Підтвердити видалення"
+                >
+                  <Trash2 size={12} />
+                  Так
+                </button>
+              ) : (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="p-1.5 rounded-lg transition-colors hover:opacity-80"
+                  style={{ backgroundColor: T.panelElevated }}
+                  title="Видалити"
+                >
+                  <Trash2 size={14} style={{ color: T.textMuted }} />
+                </button>
+              )
             )}
           </div>
         </div>

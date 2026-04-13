@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Plus, Coins } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { useAiRenderJobs, useAiRenderJob } from "@/hooks/useAiRender";
+import { useAiRenderJobs, useAiRenderJob, useCancelAiRender } from "@/hooks/useAiRender";
 import { AiRenderModal } from "./ai-render-modal";
 import { AiRenderResultCard } from "./ai-render-result-card";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
@@ -28,6 +28,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
   const [showModal, setShowModal] = useState(false);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
   const { data, isLoading, refetch } = useAiRenderJobs(projectId);
+  const deleteRender = useCancelAiRender(projectId);
 
   // Poll active job
   const { data: polledJob } = useAiRenderJob(projectId, pollingJobId);
@@ -45,6 +46,10 @@ export function TabAiRender({ projectId }: { projectId: string }) {
 
   const handleRegenerate = (_job: AiRenderJobDTO) => {
     setShowModal(true);
+  };
+
+  const handleDelete = (jobId: string) => {
+    deleteRender.mutate(jobId, { onSuccess: () => refetch() });
   };
 
   const handleJobCreated = (jobId: string) => {
@@ -126,6 +131,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
               key={job.id}
               job={job}
               onRegenerate={handleRegenerate}
+              onDelete={handleDelete}
             />
           ))}
         </div>
