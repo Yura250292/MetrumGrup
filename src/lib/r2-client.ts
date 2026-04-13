@@ -40,12 +40,15 @@ function safeMetaValue(value: string): string {
 }
 
 /**
- * R2/S3 ключі технічно підтримують UTF-8, але на практиці не-ASCII
- * символи у кінці ключа (назва файлу) створюють проблеми з підписами
- * і CORS. Тому кирилицю в імені файла кодуємо через encodeURIComponent.
+ * R2/S3 ключі підтримують UTF-8. НЕ кодуємо кирилицю в ключі, бо
+ * Cloudflare public URL декодує percent-encoded шлях при lookup: якщо
+ * ключ містить "%D0%93" (literal), а URL запитує decoded "Г" — отримуємо 404.
+ * Замість цього зберігаємо raw UTF-8 в ключі і кодуємо лише в publicUrl.
  */
 function safeKeyFileName(name: string): string {
-  return encodeURIComponent(name);
+  // Прибираємо лише небезпечні символи для ключів (/, \, .., control chars)
+  // але залишаємо UTF-8 як є.
+  return name.replace(/[/\\]/g, "_").replace(/\.\./g, "_");
 }
 
 export interface UploadedFile {
@@ -95,8 +98,11 @@ export async function uploadFileToR2(
 
   await r2Client.send(command);
 
-  // Використовуємо публічний URL (обходимо CORS проблеми)
-  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+  // Використовуємо публічний URL (обходимо CORS проблеми).
+  // Кожен сегмент шляху кодуємо окремо, щоб / залишились, а кирилиця
+  // була коректною у <img src="...">.
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const publicUrl = `${R2_PUBLIC_URL}/${encodedKey}`;
 
   console.log(`   ✅ Uploaded: ${key}`);
 
@@ -234,8 +240,9 @@ export async function createPresignedUploadUrl(
     expiresIn: 3600, // 1 година
   });
 
-  // Публічний URL для читання після завантаження
-  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+  // Публічний URL для читання після завантаження.
+  const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+  const publicUrl = `${R2_PUBLIC_URL}/${encodedKey}`;
 
   console.log(`   ✅ Presigned URL created for: ${key}`);
 
