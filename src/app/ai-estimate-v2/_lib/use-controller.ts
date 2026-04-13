@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { uploadFilesToR2, type UploadProgress } from "@/lib/r2-upload";
 import { formatCurrency } from "@/lib/utils";
 import type { WizardData } from "@/lib/wizard-types";
@@ -72,9 +72,14 @@ export type AiEstimateController = ReturnType<typeof useAiEstimateController>;
 
 export function useAiEstimateController() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   // ── Files / upload ──
   const [files, setFiles] = useState<File[]>([]);
+  // R2 keys pre-loaded from project files (skip upload during generation).
+  const [prefillR2Keys, setPrefillR2Keys] = useState<
+    Array<{ key: string; originalName: string; mimeType: string; size: number }> | null
+  >(null);
   const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
 
   // ── Project params ──
@@ -172,6 +177,62 @@ export function useAiEstimateController() {
   }, [loadProjects]);
 
   /* -------------------------------------------------------------------- */
+  /* Prefill from project files (redirect from ProjectFilesSection)       */
+  /* -------------------------------------------------------------------- */
+
+  const prefillDone = useRef(false);
+
+  useEffect(() => {
+    if (prefillDone.current) return;
+    const projectId = searchParams.get("projectId");
+    if (!projectId) return;
+
+    let rawFiles: Array<{
+      name: string;
+      url: string;
+      r2Key: string | null;
+      size: number;
+      mimeType: string;
+    }> = [];
+
+    try {
+      const stored = sessionStorage.getItem("ai-estimate-project-files");
+      if (stored) {
+        rawFiles = JSON.parse(stored);
+        sessionStorage.removeItem("ai-estimate-project-files");
+      }
+    } catch { /* ignore */ }
+
+    if (rawFiles.length === 0) return;
+    prefillDone.current = true;
+
+    // Pre-select the project so it's used for saving later.
+    setSelectedProjectId(projectId);
+
+    // Store r2Keys so generate() can skip upload and use them directly.
+    const r2Keys = rawFiles
+      .filter((f) => f.r2Key)
+      .map((f) => ({
+        key: f.r2Key!,
+        originalName: f.name,
+        mimeType: f.mimeType,
+        size: f.size,
+      }));
+    if (r2Keys.length > 0) setPrefillR2Keys(r2Keys);
+
+    // Create synthetic File objects for the UI (file list, count, size display).
+    // These are tiny placeholders — actual data is in R2 already.
+    const synthFiles = rawFiles.map(
+      (f) => new File([""], f.name, { type: f.mimeType })
+    );
+    // Override the readonly size property via Object.defineProperty.
+    rawFiles.forEach((f, i) => {
+      Object.defineProperty(synthFiles[i], "size", { value: f.size });
+    });
+    setFiles(synthFiles);
+  }, [searchParams]);
+
+  /* -------------------------------------------------------------------- */
   /* Wizard ops                                                           */
   /* -------------------------------------------------------------------- */
 
@@ -235,13 +296,18 @@ export function useAiEstimateController() {
     setUploadProgress(null);
 
     try {
-      const uploadResult = await uploadFilesToR2(files, (p) => setUploadProgress(p));
-      if (!uploadResult.success) {
-        throw new Error(`Помилка завантаження: ${uploadResult.failed.length} файлів`);
+      const formData = new FormData();
+
+      if (prefillR2Keys && prefillR2Keys.length > 0) {
+        formData.append("r2Keys", JSON.stringify(prefillR2Keys));
+      } else {
+        const uploadResult = await uploadFilesToR2(files, (p) => setUploadProgress(p));
+        if (!uploadResult.success) {
+          throw new Error(`Помилка завантаження: ${uploadResult.failed.length} файлів`);
+        }
+        formData.append("r2Keys", JSON.stringify(uploadResult.r2Keys));
       }
 
-      const formData = new FormData();
-      formData.append("r2Keys", JSON.stringify(uploadResult.r2Keys));
       if (wizardData) {
         formData.append("wizardData", JSON.stringify(wizardData));
       }
@@ -263,7 +329,7 @@ export function useAiEstimateController() {
       setIsAnalyzing(false);
       setTimeout(() => setUploadProgress(null), 1000);
     }
-  }, [files, wizardData]);
+  }, [files, wizardData, prefillR2Keys]);
 
   const closePreAnalysis = useCallback(() => setShowPreAnalysis(false), []);
 
@@ -316,38 +382,44 @@ export function useAiEstimateController() {
     setChunkedSections([]);
 
     try {
-      const totalSize = files.reduce((sum, f) => sum + f.size, 0);
       const formData = new FormData();
 
-      const isProduction =
-        typeof window !== "undefined" &&
-        window.location.hostname !== "localhost" &&
-        window.location.hostname !== "127.0.0.1";
-
-      if (isProduction && totalSize > 4 * 1024 * 1024) {
-        const filesMetadata = files.map((f) => ({ name: f.name, type: f.type, size: f.size }));
-        const presignedRes = await fetch("/api/admin/estimates/presigned-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ files: filesMetadata }),
-        });
-        if (!presignedRes.ok) throw new Error("Не вдалось отримати presigned URLs");
-        const { presignedUrls } = await presignedRes.json();
-        const uploaded = await Promise.all(
-          files.map(async (file, index) => {
-            const data = presignedUrls[index];
-            const up = await fetch(data.uploadUrl, {
-              method: "PUT",
-              body: file,
-              headers: { "Content-Type": file.type },
-            });
-            if (!up.ok) throw new Error(`Помилка завантаження ${file.name}`);
-            return { key: data.key, originalName: file.name, mimeType: file.type, size: file.size };
-          })
-        );
-        formData.append("r2Keys", JSON.stringify(uploaded));
+      // If we have prefilled R2 keys from project files, skip upload entirely.
+      if (prefillR2Keys && prefillR2Keys.length > 0) {
+        formData.append("r2Keys", JSON.stringify(prefillR2Keys));
       } else {
-        files.forEach((file) => formData.append("files", file));
+        const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+        const isProduction =
+          typeof window !== "undefined" &&
+          window.location.hostname !== "localhost" &&
+          window.location.hostname !== "127.0.0.1";
+
+        if (isProduction && totalSize > 4 * 1024 * 1024) {
+          const filesMetadata = files.map((f) => ({ name: f.name, type: f.type, size: f.size }));
+          const presignedRes = await fetch("/api/admin/estimates/presigned-url", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: filesMetadata }),
+          });
+          if (!presignedRes.ok) throw new Error("Не вдалось отримати presigned URLs");
+          const { presignedUrls } = await presignedRes.json();
+          const uploaded = await Promise.all(
+            files.map(async (file, index) => {
+              const data = presignedUrls[index];
+              const up = await fetch(data.uploadUrl, {
+                method: "PUT",
+                body: file,
+                headers: { "Content-Type": file.type },
+              });
+              if (!up.ok) throw new Error(`Помилка завантаження ${file.name}`);
+              return { key: data.key, originalName: file.name, mimeType: file.type, size: file.size };
+            })
+          );
+          formData.append("r2Keys", JSON.stringify(uploaded));
+        } else {
+          files.forEach((file) => formData.append("files", file));
+        }
       }
 
       // wizardData (always include, merge projectNotes into specialRequirements)
@@ -505,7 +577,7 @@ export function useAiEstimateController() {
       setError(err instanceof Error ? err.message : "Помилка генерації");
       setIsChunkedGenerating(false);
     }
-  }, [files, wizardData, projectNotes, checkProzorro, selectedProjectId, verify]);
+  }, [files, wizardData, projectNotes, checkProzorro, selectedProjectId, prefillR2Keys, verify]);
 
   /* -------------------------------------------------------------------- */
   /* Result mutations                                                     */

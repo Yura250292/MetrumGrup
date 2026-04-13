@@ -19,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import {
   useDeleteProjectFile,
   useDownloadFilesZip,
-  useGenerateEstimateFromFiles,
   useProjectFiles,
   type ProjectFileDTO,
 } from "@/hooks/useProjectFiles";
@@ -54,7 +53,6 @@ export function ProjectFilesSection({ projectId }: { projectId: string }) {
   const { data: session } = useSession();
   const { data: files, isLoading, error } = useProjectFiles(projectId);
   const deleteFile = useDeleteProjectFile(projectId);
-  const generateEstimate = useGenerateEstimateFromFiles(projectId);
   const downloadZip = useDownloadFilesZip(projectId);
   const [textModalOpen, setTextModalOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<ProjectFileDTO | null>(null);
@@ -93,16 +91,22 @@ export function ProjectFilesSection({ projectId }: { projectId: string }) {
 
   const clearSelection = () => setSelectedIds(new Set());
 
-  const handleGenerateAi = async () => {
-    setActionError(null);
+  const handleGenerateAi = () => {
+    if (!files) return;
+    // Зберегти метадані вибраних файлів у sessionStorage,
+    // контролер AI кошторису підхопить їх при ініціалізації.
+    const selectedFiles = files.filter((f) => validSelectedIds.has(f.id));
+    const payload = selectedFiles.map((f) => ({
+      name: f.name,
+      url: f.url,
+      r2Key: f.r2Key,
+      size: f.size,
+      mimeType: f.mimeType,
+    }));
     try {
-      const { estimateId } = await generateEstimate.mutateAsync({
-        selectedFileIds: [...validSelectedIds],
-      });
-      router.push(`/admin-v2/estimates/${estimateId}`);
-    } catch (err) {
-      setActionError((err as Error).message);
-    }
+      sessionStorage.setItem("ai-estimate-project-files", JSON.stringify(payload));
+    } catch { /* ignore quota errors */ }
+    router.push(`/ai-estimate-v2?projectId=${projectId}`);
   };
 
   const handleDownloadZip = async () => {
@@ -184,13 +188,8 @@ export function ProjectFilesSection({ projectId }: { projectId: string }) {
           <Button
             size="sm"
             onClick={handleGenerateAi}
-            disabled={generateEstimate.isPending}
           >
-            {generateEstimate.isPending ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Sparkles className="h-4 w-4" />
-            )}
+            <Sparkles className="h-4 w-4" />
             AI кошторис
           </Button>
         </div>
