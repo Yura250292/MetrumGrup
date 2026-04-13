@@ -66,11 +66,37 @@ export async function generateRender(
 
       return { images: output.images };
     } catch (err) {
-      lastError = err instanceof Error ? err : new Error(String(err));
+      const rawErr = err as { name?: string; message?: string; status?: number; body?: { detail?: string } };
+
+      // Extract a meaningful error message from the fal.ai ApiError
+      let friendlyMessage = rawErr.message || String(err);
+      const detail = rawErr.body?.detail;
+
+      if (rawErr.status === 403 && detail?.includes("Exhausted balance")) {
+        friendlyMessage = "Баланс fal.ai вичерпано. Поповніть на fal.ai/dashboard/billing";
+      } else if (rawErr.status === 403) {
+        friendlyMessage = `fal.ai: ${detail || "доступ заборонено"}`;
+      } else if (rawErr.status === 401) {
+        friendlyMessage = "fal.ai: невірний API ключ (FAL_KEY)";
+      } else if (rawErr.status === 422) {
+        friendlyMessage = `fal.ai: невалідні параметри — ${detail || "перевірте вхідні дані"}`;
+      } else if (detail) {
+        friendlyMessage = `fal.ai: ${detail}`;
+      }
+
+      lastError = new Error(friendlyMessage);
 
       // Don't retry non-transient errors
-      const msg = lastError.message.toLowerCase();
-      if (msg.includes("nsfw") || msg.includes("invalid") || msg.includes("not found")) {
+      const msg = (rawErr.message || "").toLowerCase();
+      const isNonTransient =
+        rawErr.status === 401 ||
+        rawErr.status === 403 ||
+        rawErr.status === 422 ||
+        msg.includes("nsfw") ||
+        msg.includes("invalid") ||
+        msg.includes("not found");
+
+      if (isNonTransient) {
         throw lastError;
       }
 
