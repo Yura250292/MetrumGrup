@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { X, ImageIcon, Camera, Sparkles, Upload, Loader2, AlertTriangle } from "lucide-react";
+import { X, ImageIcon, Camera, Sparkles, Upload, Loader2, AlertTriangle, Type, LayoutGrid } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useProjectFiles, useUploadProjectFile } from "@/hooks/useProjectFiles";
 import { useAiStylePresets, useCreateAiRender, useAiCredits } from "@/hooks/useAiRender";
@@ -56,9 +56,20 @@ export function AiRenderModal({
 
   const handleModeSelect = (m: AiRenderMode) => {
     setMode(m);
-    setStrength(m === "SKETCH_TO_RENDER" ? 0.92 : 0.6);
+    const strengthByMode: Record<string, number> = {
+      SKETCH_TO_RENDER: 0.92,
+      PHOTO_RERENDER: 0.6,
+      FLOOR_PLAN_TO_3D: 0.85,
+      TEXT_TO_RENDER: 1.0,
+    };
+    setStrength(strengthByMode[m] ?? 0.85);
     setControlnetType(m === "SKETCH_TO_RENDER" ? "lineart" : "depth");
-    setStep("image");
+    // TEXT_TO_RENDER skips image selection — prompt only
+    if (m === "TEXT_TO_RENDER") {
+      setStep("settings");
+    } else {
+      setStep("image");
+    }
   };
 
   const handleFileSelect = (fileId: string, fileUrl: string) => {
@@ -129,7 +140,8 @@ export function AiRenderModal({
     }
   };
 
-  const hasInput = !!selectedFileId || !!uploadedFile;
+  const isTextMode = mode === "TEXT_TO_RENDER";
+  const hasInput = isTextMode ? prompt.trim().length > 0 : (!!selectedFileId || !!uploadedFile);
   const previewUrl = uploadPreviewUrl || selectedFileUrl;
   const creditsNeeded = outputSize.w > 1024 || outputSize.h > 1024 ? 2 : 1;
   const isBusy = isUploading || createRender.isPending;
@@ -213,6 +225,40 @@ export function AiRenderModal({
                 </span>
               </div>
             </button>
+            <button
+              onClick={() => handleModeSelect("FLOOR_PLAN_TO_3D")}
+              className="flex items-center gap-4 rounded-xl p-4 transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}`, minHeight: 72 }}
+            >
+              <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: T.accentPrimarySoft }}>
+                <LayoutGrid size={24} style={{ color: T.accentPrimary }} />
+              </div>
+              <div className="text-left">
+                <span className="text-[14px] font-semibold block" style={{ color: T.textPrimary }}>
+                  План → 3D Ізометрія
+                </span>
+                <span className="text-[12px]" style={{ color: T.textMuted }}>
+                  Перетворіть 2D план зверху у 3D ізометричний рендер з меблями
+                </span>
+              </div>
+            </button>
+            <button
+              onClick={() => handleModeSelect("TEXT_TO_RENDER")}
+              className="flex items-center gap-4 rounded-xl p-4 transition-all hover:opacity-90 active:scale-[0.98]"
+              style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}`, minHeight: 72 }}
+            >
+              <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: T.accentPrimarySoft }}>
+                <Type size={24} style={{ color: T.accentPrimary }} />
+              </div>
+              <div className="text-left">
+                <span className="text-[14px] font-semibold block" style={{ color: T.textPrimary }}>
+                  Текст → Рендер
+                </span>
+                <span className="text-[12px]" style={{ color: T.textMuted }}>
+                  Генерація з нуля тільки за текстовим описом (без зображення)
+                </span>
+              </div>
+            </button>
           </div>
         )}
 
@@ -293,7 +339,7 @@ export function AiRenderModal({
                 Налаштування генерації
               </p>
               <button
-                onClick={() => setStep("image")}
+                onClick={() => setStep(isTextMode ? "mode" : "image")}
                 className="text-[12px] font-medium py-1 px-2"
                 style={{ color: T.accentPrimary }}
               >
@@ -301,8 +347,8 @@ export function AiRenderModal({
               </button>
             </div>
 
-            {/* Preview */}
-            {previewUrl && (
+            {/* Preview (hide for text-only mode) */}
+            {previewUrl && !isTextMode && (
               <div className="rounded-xl overflow-hidden aspect-video" style={{ backgroundColor: T.panelElevated }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={previewUrl} alt="Preview" className="w-full h-full object-contain" />
@@ -326,13 +372,17 @@ export function AiRenderModal({
             {/* Custom prompt */}
             <div>
               <label className="text-[12px] font-medium mb-1.5 block" style={{ color: T.textSecondary }}>
-                Опис (необов'язково)
+                Опис {isTextMode ? "(обов'язково)" : "(необов'язково, але рекомендується)"}
               </label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Двоповерховий будинок з терасою, натуральний камінь..."
-                rows={2}
+                placeholder={
+                  isTextMode
+                    ? "modern ATB supermarket, 3 floors, glass facade, parking lot, golden hour..."
+                    : "Двоповерховий будинок з терасою, натуральний камінь..."
+                }
+                rows={isTextMode ? 4 : 2}
                 className="w-full rounded-xl px-3 py-2.5 text-[13px] resize-none outline-none"
                 style={{
                   backgroundColor: T.panelElevated,
@@ -342,29 +392,31 @@ export function AiRenderModal({
               />
             </div>
 
-            {/* Strength slider */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-[12px] font-medium" style={{ color: T.textSecondary }}>
-                  AI Imagination
-                </label>
-                <span className="text-[12px] font-bold" style={{ color: T.accentPrimary }}>
-                  {(strength * 100).toFixed(0)}%
-                </span>
+            {/* Strength slider — only for image-to-image modes */}
+            {(mode === "SKETCH_TO_RENDER" || mode === "PHOTO_RERENDER") && (
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[12px] font-medium" style={{ color: T.textSecondary }}>
+                    AI Imagination
+                  </label>
+                  <span className="text-[12px] font-bold" style={{ color: T.accentPrimary }}>
+                    {(strength * 100).toFixed(0)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={10}
+                  max={95}
+                  value={strength * 100}
+                  onChange={(e) => setStrength(Number(e.target.value) / 100)}
+                  className="w-full accent-[#3B5BFF]"
+                />
+                <div className="flex justify-between mt-1">
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>Точніше до оригіналу</span>
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>Більше творчості</span>
+                </div>
               </div>
-              <input
-                type="range"
-                min={10}
-                max={95}
-                value={strength * 100}
-                onChange={(e) => setStrength(Number(e.target.value) / 100)}
-                className="w-full accent-[#3B5BFF]"
-              />
-              <div className="flex justify-between mt-1">
-                <span className="text-[10px]" style={{ color: T.textMuted }}>Точніше до оригіналу</span>
-                <span className="text-[10px]" style={{ color: T.textMuted }}>Більше творчості</span>
-              </div>
-            </div>
+            )}
 
             {/* Output size */}
             <div>

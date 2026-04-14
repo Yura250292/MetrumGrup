@@ -1,28 +1,26 @@
 /**
  * fal.ai integration for AI architectural rendering.
- * Uses the fal.ai queue API for async image generation with
- * Stable Diffusion / Flux + ControlNet.
+ * Routes to different fal.ai models based on render mode:
+ *  - SKETCH_TO_RENDER / PHOTO_RERENDER → flux/dev/image-to-image
+ *  - TEXT_TO_RENDER                    → flux/dev (text-to-image)
+ *  - FLOOR_PLAN_TO_3D                  → flux-pro/kontext (image edit)
  */
 
 import * as fal from "@fal-ai/serverless-client";
+import type { AiRenderMode } from "@prisma/client";
 import type { FalSubmitParams, FalResult } from "./types";
 
-// Configure fal.ai client
 fal.config({
   credentials: process.env.FAL_KEY,
 });
 
-const DEFAULT_MODEL = process.env.AI_RENDER_DEFAULT_MODEL || "fal-ai/flux/dev/image-to-image";
-const CONTROLNET_MODEL = "fal-ai/flux/dev/image-to-image";
-
 const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_DURATION_MS = 180_000;
+const MAX_POLL_DURATION_MS = 240_000;
 const MAX_RETRIES = 2;
 
 /**
- * Re-upload a source image to fal.ai storage. Avoids flaky direct-download
- * from R2 (tested: R2 URLs with Cyrillic chars sometimes fail at fal.ai).
- * Returns the fal.media URL.
+ * Re-upload a source image to fal.ai storage. R2 URLs with non-ASCII
+ * characters fail at fal.ai direct-download, so we always proxy.
  */
 async function uploadToFalStorage(sourceUrl: string): Promise<string> {
   const resp = await fetch(sourceUrl);
@@ -37,36 +35,84 @@ async function uploadToFalStorage(sourceUrl: string): Promise<string> {
 }
 
 /**
- * Submit an image generation job to fal.ai and poll until complete.
- * Returns the generated image URL(s).
+ * Map aspect ratio from width/height. kontext accepts preset ratios only.
+ */
+function pickAspectRatio(w: number, h: number): string {
+  const r = w / h;
+  if (r > 1.4) return "16:9";
+  if (r > 1.2) return "4:3";
+  if (r > 0.85) return "1:1";
+  if (r > 0.6) return "3:4";
+  return "9:16";
+}
+
+/**
+ * Build the fal.ai input payload and pick the model based on mode.
+ */
+async function buildModelRequest(
+  params: FalSubmitParams
+): Promise<{ modelId: string; input: Record<string, unknown> }> {
+  const mode = params.mode;
+
+  // TEXT_TO_RENDER — pure text-to-image, no input image
+  if (mode === "TEXT_TO_RENDER") {
+    return {
+      modelId: "fal-ai/flux/dev",
+      input: {
+        prompt: params.prompt,
+        image_size: { width: params.width, height: params.height },
+        num_inference_steps: 35,
+        guidance_scale: 7.0,
+        num_images: 1,
+        enable_safety_checker: false,
+        ...(params.seed !== undefined && { seed: params.seed }),
+      },
+    };
+  }
+
+  // All other modes require an input image
+  if (!params.imageUrl) {
+    throw new Error("Вхідне зображення є обов'язковим для цього режиму");
+  }
+  const falImageUrl = await uploadToFalStorage(params.imageUrl);
+
+  // FLOOR_PLAN_TO_3D — flux-pro/kontext for image-to-image edit
+  if (mode === "FLOOR_PLAN_TO_3D") {
+    return {
+      modelId: "fal-ai/flux-pro/kontext",
+      input: {
+        prompt: params.prompt,
+        image_url: falImageUrl,
+        aspect_ratio: pickAspectRatio(params.width, params.height),
+      },
+    };
+  }
+
+  // SKETCH_TO_RENDER / PHOTO_RERENDER — flux/dev/image-to-image
+  return {
+    modelId: "fal-ai/flux/dev/image-to-image",
+    input: {
+      image_url: falImageUrl,
+      prompt: params.prompt,
+      negative_prompt: params.negativePrompt,
+      strength: params.strength,
+      image_size: { width: params.width, height: params.height },
+      num_inference_steps: 35,
+      guidance_scale: 7.0,
+      num_images: 1,
+      enable_safety_checker: false,
+      ...(params.seed !== undefined && { seed: params.seed }),
+    },
+  };
+}
+
+/**
+ * Submit a render job to fal.ai and poll until complete.
  */
 export async function generateRender(
   params: FalSubmitParams
 ): Promise<FalResult> {
-  const modelId = params.controlnetType ? CONTROLNET_MODEL : DEFAULT_MODEL;
-
-  // Upload to fal.ai storage first — R2 direct-download is unreliable
-  // for URLs with non-ASCII characters (tested with Cyrillic filenames).
-  const falImageUrl = await uploadToFalStorage(params.imageUrl);
-
-  const input: Record<string, unknown> = {
-    image_url: falImageUrl,
-    prompt: params.prompt,
-    negative_prompt: params.negativePrompt,
-    strength: params.strength,
-    image_size: {
-      width: params.width,
-      height: params.height,
-    },
-    num_inference_steps: 35,
-    guidance_scale: 7.0,
-    num_images: 1,
-    enable_safety_checker: false,
-  };
-
-  if (params.seed !== undefined) {
-    input.seed = params.seed;
-  }
+  const { modelId, input } = await buildModelRequest(params);
 
   let lastError: Error | null = null;
 
@@ -79,35 +125,42 @@ export async function generateRender(
         logs: false,
       });
 
-      const output = result as { images?: Array<{ url: string; width: number; height: number }> };
+      const output = result as {
+        images?: Array<{ url: string; width: number; height: number }>;
+        image?: { url: string; width: number; height: number };
+      };
 
-      if (!output.images || output.images.length === 0) {
+      // kontext returns `image` (singular), flux returns `images` (array)
+      const images = output.images ?? (output.image ? [output.image] : []);
+
+      if (images.length === 0) {
         throw new Error("fal.ai returned no images");
       }
 
-      return { images: output.images };
+      return { images };
     } catch (err) {
-      const rawErr = err as { name?: string; message?: string; status?: number; body?: { detail?: string } };
+      const rawErr = err as { name?: string; message?: string; status?: number; body?: { detail?: string | Array<{ msg: string }> } };
 
-      // Extract a meaningful error message from the fal.ai ApiError
       let friendlyMessage = rawErr.message || String(err);
       const detail = rawErr.body?.detail;
+      const detailStr = Array.isArray(detail)
+        ? detail.map((d) => d.msg).join("; ")
+        : detail;
 
-      if (rawErr.status === 403 && detail?.includes("Exhausted balance")) {
+      if (rawErr.status === 403 && detailStr?.includes("Exhausted balance")) {
         friendlyMessage = "Баланс fal.ai вичерпано. Поповніть на fal.ai/dashboard/billing";
       } else if (rawErr.status === 403) {
-        friendlyMessage = `fal.ai: ${detail || "доступ заборонено"}`;
+        friendlyMessage = `fal.ai: ${detailStr || "доступ заборонено"}`;
       } else if (rawErr.status === 401) {
         friendlyMessage = "fal.ai: невірний API ключ (FAL_KEY)";
       } else if (rawErr.status === 422) {
-        friendlyMessage = `fal.ai: невалідні параметри — ${detail || "перевірте вхідні дані"}`;
-      } else if (detail) {
-        friendlyMessage = `fal.ai: ${detail}`;
+        friendlyMessage = `fal.ai: невалідні параметри — ${detailStr || "перевірте вхідні дані"}`;
+      } else if (detailStr) {
+        friendlyMessage = `fal.ai: ${detailStr}`;
       }
 
       lastError = new Error(friendlyMessage);
 
-      // Don't retry non-transient errors
       const msg = (rawErr.message || "").toLowerCase();
       const isNonTransient =
         rawErr.status === 401 ||
@@ -117,13 +170,10 @@ export async function generateRender(
         msg.includes("invalid") ||
         msg.includes("not found");
 
-      if (isNonTransient) {
-        throw lastError;
-      }
+      if (isNonTransient) throw lastError;
 
-      // Retry with backoff for transient errors (429, 500, timeout)
       if (attempt < MAX_RETRIES) {
-        const backoffMs = Math.pow(2, attempt + 1) * 1000; // 2s, 4s
+        const backoffMs = Math.pow(2, attempt + 1) * 1000;
         console.log(`[fal-client] Retry ${attempt + 1}/${MAX_RETRIES} after ${backoffMs}ms`);
         await new Promise((r) => setTimeout(r, backoffMs));
       }
@@ -134,7 +184,14 @@ export async function generateRender(
 }
 
 /**
- * Check if fal.ai is configured (API key present).
+ * Modes that don't require an input image.
+ */
+export function modeRequiresInputImage(mode: AiRenderMode): boolean {
+  return mode !== "TEXT_TO_RENDER";
+}
+
+/**
+ * Check if fal.ai is configured.
  */
 export function isFalConfigured(): boolean {
   return !!process.env.FAL_KEY;

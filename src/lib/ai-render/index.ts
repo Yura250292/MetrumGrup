@@ -54,6 +54,7 @@ export async function processRenderJob(jobId: string): Promise<void> {
 
     // Submit to fal.ai
     const falResult = await generateRender({
+      mode: job.mode,
       imageUrl: job.inputUrl,
       prompt,
       negativePrompt,
@@ -154,9 +155,9 @@ export async function createRenderJob(
     throw new Error("Сервіс AI візуалізації не налаштований (FAL_KEY відсутній)");
   }
 
-  // Resolve input image URL
-  let inputR2Key = input.inputR2Key ?? "";
-  let inputUrl = input.inputUrl ?? "";
+  // Resolve input image URL (optional for TEXT_TO_RENDER mode)
+  let inputR2Key: string | null = input.inputR2Key ?? null;
+  let inputUrl: string | null = input.inputUrl ?? null;
 
   if (input.inputFileId && !inputUrl) {
     const file = await prisma.projectFile.findUnique({
@@ -165,11 +166,16 @@ export async function createRenderJob(
     });
     if (!file) throw new Error("Вхідний файл не знайдено");
     inputUrl = file.url;
-    inputR2Key = file.r2Key ?? "";
+    inputR2Key = file.r2Key ?? null;
   }
 
-  if (!inputUrl) {
+  const needsImage = input.mode !== "TEXT_TO_RENDER";
+  if (needsImage && !inputUrl) {
     throw new Error("Потрібно вказати вхідне зображення");
+  }
+
+  if (input.mode === "TEXT_TO_RENDER" && !input.prompt?.trim()) {
+    throw new Error("Для режиму «Текст → Рендер» потрібен опис");
   }
 
   // Check credits
@@ -179,11 +185,18 @@ export async function createRenderJob(
     throw new Error("Кредити вичерпано");
   }
 
-  // Determine defaults based on mode.
-  // SKETCH_TO_RENDER: 0.92 — tested optimal for 2D drawings/sketches → photoreal.
-  //   Lower values (0.75) preserved too much 2D look; 0.95+ loses structure.
-  // PHOTO_RERENDER: 0.60 — preserves building shape while changing style/materials.
-  const defaultStrength = input.mode === "SKETCH_TO_RENDER" ? 0.92 : 0.6;
+  // Per-mode default parameters (tuned from real tests).
+  // SKETCH_TO_RENDER: 0.92 — preserves structure, enough freedom for photoreal.
+  // PHOTO_RERENDER: 0.60 — keeps shape, changes style/materials/lighting.
+  // FLOOR_PLAN_TO_3D: 0.85 — kontext ignores this (uses its own params).
+  // TEXT_TO_RENDER: n/a — no source image, strength unused.
+  const strengthByMode: Record<string, number> = {
+    SKETCH_TO_RENDER: 0.92,
+    PHOTO_RERENDER: 0.6,
+    FLOOR_PLAN_TO_3D: 0.85,
+    TEXT_TO_RENDER: 1.0,
+  };
+  const defaultStrength = strengthByMode[input.mode] ?? 0.85;
   const defaultControlnet = input.mode === "SKETCH_TO_RENDER" ? "lineart" : "depth";
 
   const job = await prisma.aiRenderJob.create({
@@ -236,7 +249,7 @@ export function toJobDTO(job: {
   projectId: string;
   mode: string;
   status: string;
-  inputUrl: string;
+  inputUrl: string | null;
   stylePreset: string | null;
   prompt: string | null;
   strength: unknown;

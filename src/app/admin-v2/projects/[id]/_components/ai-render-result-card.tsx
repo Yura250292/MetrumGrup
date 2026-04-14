@@ -69,7 +69,7 @@ export function AiRenderResultCard({
 
         {job.status === "COMPLETED" && job.outputUrl && (
           <>
-            {showComparison ? (
+            {showComparison && job.inputUrl ? (
               <AiRenderComparisonSlider inputUrl={job.inputUrl} outputUrl={job.outputUrl} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
@@ -77,7 +77,7 @@ export function AiRenderResultCard({
                 src={job.outputUrl}
                 alt="AI Render"
                 className="w-full h-full object-cover cursor-pointer"
-                onClick={() => setShowComparison(true)}
+                onClick={() => job.inputUrl && setShowComparison(true)}
               />
             )}
           </>
@@ -101,7 +101,13 @@ export function AiRenderResultCard({
       <div className="flex flex-col gap-2 p-3">
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold truncate" style={{ color: T.textPrimary }}>
-            {job.mode === "SKETCH_TO_RENDER" ? "Ескіз → Рендер" : "Фото → Рендер"}
+            {job.mode === "SKETCH_TO_RENDER"
+              ? "Ескіз → Рендер"
+              : job.mode === "PHOTO_RERENDER"
+                ? "Фото → Рендер"
+                : job.mode === "FLOOR_PLAN_TO_3D"
+                  ? "План → 3D"
+                  : "Текст → Рендер"}
           </span>
           {job.durationMs && (
             <span className="flex items-center gap-1 text-[11px]" style={{ color: T.textMuted }}>
@@ -124,14 +130,16 @@ export function AiRenderResultCard({
           <div className="flex gap-1">
             {job.status === "COMPLETED" && job.outputUrl && (
               <>
-                <button
-                  onClick={() => setShowComparison((v) => !v)}
-                  className="p-1.5 rounded-lg transition-colors hover:opacity-80"
-                  style={{ backgroundColor: T.panelElevated }}
-                  title={showComparison ? "Показати результат" : "Порівняти"}
-                >
-                  <RefreshCw size={14} style={{ color: T.textSecondary }} />
-                </button>
+                {job.inputUrl && (
+                  <button
+                    onClick={() => setShowComparison((v) => !v)}
+                    className="p-1.5 rounded-lg transition-colors hover:opacity-80"
+                    style={{ backgroundColor: T.panelElevated }}
+                    title={showComparison ? "Показати результат" : "Порівняти"}
+                  >
+                    <RefreshCw size={14} style={{ color: T.textSecondary }} />
+                  </button>
+                )}
                 <a
                   href={job.outputUrl}
                   download

@@ -1007,6 +1007,8 @@ enum ContentStatus {
 enum AiRenderMode {
   SKETCH_TO_RENDER
   PHOTO_RERENDER
+  TEXT_TO_RENDER
+  FLOOR_PLAN_TO_3D
 }
 
 enum AiRenderStatus {
@@ -1026,10 +1028,10 @@ model AiRenderJob {
   mode            AiRenderMode
   status          AiRenderStatus @default(QUEUED)
 
-  // Input
+  // Input (nullable — TEXT_TO_RENDER mode works from prompt only)
   inputFileId     String?
-  inputR2Key      String
-  inputUrl        String
+  inputR2Key      String?
+  inputUrl        String?
 
   // AI parameters
   stylePreset     String?

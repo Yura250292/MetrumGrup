@@ -20,7 +20,7 @@ export interface AiRenderJobDTO {
   projectId: string;
   mode: AiRenderMode;
   status: AiRenderStatus;
-  inputUrl: string;
+  inputUrl: string | null;
   stylePreset: string | null;
   prompt: string | null;
   strength: number;
@@ -56,7 +56,8 @@ export interface AiCreditsDTO {
 // ── fal.ai types ──────────────────────────────────────────────────
 
 export interface FalSubmitParams {
-  imageUrl: string;
+  mode: AiRenderMode;
+  imageUrl: string | null;
   prompt: string;
   negativePrompt: string;
   strength: number;
