@@ -23,12 +23,17 @@ export function buildPrompt(params: {
   stylePreset: StylePreset | null;
   userPrompt: string;
   mode: AiRenderMode;
+  planDescription?: string | null;
 }): { prompt: string; negativePrompt: string } {
   const parts: string[] = [];
 
-  // For FLOOR_PLAN_TO_3D the mode suffix is an instruction, put it first
+  // For FLOOR_PLAN_TO_3D the mode suffix is an instruction, put it first.
+  // If GPT-4o pre-read the plan, inject that description before styles.
   if (params.mode === "FLOOR_PLAN_TO_3D") {
     parts.push(MODE_SUFFIXES[params.mode]);
+    if (params.planDescription) {
+      parts.push(`The plan contains: ${params.planDescription}. Render every listed room and furniture item at the same position.`);
+    }
     if (params.stylePreset?.prompt) parts.push(params.stylePreset.prompt);
     if (params.userPrompt.trim()) parts.push(params.userPrompt.trim());
   } else {

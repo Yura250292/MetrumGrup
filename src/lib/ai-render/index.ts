@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadFileToR2 } from "@/lib/r2-client";
 import { generateRender, isFalConfigured } from "./fal-client";
 import { buildPrompt } from "./prompt-builder";
+import { readFloorPlan } from "./plan-reader";
 import type { AiRenderJobDTO, AiCreditsDTO, CreateRenderJobInput } from "./types";
 
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL ?? "";
@@ -45,11 +46,24 @@ export async function processRenderJob(jobId: string): Promise<void> {
       });
     }
 
+    // For FLOOR_PLAN_TO_3D, use GPT-4o to read the plan first —
+    // flux-pro/kontext alone tends to simplify structure (merges rooms,
+    // loses furniture detail). A detailed room-by-room description in
+    // the prompt dramatically improves structural fidelity.
+    let planDescription: string | null = null;
+    if (job.mode === "FLOOR_PLAN_TO_3D" && job.inputUrl) {
+      planDescription = await readFloorPlan(job.inputUrl);
+      if (planDescription) {
+        console.log(`[ai-render] Plan reader output for ${jobId}:\n${planDescription}`);
+      }
+    }
+
     // Build prompt
     const { prompt, negativePrompt } = buildPrompt({
       stylePreset,
       userPrompt: job.prompt ?? "",
       mode: job.mode,
+      planDescription,
     });
 
     // Submit to fal.ai
