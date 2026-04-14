@@ -28,25 +28,24 @@ export function buildPrompt(params: {
   const parts: string[] = [];
 
   // For FLOOR_PLAN_TO_3D the mode suffix is an instruction, put it first.
-  // If GPT-4o pre-read the plan, inject that description before styles.
+  // If GPT-4o pre-read the plan, inject positional layout.
   if (params.mode === "FLOOR_PLAN_TO_3D") {
     parts.push(MODE_SUFFIXES[params.mode]);
     if (params.planDescription) {
       parts.push(
-        `Detailed layout analysis of the floor plan: ${params.planDescription}. ` +
-        `RENDER REQUIREMENTS: render every single room listed above at its exact position. ` +
-        `Render every furniture and fixture item listed for each room. ` +
-        `In the kitchen render the stove/cooktop, refrigerator, sink, countertop exactly as described. ` +
-        `In the bathroom render the bathtub, toilet, sink, washing machine exactly as listed. ` +
-        `In bedrooms render the exact bed type, wardrobe, nightstands. ` +
-        `In the living area render the sofa type, TV console, coffee table, armchairs as specified. ` +
-        `In the dining area render the table shape and exact number of chairs. ` +
-        `Render the staircase if mentioned. Render the terrace or balcony if mentioned. ` +
-        `Do not substitute or simplify any items.`
+        `\n\nEXACT ZONAL LAYOUT TO RENDER (from the input sketch):\n${params.planDescription}\n\n` +
+        `STRICT RENDER RULES:\n` +
+        `- Place each element EXACTLY in the zone specified above.\n` +
+        `- Do not rearrange rooms between zones. Top-left stays top-left, center stays center.\n` +
+        `- Render EVERY item listed (stove, fridge, bathtub, toilet, beds, sofas, tables, chairs).\n` +
+        `- If a staircase is listed, render it prominently as wooden stairs.\n` +
+        `- Preserve the outer wall rectangle exactly.\n` +
+        `- Do not merge rooms. Do not skip small rooms (bathroom, closet, pantry).\n` +
+        `- Do not substitute furniture with different types.\n`
       );
     }
-    if (params.stylePreset?.prompt) parts.push(params.stylePreset.prompt);
-    if (params.userPrompt.trim()) parts.push(params.userPrompt.trim());
+    if (params.stylePreset?.prompt) parts.push(`Interior style: ${params.stylePreset.prompt}.`);
+    if (params.userPrompt.trim()) parts.push(`User notes: ${params.userPrompt.trim()}.`);
   } else {
     if (params.stylePreset?.prompt) parts.push(params.stylePreset.prompt);
     if (params.userPrompt.trim()) parts.push(params.userPrompt.trim());

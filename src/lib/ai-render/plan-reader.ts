@@ -43,45 +43,45 @@ export async function readFloorPlan(imageUrl: string): Promise<string | null> {
     const openai = getClient();
     const result = await openai.chat.completions.create({
       model: OPENAI_MODEL,
-      max_tokens: 1500,
+      max_tokens: 1800,
       messages: [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `You are an expert architect analyzing a residential floor plan. Examine the sketch carefully and identify EVERY element you can see.
+              text: `You are an expert architect reading a residential floor plan. Your goal is to produce a POSITIONAL layout description that an image model can render exactly.
 
-For each room, identify:
-- Purpose (living room / bedroom / kitchen / bathroom / hallway / dining room / terrace / balcony / closet / office / pantry / laundry)
-- Approximate size in m² or dimensions
-- Position in the layout (top-left, center, bottom-right, etc.)
-- Every furniture symbol and fixture visible in that room
+Divide the plan into a 3×3 grid (top-left, top-center, top-right, middle-left, center, middle-right, bottom-left, bottom-center, bottom-right). For EACH zone, state what is there.
 
-For kitchens specifically note: stove/cooktop, oven, refrigerator, dishwasher, sink, kitchen island, countertop, pantry, microwave.
+For every room also list SPECIFIC fixtures/furniture visible in the sketch:
+- Kitchen: stove/cooktop, oven, refrigerator, dishwasher, sink, island, L-shaped counter, cabinets
+- Bathroom: bathtub, shower, toilet, sink/vanity, washing machine, tiles
+- Bedroom: bed size (single/double/queen), wardrobe, nightstands
+- Living: sofa type (L-shaped/straight/sectional), armchairs, coffee table, TV console
+- Dining: table shape (round/rectangular), exact chair count, plants
+- Also note: staircase (critical — describe position and direction), terrace, balcony, entrance door, windows
 
-For bathrooms specifically note: bathtub, shower, toilet, bidet, sink/vanity, towel rail, washing machine.
+Output format — EXACTLY this structure, nothing else:
 
-For bedrooms specifically note: bed size (single/double/queen), wardrobe/closet, nightstands, desk, mirror.
+LAYOUT:
+TOP-LEFT: <what is there + items>
+TOP-CENTER: <what is there + items>
+TOP-RIGHT: <what is there + items>
+MIDDLE-LEFT: <what is there + items>
+CENTER: <what is there + items>
+MIDDLE-RIGHT: <what is there + items>
+BOTTOM-LEFT: <what is there + items>
+BOTTOM-CENTER: <what is there + items>
+BOTTOM-RIGHT: <what is there + items>
 
-For living areas specifically note: sofa (corner/straight/sectional), armchairs, coffee table, TV console, bookshelf, fireplace.
+KEY FEATURES:
+- Staircase: <yes/no, position, going up/down>
+- Entrance: <position>
+- Terrace/balcony: <yes/no, position>
+- Windows: <which walls have windows>
 
-For dining areas: table shape (round/rectangular), number of chairs.
-
-Also identify:
-- Staircase: location, direction (going up/down), number of steps if visible
-- Entrance door (usually with arrow or swing marker)
-- Interior doors (position and swing direction)
-- Windows in exterior walls
-- Terrace or balcony if any
-- Any measurements/dimensions shown
-
-Output format — one room per line:
-ROOM [name, ~Xm², position]: item1, item2, item3, ...
-Then at the end:
-STRUCTURE: list walls, doors, windows, stairs.
-
-Be thorough. Do not miss anything. Do not add commentary — just the structured list.`,
+If a zone is empty or part of another room, write "(part of X)" or "(empty corridor)". Do not invent rooms. Read only what the sketch actually shows. Do not add commentary.`,
             },
             {
               type: "image_url",
