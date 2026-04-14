@@ -11,6 +11,35 @@ import { prisma } from '../prisma';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || '' });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
+/**
+ * Retry helper for Gemini API calls that may fail with 503/429.
+ * Exponential backoff: 2s, 4s, 8s (max 3 attempts).
+ */
+async function retryGeminiCall<T>(
+  label: string,
+  fn: () => Promise<T>,
+  maxAttempts: number = 3
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
+      const retryable = /503|429|overload|high demand|rate limit|ECONNRESET|ETIMEDOUT|network/i.test(msg);
+      if (retryable && attempt < maxAttempts) {
+        const delayMs = 2000 * Math.pow(2, attempt - 1);
+        console.warn(`⚠️ ${label} [спроба ${attempt}] retryable error: ${msg.substring(0, 120)}. Чекаю ${delayMs}ms...`);
+        await new Promise(r => setTimeout(r, delayMs));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
 export interface VectorizeResult {
   projectId: string;
   totalChunks: number;
@@ -81,65 +110,81 @@ export async function vectorizeProject(
 
     let extractedData: ExtractedProjectData = {};
 
+    let skippedFiles = 0;
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const progress = ((i + 1) / files.length) * 60; // 0-60%
 
       onProgress?.(`📄 Обробка ${file.fileName}...`, progress);
 
-      if (file.mimeType === 'application/pdf') {
-        // PDF → текст + chunking
-        console.log(`📄 Обробка PDF: ${file.fileName}, розмір: ${file.buffer.length} bytes`);
+      try {
+        if (file.mimeType === 'application/pdf') {
+          // PDF → текст + chunking
+          console.log(`📄 Обробка PDF: ${file.fileName}, розмір: ${file.buffer.length} bytes`);
 
-        const pdfData = await parsePDF(file.buffer);
-        console.log(`📄 PDF текст витягнуто: ${pdfData.text.length} символів, сторінок: ${pdfData.numpages}`);
+          const pdfData = await parsePDF(file.buffer);
+          console.log(`📄 PDF текст витягнуто: ${pdfData.text.length} символів, сторінок: ${pdfData.numpages}`);
 
-        if (!pdfData.text || pdfData.text.length < 50) {
-          console.error(`⚠️ PDF ${file.fileName} порожній або занадто малий! Текст: "${pdfData.text.substring(0, 100)}"`);
-          throw new Error(`PDF файл ${file.fileName} не містить тексту або не вдалось його прочитати`);
-        }
-
-        const chunks = chunkText(pdfData.text, 512, 50);
-        console.log(`📄 PDF розбито на ${chunks.length} chunks`);
-
-        if (chunks.length === 0) {
-          console.error(`⚠️ PDF ${file.fileName} не вдалось розбити на chunks!`);
-          throw new Error(`PDF файл ${file.fileName} не вдалось обробити`);
-        }
-
-        chunks.forEach((chunk, idx) => {
-          allChunks.push({
-            content: chunk,
-            fileName: file.fileName,
-            fileType: 'pdf',
-            metadata: { page: Math.floor(idx / 2) + 1 }
-          });
-        });
-
-        // Витягти структуровані дані з PDF
-        console.log(`🤖 Аналіз PDF через Gemini: ${file.fileName}`);
-        const pdfExtractedData = await extractDataFromPDF(pdfData.text, file.fileName);
-        console.log(`✅ PDF дані витягнуто:`, Object.keys(pdfExtractedData));
-        extractedData = { ...extractedData, ...pdfExtractedData };
-
-      } else if (file.mimeType.startsWith('image/')) {
-        // Фото → Gemini Vision
-        const imageAnalysis = await analyzeImageWithGemini(file.buffer, file.mimeType);
-
-        allChunks.push({
-          content: imageAnalysis.description,
-          fileName: file.fileName,
-          fileType: 'image',
-          metadata: {
-            extractedData: imageAnalysis.extractedData
+          if (!pdfData.text || pdfData.text.length < 50) {
+            console.warn(`⚠️ PDF ${file.fileName} порожній або занадто малий, пропускаю`);
+            skippedFiles++;
+            continue;
           }
-        });
 
-        // Оновити дані про стан об'єкта
-        if (imageAnalysis.siteCondition) {
-          extractedData.siteCondition = imageAnalysis.siteCondition;
+          const chunks = chunkText(pdfData.text, 512, 50);
+          console.log(`📄 PDF розбито на ${chunks.length} chunks`);
+
+          if (chunks.length === 0) {
+            console.warn(`⚠️ PDF ${file.fileName} не вдалось розбити на chunks, пропускаю`);
+            skippedFiles++;
+            continue;
+          }
+
+          chunks.forEach((chunk, idx) => {
+            allChunks.push({
+              content: chunk,
+              fileName: file.fileName,
+              fileType: 'pdf',
+              metadata: { page: Math.floor(idx / 2) + 1 }
+            });
+          });
+
+          // Витягти структуровані дані з PDF (errors handled inside, returns {} on failure)
+          console.log(`🤖 Аналіз PDF через Gemini: ${file.fileName}`);
+          const pdfExtractedData = await extractDataFromPDF(pdfData.text, file.fileName);
+          console.log(`✅ PDF дані витягнуто:`, Object.keys(pdfExtractedData));
+          extractedData = { ...extractedData, ...pdfExtractedData };
+
+        } else if (file.mimeType.startsWith('image/')) {
+          // Фото → Gemini Vision (errors handled inside, returns fallback on failure)
+          const imageAnalysis = await analyzeImageWithGemini(file.buffer, file.mimeType);
+
+          allChunks.push({
+            content: imageAnalysis.description,
+            fileName: file.fileName,
+            fileType: 'image',
+            metadata: {
+              extractedData: imageAnalysis.extractedData
+            }
+          });
+
+          if (imageAnalysis.siteCondition) {
+            extractedData.siteCondition = imageAnalysis.siteCondition;
+          }
         }
+      } catch (fileError) {
+        const msg = fileError instanceof Error ? fileError.message : String(fileError);
+        console.error(`❌ Помилка обробки файлу ${file.fileName}: ${msg.substring(0, 200)}`);
+        skippedFiles++;
+        // Continue with next file instead of failing the entire vectorization
       }
+    }
+
+    if (skippedFiles > 0) {
+      console.warn(`⚠️ Пропущено ${skippedFiles}/${files.length} файлів через помилки обробки`);
+    }
+    if (allChunks.length === 0) {
+      throw new Error(`Жодного файлу не вдалось обробити. Скасовую векторизацію.`);
     }
 
     onProgress?.('🧮 Векторизація chunks...', 65);
@@ -337,12 +382,22 @@ async function analyzeImageWithGemini(
   // Compress image to save tokens
   const compressed = await compressImageForVision(buffer, mimeType);
 
-  const result = await model.generateContent([
-    prompt,
-    {
-      inlineData: compressed,
-    }
-  ]);
+  let result;
+  try {
+    result = await retryGeminiCall('Image Vision', () => model.generateContent([
+      prompt,
+      {
+        inlineData: compressed,
+      }
+    ]));
+  } catch (error) {
+    // Graceful degradation: return minimal description so pipeline continues
+    const msg = error instanceof Error ? error.message : String(error);
+    console.warn(`⚠️ Image analysis failed permanently, returning fallback: ${msg.substring(0, 100)}`);
+    return {
+      description: '[Image analysis unavailable — Gemini Vision failed]',
+    };
+  }
 
   // Token logging
   const usage = result.response.usageMetadata;
@@ -612,7 +667,7 @@ ${smartTruncatePdfText(text)}
 - Якщо є креслення - витягуй розміри з позначок`;
 
   try {
-    const result = await model.generateContent(prompt);
+    const result = await retryGeminiCall('PDF extract', () => model.generateContent(prompt));
 
     // Token logging
     const usage = result.response.usageMetadata;
@@ -630,7 +685,7 @@ ${smartTruncatePdfText(text)}
 
     return data;
   } catch (error) {
-    console.warn('Не вдалось витягти структуровані дані:', error);
+    console.warn('Не вдалось витягти структуровані дані:', error instanceof Error ? error.message : error);
     return {};
   }
 }
