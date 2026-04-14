@@ -15,6 +15,7 @@ import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AgentContext, EstimateSection, EstimateItem } from './base-agent';
 import { findSimilarPrices } from '../prozorro-price-reference';
+import { findBestZbirnykNorm, detectZbirnykSection } from '../zbirnyk-15-search';
 
 export interface MasterAgentOutput {
   sections: EstimateSection[];
@@ -452,9 +453,13 @@ export class MasterEstimateAgent {
     // Зібрати всі успішні секції в правильному порядку
     const allSections: EstimateSection[] = sectionResults.filter((s): s is EstimateSection => s !== null);
 
-    // Збагатити всі секції цінами з Prozorro
+    // ⭐ Збагатити секцію "Оздоблення" цінами робіт зі Збірника 15
+    console.log(`\n📚 Enriching "Оздоблення" with Zbirnyk 15 norms...`);
+    const zbirnykEnriched = this.enrichWithZbirnyk15(allSections);
+
+    // Збагатити всі секції цінами з Prozorro (для матеріалів)
     console.log(`\n💰 Enriching all sections with Prozorro prices...`);
-    const enrichedSections = await this.enrichWithProzorroPrices(allSections);
+    const enrichedSections = await this.enrichWithProzorroPrices(zbirnykEnriched);
 
     // Розрахувати загальну суму
     const totalCost = enrichedSections.reduce((sum, section) => sum + section.sectionTotal, 0);
@@ -728,7 +733,32 @@ export class MasterEstimateAgent {
 - Не забудь механізовану техніку (екскаватори, автокрани, самоскиди).`
       : '';
 
-    return `Ти - ДОСВІДЧЕНИЙ ІНЖЕНЕР-КОШТОРИСНИК з 20-річним стажем, спеціалізація: "${spec.title}".${demolitionExtra}
+    // Для оздоблення — використання офіційного Збірника 15
+    const zbirnykExtra = spec.title === 'Оздоблення'
+      ? `\n\n📚 ДЖЕРЕЛО ЦІН НА РОБОТИ: Збірник 15 «Оздоблювальні роботи»
+Офіційні кошторисні норми України, 748 норм з 6 розділів:
+- 15-1...15-6: Облицювальні роботи (плитка, граніт, мармур, вапняк) — 220 норм
+- 15-62...15-100: Штукатурні та декоративні роботи — 215 норм
+- 15-101...15-113: Ліпні роботи — 59 норм
+- 15-114...15-160: Малярні роботи (фарбування, грунтування, лакування) — 196 норм
+- 15-161...15-172: Склярські роботи — 46 норм
+- 15-173...15-176: Шпалерні роботи — 12 норм
+
+БАЗОВІ СТАВКИ Збірника 15:
+- Робітник: 250 ₴/люд.-год
+- Машиніст: 280 ₴/люд.-год
+- Накладні витрати: 25%
+
+ПРАВИЛА:
+1. Пиши ТОЧНІ описи робіт щоб система автоматично знайшла відповідну норму зі Збірника 15.
+   Приклад: "Облицювання стін плиткою керамічною 300×300 мм на клею" → знайдеться норма 15-60-1 або аналогічна.
+2. Коли ЗНАЄШ код норми — додай його в notes: "Zbirnyk 15-62-5".
+3. laborCost має відповідати офіційним нормам:
+   laborCost = quantity × люд.-год./од. × 250 ₴ × 1.25 (накладні)
+4. Якщо робота не з оздоблювальних (наприклад, стяжка) — вказуй priceSource як "KAPITEL 2025" або "Ринкова".`
+      : '';
+
+    return `Ти - ДОСВІДЧЕНИЙ ІНЖЕНЕР-КОШТОРИСНИК з 20-річним стажем, спеціалізація: "${spec.title}".${demolitionExtra}${zbirnykExtra}
 
 ТВОЯ ЗАДАЧА:
 Згенерувати МАКСИМАЛЬНО ДЕТАЛЬНИЙ кошторис для секції "${spec.title}".
@@ -1132,6 +1162,49 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
     prompt += `Поверни JSON.\n`;
 
     return prompt;
+  }
+
+  /**
+   * Збагатити позиції ВАРТІСТЮ РОБІТ зі Збірника 15.
+   * Застосовується до ВСІХ секцій (якщо опис роботи матчиться з нормою).
+   * Пріоритет — Збірник 15, бо це офіційні норми України.
+   */
+  private enrichWithZbirnyk15(sections: EstimateSection[]): EstimateSection[] {
+    let totalUpdated = 0;
+    let totalItems = 0;
+
+    const result = sections.map(section => {
+      const updatedItems = section.items.map(item => {
+        totalItems++;
+        // Спробувати знайти норму зі Збірника 15
+        const zbSection = detectZbirnykSection(item.description);
+        if (!zbSection) return item;
+
+        const match = findBestZbirnykNorm(item.description, item.unit, zbSection, 0.35);
+        if (!match || match.similarity < 0.4) return item;
+
+        // Розрахувати вартість роботи за нормою
+        const newLaborCost = Math.round(item.quantity * match.norm.laborPrice);
+        const oldTotal = item.totalCost;
+        const newTotal = Math.round(item.quantity * item.unitPrice + newLaborCost);
+
+        totalUpdated++;
+        return {
+          ...item,
+          laborCost: newLaborCost,
+          totalCost: newTotal,
+          priceSource: `Збірник 15 (${match.norm.code})${item.priceSource ? ' + ' + item.priceSource.replace(/AI оцінка.*/, '').trim() : ''}`,
+          confidence: Math.max(item.confidence ?? 0.7, 0.9),
+          notes: `[Збірник 15 ${match.norm.code}: ${match.norm.group}, match=${(match.similarity * 100).toFixed(0)}%] ${item.notes ?? ''}`.trim(),
+        };
+      });
+
+      const newSectionTotal = updatedItems.reduce((sum, i) => sum + i.totalCost, 0);
+      return { ...section, items: updatedItems, sectionTotal: newSectionTotal };
+    });
+
+    console.log(`   ✅ Збірник 15: збагачено ${totalUpdated}/${totalItems} позицій офіційними нормами`);
+    return result;
   }
 
   /**

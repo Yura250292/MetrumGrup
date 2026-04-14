@@ -1,36 +1,59 @@
 /**
  * Розрахунок вартості робіт з використанням реальних розцінок
- * Поєднує дані з:
- * 1. Прайс KAPITEL від 08.09.2025 (Львів/Івано-Франківськ)
- * 2. Існуюча база робіт
+ * Пріоритет джерел (highest → lowest):
+ *   1. Збірник 15 (офіційні кошторисні норми України, 748 норм) — для оздоблювальних робіт
+ *   2. Прайс KAPITEL від 08.09.2025 (Львів/Івано-Франківськ)
+ *   3. Існуюча база робіт (work-items-database-extended)
+ *   4. Оцінка на основі категорії
  */
 
 import { LABOR_RATES_KAPITEL_2025, findLaborRate, type LaborRate } from './labor-rates-kapitel-2025';
 import { WORK_ITEMS_DATABASE, type WorkItemWithPrice } from './work-items-database-extended';
+import { findBestZbirnykNorm, detectZbirnykSection } from './zbirnyk-15-search';
+import type { Zbirnyk15Norm } from './zbirnyk-15-norms';
 
 export interface LaborCostResult {
   workName: string;
   quantity: number;
   unit: string;
   laborCost: number;
-  source: 'kapitel_2025' | 'database' | 'estimated';
+  source: 'zbirnyk_15' | 'kapitel_2025' | 'database' | 'estimated';
   confidence: number; // 0-1
-  rate?: LaborRate | WorkItemWithPrice | null;
+  rate?: LaborRate | WorkItemWithPrice | Zbirnyk15Norm | null;
   notes?: string;
 }
 
 /**
- * Головна функція розрахунку вартості робіт
- * Спочатку шукає в прайсі Kapitel, потім у базі, потім робить оцінку
+ * Головна функція розрахунку вартості робіт.
+ * Пріоритет: Збірник 15 → KAPITEL → база робіт → оцінка.
  */
 export function calculateLaborCost(
   workName: string,
   quantity: number,
   unit: string
 ): LaborCostResult {
+  // 1. ⭐ НАЙВИЩИЙ ПРІОРИТЕТ: Збірник 15 (офіційні кошторисні норми України)
+  //    Покриває: облицювання, штукатурку, малярні, склярські, ліпнину, шпалери
+  const section = detectZbirnykSection(workName);
+  if (section) {
+    const zbMatch = findBestZbirnykNorm(workName, unit, section, 0.3);
+    if (zbMatch && zbMatch.similarity >= 0.4) {
+      return {
+        workName,
+        quantity,
+        unit,
+        laborCost: quantity * zbMatch.norm.laborPrice,
+        source: 'zbirnyk_15',
+        confidence: Math.min(0.98, 0.7 + zbMatch.similarity * 0.28),
+        rate: zbMatch.norm,
+        notes: `Збірник 15, норма ${zbMatch.norm.code} (${zbMatch.norm.group}), match=${(zbMatch.similarity * 100).toFixed(0)}%`,
+      };
+    }
+  }
+
   const searchTerm = workName.toLowerCase();
 
-  // 1. Спочатку шукаємо в прайсі Kapitel (найточніший)
+  // 2. Прайс KAPITEL (Львів/Івано-Франківськ)
   const kapitelRate = findLaborRate(workName);
   if (kapitelRate) {
     return {
@@ -39,13 +62,13 @@ export function calculateLaborCost(
       unit,
       laborCost: quantity * kapitelRate.price,
       source: 'kapitel_2025',
-      confidence: kapitelRate.priceFrom ? 0.85 : 0.95, // якщо "від X" - трохи нижча впевненість
+      confidence: kapitelRate.priceFrom ? 0.85 : 0.95,
       rate: kapitelRate,
       notes: kapitelRate.priceFrom ? 'Ціна вказана як мінімальна ("від")' : undefined
     };
   }
 
-  // 2. Шукаємо в загальній базі робіт
+  // 3. Загальна база робіт
   const dbWork = WORK_ITEMS_DATABASE.find(w =>
     w.name.toLowerCase().includes(searchTerm) ||
     searchTerm.includes(w.name.toLowerCase()) ||
@@ -64,7 +87,7 @@ export function calculateLaborCost(
     };
   }
 
-  // 3. Оцінка на основі категорії та складності
+  // 4. Оцінка на основі категорії
   const estimated = estimateLaborCost(workName, quantity, unit);
   return estimated;
 }
