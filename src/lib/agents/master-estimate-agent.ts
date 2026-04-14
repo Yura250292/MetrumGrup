@@ -15,7 +15,7 @@ import OpenAI from 'openai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AgentContext, EstimateSection, EstimateItem } from './base-agent';
 import { findSimilarPrices } from '../prozorro-price-reference';
-import { findBestKnuNorm, detectAgentCategory } from '../knu-search';
+import { calculateLaborCost } from '../labor-cost-calculator';
 
 export interface MasterAgentOutput {
   sections: EstimateSection[];
@@ -453,13 +453,14 @@ export class MasterEstimateAgent {
     // Зібрати всі успішні секції в правильному порядку
     const allSections: EstimateSection[] = sectionResults.filter((s): s is EstimateSection => s !== null);
 
-    // ⭐ Збагатити ВСІ секції цінами робіт з КНУ РЕКНб (21 том, 6687 норм)
-    console.log(`\n📚 Enriching sections with КНУ РЕКНб norms...`);
-    const knuEnriched = this.enrichWithKnu(allSections);
+    // ⭐ Збагатити вартість робіт через повний каскад:
+    //    КНУ РЕКНб → KAPITEL 2025 → WORK_ITEMS_DATABASE → AI fallback
+    console.log(`\n📚 Enriching labor costs through cascade (КНУ → KAPITEL → DB → AI)...`);
+    const laborEnriched = this.enrichWithLaborSources(allSections);
 
-    // Збагатити всі секції цінами з Prozorro (для матеріалів)
-    console.log(`\n💰 Enriching all sections with Prozorro prices...`);
-    const enrichedSections = await this.enrichWithProzorroPrices(knuEnriched);
+    // Збагатити всі секції цінами матеріалів з Prozorro
+    console.log(`\n💰 Enriching material prices with Prozorro...`);
+    const enrichedSections = await this.enrichWithProzorroPrices(laborEnriched);
 
     // Розрахувати загальну суму
     const totalCost = enrichedSections.reduce((sum, section) => sum + section.sectionTotal, 0);
@@ -1174,34 +1175,94 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
   }
 
   /**
-   * Збагатити позиції ВАРТІСТЮ РОБІТ з КНУ РЕКНб (21 том, 6687 офіційних норм).
-   * Застосовується до ВСІХ секцій, шукає відповідну норму по опису роботи.
+   * Збагатити ВАРТІСТЬ РОБІТ через повний каскад джерел.
+   * КОЖНА позиція обов'язково отримує джерело (ніколи не залишається "AI kept"):
+   *   1. КНУ РЕКНб (офіційні норми, 21 том, 6687 норм) — highest priority
+   *   2. KAPITEL 2025 (реальні розцінки Львів/Івано-Франківськ)
+   *   3. WORK_ITEMS_DATABASE (внутрішня база робіт)
+   *   4. Estimated (оцінка по категорії — завжди повертає значення)
+   *
+   * Якщо AI вже дав вищу ціну праці ніж каскад — зберігаємо більшу (AI міг врахувати складність),
+   * але stamping'уємо джерело як "AI verified by <source>" щоб мати auditability.
    */
-  private enrichWithKnu(sections: EstimateSection[]): EstimateSection[] {
-    let totalUpdated = 0;
+  private enrichWithLaborSources(sections: EstimateSection[]): EstimateSection[] {
     let totalItems = 0;
+    const bySource: Record<string, number> = {
+      knu: 0,
+      kapitel_2025: 0,
+      database: 0,
+      estimated: 0,
+    };
     const byVolume = new Map<number, number>();
 
     const result = sections.map(section => {
       const updatedItems = section.items.map(item => {
         totalItems++;
-        const category = detectAgentCategory(item.description);
-        const match = findBestKnuNorm(item.description, item.unit, category ?? undefined, 0.35);
-        if (!match || match.similarity < 0.4) return item;
 
-        const newLaborCost = Math.round(item.quantity * match.norm.laborPrice);
-        const newTotal = Math.round(item.quantity * item.unitPrice + newLaborCost);
+        // Матеріальні позиції без трудомістких робіт — не робимо labor enrichment
+        // (їх вартість — це чистий матеріал, laborCost має бути 0)
+        // Це детектується по опису: "Кабель...", "Плитка...", "Фарба..." без дієслова монтажу
+        const desc = item.description.toLowerCase();
+        const isPureMaterial = /^(кабель|плитка |ламінат |фарба |клей |грунтовка |шпаклівка |цемент |арматура |газоблок |цегла |плит\w*|труба )/i.test(desc)
+          && !/монтаж|встановлен|прокладан|укладан|облицюван|штукатур|фарбуван|заливк|кладка|мурування/i.test(desc);
 
-        totalUpdated++;
-        byVolume.set(match.norm.volume, (byVolume.get(match.norm.volume) ?? 0) + 1);
+        if (isPureMaterial && item.laborCost === 0) {
+          // Чистий матеріал без роботи — залишаємо як є
+          return item;
+        }
+
+        // Знайти офіційну розцінку через повний каскад
+        const laborResult = calculateLaborCost(
+          item.description,
+          item.quantity,
+          item.unit
+        );
+
+        bySource[laborResult.source]++;
+
+        // Якщо AI laborCost > cascade laborCost — зберігаємо AI (він міг врахувати складність/бренд)
+        // Це захищає від явного заниження ціни через категорійну оцінку
+        const aiLaborCost = item.laborCost || 0;
+        const cascadeLaborCost = Math.round(laborResult.laborCost);
+        const finalLaborCost = aiLaborCost > cascadeLaborCost * 1.5
+          ? aiLaborCost  // AI суттєво вищий → зберігаємо AI
+          : cascadeLaborCost;
+        const newTotal = Math.round(item.quantity * item.unitPrice + finalLaborCost);
+
+        let priceSource = '';
+        let notes = item.notes ?? '';
+        const aiOverride = finalLaborCost === aiLaborCost && aiLaborCost > cascadeLaborCost * 1.5;
+
+        if (laborResult.source === 'knu' && laborResult.rate && 'volume' in laborResult.rate) {
+          const knu = laborResult.rate;
+          byVolume.set(knu.volume, (byVolume.get(knu.volume) ?? 0) + 1);
+          priceSource = aiOverride
+            ? `AI+КНУ Зб.${knu.volume}`
+            : `КНУ Зб.${knu.volume} (${knu.code})`;
+          notes = `[КНУ ${knu.code}: ${knu.groupTitle.substring(0, 80)}] ${notes}`.trim();
+        } else if (laborResult.source === 'kapitel_2025') {
+          priceSource = aiOverride ? 'AI+KAPITEL 2025' : 'KAPITEL 2025';
+          notes = `[KAPITEL] ${notes}`.trim();
+        } else if (laborResult.source === 'database') {
+          priceSource = aiOverride ? 'AI+DB' : 'База робіт Metrum';
+          notes = `[DB match] ${notes}`.trim();
+        } else {
+          priceSource = aiOverride ? 'AI+Estimate' : 'Оцінка по категорії';
+          notes = `[Estimated by category] ${notes}`.trim();
+        }
+
+        const newConfidence = Math.max(
+          item.confidence ?? 0.7,
+          laborResult.confidence
+        );
 
         return {
           ...item,
-          laborCost: newLaborCost,
+          laborCost: finalLaborCost,
           totalCost: newTotal,
-          priceSource: `КНУ Зб.${match.norm.volume} (${match.norm.code})`,
-          confidence: Math.max(item.confidence ?? 0.7, 0.9),
-          notes: `[КНУ ${match.norm.code}: ${match.norm.groupTitle.substring(0, 80)}, match=${(match.similarity * 100).toFixed(0)}%] ${item.notes ?? ''}`.trim(),
+          priceSource,
+          confidence: newConfidence,
+          notes: notes.substring(0, 500),
         };
       });
 
@@ -1209,11 +1270,13 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
       return { ...section, items: updatedItems, sectionTotal: newSectionTotal };
     });
 
-    console.log(`   ✅ КНУ РЕКНб: збагачено ${totalUpdated}/${totalItems} позицій офіційними нормами`);
+    const totalEnriched = bySource.knu + bySource.kapitel_2025 + bySource.database + bySource.estimated;
+    console.log(`   ✅ Labor enrichment: ${totalEnriched}/${totalItems} позицій через каскад`);
+    console.log(`      КНУ: ${bySource.knu} | KAPITEL: ${bySource.kapitel_2025} | DB: ${bySource.database} | Estimated: ${bySource.estimated}`);
     if (byVolume.size > 0) {
       const breakdown = [...byVolume.entries()].sort((a, b) => a[0] - b[0])
         .map(([v, n]) => `Зб.${v}: ${n}`).join(', ');
-      console.log(`      По томах: ${breakdown}`);
+      console.log(`      КНУ по томах: ${breakdown}`);
     }
     return result;
   }
