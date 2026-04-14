@@ -13,11 +13,12 @@ export async function GET(_request: NextRequest) {
   try {
     await requireStaffAccess();
 
-    // Auto-seed if empty
-    const count = await prisma.aiStylePreset.count();
-    if (count === 0) {
-      await prisma.aiStylePreset.createMany({
-        data: DEFAULT_STYLE_PRESETS.map((p) => ({
+    // Auto-seed: upsert all default presets so new ones get added
+    // to existing DBs without losing user customizations.
+    for (const p of DEFAULT_STYLE_PRESETS) {
+      await prisma.aiStylePreset.upsert({
+        where: { name: p.name },
+        create: {
           name: p.name,
           label: p.label,
           description: p.description,
@@ -25,7 +26,8 @@ export async function GET(_request: NextRequest) {
           prompt: p.prompt,
           negativePrompt: p.negativePrompt,
           sortOrder: p.sortOrder,
-        })),
+        },
+        update: {},
       });
     }
 

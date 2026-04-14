@@ -91,4 +91,44 @@ export const DEFAULT_STYLE_PRESETS = [
       "cold, sterile, hospital-like, industrial, concrete, neon, harsh lighting",
     sortOrder: 8,
   },
+  {
+    name: "modern_interior",
+    label: "Сучасний інтер'єр",
+    description: "Мінімалістичні меблі, нейтральна палітра, скло",
+    category: "interior",
+    prompt:
+      "modern minimalist interior, clean lines, neutral color palette with white and grey, contemporary furniture, hardwood floors, large windows with natural light, open plan, uncluttered",
+    negativePrompt: "ornate, baroque, victorian, cluttered, dark, rustic",
+    sortOrder: 9,
+  },
+  {
+    name: "luxury_interior",
+    label: "Преміум інтер'єр",
+    description: "Мармур, золото, велюр, розкішні тканини",
+    category: "interior",
+    prompt:
+      "luxury premium interior, marble floors and accents, gold and brass details, velvet upholstery, silk curtains, chandelier, elegant furniture, rich textures, high-end finishes, warm lighting",
+    negativePrompt: "cheap, plastic, industrial, minimalist, bare, empty",
+    sortOrder: 10,
+  },
+  {
+    name: "boho_interior",
+    label: "Бохо",
+    description: "Натуральні тканини, рослини, теплі тони, ретро меблі",
+    category: "interior",
+    prompt:
+      "bohemian interior design, natural rattan and wicker furniture, macrame wall hangings, layered rugs and textiles, indoor plants, warm earthy tones, vintage furniture, eclectic decor",
+    negativePrompt: "sterile, minimalist, modern, cold, industrial, sharp corners",
+    sortOrder: 11,
+  },
+  {
+    name: "japandi_interior",
+    label: "Japandi",
+    description: "Японський мінімалізм + скандинавський стиль",
+    category: "interior",
+    prompt:
+      "japandi interior design, japanese minimalism meets scandinavian style, light wood, low furniture, natural materials, zen atmosphere, neutral tones, tatami mats, paper lamps, uncluttered space, shoji screens",
+    negativePrompt: "ornate, luxurious, cluttered, baroque, maximalist, dark",
+    sortOrder: 12,
+  },
 ] as const;

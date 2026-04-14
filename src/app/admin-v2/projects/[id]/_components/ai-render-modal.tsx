@@ -355,16 +355,19 @@ export function AiRenderModal({
               </div>
             )}
 
-            {/* Style presets */}
+            {/* Style presets — filter by mode:
+                - FLOOR_PLAN_TO_3D & PHOTO_RERENDER (interior use) → interior styles
+                - SKETCH_TO_RENDER & TEXT_TO_RENDER → all styles */}
             {presets && presets.length > 0 && (
               <div>
                 <label className="text-[12px] font-medium mb-2 block" style={{ color: T.textSecondary }}>
-                  Архітектурний стиль
+                  {mode === "FLOOR_PLAN_TO_3D" ? "Стиль інтер'єру" : "Архітектурний стиль"}
                 </label>
                 <AiStylePresetPicker
                   presets={presets}
                   selected={stylePreset}
                   onSelect={setStylePreset}
+                  category={mode === "FLOOR_PLAN_TO_3D" ? "interior" : undefined}
                 />
               </div>
             )}
