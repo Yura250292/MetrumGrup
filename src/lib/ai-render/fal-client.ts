@@ -76,14 +76,16 @@ async function buildModelRequest(
   }
   const falImageUrl = await uploadToFalStorage(params.imageUrl);
 
-  // FLOOR_PLAN_TO_3D — flux-pro/kontext for image-to-image edit
+  // FLOOR_PLAN_TO_3D — Seedream v4 edit preserves floor plan structure
+  // far better than flux-pro/kontext. Tested: stairs, L-shaped kitchen,
+  // bathroom fixtures, dining table with exact chair count, plants —
+  // all rendered at correct positions. Takes ~28s vs kontext's 10s.
   if (mode === "FLOOR_PLAN_TO_3D") {
     return {
-      modelId: "fal-ai/flux-pro/kontext",
+      modelId: "fal-ai/bytedance/seedream/v4/edit",
       input: {
         prompt: params.prompt,
-        image_url: falImageUrl,
-        aspect_ratio: pickAspectRatio(params.width, params.height),
+        image_urls: [falImageUrl],
       },
     };
   }
@@ -126,16 +128,23 @@ export async function generateRender(
       });
 
       const output = result as {
-        images?: Array<{ url: string; width: number; height: number }>;
-        image?: { url: string; width: number; height: number };
+        images?: Array<{ url: string; width?: number | null; height?: number | null }>;
+        image?: { url: string; width?: number | null; height?: number | null };
       };
 
       // kontext returns `image` (singular), flux returns `images` (array)
-      const images = output.images ?? (output.image ? [output.image] : []);
+      const rawImages = output.images ?? (output.image ? [output.image] : []);
 
-      if (images.length === 0) {
+      if (rawImages.length === 0) {
         throw new Error("fal.ai returned no images");
       }
+
+      // Normalize: some models (Seedream) return null for width/height
+      const images = rawImages.map((img) => ({
+        url: img.url,
+        width: img.width ?? params.width,
+        height: img.height ?? params.height,
+      }));
 
       return { images };
     } catch (err) {
