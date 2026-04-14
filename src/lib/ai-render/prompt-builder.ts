@@ -32,7 +32,18 @@ export function buildPrompt(params: {
   if (params.mode === "FLOOR_PLAN_TO_3D") {
     parts.push(MODE_SUFFIXES[params.mode]);
     if (params.planDescription) {
-      parts.push(`The plan contains: ${params.planDescription}. Render every listed room and furniture item at the same position.`);
+      parts.push(
+        `Detailed layout analysis of the floor plan: ${params.planDescription}. ` +
+        `RENDER REQUIREMENTS: render every single room listed above at its exact position. ` +
+        `Render every furniture and fixture item listed for each room. ` +
+        `In the kitchen render the stove/cooktop, refrigerator, sink, countertop exactly as described. ` +
+        `In the bathroom render the bathtub, toilet, sink, washing machine exactly as listed. ` +
+        `In bedrooms render the exact bed type, wardrobe, nightstands. ` +
+        `In the living area render the sofa type, TV console, coffee table, armchairs as specified. ` +
+        `In the dining area render the table shape and exact number of chairs. ` +
+        `Render the staircase if mentioned. Render the terrace or balcony if mentioned. ` +
+        `Do not substitute or simplify any items.`
+      );
     }
     if (params.stylePreset?.prompt) parts.push(params.stylePreset.prompt);
     if (params.userPrompt.trim()) parts.push(params.userPrompt.trim());

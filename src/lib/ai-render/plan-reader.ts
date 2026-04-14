@@ -43,28 +43,45 @@ export async function readFloorPlan(imageUrl: string): Promise<string | null> {
     const openai = getClient();
     const result = await openai.chat.completions.create({
       model: OPENAI_MODEL,
-      max_tokens: 800,
+      max_tokens: 1500,
       messages: [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: [
-                "Read this architectural floor plan sketch.",
-                "Output a CONCISE list of rooms, furniture, and key features",
-                "in a format suitable for guiding image generation.",
-                "Format each room on its own line like:",
-                "  Room N (purpose, approx size): comma-separated list of items",
-                "Example:",
-                "  Room 1 (living room, ~26m²): sofa, coffee table, TV console, 2 armchairs",
-                "  Room 2 (bedroom, ~15m²): bed, wardrobe, nightstand",
-                "  Room 3 (bathroom, ~4m²): bathtub, sink, toilet",
-                "",
-                "Also mention any of these if visible: staircase, balcony,",
-                "kitchen island, fireplace, large windows.",
-                "Be concrete and specific. No flowery language.",
-              ].join(" "),
+              text: `You are an expert architect analyzing a residential floor plan. Examine the sketch carefully and identify EVERY element you can see.
+
+For each room, identify:
+- Purpose (living room / bedroom / kitchen / bathroom / hallway / dining room / terrace / balcony / closet / office / pantry / laundry)
+- Approximate size in m² or dimensions
+- Position in the layout (top-left, center, bottom-right, etc.)
+- Every furniture symbol and fixture visible in that room
+
+For kitchens specifically note: stove/cooktop, oven, refrigerator, dishwasher, sink, kitchen island, countertop, pantry, microwave.
+
+For bathrooms specifically note: bathtub, shower, toilet, bidet, sink/vanity, towel rail, washing machine.
+
+For bedrooms specifically note: bed size (single/double/queen), wardrobe/closet, nightstands, desk, mirror.
+
+For living areas specifically note: sofa (corner/straight/sectional), armchairs, coffee table, TV console, bookshelf, fireplace.
+
+For dining areas: table shape (round/rectangular), number of chairs.
+
+Also identify:
+- Staircase: location, direction (going up/down), number of steps if visible
+- Entrance door (usually with arrow or swing marker)
+- Interior doors (position and swing direction)
+- Windows in exterior walls
+- Terrace or balcony if any
+- Any measurements/dimensions shown
+
+Output format — one room per line:
+ROOM [name, ~Xm², position]: item1, item2, item3, ...
+Then at the end:
+STRUCTURE: list walls, doors, windows, stairs.
+
+Be thorough. Do not miss anything. Do not add commentary — just the structured list.`,
             },
             {
               type: "image_url",
