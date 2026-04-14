@@ -18,7 +18,7 @@
 
 import { MATERIALS_DATABASE, type MaterialWithPrice } from '../../materials-database-extended';
 import { WORK_ITEMS_DATABASE, type WorkItemWithPrice } from '../../work-items-database-extended';
-import { findBestZbirnykNorm, detectZbirnykSection } from '../../zbirnyk-15-search';
+import { findBestKnuNorm, detectAgentCategory } from '../../knu-search';
 import {
   descriptionSimilarity,
   normalizeDescription,
@@ -136,23 +136,21 @@ export const catalogProvider: PriceProvider = {
     const targetDate = query.date ?? new Date();
 
     if (query.kind === 'labor') {
-      // ⭐ PRIORITY 1: Збірник 15 (офіційні норми України) для оздоблювальних робіт
-      const zbSection = detectZbirnykSection(query.description);
-      if (zbSection) {
-        const zbMatch = findBestZbirnykNorm(query.description, query.unit, zbSection, 0.3);
-        if (zbMatch && zbMatch.similarity >= 0.4) {
-          const rawConfidence = Math.min(0.98, 0.75 + zbMatch.similarity * 0.23);
-          return {
-            unitPrice: 0,
-            laborCost: zbMatch.norm.laborPrice,
-            source: `Збірник 15 (норма ${zbMatch.norm.code})`,
-            sourceType: 'catalog',
-            rawConfidence,
-            confidence: rawConfidence * 1.0,
-            sourceDate: new Date('2025-01-01'),
-            notes: `Збірник 15 ${zbMatch.norm.code}: ${zbMatch.norm.group} (match=${(zbMatch.similarity * 100).toFixed(0)}%)`,
-          };
-        }
+      // ⭐ PRIORITY 1: КНУ РЕКНб — офіційні норми України, 21 том, 6687 норм
+      const agentCategory = detectAgentCategory(query.description);
+      const knuMatch = findBestKnuNorm(query.description, query.unit, agentCategory ?? undefined, 0.3);
+      if (knuMatch && knuMatch.similarity >= 0.4) {
+        const rawConfidence = Math.min(0.98, 0.75 + knuMatch.similarity * 0.23);
+        return {
+          unitPrice: 0,
+          laborCost: knuMatch.norm.laborPrice,
+          source: `КНУ Збірник ${knuMatch.norm.volume} (норма ${knuMatch.norm.code})`,
+          sourceType: 'catalog',
+          rawConfidence,
+          confidence: rawConfidence * 1.0,
+          sourceDate: new Date('2021-12-31'),
+          notes: `КНУ ${knuMatch.norm.code}: ${knuMatch.norm.groupTitle.substring(0, 80)} (match=${(knuMatch.similarity * 100).toFixed(0)}%)`,
+        };
       }
 
       // PRIORITY 2: Внутрішній каталог робіт

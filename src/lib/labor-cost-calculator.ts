@@ -1,7 +1,7 @@
 /**
- * Розрахунок вартості робіт з використанням реальних розцінок
+ * Розрахунок вартості робіт з використанням реальних розцінок.
  * Пріоритет джерел (highest → lowest):
- *   1. Збірник 15 (офіційні кошторисні норми України, 748 норм) — для оздоблювальних робіт
+ *   1. КНУ РЕКНб — 21 Збірник, 6687 офіційних норм України (покриває ВСІ види робіт)
  *   2. Прайс KAPITEL від 08.09.2025 (Львів/Івано-Франківськ)
  *   3. Існуюча база робіт (work-items-database-extended)
  *   4. Оцінка на основі категорії
@@ -9,44 +9,43 @@
 
 import { LABOR_RATES_KAPITEL_2025, findLaborRate, type LaborRate } from './labor-rates-kapitel-2025';
 import { WORK_ITEMS_DATABASE, type WorkItemWithPrice } from './work-items-database-extended';
-import { findBestZbirnykNorm, detectZbirnykSection } from './zbirnyk-15-search';
-import type { Zbirnyk15Norm } from './zbirnyk-15-norms';
+import { findBestKnuNorm, detectAgentCategory } from './knu-search';
+import type { KnuNorm } from './knu-norms';
 
 export interface LaborCostResult {
   workName: string;
   quantity: number;
   unit: string;
   laborCost: number;
-  source: 'zbirnyk_15' | 'kapitel_2025' | 'database' | 'estimated';
+  source: 'knu' | 'kapitel_2025' | 'database' | 'estimated';
   confidence: number; // 0-1
-  rate?: LaborRate | WorkItemWithPrice | Zbirnyk15Norm | null;
+  rate?: LaborRate | WorkItemWithPrice | KnuNorm | null;
   notes?: string;
 }
 
 /**
  * Головна функція розрахунку вартості робіт.
- * Пріоритет: Збірник 15 → KAPITEL → база робіт → оцінка.
+ * Пріоритет: КНУ РЕКНб → KAPITEL → база робіт → оцінка.
  */
 export function calculateLaborCost(
   workName: string,
   quantity: number,
   unit: string
 ): LaborCostResult {
-  // 1. ⭐ НАЙВИЩИЙ ПРІОРИТЕТ: Збірник 15 (офіційні кошторисні норми України)
-  //    Покриває: облицювання, штукатурку, малярні, склярські, ліпнину, шпалери
-  const section = detectZbirnykSection(workName);
-  if (section) {
-    const zbMatch = findBestZbirnykNorm(workName, unit, section, 0.3);
-    if (zbMatch && zbMatch.similarity >= 0.4) {
+  // 1. ⭐ НАЙВИЩИЙ ПРІОРИТЕТ: КНУ РЕКНб (офіційні норми України, 21 том, 6687 норм)
+  const category = detectAgentCategory(workName);
+  if (category) {
+    const knuMatch = findBestKnuNorm(workName, unit, category, 0.3);
+    if (knuMatch && knuMatch.similarity >= 0.4) {
       return {
         workName,
         quantity,
         unit,
-        laborCost: quantity * zbMatch.norm.laborPrice,
-        source: 'zbirnyk_15',
-        confidence: Math.min(0.98, 0.7 + zbMatch.similarity * 0.28),
-        rate: zbMatch.norm,
-        notes: `Збірник 15, норма ${zbMatch.norm.code} (${zbMatch.norm.group}), match=${(zbMatch.similarity * 100).toFixed(0)}%`,
+        laborCost: quantity * knuMatch.norm.laborPrice,
+        source: 'knu',
+        confidence: Math.min(0.98, 0.7 + knuMatch.similarity * 0.28),
+        rate: knuMatch.norm,
+        notes: `КНУ РЕКНб Збірник ${knuMatch.norm.volume}, норма ${knuMatch.norm.code}, match=${(knuMatch.similarity * 100).toFixed(0)}%`,
       };
     }
   }
