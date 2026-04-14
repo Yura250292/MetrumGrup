@@ -106,7 +106,7 @@ export function AiRenderResultCard({
               : job.mode === "PHOTO_RERENDER"
                 ? "Фото → Рендер"
                 : job.mode === "FLOOR_PLAN_TO_3D"
-                  ? "План → 3D"
+                  ? "План → Реалістика"
                   : "Текст → Рендер"}
           </span>
           {job.durationMs && (

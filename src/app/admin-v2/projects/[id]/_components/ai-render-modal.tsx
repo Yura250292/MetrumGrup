@@ -235,10 +235,10 @@ export function AiRenderModal({
               </div>
               <div className="text-left">
                 <span className="text-[14px] font-semibold block" style={{ color: T.textPrimary }}>
-                  План → 3D Ізометрія
+                  План → Реалістичний вид
                 </span>
                 <span className="text-[12px]" style={{ color: T.textMuted }}>
-                  Перетворіть 2D план зверху у 3D ізометричний рендер з меблями
+                  Перетворіть 2D план у фотореалістичний вигляд зверху з меблями
                 </span>
               </div>
             </button>

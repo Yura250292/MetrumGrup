@@ -13,7 +13,7 @@ const MODE_SUFFIXES: Record<AiRenderMode, string> = {
   TEXT_TO_RENDER:
     "photorealistic architectural visualization, professional architecture photography, exterior view of building, real materials and textures, natural lighting, golden hour, landscaping, ultra detailed, hyperrealistic, 8k resolution, unreal engine 5 quality, shot on Canon EOS R5",
   FLOOR_PLAN_TO_3D:
-    "transform this 2D architectural floor plan into a photorealistic isometric 3D cutaway render of the building, 3D model showing walls floors and interior layout with furniture, detailed textures, professional 3D architecture visualization, blender render quality",
+    "transform this 2D floor plan sketch into a photorealistic top-down overhead view of the interior, keep the same top-down bird eye view perspective, add realistic wooden parquet flooring, ceramic tile in bathroom, furniture placed in each room (sofa, bed, dining table, kitchen counter, chairs), area rugs, modern minimalist interior design style, professional interior visualization, soft natural lighting from above, detailed textures",
 };
 
 const DEFAULT_NEGATIVE =
