@@ -16,8 +16,25 @@ const DEFAULT_MODEL = process.env.AI_RENDER_DEFAULT_MODEL || "fal-ai/flux/dev/im
 const CONTROLNET_MODEL = "fal-ai/flux/dev/image-to-image";
 
 const POLL_INTERVAL_MS = 3000;
-const MAX_POLL_DURATION_MS = 120_000;
+const MAX_POLL_DURATION_MS = 180_000;
 const MAX_RETRIES = 2;
+
+/**
+ * Re-upload a source image to fal.ai storage. Avoids flaky direct-download
+ * from R2 (tested: R2 URLs with Cyrillic chars sometimes fail at fal.ai).
+ * Returns the fal.media URL.
+ */
+async function uploadToFalStorage(sourceUrl: string): Promise<string> {
+  const resp = await fetch(sourceUrl);
+  if (!resp.ok) {
+    throw new Error(`Не вдалось завантажити вхідне зображення (${resp.status})`);
+  }
+  const contentType = resp.headers.get("content-type") || "image/jpeg";
+  const buf = Buffer.from(await resp.arrayBuffer());
+  const ext = contentType.includes("png") ? "png" : "jpg";
+  const file = new File([buf], `input.${ext}`, { type: contentType });
+  return await fal.storage.upload(file);
+}
 
 /**
  * Submit an image generation job to fal.ai and poll until complete.
@@ -28,8 +45,12 @@ export async function generateRender(
 ): Promise<FalResult> {
   const modelId = params.controlnetType ? CONTROLNET_MODEL : DEFAULT_MODEL;
 
+  // Upload to fal.ai storage first — R2 direct-download is unreliable
+  // for URLs with non-ASCII characters (tested with Cyrillic filenames).
+  const falImageUrl = await uploadToFalStorage(params.imageUrl);
+
   const input: Record<string, unknown> = {
-    image_url: params.imageUrl,
+    image_url: falImageUrl,
     prompt: params.prompt,
     negative_prompt: params.negativePrompt,
     strength: params.strength,
@@ -37,8 +58,8 @@ export async function generateRender(
       width: params.width,
       height: params.height,
     },
-    num_inference_steps: 28,
-    guidance_scale: 7.5,
+    num_inference_steps: 35,
+    guidance_scale: 7.0,
     num_images: 1,
     enable_safety_checker: false,
   };

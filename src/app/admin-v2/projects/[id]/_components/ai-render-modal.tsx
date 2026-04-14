@@ -27,7 +27,7 @@ export function AiRenderModal({
   const [uploadPreviewUrl, setUploadPreviewUrl] = useState<string | null>(null);
   const [stylePreset, setStylePreset] = useState<string | null>("modern_minimalist");
   const [prompt, setPrompt] = useState("");
-  const [strength, setStrength] = useState(0.7);
+  const [strength, setStrength] = useState(0.92);
   const [controlnetType, setControlnetType] = useState<string>("lineart");
   const [outputSize, setOutputSize] = useState<{ w: number; h: number }>({ w: 1024, h: 768 });
   const [isUploading, setIsUploading] = useState(false);
@@ -56,7 +56,7 @@ export function AiRenderModal({
 
   const handleModeSelect = (m: AiRenderMode) => {
     setMode(m);
-    setStrength(m === "SKETCH_TO_RENDER" ? 0.75 : 0.55);
+    setStrength(m === "SKETCH_TO_RENDER" ? 0.92 : 0.6);
     setControlnetType(m === "SKETCH_TO_RENDER" ? "lineart" : "depth");
     setStep("image");
   };

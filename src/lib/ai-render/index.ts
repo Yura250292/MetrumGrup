@@ -179,8 +179,11 @@ export async function createRenderJob(
     throw new Error("Кредити вичерпано");
   }
 
-  // Determine defaults based on mode
-  const defaultStrength = input.mode === "SKETCH_TO_RENDER" ? 0.75 : 0.55;
+  // Determine defaults based on mode.
+  // SKETCH_TO_RENDER: 0.92 — tested optimal for 2D drawings/sketches → photoreal.
+  //   Lower values (0.75) preserved too much 2D look; 0.95+ loses structure.
+  // PHOTO_RERENDER: 0.60 — preserves building shape while changing style/materials.
+  const defaultStrength = input.mode === "SKETCH_TO_RENDER" ? 0.92 : 0.6;
   const defaultControlnet = input.mode === "SKETCH_TO_RENDER" ? "lineart" : "depth";
 
   const job = await prisma.aiRenderJob.create({
