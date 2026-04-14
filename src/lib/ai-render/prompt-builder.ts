@@ -13,7 +13,7 @@ const MODE_SUFFIXES: Record<AiRenderMode, string> = {
   TEXT_TO_RENDER:
     "photorealistic architectural visualization, professional architecture photography, exterior view of building, real materials and textures, natural lighting, golden hour, landscaping, ultra detailed, hyperrealistic, 8k resolution, unreal engine 5 quality, shot on Canon EOS R5",
   FLOOR_PLAN_TO_3D:
-    "Carefully READ and INTERPRET this architectural floor plan sketch, then render it as a photorealistic top-down interior visualization. Identify and preserve: (1) EXTERIOR WALLS — the outer boundary of the building; (2) INTERIOR WALLS — every partition between rooms, exactly as drawn; (3) DOORS — openings in walls with door swings, keep their positions and swing direction; (4) WINDOWS — openings shown as double lines or gaps in exterior walls, preserve their positions and sizes; (5) EXISTING FURNITURE — any furniture symbols already drawn in the sketch (bed, table, sofa, toilet, sink, bathtub, kitchen appliances) must be rendered at the same positions with realistic appearance; (6) ROOM LABELS — if rooms are labeled (Living Room, Kitchen, Bedroom, Bathroom, Hallway), use them to choose appropriate furniture and materials; (7) DIMENSIONS — respect the proportions shown by dimension lines. CRITICAL RULES: do not merge rooms, do not move walls, do not add or remove rooms, do not move doors or windows. The output must have identical wall layout as the input. Apply photorealistic textures: wooden parquet flooring in living areas and bedrooms, ceramic tile in bathrooms, tile or wood in kitchen. For empty rooms, add appropriate furniture based on room label (bed in bedroom, sofa and coffee table in living room, dining table in kitchen, toilet-sink-bathtub in bathroom). Soft natural daylight from above. Top-down bird eye view, same orthographic perspective as the input sketch.",
+    "Photorealistic top-down interior visualization of this exact floor plan. Preserve every wall, door, and window position from the sketch. Render fixtures and furniture that are already drawn in the plan (bathtub, toilet, sink, stove, bed, sofa, table, chairs) at their exact positions. Apply realistic textures: wooden parquet flooring in living areas, ceramic tile in bathroom and kitchen. Soft natural daylight from above. Top-down bird eye view, same perspective as the input sketch. Do not invent furniture in empty rooms — leave small unlabeled rooms empty or as hallways.",
 };
 
 const DEFAULT_NEGATIVE =
@@ -23,27 +23,13 @@ export function buildPrompt(params: {
   stylePreset: StylePreset | null;
   userPrompt: string;
   mode: AiRenderMode;
-  planDescription?: string | null;
 }): { prompt: string; negativePrompt: string } {
   const parts: string[] = [];
 
-  // For FLOOR_PLAN_TO_3D the mode suffix is an instruction, put it first.
-  // If GPT-4o pre-read the plan, inject positional layout.
+  // For FLOOR_PLAN_TO_3D: put the mode instruction first, then style/notes.
+  // Seedream reads the sketch itself; we don't need an external plan reader.
   if (params.mode === "FLOOR_PLAN_TO_3D") {
     parts.push(MODE_SUFFIXES[params.mode]);
-    if (params.planDescription) {
-      parts.push(
-        `\n\nEXACT ZONAL LAYOUT TO RENDER (from the input sketch):\n${params.planDescription}\n\n` +
-        `STRICT RENDER RULES:\n` +
-        `- Place each element EXACTLY in the zone specified above.\n` +
-        `- Do not rearrange rooms between zones. Top-left stays top-left, center stays center.\n` +
-        `- Render EVERY item listed (stove, fridge, bathtub, toilet, beds, sofas, tables, chairs).\n` +
-        `- If a staircase is listed, render it prominently as wooden stairs.\n` +
-        `- Preserve the outer wall rectangle exactly.\n` +
-        `- Do not merge rooms. Do not skip small rooms (bathroom, closet, pantry).\n` +
-        `- Do not substitute furniture with different types.\n`
-      );
-    }
     if (params.stylePreset?.prompt) parts.push(`Interior style: ${params.stylePreset.prompt}.`);
     if (params.userPrompt.trim()) parts.push(`User notes: ${params.userPrompt.trim()}.`);
   } else {
