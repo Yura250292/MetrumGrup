@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import "frappe-gantt/dist/frappe-gantt.css";
+import "./frappe-gantt-vendor.css";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 type GanttItem = {
