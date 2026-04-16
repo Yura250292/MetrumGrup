@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { Sidebar } from "./_components/sidebar";
 import { Header } from "./_components/header";
 import { MobileShell } from "./_components/mobile-shell";
+import { TimerPill } from "./_components/timer-pill";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic";
 export default async function AdminV2Layout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const isClient = session.user.role === "CLIENT";
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: T.background, color: T.textPrimary }}>
@@ -19,6 +22,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
         <Header />
         <main className="flex-1 px-6 py-6 md:px-8 md:py-8 pb-24 md:pb-8">{children}</main>
       </div>
+      {!isClient && <TimerPill />}
     </div>
   );
 }

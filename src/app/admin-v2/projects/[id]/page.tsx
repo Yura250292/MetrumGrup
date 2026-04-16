@@ -12,11 +12,13 @@ import {
   MessageSquare,
   Camera,
   Edit3,
+  BarChart3,
 } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
+import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -57,6 +59,8 @@ export default async function AdminV2ProjectDetailPage({
   const totalBudget = Number(project.totalBudget);
   const totalPaid = Number(project.totalPaid);
   const paidPercent = totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0;
+
+  const tasksEnabled = await isTasksEnabledForProject(project.id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -135,6 +139,19 @@ export default async function AdminV2ProjectDetailPage({
             >
               <Edit3 size={16} /> Етапи
             </Link>
+            {tasksEnabled && (
+              <Link
+                href={`/admin-v2/projects/${project.id}/reports`}
+                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
+                style={{
+                  backgroundColor: T.panelElevated,
+                  color: T.textPrimary,
+                  border: `1px solid ${T.borderStrong}`,
+                }}
+              >
+                <BarChart3 size={16} /> Звіти
+              </Link>
+            )}
           </div>
         </div>
 
@@ -156,6 +173,7 @@ export default async function AdminV2ProjectDetailPage({
       <ProjectTabs
         activeTab={activeTab}
         projectId={project.id}
+        tasksEnabled={tasksEnabled}
         project={{
           id: project.id,
           title: project.title,

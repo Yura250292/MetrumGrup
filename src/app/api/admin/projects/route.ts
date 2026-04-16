@@ -6,6 +6,7 @@ import { slugify } from "@/lib/utils";
 import { auditLog } from "@/lib/audit";
 import { ProjectStage } from "@prisma/client";
 import { addProjectMember } from "@/lib/projects/members-service";
+import { seedProjectTaskDefaults } from "@/lib/tasks/defaults";
 
 const STAGE_ORDER: ProjectStage[] = [
   "DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER",
@@ -104,6 +105,14 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       console.error("Failed to auto-add manager as project member:", err);
     }
+  }
+
+  // Seed default task statuses & labels for the new project. Idempotent.
+  // Failure is non-fatal — feature-flag gate means tasks may be disabled anyway.
+  try {
+    await seedProjectTaskDefaults(project.id);
+  } catch (err) {
+    console.error("Failed to seed project task defaults:", err);
   }
 
   await auditLog({

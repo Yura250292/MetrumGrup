@@ -70,6 +70,16 @@ export type ProjectAccessContext = {
   canManageMembers: boolean;
   canViewFinancials: boolean;
   canViewInternalFiles: boolean;
+  // Tasks (Phase 1+). CLIENT is ALWAYS false here — enforced below.
+  canViewTasks: boolean;
+  canCreateTasks: boolean;
+  canEditAnyTask: boolean;
+  canDeleteTasks: boolean;
+  canAssignTasks: boolean;
+  canManageTaskConfig: boolean; // statuses / labels / custom fields
+  canLogTime: boolean;
+  canViewTimeReports: boolean;
+  canViewCostReports: boolean;
 };
 
 export async function getProjectAccessContext(
@@ -103,6 +113,35 @@ export async function getProjectAccessContext(
   const canViewInternalFiles =
     isSuperAdmin || (effective?.canViewInternalFiles ?? false);
 
+  // Tasks are an INTERNAL tool — CLIENT never gets task-related access,
+  // regardless of overrides. This hard-block is checked BEFORE merging
+  // effective permissions.
+  const taskDenyClient = role === "CLIENT";
+  const canViewTasks =
+    !taskDenyClient && (isSuperAdmin || (effective?.canViewTasks ?? false));
+  const canCreateTasks =
+    !taskDenyClient && (isSuperAdmin || (effective?.canCreateTasks ?? false));
+  const canEditAnyTask =
+    !taskDenyClient && (isSuperAdmin || (effective?.canEditAnyTask ?? false));
+  const canDeleteTasks =
+    !taskDenyClient && (isSuperAdmin || (effective?.canDeleteTasks ?? false));
+  const canAssignTasks =
+    !taskDenyClient && (isSuperAdmin || (effective?.canAssignTasks ?? false));
+  const canManageTaskConfig =
+    !taskDenyClient &&
+    (isSuperAdmin ||
+      Boolean(
+        effective?.canManageStatuses &&
+          effective?.canManageLabels &&
+          effective?.canManageCustomFields,
+      ));
+  const canLogTime =
+    !taskDenyClient && (isSuperAdmin || (effective?.canLogTime ?? false));
+  const canViewTimeReports =
+    !taskDenyClient && (isSuperAdmin || (effective?.canViewTimeReports ?? false));
+  const canViewCostReports =
+    !taskDenyClient && (isSuperAdmin || (effective?.canViewCostReports ?? false));
+
   return {
     projectId,
     userId,
@@ -121,6 +160,15 @@ export async function getProjectAccessContext(
     canManageMembers,
     canViewFinancials,
     canViewInternalFiles,
+    canViewTasks,
+    canCreateTasks,
+    canEditAnyTask,
+    canDeleteTasks,
+    canAssignTasks,
+    canManageTaskConfig,
+    canLogTime,
+    canViewTimeReports,
+    canViewCostReports,
   };
 }
 
@@ -159,4 +207,55 @@ export async function canViewProjectFinancials(
 ): Promise<boolean> {
   const ctx = await getProjectAccessContext(projectId, userId);
   return Boolean(ctx?.canViewFinancials);
+}
+
+// ------- Tasks-specific helpers (Phase 1+) -------
+// Each returns false for CLIENT regardless of override.
+
+export async function canViewProjectTasks(
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const ctx = await getProjectAccessContext(projectId, userId);
+  return Boolean(ctx?.canViewTasks);
+}
+
+export async function canCreateProjectTasks(
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const ctx = await getProjectAccessContext(projectId, userId);
+  return Boolean(ctx?.canCreateTasks);
+}
+
+export async function canManageProjectTasks(
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const ctx = await getProjectAccessContext(projectId, userId);
+  return Boolean(ctx?.canEditAnyTask);
+}
+
+export async function canManageProjectTaskConfig(
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const ctx = await getProjectAccessContext(projectId, userId);
+  return Boolean(ctx?.canManageTaskConfig);
+}
+
+export async function canLogTimeOnProject(
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const ctx = await getProjectAccessContext(projectId, userId);
+  return Boolean(ctx?.canLogTime);
+}
+
+export async function canViewProjectTimeReports(
+  projectId: string,
+  userId: string,
+): Promise<boolean> {
+  const ctx = await getProjectAccessContext(projectId, userId);
+  return Boolean(ctx?.canViewTimeReports);
 }

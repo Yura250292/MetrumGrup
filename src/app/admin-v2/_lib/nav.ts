@@ -14,6 +14,7 @@ import {
   Activity,
   Building2,
   FileText,
+  ListTodo,
   type LucideIcon,
 } from "lucide-react";
 
@@ -38,6 +39,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Головне",
     items: [
       { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true },
+      { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo },
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
@@ -50,6 +52,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
+      { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
       { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
@@ -89,12 +92,14 @@ export const MOBILE_NAV: NavItem[] = [
 // Breadcrumb labels — keyed by full path
 export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2": "Дашборд",
+  "/admin-v2/me": "Мої задачі",
   "/admin-v2/projects": "Проєкти",
   "/admin-v2/projects/new": "Новий проєкт",
   "/admin-v2/projects/dashboard": "Огляд проєктів",
   "/admin-v2/clients": "Клієнти",
   "/admin-v2/estimates": "Кошториси",
   "/admin-v2/estimates/new": "Новий кошторис",
+  "/admin-v2/reference-estimates": "Довідкові кошториси",
   // Dynamic [id] segments — handled by header fallback
   "/admin-v2/materials": "Матеріали та ціни",
   "/admin-v2/resources/equipment": "Техніка",

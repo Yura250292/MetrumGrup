@@ -8,40 +8,62 @@ datasource db {
 }
 
 model User {
-  id                 String                 @id @default(cuid())
-  email              String                 @unique
+  id                 String                    @id @default(cuid())
+  email              String                    @unique
   password           String
   name               String
   phone              String?
   avatar             String?
-  role               Role                   @default(CLIENT)
-  isActive           Boolean                @default(true)
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
+  role               Role                      @default(CLIENT)
+  isActive           Boolean                   @default(true)
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
   auditLogs          AuditLog[]
-  createdEstimates   Estimate[]             @relation("EstimateCreator")
-  engineerReviews    Estimate[]             @relation("EngineerReviews")
-  financeReviews     Estimate[]             @relation("FinanceReviews")
-  financialTemplates FinancialTemplate[]    @relation("TemplateCreator")
+  createdEstimates   Estimate[]                @relation("EstimateCreator")
+  engineerReviews    Estimate[]                @relation("EngineerReviews")
+  financeReviews     Estimate[]                @relation("FinanceReviews")
+  financialTemplates FinancialTemplate[]       @relation("TemplateCreator")
   inventoryTx        InventoryTransaction[]
   newsArticles       NewsArticle[]
   notifications      Notification[]
   payments           Payment[]
   photoReports       PhotoReport[]
   projectFiles       ProjectFile[]
-  clientProjects     Project[]              @relation("ClientProjects")
-  managedProjects    Project[]              @relation("ManagerProjects")
+  clientProjects     Project[]                 @relation("ClientProjects")
+  managedProjects    Project[]                 @relation("ManagerProjects")
   aiRenderJobs       AiRenderJob[]
   estimateVersions   EstimateVersion[]
   approvalSteps      EstimateApprovalStep[]
   criticalChanges    EstimateCriticalChange[]
   chatMessages       ChatMessage[]
   chatParticipations ConversationParticipant[]
-  authoredComments   Comment[]              @relation("CommentAuthor")
+  authoredComments   Comment[]                 @relation("CommentAuthor")
   reactions          Reaction[]
-  refineHistory      EstimateRefineHistory[] @relation("RefineHistoryUser")
-  projectMemberships ProjectMember[]        @relation("ProjectMemberUser")
-  invitedMembers     ProjectMember[]        @relation("ProjectMemberInviter")
+  refineHistory      EstimateRefineHistory[]   @relation("RefineHistoryUser")
+  projectMemberships ProjectMember[]           @relation("ProjectMemberUser")
+  invitedMembers     ProjectMember[]           @relation("ProjectMemberInviter")
+  referenceEstimates ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
+  createdTasks       Task[]                    @relation("TaskCreator")
+  taskAssignments    TaskAssignee[]            @relation("TaskAssigneeUser")
+  taskAssignerOf     TaskAssignee[]            @relation("TaskAssigneeAssigner")
+  taskWatchers       TaskWatcher[]             @relation("TaskWatcherUser")
+  checklistItems     ChecklistItem[]           @relation("ChecklistAssignee")
+  checklistCompletions ChecklistItem[]         @relation("ChecklistCompletedBy")
+  savedViews         SavedView[]               @relation("SavedViewUser")
+  timeLogs           TimeLog[]                 @relation("TimeLogUser")
+  timeLogsApproved   TimeLog[]                 @relation("TimeLogApprover")
+  hourlyRates        UserHourlyRate[]          @relation("UserHourlyRateUser")
+  workSchedule       UserWorkSchedule?         @relation("UserWorkScheduleUser")
+  timeOff            TimeOff[]                 @relation("TimeOffUser")
+  timeOffApproved    TimeOff[]                 @relation("TimeOffApprover")
+  automations        Automation[]              @relation("AutomationCreator")
+  webhooks           Webhook[]                 @relation("WebhookCreator")
+  projectTemplates   ProjectTemplate[]         @relation("ProjectTemplateCreator")
+  taskTemplates      TaskTemplate[]            @relation("TaskTemplateCreator")
+  departmentsHead    Department[]              @relation("DepartmentHead")
+  teamsLead          Team[]                    @relation("TeamLead")
+  teamMemberships    TeamMember[]              @relation("TeamMemberUser")
+  integrations       UserIntegration[]         @relation("UserIntegrationUser")
 
   @@map("users")
 }
@@ -80,6 +102,16 @@ model Project {
   conversation      Conversation?
   members           ProjectMember[]
   aiRenderJobs      AiRenderJob[]
+  tasks             Task[]
+  taskStatuses      TaskStatus[]
+  taskLabels        TaskLabel[]
+  taskCustomFields  TaskCustomField[]
+  savedViews        SavedView[]       @relation("SavedViewProject")
+  userHourlyRates   UserHourlyRate[]  @relation("UserHourlyRateProject")
+  automations       Automation[]      @relation("AutomationProject")
+  webhooks          Webhook[]         @relation("WebhookProject")
+  taskTemplates     TaskTemplate[]    @relation("TaskTemplateProject")
+  emailInbox        EmailToTaskInbox? @relation("EmailInboxProject")
 
   @@map("projects")
 }
@@ -118,29 +150,30 @@ model ProjectStageRecord {
   updatedAt DateTime     @updatedAt
   projectId String
   project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
 
   @@unique([projectId, stage])
   @@map("project_stage_records")
 }
 
 model Estimate {
-  id                    String            @id @default(cuid())
-  number                String            @unique
+  id                    String                   @id @default(cuid())
+  number                String                   @unique
   title                 String
   description           String?
-  status                EstimateStatus    @default(DRAFT)
-  version               Int               @default(1)
-  totalMaterials        Decimal           @default(0) @db.Decimal(12, 2)
-  totalLabor            Decimal           @default(0) @db.Decimal(12, 2)
-  totalOverhead         Decimal           @default(0) @db.Decimal(12, 2)
-  totalAmount           Decimal           @default(0) @db.Decimal(12, 2)
-  discount              Decimal           @default(0) @db.Decimal(5, 2)
-  finalAmount           Decimal           @default(0) @db.Decimal(12, 2)
+  status                EstimateStatus           @default(DRAFT)
+  version               Int                      @default(1)
+  totalMaterials        Decimal                  @default(0) @db.Decimal(12, 2)
+  totalLabor            Decimal                  @default(0) @db.Decimal(12, 2)
+  totalOverhead         Decimal                  @default(0) @db.Decimal(12, 2)
+  totalAmount           Decimal                  @default(0) @db.Decimal(12, 2)
+  discount              Decimal                  @default(0) @db.Decimal(5, 2)
+  finalAmount           Decimal                  @default(0) @db.Decimal(12, 2)
   notes                 String?
   sentAt                DateTime?
   approvedAt            DateTime?
-  createdAt             DateTime          @default(now())
-  updatedAt             DateTime          @updatedAt
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
   projectId             String
   createdById           String
   engineerNotes         String?
@@ -149,21 +182,21 @@ model Estimate {
   financeNotes          String?
   financeReviewedAt     DateTime?
   financeReviewedById   String?
-  finalClientPrice      Decimal           @default(0) @db.Decimal(12, 2)
-  profitAmount          Decimal           @default(0) @db.Decimal(12, 2)
-  profitMarginLabor     Decimal?          @db.Decimal(5, 2)
-  profitMarginMaterials Decimal?          @db.Decimal(5, 2)
-  profitMarginOverall   Decimal           @default(20) @db.Decimal(5, 2)
-  taxAmount             Decimal           @default(0) @db.Decimal(12, 2)
-  taxRate               Decimal           @default(0) @db.Decimal(5, 2)
+  finalClientPrice      Decimal                  @default(0) @db.Decimal(12, 2)
+  profitAmount          Decimal                  @default(0) @db.Decimal(12, 2)
+  profitMarginLabor     Decimal?                 @db.Decimal(5, 2)
+  profitMarginMaterials Decimal?                 @db.Decimal(5, 2)
+  profitMarginOverall   Decimal                  @default(20) @db.Decimal(5, 2)
+  taxAmount             Decimal                  @default(0) @db.Decimal(12, 2)
+  taxRate               Decimal                  @default(0) @db.Decimal(5, 2)
   taxationType          TaxationType?
-  logisticsCost         Decimal           @default(0) @db.Decimal(12, 2)
-  pdvAmount             Decimal           @default(0) @db.Decimal(12, 2)
-  esvAmount             Decimal           @default(0) @db.Decimal(12, 2)
-  militaryTaxAmount     Decimal           @default(0) @db.Decimal(12, 2)
-  profitTaxAmount       Decimal           @default(0) @db.Decimal(12, 2)
-  unifiedTaxAmount      Decimal           @default(0) @db.Decimal(12, 2)
-  pdfoAmount            Decimal           @default(0) @db.Decimal(12, 2)
+  logisticsCost         Decimal                  @default(0) @db.Decimal(12, 2)
+  pdvAmount             Decimal                  @default(0) @db.Decimal(12, 2)
+  esvAmount             Decimal                  @default(0) @db.Decimal(12, 2)
+  militaryTaxAmount     Decimal                  @default(0) @db.Decimal(12, 2)
+  profitTaxAmount       Decimal                  @default(0) @db.Decimal(12, 2)
+  unifiedTaxAmount      Decimal                  @default(0) @db.Decimal(12, 2)
+  pdfoAmount            Decimal                  @default(0) @db.Decimal(12, 2)
   taxCalculationDetails Json?
   taxCalculatedAt       DateTime?
   items                 EstimateItem[]
@@ -171,26 +204,26 @@ model Estimate {
   versions              EstimateVersion[]
   approvalSteps         EstimateApprovalStep[]
   criticalChanges       EstimateCriticalChange[]
-  verificationStatus    String?           // "passed" | "warnings" | "critical" | "not_verified"
-  verificationResults   Json?             // повні результати у форматі JSON
-  verificationScore     Decimal?          @db.Decimal(5, 2) // 0-100
+  verificationStatus    String? // "passed" | "warnings" | "critical" | "not_verified"
+  verificationResults   Json? // повні результати у форматі JSON
+  verificationScore     Decimal?                 @db.Decimal(5, 2) // 0-100
   verifiedAt            DateTime?
-  verifiedBy            String?           // "openai" | "anthropic"
-  analysisSummary       String?           @db.Text // Звіт інженера про аналіз проекту
-  prozorroChecked       Boolean           @default(false) // Чи була перевірка на Prozorro
-  prozorroCheckedAt     DateTime?         // Коли останній раз перевіряли Prozorro
-  prozorroAnalysis      String?           @db.Text // Аналіз конкурентних тендерів Prozorro
-  structuredReport      Json?             // StructuredEngineerReport v2 (JSON)
-  bidIntelligence       Json?             // BidIntelligenceResult (JSON)
-  createdBy             User              @relation("EstimateCreator", fields: [createdById], references: [id])
-  engineerReviewedBy    User?             @relation("EngineerReviews", fields: [engineerReviewedById], references: [id])
-  financeReviewedBy     User?             @relation("FinanceReviews", fields: [financeReviewedById], references: [id])
-  project               Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  verifiedBy            String? // "openai" | "anthropic"
+  analysisSummary       String?                  @db.Text // Звіт інженера про аналіз проекту
+  prozorroChecked       Boolean                  @default(false) // Чи була перевірка на Prozorro
+  prozorroCheckedAt     DateTime? // Коли останній раз перевіряли Prozorro
+  prozorroAnalysis      String?                  @db.Text // Аналіз конкурентних тендерів Prozorro
+  structuredReport      Json? // StructuredEngineerReport v2 (JSON)
+  bidIntelligence       Json? // BidIntelligenceResult (JSON)
+  createdBy             User                     @relation("EstimateCreator", fields: [createdById], references: [id])
+  engineerReviewedBy    User?                    @relation("EngineerReviews", fields: [engineerReviewedById], references: [id])
+  financeReviewedBy     User?                    @relation("FinanceReviews", fields: [financeReviewedById], references: [id])
+  project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   similarTenders        EstimateTenderMatch[]
   conversation          Conversation?
   // Refine history (Stage 6.2)
-  refineHistory         EstimateRefineHistory[] @relation("RefineHistoryEstimate")
-  refinedFromHistory    EstimateRefineHistory[] @relation("RefineHistoryPrevious")
+  refineHistory         EstimateRefineHistory[]  @relation("RefineHistoryEstimate")
+  refinedFromHistory    EstimateRefineHistory[]  @relation("RefineHistoryPrevious")
 
   @@map("estimates")
 }
@@ -199,24 +232,24 @@ model Estimate {
 /// Each refine produces a new Estimate version + a row here that captures
 /// the diff against the previous version.
 model EstimateRefineHistory {
-  id                  String   @id @default(cuid())
-  estimateId          String
-  previousEstimateId  String?
-  refinedById         String?
-  changeReason        String?
-  impactedCategories  Json?
-  addedCount          Int      @default(0)
-  removedCount        Int      @default(0)
-  changedCount        Int      @default(0)
-  unchangedCount      Int      @default(0)
-  deltaAmount         Decimal  @default(0) @db.Decimal(14, 2)
-  changedItems        Json?
-  metadata            Json?
-  createdAt           DateTime @default(now())
+  id                 String   @id @default(cuid())
+  estimateId         String
+  previousEstimateId String?
+  refinedById        String?
+  changeReason       String?
+  impactedCategories Json?
+  addedCount         Int      @default(0)
+  removedCount       Int      @default(0)
+  changedCount       Int      @default(0)
+  unchangedCount     Int      @default(0)
+  deltaAmount        Decimal  @default(0) @db.Decimal(14, 2)
+  changedItems       Json?
+  metadata           Json?
+  createdAt          DateTime @default(now())
 
-  estimate         Estimate @relation("RefineHistoryEstimate", fields: [estimateId], references: [id], onDelete: Cascade)
+  estimate         Estimate  @relation("RefineHistoryEstimate", fields: [estimateId], references: [id], onDelete: Cascade)
   previousEstimate Estimate? @relation("RefineHistoryPrevious", fields: [previousEstimateId], references: [id], onDelete: SetNull)
-  refinedBy        User?    @relation("RefineHistoryUser", fields: [refinedById], references: [id], onDelete: SetNull)
+  refinedBy        User?     @relation("RefineHistoryUser", fields: [refinedById], references: [id], onDelete: SetNull)
 
   @@index([estimateId])
   @@index([previousEstimateId])
@@ -228,7 +261,7 @@ model EstimateSection {
   id          String         @id @default(cuid())
   title       String
   sortOrder   Int            @default(0)
-  totalAmount Decimal        @default(0) @db.Decimal(12, 2) @map("total_amount")
+  totalAmount Decimal        @default(0) @map("total_amount") @db.Decimal(12, 2)
   estimateId  String
   items       EstimateItem[]
   estimate    Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)
@@ -373,23 +406,23 @@ model PhotoReportImage {
 }
 
 model ProjectFile {
-  id               String          @id @default(cuid())
+  id               String         @id @default(cuid())
   type             FileType
-  category         FileCategory    @default(OTHER)
-  visibility       FileVisibility  @default(TEAM)
+  category         FileCategory   @default(OTHER)
+  visibility       FileVisibility @default(TEAM)
   name             String
   url              String
   r2Key            String?
-  textContent      String?         @db.Text
+  textContent      String?        @db.Text
   size             Int
   mimeType         String
   linkedEntityType String?
   linkedEntityId   String?
-  createdAt        DateTime        @default(now())
+  createdAt        DateTime       @default(now())
   projectId        String
   uploadedById     String
-  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  uploadedBy       User            @relation(fields: [uploadedById], references: [id])
+  project          Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy       User           @relation(fields: [uploadedById], references: [id])
 
   @@index([projectId, createdAt])
   @@index([projectId, visibility])
@@ -403,6 +436,7 @@ enum FileCategory {
   NOTE
   PHOTO_ATTACHMENT
   AI_VISUALIZATION
+  TASK_ATTACHMENT
   OTHER
 }
 
@@ -636,7 +670,7 @@ model TaxRecord {
 }
 
 model EstimateVersion {
-  id                String                 @id @default(cuid())
+  id                String                   @id @default(cuid())
   estimateId        String
   versionNumber     Int
   eventType         String
@@ -644,10 +678,10 @@ model EstimateVersion {
   financialSnapshot Json
   snapshotHash      String
   changeDescription String?
-  createdAt         DateTime               @default(now())
+  createdAt         DateTime                 @default(now())
   createdById       String
-  estimate          Estimate               @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  createdBy         User                   @relation(fields: [createdById], references: [id])
+  estimate          Estimate                 @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  createdBy         User                     @relation(fields: [createdById], references: [id])
   approvalSteps     EstimateApprovalStep[]
   criticalChanges   EstimateCriticalChange[]
 
@@ -711,33 +745,33 @@ model DocumentSequence {
 }
 
 model ProzorroTender {
-  id                  String   @id
-  title               String
-  description         String?  @db.Text
-  status              String
-  valueAmount         Decimal  @db.Decimal(12, 2)
-  valueCurrency       String   @default("UAH")
-  vatIncluded         Boolean  @default(true)
+  id            String  @id
+  title         String
+  description   String? @db.Text
+  status        String
+  valueAmount   Decimal @db.Decimal(12, 2)
+  valueCurrency String  @default("UAH")
+  vatIncluded   Boolean @default(true)
 
   procuringEntityName String
   procuringEntityCode String
 
-  cpvCode             String
-  cpvDescription      String?
+  cpvCode        String
+  cpvDescription String?
 
-  datePublished       DateTime
-  dateModified        DateTime
+  datePublished DateTime
+  dateModified  DateTime
 
-  awardedAmount       Decimal? @db.Decimal(12, 2)
-  awardedDate         DateTime?
+  awardedAmount Decimal?  @db.Decimal(12, 2)
+  awardedDate   DateTime?
 
-  rawData             Json?
+  rawData Json?
 
-  cachedAt            DateTime @default(now())
-  lastAccessedAt      DateTime @default(now())
+  cachedAt       DateTime @default(now())
+  lastAccessedAt DateTime @default(now())
 
-  similarEstimates    EstimateTenderMatch[]
-  parsedEstimates     ProzorroEstimateData[]  // Розпарсені кошториси
+  similarEstimates EstimateTenderMatch[]
+  parsedEstimates  ProzorroEstimateData[] // Розпарсені кошториси
 
   @@index([cpvCode])
   @@index([valueAmount])
@@ -752,11 +786,11 @@ model EstimateTenderMatch {
   tenderId        String
   similarityScore Decimal  @db.Decimal(5, 2)
   matchReasons    Json?
-  budgetBand      String?  // 'core' | 'near' | 'context'
+  budgetBand      String? // 'core' | 'near' | 'context'
   matchedAt       DateTime @default(now())
 
-  estimate        Estimate        @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  tender          ProzorroTender  @relation(fields: [tenderId], references: [id])
+  estimate Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  tender   ProzorroTender @relation(fields: [tenderId], references: [id])
 
   @@unique([estimateId, tenderId])
   @@index([estimateId])
@@ -771,20 +805,20 @@ model ProzorroEstimateData {
   awardedAmount Decimal  @db.Decimal(12, 2)
   datePublished DateTime
 
-  documentId    String   // ID документа з Prozorro
-  documentUrl   String   // URL оригінального файлу
-  documentTitle String   // Назва файлу
-  documentFormat String  // "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  documentId     String // ID документа з Prozorro
+  documentUrl    String // URL оригінального файлу
+  documentTitle  String // Назва файлу
+  documentFormat String // "application/pdf", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-  parsedAt      DateTime @default(now())
-  parseStatus   String   @default("success") // "success", "partial", "failed"
-  parseErrors   Json?    // Помилки парсингу якщо були
+  parsedAt    DateTime @default(now())
+  parseStatus String   @default("success") // "success", "partial", "failed"
+  parseErrors Json? // Помилки парсингу якщо були
 
-  totalItems    Int      @default(0)
-  totalAmount   Decimal? @db.Decimal(12, 2)
+  totalItems  Int      @default(0)
+  totalAmount Decimal? @db.Decimal(12, 2)
 
-  items         ProzorroEstimateItem[]
-  tender        ProzorroTender         @relation(fields: [tenderId], references: [id])
+  items  ProzorroEstimateItem[]
+  tender ProzorroTender         @relation(fields: [tenderId], references: [id])
 
   @@index([tenderId])
   @@index([datePublished])
@@ -794,21 +828,21 @@ model ProzorroEstimateData {
 
 // 📋 Окремі позиції з розпарсених кошторисів
 model ProzorroEstimateItem {
-  id          String   @id @default(cuid())
-  estimateId  String
+  id         String @id @default(cuid())
+  estimateId String
 
-  rowNumber   Int?     // Номер рядка в оригінальному документі
-  category    String?  // Розділ/секція (наприклад: "Земляні роботи", "Фундамент")
-  code        String?  // Код позиції (якщо є в кошторисі)
-  description String   @db.Text // Опис позиції
-  unit        String   // Одиниця виміру (м², шт, м³, кг)
-  quantity    Decimal  @db.Decimal(12, 4)
-  unitPrice   Decimal  @db.Decimal(12, 2)
-  totalPrice  Decimal  @db.Decimal(12, 2)
+  rowNumber   Int? // Номер рядка в оригінальному документі
+  category    String? // Розділ/секція (наприклад: "Земляні роботи", "Фундамент")
+  code        String? // Код позиції (якщо є в кошторисі)
+  description String  @db.Text // Опис позиції
+  unit        String // Одиниця виміру (м², шт, м³, кг)
+  quantity    Decimal @db.Decimal(12, 4)
+  unitPrice   Decimal @db.Decimal(12, 2)
+  totalPrice  Decimal @db.Decimal(12, 2)
 
-  notes       String?  @db.Text // Додаткові примітки
+  notes String? @db.Text // Додаткові примітки
 
-  estimate    ProzorroEstimateData @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  estimate ProzorroEstimateData @relation(fields: [estimateId], references: [id], onDelete: Cascade)
 
   @@index([estimateId])
   @@index([category])
@@ -903,6 +937,7 @@ model Reaction {
 enum CommentEntityType {
   ESTIMATE
   PROJECT
+  TASK
 }
 
 enum ConversationType {
@@ -1021,51 +1056,51 @@ enum AiRenderStatus {
 }
 
 model AiRenderJob {
-  id              String         @id @default(cuid())
-  projectId       String
-  createdById     String
+  id          String @id @default(cuid())
+  projectId   String
+  createdById String
 
-  mode            AiRenderMode
-  status          AiRenderStatus @default(QUEUED)
+  mode   AiRenderMode
+  status AiRenderStatus @default(QUEUED)
 
   // Input (nullable — TEXT_TO_RENDER mode works from prompt only)
-  inputFileId     String?
-  inputR2Key      String?
-  inputUrl        String?
+  inputFileId String?
+  inputR2Key  String?
+  inputUrl    String?
 
   // AI parameters
-  stylePreset     String?
-  prompt          String?        @db.Text
-  negativePrompt  String?        @db.Text
-  strength        Decimal        @default(0.65) @db.Decimal(3, 2)
-  controlnetType  String?
-  seed            Int?
-  width           Int            @default(1024)
-  height          Int            @default(1024)
+  stylePreset    String?
+  prompt         String? @db.Text
+  negativePrompt String? @db.Text
+  strength       Decimal @default(0.65) @db.Decimal(3, 2)
+  controlnetType String?
+  seed           Int?
+  width          Int     @default(1024)
+  height         Int     @default(1024)
 
   // Output
-  outputR2Key     String?
-  outputUrl       String?
-  outputFileId    String?
-  thumbnailR2Key  String?
-  thumbnailUrl    String?
+  outputR2Key    String?
+  outputUrl      String?
+  outputFileId   String?
+  thumbnailR2Key String?
+  thumbnailUrl   String?
 
   // Provider tracking
-  provider        String?
-  externalJobId   String?
+  provider      String?
+  externalJobId String?
 
   // Timing & errors
-  startedAt       DateTime?
-  completedAt     DateTime?
-  errorMessage    String?
-  durationMs      Int?
-  creditsUsed     Int            @default(1)
+  startedAt    DateTime?
+  completedAt  DateTime?
+  errorMessage String?
+  durationMs   Int?
+  creditsUsed  Int       @default(1)
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy       User           @relation(fields: [createdById], references: [id])
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User    @relation(fields: [createdById], references: [id])
 
   @@index([projectId, createdAt])
   @@index([createdById])
@@ -1074,28 +1109,28 @@ model AiRenderJob {
 }
 
 model AiStylePreset {
-  id              String   @id @default(cuid())
-  name            String   @unique
-  label           String
-  description     String?
-  thumbnailUrl    String?
-  prompt          String   @db.Text
-  negativePrompt  String?  @db.Text
-  category        String   @default("exterior")
-  sortOrder       Int      @default(0)
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  name           String   @unique
+  label          String
+  description    String?
+  thumbnailUrl   String?
+  prompt         String   @db.Text
+  negativePrompt String?  @db.Text
+  category       String   @default("exterior")
+  sortOrder      Int      @default(0)
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
 
   @@index([category, isActive])
   @@map("ai_style_presets")
 }
 
 model AiCreditBalance {
-  id              String    @id @default(cuid())
-  totalCredits    Int       @default(100)
-  usedCredits     Int       @default(0)
-  resetAt         DateTime?
-  updatedAt       DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  totalCredits Int       @default(100)
+  usedCredits  Int       @default(0)
+  resetAt      DateTime?
+  updatedAt    DateTime  @updatedAt
 
   @@map("ai_credit_balances")
 }
@@ -1107,4 +1142,583 @@ enum FileType {
   COMPLETION_ACT
   ESTIMATE
   AI_RENDER
+}
+
+model ReferenceEstimate {
+  id           String                     @id @default(cuid())
+  title        String
+  description  String?
+  totalAreaM2  Decimal                    @db.Decimal(10, 2)
+  grandTotal   Decimal                    @db.Decimal(12, 2)
+  sourceFormat String?
+  itemCount    Int                        @default(0)
+  isActive     Boolean                    @default(true)
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+  createdById  String
+  createdBy    User                       @relation("ReferenceEstimateCreator", fields: [createdById], references: [id])
+  sections     ReferenceEstimateSection[]
+
+  @@index([isActive, createdAt(sort: Desc)])
+  @@map("reference_estimates")
+}
+
+model ReferenceEstimateSection {
+  id           String                  @id @default(cuid())
+  referenceId  String
+  title        String
+  sortOrder    Int                     @default(0)
+  sectionTotal Decimal                 @default(0) @db.Decimal(12, 2)
+  items        ReferenceEstimateItem[]
+  reference    ReferenceEstimate       @relation(fields: [referenceId], references: [id], onDelete: Cascade)
+
+  @@index([referenceId])
+  @@map("reference_estimate_sections")
+}
+
+model ReferenceEstimateItem {
+  id          String                   @id @default(cuid())
+  sectionId   String
+  description String
+  unit        String
+  quantity    Decimal                  @db.Decimal(10, 3)
+  unitPrice   Decimal                  @db.Decimal(10, 2)
+  totalCost   Decimal                  @db.Decimal(12, 2)
+  kind        String
+  sortOrder   Int                      @default(0)
+  section     ReferenceEstimateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@index([sectionId])
+  @@map("reference_estimate_items")
+}
+
+// ============================================================
+// Task Layer (Worksection-style PM) — Phase 1: Task Core
+// All models are additive — no existing tables modified.
+// ============================================================
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum TaskCustomFieldType {
+  TEXT
+  NUMBER
+  DATE
+  SELECT
+  MULTI_SELECT
+  URL
+  USER
+}
+
+model Task {
+  id                  String    @id @default(cuid())
+  projectId           String
+  stageId             String
+  parentTaskId        String?
+  statusId            String
+  title               String
+  description         String?   @db.Text
+  priority            TaskPriority @default(NORMAL)
+  startDate           DateTime?
+  dueDate             DateTime?
+  completedAt         DateTime?
+  estimatedHours      Decimal?  @db.Decimal(8, 2)
+  actualHours         Decimal   @default(0) @db.Decimal(10, 2)
+  customFields        Json?
+  position            Int       @default(0)
+  isRecurring         Boolean   @default(false)
+  recurrenceRule      String?
+  recurrenceParentId  String?
+  isArchived          Boolean   @default(false)
+  isPrivate           Boolean   @default(false)
+  createdById         String
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage               ProjectStageRecord   @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  parentTask          Task?                @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks            Task[]               @relation("TaskHierarchy")
+  status              TaskStatus           @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  createdBy           User                 @relation("TaskCreator", fields: [createdById], references: [id])
+  recurrenceParent    Task?                @relation("TaskRecurrence", fields: [recurrenceParentId], references: [id])
+  recurrenceChildren  Task[]               @relation("TaskRecurrence")
+  assignees           TaskAssignee[]
+  watchers            TaskWatcher[]
+  labels              TaskLabelAssignment[]
+  checklist           ChecklistItem[]
+  outgoingDeps        TaskDependency[]     @relation("TaskDepPredecessor")
+  incomingDeps        TaskDependency[]     @relation("TaskDepSuccessor")
+  timeLogs            TimeLog[]
+
+  @@index([projectId, stageId, isArchived])
+  @@index([projectId, statusId])
+  @@index([parentTaskId])
+  @@index([dueDate])
+  @@index([createdById])
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  id            String   @id @default(cuid())
+  taskId        String
+  userId        String
+  assignedAt    DateTime @default(now())
+  assignedById  String?
+
+  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user          User     @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy    User?    @relation("TaskAssigneeAssigner", fields: [assignedById], references: [id])
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@map("task_assignees")
+}
+
+model TaskWatcher {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation("TaskWatcherUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
+  @@map("task_watchers")
+}
+
+model TaskStatus {
+  id         String   @id @default(cuid())
+  projectId  String
+  name       String
+  color      String   @default("#94a3b8")
+  position   Int      @default(0)
+  isDone     Boolean  @default(false)
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks      Task[]
+
+  @@unique([projectId, name])
+  @@index([projectId, position])
+  @@map("task_statuses")
+}
+
+model TaskLabel {
+  id         String   @id @default(cuid())
+  projectId  String
+  name       String
+  color      String   @default("#64748b")
+  createdAt  DateTime @default(now())
+
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignments TaskLabelAssignment[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("task_labels")
+}
+
+model TaskLabelAssignment {
+  id        String   @id @default(cuid())
+  taskId    String
+  labelId   String
+
+  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label     TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, labelId])
+  @@index([labelId])
+  @@map("task_label_assignments")
+}
+
+model ChecklistItem {
+  id             String    @id @default(cuid())
+  taskId         String
+  content        String
+  isDone         Boolean   @default(false)
+  position       Int       @default(0)
+  dueDate        DateTime?
+  assigneeId     String?
+  completedAt    DateTime?
+  completedById  String?
+  createdAt      DateTime  @default(now())
+
+  task           Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee       User?  @relation("ChecklistAssignee", fields: [assigneeId], references: [id])
+  completedBy    User?  @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
+
+  @@index([taskId, position])
+  @@map("checklist_items")
+}
+
+model TaskCustomField {
+  id          String              @id @default(cuid())
+  projectId   String
+  name        String
+  type        TaskCustomFieldType
+  options     Json?
+  position    Int                 @default(0)
+  isRequired  Boolean             @default(false)
+  createdAt   DateTime            @default(now())
+
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, name])
+  @@index([projectId, position])
+  @@map("task_custom_fields")
+}
+
+// Placeholder for Phase 4 — declared empty to avoid schema churn when we
+// enable dependencies. Tasks.outgoingDeps / incomingDeps relations point here.
+model TaskDependency {
+  id             String              @id @default(cuid())
+  predecessorId  String
+  successorId    String
+  type           TaskDependencyType  @default(FS)
+  lagDays        Int                 @default(0)
+  createdAt      DateTime            @default(now())
+
+  predecessor    Task @relation("TaskDepPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor      Task @relation("TaskDepSuccessor",   fields: [successorId],   references: [id], onDelete: Cascade)
+
+  @@unique([predecessorId, successorId])
+  @@index([successorId])
+  @@map("task_dependencies")
+}
+
+enum TaskDependencyType {
+  FS
+  SS
+  FF
+  SF
+}
+
+enum TaskViewType {
+  LIST
+  KANBAN
+  GANTT
+  CALENDAR
+  PEOPLE
+}
+
+// ============================================================
+// Time Tracking (Phase 3) — timer, logs, rates, capacity
+// All additive. Independent of existing CrewAssignment / LaborRate
+// which remain for estimates.
+// ============================================================
+
+enum TimeOffType {
+  VACATION
+  SICK
+  PERSONAL
+  HOLIDAY
+}
+
+model TimeLog {
+  id                   String    @id @default(cuid())
+  taskId               String
+  userId               String
+  startedAt            DateTime
+  endedAt              DateTime?
+  minutes              Int?
+  description          String?
+  billable             Boolean   @default(true)
+  hourlyRateSnapshot   Decimal?  @db.Decimal(10, 2)
+  costSnapshot         Decimal?  @db.Decimal(12, 2)
+  approvedAt           DateTime?
+  approvedById         String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User  @relation("TimeLogUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy  User? @relation("TimeLogApprover", fields: [approvedById], references: [id])
+
+  @@index([userId, startedAt])
+  @@index([taskId, startedAt])
+  @@index([billable, startedAt])
+  @@map("time_logs")
+}
+
+model UserHourlyRate {
+  id             String    @id @default(cuid())
+  userId         String
+  projectId      String?
+  rate           Decimal   @db.Decimal(10, 2)
+  currency       String    @default("UAH")
+  effectiveFrom  DateTime
+  effectiveTo    DateTime?
+  createdAt      DateTime  @default(now())
+
+  user     User     @relation("UserHourlyRateUser", fields: [userId], references: [id], onDelete: Cascade)
+  project  Project? @relation("UserHourlyRateProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId, effectiveFrom])
+  @@index([projectId, userId])
+  @@map("user_hourly_rates")
+}
+
+model UserWorkSchedule {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  weeklyHoursJson    Json
+  timezone           String   @default("Europe/Kyiv")
+  workingHoursStart  String   @default("09:00")
+  workingHoursEnd    String   @default("18:00")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user User @relation("UserWorkScheduleUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_work_schedules")
+}
+
+model TimeOff {
+  id            String      @id @default(cuid())
+  userId        String
+  startDate     DateTime
+  endDate       DateTime
+  type          TimeOffType
+  notes         String?
+  approvedAt    DateTime?
+  approvedById  String?
+  createdAt     DateTime    @default(now())
+
+  user        User  @relation("TimeOffUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy  User? @relation("TimeOffApprover", fields: [approvedById], references: [id])
+
+  @@index([userId, startDate])
+  @@map("time_off")
+}
+
+// ============================================================
+// Phase 5 — Automations, Recurring, Templates, Webhooks, Email
+// ============================================================
+
+enum AutomationTrigger {
+  TASK_CREATED
+  TASK_STATUS_CHANGED
+  TASK_DUE_APPROACHING
+  TIME_LOGGED
+  RECURRING_CRON
+  WEBHOOK
+  EMAIL_RECEIVED
+}
+
+model Automation {
+  id             String             @id @default(cuid())
+  projectId      String?
+  name           String
+  isActive       Boolean            @default(true)
+  trigger        AutomationTrigger
+  triggerConfig  Json?
+  conditionsJson Json?
+  actionsJson    Json
+  lastRunAt      DateTime?
+  runCount       Int                @default(0)
+  createdById    String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  project   Project?           @relation("AutomationProject", fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User               @relation("AutomationCreator", fields: [createdById], references: [id])
+  runs      AutomationRunLog[]
+
+  @@index([projectId, isActive])
+  @@index([trigger, isActive])
+  @@map("automations")
+}
+
+model AutomationRunLog {
+  id            String   @id @default(cuid())
+  automationId  String
+  triggeredAt   DateTime @default(now())
+  context       Json?
+  result        String
+  errorMessage  String?
+  durationMs    Int
+
+  automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId, triggeredAt])
+  @@map("automation_run_logs")
+}
+
+model Webhook {
+  id            String              @id @default(cuid())
+  projectId     String?
+  url           String
+  events        String[]
+  secret        String
+  isActive      Boolean             @default(true)
+  lastDeliveryAt DateTime?
+  failureCount  Int                 @default(0)
+  createdById   String
+  createdAt     DateTime            @default(now())
+
+  project   Project?           @relation("WebhookProject", fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User               @relation("WebhookCreator", fields: [createdById], references: [id])
+  deliveries WebhookDelivery[]
+
+  @@index([projectId, isActive])
+  @@map("webhooks")
+}
+
+model WebhookDelivery {
+  id            String    @id @default(cuid())
+  webhookId     String
+  event         String
+  payloadHash   String
+  statusCode    Int?
+  responseBody  String?   @db.Text
+  attemptCount  Int       @default(0)
+  nextAttemptAt DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@index([nextAttemptAt])
+  @@map("webhook_deliveries")
+}
+
+model ProjectTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  dataJson    Json
+  isGlobal    Boolean  @default(false)
+  createdById String
+  createdAt   DateTime @default(now())
+
+  createdBy User @relation("ProjectTemplateCreator", fields: [createdById], references: [id])
+
+  @@map("project_templates")
+}
+
+model TaskTemplate {
+  id          String   @id @default(cuid())
+  projectId   String?
+  name        String
+  description String?
+  dataJson    Json
+  createdById String
+  createdAt   DateTime @default(now())
+
+  project   Project? @relation("TaskTemplateProject", fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("TaskTemplateCreator", fields: [createdById], references: [id])
+
+  @@index([projectId])
+  @@map("task_templates")
+}
+
+model EmailToTaskInbox {
+  id               String   @id @default(cuid())
+  projectId        String   @unique
+  inboxAddress     String   @unique
+  defaultStatusId  String?
+  defaultAssigneeId String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+
+  project Project @relation("EmailInboxProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("email_to_task_inboxes")
+}
+
+// ============================================================
+// Phase 6 — Teams, Departments, Integrations
+// ============================================================
+
+model Department {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  headUserId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  head  User?  @relation("DepartmentHead", fields: [headUserId], references: [id])
+  teams Team[]
+
+  @@map("departments")
+}
+
+model Team {
+  id           String   @id @default(cuid())
+  name         String
+  departmentId String?
+  leadUserId   String?
+  color        String   @default("#3b82f6")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  department Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  lead       User?        @relation("TeamLead", fields: [leadUserId], references: [id])
+  members    TeamMember[]
+
+  @@unique([departmentId, name])
+  @@map("teams")
+}
+
+model TeamMember {
+  id       String   @id @default(cuid())
+  teamId   String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation("TeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([userId])
+  @@map("team_members")
+}
+
+model UserIntegration {
+  id            String   @id @default(cuid())
+  userId        String
+  provider      String   // "slack" | "telegram" | "google_calendar"
+  externalId    String
+  accessToken   String   @db.Text
+  refreshToken  String?  @db.Text
+  scopes        String?
+  connectedAt   DateTime @default(now())
+
+  user User @relation("UserIntegrationUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, provider])
+  @@index([provider])
+  @@map("user_integrations")
+}
+
+model SavedView {
+  id          String       @id @default(cuid())
+  userId      String?
+  projectId   String?
+  name        String
+  viewType    TaskViewType
+  filtersJson Json?
+  groupBy     String?
+  sortBy      String?
+  columnsJson Json?
+  isShared    Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  user        User?    @relation("SavedViewUser", fields: [userId], references: [id], onDelete: Cascade)
+  project     Project? @relation("SavedViewProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, isShared])
+  @@index([userId, projectId])
+  @@map("saved_views")
 }

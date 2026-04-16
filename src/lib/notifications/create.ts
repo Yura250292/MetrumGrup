@@ -11,7 +11,12 @@ export type ProjectNotificationType =
   | "PROJECT_ESTIMATE_CREATED"
   | "PROJECT_ESTIMATE_APPROVED"
   | "PROJECT_MEMBER_ADDED"
-  | "PROJECT_COMMENT";
+  | "PROJECT_COMMENT"
+  | "TASK_ASSIGNED"
+  | "TASK_COMMENTED"
+  | "TASK_STATUS_CHANGED"
+  | "TASK_DUE_SOON"
+  | "TASK_CREATED";
 
 /**
  * Parse <@userId> tags from a body of text and return unique userIds
@@ -83,6 +88,43 @@ export async function createMentionNotifications(opts: {
  * Best-effort: callers should wrap in try/catch so a notification
  * failure does not break the parent write operation.
  */
+/**
+ * Create Notification rows for a specific set of user IDs (skipping the actor).
+ * Useful for task assignments, mentions, due-date reminders — any case where
+ * we want targeted delivery rather than broadcasting to all project members.
+ */
+export async function notifyUsers(opts: {
+  userIds: string[];
+  actorId: string;
+  type: ProjectNotificationType;
+  title: string;
+  body?: string;
+  relatedEntity: string;
+  relatedId: string;
+}): Promise<number> {
+  const targets = Array.from(
+    new Set(opts.userIds.filter((id) => id && id !== opts.actorId)),
+  );
+  if (targets.length === 0) return 0;
+
+  const preview = opts.body
+    ? opts.body.replace(MENTION_REGEX, "@…").trim().slice(0, 160)
+    : null;
+
+  await prisma.notification.createMany({
+    data: targets.map((userId) => ({
+      userId,
+      type: opts.type,
+      title: opts.title,
+      body: preview,
+      relatedEntity: opts.relatedEntity,
+      relatedId: opts.relatedId,
+    })),
+  });
+
+  return targets.length;
+}
+
 export async function notifyProjectMembers(opts: {
   projectId: string;
   actorId: string;

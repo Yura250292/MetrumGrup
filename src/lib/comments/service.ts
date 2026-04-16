@@ -12,6 +12,7 @@ import { canParticipateInProject, canViewProject } from "@/lib/projects/access";
  * permission checks through the canonical project access layer.
  *  - PROJECT comments: entityId IS the project id
  *  - ESTIMATE comments: lookup estimate.projectId
+ *  - TASK comments: lookup task.projectId
  */
 async function resolveCommentProjectId(
   entityType: CommentEntityType,
@@ -27,6 +28,13 @@ async function resolveCommentProjectId(
       select: { projectId: true },
     });
     return e?.projectId ?? null;
+  }
+  if (entityType === "TASK") {
+    const t = await prisma.task.findUnique({
+      where: { id: entityId },
+      select: { projectId: true },
+    });
+    return t?.projectId ?? null;
   }
   return null;
 }
@@ -133,6 +141,12 @@ export async function postComment(
       select: { id: true },
     });
     if (!exists) throw new Error("Проєкт не знайдено");
+  } else if (entityType === "TASK") {
+    const exists = await prisma.task.findUnique({
+      where: { id: entityId },
+      select: { id: true },
+    });
+    if (!exists) throw new Error("Задачу не знайдено");
   }
 
   // Centralized access check: posting requires active project membership
@@ -163,7 +177,9 @@ export async function postComment(
     title:
       entityType === "PROJECT"
         ? "Вас згадано в обговоренні проєкту"
-        : "Вас згадано в обговоренні кошторису",
+        : entityType === "ESTIMATE"
+          ? "Вас згадано в обговоренні кошторису"
+          : "Вас згадано у задачі",
     relatedEntity: entityType,
     relatedId: entityId,
   });
@@ -178,17 +194,27 @@ export async function postComment(
         select: { title: true },
       });
       const mentionedIds = parseMentionedIds(trimmed, authorId);
+      const title =
+        entityType === "PROJECT"
+          ? `Новий коментар у проєкті «${project?.title ?? ""}»`
+          : entityType === "ESTIMATE"
+            ? `Новий коментар до кошторису у проєкті «${project?.title ?? ""}»`
+            : `Новий коментар у задачі (проєкт «${project?.title ?? ""}»)`;
+      const relEntity =
+        entityType === "PROJECT"
+          ? "Project"
+          : entityType === "ESTIMATE"
+            ? "Estimate"
+            : "Task";
+      const relId = entityType === "PROJECT" ? projectId : entityId;
       await notifyProjectMembers({
         projectId,
         actorId: authorId,
-        type: "PROJECT_COMMENT",
-        title:
-          entityType === "PROJECT"
-            ? `Новий коментар у проєкті «${project?.title ?? ""}»`
-            : `Новий коментар до кошторису у проєкті «${project?.title ?? ""}»`,
+        type: entityType === "TASK" ? "TASK_COMMENTED" : "PROJECT_COMMENT",
+        title,
         body: trimmed,
-        relatedEntity: entityType === "PROJECT" ? "Project" : "Estimate",
-        relatedId: entityType === "PROJECT" ? projectId : entityId,
+        relatedEntity: relEntity,
+        relatedId: relId,
         excludeUserIds: mentionedIds,
       });
     } catch (err) {

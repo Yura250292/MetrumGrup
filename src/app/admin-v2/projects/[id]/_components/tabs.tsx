@@ -12,6 +12,7 @@ import {
   Calculator,
   Wallet,
   Sparkles,
+  ListTodo,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { TabOverview, type ProjectDetailData } from "./tab-overview";
@@ -23,8 +24,9 @@ import { TabActivity } from "./tab-activity";
 import { TabEstimates } from "./tab-estimates";
 import { TabFinances } from "./tab-finances";
 import { TabAiRender } from "./tab-ai-render";
+import { TabTasks } from "./tab-tasks";
 
-const TAB_DEFS = [
+const BASE_TAB_DEFS = [
   { id: "overview", label: "Огляд", icon: LayoutDashboard },
   { id: "team", label: "Команда", icon: Users },
   { id: "chat", label: "Чат", icon: MessageSquare },
@@ -34,23 +36,30 @@ const TAB_DEFS = [
   { id: "estimates", label: "Кошториси", icon: Calculator },
   { id: "finances", label: "Фінанси", icon: Wallet },
   { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
+  { id: "tasks", label: "Задачі", icon: ListTodo },
 ] as const;
 
-type TabId = (typeof TAB_DEFS)[number]["id"];
+type TabId = (typeof BASE_TAB_DEFS)[number]["id"];
 
 export function ProjectTabs({
   activeTab,
   projectId,
   project,
+  tasksEnabled = false,
 }: {
   activeTab: string;
   projectId: string;
   project: ProjectDetailData;
+  tasksEnabled?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const scrollRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
+
+  const TAB_DEFS = tasksEnabled
+    ? BASE_TAB_DEFS
+    : BASE_TAB_DEFS.filter((t) => t.id !== "tasks");
 
   const current: TabId =
     (TAB_DEFS.find((t) => t.id === activeTab)?.id as TabId) || "overview";
@@ -136,6 +145,12 @@ export function ProjectTabs({
           />
         )}
         {current === "ai-render" && <TabAiRender projectId={projectId} />}
+        {current === "tasks" && tasksEnabled && (
+          <TabTasks
+            projectId={projectId}
+            stages={project.stages.map((s) => ({ id: s.id, stage: s.stage }))}
+          />
+        )}
       </div>
     </div>
   );
