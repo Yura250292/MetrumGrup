@@ -50,6 +50,7 @@ export async function PATCH(
     };
 
     if (body.type === "INCOME" || body.type === "EXPENSE") data.type = body.type;
+    if (body.kind === "PLAN" || body.kind === "FACT") data.kind = body.kind;
     if (body.amount !== undefined) {
       const n = Number(body.amount);
       if (!Number.isFinite(n) || n <= 0) {
@@ -118,6 +119,7 @@ export async function PATCH(
       projectId: updated.projectId ?? undefined,
       oldData: {
         type: existing.type,
+        kind: existing.kind,
         amount: Number(existing.amount),
         category: existing.category,
         title: existing.title,
@@ -126,6 +128,7 @@ export async function PATCH(
       },
       newData: {
         type: updated.type,
+        kind: updated.kind,
         amount: Number(updated.amount),
         category: updated.category,
         title: updated.title,

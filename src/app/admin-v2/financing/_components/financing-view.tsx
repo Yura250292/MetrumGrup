@@ -6,7 +6,6 @@ import {
   Download,
   Loader2,
   Search,
-  X,
   Edit,
   Archive,
   Paperclip,
@@ -15,19 +14,21 @@ import {
   TrendingDown,
   Wallet,
   Filter,
+  FileText,
+  CircleDot,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import {
   FINANCE_CATEGORIES,
   FINANCE_CATEGORY_LABELS,
-  FINANCE_ENTRY_TYPE_LABELS,
 } from "@/lib/constants";
 import { EntryFormModal, type EntryFormValues } from "./entry-form-modal";
 
 export type FinanceEntryDTO = {
   id: string;
   occurredAt: string;
+  kind: "PLAN" | "FACT";
   type: "INCOME" | "EXPENSE";
   amount: number | string;
   currency: string;
@@ -53,14 +54,28 @@ export type FinanceEntryDTO = {
   }>;
 };
 
+export type QuadrantStats = { sum: number; count: number };
+
 export type FinanceSummaryDTO = {
-  income: number;
-  expense: number;
+  plan: { income: QuadrantStats; expense: QuadrantStats };
+  fact: { income: QuadrantStats; expense: QuadrantStats };
   balance: number;
   count: number;
 };
 
 export type ProjectOption = { id: string; title: string };
+
+const EMPTY_SUMMARY: FinanceSummaryDTO = {
+  plan: { income: { sum: 0, count: 0 }, expense: { sum: 0, count: 0 } },
+  fact: { income: { sum: 0, count: 0 }, expense: { sum: 0, count: 0 } },
+  balance: 0,
+  count: 0,
+};
+
+type QuadrantPreset = {
+  kind: "PLAN" | "FACT";
+  type: "INCOME" | "EXPENSE";
+};
 
 export function FinancingView({
   scope,
@@ -74,19 +89,13 @@ export function FinancingView({
   currentUserName: string;
 }) {
   const [entries, setEntries] = useState<FinanceEntryDTO[]>([]);
-  const [summary, setSummary] = useState<FinanceSummaryDTO>({
-    income: 0,
-    expense: 0,
-    balance: 0,
-    count: 0,
-  });
+  const [summary, setSummary] = useState<FinanceSummaryDTO>(EMPTY_SUMMARY);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({
-    projectId: scope ? scope.id : ("" as string),
-    type: "",
+    projectId: scope ? scope.id : "",
     category: "",
     from: "",
     to: "",
@@ -94,7 +103,7 @@ export function FinancingView({
   });
 
   const [editing, setEditing] = useState<FinanceEntryDTO | null>(null);
-  const [creating, setCreating] = useState(false);
+  const [createPreset, setCreatePreset] = useState<QuadrantPreset | null>(null);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -104,7 +113,6 @@ export function FinancingView({
       if (filters.projectId === "__NULL__") p.set("projectId", "null");
       else if (filters.projectId) p.set("projectId", filters.projectId);
     }
-    if (filters.type) p.set("type", filters.type);
     if (filters.category) p.set("category", filters.category);
     if (filters.from) p.set("from", new Date(filters.from).toISOString());
     if (filters.to) {
@@ -124,7 +132,7 @@ export function FinancingView({
       if (!res.ok) throw new Error("Помилка завантаження");
       const json = await res.json();
       setEntries(json.data || []);
-      setSummary(json.summary || { income: 0, expense: 0, balance: 0, count: 0 });
+      setSummary(json.summary || EMPTY_SUMMARY);
     } catch (err: any) {
       setError(err?.message || "Помилка");
     } finally {
@@ -165,6 +173,7 @@ export function FinancingView({
 
     const payload: Record<string, unknown> = {
       type: values.type,
+      kind: values.kind,
       amount: Number(values.amount),
       occurredAt: new Date(values.occurredAt).toISOString(),
       projectId: values.projectId || null,
@@ -194,10 +203,9 @@ export function FinancingView({
     await loadData();
 
     if (andCreateAnother && !isEdit) {
-      setCreating(true);
       setEditing(null);
     } else {
-      setCreating(false);
+      setCreatePreset(null);
       setEditing(null);
     }
   }
@@ -250,7 +258,6 @@ export function FinancingView({
   const resetFilters = () => {
     setFilters({
       projectId: scope ? scope.id : "",
-      type: "",
       category: "",
       from: "",
       to: "",
@@ -258,17 +265,31 @@ export function FinancingView({
     });
   };
 
+  const quadrantEntries = useMemo(() => {
+    const result: Record<string, FinanceEntryDTO[]> = {
+      "PLAN:EXPENSE": [],
+      "PLAN:INCOME": [],
+      "FACT:EXPENSE": [],
+      "FACT:INCOME": [],
+    };
+    for (const e of entries) {
+      const key = `${e.kind}:${e.type}`;
+      if (result[key]) result[key].push(e);
+    }
+    return result;
+  }, [entries]);
+
+  const planBalance = summary.plan.income.sum - summary.plan.expense.sum;
+  const factBalance = summary.balance;
+
   return (
     <div className="flex flex-col gap-6">
       {/* Hero */}
       {!scope && (
         <section className="flex flex-wrap items-end justify-between gap-4">
           <div className="flex flex-col gap-2">
-            <span
-              className="text-[11px] font-bold tracking-wider"
-              style={{ color: T.textMuted }}
-            >
-              ФАКТ РУХУ ГРОШЕЙ
+            <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+              ФАКТ І ПЛАН РУХУ ГРОШЕЙ
             </span>
             <h1
               className="text-3xl md:text-4xl font-bold tracking-tight"
@@ -277,7 +298,7 @@ export function FinancingView({
               Фінансування
             </h1>
             <p className="text-[15px]" style={{ color: T.textSecondary }}>
-              Доходи, витрати, постійні витрати компанії та баланс по проєктах
+              Плануйте витрати й доходи, вносьте фактичні операції, бачте баланс у реальному часі
             </p>
           </div>
           <div className="flex gap-2">
@@ -294,16 +315,6 @@ export function FinancingView({
               {exporting ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               Експорт в Excel
             </button>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setCreating(true);
-              }}
-              className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white"
-              style={{ backgroundColor: T.accentPrimary }}
-            >
-              <Plus size={16} /> Додати операцію
-            </button>
           </div>
         </section>
       )}
@@ -315,61 +326,51 @@ export function FinancingView({
               Фінансування проєкту
             </h2>
             <p className="text-[13px]" style={{ color: T.textMuted }}>
-              Фактичні доходи та витрати, прив'язані до «{scope.title}»
+              План і факт по «{scope.title}»
             </p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={handleExport}
-              disabled={exporting || loading}
-              className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-semibold disabled:opacity-50"
-              style={{
-                backgroundColor: T.panelElevated,
-                color: T.textPrimary,
-                border: `1px solid ${T.borderStrong}`,
-              }}
-            >
-              {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-              Excel
-            </button>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setCreating(true);
-              }}
-              className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold text-white"
-              style={{ backgroundColor: T.accentPrimary }}
-            >
-              <Plus size={14} /> Додати
-            </button>
-          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting || loading}
+            className="flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-semibold disabled:opacity-50"
+            style={{
+              backgroundColor: T.panelElevated,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderStrong}`,
+            }}
+          >
+            {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+            Excel
+          </button>
         </div>
       )}
 
-      {/* KPI strip */}
-      <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KpiCard
-          label="ДОХОДИ"
-          value={formatCurrency(summary.income)}
-          icon={<TrendingUp size={14} />}
-          accent={T.success}
+      {/* Global balance strip */}
+      <section
+        className="grid grid-cols-2 sm:grid-cols-4 gap-3 rounded-2xl p-3 sm:p-4"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      >
+        <SummaryStat
+          label="ПЛАН БАЛАНС"
+          value={formatCurrency(planBalance)}
+          accent={planBalance >= 0 ? T.accentPrimary : T.warning}
+          icon={<CircleDot size={12} />}
         />
-        <KpiCard
-          label="ВИТРАТИ"
-          value={formatCurrency(summary.expense)}
-          icon={<TrendingDown size={14} />}
-          accent={T.danger}
+        <SummaryStat
+          label="ФАКТ БАЛАНС"
+          value={formatCurrency(factBalance)}
+          accent={factBalance >= 0 ? T.success : T.danger}
+          icon={<Wallet size={12} />}
         />
-        <KpiCard
-          label="БАЛАНС"
-          value={formatCurrency(summary.balance)}
-          icon={<Wallet size={14} />}
-          accent={summary.balance >= 0 ? T.success : T.danger}
+        <SummaryStat
+          label="ЗАВЕРШЕННЯ ПЛАНУ (ДОХ.)"
+          value={formatPercent(summary.fact.income.sum, summary.plan.income.sum)}
+          accent={T.textPrimary}
         />
-        <KpiCard
-          label="ОПЕРАЦІЙ"
-          value={String(summary.count)}
-          accent={T.accentPrimary}
+        <SummaryStat
+          label="ЗАВЕРШЕННЯ ПЛАНУ (ВИТР.)"
+          value={formatPercent(summary.fact.expense.sum, summary.plan.expense.sum)}
+          accent={T.textPrimary}
         />
       </section>
 
@@ -380,10 +381,7 @@ export function FinancingView({
       >
         <div className="flex items-center gap-2 mb-3">
           <Filter size={14} style={{ color: T.textMuted }} />
-          <span
-            className="text-[11px] font-bold tracking-wider"
-            style={{ color: T.textMuted }}
-          >
+          <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
             ФІЛЬТРИ
           </span>
           <button
@@ -394,7 +392,7 @@ export function FinancingView({
             Скинути
           </button>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
           {!scope && (
             <FilterSelect
               value={filters.projectId}
@@ -409,14 +407,6 @@ export function FinancingView({
               ))}
             </FilterSelect>
           )}
-          <FilterSelect
-            value={filters.type}
-            onChange={(v) => setFilters((p) => ({ ...p, type: v }))}
-          >
-            <option value="">Всі типи</option>
-            <option value="INCOME">Дохід</option>
-            <option value="EXPENSE">Витрата</option>
-          </FilterSelect>
           <FilterSelect
             value={filters.category}
             onChange={(v) => setFilters((p) => ({ ...p, category: v }))}
@@ -461,171 +451,90 @@ export function FinancingView({
         </div>
       </section>
 
-      {/* Table */}
-      <section
-        className="overflow-hidden rounded-2xl"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-      >
-        {loading ? (
-          <div
-            className="flex items-center justify-center gap-2 py-16 text-sm"
-            style={{ color: T.textMuted }}
-          >
-            <Loader2 size={16} className="animate-spin" /> Завантажуємо…
-          </div>
-        ) : error ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-center">
-            <AlertCircle size={32} style={{ color: T.danger }} />
-            <span className="text-[14px]" style={{ color: T.danger }}>
-              {error}
-            </span>
-          </div>
-        ) : entries.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-center">
-            <AlertCircle size={32} style={{ color: T.textMuted }} />
-            <span className="text-[14px] font-semibold" style={{ color: T.textPrimary }}>
-              Немає операцій
-            </span>
-            <span className="text-[12px]" style={{ color: T.textMuted }}>
-              Натисніть «Додати операцію», щоб створити першу
-            </span>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px]">
-              <thead>
-                <tr style={{ backgroundColor: T.panelSoft }}>
-                  <Th>ДАТА</Th>
-                  {!scope && <Th>ПРОЄКТ</Th>}
-                  <Th>ТИП</Th>
-                  <Th>КАТЕГОРІЯ</Th>
-                  <Th>НАЗВА</Th>
-                  <Th align="right">СУМА</Th>
-                  <Th>ВІДПОВІДАЛЬНИЙ</Th>
-                  <Th align="center">📎</Th>
-                  <Th align="right">ДІЇ</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e, i) => {
-                  const isExpense = e.type === "EXPENSE";
-                  const sign = isExpense ? "−" : "+";
-                  const amountColor = isExpense ? T.danger : T.success;
-                  const amount = Number(e.amount);
-                  return (
-                    <tr
-                      key={e.id}
-                      style={{
-                        backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",
-                        borderTop: `1px solid ${T.borderSoft}`,
-                      }}
-                    >
-                      <td
-                        className="px-4 py-3.5 text-[12px] whitespace-nowrap"
-                        style={{ color: T.textSecondary }}
-                      >
-                        {formatDateShort(e.occurredAt)}
-                      </td>
-                      {!scope && (
-                        <td
-                          className="px-4 py-3.5 text-[12px]"
-                          style={{ color: T.textSecondary }}
-                        >
-                          {e.project?.title ?? (
-                            <span style={{ color: T.textMuted, fontStyle: "italic" }}>
-                              Постійна витрата
-                            </span>
-                          )}
-                        </td>
-                      )}
-                      <td className="px-4 py-3.5">
-                        <TypeBadge type={e.type} />
-                      </td>
-                      <td
-                        className="px-4 py-3.5 text-[12px]"
-                        style={{ color: T.textSecondary }}
-                      >
-                        {FINANCE_CATEGORY_LABELS[e.category] ?? e.category}
-                      </td>
-                      <td
-                        className="px-4 py-3.5 text-[13px] font-semibold max-w-sm truncate"
-                        style={{ color: T.textPrimary }}
-                      >
-                        {e.title}
-                        {e.description && (
-                          <div
-                            className="text-[10px] font-normal truncate"
-                            style={{ color: T.textMuted }}
-                          >
-                            {e.description}
-                          </div>
-                        )}
-                      </td>
-                      <td
-                        className="px-4 py-3.5 text-right text-[13px] font-bold whitespace-nowrap"
-                        style={{ color: amountColor }}
-                      >
-                        {sign} {formatCurrency(amount)}
-                      </td>
-                      <td
-                        className="px-4 py-3.5 text-[11px]"
-                        style={{ color: T.textMuted }}
-                      >
-                        {e.createdBy?.name ?? "—"}
-                      </td>
-                      <td className="px-4 py-3.5 text-center">
-                        {e.attachments.length > 0 && (
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold"
-                            style={{
-                              backgroundColor: T.accentPrimarySoft,
-                              color: T.accentPrimary,
-                            }}
-                          >
-                            <Paperclip size={10} />
-                            {e.attachments.length}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3.5 text-right">
-                        <div className="flex justify-end gap-1.5">
-                          <IconButton
-                            onClick={() => {
-                              setCreating(false);
-                              setEditing(e);
-                            }}
-                            title="Редагувати"
-                          >
-                            <Edit size={12} />
-                          </IconButton>
-                          <IconButton
-                            onClick={() => handleArchive(e)}
-                            title="Архівувати"
-                            danger
-                          >
-                            <Archive size={12} />
-                          </IconButton>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {/* 2x2 grid of quadrants */}
+      {loading ? (
+        <div
+          className="flex items-center justify-center gap-2 rounded-2xl py-20 text-sm"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+            color: T.textMuted,
+          }}
+        >
+          <Loader2 size={16} className="animate-spin" /> Завантажуємо…
+        </div>
+      ) : error ? (
+        <div
+          className="flex flex-col items-center gap-3 rounded-2xl py-16 text-center"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <AlertCircle size={32} style={{ color: T.danger }} />
+          <span className="text-[14px]" style={{ color: T.danger }}>
+            {error}
+          </span>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <QuadrantCard
+            title="Планові витрати"
+            icon={<TrendingDown size={16} />}
+            accent={T.warning}
+            stats={summary.plan.expense}
+            entries={quadrantEntries["PLAN:EXPENSE"]}
+            onAdd={() => setCreatePreset({ kind: "PLAN", type: "EXPENSE" })}
+            onEdit={(e) => setEditing(e)}
+            onArchive={handleArchive}
+            showProject={!scope}
+            planned
+          />
+          <QuadrantCard
+            title="Планові доходи"
+            icon={<TrendingUp size={16} />}
+            accent={T.accentPrimary}
+            stats={summary.plan.income}
+            entries={quadrantEntries["PLAN:INCOME"]}
+            onAdd={() => setCreatePreset({ kind: "PLAN", type: "INCOME" })}
+            onEdit={(e) => setEditing(e)}
+            onArchive={handleArchive}
+            showProject={!scope}
+            planned
+          />
+          <QuadrantCard
+            title="Фактичні витрати"
+            icon={<TrendingDown size={16} />}
+            accent={T.danger}
+            stats={summary.fact.expense}
+            entries={quadrantEntries["FACT:EXPENSE"]}
+            onAdd={() => setCreatePreset({ kind: "FACT", type: "EXPENSE" })}
+            onEdit={(e) => setEditing(e)}
+            onArchive={handleArchive}
+            showProject={!scope}
+          />
+          <QuadrantCard
+            title="Фактичні доходи"
+            icon={<TrendingUp size={16} />}
+            accent={T.success}
+            stats={summary.fact.income}
+            entries={quadrantEntries["FACT:INCOME"]}
+            onAdd={() => setCreatePreset({ kind: "FACT", type: "INCOME" })}
+            onEdit={(e) => setEditing(e)}
+            onArchive={handleArchive}
+            showProject={!scope}
+          />
+        </div>
+      )}
 
-      {(creating || editing) && (
+      {(createPreset || editing) && (
         <EntryFormModal
           mode={editing ? "edit" : "create"}
           initial={editing}
+          preset={createPreset ?? undefined}
           projects={projects}
           scope={scope}
           currentUserId={currentUserId}
           currentUserName={currentUserName}
           onClose={() => {
-            setCreating(false);
+            setCreatePreset(null);
             setEditing(null);
           }}
           onSave={handleSave}
@@ -635,31 +544,253 @@ export function FinancingView({
   );
 }
 
-function KpiCard({
+function QuadrantCard({
+  title,
+  icon,
+  accent,
+  stats,
+  entries,
+  onAdd,
+  onEdit,
+  onArchive,
+  showProject,
+  planned = false,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  accent: string;
+  stats: QuadrantStats;
+  entries: FinanceEntryDTO[];
+  onAdd: () => void;
+  onEdit: (e: FinanceEntryDTO) => void;
+  onArchive: (e: FinanceEntryDTO) => void;
+  showProject: boolean;
+  planned?: boolean;
+}) {
+  return (
+    <section
+      className="flex flex-col overflow-hidden rounded-2xl"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${planned ? T.borderSoft : T.borderStrong}`,
+        opacity: planned ? 0.95 : 1,
+      }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between gap-3 border-b px-5 py-4"
+        style={{ borderColor: T.borderSoft, backgroundColor: T.panelElevated }}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span
+            className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
+            style={{ backgroundColor: `${accent}22`, color: accent }}
+          >
+            {icon}
+          </span>
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span
+                className="text-[13px] font-bold tracking-tight truncate"
+                style={{ color: T.textPrimary }}
+              >
+                {title}
+              </span>
+              {planned && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[8px] font-bold"
+                  style={{
+                    backgroundColor: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                  }}
+                >
+                  ПЛАН
+                </span>
+              )}
+            </div>
+            <span className="text-[10px]" style={{ color: T.textMuted }}>
+              {stats.count} {stats.count === 1 ? "запис" : stats.count < 5 ? "записи" : "записів"}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <span className="text-[15px] sm:text-lg font-bold" style={{ color: accent }}>
+            {formatCurrency(stats.sum)}
+          </span>
+          <button
+            onClick={onAdd}
+            title="Додати"
+            className="flex h-8 w-8 items-center justify-center rounded-lg"
+            style={{
+              backgroundColor: accent,
+              color: "#fff",
+            }}
+          >
+            <Plus size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* List */}
+      {entries.length === 0 ? (
+        <div
+          className="flex flex-col items-center justify-center gap-2 py-10 text-center px-6"
+          style={{ color: T.textMuted }}
+        >
+          <FileText size={22} />
+          <span className="text-[12px]">Порожньо</span>
+          <button
+            onClick={onAdd}
+            className="mt-2 rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: accent,
+              border: `1px solid ${accent}`,
+            }}
+          >
+            + Додати перший запис
+          </button>
+        </div>
+      ) : (
+        <div className="max-h-[360px] overflow-y-auto">
+          {entries.map((e, i) => (
+            <EntryRow
+              key={e.id}
+              entry={e}
+              accent={accent}
+              isZebra={i % 2 === 1}
+              showProject={showProject}
+              onEdit={() => onEdit(e)}
+              onArchive={() => onArchive(e)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EntryRow({
+  entry,
+  accent,
+  isZebra,
+  showProject,
+  onEdit,
+  onArchive,
+}: {
+  entry: FinanceEntryDTO;
+  accent: string;
+  isZebra: boolean;
+  showProject: boolean;
+  onEdit: () => void;
+  onArchive: () => void;
+}) {
+  const amount = Number(entry.amount);
+  return (
+    <div
+      className="group flex items-center gap-3 border-b px-4 py-3 hover:brightness-125"
+      style={{
+        borderColor: T.borderSoft,
+        backgroundColor: isZebra ? T.panelSoft : "transparent",
+      }}
+    >
+      <div
+        className="text-[11px] font-mono flex-shrink-0 w-14"
+        style={{ color: T.textMuted }}
+      >
+        {formatDateShort(entry.occurredAt)}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div
+          className="text-[12.5px] font-semibold truncate"
+          style={{ color: T.textPrimary }}
+        >
+          {entry.title}
+        </div>
+        <div
+          className="flex items-center gap-1.5 text-[10px] truncate"
+          style={{ color: T.textMuted }}
+        >
+          <span>{FINANCE_CATEGORY_LABELS[entry.category] ?? entry.category}</span>
+          {showProject && (
+            <>
+              <span>·</span>
+              <span>
+                {entry.project?.title ?? (
+                  <em style={{ color: T.textMuted }}>Постійна</em>
+                )}
+              </span>
+            </>
+          )}
+          {entry.attachments.length > 0 && (
+            <>
+              <span>·</span>
+              <span className="inline-flex items-center gap-0.5">
+                <Paperclip size={9} />
+                {entry.attachments.length}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+      <div
+        className="text-[13px] font-bold whitespace-nowrap flex-shrink-0"
+        style={{ color: accent }}
+      >
+        {formatCurrency(amount)}
+      </div>
+      <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={onEdit}
+          title="Редагувати"
+          className="flex h-6 w-6 items-center justify-center rounded-md"
+          style={{
+            backgroundColor: T.panelElevated,
+            color: T.textSecondary,
+            border: `1px solid ${T.borderStrong}`,
+          }}
+        >
+          <Edit size={10} />
+        </button>
+        <button
+          onClick={onArchive}
+          title="Архівувати"
+          className="flex h-6 w-6 items-center justify-center rounded-md"
+          style={{
+            backgroundColor: T.dangerSoft,
+            color: T.danger,
+            border: `1px solid ${T.danger}`,
+          }}
+        >
+          <Archive size={10} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SummaryStat({
   label,
   value,
+  accent,
   icon,
-  accent = T.textPrimary,
 }: {
   label: string;
   value: string;
+  accent: string;
   icon?: React.ReactNode;
-  accent?: string;
 }) {
   return (
-    <div
-      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-    >
+    <div className="flex flex-col gap-0.5 min-w-0">
       <span
-        className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-bold tracking-wider truncate"
+        className="flex items-center gap-1 text-[9px] sm:text-[10px] font-bold tracking-wider truncate"
         style={{ color: T.textMuted }}
       >
         {icon}
         {label}
       </span>
       <span
-        className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate"
+        className="text-base sm:text-xl font-bold truncate"
         style={{ color: accent }}
       >
         {value}
@@ -668,63 +799,10 @@ function KpiCard({
   );
 }
 
-function Th({
-  children,
-  align = "left",
-}: {
-  children: React.ReactNode;
-  align?: "left" | "right" | "center";
-}) {
-  return (
-    <th
-      className="px-4 py-3 text-[10px] font-bold tracking-wider"
-      style={{ color: T.textMuted, textAlign: align }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function TypeBadge({ type }: { type: "INCOME" | "EXPENSE" }) {
-  const isIncome = type === "INCOME";
-  return (
-    <span
-      className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
-      style={{
-        backgroundColor: isIncome ? T.successSoft : T.dangerSoft,
-        color: isIncome ? T.success : T.danger,
-      }}
-    >
-      {FINANCE_ENTRY_TYPE_LABELS[type]}
-    </span>
-  );
-}
-
-function IconButton({
-  children,
-  onClick,
-  title,
-  danger = false,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title: string;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className="flex h-7 w-7 items-center justify-center rounded-lg transition hover:brightness-125"
-      style={{
-        backgroundColor: danger ? T.dangerSoft : T.panelElevated,
-        color: danger ? T.danger : T.textSecondary,
-        border: `1px solid ${danger ? T.danger : T.borderStrong}`,
-      }}
-    >
-      {children}
-    </button>
-  );
+function formatPercent(actual: number, planned: number): string {
+  if (!planned || planned === 0) return "—";
+  const pct = Math.round((actual / planned) * 100);
+  return `${pct}%`;
 }
 
 function FilterSelect({

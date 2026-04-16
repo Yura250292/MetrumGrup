@@ -370,6 +370,7 @@ model Payment {
 model FinanceEntry {
   id           String           @id @default(cuid())
   occurredAt   DateTime
+  kind         FinanceEntryKind @default(FACT)
   type         FinanceEntryType
   amount       Decimal          @db.Decimal(12, 2)
   currency     String           @default("UAH")
@@ -392,6 +393,7 @@ model FinanceEntry {
 
   @@index([projectId, occurredAt])
   @@index([type, occurredAt])
+  @@index([kind, type])
   @@index([category])
   @@index([isArchived])
   @@map("finance_entries")
@@ -1058,6 +1060,11 @@ enum PaymentMethod {
 enum FinanceEntryType {
   INCOME
   EXPENSE
+}
+
+enum FinanceEntryKind {
+  PLAN
+  FACT
 }
 
 enum EstimateStatus {

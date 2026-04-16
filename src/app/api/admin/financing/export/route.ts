@@ -8,6 +8,8 @@ import {
   FINANCE_CATEGORY_LABELS,
   FINANCE_ENTRY_TYPE_LABELS,
 } from "@/lib/constants";
+
+const KIND_LABELS: Record<"PLAN" | "FACT", string> = { PLAN: "План", FACT: "Факт" };
 import {
   parseListParams,
   buildWhere,
@@ -61,6 +63,9 @@ export async function GET(request: NextRequest) {
         value: FINANCE_ENTRY_TYPE_LABELS[filters.type] ?? filters.type,
       });
     }
+    if (filters.kind) {
+      appliedFilters.push({ label: "Вид", value: KIND_LABELS[filters.kind] ?? filters.kind });
+    }
     if (filters.category) {
       appliedFilters.push({
         label: "Категорія",
@@ -79,6 +84,7 @@ export async function GET(request: NextRequest) {
     const buffer = await generateFinancingExcel({
       entries: entries.map((e) => ({
         occurredAt: e.occurredAt,
+        kind: e.kind,
         type: e.type,
         amount: Number(e.amount),
         currency: e.currency,

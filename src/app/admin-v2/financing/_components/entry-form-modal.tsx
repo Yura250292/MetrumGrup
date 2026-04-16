@@ -11,10 +11,11 @@ import {
   FileText,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { FINANCE_CATEGORIES, financeCategoriesForType } from "@/lib/constants";
+import { financeCategoriesForType } from "@/lib/constants";
 import type { FinanceEntryDTO, ProjectOption } from "./financing-view";
 
 export type EntryFormValues = {
+  kind: "PLAN" | "FACT";
   type: "INCOME" | "EXPENSE";
   amount: string;
   occurredAt: string;
@@ -30,6 +31,7 @@ export type EntryFormValues = {
 export function EntryFormModal({
   mode,
   initial,
+  preset,
   projects,
   scope,
   currentUserId: _currentUserId,
@@ -39,6 +41,7 @@ export function EntryFormModal({
 }: {
   mode: "create" | "edit";
   initial: FinanceEntryDTO | null;
+  preset?: { kind: "PLAN" | "FACT"; type: "INCOME" | "EXPENSE" };
   projects: ProjectOption[];
   scope?: { id: string; title: string };
   currentUserId: string;
@@ -49,6 +52,7 @@ export function EntryFormModal({
   const [values, setValues] = useState<EntryFormValues>(() => {
     if (initial) {
       return {
+        kind: initial.kind,
         type: initial.type,
         amount: String(Number(initial.amount)),
         occurredAt: initial.occurredAt.slice(0, 10),
@@ -62,7 +66,8 @@ export function EntryFormModal({
       };
     }
     return {
-      type: "EXPENSE",
+      kind: preset?.kind ?? "FACT",
+      type: preset?.type ?? "EXPENSE",
       amount: "",
       occurredAt: new Date().toISOString().slice(0, 10),
       projectId: scope ? scope.id : "",
@@ -116,11 +121,7 @@ export function EntryFormModal({
       return;
     }
 
-    const projectId = scope
-      ? scope.id
-      : isCompanyExpense
-        ? ""
-        : values.projectId;
+    const projectId = scope ? scope.id : isCompanyExpense ? "" : values.projectId;
 
     if (!scope && !isCompanyExpense && !projectId) {
       setError("Виберіть проєкт або позначте як постійну витрату");
@@ -199,31 +200,89 @@ export function EntryFormModal({
         </div>
 
         <form onSubmit={(e) => handleSubmit(e, false)} className="flex flex-col gap-4 p-6">
-          {/* Type segmented control */}
-          <div className="grid grid-cols-2 gap-1.5 rounded-xl p-1" style={{ backgroundColor: T.panelSoft }}>
-            {(["INCOME", "EXPENSE"] as const).map((t) => {
-              const active = values.type === t;
-              const isIncome = t === "INCOME";
-              return (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setValues((p) => ({ ...p, type: t }))}
-                  className="rounded-lg px-3 py-2.5 text-sm font-bold transition"
-                  style={{
-                    backgroundColor: active
-                      ? isIncome ? T.successSoft : T.dangerSoft
-                      : "transparent",
-                    color: active
-                      ? isIncome ? T.success : T.danger
-                      : T.textMuted,
-                    border: `1px solid ${active ? (isIncome ? T.success : T.danger) : "transparent"}`,
-                  }}
-                >
-                  {isIncome ? "+ Дохід" : "− Витрата"}
-                </button>
-              );
-            })}
+          {/* Kind + Type segmented controls */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span
+                className="text-[10px] font-bold tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                ВИД ЗАПИСУ *
+              </span>
+              <div
+                className="grid grid-cols-2 gap-1 rounded-xl p-1"
+                style={{ backgroundColor: T.panelSoft }}
+              >
+                {(["PLAN", "FACT"] as const).map((k) => {
+                  const active = values.kind === k;
+                  const label = k === "PLAN" ? "План" : "Факт";
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => setValues((p) => ({ ...p, kind: k }))}
+                      className="rounded-lg px-3 py-2 text-sm font-bold transition"
+                      style={{
+                        backgroundColor: active
+                          ? k === "PLAN"
+                            ? T.accentPrimarySoft
+                            : T.successSoft
+                          : "transparent",
+                        color: active
+                          ? k === "PLAN"
+                            ? T.accentPrimary
+                            : T.success
+                          : T.textMuted,
+                        border: `1px solid ${active ? (k === "PLAN" ? T.accentPrimary : T.success) : "transparent"}`,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span
+                className="text-[10px] font-bold tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                ТИП *
+              </span>
+              <div
+                className="grid grid-cols-2 gap-1 rounded-xl p-1"
+                style={{ backgroundColor: T.panelSoft }}
+              >
+                {(["INCOME", "EXPENSE"] as const).map((t) => {
+                  const active = values.type === t;
+                  const isIncome = t === "INCOME";
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setValues((p) => ({ ...p, type: t }))}
+                      className="rounded-lg px-3 py-2 text-sm font-bold transition"
+                      style={{
+                        backgroundColor: active
+                          ? isIncome
+                            ? T.successSoft
+                            : T.dangerSoft
+                          : "transparent",
+                        color: active
+                          ? isIncome
+                            ? T.success
+                            : T.danger
+                          : T.textMuted,
+                        border: `1px solid ${active ? (isIncome ? T.success : T.danger) : "transparent"}`,
+                      }}
+                    >
+                      {isIncome ? "+ Дохід" : "− Витрата"}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           {/* Project / company toggle */}
@@ -328,7 +387,7 @@ export function EntryFormModal({
               />
             </Field>
 
-            <Field label="Дата операції" required>
+            <Field label={values.kind === "PLAN" ? "Запланована дата" : "Дата операції"} required>
               <input
                 type="date"
                 value={values.occurredAt}
@@ -364,7 +423,11 @@ export function EntryFormModal({
                   value={values.title}
                   onChange={(e) => setValues((p) => ({ ...p, title: e.target.value }))}
                   required
-                  placeholder="Напр. «Бетон М300 для фундаменту»"
+                  placeholder={
+                    values.kind === "PLAN"
+                      ? "Напр. «Закупка бетону на фундамент (план)»"
+                      : "Напр. «Бетон М300 для фундаменту»"
+                  }
                   className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
                   style={{
                     backgroundColor: T.panelSoft,

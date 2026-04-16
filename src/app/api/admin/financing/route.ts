@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const type = body.type === "INCOME" || body.type === "EXPENSE" ? body.type : null;
+    const kind = body.kind === "PLAN" || body.kind === "FACT" ? body.kind : "FACT";
     const amountNum = Number(body.amount);
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const category =
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
     const entry = await prisma.financeEntry.create({
       data: {
         type,
+        kind,
         amount: amountNum,
         currency: typeof body.currency === "string" && body.currency ? body.currency : "UAH",
         occurredAt,
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
       entity: "FinanceEntry",
       entityId: entry.id,
       projectId: entry.projectId ?? undefined,
-      newData: { type: entry.type, amount: Number(entry.amount), category: entry.category, title: entry.title },
+      newData: { type: entry.type, kind: entry.kind, amount: Number(entry.amount), category: entry.category, title: entry.title },
     });
 
     return NextResponse.json({ data: entry }, { status: 201 });
