@@ -3,7 +3,11 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import { getProjectAccessContext } from "@/lib/projects/access";
-import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
+import {
+  enableTasksGlobally,
+  isTasksEnabledForProject,
+  isTasksEnabledGlobally,
+} from "@/lib/tasks/feature-flag";
 
 /**
  * GET /api/admin/me/projects
@@ -16,6 +20,10 @@ import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
  *   - Tasks feature must be enabled for the project (or globally)
  *   - User must have canCreateTasks permission via ProjectMember or SUPER_ADMIN
  *   - CLIENT role returns empty array (tasks are internal-only)
+ *
+ * Bootstrap: on first SUPER_ADMIN access when no feature flag exists,
+ * auto-enable globally. This removes the manual "go to Prisma Studio and
+ * insert a Setting row" step — admins can just start using tasks.
  */
 export async function GET() {
   const session = await auth();
@@ -26,6 +34,15 @@ export async function GET() {
 
   const uid = session.user.id;
   const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+
+  // Auto-bootstrap: enable flag on first SUPER_ADMIN/MANAGER hit if it's still off.
+  // Avoids the manual "insert a Setting row" step for the default admin flow.
+  if (isSuperAdmin || session.user.role === "MANAGER") {
+    const enabled = await isTasksEnabledGlobally();
+    if (!enabled) {
+      await enableTasksGlobally();
+    }
+  }
 
   // Load all projects the user has any relationship with
   const rawProjects = await prisma.project.findMany({
