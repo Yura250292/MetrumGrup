@@ -23,6 +23,7 @@ import { TabPhotos } from "./tab-photos";
 import { TabActivity } from "./tab-activity";
 import { TabEstimates } from "./tab-estimates";
 import { TabFinances } from "./tab-finances";
+import { TabFinancing } from "./tab-financing";
 import { TabAiRender } from "./tab-ai-render";
 import { TabTasks } from "./tab-tasks";
 
@@ -34,7 +35,8 @@ const BASE_TAB_DEFS = [
   { id: "photos", label: "Фото", icon: Camera },
   { id: "activity", label: "Активність", icon: Activity },
   { id: "estimates", label: "Кошториси", icon: Calculator },
-  { id: "finances", label: "Фінанси", icon: Wallet },
+  { id: "finances", label: "Платежі", icon: Wallet },
+  { id: "financing", label: "Фінансування", icon: Wallet },
   { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
   { id: "tasks", label: "Задачі", icon: ListTodo },
 ] as const;
@@ -143,6 +145,9 @@ export function ProjectTabs({
             totalPaid={project.totalPaid}
             payments={project.payments}
           />
+        )}
+        {current === "financing" && (
+          <TabFinancing projectId={projectId} projectTitle={project.title} />
         )}
         {current === "ai-render" && <TabAiRender projectId={projectId} />}
         {current === "tasks" && tasksEnabled && (

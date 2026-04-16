@@ -8,62 +8,65 @@ datasource db {
 }
 
 model User {
-  id                 String                    @id @default(cuid())
-  email              String                    @unique
-  password           String
-  name               String
-  phone              String?
-  avatar             String?
-  role               Role                      @default(CLIENT)
-  isActive           Boolean                   @default(true)
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
-  auditLogs          AuditLog[]
-  createdEstimates   Estimate[]                @relation("EstimateCreator")
-  engineerReviews    Estimate[]                @relation("EngineerReviews")
-  financeReviews     Estimate[]                @relation("FinanceReviews")
-  financialTemplates FinancialTemplate[]       @relation("TemplateCreator")
-  inventoryTx        InventoryTransaction[]
-  newsArticles       NewsArticle[]
-  notifications      Notification[]
-  payments           Payment[]
-  photoReports       PhotoReport[]
-  projectFiles       ProjectFile[]
-  clientProjects     Project[]                 @relation("ClientProjects")
-  managedProjects    Project[]                 @relation("ManagerProjects")
-  aiRenderJobs       AiRenderJob[]
-  estimateVersions   EstimateVersion[]
-  approvalSteps      EstimateApprovalStep[]
-  criticalChanges    EstimateCriticalChange[]
-  chatMessages       ChatMessage[]
-  chatParticipations ConversationParticipant[]
-  authoredComments   Comment[]                 @relation("CommentAuthor")
-  reactions          Reaction[]
-  refineHistory      EstimateRefineHistory[]   @relation("RefineHistoryUser")
-  projectMemberships ProjectMember[]           @relation("ProjectMemberUser")
-  invitedMembers     ProjectMember[]           @relation("ProjectMemberInviter")
-  referenceEstimates ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
-  createdTasks       Task[]                    @relation("TaskCreator")
-  taskAssignments    TaskAssignee[]            @relation("TaskAssigneeUser")
-  taskAssignerOf     TaskAssignee[]            @relation("TaskAssigneeAssigner")
-  taskWatchers       TaskWatcher[]             @relation("TaskWatcherUser")
-  checklistItems     ChecklistItem[]           @relation("ChecklistAssignee")
-  checklistCompletions ChecklistItem[]         @relation("ChecklistCompletedBy")
-  savedViews         SavedView[]               @relation("SavedViewUser")
-  timeLogs           TimeLog[]                 @relation("TimeLogUser")
-  timeLogsApproved   TimeLog[]                 @relation("TimeLogApprover")
-  hourlyRates        UserHourlyRate[]          @relation("UserHourlyRateUser")
-  workSchedule       UserWorkSchedule?         @relation("UserWorkScheduleUser")
-  timeOff            TimeOff[]                 @relation("TimeOffUser")
-  timeOffApproved    TimeOff[]                 @relation("TimeOffApprover")
-  automations        Automation[]              @relation("AutomationCreator")
-  webhooks           Webhook[]                 @relation("WebhookCreator")
-  projectTemplates   ProjectTemplate[]         @relation("ProjectTemplateCreator")
-  taskTemplates      TaskTemplate[]            @relation("TaskTemplateCreator")
-  departmentsHead    Department[]              @relation("DepartmentHead")
-  teamsLead          Team[]                    @relation("TeamLead")
-  teamMemberships    TeamMember[]              @relation("TeamMemberUser")
-  integrations       UserIntegration[]         @relation("UserIntegrationUser")
+  id                    String                    @id @default(cuid())
+  email                 String                    @unique
+  password              String
+  name                  String
+  phone                 String?
+  avatar                String?
+  role                  Role                      @default(CLIENT)
+  isActive              Boolean                   @default(true)
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+  auditLogs             AuditLog[]
+  createdEstimates      Estimate[]                @relation("EstimateCreator")
+  engineerReviews       Estimate[]                @relation("EngineerReviews")
+  financeReviews        Estimate[]                @relation("FinanceReviews")
+  financialTemplates    FinancialTemplate[]       @relation("TemplateCreator")
+  inventoryTx           InventoryTransaction[]
+  newsArticles          NewsArticle[]
+  notifications         Notification[]
+  payments              Payment[]
+  photoReports          PhotoReport[]
+  projectFiles          ProjectFile[]
+  clientProjects        Project[]                 @relation("ClientProjects")
+  managedProjects       Project[]                 @relation("ManagerProjects")
+  aiRenderJobs          AiRenderJob[]
+  estimateVersions      EstimateVersion[]
+  approvalSteps         EstimateApprovalStep[]
+  criticalChanges       EstimateCriticalChange[]
+  chatMessages          ChatMessage[]
+  chatParticipations    ConversationParticipant[]
+  authoredComments      Comment[]                 @relation("CommentAuthor")
+  reactions             Reaction[]
+  refineHistory         EstimateRefineHistory[]   @relation("RefineHistoryUser")
+  projectMemberships    ProjectMember[]           @relation("ProjectMemberUser")
+  invitedMembers        ProjectMember[]           @relation("ProjectMemberInviter")
+  referenceEstimates    ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
+  createdTasks          Task[]                    @relation("TaskCreator")
+  taskAssignments       TaskAssignee[]            @relation("TaskAssigneeUser")
+  taskAssignerOf        TaskAssignee[]            @relation("TaskAssigneeAssigner")
+  taskWatchers          TaskWatcher[]             @relation("TaskWatcherUser")
+  checklistItems        ChecklistItem[]           @relation("ChecklistAssignee")
+  checklistCompletions  ChecklistItem[]           @relation("ChecklistCompletedBy")
+  savedViews            SavedView[]               @relation("SavedViewUser")
+  timeLogs              TimeLog[]                 @relation("TimeLogUser")
+  timeLogsApproved      TimeLog[]                 @relation("TimeLogApprover")
+  hourlyRates           UserHourlyRate[]          @relation("UserHourlyRateUser")
+  workSchedule          UserWorkSchedule?         @relation("UserWorkScheduleUser")
+  timeOff               TimeOff[]                 @relation("TimeOffUser")
+  timeOffApproved       TimeOff[]                 @relation("TimeOffApprover")
+  automations           Automation[]              @relation("AutomationCreator")
+  webhooks              Webhook[]                 @relation("WebhookCreator")
+  projectTemplates      ProjectTemplate[]         @relation("ProjectTemplateCreator")
+  taskTemplates         TaskTemplate[]            @relation("TaskTemplateCreator")
+  departmentsHead       Department[]              @relation("DepartmentHead")
+  teamsLead             Team[]                    @relation("TeamLead")
+  teamMemberships       TeamMember[]              @relation("TeamMemberUser")
+  integrations          UserIntegration[]         @relation("UserIntegrationUser")
+  financeEntriesCreated FinanceEntry[]            @relation("FinanceEntryCreator")
+  financeEntriesUpdated FinanceEntry[]            @relation("FinanceEntryUpdater")
+  financeAttachments    FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
 
   @@map("users")
 }
@@ -106,12 +109,13 @@ model Project {
   taskStatuses      TaskStatus[]
   taskLabels        TaskLabel[]
   taskCustomFields  TaskCustomField[]
-  savedViews        SavedView[]       @relation("SavedViewProject")
-  userHourlyRates   UserHourlyRate[]  @relation("UserHourlyRateProject")
-  automations       Automation[]      @relation("AutomationProject")
-  webhooks          Webhook[]         @relation("WebhookProject")
-  taskTemplates     TaskTemplate[]    @relation("TaskTemplateProject")
-  emailInbox        EmailToTaskInbox? @relation("EmailInboxProject")
+  savedViews        SavedView[]            @relation("SavedViewProject")
+  userHourlyRates   UserHourlyRate[]       @relation("UserHourlyRateProject")
+  automations       Automation[]           @relation("AutomationProject")
+  webhooks          Webhook[]              @relation("WebhookProject")
+  taskTemplates     TaskTemplate[]         @relation("TaskTemplateProject")
+  emailInbox        EmailToTaskInbox?      @relation("EmailInboxProject")
+  financeEntries    FinanceEntry[]
 
   @@map("projects")
 }
@@ -359,6 +363,55 @@ model Payment {
   project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@map("payments")
+}
+
+// Факт руху грошей по проєктах і постійних витрат компанії.
+// Окрема сутність від Payment (планування) і Estimate (кошторис).
+model FinanceEntry {
+  id           String           @id @default(cuid())
+  occurredAt   DateTime
+  type         FinanceEntryType
+  amount       Decimal          @db.Decimal(12, 2)
+  currency     String           @default("UAH")
+  projectId    String?
+  category     String
+  subcategory  String?
+  title        String
+  description  String?
+  counterparty String?
+  isArchived   Boolean          @default(false)
+  createdById  String
+  updatedById  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  project     Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy   User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
+  updatedBy   User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
+  attachments FinanceEntryAttachment[]
+
+  @@index([projectId, occurredAt])
+  @@index([type, occurredAt])
+  @@index([category])
+  @@index([isArchived])
+  @@map("finance_entries")
+}
+
+model FinanceEntryAttachment {
+  id           String   @id @default(cuid())
+  entryId      String
+  r2Key        String
+  originalName String
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  entry      FinanceEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  uploadedBy User         @relation("FinanceAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([entryId])
+  @@map("finance_entry_attachments")
 }
 
 model CompletionAct {
@@ -1002,6 +1055,11 @@ enum PaymentMethod {
   CARD
 }
 
+enum FinanceEntryType {
+  INCOME
+  EXPENSE
+}
+
 enum EstimateStatus {
   DRAFT
   SENT
@@ -1215,45 +1273,45 @@ enum TaskCustomFieldType {
 }
 
 model Task {
-  id                  String    @id @default(cuid())
-  projectId           String
-  stageId             String
-  parentTaskId        String?
-  statusId            String
-  title               String
-  description         String?   @db.Text
-  priority            TaskPriority @default(NORMAL)
-  startDate           DateTime?
-  dueDate             DateTime?
-  completedAt         DateTime?
-  estimatedHours      Decimal?  @db.Decimal(8, 2)
-  actualHours         Decimal   @default(0) @db.Decimal(10, 2)
-  customFields        Json?
-  position            Int       @default(0)
-  isRecurring         Boolean   @default(false)
-  recurrenceRule      String?
-  recurrenceParentId  String?
-  isArchived          Boolean   @default(false)
-  isPrivate           Boolean   @default(false)
-  createdById         String
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                 String       @id @default(cuid())
+  projectId          String
+  stageId            String
+  parentTaskId       String?
+  statusId           String
+  title              String
+  description        String?      @db.Text
+  priority           TaskPriority @default(NORMAL)
+  startDate          DateTime?
+  dueDate            DateTime?
+  completedAt        DateTime?
+  estimatedHours     Decimal?     @db.Decimal(8, 2)
+  actualHours        Decimal      @default(0) @db.Decimal(10, 2)
+  customFields       Json?
+  position           Int          @default(0)
+  isRecurring        Boolean      @default(false)
+  recurrenceRule     String?
+  recurrenceParentId String?
+  isArchived         Boolean      @default(false)
+  isPrivate          Boolean      @default(false)
+  createdById        String
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
-  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  stage               ProjectStageRecord   @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  parentTask          Task?                @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: Cascade)
-  subtasks            Task[]               @relation("TaskHierarchy")
-  status              TaskStatus           @relation(fields: [statusId], references: [id], onDelete: Restrict)
-  createdBy           User                 @relation("TaskCreator", fields: [createdById], references: [id])
-  recurrenceParent    Task?                @relation("TaskRecurrence", fields: [recurrenceParentId], references: [id])
-  recurrenceChildren  Task[]               @relation("TaskRecurrence")
-  assignees           TaskAssignee[]
-  watchers            TaskWatcher[]
-  labels              TaskLabelAssignment[]
-  checklist           ChecklistItem[]
-  outgoingDeps        TaskDependency[]     @relation("TaskDepPredecessor")
-  incomingDeps        TaskDependency[]     @relation("TaskDepSuccessor")
-  timeLogs            TimeLog[]
+  project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage              ProjectStageRecord    @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  parentTask         Task?                 @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks           Task[]                @relation("TaskHierarchy")
+  status             TaskStatus            @relation(fields: [statusId], references: [id], onDelete: Restrict)
+  createdBy          User                  @relation("TaskCreator", fields: [createdById], references: [id])
+  recurrenceParent   Task?                 @relation("TaskRecurrence", fields: [recurrenceParentId], references: [id])
+  recurrenceChildren Task[]                @relation("TaskRecurrence")
+  assignees          TaskAssignee[]
+  watchers           TaskWatcher[]
+  labels             TaskLabelAssignment[]
+  checklist          ChecklistItem[]
+  outgoingDeps       TaskDependency[]      @relation("TaskDepPredecessor")
+  incomingDeps       TaskDependency[]      @relation("TaskDepSuccessor")
+  timeLogs           TimeLog[]
 
   @@index([projectId, stageId, isArchived])
   @@index([projectId, statusId])
@@ -1264,15 +1322,15 @@ model Task {
 }
 
 model TaskAssignee {
-  id            String   @id @default(cuid())
-  taskId        String
-  userId        String
-  assignedAt    DateTime @default(now())
-  assignedById  String?
+  id           String   @id @default(cuid())
+  taskId       String
+  userId       String
+  assignedAt   DateTime @default(now())
+  assignedById String?
 
-  task          Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user          User     @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
-  assignedBy    User?    @relation("TaskAssigneeAssigner", fields: [assignedById], references: [id])
+  task       Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User  @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("TaskAssigneeAssigner", fields: [assignedById], references: [id])
 
   @@unique([taskId, userId])
   @@index([userId])
@@ -1285,8 +1343,8 @@ model TaskWatcher {
   userId    String
   createdAt DateTime @default(now())
 
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user      User     @relation("TaskWatcherUser", fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation("TaskWatcherUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, userId])
   @@index([userId])
@@ -1294,17 +1352,17 @@ model TaskWatcher {
 }
 
 model TaskStatus {
-  id         String   @id @default(cuid())
-  projectId  String
-  name       String
-  color      String   @default("#94a3b8")
-  position   Int      @default(0)
-  isDone     Boolean  @default(false)
-  isDefault  Boolean  @default(false)
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  color     String   @default("#94a3b8")
+  position  Int      @default(0)
+  isDone    Boolean  @default(false)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
 
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks      Task[]
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   Task[]
 
   @@unique([projectId, name])
   @@index([projectId, position])
@@ -1312,13 +1370,13 @@ model TaskStatus {
 }
 
 model TaskLabel {
-  id         String   @id @default(cuid())
-  projectId  String
-  name       String
-  color      String   @default("#64748b")
-  createdAt  DateTime @default(now())
+  id        String   @id @default(cuid())
+  projectId String
+  name      String
+  color     String   @default("#64748b")
+  createdAt DateTime @default(now())
 
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignments TaskLabelAssignment[]
 
   @@unique([projectId, name])
@@ -1327,12 +1385,12 @@ model TaskLabel {
 }
 
 model TaskLabelAssignment {
-  id        String   @id @default(cuid())
-  taskId    String
-  labelId   String
+  id      String @id @default(cuid())
+  taskId  String
+  labelId String
 
-  task      Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  label     TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  task  Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@unique([taskId, labelId])
   @@index([labelId])
@@ -1340,36 +1398,36 @@ model TaskLabelAssignment {
 }
 
 model ChecklistItem {
-  id             String    @id @default(cuid())
-  taskId         String
-  content        String
-  isDone         Boolean   @default(false)
-  position       Int       @default(0)
-  dueDate        DateTime?
-  assigneeId     String?
-  completedAt    DateTime?
-  completedById  String?
-  createdAt      DateTime  @default(now())
+  id            String    @id @default(cuid())
+  taskId        String
+  content       String
+  isDone        Boolean   @default(false)
+  position      Int       @default(0)
+  dueDate       DateTime?
+  assigneeId    String?
+  completedAt   DateTime?
+  completedById String?
+  createdAt     DateTime  @default(now())
 
-  task           Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  assignee       User?  @relation("ChecklistAssignee", fields: [assigneeId], references: [id])
-  completedBy    User?  @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
+  task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  assignee    User? @relation("ChecklistAssignee", fields: [assigneeId], references: [id])
+  completedBy User? @relation("ChecklistCompletedBy", fields: [completedById], references: [id])
 
   @@index([taskId, position])
   @@map("checklist_items")
 }
 
 model TaskCustomField {
-  id          String              @id @default(cuid())
-  projectId   String
-  name        String
-  type        TaskCustomFieldType
-  options     Json?
-  position    Int                 @default(0)
-  isRequired  Boolean             @default(false)
-  createdAt   DateTime            @default(now())
+  id         String              @id @default(cuid())
+  projectId  String
+  name       String
+  type       TaskCustomFieldType
+  options    Json?
+  position   Int                 @default(0)
+  isRequired Boolean             @default(false)
+  createdAt  DateTime            @default(now())
 
-  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, name])
   @@index([projectId, position])
@@ -1379,15 +1437,15 @@ model TaskCustomField {
 // Placeholder for Phase 4 — declared empty to avoid schema churn when we
 // enable dependencies. Tasks.outgoingDeps / incomingDeps relations point here.
 model TaskDependency {
-  id             String              @id @default(cuid())
-  predecessorId  String
-  successorId    String
-  type           TaskDependencyType  @default(FS)
-  lagDays        Int                 @default(0)
-  createdAt      DateTime            @default(now())
+  id            String             @id @default(cuid())
+  predecessorId String
+  successorId   String
+  type          TaskDependencyType @default(FS)
+  lagDays       Int                @default(0)
+  createdAt     DateTime           @default(now())
 
-  predecessor    Task @relation("TaskDepPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
-  successor      Task @relation("TaskDepSuccessor",   fields: [successorId],   references: [id], onDelete: Cascade)
+  predecessor Task @relation("TaskDepPredecessor", fields: [predecessorId], references: [id], onDelete: Cascade)
+  successor   Task @relation("TaskDepSuccessor", fields: [successorId], references: [id], onDelete: Cascade)
 
   @@unique([predecessorId, successorId])
   @@index([successorId])
@@ -1423,24 +1481,24 @@ enum TimeOffType {
 }
 
 model TimeLog {
-  id                   String    @id @default(cuid())
-  taskId               String
-  userId               String
-  startedAt            DateTime
-  endedAt              DateTime?
-  minutes              Int?
-  description          String?
-  billable             Boolean   @default(true)
-  hourlyRateSnapshot   Decimal?  @db.Decimal(10, 2)
-  costSnapshot         Decimal?  @db.Decimal(12, 2)
-  approvedAt           DateTime?
-  approvedById         String?
-  createdAt            DateTime  @default(now())
-  updatedAt            DateTime  @updatedAt
+  id                 String    @id @default(cuid())
+  taskId             String
+  userId             String
+  startedAt          DateTime
+  endedAt            DateTime?
+  minutes            Int?
+  description        String?
+  billable           Boolean   @default(true)
+  hourlyRateSnapshot Decimal?  @db.Decimal(10, 2)
+  costSnapshot       Decimal?  @db.Decimal(12, 2)
+  approvedAt         DateTime?
+  approvedById       String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
-  task        Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user        User  @relation("TimeLogUser", fields: [userId], references: [id], onDelete: Cascade)
-  approvedBy  User? @relation("TimeLogApprover", fields: [approvedById], references: [id])
+  task       Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User  @relation("TimeLogUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy User? @relation("TimeLogApprover", fields: [approvedById], references: [id])
 
   @@index([userId, startedAt])
   @@index([taskId, startedAt])
@@ -1449,17 +1507,17 @@ model TimeLog {
 }
 
 model UserHourlyRate {
-  id             String    @id @default(cuid())
-  userId         String
-  projectId      String?
-  rate           Decimal   @db.Decimal(10, 2)
-  currency       String    @default("UAH")
-  effectiveFrom  DateTime
-  effectiveTo    DateTime?
-  createdAt      DateTime  @default(now())
+  id            String    @id @default(cuid())
+  userId        String
+  projectId     String?
+  rate          Decimal   @db.Decimal(10, 2)
+  currency      String    @default("UAH")
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdAt     DateTime  @default(now())
 
-  user     User     @relation("UserHourlyRateUser", fields: [userId], references: [id], onDelete: Cascade)
-  project  Project? @relation("UserHourlyRateProject", fields: [projectId], references: [id], onDelete: Cascade)
+  user    User     @relation("UserHourlyRateUser", fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation("UserHourlyRateProject", fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([userId, effectiveFrom])
   @@index([projectId, userId])
@@ -1467,14 +1525,14 @@ model UserHourlyRate {
 }
 
 model UserWorkSchedule {
-  id                 String   @id @default(cuid())
-  userId             String   @unique
-  weeklyHoursJson    Json
-  timezone           String   @default("Europe/Kyiv")
-  workingHoursStart  String   @default("09:00")
-  workingHoursEnd    String   @default("18:00")
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  weeklyHoursJson   Json
+  timezone          String   @default("Europe/Kyiv")
+  workingHoursStart String   @default("09:00")
+  workingHoursEnd   String   @default("18:00")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   user User @relation("UserWorkScheduleUser", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1482,18 +1540,18 @@ model UserWorkSchedule {
 }
 
 model TimeOff {
-  id            String      @id @default(cuid())
-  userId        String
-  startDate     DateTime
-  endDate       DateTime
-  type          TimeOffType
-  notes         String?
-  approvedAt    DateTime?
-  approvedById  String?
-  createdAt     DateTime    @default(now())
+  id           String      @id @default(cuid())
+  userId       String
+  startDate    DateTime
+  endDate      DateTime
+  type         TimeOffType
+  notes        String?
+  approvedAt   DateTime?
+  approvedById String?
+  createdAt    DateTime    @default(now())
 
-  user        User  @relation("TimeOffUser", fields: [userId], references: [id], onDelete: Cascade)
-  approvedBy  User? @relation("TimeOffApprover", fields: [approvedById], references: [id])
+  user       User  @relation("TimeOffUser", fields: [userId], references: [id], onDelete: Cascade)
+  approvedBy User? @relation("TimeOffApprover", fields: [approvedById], references: [id])
 
   @@index([userId, startDate])
   @@map("time_off")
@@ -1514,19 +1572,19 @@ enum AutomationTrigger {
 }
 
 model Automation {
-  id             String             @id @default(cuid())
+  id             String            @id @default(cuid())
   projectId      String?
   name           String
-  isActive       Boolean            @default(true)
+  isActive       Boolean           @default(true)
   trigger        AutomationTrigger
   triggerConfig  Json?
   conditionsJson Json?
   actionsJson    Json
   lastRunAt      DateTime?
-  runCount       Int                @default(0)
+  runCount       Int               @default(0)
   createdById    String
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
 
   project   Project?           @relation("AutomationProject", fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User               @relation("AutomationCreator", fields: [createdById], references: [id])
@@ -1538,13 +1596,13 @@ model Automation {
 }
 
 model AutomationRunLog {
-  id            String   @id @default(cuid())
-  automationId  String
-  triggeredAt   DateTime @default(now())
-  context       Json?
-  result        String
-  errorMessage  String?
-  durationMs    Int
+  id           String   @id @default(cuid())
+  automationId String
+  triggeredAt  DateTime @default(now())
+  context      Json?
+  result       String
+  errorMessage String?
+  durationMs   Int
 
   automation Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
 
@@ -1553,19 +1611,19 @@ model AutomationRunLog {
 }
 
 model Webhook {
-  id            String              @id @default(cuid())
-  projectId     String?
-  url           String
-  events        String[]
-  secret        String
-  isActive      Boolean             @default(true)
+  id             String    @id @default(cuid())
+  projectId      String?
+  url            String
+  events         String[]
+  secret         String
+  isActive       Boolean   @default(true)
   lastDeliveryAt DateTime?
-  failureCount  Int                 @default(0)
-  createdById   String
-  createdAt     DateTime            @default(now())
+  failureCount   Int       @default(0)
+  createdById    String
+  createdAt      DateTime  @default(now())
 
-  project   Project?           @relation("WebhookProject", fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy User               @relation("WebhookCreator", fields: [createdById], references: [id])
+  project    Project?          @relation("WebhookProject", fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy  User              @relation("WebhookCreator", fields: [createdById], references: [id])
   deliveries WebhookDelivery[]
 
   @@index([projectId, isActive])
@@ -1622,13 +1680,13 @@ model TaskTemplate {
 }
 
 model EmailToTaskInbox {
-  id               String   @id @default(cuid())
-  projectId        String   @unique
-  inboxAddress     String   @unique
-  defaultStatusId  String?
+  id                String   @id @default(cuid())
+  projectId         String   @unique
+  inboxAddress      String   @unique
+  defaultStatusId   String?
   defaultAssigneeId String?
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
 
   project Project @relation("EmailInboxProject", fields: [projectId], references: [id], onDelete: Cascade)
 
@@ -1685,14 +1743,14 @@ model TeamMember {
 }
 
 model UserIntegration {
-  id            String   @id @default(cuid())
-  userId        String
-  provider      String   // "slack" | "telegram" | "google_calendar"
-  externalId    String
-  accessToken   String   @db.Text
-  refreshToken  String?  @db.Text
-  scopes        String?
-  connectedAt   DateTime @default(now())
+  id           String   @id @default(cuid())
+  userId       String
+  provider     String // "slack" | "telegram" | "google_calendar"
+  externalId   String
+  accessToken  String   @db.Text
+  refreshToken String?  @db.Text
+  scopes       String?
+  connectedAt  DateTime @default(now())
 
   user User @relation("UserIntegrationUser", fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1715,8 +1773,8 @@ model SavedView {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  user        User?    @relation("SavedViewUser", fields: [userId], references: [id], onDelete: Cascade)
-  project     Project? @relation("SavedViewProject", fields: [projectId], references: [id], onDelete: Cascade)
+  user    User?    @relation("SavedViewUser", fields: [userId], references: [id], onDelete: Cascade)
+  project Project? @relation("SavedViewProject", fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, isShared])
   @@index([userId, projectId])

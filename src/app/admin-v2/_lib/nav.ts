@@ -15,6 +15,7 @@ import {
   Building2,
   FileText,
   ListTodo,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -54,6 +55,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
       { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
       { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
+      { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
@@ -113,6 +115,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/chat": "Чат",
   "/admin-v2/finance": "Фінансовий облік",
   "/admin-v2/finance/templates": "Шаблони",
+  "/admin-v2/financing": "Фінансування",
   "/admin": "Дашборд",
   "/admin/projects": "Проєкти",
   "/admin/projects/new": "Новий проєкт",

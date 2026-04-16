@@ -134,3 +134,37 @@ export const PROJECT_TEMPLATES = [
 ] as const;
 
 export type ProjectTemplateId = typeof PROJECT_TEMPLATES[number]["id"];
+
+export const FINANCE_ENTRY_TYPE_LABELS = {
+  INCOME: "Дохід",
+  EXPENSE: "Витрата",
+} as const;
+
+export const FINANCE_CATEGORIES = [
+  { key: "materials",       label: "Матеріали",            applicableTo: "EXPENSE" },
+  { key: "subcontractors",  label: "Роботи / підрядники",  applicableTo: "EXPENSE" },
+  { key: "salary",          label: "Зарплата",             applicableTo: "EXPENSE" },
+  { key: "rent",            label: "Оренда",               applicableTo: "EXPENSE" },
+  { key: "equipment",       label: "Техніка",              applicableTo: "EXPENSE" },
+  { key: "logistics",       label: "Логістика",            applicableTo: "EXPENSE" },
+  { key: "design",          label: "Проєктування",         applicableTo: "EXPENSE" },
+  { key: "demolition",      label: "Демонтаж",             applicableTo: "EXPENSE" },
+  { key: "construction",    label: "Будівельні витрати",   applicableTo: "EXPENSE" },
+  { key: "admin",           label: "Адміністративні",      applicableTo: "EXPENSE" },
+  { key: "utilities",       label: "Комунальні",           applicableTo: "EXPENSE" },
+  { key: "taxes",           label: "Податки / ПДВ",        applicableTo: "EXPENSE" },
+  { key: "other_expense",   label: "Інші витрати",         applicableTo: "EXPENSE" },
+
+  { key: "investment",      label: "Інвестиція",           applicableTo: "INCOME" },
+  { key: "client_advance",  label: "Аванс від замовника",  applicableTo: "INCOME" },
+  { key: "other_income",    label: "Інші доходи",          applicableTo: "INCOME" },
+] as const;
+
+export type FinanceCategoryKey = typeof FINANCE_CATEGORIES[number]["key"];
+
+export const FINANCE_CATEGORY_LABELS: Record<string, string> =
+  Object.fromEntries(FINANCE_CATEGORIES.map((c) => [c.key, c.label]));
+
+export function financeCategoriesForType(type: "INCOME" | "EXPENSE") {
+  return FINANCE_CATEGORIES.filter((c) => c.applicableTo === type);
+}
