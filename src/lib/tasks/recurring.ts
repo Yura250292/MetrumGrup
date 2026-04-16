@@ -4,15 +4,42 @@ import { RRule, rrulestr } from "rrule";
 /**
  * Recurring task spawner.
  *
- * Tasks with `isRecurring=true` + `recurrenceRule` (RRULE string) act as
- * templates. On each cron tick we compute next occurrences strictly after
- * the latest spawned child's dueDate (or the parent's creation date) and
- * up to `now + horizonHours`. For each, we spawn a child Task with
- * `recurrenceParentId` pointing back to the template, copy core fields,
- * and shift startDate/dueDate to the occurrence.
+ * === Product spec (decided as of 2026-04-16) ===
+ * Mode: "schedule-based" — spawn ahead of time based on RRULE,
+ *       independent of whether the previous occurrence is complete.
+ *       (NOT "spawn-after-completion" — that would be a different model.)
  *
- * The template itself is never shown in List/Kanban (filter by
- * isRecurring=false OR show with a badge — that's a UI concern).
+ * What is copied from the template to each child:
+ *   ✓ title, description, priority, estimatedHours, isPrivate
+ *   ✓ assignees (TaskAssignee rows)
+ *   ✓ labels (TaskLabelAssignment rows)
+ *   ✓ customFields (entire JSON blob)
+ *   ✓ statusId (starts in the template's current status)
+ *   ✗ checklist items — NOT copied (design: each occurrence starts with
+ *     empty checklist; if checklist reuse is needed, convert the
+ *     template to a TaskTemplate instead)
+ *   ✗ subtasks — NOT copied (same rationale; use TaskTemplate for
+ *     hierarchical blueprints)
+ *   ✗ time logs, comments, attachments — never copied
+ *
+ * Duplicate prevention: spawn only for occurrences strictly after the
+ * latest already-spawned child's dueDate (or the template's creation
+ * date if no children yet). Cron runs every 5 min; horizon is 24h —
+ * if the cron is down for >24h, subsequent runs will backfill since
+ * they always look "after latest existing child".
+ *
+ * Overdue handling: a child task spawned on day N with dueDate = day N
+ * becomes overdue on day N+1 if unfinished. It does NOT block future
+ * spawns — each recurrence is an independent task instance.
+ *
+ * Manual editing of template: takes effect on the *next* spawn only.
+ * Previously-spawned children are independent — editing template
+ * title/assignees/etc. does not retroactively update children.
+ *
+ * UI filtering: templates (isRecurring=true) ARE shown in task lists,
+ * identifiable by `_count.recurrenceChildren` or `isRecurring` flag.
+ * Children have `recurrenceParentId` set so they can be filtered by
+ * "all instances of template X" if needed.
  */
 
 export async function spawnRecurringOccurrences(opts?: {

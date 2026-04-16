@@ -18,6 +18,26 @@ import { resolveMemberPermissions, type EffectivePermissions } from "./permissio
  * LEGACY fallback: while ProjectMember backfill is in progress (PR1-PR2 in
  * production but PR4 not yet deployed), `canViewProject` falls back to chat
  * conversation participants. Remove fallback in PR4 once sync is live.
+ *
+ * ================================================================
+ * TASKS POLICY (Phase 1+): internal-staff-only
+ * ================================================================
+ * Product decision: tasks are an internal execution layer for the
+ * Metrum team. CLIENTs see the public-facing project portal
+ * (stages, photos, payments, completion acts) but NEVER see tasks,
+ * checklists, time logs, comments on tasks, or task-related reports.
+ *
+ * Implementation:
+ *   - All `canView*Tasks` / `canLogTime` / `canViewTimeReports` etc.
+ *     below are hard-forced to `false` when `role === "CLIENT"`,
+ *     regardless of `ProjectMember.permissions` overrides.
+ *   - This is intentionally stricter than Worksection (which supports
+ *     guest/reader external access to individual tasks). If a client
+ *     portal for tasks is ever required, add a new `TaskVisibility`
+ *     model or `isClientVisible` flag — DO NOT remove this hard-block.
+ *
+ * The `taskDenyClient` constant below enforces this; any new task
+ * permission added here must be gated through it.
  */
 
 type AccessProject = {

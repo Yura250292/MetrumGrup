@@ -612,6 +612,17 @@ export async function addAssignee(
   });
 
   try {
+    await auditLog({
+      userId: actorId,
+      action: "UPDATE",
+      entity: "Task",
+      entityId: taskId,
+      projectId: existing.projectId,
+      newData: { assigneeAdded: userId },
+    });
+  } catch {}
+
+  try {
     await notifyUsers({
       userIds: [userId],
       actorId,
@@ -635,6 +646,17 @@ export async function removeAssignee(
   await prisma.taskAssignee
     .delete({ where: { taskId_userId: { taskId, userId } } })
     .catch(() => {});
+
+  try {
+    await auditLog({
+      userId: actorId,
+      action: "UPDATE",
+      entity: "Task",
+      entityId: taskId,
+      projectId: existing.projectId,
+      oldData: { assigneeRemoved: userId },
+    });
+  } catch {}
 }
 
 export async function toggleWatcher(taskId: string, userId: string): Promise<boolean> {
@@ -679,6 +701,16 @@ export async function attachLabel(
     update: {},
     create: { taskId, labelId },
   });
+  try {
+    await auditLog({
+      userId: actorId,
+      action: "UPDATE",
+      entity: "Task",
+      entityId: taskId,
+      projectId: existing.projectId,
+      newData: { labelAttached: labelId },
+    });
+  } catch {}
 }
 
 export async function detachLabel(
@@ -697,6 +729,16 @@ export async function detachLabel(
   await prisma.taskLabelAssignment
     .delete({ where: { taskId_labelId: { taskId, labelId } } })
     .catch(() => {});
+  try {
+    await auditLog({
+      userId: actorId,
+      action: "UPDATE",
+      entity: "Task",
+      entityId: taskId,
+      projectId: existing.projectId,
+      oldData: { labelDetached: labelId },
+    });
+  } catch {}
 }
 
 export type ChecklistInput = {
@@ -730,7 +772,7 @@ export async function addChecklistItem(
   });
   const position = input.position ?? (max._max.position ?? -1) + 1;
 
-  return prisma.checklistItem.create({
+  const created = await prisma.checklistItem.create({
     data: {
       taskId,
       content,
@@ -739,6 +781,17 @@ export async function addChecklistItem(
       assigneeId: input.assigneeId ?? null,
     },
   });
+  try {
+    await auditLog({
+      userId: actorId,
+      action: "CREATE",
+      entity: "ChecklistItem",
+      entityId: created.id,
+      projectId: existing.projectId,
+      newData: { taskId, content: content.slice(0, 80) },
+    });
+  } catch {}
+  return created;
 }
 
 export async function toggleChecklistItem(

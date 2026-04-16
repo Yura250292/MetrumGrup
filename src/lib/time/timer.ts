@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { auditLog } from "@/lib/audit";
 import { getProjectAccessContext } from "@/lib/projects/access";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { emit as emitRealtime } from "@/lib/realtime/sse-hub";
@@ -84,6 +85,16 @@ export async function startTimer(opts: {
     taskId: opts.taskId,
     userId: opts.userId,
   });
+  try {
+    await auditLog({
+      userId: opts.userId,
+      action: "CREATE",
+      entity: "TimeLog",
+      entityId: created.id,
+      projectId: task.projectId,
+      newData: { taskId: opts.taskId, startedAt: created.startedAt },
+    });
+  } catch {}
   return created;
 }
 
@@ -138,6 +149,16 @@ export async function stopTimer(opts: {
     userId: active.userId,
     minutes,
   });
+  try {
+    await auditLog({
+      userId: active.userId,
+      action: "UPDATE",
+      entity: "TimeLog",
+      entityId: active.id,
+      projectId: active.task.projectId,
+      newData: { minutes, cost: cost ?? null },
+    });
+  } catch {}
   return updated;
 }
 
