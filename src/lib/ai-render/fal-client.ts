@@ -91,16 +91,15 @@ async function buildModelRequest(
   }
 
   // TOPDOWN_TO_3D — take a photorealistic top-down render (from Seedream)
-  // and convert to 3D perspective/isometric view using kontext.
-  // Tested: produces stunning 3D cutaway, isometric, and eye-level views
-  // when the input is already photorealistic (not a raw sketch).
+  // and convert to 3D perspective/isometric view.
+  // Tested: Seedream preserves room layout far better than kontext
+  // when converting top-down to 3D (kontext rearranges rooms).
   if (mode === "TOPDOWN_TO_3D") {
     return {
-      modelId: "fal-ai/flux-pro/kontext",
+      modelId: "fal-ai/bytedance/seedream/v4/edit",
       input: {
         prompt: params.prompt,
-        image_url: falImageUrl,
-        aspect_ratio: pickAspectRatio(params.width, params.height),
+        image_urls: [falImageUrl],
       },
     };
   }
