@@ -6,7 +6,8 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useAiRenderJobs, useAiRenderJob, useCancelAiRender, useCreateAiRender } from "@/hooks/useAiRender";
 import { AiRenderModal } from "./ai-render-modal";
 import { AiRenderResultCard } from "./ai-render-result-card";
-import type { AiRenderJobDTO } from "@/lib/ai-render/types";
+import { FurnitureEditor } from "./furniture-editor";
+import type { AiRenderJobDTO, FurnitureItem } from "@/lib/ai-render/types";
 
 function SkeletonCard() {
   return (
@@ -26,6 +27,7 @@ function SkeletonCard() {
 
 export function TabAiRender({ projectId }: { projectId: string }) {
   const [showModal, setShowModal] = useState(false);
+  const [editFurnitureUrl, setEditFurnitureUrl] = useState<string | null>(null);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
   const { data, isLoading, refetch } = useAiRenderJobs(projectId);
   const deleteRender = useCancelAiRender(projectId);
@@ -58,16 +60,45 @@ export function TabAiRender({ projectId }: { projectId: string }) {
     refetch();
   };
 
-  const handleGenerate3D = async (outputUrl: string) => {
+  const handleEditFurniture = (outputUrl: string) => {
+    setEditFurnitureUrl(outputUrl);
+  };
+
+  const handleFurnitureSubmit = async (items: FurnitureItem[]) => {
+    if (!editFurnitureUrl) return;
     try {
       const job = await createRender.mutateAsync({
-        mode: "TOPDOWN_TO_3D" as AiRenderJobDTO["mode"],
-        inputUrl: outputUrl,
-        prompt: "3D architectural model",
+        mode: "EDIT_FURNITURE" as AiRenderJobDTO["mode"],
+        inputUrl: editFurnitureUrl,
         width: 1024,
         height: 1024,
+        furnitureLayout: items,
       });
+      setEditFurnitureUrl(null);
       setPollingJobId(job.id);
+      refetch();
+    } catch {
+      // error handled by mutation
+    }
+  };
+
+  const handleGenerate3D = async (outputUrl: string) => {
+    const views = [
+      { prompt: "Transform this top-down interior into a close-up 3D cutaway from the front-left corner, camera at 30 degree low angle, walls cut at mid-height, all rooms visible with detailed furniture, warm golden hour sunlight, photorealistic architectural visualization, 8k", width: 1024, height: 576 },
+      { prompt: "Transform this top-down interior into a close-up 3D cutaway from the back-right corner, opposite angle, walls cut showing kitchen and bathroom, evening ambient lighting with warm lamps, photorealistic architectural render, 8k", width: 1024, height: 576 },
+      { prompt: "Transform this top-down interior into a dramatic close-up 3D isometric architectural scale model, 45 degree viewing angle, walls at half height, all rooms visible with furniture, strong directional sunlight with shadows, premium miniature model look, photorealistic, 8k", width: 1024, height: 1024 },
+    ];
+    try {
+      for (const view of views) {
+        const job = await createRender.mutateAsync({
+          mode: "TOPDOWN_TO_3D" as AiRenderJobDTO["mode"],
+          inputUrl: outputUrl,
+          prompt: view.prompt,
+          width: view.width,
+          height: view.height,
+        });
+        setPollingJobId(job.id);
+      }
       refetch();
     } catch {
       // error handled by mutation
@@ -150,6 +181,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
               onRegenerate={handleRegenerate}
               onDelete={handleDelete}
               onGenerate3D={handleGenerate3D}
+              onEditFurniture={handleEditFurniture}
             />
           ))}
         </div>
@@ -161,6 +193,16 @@ export function TabAiRender({ projectId }: { projectId: string }) {
           projectId={projectId}
           onClose={() => setShowModal(false)}
           onJobCreated={handleJobCreated}
+        />
+      )}
+
+      {/* Furniture editor */}
+      {editFurnitureUrl && (
+        <FurnitureEditor
+          imageUrl={editFurnitureUrl}
+          onSubmit={handleFurnitureSubmit}
+          onClose={() => setEditFurnitureUrl(null)}
+          isSubmitting={createRender.isPending}
         />
       )}
     </div>

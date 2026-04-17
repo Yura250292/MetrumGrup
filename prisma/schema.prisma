@@ -1110,6 +1110,7 @@ enum AiRenderMode {
   TEXT_TO_RENDER
   FLOOR_PLAN_TO_3D
   TOPDOWN_TO_3D
+  EDIT_FURNITURE
 }
 
 enum AiRenderStatus {

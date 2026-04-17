@@ -90,19 +90,25 @@ async function buildModelRequest(
     };
   }
 
-  // TOPDOWN_TO_3D — generate interactive 3D model (.glb) from top-down render.
-  // Uses Trellis (image-to-3D mesh). Output is a .glb file, not an image.
-  // Tested: Trellis produces rotatable 3D model of apartment with
-  // walls, rooms, furniture, and lighting visible.
+  // TOPDOWN_TO_3D — generate 3D perspective views from top-down render
+  // Uses Seedream v4/edit for photorealistic static 3D views
   if (mode === "TOPDOWN_TO_3D") {
     return {
-      modelId: "fal-ai/trellis",
+      modelId: "fal-ai/bytedance/seedream/v4/edit",
       input: {
-        image_url: falImageUrl,
-        ss_sampling_steps: 50,
-        slat_sampling_steps: 50,
-        mesh_simplify: 0.90,
-        texture_size: 2048,
+        prompt: params.prompt,
+        image_urls: [falImageUrl],
+      },
+    };
+  }
+
+  // EDIT_FURNITURE — re-render top-down view with updated furniture layout
+  if (mode === "EDIT_FURNITURE") {
+    return {
+      modelId: "fal-ai/bytedance/seedream/v4/edit",
+      input: {
+        prompt: params.prompt,
+        image_urls: [falImageUrl],
       },
     };
   }

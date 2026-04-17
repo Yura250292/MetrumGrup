@@ -13,6 +13,7 @@ import { prisma } from "@/lib/prisma";
 import { uploadFileToR2 } from "@/lib/r2-client";
 import { generateRender, isFalConfigured } from "./fal-client";
 import { buildPrompt } from "./prompt-builder";
+import { serializeFurnitureLayout } from "./layout-to-prompt";
 import type { AiRenderJobDTO, AiCreditsDTO, CreateRenderJobInput } from "./types";
 
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL ?? "";
@@ -208,9 +209,17 @@ export async function createRenderJob(
     FLOOR_PLAN_TO_3D: 0.85,
     TEXT_TO_RENDER: 1.0,
     TOPDOWN_TO_3D: 0.85,
+    EDIT_FURNITURE: 0.85,
   };
   const defaultStrength = strengthByMode[input.mode] ?? 0.85;
   const defaultControlnet = input.mode === "SKETCH_TO_RENDER" ? "lineart" : "depth";
+
+  // For EDIT_FURNITURE, serialize furniture layout into the prompt
+  let finalPrompt = input.prompt ?? null;
+  if (input.mode === "EDIT_FURNITURE" && input.furnitureLayout?.length) {
+    const layoutText = serializeFurnitureLayout(input.furnitureLayout);
+    finalPrompt = layoutText + (finalPrompt ? ` ${finalPrompt}` : "");
+  }
 
   const job = await prisma.aiRenderJob.create({
     data: {
@@ -221,7 +230,7 @@ export async function createRenderJob(
       inputR2Key,
       inputUrl,
       stylePreset: input.stylePreset ?? null,
-      prompt: input.prompt ?? null,
+      prompt: finalPrompt,
       strength: input.strength ?? defaultStrength,
       controlnetType: input.controlnetType ?? defaultControlnet,
       width: input.width ?? 1024,

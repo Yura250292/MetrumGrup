@@ -1,11 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check, Trash2, Box } from "lucide-react";
+import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check, Trash2, Box, Move } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
 import { AiRenderComparisonSlider } from "./ai-render-comparison-slider";
-import { Ai3DModelViewer } from "./ai-3d-model-viewer";
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   QUEUED: { label: "В черзі", color: T.textMuted, bg: T.panelElevated },
@@ -21,18 +20,19 @@ export function AiRenderResultCard({
   onRegenerate,
   onDelete,
   onGenerate3D,
+  onEditFurniture,
 }: {
   job: AiRenderJobDTO;
   onRegenerate?: (job: AiRenderJobDTO) => void;
   onDelete?: (jobId: string) => void;
   onGenerate3D?: (outputUrl: string) => void;
+  onEditFurniture?: (outputUrl: string) => void;
 }) {
   const [showComparison, setShowComparison] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const statusInfo = STATUS_MAP[job.status] ?? STATUS_MAP.QUEUED;
   const isInProgress = job.status === "QUEUED" || job.status === "PROCESSING" || job.status === "UPLOADING";
   const canDelete = !isInProgress;
-  const is3DModel = job.outputUrl?.endsWith(".glb");
 
   return (
     <div
@@ -73,9 +73,7 @@ export function AiRenderResultCard({
 
         {job.status === "COMPLETED" && job.outputUrl && (
           <>
-            {is3DModel ? (
-              <Ai3DModelViewer src={job.outputUrl} />
-            ) : showComparison && job.inputUrl ? (
+            {showComparison && job.inputUrl ? (
               <AiRenderComparisonSlider inputUrl={job.inputUrl} outputUrl={job.outputUrl} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
@@ -115,7 +113,9 @@ export function AiRenderResultCard({
                   ? "План → Реалістика"
                   : job.mode === "TOPDOWN_TO_3D"
                     ? "3D Візуалізація"
-                    : "Текст → Рендер"}
+                    : job.mode === "EDIT_FURNITURE"
+                      ? "Редагування меблів"
+                      : "Текст → Рендер"}
           </span>
           {job.durationMs && (
             <span className="flex items-center gap-1 text-[11px]" style={{ color: T.textMuted }}>
@@ -159,6 +159,17 @@ export function AiRenderResultCard({
                 >
                   <Download size={14} style={{ color: T.textSecondary }} />
                 </a>
+                {job.mode === "FLOOR_PLAN_TO_3D" && onEditFurniture && (
+                  <button
+                    onClick={() => onEditFurniture(job.outputUrl!)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors hover:opacity-80"
+                    style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+                    title="Змінити розміщення меблів"
+                  >
+                    <Move size={12} />
+                    Меблі
+                  </button>
+                )}
                 {job.mode === "FLOOR_PLAN_TO_3D" && onGenerate3D && (
                   <button
                     onClick={() => onGenerate3D(job.outputUrl!)}

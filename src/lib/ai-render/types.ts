@@ -1,5 +1,18 @@
 import type { AiRenderMode, AiRenderStatus } from "@prisma/client";
 
+// ── Furniture editor types ───────────────────────────────────────
+
+export interface FurnitureItem {
+  id: string;
+  type: string;
+  label: string;
+  x: number;      // % of container width (0-100)
+  y: number;      // % of container height (0-100)
+  width: number;  // % of container width
+  height: number; // % of container height
+  rotation: number; // 0, 90, 180, 270
+}
+
 // ── API Request / Response types ──────────────────────────────────
 
 export interface CreateRenderJobInput {
@@ -13,6 +26,7 @@ export interface CreateRenderJobInput {
   controlnetType?: string;
   width?: number;
   height?: number;
+  furnitureLayout?: FurnitureItem[];
 }
 
 export interface AiRenderJobDTO {
