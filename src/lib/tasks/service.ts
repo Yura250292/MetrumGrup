@@ -38,6 +38,37 @@ function bad(msg: string): never {
   throw new TaskError(msg, 400);
 }
 
+/**
+ * Apply private-task visibility filtering to a Prisma where clause.
+ * Users without canViewPrivateTasks only see: non-private tasks, tasks they
+ * created, tasks they are assigned to, or tasks they watch.
+ */
+import type { ProjectAccessContext } from "@/lib/projects/access";
+
+function applyTaskPrivacyScope(
+  where: Prisma.TaskWhereInput,
+  ctx: ProjectAccessContext,
+  currentUserId: string,
+): void {
+  if (ctx.isSuperAdmin || ctx.member?.effective.canViewPrivateTasks) return;
+
+  const privacyOr: Prisma.TaskWhereInput[] = [
+    { isPrivate: false },
+    { createdById: currentUserId },
+    { assignees: { some: { userId: currentUserId } } },
+    { watchers: { some: { userId: currentUserId } } },
+  ];
+
+  const existingAnd = Array.isArray(where.AND)
+    ? where.AND
+    : where.AND
+      ? [where.AND]
+      : [];
+  where.AND = [...existingAnd, { OR: privacyOr }];
+  // Clean up top-level OR if search was set there — it's now inside AND
+  delete where.OR;
+}
+
 const TASK_DETAIL_INCLUDE = {
   status: true,
   stage: { select: { id: true, stage: true, status: true } },
@@ -137,52 +168,24 @@ export async function listTasks(filter: ListFilter, currentUserId: string) {
   if (filter.priority) where.priority = filter.priority;
   if (filter.parentTaskId === null) where.parentTaskId = null;
   if (typeof filter.parentTaskId === "string") where.parentTaskId = filter.parentTaskId;
-  if (filter.search) {
-    where.OR = [
-      { title: { contains: filter.search, mode: "insensitive" } },
-      { description: { contains: filter.search, mode: "insensitive" } },
-    ];
-  }
   if (filter.assigneeId) {
     where.assignees = { some: { userId: filter.assigneeId } };
   }
   if (filter.labelId) {
     where.labels = { some: { labelId: filter.labelId } };
   }
-
-  // Private tasks: hide from users without canViewPrivateTasks, unless they
-  // are creator / assignee / watcher.
-  const effective = ctx.member?.effective;
-  if (!ctx.isSuperAdmin && !effective?.canViewPrivateTasks) {
-    where.OR = [
-      ...(where.OR ?? []),
-      { isPrivate: false },
-      { createdById: currentUserId },
-      { assignees: { some: { userId: currentUserId } } },
-      { watchers: { some: { userId: currentUserId } } },
-    ];
-    // If OR was empty before, we just added everything; else keep original
-    // semantics as AND( original OR, privacy OR ). Simplify by wrapping.
-    if (filter.search) {
-      where.AND = [
-        {
-          OR: [
-            { title: { contains: filter.search, mode: "insensitive" } },
-            { description: { contains: filter.search, mode: "insensitive" } },
-          ],
-        },
-        {
-          OR: [
-            { isPrivate: false },
-            { createdById: currentUserId },
-            { assignees: { some: { userId: currentUserId } } },
-            { watchers: { some: { userId: currentUserId } } },
-          ],
-        },
-      ];
-      delete where.OR;
-    }
+  if (filter.search) {
+    const searchAnd: Prisma.TaskWhereInput = {
+      OR: [
+        { title: { contains: filter.search, mode: "insensitive" } },
+        { description: { contains: filter.search, mode: "insensitive" } },
+      ],
+    };
+    where.AND = [...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []), searchAnd];
   }
+
+  // Private tasks: shared helper
+  applyTaskPrivacyScope(where, ctx, currentUserId);
 
   const take = Math.min(filter.take ?? 50, 200);
   const rows = await prisma.task.findMany({
@@ -291,6 +294,30 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
   });
   const position = (lastPos._max.position ?? -1) + 1;
 
+  // Validate assigneeIds: each must have task access on this project
+  if (input.assigneeIds && input.assigneeIds.length > 0) {
+    for (const uid of input.assigneeIds) {
+      const targetCtx = await getProjectAccessContext(input.projectId, uid);
+      if (!targetCtx?.canViewTasks) {
+        bad(`Assignee ${uid} does not have task access on this project`);
+      }
+    }
+  }
+
+  // Validate labelIds: each must belong to this project
+  if (input.labelIds && input.labelIds.length > 0) {
+    const validLabels = await prisma.taskLabel.findMany({
+      where: { id: { in: input.labelIds }, projectId: input.projectId },
+      select: { id: true },
+    });
+    const validIds = new Set(validLabels.map((l) => l.id));
+    for (const lid of input.labelIds) {
+      if (!validIds.has(lid)) {
+        bad(`Label ${lid} does not belong to this project`);
+      }
+    }
+  }
+
   const task = await prisma.$transaction(async (tx) => {
     const created = await tx.task.create({
       data: {
@@ -379,6 +406,13 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
     }
   } catch (err) {
     console.error("[tasks/createTask] dispatch failed:", err);
+  }
+
+  // Notify all project members about new task (best-effort)
+  try {
+    await notifyTaskCreatedToProject(task.id, actorId);
+  } catch (err) {
+    console.error("[tasks/createTask] notifyProject failed:", err);
   }
 
   // Real-time broadcast
@@ -642,7 +676,12 @@ export async function removeAssignee(
   const existing = await loadTaskWithProject(taskId);
   await requireTasksEnabled(existing.projectId);
   const ctx = await getProjectAccessContext(existing.projectId, actorId);
-  if (!ctx?.canAssignTasks && userId !== actorId) forbid();
+  if (!ctx?.canViewTasks) forbid();
+
+  // Self-unassign: allowed for any project member who is currently assigned.
+  // Removing someone else: requires canAssignTasks.
+  const isSelfUnassign = userId === actorId;
+  if (!isSelfUnassign && !ctx.canAssignTasks) forbid();
   await prisma.taskAssignee
     .delete({ where: { taskId_userId: { taskId, userId } } })
     .catch(() => {});
@@ -804,6 +843,15 @@ export async function toggleChecklistItem(
   const ctx = await getProjectAccessContext(existing.projectId, actorId);
   if (!ctx?.canViewTasks) forbid();
 
+  // Require edit capability — read-only users must not mutate checklist
+  const isOwner = existing.createdById === actorId;
+  const isAssignee =
+    (await prisma.taskAssignee.count({ where: { taskId, userId: actorId } })) > 0;
+  const canEdit =
+    ctx.canEditAnyTask ||
+    ((ctx.member?.effective.canEditOwnTasks ?? false) && (isOwner || isAssignee));
+  if (!canEdit) forbid();
+
   const item = await prisma.checklistItem.findFirst({
     where: { id: itemId, taskId },
   });
@@ -853,21 +901,7 @@ export async function searchTasks(
   const ctx = await assertCanView(projectId, currentUserId);
 
   const where = buildTaskWhere(projectId, filter);
-  // Private task guard — same pattern as listTasks
-  const effective = ctx.member?.effective;
-  if (!ctx.isSuperAdmin && !effective?.canViewPrivateTasks) {
-    where.AND = [
-      ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-      {
-        OR: [
-          { isPrivate: false },
-          { createdById: currentUserId },
-          { assignees: { some: { userId: currentUserId } } },
-          { watchers: { some: { userId: currentUserId } } },
-        ],
-      },
-    ];
-  }
+  applyTaskPrivacyScope(where, ctx, currentUserId);
 
   const rows = await prisma.task.findMany({
     where,
@@ -982,18 +1016,71 @@ export async function reorderTask(
   });
   if (!status) bad("Invalid status");
 
-  await prisma.task.update({
-    where: { id: taskId },
-    data: {
-      statusId: newStatusId,
-      position: newPosition,
-      completedAt:
-        existing.statusId === newStatusId
-          ? undefined
-          : status.isDone
-            ? new Date()
-            : null,
-    },
+  await prisma.$transaction(async (tx) => {
+    // Get all tasks in the target column, ordered by position
+    const columnTasks = await tx.task.findMany({
+      where: {
+        projectId: existing.projectId,
+        statusId: newStatusId,
+        id: { not: taskId }, // exclude the moving task
+      },
+      select: { id: true, position: true },
+      orderBy: { position: "asc" },
+    });
+
+    // Insert the moving task at newPosition and reindex the entire column
+    const clampedPos = Math.max(0, Math.min(newPosition, columnTasks.length));
+    const reordered = [
+      ...columnTasks.slice(0, clampedPos),
+      { id: taskId, position: -1 }, // placeholder
+      ...columnTasks.slice(clampedPos),
+    ];
+
+    // Batch-update positions for all tasks in the column
+    for (let i = 0; i < reordered.length; i++) {
+      const t = reordered[i]!;
+      if (t.id === taskId) {
+        await tx.task.update({
+          where: { id: taskId },
+          data: {
+            statusId: newStatusId,
+            position: i,
+            completedAt:
+              existing.statusId === newStatusId
+                ? undefined
+                : status.isDone
+                  ? new Date()
+                  : null,
+          },
+        });
+      } else if (t.position !== i) {
+        await tx.task.update({
+          where: { id: t.id },
+          data: { position: i },
+        });
+      }
+    }
+
+    // If moving between columns, reindex the old column to close the gap
+    if (existing.statusId !== newStatusId) {
+      const oldColumnTasks = await tx.task.findMany({
+        where: {
+          projectId: existing.projectId,
+          statusId: existing.statusId,
+          id: { not: taskId },
+        },
+        select: { id: true, position: true },
+        orderBy: { position: "asc" },
+      });
+      for (let i = 0; i < oldColumnTasks.length; i++) {
+        if (oldColumnTasks[i]!.position !== i) {
+          await tx.task.update({
+            where: { id: oldColumnTasks[i]!.id },
+            data: { position: i },
+          });
+        }
+      }
+    }
   });
 }
 

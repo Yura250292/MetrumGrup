@@ -4,11 +4,7 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import { getProjectAccessContext } from "@/lib/projects/access";
-
-async function canManage(projectId: string, userId: string) {
-  const ctx = await getProjectAccessContext(projectId, userId);
-  return !!ctx && (ctx.isSuperAdmin || ctx.member?.effective.canManageWebhooks);
-}
+import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 
 export async function GET(
   _request: NextRequest,
@@ -17,12 +13,21 @@ export async function GET(
   const { id: projectId } = await params;
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!(await canManage(projectId, session.user.id))) {
+
+  if (!(await isTasksEnabledForProject(projectId))) {
+    return NextResponse.json({ error: "Tasks disabled" }, { status: 404 });
+  }
+  const ctx = await getProjectAccessContext(projectId, session.user.id);
+  if (!ctx || (!ctx.isSuperAdmin && !ctx.member?.effective.canManageWebhooks)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Only super admins see global (projectId: null) webhooks
+  const scopeFilter = ctx.isSuperAdmin
+    ? { OR: [{ projectId }, { projectId: null }] }
+    : { projectId };
   const items = await prisma.webhook.findMany({
-    where: { OR: [{ projectId }, { projectId: null }] },
+    where: scopeFilter,
     orderBy: { createdAt: "desc" },
   });
   // Mask secret in listing
@@ -38,7 +43,12 @@ export async function POST(
   const { id: projectId } = await params;
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!(await canManage(projectId, session.user.id))) {
+
+  if (!(await isTasksEnabledForProject(projectId))) {
+    return NextResponse.json({ error: "Tasks disabled" }, { status: 404 });
+  }
+  const ctx = await getProjectAccessContext(projectId, session.user.id);
+  if (!ctx || (!ctx.isSuperAdmin && !ctx.member?.effective.canManageWebhooks)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

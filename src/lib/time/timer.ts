@@ -203,7 +203,7 @@ export async function createManualLog(opts: {
     ? Number(((minutes / 60) * resolved.rate).toFixed(2))
     : null;
 
-  return prisma.timeLog.create({
+  const created = await prisma.timeLog.create({
     data: {
       taskId: opts.taskId,
       userId: opts.userId,
@@ -216,6 +216,28 @@ export async function createManualLog(opts: {
       costSnapshot: cost,
     },
   });
+
+  // Audit log (parity with start/stop)
+  try {
+    await auditLog({
+      userId: opts.actorId,
+      action: "CREATE",
+      entity: "TimeLog",
+      entityId: created.id,
+      projectId: task.projectId,
+      newData: { taskId: opts.taskId, userId: opts.userId, minutes, manual: true },
+    });
+  } catch {}
+
+  // Real-time broadcast
+  emitRealtime(task.projectId, "timelog.created", {
+    taskId: opts.taskId,
+    userId: opts.userId,
+    minutes,
+    manual: true,
+  });
+
+  return created;
 }
 
 export async function deleteLog(opts: { logId: string; actorId: string }) {
@@ -256,7 +278,12 @@ export async function listTaskLogs(taskId: string, currentUserId: string) {
   const ctx = await getProjectAccessContext(task.projectId, currentUserId);
   if (!ctx?.canViewTasks) throw new TimerError("Forbidden", 403);
 
-  return prisma.timeLog.findMany({
+  // Require canViewTimeReports to see time logs at all
+  if (!ctx.canViewTimeReports && !ctx.isSuperAdmin) {
+    throw new TimerError("Forbidden", 403);
+  }
+
+  const rows = await prisma.timeLog.findMany({
     where: { taskId },
     include: {
       user: { select: { id: true, name: true, avatar: true } },
@@ -264,6 +291,18 @@ export async function listTaskLogs(taskId: string, currentUserId: string) {
     },
     orderBy: { startedAt: "desc" },
   });
+
+  // Strip cost data unless user has canViewCostReports
+  const canSeeCosts = ctx.canViewCostReports || ctx.isSuperAdmin;
+  if (!canSeeCosts) {
+    return rows.map((row) => ({
+      ...row,
+      hourlyRateSnapshot: null,
+      costSnapshot: null,
+    }));
+  }
+
+  return rows;
 }
 
 export async function listUserLogs(opts: {

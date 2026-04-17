@@ -32,8 +32,13 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  // Only super admins see global (projectId: null) automations.
+  // Project managers see only project-scoped ones.
+  const scopeFilter = ctx.isSuperAdmin
+    ? { OR: [{ projectId }, { projectId: null }] }
+    : { projectId };
   const items = await prisma.automation.findMany({
-    where: { OR: [{ projectId }, { projectId: null }] },
+    where: scopeFilter,
     include: {
       createdBy: { select: { id: true, name: true } },
       _count: { select: { runs: true } },
@@ -51,6 +56,9 @@ export async function POST(
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
+  if (!(await isTasksEnabledForProject(projectId))) {
+    return NextResponse.json({ error: "Tasks disabled" }, { status: 404 });
+  }
   const ctx = await getProjectAccessContext(projectId, session.user.id);
   if (!ctx?.member?.effective.canManageAutomations && !ctx?.isSuperAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

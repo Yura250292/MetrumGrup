@@ -53,9 +53,9 @@ export function useComments(entityType: CommentEntityType, entityId: string) {
   return useQuery({
     queryKey: commentsKeys.list(entityType, entityId),
     queryFn: () =>
-      jsonFetch<{ comments: CommentDTO[] }>(
+      jsonFetch<{ data: CommentDTO[] }>(
         `/api/admin/comments?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`
-      ).then((d) => d.comments),
+      ).then((d) => d.data),
     enabled: !!entityId,
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
@@ -67,10 +67,10 @@ export function usePostComment(entityType: CommentEntityType, entityId: string) 
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: string) =>
-      jsonFetch<{ comment: CommentDTO }>("/api/admin/comments", {
+      jsonFetch<{ data: CommentDTO }>("/api/admin/comments", {
         method: "POST",
         body: JSON.stringify({ entityType, entityId, body }),
-      }).then((d) => d.comment),
+      }).then((d) => d.data),
     onSuccess: (comment) => {
       qc.setQueryData<CommentDTO[]>(
         commentsKeys.list(entityType, entityId),

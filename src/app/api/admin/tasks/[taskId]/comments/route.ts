@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { unauthorizedResponse } from "@/lib/auth-utils";
+import {
+  unauthorizedResponse,
+  forbiddenResponse,
+} from "@/lib/auth-utils";
 import { listComments, postComment } from "@/lib/comments/service";
+
+function handleCommentError(err: unknown) {
+  const message = err instanceof Error ? err.message : "Unknown error";
+  if (message === "Unauthorized") return unauthorizedResponse();
+  if (message === "Forbidden") return forbiddenResponse();
+  if (message.includes("не знайдено")) {
+    return NextResponse.json({ error: message }, { status: 404 });
+  }
+  if (message.includes("Порожній")) {
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+  console.error("[task/comments] error:", err);
+  return NextResponse.json({ error: message }, { status: 500 });
+}
 
 export async function GET(
   _request: NextRequest,
@@ -15,9 +32,7 @@ export async function GET(
     const items = await listComments("TASK", taskId, session.user.id);
     return NextResponse.json({ data: items });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Internal error";
-    const status = msg === "Forbidden" ? 403 : msg.includes("не знайдено") ? 404 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return handleCommentError(e);
   }
 }
 
@@ -35,7 +50,7 @@ export async function POST(
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  if (typeof body.body !== "string") {
+  if (typeof body.body !== "string" || !body.body.trim()) {
     return NextResponse.json({ error: "body required" }, { status: 400 });
   }
 
@@ -43,11 +58,6 @@ export async function POST(
     const comment = await postComment("TASK", taskId, session.user.id, body.body);
     return NextResponse.json({ data: comment }, { status: 201 });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Internal error";
-    const status =
-      msg === "Forbidden" ? 403 :
-      msg.includes("не знайдено") ? 404 :
-      msg.includes("Порожній") ? 400 : 500;
-    return NextResponse.json({ error: msg }, { status });
+    return handleCommentError(e);
   }
 }

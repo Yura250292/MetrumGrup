@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Невірні параметри" }, { status: 400 });
     }
     const comments = await listComments(parsed.data.entityType, parsed.data.entityId, session.user.id);
-    return NextResponse.json({ comments });
+    return NextResponse.json({ data: comments });
   } catch (err) {
     return handleError(err);
   }
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       session.user.id,
       parsed.data.body
     );
-    return NextResponse.json({ comment }, { status: 201 });
+    return NextResponse.json({ data: comment }, { status: 201 });
   } catch (err) {
     return handleError(err);
   }
