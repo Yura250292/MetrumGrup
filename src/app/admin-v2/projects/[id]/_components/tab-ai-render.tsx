@@ -117,7 +117,10 @@ export function TabAiRender({ projectId }: { projectId: string }) {
   return (
     <div className="flex flex-col gap-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
+      <div
+        className="flex items-center justify-between flex-wrap gap-2 rounded-2xl px-4 py-3"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      >
         <div className="flex items-center gap-3">
           {!isLoading && (
             <span className="text-[13px]" style={{ color: T.textMuted }}>
@@ -137,7 +140,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
         <button
           onClick={() => setShowModal(true)}
           className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white active:scale-[0.97] transition"
-          style={{ backgroundColor: T.accentPrimary, minHeight: 44 }}
+          style={{ backgroundColor: T.accentPrimary, minHeight: 40 }}
         >
           <Plus size={16} /> Нова візуалізація
         </button>
