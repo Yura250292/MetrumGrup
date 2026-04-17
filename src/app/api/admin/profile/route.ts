@@ -43,7 +43,7 @@ export async function GET() {
       },
       projectMemberships: {
         select: {
-          role: true,
+          roleInProject: true,
           project: { select: { id: true, title: true } },
         },
         take: 20,
@@ -64,7 +64,7 @@ export async function GET() {
   const projectRoles = user.projectMemberships.map((pm) => ({
     projectId: pm.project.id,
     projectTitle: pm.project.title,
-    role: pm.role,
+    role: pm.roleInProject,
   }));
 
   // Compute profile completeness
