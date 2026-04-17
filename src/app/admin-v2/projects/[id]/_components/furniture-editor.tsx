@@ -50,6 +50,7 @@ export function FurnitureEditor({
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const justFinishedDrag = useRef(false);
 
   const addItem = useCallback((template: FurnitureTemplate) => {
     const id = `f_${nextId++}`;
@@ -135,8 +136,12 @@ export function FurnitureEditor({
   );
 
   const handlePointerUp = useCallback(() => {
+    if (draggingId) {
+      justFinishedDrag.current = true;
+      setTimeout(() => { justFinishedDrag.current = false; }, 50);
+    }
     setDraggingId(null);
-  }, []);
+  }, [draggingId]);
 
   const selectedItem = items.find((i) => i.id === selectedId);
   const template = selectedItem
@@ -220,7 +225,7 @@ export function FurnitureEditor({
             style={{ touchAction: "none" }}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onClick={() => setSelectedId(null)}
+            onClick={() => { if (!justFinishedDrag.current) setSelectedId(null); }}
           >
             {/* Background image */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -239,6 +244,7 @@ export function FurnitureEditor({
                 <div
                   key={item.id}
                   onPointerDown={(e) => handlePointerDown(e, item)}
+                  onClick={(e) => { e.stopPropagation(); setSelectedId(item.id); }}
                   className="absolute flex items-center justify-center rounded-md cursor-move select-none"
                   style={{
                     left: `${item.x}%`,
