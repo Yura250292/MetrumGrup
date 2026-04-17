@@ -41,11 +41,12 @@ export function FurnitureEditor({
   isSubmitting,
 }: {
   imageUrl: string;
-  onSubmit: (items: FurnitureItem[]) => void;
+  onSubmit: (items: FurnitureItem[], userNote: string) => void;
   onClose: () => void;
   isSubmitting: boolean;
 }) {
   const [items, setItems] = useState<FurnitureItem[]>([]);
+  const [userNote, setUserNote] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -303,18 +304,30 @@ export function FurnitureEditor({
 
       {/* Bottom bar */}
       <div
-        className="flex items-center justify-between px-4 py-3 shrink-0"
+        className="flex items-center gap-3 px-4 py-3 shrink-0"
         style={{ backgroundColor: T.panel, borderTop: `1px solid ${T.borderSoft}` }}
       >
-        <span className="text-[12px]" style={{ color: T.textMuted }}>
+        <span className="text-[12px] shrink-0" style={{ color: T.textMuted }}>
           {items.length === 0
-            ? "Додайте меблі з панелі зліва та розмістіть їх на плані"
-            : `${items.length} ${items.length === 1 ? "предмет" : "предметів"} розміщено`}
+            ? "Додайте меблі або опишіть зміни"
+            : `${items.length} шт.`}
         </span>
+        <input
+          type="text"
+          value={userNote}
+          onChange={(e) => setUserNote(e.target.value)}
+          placeholder="Прибери диван, перенеси стіл до вікна..."
+          className="flex-1 px-3 py-2 rounded-lg text-[13px] outline-none"
+          style={{
+            backgroundColor: T.panelElevated,
+            color: T.textPrimary,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        />
         <button
-          onClick={() => onSubmit(items)}
-          disabled={items.length === 0 || isSubmitting}
-          className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white active:scale-[0.97] transition disabled:opacity-40"
+          onClick={() => onSubmit(items, userNote)}
+          disabled={(items.length === 0 && !userNote.trim()) || isSubmitting}
+          className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white active:scale-[0.97] transition disabled:opacity-40 shrink-0"
           style={{ backgroundColor: T.accentPrimary }}
         >
           <Wand2 size={14} />

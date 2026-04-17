@@ -26,7 +26,7 @@ export function AiRenderResultCard({
   onRegenerate?: (job: AiRenderJobDTO) => void;
   onDelete?: (jobId: string) => void;
   onGenerate3D?: (outputUrl: string) => void;
-  onEditFurniture?: (outputUrl: string) => void;
+  onEditFurniture?: (renderUrl: string, sketchUrl: string) => void;
 }) {
   const [showComparison, setShowComparison] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -159,9 +159,9 @@ export function AiRenderResultCard({
                 >
                   <Download size={14} style={{ color: T.textSecondary }} />
                 </a>
-                {job.mode === "FLOOR_PLAN_TO_3D" && onEditFurniture && (
+                {job.mode === "FLOOR_PLAN_TO_3D" && onEditFurniture && job.inputUrl && (
                   <button
-                    onClick={() => onEditFurniture(job.outputUrl!)}
+                    onClick={() => onEditFurniture(job.outputUrl!, job.inputUrl!)}
                     className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors hover:opacity-80"
                     style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
                     title="Змінити розміщення меблів"

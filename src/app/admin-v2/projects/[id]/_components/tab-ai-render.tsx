@@ -28,6 +28,7 @@ function SkeletonCard() {
 export function TabAiRender({ projectId }: { projectId: string }) {
   const [showModal, setShowModal] = useState(false);
   const [editFurnitureUrl, setEditFurnitureUrl] = useState<string | null>(null);
+  const [editFurnitureSketchUrl, setEditFurnitureSketchUrl] = useState<string | null>(null);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
   const { data, isLoading, refetch } = useAiRenderJobs(projectId);
   const deleteRender = useCancelAiRender(projectId);
@@ -60,21 +61,24 @@ export function TabAiRender({ projectId }: { projectId: string }) {
     refetch();
   };
 
-  const handleEditFurniture = (outputUrl: string) => {
-    setEditFurnitureUrl(outputUrl);
+  const handleEditFurniture = (renderUrl: string, sketchUrl: string) => {
+    setEditFurnitureUrl(renderUrl);
+    setEditFurnitureSketchUrl(sketchUrl);
   };
 
-  const handleFurnitureSubmit = async (items: FurnitureItem[]) => {
-    if (!editFurnitureUrl) return;
+  const handleFurnitureSubmit = async (items: FurnitureItem[], userNote: string) => {
+    if (!editFurnitureSketchUrl) return;
     try {
       const job = await createRender.mutateAsync({
         mode: "EDIT_FURNITURE" as AiRenderJobDTO["mode"],
-        inputUrl: editFurnitureUrl,
+        inputUrl: editFurnitureSketchUrl, // original sketch, not rendered image
         width: 1024,
         height: 1024,
+        prompt: userNote || undefined,
         furnitureLayout: items,
       });
       setEditFurnitureUrl(null);
+      setEditFurnitureSketchUrl(null);
       setPollingJobId(job.id);
       refetch();
     } catch {
@@ -201,7 +205,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
         <FurnitureEditor
           imageUrl={editFurnitureUrl}
           onSubmit={handleFurnitureSubmit}
-          onClose={() => setEditFurnitureUrl(null)}
+          onClose={() => { setEditFurnitureUrl(null); setEditFurnitureSketchUrl(null); }}
           isSubmitting={createRender.isPending}
         />
       )}
