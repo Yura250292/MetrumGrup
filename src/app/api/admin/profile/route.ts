@@ -7,6 +7,7 @@ export async function GET() {
   const session = await auth();
   if (!session?.user?.id) return unauthorizedResponse();
 
+  try {
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
     select: {
@@ -86,6 +87,13 @@ export async function GET() {
     projectRoles,
     profileCompleteness,
   });
+  } catch (error) {
+    console.error("GET /api/admin/profile error:", error);
+    return NextResponse.json(
+      { error: "Internal server error", details: String(error) },
+      { status: 500 }
+    );
+  }
 }
 
 export async function PATCH(request: NextRequest) {
