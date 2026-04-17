@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { Download } from "lucide-react";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 type TimeReport = {
   range: { from: string; to: string };
@@ -231,15 +232,7 @@ export function ReportsClient({
                   border: `1px solid ${T.borderSoft}`,
                 }}
               >
-                <span
-                  className="inline-flex items-center justify-center rounded-full h-7 w-7 text-[10px] font-bold"
-                  style={{
-                    backgroundColor: T.accentPrimarySoft,
-                    color: T.accentPrimary,
-                  }}
-                >
-                  {r.name.slice(0, 2).toUpperCase()}
-                </span>
+                <UserAvatar src={r.avatar} name={r.name} size={28} />
                 <span className="flex-1 text-sm" style={{ color: T.textPrimary }}>
                   {r.name}
                 </span>

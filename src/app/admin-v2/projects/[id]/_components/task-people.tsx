@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 type PeopleTask = {
   id: string;
@@ -80,17 +81,16 @@ export function TaskPeopleView({
           >
             <header className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <span
-                  className="inline-flex items-center justify-center rounded-full h-8 w-8 text-[11px] font-bold"
-                  style={{
-                    backgroundColor: T.accentPrimarySoft,
-                    color: T.accentPrimary,
-                  }}
-                >
-                  {g.user
-                    ? g.user.name.slice(0, 2).toUpperCase()
-                    : "—"}
-                </span>
+                {g.user ? (
+                  <UserAvatar src={g.user.avatar} name={g.user.name} size={32} />
+                ) : (
+                  <span
+                    className="inline-flex items-center justify-center rounded-full h-8 w-8 text-[11px] font-bold"
+                    style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                  >
+                    —
+                  </span>
+                )}
                 <div>
                   <h4 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
                     {g.user ? g.user.name : "Без виконавця"}

@@ -19,6 +19,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 export type KanbanStatus = {
   id: string;
@@ -253,18 +254,7 @@ function Card({
         {card.assignees.length > 0 && (
           <div className="flex -space-x-1.5">
             {card.assignees.slice(0, 3).map((a) => (
-              <span
-                key={a.user.id}
-                title={a.user.name}
-                className="inline-flex items-center justify-center rounded-full h-5 w-5 text-[9px] font-bold"
-                style={{
-                  backgroundColor: T.accentPrimarySoft,
-                  color: T.accentPrimary,
-                  border: `1px solid ${T.panel}`,
-                }}
-              >
-                {a.user.name.slice(0, 2).toUpperCase()}
-              </span>
+              <UserAvatar key={a.user.id} src={a.user.avatar} name={a.user.name} size={20} />
             ))}
             {card.assignees.length > 3 && (
               <span
