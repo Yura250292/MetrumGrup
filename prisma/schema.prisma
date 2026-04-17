@@ -14,6 +14,19 @@ model User {
   name                  String
   phone                 String?
   avatar                String?
+  firstName             String?
+  lastName              String?
+  bio                   String?                   @db.Text
+  jobTitle              String?
+  timezone              String                    @default("Europe/Kyiv")
+  locale                String                    @default("uk")
+  dateFormat            String                    @default("DD.MM.YYYY")
+  weekStartsOn          Int                       @default(1)
+  defaultTaskView       String                    @default("list")
+  defaultLandingPage    String                    @default("dashboard")
+  notificationPrefsJson Json?
+  workPrefsJson         Json?
+  productivityPrefsJson Json?
   role                  Role                      @default(CLIENT)
   isActive              Boolean                   @default(true)
   createdAt             DateTime                  @default(now())
@@ -67,6 +80,7 @@ model User {
   financeEntriesCreated FinanceEntry[]            @relation("FinanceEntryCreator")
   financeEntriesUpdated FinanceEntry[]            @relation("FinanceEntryUpdater")
   financeAttachments    FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
+  commentReadStates     CommentReadState[]
 
   @@map("users")
 }
@@ -955,20 +969,49 @@ model ChatMessage {
 }
 
 model Comment {
-  id         String            @id @default(cuid())
-  entityType CommentEntityType
-  entityId   String
-  authorId   String
-  body       String            @db.Text
-  createdAt  DateTime          @default(now())
-  editedAt   DateTime?
-  deletedAt  DateTime?
-  author     User              @relation("CommentAuthor", fields: [authorId], references: [id])
-  reactions  Reaction[]
+  id          String              @id @default(cuid())
+  entityType  CommentEntityType
+  entityId    String
+  authorId    String
+  body        String              @db.Text
+  createdAt   DateTime            @default(now())
+  editedAt    DateTime?
+  deletedAt   DateTime?
+  author      User                @relation("CommentAuthor", fields: [authorId], references: [id])
+  reactions   Reaction[]
+  attachments CommentAttachment[]
 
   @@index([entityType, entityId, createdAt])
   @@index([authorId])
   @@map("comments")
+}
+
+model CommentAttachment {
+  id        String   @id @default(cuid())
+  commentId String
+  name      String
+  url       String
+  r2Key     String?
+  size      Int
+  mimeType  String
+  createdAt DateTime @default(now())
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([commentId])
+  @@map("comment_attachments")
+}
+
+model CommentReadState {
+  id         String            @id @default(cuid())
+  entityType CommentEntityType
+  entityId   String
+  userId     String
+  lastReadAt DateTime          @default(now())
+  user       User              @relation(fields: [userId], references: [id])
+
+  @@unique([entityType, entityId, userId], name: "uniq_comment_read_state")
+  @@index([userId])
+  @@map("comment_read_states")
 }
 
 model Reaction {

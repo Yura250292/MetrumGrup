@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { Trash2 } from "lucide-react";
+import { Trash2, FileIcon, Download } from "lucide-react";
 import {
   useDeleteComment,
   useToggleCommentReaction,
@@ -79,9 +79,47 @@ export function CommentItem({
             </button>
           )}
         </div>
-        <div className="mt-0.5 text-sm admin-dark:text-gray-200 admin-light:text-gray-800">
-          <RenderCommentBody body={comment.body} mentions={comment.mentions} />
-        </div>
+        {comment.body && (
+          <div className="mt-0.5 text-sm admin-dark:text-gray-200 admin-light:text-gray-800">
+            <RenderCommentBody body={comment.body} mentions={comment.mentions} />
+          </div>
+        )}
+        {comment.attachments && comment.attachments.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {comment.attachments.map((att) => {
+              const isImage = att.mimeType.startsWith("image/");
+              return isImage ? (
+                <a
+                  key={att.id}
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="block rounded-lg overflow-hidden border admin-dark:border-white/10 admin-light:border-gray-200 hover:opacity-90 transition-opacity"
+                >
+                  <img
+                    src={att.url}
+                    alt={att.name}
+                    className="max-h-48 max-w-[240px] object-cover"
+                  />
+                </a>
+              ) : (
+                <a
+                  key={att.id}
+                  href={att.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 rounded-lg border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-gray-800/60 admin-light:bg-gray-50 px-3 py-2 text-xs hover:admin-dark:bg-gray-700/60 hover:admin-light:bg-gray-100 transition-colors"
+                >
+                  <FileIcon className="h-4 w-4 admin-dark:text-gray-400 admin-light:text-gray-500" />
+                  <span className="max-w-[160px] truncate admin-dark:text-gray-300 admin-light:text-gray-700">
+                    {att.name}
+                  </span>
+                  <Download className="h-3.5 w-3.5 admin-dark:text-gray-500 admin-light:text-gray-400" />
+                </a>
+              );
+            })}
+          </div>
+        )}
         <div className="mt-1.5">
           <ReactionBar
             reactions={comment.reactions}

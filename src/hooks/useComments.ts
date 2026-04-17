@@ -18,6 +18,14 @@ export type CommentAuthor = {
   role: string;
 };
 
+export type CommentAttachment = {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
+};
+
 export type CommentDTO = {
   id: string;
   body: string;
@@ -26,6 +34,7 @@ export type CommentDTO = {
   author: CommentAuthor;
   reactions: ReactionGroup[];
   mentions: { id: string; name: string }[];
+  attachments?: CommentAttachment[];
 };
 
 export const commentsKeys = {
@@ -63,14 +72,24 @@ export function useComments(entityType: CommentEntityType, entityId: string) {
   });
 }
 
+type PostCommentInput = {
+  body: string;
+  attachments?: { name: string; url: string; r2Key?: string; size: number; mimeType: string }[];
+};
+
 export function usePostComment(entityType: CommentEntityType, entityId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) =>
-      jsonFetch<{ data: CommentDTO }>("/api/admin/comments", {
+    mutationFn: (input: string | PostCommentInput) => {
+      const payload =
+        typeof input === "string"
+          ? { entityType, entityId, body: input }
+          : { entityType, entityId, body: input.body, attachments: input.attachments };
+      return jsonFetch<{ data: CommentDTO }>("/api/admin/comments", {
         method: "POST",
-        body: JSON.stringify({ entityType, entityId, body }),
-      }).then((d) => d.data),
+        body: JSON.stringify(payload),
+      }).then((d) => d.data);
+    },
     onSuccess: (comment) => {
       qc.setQueryData<CommentDTO[]>(
         commentsKeys.list(entityType, entityId),
@@ -92,6 +111,39 @@ export function useDeleteComment(entityType: CommentEntityType, entityId: string
         commentsKeys.list(entityType, entityId),
         (prev) => (prev ? prev.filter((c) => c.id !== commentId) : prev)
       );
+    },
+  });
+}
+
+export function useUnreadCommentCount(
+  entityType: CommentEntityType,
+  entityId: string,
+) {
+  return useQuery({
+    queryKey: ["comments-unread", entityType, entityId],
+    queryFn: () =>
+      jsonFetch<{ unreadCount: number }>(
+        `/api/admin/comments/read?entityType=${encodeURIComponent(entityType)}&entityId=${encodeURIComponent(entityId)}`,
+      ).then((d) => d.unreadCount),
+    enabled: !!entityId,
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+export function useMarkCommentsRead(
+  entityType: CommentEntityType,
+  entityId: string,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      jsonFetch<{ ok: true }>("/api/admin/comments/read", {
+        method: "POST",
+        body: JSON.stringify({ entityType, entityId }),
+      }),
+    onSuccess: () => {
+      qc.setQueryData(["comments-unread", entityType, entityId], 0);
     },
   });
 }

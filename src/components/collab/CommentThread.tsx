@@ -1,9 +1,11 @@
 "use client";
 
+import { useEffect } from "react";
 import { MessageCircle } from "lucide-react";
 import {
   useComments,
   usePostComment,
+  useMarkCommentsRead,
   type CommentEntityType,
 } from "@/hooks/useComments";
 import { CommentItem } from "./CommentItem";
@@ -18,6 +20,15 @@ export function CommentThread({
 }) {
   const { data: comments, isLoading } = useComments(entityType, entityId);
   const postComment = usePostComment(entityType, entityId);
+  const markRead = useMarkCommentsRead(entityType, entityId);
+
+  // Mark comments as read when thread is opened and comments load
+  useEffect(() => {
+    if (comments && comments.length > 0) {
+      markRead.mutate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entityType, entityId, comments?.length]);
 
   return (
     <div className="rounded-xl border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-gray-900/40 admin-light:bg-white p-4">
@@ -58,8 +69,10 @@ export function CommentThread({
       </div>
 
       <CommentComposer
-        onSubmit={async (body) => {
-          await postComment.mutateAsync(body);
+        onSubmit={async (body, attachments) => {
+          await postComment.mutateAsync(
+            attachments ? { body, attachments } : body,
+          );
         }}
         isPending={postComment.isPending}
       />
