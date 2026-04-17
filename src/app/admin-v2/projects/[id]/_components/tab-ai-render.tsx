@@ -59,27 +59,19 @@ export function TabAiRender({ projectId }: { projectId: string }) {
   };
 
   const handleGenerate3D = async (outputUrl: string) => {
-    const views = [
-      { prompt: "Transform into a close-up 3D cutaway view from the front-left corner, low camera angle at 30 degrees, walls cut at mid-height showing interior of all rooms, detailed furniture and textures visible, warm golden hour lighting through windows, photorealistic architectural visualization, 8k", w: 1024, h: 768 },
-      { prompt: "Transform into a close-up 3D cutaway view from the back-right corner, low camera angle at 30 degrees, opposite side of the apartment, walls cut showing kitchen and bathroom interiors, evening ambient lighting, photorealistic architectural render, 8k", w: 1024, h: 768 },
-      { prompt: "Transform into a dramatic close-up 3D isometric model of this apartment, camera very close, 45 degree angle, walls at half height, all rooms visible with furniture and decor, strong directional sunlight casting shadows, looks like a premium architectural scale model, photorealistic, ultra detailed 8k", w: 1024, h: 1024 },
-    ];
-
-    for (const view of views) {
-      try {
-        const job = await createRender.mutateAsync({
-          mode: "TOPDOWN_TO_3D" as AiRenderJobDTO["mode"],
-          inputUrl: outputUrl,
-          prompt: view.prompt,
-          width: view.w,
-          height: view.h,
-        });
-        setPollingJobId(job.id);
-      } catch {
-        // continue with next view
-      }
+    try {
+      const job = await createRender.mutateAsync({
+        mode: "TOPDOWN_TO_3D" as AiRenderJobDTO["mode"],
+        inputUrl: outputUrl,
+        prompt: "3D architectural model",
+        width: 1024,
+        height: 1024,
+      });
+      setPollingJobId(job.id);
+      refetch();
+    } catch {
+      // error handled by mutation
     }
-    refetch();
   };
 
   // Merge polled job into the list for real-time updates

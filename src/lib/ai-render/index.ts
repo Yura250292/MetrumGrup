@@ -78,18 +78,23 @@ export async function processRenderJob(jobId: string): Promise<void> {
       data: { status: "UPLOADING" },
     });
 
-    const resultImageUrl = falResult.images[0].url;
-    const imageResponse = await fetch(resultImageUrl);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to download render from fal.ai: ${imageResponse.status}`);
+    // Trellis returns .glb 3D model; all other modes return images.
+    const isModel = !!falResult.modelUrl;
+    const resultUrl = isModel ? falResult.modelUrl! : falResult.images[0].url;
+    const ext = isModel ? "glb" : "png";
+    const mimeType = isModel ? "model/gltf-binary" : "image/png";
+
+    const resultResponse = await fetch(resultUrl);
+    if (!resultResponse.ok) {
+      throw new Error(`Failed to download result from fal.ai: ${resultResponse.status}`);
     }
 
-    const imageBuffer = Buffer.from(await imageResponse.arrayBuffer());
-    const fileName = `ai-render-${jobId}.png`;
-    const imageFile = new File([imageBuffer], fileName, { type: "image/png" });
+    const resultBuffer = Buffer.from(await resultResponse.arrayBuffer());
+    const fileName = `ai-render-${jobId}.${ext}`;
+    const resultFile = new File([resultBuffer], fileName, { type: mimeType });
 
     const uploaded = await uploadFileToR2(
-      imageFile,
+      resultFile,
       `projects/${job.projectId}/ai-renders`
     );
 
@@ -104,8 +109,8 @@ export async function processRenderJob(jobId: string): Promise<void> {
         name: fileName,
         url: uploaded.url,
         r2Key: uploaded.key,
-        size: imageBuffer.length,
-        mimeType: "image/png",
+        size: resultBuffer.length,
+        mimeType,
       },
     });
 

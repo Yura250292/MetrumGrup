@@ -5,6 +5,7 @@ import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check, Trash2, Box } 
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
 import { AiRenderComparisonSlider } from "./ai-render-comparison-slider";
+import { Ai3DModelViewer } from "./ai-3d-model-viewer";
 
 const STATUS_MAP: Record<string, { label: string; color: string; bg: string }> = {
   QUEUED: { label: "В черзі", color: T.textMuted, bg: T.panelElevated },
@@ -31,6 +32,7 @@ export function AiRenderResultCard({
   const statusInfo = STATUS_MAP[job.status] ?? STATUS_MAP.QUEUED;
   const isInProgress = job.status === "QUEUED" || job.status === "PROCESSING" || job.status === "UPLOADING";
   const canDelete = !isInProgress;
+  const is3DModel = job.outputUrl?.endsWith(".glb");
 
   return (
     <div
@@ -71,7 +73,9 @@ export function AiRenderResultCard({
 
         {job.status === "COMPLETED" && job.outputUrl && (
           <>
-            {showComparison && job.inputUrl ? (
+            {is3DModel ? (
+              <Ai3DModelViewer src={job.outputUrl} />
+            ) : showComparison && job.inputUrl ? (
               <AiRenderComparisonSlider inputUrl={job.inputUrl} outputUrl={job.outputUrl} />
             ) : (
               // eslint-disable-next-line @next/next/no-img-element

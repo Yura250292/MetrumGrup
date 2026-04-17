@@ -69,4 +69,5 @@ export interface FalSubmitParams {
 
 export interface FalResult {
   images: Array<{ url: string; width: number; height: number }>;
+  modelUrl?: string;
 }

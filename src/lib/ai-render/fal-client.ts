@@ -90,16 +90,15 @@ async function buildModelRequest(
     };
   }
 
-  // TOPDOWN_TO_3D — take a photorealistic top-down render (from Seedream)
-  // and convert to 3D perspective/isometric view.
-  // Tested: Seedream preserves room layout far better than kontext
-  // when converting top-down to 3D (kontext rearranges rooms).
+  // TOPDOWN_TO_3D — generate interactive 3D model (.glb) from top-down render.
+  // Uses Trellis (image-to-3D mesh). Output is a .glb file, not an image.
+  // Tested: Trellis produces rotatable 3D model of apartment with
+  // walls, rooms, furniture, and lighting visible.
   if (mode === "TOPDOWN_TO_3D") {
     return {
-      modelId: "fal-ai/bytedance/seedream/v4/edit",
+      modelId: "fal-ai/trellis",
       input: {
-        prompt: params.prompt,
-        image_urls: [falImageUrl],
+        image_url: falImageUrl,
       },
     };
   }
@@ -144,7 +143,16 @@ export async function generateRender(
       const output = result as {
         images?: Array<{ url: string; width?: number | null; height?: number | null }>;
         image?: { url: string; width?: number | null; height?: number | null };
+        model_mesh?: { url: string };
       };
+
+      // Trellis returns model_mesh (3D .glb file)
+      if (output.model_mesh?.url) {
+        return {
+          images: [{ url: output.model_mesh.url, width: params.width, height: params.height }],
+          modelUrl: output.model_mesh.url,
+        };
+      }
 
       // kontext returns `image` (singular), flux returns `images` (array)
       const rawImages = output.images ?? (output.image ? [output.image] : []);
@@ -153,7 +161,6 @@ export async function generateRender(
         throw new Error("fal.ai returned no images");
       }
 
-      // Normalize: some models (Seedream) return null for width/height
       const images = rawImages.map((img) => ({
         url: img.url,
         width: img.width ?? params.width,
