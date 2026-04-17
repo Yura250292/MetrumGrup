@@ -52,6 +52,7 @@ export async function GET() {
           OR: [
             { managerId: uid },
             { members: { some: { userId: uid, isActive: true } } },
+            { isInternal: true },
           ],
           status: { not: "CANCELLED" },
         },
@@ -60,12 +61,13 @@ export async function GET() {
       title: true,
       status: true,
       currentStage: true,
+      isInternal: true,
       stages: {
         orderBy: { sortOrder: "asc" },
         select: { id: true, stage: true, status: true },
       },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ isInternal: "asc" }, { updatedAt: "desc" }],
     take: 100,
   });
 
@@ -75,10 +77,23 @@ export async function GET() {
     title: string;
     status: string;
     currentStage: string;
+    isInternal: boolean;
     stages: { id: string; stage: string; status: string }[];
   }> = [];
 
   for (const p of rawProjects) {
+    // Internal projects are always accessible for task creation
+    if (p.isInternal) {
+      results.push({
+        id: p.id,
+        title: p.title,
+        status: p.status,
+        currentStage: p.currentStage,
+        isInternal: true,
+        stages: p.stages,
+      });
+      continue;
+    }
     const enabled = await isTasksEnabledForProject(p.id);
     if (!enabled) continue;
     const ctx = await getProjectAccessContext(p.id, uid);
@@ -88,6 +103,7 @@ export async function GET() {
       title: p.title,
       status: p.status,
       currentStage: p.currentStage,
+      isInternal: false,
       stages: p.stages,
     });
   }

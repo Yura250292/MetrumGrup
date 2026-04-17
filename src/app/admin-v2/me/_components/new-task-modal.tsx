@@ -10,6 +10,7 @@ type MyProject = {
   id: string;
   title: string;
   currentStage: string;
+  isInternal?: boolean;
   stages: { id: string; stage: ProjectStage; status: string }[];
 };
 
@@ -153,22 +154,31 @@ export function NewTaskModal({
           </p>
         ) : (
           <>
-            <Field label="ПРОЄКТ">
+            <Field label="ПРОЄКТ / КАТЕГОРІЯ">
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
                 className="rounded-lg px-3 py-2 text-sm outline-none"
                 style={inputStyle}
               >
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}
-                  </option>
-                ))}
+                {projects.some((p) => p.isInternal) && (
+                  <optgroup label="Внутрішні">
+                    {projects.filter((p) => p.isInternal).map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </optgroup>
+                )}
+                {projects.some((p) => !p.isInternal) && (
+                  <optgroup label="Проєкти">
+                    {projects.filter((p) => !p.isInternal).map((p) => (
+                      <option key={p.id} value={p.id}>{p.title}</option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </Field>
 
-            {selectedProject && (
+            {selectedProject && !selectedProject.isInternal && (
               <Field label="СТАДІЯ">
                 <select
                   value={stageId}

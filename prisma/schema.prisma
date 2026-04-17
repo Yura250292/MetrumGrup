@@ -39,6 +39,7 @@ model User {
   inventoryTx           InventoryTransaction[]
   newsArticles          NewsArticle[]
   notifications         Notification[]
+  pushSubscriptions     PushSubscription[]
   payments              Payment[]
   photoReports          PhotoReport[]
   projectFiles          ProjectFile[]
@@ -92,6 +93,7 @@ model Project {
   description       String?
   address           String?
   coverImageUrl     String?
+  isInternal        Boolean                @default(false)
   status            ProjectStatus          @default(DRAFT)
   currentStage      ProjectStage           @default(DESIGN)
   stageProgress     Int                    @default(0)
@@ -690,6 +692,22 @@ model Notification {
 
   @@index([userId, isRead])
   @@map("notifications")
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @db.Text
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint])
+  @@index([userId])
+  @@map("push_subscriptions")
 }
 
 model Setting {

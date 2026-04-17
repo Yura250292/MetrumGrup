@@ -44,12 +44,14 @@ type AccessProject = {
   id: string;
   clientId: string;
   managerId: string | null;
+  isInternal: boolean;
 };
 
 const PROJECT_ACCESS_SELECT = {
   id: true,
   clientId: true,
   managerId: true,
+  isInternal: true,
 } as const;
 
 async function loadProject(projectId: string): Promise<AccessProject | null> {
@@ -115,12 +117,14 @@ export async function getProjectAccessContext(
 
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isClientOfProject = role === "CLIENT" && project.clientId === userId;
+  // Internal projects are accessible to all non-CLIENT staff
+  const isInternalAccess = project.isInternal && role !== "CLIENT";
 
   const effective = member
     ? resolveMemberPermissions(member.roleInProject, member.permissions)
     : null;
 
-  const canView = isSuperAdmin || isClientOfProject || Boolean(member);
+  const canView = isSuperAdmin || isClientOfProject || isInternalAccess || Boolean(member);
   // CLIENT cannot post in team chat / write internal collaboration items.
   const canParticipate = isSuperAdmin || Boolean(member);
   const canUpload = isSuperAdmin || (effective?.canUpload ?? false);
@@ -138,15 +142,15 @@ export async function getProjectAccessContext(
   // effective permissions.
   const taskDenyClient = role === "CLIENT";
   const canViewTasks =
-    !taskDenyClient && (isSuperAdmin || (effective?.canViewTasks ?? false));
+    !taskDenyClient && (isSuperAdmin || isInternalAccess || (effective?.canViewTasks ?? false));
   const canCreateTasks =
-    !taskDenyClient && (isSuperAdmin || (effective?.canCreateTasks ?? false));
+    !taskDenyClient && (isSuperAdmin || isInternalAccess || (effective?.canCreateTasks ?? false));
   const canEditAnyTask =
-    !taskDenyClient && (isSuperAdmin || (effective?.canEditAnyTask ?? false));
+    !taskDenyClient && (isSuperAdmin || isInternalAccess || (effective?.canEditAnyTask ?? false));
   const canDeleteTasks =
-    !taskDenyClient && (isSuperAdmin || (effective?.canDeleteTasks ?? false));
+    !taskDenyClient && (isSuperAdmin || isInternalAccess || (effective?.canDeleteTasks ?? false));
   const canAssignTasks =
-    !taskDenyClient && (isSuperAdmin || (effective?.canAssignTasks ?? false));
+    !taskDenyClient && (isSuperAdmin || isInternalAccess || (effective?.canAssignTasks ?? false));
   const canManageTaskConfig =
     !taskDenyClient &&
     (isSuperAdmin ||
