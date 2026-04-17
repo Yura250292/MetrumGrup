@@ -267,18 +267,30 @@ export async function postComment(
     },
   });
 
+  // Build context for notification titles (best-effort)
+  let mentionTitle: string;
+  let taskRelatedId = entityId; // default for non-task entities
+  if (entityType === "TASK" && projectId) {
+    const taskDetail = await prisma.task.findUnique({
+      where: { id: entityId },
+      select: { title: true },
+    });
+    mentionTitle = `Вас позначили у задачі «${taskDetail?.title ?? ""}»`;
+    // "projectId:taskId" format for deep-link routing
+    taskRelatedId = `${projectId}:${entityId}`;
+  } else if (entityType === "PROJECT") {
+    mentionTitle = "Вас позначили в обговоренні проєкту";
+  } else {
+    mentionTitle = "Вас позначили в обговоренні кошторису";
+  }
+
   await createMentionNotifications({
     body: trimmed,
     authorId,
     type: "COMMENT_MENTION",
-    title:
-      entityType === "PROJECT"
-        ? "Вас згадано в обговоренні проєкту"
-        : entityType === "ESTIMATE"
-          ? "Вас згадано в обговоренні кошторису"
-          : "Вас згадано у задачі",
+    title: mentionTitle,
     relatedEntity: entityType,
-    relatedId: entityId,
+    relatedId: entityType === "TASK" ? taskRelatedId : entityId,
   });
 
   // Broadcast notifications — best-effort: a notification failure must not
@@ -299,7 +311,6 @@ export async function postComment(
           select: { title: true },
         });
         const stakeholderIds = await getTaskStakeholderIds(entityId);
-        // Exclude already-mentioned users to avoid duplicates
         const targets = stakeholderIds.filter(
           (id) => !mentionedIds.includes(id),
         );
@@ -310,7 +321,7 @@ export async function postComment(
           title: `Новий коментар у задачі «${taskDetail?.title ?? ""}» (${project?.title ?? ""})`,
           body: trimmed,
           relatedEntity: "Task",
-          relatedId: entityId,
+          relatedId: `${projectId}:${entityId}`,
         });
       } else {
         const title =

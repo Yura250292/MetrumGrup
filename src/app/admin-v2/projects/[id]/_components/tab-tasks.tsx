@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { STAGE_LABELS } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
@@ -107,6 +108,15 @@ export function TabTasks({
   const [quickStageId, setQuickStageId] = useState(stages[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+
+  // Open TaskDrawer if ?task=<id> is in URL (e.g. from notification deep-link)
+  useEffect(() => {
+    const taskParam = searchParams.get("task");
+    if (taskParam) {
+      setActiveTaskId(taskParam);
+    }
+  }, [searchParams]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
