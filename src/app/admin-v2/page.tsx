@@ -249,7 +249,7 @@ export default async function AdminV2Dashboard() {
           sub={`${activeProjectsCount} активних`}
           icon={FolderKanban}
           accent={T.accentPrimary}
-          gradient="linear-gradient(135deg, #EEF2FF 0%, #DBEAFE 100%)"
+          gradient="var(--kpi-blue)"
           href="/admin-v2/projects"
         />
         <KpiCard
@@ -258,7 +258,7 @@ export default async function AdminV2Dashboard() {
           sub="облікових записів"
           icon={Users}
           accent={T.teal}
-          gradient="linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%)"
+          gradient="var(--kpi-teal)"
           href="/admin-v2/clients"
         />
         <KpiCard
@@ -267,7 +267,7 @@ export default async function AdminV2Dashboard() {
           sub="загальний бюджет"
           icon={Wallet}
           accent={T.violet}
-          gradient="linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)"
+          gradient="var(--kpi-violet)"
           href="/admin-v2/projects"
         />
         <KpiCard
@@ -276,7 +276,7 @@ export default async function AdminV2Dashboard() {
           sub="усього по платежах"
           icon={TrendingUp}
           accent={T.emerald}
-          gradient="linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)"
+          gradient="var(--kpi-emerald)"
         />
       </section>
 
@@ -288,7 +288,7 @@ export default async function AdminV2Dashboard() {
           sub={`${completedWeekTasksCount} завершено за тиждень`}
           icon={ListTodo}
           accent={T.sky}
-          gradient="linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)"
+          gradient="var(--kpi-sky)"
           href="/admin-v2/me"
         />
         <KpiCard
@@ -297,9 +297,7 @@ export default async function AdminV2Dashboard() {
           sub={`${dueTodayTasksCount} на сьогодні`}
           icon={AlertCircle}
           accent={overdueTasksCount > 0 ? T.danger : T.textMuted}
-          gradient={overdueTasksCount > 0
-            ? "linear-gradient(135deg, #FEF2F2 0%, #FECACA 100%)"
-            : undefined}
+          gradient={overdueTasksCount > 0 ? "var(--kpi-danger)" : undefined}
           href="/admin-v2/me"
         />
         <KpiCard
@@ -308,7 +306,7 @@ export default async function AdminV2Dashboard() {
           sub={`${weekTimeLogs.length} співробітників`}
           icon={Clock}
           accent={T.amber}
-          gradient="linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
+          gradient="var(--kpi-amber)"
         />
         <KpiCard
           label="AI КОШТОРИСИ"
@@ -316,7 +314,7 @@ export default async function AdminV2Dashboard() {
           sub="за місяць"
           icon={Sparkles}
           accent={T.indigo}
-          gradient="linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)"
+          gradient="var(--kpi-indigo)"
           href="/ai-estimate-v2"
         />
       </section>
@@ -735,7 +733,7 @@ export default async function AdminV2Dashboard() {
       <section
         className="rounded-2xl p-6"
         style={{
-          background: "linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 30%, #F5F3FF 70%, #EDE9FE 100%)",
+          background: "var(--kpi-banner)",
           border: `1px solid ${T.accentPrimary}25`,
           boxShadow: `0 4px 16px ${T.accentPrimary}12`,
         }}

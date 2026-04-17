@@ -32,7 +32,7 @@ export function Sidebar() {
       <div
         className="flex h-16 items-center justify-between px-4"
         style={{
-          background: "linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)",
+          background: "var(--kpi-sidebar)",
           borderBottom: `1px solid ${T.accentPrimary}18`,
         }}
       >
@@ -94,7 +94,7 @@ export function Sidebar() {
                       className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[#F1F5F9]"
                       style={{
                         background: active
-                          ? `linear-gradient(135deg, ${T.accentPrimarySoft}, #DBEAFE)`
+                          ? "var(--nav-active)"
                           : undefined,
                         color: active ? T.accentPrimary : T.textSecondary,
                         border: `1px solid ${active ? T.accentPrimary + "30" : "transparent"}`,

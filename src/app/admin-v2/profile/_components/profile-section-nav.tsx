@@ -23,7 +23,7 @@ export function ProfileSectionNav({ sections, active, onSelect }: Props) {
             className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all"
             style={{
               background: isActive
-                ? "linear-gradient(135deg, " + T.accentPrimarySoft + ", #DBEAFE)"
+                ? "var(--nav-active)"
                 : undefined,
               color: isActive ? T.accentPrimary : T.textSecondary,
               border: "1px solid " + (isActive ? T.accentPrimary + "30" : "transparent"),

@@ -109,21 +109,21 @@ export default async function AdminV2ProjectsPage() {
           value={String(projects.length)}
           sub="у системі"
           accent={T.sky}
-          gradient="linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)"
+          gradient="var(--kpi-sky)"
         />
         <KpiCard
           label="ЗАГАЛЬНИЙ БЮДЖЕТ"
           value={formatCurrency(totalBudget)}
           sub={`${formatCurrency(totalPaid)} сплачено`}
           accent={T.violet}
-          gradient="linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)"
+          gradient="var(--kpi-violet)"
         />
         <KpiCard
           label="ВИКОНАННЯ ОПЛАТ"
           value={`${totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0}%`}
           sub="від загальної суми"
           accent={T.emerald}
-          gradient="linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)"
+          gradient="var(--kpi-emerald)"
         />
       </section>
 
