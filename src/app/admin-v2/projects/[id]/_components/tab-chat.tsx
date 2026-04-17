@@ -93,7 +93,7 @@ function OpenProjectChatV2({ projectId }: { projectId: string }) {
     <button
       onClick={open}
       disabled={busy || createConversation.isPending}
-      className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-60"
+      className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white transition hover:brightness-95 disabled:opacity-60"
       style={{ backgroundColor: T.accentPrimary }}
     >
       {busy || createConversation.isPending ? (

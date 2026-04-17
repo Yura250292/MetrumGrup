@@ -10,12 +10,12 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "dark",
+  theme: "light",
   toggleTheme: () => {},
 });
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>("dark");
+  const [theme, setTheme] = useState<Theme>("light");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -39,7 +39,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Always render the provider, even during SSR
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <div className={mounted ? (theme === "dark" ? "admin-dark" : "admin-light") : "admin-dark"}>
+      <div className={mounted ? (theme === "dark" ? "admin-dark" : "admin-light") : "admin-light"}>
         {children}
       </div>
     </ThemeContext.Provider>

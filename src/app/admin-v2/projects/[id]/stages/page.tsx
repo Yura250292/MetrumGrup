@@ -135,7 +135,7 @@ export default function AdminV2ProjectStagesPage({
     <div className="flex flex-col gap-6 max-w-4xl">
       <Link
         href={`/admin-v2/projects/${id}`}
-        className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-125"
+        className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-[0.97]"
         style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
       >
         <ArrowLeft size={14} /> {projectTitle || "Назад"}

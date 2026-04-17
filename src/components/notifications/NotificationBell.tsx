@@ -148,7 +148,7 @@ export function NotificationBell({
 
   const defaultButtonClass =
     variant === "v2"
-      ? "relative rounded-lg p-2 transition hover:brightness-125"
+      ? "relative rounded-lg p-2 transition hover:brightness-[0.97]"
       : "relative rounded-lg p-2 transition-colors admin-dark:text-gray-400 admin-dark:hover:bg-white/10 admin-dark:hover:text-white admin-light:text-gray-600 admin-light:hover:bg-gray-100 admin-light:hover:text-gray-900";
 
   return (

@@ -49,7 +49,7 @@ export function ReferenceEstimatesClient() {
         <button
           type="button"
           onClick={() => setUploadOpen(true)}
-          className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:brightness-110"
+          className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-white transition hover:brightness-95"
           style={{ backgroundColor: T.accentPrimary }}
         >
           <Plus size={14} /> Завантажити XLSX
@@ -132,7 +132,7 @@ export function ReferenceEstimatesClient() {
                         type="button"
                         onClick={() => handleDelete(ref.id, ref.title)}
                         disabled={del.isPending}
-                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] transition hover:brightness-125"
+                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] transition hover:brightness-[0.97]"
                         style={{
                           backgroundColor: T.dangerSoft,
                           color: T.danger,

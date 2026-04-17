@@ -55,7 +55,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
           {(e.analysisSummary || e.prozorroAnalysis) && (
             <button
               onClick={() => controller.setEngineerReportOpen(true)}
-              className="flex items-start gap-3 rounded-2xl p-4 text-left transition hover:brightness-125"
+              className="flex items-start gap-3 rounded-2xl p-4 text-left transition hover:brightness-[0.97]"
               style={{ backgroundColor: T.warningSoft, border: `1px solid ${T.warning}` }}
             >
               <AlertCircle size={18} style={{ color: T.warning }} className="mt-0.5 flex-shrink-0" />
@@ -77,7 +77,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
               className="rounded-2xl p-5"
               style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
             >
-              <div className="admin-dark" style={DARK_VARS}>
+              <div className="admin-light" style={DARK_VARS}>
                 <EditableSectionTable
                   estimateId={e.id}
                   sectionId={section.id}
@@ -102,7 +102,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
               className="rounded-2xl p-5"
               style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
             >
-              <div className="admin-dark" style={DARK_VARS}>
+              <div className="admin-light" style={DARK_VARS}>
                 <TaxBreakdownCard
                   taxationType={e.taxationType as any}
                   taxBreakdown={{
@@ -186,7 +186,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
             className="rounded-2xl p-5"
             style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
           >
-            <div className="admin-dark" style={DARK_VARS}>
+            <div className="admin-light" style={DARK_VARS}>
               <ApprovalSignatureCard approvals={controller.approvals} estimateId={e.id} />
             </div>
           </div>
@@ -194,7 +194,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
             className="rounded-2xl p-5"
             style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
           >
-            <div className="admin-dark" style={DARK_VARS}>
+            <div className="admin-light" style={DARK_VARS}>
               <EstimateHistoryTimeline estimateId={e.id} />
             </div>
           </div>
@@ -206,7 +206,7 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
           className="rounded-2xl p-5"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
-          <div className="admin-dark" style={DARK_VARS}>
+          <div className="admin-light" style={DARK_VARS}>
             <CommentThread entityType="ESTIMATE" entityId={e.id} />
           </div>
         </div>

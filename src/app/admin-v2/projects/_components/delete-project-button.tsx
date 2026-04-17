@@ -53,7 +53,7 @@ export function DeleteProjectButton({
       disabled={busy}
       title="Видалити проєкт"
       aria-label={`Видалити проєкт ${projectTitle}`}
-      className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:brightness-125 disabled:opacity-60"
+      className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:brightness-[0.97] disabled:opacity-60"
       style={{
         backgroundColor: T.dangerSoft,
         color: T.danger,

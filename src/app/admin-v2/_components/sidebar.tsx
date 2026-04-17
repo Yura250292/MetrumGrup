@@ -56,7 +56,7 @@ export function Sidebar() {
         )}
         <button
           onClick={() => setCollapsed((c) => !c)}
-          className="rounded-lg p-1.5 transition hover:brightness-125"
+          className="rounded-lg p-1.5 transition hover:brightness-[0.97]"
           style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
         >
           {collapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
@@ -146,7 +146,7 @@ export function Sidebar() {
           )}
           <button
             onClick={() => signOut({ callbackUrl: "/login" })}
-            className="rounded-lg p-2 transition hover:brightness-125"
+            className="rounded-lg p-2 transition hover:brightness-[0.97]"
             style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
             title="Вийти"
           >

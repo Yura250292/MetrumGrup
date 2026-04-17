@@ -63,7 +63,7 @@ export function Header() {
             ) : (
               <Link
                 href={crumb.href}
-                className="font-medium transition hover:brightness-125"
+                className="font-medium transition hover:brightness-[0.97]"
                 style={{ color: T.textMuted }}
               >
                 {crumb.label}

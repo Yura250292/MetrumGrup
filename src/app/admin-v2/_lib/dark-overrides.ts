@@ -3,10 +3,10 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 /**
  * CSS variable overrides applied to wrappers around legacy shadcn-based
  * components (Card, Button, Badge, Input, etc) so they render with v2
- * dark colors instead of falling back to the legacy light theme.
+ * light theme tokens mapped to CSS custom properties.
  *
  * Usage:
- *   <div className="admin-dark" style={DARK_VARS}>
+ *   <div className="admin-light" style={DARK_VARS}>
  *     <LegacyComponentThatUsesShadcnCard />
  *   </div>
  */

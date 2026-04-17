@@ -513,7 +513,7 @@ export default async function AdminV2Dashboard() {
             </div>
             <Link
               href="/admin-v2/projects"
-              className="flex items-center gap-1.5 text-xs font-semibold transition hover:brightness-125"
+              className="flex items-center gap-1.5 text-xs font-semibold transition hover:brightness-[0.97]"
               style={{ color: T.accentPrimary }}
             >
               Усі проєкти <ArrowRight size={14} />
@@ -528,7 +528,7 @@ export default async function AdminV2Dashboard() {
                 <Link
                   key={project.id}
                   href={`/admin-v2/projects/${project.id}`}
-                  className="flex items-center gap-3 rounded-xl p-3.5 transition hover:brightness-125"
+                  className="flex items-center gap-3 rounded-xl p-3.5 transition hover:brightness-[0.97]"
                   style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
                 >
                   <div
@@ -659,7 +659,7 @@ export default async function AdminV2Dashboard() {
                   <li key={t.id}>
                     <Link
                       href={`/admin-v2/projects/${t.project.id}?tab=tasks`}
-                      className="flex items-start gap-2 rounded-lg p-2.5 transition hover:brightness-125"
+                      className="flex items-start gap-2 rounded-lg p-2.5 transition hover:brightness-[0.97]"
                       style={{
                         backgroundColor: T.panelElevated,
                         borderLeft: `3px solid ${t.status.color}`,
@@ -716,7 +716,7 @@ export default async function AdminV2Dashboard() {
           </div>
           <Link
             href="/ai-estimate-v2"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
             style={{ backgroundColor: T.accentPrimary }}
           >
             <Sparkles size={16} /> Згенерувати
@@ -793,7 +793,7 @@ function KpiCard({
   );
   if (href) {
     return (
-      <Link href={href} className="hover:brightness-125 transition">
+      <Link href={href} className="hover:brightness-[0.97] transition">
         {content}
       </Link>
     );

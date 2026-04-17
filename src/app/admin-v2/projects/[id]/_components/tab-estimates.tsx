@@ -13,7 +13,7 @@ export function TabEstimates({ projectId }: { projectId: string }) {
       <h2 className="mb-4 text-[13px] font-bold" style={{ color: T.textPrimary }}>
         Кошториси проєкту
       </h2>
-      <div className="admin-dark" style={DARK_VARS}>
+      <div className="admin-light" style={DARK_VARS}>
         <ProjectEstimatesSection projectId={projectId} />
       </div>
     </div>

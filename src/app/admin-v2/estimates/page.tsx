@@ -65,14 +65,14 @@ export default async function AdminV2EstimatesPage() {
         <div className="flex items-center gap-2">
           <Link
             href="/ai-estimate-v2"
-            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
+            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
             style={{ backgroundColor: T.accentPrimary }}
           >
             <Sparkles size={16} /> AI генератор
           </Link>
           <Link
             href="/admin-v2/estimates/new"
-            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition hover:brightness-125"
+            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition hover:brightness-[0.97]"
             style={{
               backgroundColor: T.panelElevated,
               color: T.textPrimary,
@@ -136,7 +136,7 @@ export default async function AdminV2EstimatesPage() {
               <Link
                 key={est.id}
                 href={`/admin-v2/estimates/${est.id}`}
-                className="flex items-center gap-4 px-6 py-4 transition hover:brightness-125"
+                className="flex items-center gap-4 px-6 py-4 transition hover:brightness-[0.97]"
                 style={{
                   backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",
                   borderTop: i === 0 ? "none" : `1px solid ${T.borderSoft}`,

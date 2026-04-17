@@ -221,7 +221,7 @@ function FeedRow({ item }: { item: FeedItem }) {
   );
 
   return item.link ? (
-    <Link href={item.link} className="block transition hover:brightness-125">
+    <Link href={item.link} className="block transition hover:brightness-[0.97]">
       {content}
     </Link>
   ) : (

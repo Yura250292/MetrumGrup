@@ -92,7 +92,7 @@ export default async function AdminV2ProjectsPage() {
         </div>
         <Link
           href="/admin-v2/projects/new"
-          className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
+          className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
           style={{ backgroundColor: T.accentPrimary }}
         >
           <Plus size={16} /> Новий проєкт
@@ -161,7 +161,7 @@ function ProjectCard({
   return (
     <Link
       href={`/admin-v2/projects/${project.id}`}
-      className="group flex flex-col overflow-hidden rounded-2xl transition hover:brightness-110"
+      className="group flex flex-col overflow-hidden rounded-2xl transition hover:brightness-95"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,

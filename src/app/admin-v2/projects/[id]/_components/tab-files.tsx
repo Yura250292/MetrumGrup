@@ -15,7 +15,7 @@ export function TabFiles({ projectId }: { projectId: string }) {
         <h2 className="mb-4 text-[13px] font-bold" style={{ color: T.textPrimary }}>
           Файли проєкту
         </h2>
-        <div className="admin-dark" style={DARK_VARS}>
+        <div className="admin-light" style={DARK_VARS}>
           <ProjectFilesSection projectId={projectId} />
         </div>
       </div>
@@ -27,7 +27,7 @@ export function TabFiles({ projectId }: { projectId: string }) {
         <h2 className="mb-4 text-[13px] font-bold" style={{ color: T.textPrimary }}>
           Обговорення
         </h2>
-        <div className="admin-dark" style={DARK_VARS}>
+        <div className="admin-light" style={DARK_VARS}>
           <CommentThread entityType="PROJECT" entityId={projectId} />
         </div>
       </div>

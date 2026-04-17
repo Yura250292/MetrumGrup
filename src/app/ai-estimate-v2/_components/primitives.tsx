@@ -19,7 +19,7 @@ export function BtnPrimary({ children, icon: Icon, onClick, className = "" }: Bt
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110 ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 ${className}`}
       style={{ backgroundColor: T.accentPrimary }}
     >
       {Icon && <Icon size={16} />}
@@ -32,7 +32,7 @@ export function BtnSecondary({ children, icon: Icon, onClick, className = "" }: 
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition hover:brightness-110 ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold transition hover:brightness-95 ${className}`}
       style={{
         backgroundColor: T.panelElevated,
         color: T.textPrimary,
@@ -49,7 +49,7 @@ export function BtnGhost({ children, icon: Icon, onClick, className = "" }: BtnP
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-white/5 ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition hover:bg-black/5 ${className}`}
       style={{ color: T.textSecondary }}
     >
       {Icon && <Icon size={16} />}
@@ -62,7 +62,7 @@ export function BtnIconOnly({ icon: Icon, onClick }: { icon: LucideIcon; onClick
   return (
     <button
       onClick={onClick}
-      className="flex h-10 w-10 items-center justify-center rounded-xl transition hover:brightness-110"
+      className="flex h-10 w-10 items-center justify-center rounded-xl transition hover:brightness-95"
       style={{
         backgroundColor: T.panelElevated,
         border: `1px solid ${T.borderStrong}`,
@@ -324,6 +324,7 @@ export function SectionCard({
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${accent ? T.borderAccent : T.borderSoft}`,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
       }}
     >
       {children}

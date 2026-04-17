@@ -207,7 +207,7 @@ export default function AdminV2FinancePage() {
       {/* Templates link */}
       <Link
         href="/admin-v2/finance/templates"
-        className="flex items-center justify-between rounded-2xl p-5 transition hover:brightness-125"
+        className="flex items-center justify-between rounded-2xl p-5 transition hover:brightness-[0.97]"
         style={{
           backgroundColor: T.panelElevated,
           border: `1px solid ${T.borderAccent}`,

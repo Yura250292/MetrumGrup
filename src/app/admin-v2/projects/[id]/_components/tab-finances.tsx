@@ -129,7 +129,7 @@ export function TabFinances({
           </h2>
           <Link
             href={`/admin-v2/projects/${projectId}/finances`}
-            className="flex items-center gap-1.5 text-xs font-semibold transition hover:brightness-125"
+            className="flex items-center gap-1.5 text-xs font-semibold transition hover:brightness-[0.97]"
             style={{ color: T.accentPrimary }}
           >
             <Edit3 size={12} /> Розширені дії <ArrowRight size={12} />

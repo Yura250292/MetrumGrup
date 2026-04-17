@@ -688,7 +688,7 @@ function EntryRow({
   const amount = Number(entry.amount);
   return (
     <div
-      className="group flex items-center gap-3 border-b px-4 py-3 hover:brightness-125"
+      className="group flex items-center gap-3 border-b px-4 py-3 hover:brightness-[0.97]"
       style={{
         borderColor: T.borderSoft,
         backgroundColor: isZebra ? T.panelSoft : "transparent",

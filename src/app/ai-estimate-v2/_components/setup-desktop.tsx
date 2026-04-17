@@ -144,7 +144,7 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isBusy}
-                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95 disabled:opacity-60"
                 style={{ backgroundColor: T.accentPrimary }}
               >
                 <FolderOpen size={16} /> Обрати файли
@@ -274,7 +274,7 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
                 />
                 <button
                   onClick={controller.openWizard}
-                  className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-110"
+                  className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95"
                   style={{ backgroundColor: T.accentPrimary }}
                 >
                   {controller.wizardCompleted ? "Редагувати" : "Запустити майстер"} <ArrowRight size={16} />
@@ -470,7 +470,7 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
             <button
               disabled={!filesReady || isBusy}
               onClick={controller.runPreAnalysis}
-              className="flex w-full items-center justify-center gap-2.5 rounded-xl px-5 py-4 text-[15px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2.5 rounded-xl px-5 py-4 text-[15px] font-bold text-white transition hover:brightness-95 disabled:opacity-50"
               style={{ backgroundColor: T.accentPrimary }}
             >
               {controller.isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
@@ -478,7 +478,7 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
             </button>
             <button
               disabled={!filesReady}
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold transition hover:brightness-110 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold transition hover:brightness-95 disabled:opacity-50"
               style={{ backgroundColor: T.panel, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}
             >
               <Eye size={16} /> Попередній перегляд

@@ -486,7 +486,7 @@ function TaskRow({ task, onOpen }: { task: TaskListItem; onOpen: () => void }) {
   return (
     <li
       onClick={onOpen}
-      className="flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition hover:brightness-110"
+      className="flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition hover:brightness-95"
       style={{
         backgroundColor: T.panelElevated,
         border: `1px solid ${T.borderSoft}`,

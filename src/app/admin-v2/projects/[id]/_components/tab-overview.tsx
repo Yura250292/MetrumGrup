@@ -79,7 +79,7 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
           action={
             <Link
               href={`/admin-v2/projects/${project.id}/stages`}
-              className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-125"
+              className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
               style={{ color: T.accentPrimary }}
             >
               <Edit3 size={12} /> Редагувати

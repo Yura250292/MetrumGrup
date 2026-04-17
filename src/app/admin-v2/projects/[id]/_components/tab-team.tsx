@@ -18,7 +18,7 @@ export function TabTeam({
   return (
     <div className="flex flex-col gap-6">
       {/* Real ProjectMember management */}
-      <div className="admin-dark" style={DARK_VARS}>
+      <div className="admin-light" style={DARK_VARS}>
         <ProjectTeamSection projectId={projectId} />
       </div>
 

@@ -34,7 +34,7 @@ export default async function AdminV2PortfolioPage() {
         </div>
         <Link
           href="/admin/cms/portfolio"
-          className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-110"
+          className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
           style={{ backgroundColor: T.accentPrimary }}
         >
           <Plus size={16} /> Додати проєкт
