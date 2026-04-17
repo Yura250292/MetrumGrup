@@ -6,6 +6,7 @@ import { ChevronRight, ArrowLeft } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function Header() {
   const pathname = usePathname();
@@ -74,10 +75,13 @@ export function Header() {
         ))}
       </nav>
 
-      <NotificationBell
-        variant="v2"
-        buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
-      />
+      <div className="flex items-center gap-3">
+        <ThemeToggle />
+        <NotificationBell
+          variant="v2"
+          buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
+        />
+      </div>
     </header>
   );
 }

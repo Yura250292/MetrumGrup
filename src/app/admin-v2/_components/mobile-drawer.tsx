@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { signOut, useSession } from "next-auth/react";
-import { LogOut, X } from "lucide-react";
+import { LogOut, X, Sun, Moon } from "lucide-react";
+import { useTheme } from "@/contexts/ThemeContext";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { NAV_GROUPS, isItemActive } from "../_lib/nav";
@@ -20,6 +21,7 @@ export function MobileDrawer({
   const pathname = usePathname();
   const { data: session } = useSession();
   const unreadCount = useUnreadChatCount();
+  const { theme, toggleTheme } = useTheme();
   const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
 
   // Close on route change
@@ -144,6 +146,22 @@ export function MobileDrawer({
                   </div>
                 );
               })}
+
+              {/* Theme toggle */}
+              <button
+                onClick={toggleTheme}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-3 transition tap-highlight-none active:scale-[0.98]"
+                style={{
+                  color: T.textSecondary,
+                  backgroundColor: T.panelElevated,
+                  minHeight: 48,
+                }}
+              >
+                {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+                <span className="text-[14px] font-medium">
+                  {theme === "dark" ? "Світла тема" : "Темна тема"}
+                </span>
+              </button>
 
               {/* Sign out */}
               <button
