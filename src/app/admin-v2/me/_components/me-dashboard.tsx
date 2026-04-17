@@ -20,6 +20,7 @@ import {
   Plus,
   X,
   Loader2,
+  Trash2,
 } from "lucide-react";
 
 type TaskStatus = {
@@ -201,6 +202,17 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
     }
   };
 
+  const deleteTask = async (taskId: string, title: string) => {
+    if (!confirm(`Видалити задачу «${title}»?`)) return;
+    setPendingId(taskId);
+    try {
+      await fetch(`/api/admin/tasks/${taskId}`, { method: "DELETE" });
+      await load();
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   const counts = dashboard?.counts;
 
   return (
@@ -376,6 +388,7 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
                 onStartTimer={() => void startTimer(t.id)}
                 onStopTimer={() => void stopTimer()}
                 onMarkDone={() => void markDone(t)}
+                onDelete={() => void deleteTask(t.id, t.title)}
               />
             ))}
           </ul>
@@ -508,6 +521,7 @@ function TaskRow({
   onStartTimer,
   onStopTimer,
   onMarkDone,
+  onDelete,
 }: {
   task: TaskItem;
   isTimerActive: boolean;
@@ -515,6 +529,7 @@ function TaskRow({
   onStartTimer: () => void;
   onStopTimer: () => void;
   onMarkDone: () => void;
+  onDelete: () => void;
 }) {
   const overdue = isOverdue(task);
   return (
@@ -601,6 +616,18 @@ function TaskRow({
             <CheckCircle2 size={12} />
           </button>
         )}
+        <button
+          onClick={onDelete}
+          disabled={pending}
+          title="Видалити задачу"
+          className="rounded-md p-1.5 disabled:opacity-50"
+          style={{
+            backgroundColor: "#ef444422",
+            color: "#ef4444",
+          }}
+        >
+          <Trash2 size={12} />
+        </button>
       </div>
     </li>
   );
