@@ -74,11 +74,11 @@ export function MobileDrawer({
             {/* User info */}
             <div
               className="mx-5 mb-3 flex items-center gap-3 rounded-xl p-3"
-              style={{ backgroundColor: T.panelElevated }}
+              style={{ background: "linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)" }}
             >
               <div
                 className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold flex-shrink-0"
-                style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`, color: "#FFFFFF" }}
               >
                 {session?.user?.name?.charAt(0)?.toUpperCase() || "A"}
               </div>
@@ -118,9 +118,12 @@ export function MobileDrawer({
                             href={item.href}
                             className="relative flex items-center gap-3 rounded-xl px-4 py-3 transition tap-highlight-none active:scale-[0.98]"
                             style={{
-                              backgroundColor: active ? T.accentPrimarySoft : "transparent",
+                              background: active
+                                ? `linear-gradient(135deg, ${T.accentPrimarySoft}, #DBEAFE)`
+                                : "transparent",
                               color: active ? T.accentPrimary : T.textSecondary,
-                              border: `1px solid ${active ? T.borderAccent : "transparent"}`,
+                              border: `1px solid ${active ? T.accentPrimary + "30" : "transparent"}`,
+                              boxShadow: active ? `0 2px 6px ${T.accentPrimary}15` : undefined,
                               minHeight: 48,
                             }}
                           >

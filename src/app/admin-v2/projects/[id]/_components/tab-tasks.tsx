@@ -27,6 +27,7 @@ import { TaskCalendar } from "./task-calendar";
 import { TaskPeopleView } from "./task-people";
 import { TaskGantt } from "./task-gantt";
 import { useProjectRealtime } from "@/hooks/useProjectRealtime";
+import { CommentThread } from "@/components/collab/CommentThread";
 
 type StageLite = {
   id: string;
@@ -1057,6 +1058,11 @@ function TaskDrawer({
                   ))}
                 </ul>
               )}
+            </div>
+
+            {/* Task discussion thread */}
+            <div className="flex flex-col gap-2">
+              <CommentThread entityType="TASK" entityId={taskId} />
             </div>
           </div>
         )}

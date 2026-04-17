@@ -93,7 +93,10 @@ export default async function AdminV2ProjectsPage() {
         <Link
           href="/admin-v2/projects/new"
           className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
-          style={{ backgroundColor: T.accentPrimary }}
+          style={{
+            background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`,
+            boxShadow: `0 4px 12px ${T.accentPrimary}30`,
+          }}
         >
           <Plus size={16} /> Новий проєкт
         </Link>
@@ -101,18 +104,26 @@ export default async function AdminV2ProjectsPage() {
 
       {/* KPI strip */}
       <section className="grid grid-cols-3 gap-3 sm:gap-4">
-        <KpiCard label="ВСЬОГО" value={String(projects.length)} sub="у системі" />
+        <KpiCard
+          label="ВСЬОГО"
+          value={String(projects.length)}
+          sub="у системі"
+          accent={T.sky}
+          gradient="linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)"
+        />
         <KpiCard
           label="ЗАГАЛЬНИЙ БЮДЖЕТ"
           value={formatCurrency(totalBudget)}
           sub={`${formatCurrency(totalPaid)} сплачено`}
-          accent={T.accentPrimary}
+          accent={T.violet}
+          gradient="linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)"
         />
         <KpiCard
           label="ВИКОНАННЯ ОПЛАТ"
           value={`${totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0}%`}
           sub="від загальної суми"
-          accent={T.success}
+          accent={T.emerald}
+          gradient="linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)"
         />
       </section>
 
@@ -342,24 +353,30 @@ function KpiCard({
   value,
   sub,
   accent = T.textPrimary,
+  gradient,
 }: {
   label: string;
   value: string;
   sub: string;
   accent?: string;
+  gradient?: string;
 }) {
   return (
     <div
       className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      style={{
+        background: gradient || T.panel,
+        border: `1px solid ${accent}20`,
+        boxShadow: `0 2px 8px ${accent}12`,
+      }}
     >
-      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textMuted }}>
+      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textSecondary }}>
         {label}
       </span>
       <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate" style={{ color: accent }}>
         {value}
       </span>
-      <span className="text-[10px] sm:text-[11px] hidden sm:block truncate" style={{ color: T.textMuted }}>
+      <span className="text-[10px] sm:text-[11px] hidden sm:block truncate" style={{ color: T.textSecondary }}>
         {sub}
       </span>
     </div>
@@ -382,7 +399,7 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
       style={{
         backgroundColor: c.bg,
         color: c.fg,
-        boxShadow: `0 2px 8px rgba(0,0,0,0.4)`,
+        boxShadow: `0 2px 8px rgba(0,0,0,0.12)`,
       }}
     >
       {label}

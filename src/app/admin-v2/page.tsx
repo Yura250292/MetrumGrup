@@ -249,6 +249,7 @@ export default async function AdminV2Dashboard() {
           sub={`${activeProjectsCount} активних`}
           icon={FolderKanban}
           accent={T.accentPrimary}
+          gradient="linear-gradient(135deg, #EEF2FF 0%, #DBEAFE 100%)"
           href="/admin-v2/projects"
         />
         <KpiCard
@@ -256,7 +257,8 @@ export default async function AdminV2Dashboard() {
           value={String(clientsCount)}
           sub="облікових записів"
           icon={Users}
-          accent={T.success}
+          accent={T.teal}
+          gradient="linear-gradient(135deg, #F0FDFA 0%, #CCFBF1 100%)"
           href="/admin-v2/clients"
         />
         <KpiCard
@@ -264,7 +266,8 @@ export default async function AdminV2Dashboard() {
           value={formatCurrency(portfolio)}
           sub="загальний бюджет"
           icon={Wallet}
-          accent={T.accentSecondary}
+          accent={T.violet}
+          gradient="linear-gradient(135deg, #F5F3FF 0%, #EDE9FE 100%)"
           href="/admin-v2/projects"
         />
         <KpiCard
@@ -272,7 +275,8 @@ export default async function AdminV2Dashboard() {
           value={formatCurrency(revenue)}
           sub="усього по платежах"
           icon={TrendingUp}
-          accent={T.success}
+          accent={T.emerald}
+          gradient="linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)"
         />
       </section>
 
@@ -283,7 +287,8 @@ export default async function AdminV2Dashboard() {
           value={String(activeTasksCount)}
           sub={`${completedWeekTasksCount} завершено за тиждень`}
           icon={ListTodo}
-          accent={T.accentPrimary}
+          accent={T.sky}
+          gradient="linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)"
           href="/admin-v2/me"
         />
         <KpiCard
@@ -292,6 +297,9 @@ export default async function AdminV2Dashboard() {
           sub={`${dueTodayTasksCount} на сьогодні`}
           icon={AlertCircle}
           accent={overdueTasksCount > 0 ? T.danger : T.textMuted}
+          gradient={overdueTasksCount > 0
+            ? "linear-gradient(135deg, #FEF2F2 0%, #FECACA 100%)"
+            : undefined}
           href="/admin-v2/me"
         />
         <KpiCard
@@ -299,14 +307,16 @@ export default async function AdminV2Dashboard() {
           value={formatHours(weekHoursTotal)}
           sub={`${weekTimeLogs.length} співробітників`}
           icon={Clock}
-          accent={T.warning}
+          accent={T.amber}
+          gradient="linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)"
         />
         <KpiCard
           label="AI КОШТОРИСИ"
           value={String(aiEstimatesMonth)}
           sub="за місяць"
           icon={Sparkles}
-          accent={T.accentPrimary}
+          accent={T.indigo}
+          gradient="linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%)"
           href="/ai-estimate-v2"
         />
       </section>
@@ -375,6 +385,16 @@ export default async function AdminV2Dashboard() {
               {stageOrder.map((stage) => {
                 const count = stageMap.get(stage) ?? 0;
                 const pct = (count / stageMax) * 100;
+                const stageColors: Record<string, string> = {
+                  DESIGN: T.violet,
+                  FOUNDATION: T.sky,
+                  WALLS: T.accentPrimary,
+                  ROOF: T.teal,
+                  ENGINEERING: T.amber,
+                  FINISHING: T.indigo,
+                  HANDOVER: T.emerald,
+                };
+                const barColor = stageColors[stage] || T.accentPrimary;
                 return (
                   <div key={stage} className="flex items-center gap-3">
                     <span
@@ -385,14 +405,15 @@ export default async function AdminV2Dashboard() {
                     </span>
                     <div
                       className="flex-1 h-5 rounded-md overflow-hidden"
-                      style={{ backgroundColor: T.panelElevated }}
+                      style={{ backgroundColor: barColor + "12" }}
                     >
                       <div
                         className="h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-bold"
                         style={{
                           width: `${Math.max(pct, count > 0 ? 6 : 0)}%`,
-                          backgroundColor:
-                            count > 0 ? T.accentPrimary : "transparent",
+                          background: count > 0
+                            ? `linear-gradient(90deg, ${barColor}cc, ${barColor})`
+                            : "transparent",
                           color: "#fff",
                         }}
                       >
@@ -439,12 +460,20 @@ export default async function AdminV2Dashboard() {
             </p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {weekTimeLogs.map((log) => {
+              {weekTimeLogs.map((log, idx) => {
                 const name = userMap.get(log.userId) ?? "—";
                 const minutes = log._sum.minutes ?? 0;
                 const pct = weekHoursTotal
                   ? (minutes / weekHoursTotal) * 100
                   : 0;
+                const avatarColors = [
+                  { bg: T.accentPrimarySoft, fg: T.accentPrimary },
+                  { bg: T.tealSoft, fg: T.teal },
+                  { bg: T.violetSoft, fg: T.violet },
+                  { bg: T.amberSoft, fg: T.amber },
+                  { bg: T.roseSoft, fg: T.rose },
+                ];
+                const ac = avatarColors[idx % avatarColors.length];
                 return (
                   <li
                     key={log.userId}
@@ -457,8 +486,8 @@ export default async function AdminV2Dashboard() {
                     <span
                       className="inline-flex items-center justify-center h-7 w-7 rounded-full flex-shrink-0 text-[10px] font-bold"
                       style={{
-                        backgroundColor: T.accentPrimarySoft,
-                        color: T.accentPrimary,
+                        backgroundColor: ac.bg,
+                        color: ac.fg,
                       }}
                     >
                       {name.slice(0, 2).toUpperCase()}
@@ -471,13 +500,13 @@ export default async function AdminV2Dashboard() {
                     </span>
                     <div
                       className="w-20 h-1.5 rounded-full overflow-hidden flex-shrink-0"
-                      style={{ backgroundColor: T.panel }}
+                      style={{ backgroundColor: ac.fg + "18" }}
                     >
                       <div
                         className="h-full rounded-full"
                         style={{
                           width: `${pct}%`,
-                          backgroundColor: T.warning,
+                          backgroundColor: ac.fg,
                         }}
                       />
                     </div>
@@ -524,7 +553,16 @@ export default async function AdminV2Dashboard() {
             <EmptyProjects />
           ) : (
             <div className="flex flex-col gap-2">
-              {recentProjects.map((project) => (
+              {recentProjects.map((project, idx) => {
+                const projectColors = [
+                  { bg: T.accentPrimarySoft, fg: T.accentPrimary },
+                  { bg: T.emeraldSoft, fg: T.emerald },
+                  { bg: T.violetSoft, fg: T.violet },
+                  { bg: T.skySoft, fg: T.sky },
+                  { bg: T.amberSoft, fg: T.amber },
+                ];
+                const pc = projectColors[idx % projectColors.length];
+                return (
                 <Link
                   key={project.id}
                   href={`/admin-v2/projects/${project.id}`}
@@ -533,7 +571,7 @@ export default async function AdminV2Dashboard() {
                 >
                   <div
                     className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-sm font-bold"
-                    style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                    style={{ backgroundColor: pc.bg, color: pc.fg }}
                   >
                     {project.client?.name?.charAt(0)?.toUpperCase() || "?"}
                   </div>
@@ -558,7 +596,8 @@ export default async function AdminV2Dashboard() {
                   </div>
                   <ArrowRight size={16} style={{ color: T.textMuted }} className="flex-shrink-0" />
                 </Link>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -695,15 +734,19 @@ export default async function AdminV2Dashboard() {
       {/* Quick actions */}
       <section
         className="rounded-2xl p-6"
-        style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderAccent}` }}
+        style={{
+          background: "linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 30%, #F5F3FF 70%, #EDE9FE 100%)",
+          border: `1px solid ${T.accentPrimary}25`,
+          boxShadow: `0 4px 16px ${T.accentPrimary}12`,
+        }}
       >
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div
               className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
-              style={{ backgroundColor: T.accentPrimarySoft }}
+              style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
             >
-              <Sparkles size={20} style={{ color: T.accentPrimary }} />
+              <Sparkles size={20} color="#FFFFFF" />
             </div>
             <div className="flex flex-col gap-0">
               <div className="text-sm font-bold" style={{ color: T.textPrimary }}>
@@ -717,7 +760,7 @@ export default async function AdminV2Dashboard() {
           <Link
             href="/ai-estimate-v2"
             className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
-            style={{ backgroundColor: T.accentPrimary }}
+            style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
           >
             <Sparkles size={16} /> Згенерувати
           </Link>
@@ -746,6 +789,7 @@ function KpiCard({
   sub,
   icon: Icon,
   accent,
+  gradient,
   href,
 }: {
   label: string;
@@ -753,26 +797,28 @@ function KpiCard({
   sub: string;
   icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
   accent: string;
+  gradient?: string;
   href?: string;
 }) {
   const content = (
     <div
       className="flex flex-col gap-1.5 rounded-xl sm:rounded-2xl p-3 sm:p-6 h-full transition"
       style={{
-        backgroundColor: T.panel,
-        border: `1px solid ${T.borderSoft}`,
+        background: gradient || T.panel,
+        border: `1px solid ${accent}20`,
+        boxShadow: `0 2px 8px ${accent}12`,
       }}
     >
       <div className="flex items-center justify-between">
         <span
           className="text-[9px] sm:text-[10px] font-bold tracking-wider"
-          style={{ color: T.textMuted }}
+          style={{ color: T.textSecondary }}
         >
           {label}
         </span>
         <div
           className="flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-lg"
-          style={{ backgroundColor: accent + "22" }}
+          style={{ backgroundColor: accent + "18", border: `1px solid ${accent}30` }}
         >
           <Icon size={16} style={{ color: accent }} />
         </div>
@@ -785,7 +831,7 @@ function KpiCard({
       </div>
       <div
         className="text-[10px] sm:text-xs hidden sm:block truncate"
-        style={{ color: T.textMuted }}
+        style={{ color: T.textSecondary }}
       >
         {sub}
       </div>
@@ -818,20 +864,23 @@ function FinanceTile({
     <div
       className="flex items-center gap-4 rounded-2xl p-5"
       style={{
-        backgroundColor: emphasize ? color + "10" : T.panel,
-        border: `1px solid ${emphasize ? color : T.borderSoft}`,
+        background: emphasize
+          ? `linear-gradient(135deg, ${color}08 0%, ${color}18 100%)`
+          : T.panel,
+        border: `1px solid ${emphasize ? color : color + "30"}`,
+        boxShadow: emphasize ? `0 4px 12px ${color}18` : `0 1px 4px ${color}10`,
       }}
     >
       <div
         className="flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0"
-        style={{ backgroundColor: color + "22" }}
+        style={{ backgroundColor: color + "18", border: `1px solid ${color}30` }}
       >
         <Icon size={20} style={{ color }} />
       </div>
       <div className="flex flex-col gap-0.5 min-w-0 flex-1">
         <span
           className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: T.textMuted }}
+          style={{ color: T.textSecondary }}
         >
           {label}
         </span>

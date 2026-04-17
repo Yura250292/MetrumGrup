@@ -25,10 +25,11 @@ export function Header() {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-12 md:h-16 items-center justify-between border-b px-4 md:px-8"
+      className="sticky top-0 z-30 flex h-12 md:h-16 items-center justify-between px-4 md:px-8"
       style={{
         backgroundColor: T.panel,
-        borderColor: T.borderSoft,
+        borderBottom: `1px solid ${T.borderSoft}`,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         backdropFilter: "blur(12px)",
       }}
     >
@@ -63,8 +64,8 @@ export function Header() {
             ) : (
               <Link
                 href={crumb.href}
-                className="font-medium transition hover:brightness-[0.97]"
-                style={{ color: T.textMuted }}
+                className="font-medium transition"
+                style={{ color: T.accentPrimary + "90" }}
               >
                 {crumb.label}
               </Link>

@@ -30,14 +30,17 @@ export function Sidebar() {
     >
       {/* Brand */}
       <div
-        className="flex h-16 items-center justify-between border-b px-4"
-        style={{ borderColor: T.borderSoft }}
+        className="flex h-16 items-center justify-between px-4"
+        style={{
+          background: "linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%)",
+          borderBottom: `1px solid ${T.accentPrimary}18`,
+        }}
       >
         {!collapsed && (
           <div className="flex items-center gap-2.5">
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-              style={{ backgroundColor: T.accentPrimary }}
+              style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
             >
               <Layers size={16} color="#FFFFFF" />
             </div>
@@ -47,7 +50,7 @@ export function Sidebar() {
               </span>
               <span
                 className="text-[9px] font-semibold uppercase tracking-[0.15em] mt-0.5"
-                style={{ color: T.textMuted }}
+                style={{ color: T.accentSecondary }}
               >
                 Адмін-панель
               </span>
@@ -57,7 +60,7 @@ export function Sidebar() {
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="rounded-lg p-1.5 transition hover:brightness-[0.97]"
-          style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
+          style={{ color: T.textMuted, backgroundColor: T.panel }}
         >
           {collapsed ? <Menu size={18} /> : <ChevronLeft size={18} />}
         </button>
@@ -88,11 +91,14 @@ export function Sidebar() {
                       key={item.href}
                       href={item.href}
                       title={collapsed ? item.label : undefined}
-                      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition"
+                      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[#F1F5F9]"
                       style={{
-                        backgroundColor: active ? T.accentPrimarySoft : "transparent",
+                        background: active
+                          ? `linear-gradient(135deg, ${T.accentPrimarySoft}, #DBEAFE)`
+                          : undefined,
                         color: active ? T.accentPrimary : T.textSecondary,
-                        border: `1px solid ${active ? T.borderAccent : "transparent"}`,
+                        border: `1px solid ${active ? T.accentPrimary + "30" : "transparent"}`,
+                        boxShadow: active ? `0 2px 8px ${T.accentPrimary}15` : undefined,
                         justifyContent: collapsed ? "center" : "flex-start",
                       }}
                     >
@@ -130,7 +136,7 @@ export function Sidebar() {
             <>
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold flex-shrink-0"
-                style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`, color: "#FFFFFF" }}
               >
                 {session?.user?.name?.charAt(0)?.toUpperCase() || "А"}
               </div>
