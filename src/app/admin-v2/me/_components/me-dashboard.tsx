@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSession } from "next-auth/react";
+
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { STAGE_LABELS } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
@@ -103,7 +103,7 @@ function isDueToday(t: TaskItem): boolean {
   );
 }
 
-export function MeDashboard() {
+export function MeDashboard({ currentUserId }: { currentUserId: string }) {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
@@ -384,6 +384,7 @@ export function MeDashboard() {
 
       {createOpen && (
         <NewTaskModal
+          currentUserId={currentUserId}
           onClose={() => setCreateOpen(false)}
           onCreated={() => {
             setCreateOpen(false);
@@ -518,7 +519,7 @@ function TaskRow({
   const overdue = isOverdue(task);
   return (
     <li
-      className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:brightness-110"
+      className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:brightness-95"
       style={{
         backgroundColor: T.panelElevated,
         border: `1px solid ${isTimerActive ? T.accentPrimary : overdue ? "#ef4444" : T.borderSoft}`,
@@ -622,7 +623,7 @@ function Tile({
     <button
       onClick={onClick}
       disabled={!onClick}
-      className="flex flex-col gap-1 rounded-xl px-3 py-3 text-left transition hover:brightness-110 disabled:cursor-default"
+      className="flex flex-col gap-1 rounded-xl px-3 py-3 text-left transition hover:brightness-95 disabled:cursor-default"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <span
@@ -647,14 +648,14 @@ type MyProject = {
 };
 
 function NewTaskModal({
+  currentUserId,
   onClose,
   onCreated,
 }: {
+  currentUserId: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { data: session } = useSession();
-  const currentUserId = session?.user?.id ?? null;
   const [projects, setProjects] = useState<MyProject[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [projectId, setProjectId] = useState("");

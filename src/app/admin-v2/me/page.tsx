@@ -37,7 +37,7 @@ export default async function MyTasksPage() {
           Мої задачі
         </h1>
       </header>
-      <MeDashboard />
+      <MeDashboard currentUserId={session.user.id} />
     </div>
   );
 }
