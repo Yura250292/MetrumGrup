@@ -15,6 +15,38 @@ export function formatCurrency(amount: number | string): string {
   }).format(num);
 }
 
+/**
+ * Compact currency for KPI tiles — auto-abbreviates large numbers:
+ *   < 10 000         → "8 500 ₴"
+ *   10 000–999 999   → "125 тис ₴"
+ *   1 000 000+       → "3.2 млн ₴"
+ *   1 000 000 000+   → "1.5 млрд ₴"
+ */
+export function formatCurrencyCompact(amount: number | string): string {
+  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  const abs = Math.abs(num);
+  const sign = num < 0 ? "−" : "";
+
+  if (abs >= 1_000_000_000) {
+    const v = abs / 1_000_000_000;
+    return `${sign}${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)} млрд ₴`;
+  }
+  if (abs >= 1_000_000) {
+    const v = abs / 1_000_000;
+    return `${sign}${v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)} млн ₴`;
+  }
+  if (abs >= 10_000) {
+    const v = Math.round(abs / 1_000);
+    return `${sign}${v} тис ₴`;
+  }
+  return new Intl.NumberFormat("uk-UA", {
+    style: "currency",
+    currency: "UAH",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(num);
+}
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
   return new Intl.DateTimeFormat("uk-UA", {

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { formatCurrency, formatDateShort } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateShort } from "@/lib/utils";
 import { PROJECT_STATUS_LABELS, STAGE_LABELS } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
 import {
@@ -263,7 +263,7 @@ export default async function AdminV2Dashboard() {
         />
         <KpiCard
           label="ПОРТФЕЛЬ"
-          value={formatCurrency(portfolio)}
+          value={formatCurrencyCompact(portfolio)}
           sub="загальний бюджет"
           icon={Wallet}
           accent={T.violet}
@@ -272,7 +272,7 @@ export default async function AdminV2Dashboard() {
         />
         <KpiCard
           label="СПЛАЧЕНО"
-          value={formatCurrency(revenue)}
+          value={formatCurrencyCompact(revenue)}
           sub="усього по платежах"
           icon={TrendingUp}
           accent={T.emerald}
@@ -886,7 +886,7 @@ function FinanceTile({
           className="text-xl font-bold truncate"
           style={{ color }}
         >
-          {formatCurrency(value)}
+          {formatCurrencyCompact(value)}
         </span>
       </div>
     </div>
