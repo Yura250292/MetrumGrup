@@ -12,6 +12,7 @@ import {
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { AIGenerateEstimateModal } from "./AIGenerateEstimateModal";
+import { EstimateCalculatorModal } from "./EstimateCalculatorModal";
 import { EngineerReportModal } from "@/components/admin/EngineerReportModal";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -35,6 +36,7 @@ function formatDate(iso: string): string {
 export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
   const { data: estimates, isLoading, error } = useProjectEstimates(projectId);
   const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [calcModalOpen, setCalcModalOpen] = useState(false);
   const [reportFor, setReportFor] = useState<ProjectEstimateDTO | null>(null);
 
   return (
@@ -59,6 +61,14 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
           >
             <Sparkles className="h-4 w-4" />
             AI з файлів
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setCalcModalOpen(true)}
+          >
+            <Calculator className="h-4 w-4" />
+            Калькулятор
           </Button>
           <Link href={`/admin/estimates/ai-generate?projectId=${projectId}`}>
             <Button size="sm">
@@ -140,6 +150,12 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
       <AIGenerateEstimateModal
         open={aiModalOpen}
         onOpenChange={setAiModalOpen}
+        projectId={projectId}
+      />
+
+      <EstimateCalculatorModal
+        open={calcModalOpen}
+        onOpenChange={setCalcModalOpen}
         projectId={projectId}
       />
 

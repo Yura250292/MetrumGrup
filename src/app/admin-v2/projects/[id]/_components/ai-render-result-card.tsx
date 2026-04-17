@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check, Trash2 } from "lucide-react";
+import { Download, RefreshCw, Clock, AlertCircle, Loader2, Check, Trash2, Box } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
 import { AiRenderComparisonSlider } from "./ai-render-comparison-slider";
@@ -19,10 +19,12 @@ export function AiRenderResultCard({
   job,
   onRegenerate,
   onDelete,
+  onGenerate3D,
 }: {
   job: AiRenderJobDTO;
   onRegenerate?: (job: AiRenderJobDTO) => void;
   onDelete?: (jobId: string) => void;
+  onGenerate3D?: (outputUrl: string) => void;
 }) {
   const [showComparison, setShowComparison] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -107,7 +109,9 @@ export function AiRenderResultCard({
                 ? "Фото → Рендер"
                 : job.mode === "FLOOR_PLAN_TO_3D"
                   ? "План → Реалістика"
-                  : "Текст → Рендер"}
+                  : job.mode === "TOPDOWN_TO_3D"
+                    ? "3D Візуалізація"
+                    : "Текст → Рендер"}
           </span>
           {job.durationMs && (
             <span className="flex items-center gap-1 text-[11px]" style={{ color: T.textMuted }}>
@@ -151,6 +155,17 @@ export function AiRenderResultCard({
                 >
                   <Download size={14} style={{ color: T.textSecondary }} />
                 </a>
+                {job.mode === "FLOOR_PLAN_TO_3D" && onGenerate3D && (
+                  <button
+                    onClick={() => onGenerate3D(job.outputUrl!)}
+                    className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition-colors hover:opacity-80"
+                    style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                    title="Створити 3D візуалізації з цього плану"
+                  >
+                    <Box size={12} />
+                    3D Вид
+                  </button>
+                )}
               </>
             )}
             {(job.status === "COMPLETED" || job.status === "FAILED") && onRegenerate && (

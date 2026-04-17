@@ -1109,6 +1109,7 @@ enum AiRenderMode {
   PHOTO_RERENDER
   TEXT_TO_RENDER
   FLOOR_PLAN_TO_3D
+  TOPDOWN_TO_3D
 }
 
 enum AiRenderStatus {

@@ -202,6 +202,7 @@ export async function createRenderJob(
     PHOTO_RERENDER: 0.6,
     FLOOR_PLAN_TO_3D: 0.85,
     TEXT_TO_RENDER: 1.0,
+    TOPDOWN_TO_3D: 0.85,
   };
   const defaultStrength = strengthByMode[input.mode] ?? 0.85;
   const defaultControlnet = input.mode === "SKETCH_TO_RENDER" ? "lineart" : "depth";

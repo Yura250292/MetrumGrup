@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Sparkles, Plus, Coins } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { useAiRenderJobs, useAiRenderJob, useCancelAiRender } from "@/hooks/useAiRender";
+import { useAiRenderJobs, useAiRenderJob, useCancelAiRender, useCreateAiRender } from "@/hooks/useAiRender";
 import { AiRenderModal } from "./ai-render-modal";
 import { AiRenderResultCard } from "./ai-render-result-card";
 import type { AiRenderJobDTO } from "@/lib/ai-render/types";
@@ -29,6 +29,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
   const { data, isLoading, refetch } = useAiRenderJobs(projectId);
   const deleteRender = useCancelAiRender(projectId);
+  const createRender = useCreateAiRender(projectId);
 
   // Poll active job
   const { data: polledJob } = useAiRenderJob(projectId, pollingJobId);
@@ -54,6 +55,30 @@ export function TabAiRender({ projectId }: { projectId: string }) {
 
   const handleJobCreated = (jobId: string) => {
     setPollingJobId(jobId);
+    refetch();
+  };
+
+  const handleGenerate3D = async (outputUrl: string) => {
+    const views = [
+      { prompt: "3D cutaway perspective view showing all rooms at an angle", w: 1024, h: 768 },
+      { prompt: "isometric 3D architectural model, cutaway view showing interior, shadow on ground", w: 1024, h: 1024 },
+      { prompt: "eye-level interior view of the main living room, camera inside room, cozy atmosphere", w: 1024, h: 768 },
+    ];
+
+    for (const view of views) {
+      try {
+        const job = await createRender.mutateAsync({
+          mode: "TOPDOWN_TO_3D" as AiRenderJobDTO["mode"],
+          inputUrl: outputUrl,
+          prompt: view.prompt,
+          width: view.w,
+          height: view.h,
+        });
+        setPollingJobId(job.id);
+      } catch {
+        // continue with next view
+      }
+    }
     refetch();
   };
 
@@ -132,6 +157,7 @@ export function TabAiRender({ projectId }: { projectId: string }) {
               job={job}
               onRegenerate={handleRegenerate}
               onDelete={handleDelete}
+              onGenerate3D={handleGenerate3D}
             />
           ))}
         </div>

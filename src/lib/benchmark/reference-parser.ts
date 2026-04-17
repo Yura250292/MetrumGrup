@@ -116,21 +116,41 @@ export function parseReferenceEstimate(filePath: string): ReferenceEstimate {
     throw new Error(`Reference file not found: ${filePath}`);
   }
   const wb = XLSX.readFile(filePath);
+  return parseWorkbook(wb, filePath);
+}
+
+/**
+ * Parse a reference estimate from an in-memory XLSX buffer. Used by the
+ * admin upload flow where the file is uploaded via FormData and never
+ * touches disk.
+ */
+export function parseReferenceEstimateBuffer(
+  buffer: ArrayBuffer | Uint8Array,
+  sourceLabel = 'uploaded.xlsx'
+): ReferenceEstimate {
+  const data = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  const wb = XLSX.read(data, { type: 'array' });
+  return parseWorkbook(wb, sourceLabel);
+}
+
+function parseWorkbook(wb: XLSX.WorkBook, sourceLabel: string): ReferenceEstimate {
   const firstSheet = wb.Sheets[wb.SheetNames[0]];
+  if (!firstSheet) {
+    throw new Error(`No sheets found in ${sourceLabel}`);
+  }
   const rows = XLSX.utils.sheet_to_json<any[]>(firstSheet, { header: 1, defval: null });
 
-  // Look at the header row to figure out the format.
   const headerIdx = rows.findIndex(isHeaderRow);
   if (headerIdx === -1) {
-    throw new Error(`Cannot find header row in ${filePath}`);
+    throw new Error(`Cannot find header row in ${sourceLabel}`);
   }
   const header = rows[headerIdx].map(trimText).join(' ').toLowerCase();
   const isTwoColumn = header.includes('матеріал');
 
   if (isTwoColumn) {
-    return parseTwoColumn(filePath, rows, headerIdx);
+    return parseTwoColumn(sourceLabel, rows, headerIdx);
   }
-  return parseSingleColumn(filePath, rows, headerIdx);
+  return parseSingleColumn(sourceLabel, rows, headerIdx);
 }
 
 /**

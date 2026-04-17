@@ -14,6 +14,8 @@ const MODE_SUFFIXES: Record<AiRenderMode, string> = {
     "photorealistic architectural visualization, professional architecture photography, exterior view of building, real materials and textures, natural lighting, golden hour, landscaping, ultra detailed, hyperrealistic, 8k resolution, unreal engine 5 quality, shot on Canon EOS R5",
   FLOOR_PLAN_TO_3D:
     "Photorealistic top-down interior visualization of this exact floor plan. Preserve every wall, door, and window position from the sketch. Render fixtures and furniture that are already drawn in the plan (bathtub, toilet, sink, stove, bed, sofa, table, chairs) at their exact positions. Apply realistic textures: wooden parquet flooring in living areas, ceramic tile in bathroom and kitchen. Soft natural daylight from above. Top-down bird eye view, same perspective as the input sketch. Do not invent furniture in empty rooms — leave small unlabeled rooms empty or as hallways.",
+  TOPDOWN_TO_3D:
+    "Transform this photorealistic top-down interior view into a stunning 3D perspective visualization, showing all rooms with walls visible at an angle, furniture and fixtures visible from above at a diagonal angle, professional architectural 3D render, warm natural lighting through windows, photorealistic materials and textures, 8k quality",
 };
 
 const DEFAULT_NEGATIVE =
@@ -28,7 +30,7 @@ export function buildPrompt(params: {
 
   // For FLOOR_PLAN_TO_3D: put the mode instruction first, then style/notes.
   // Seedream reads the sketch itself; we don't need an external plan reader.
-  if (params.mode === "FLOOR_PLAN_TO_3D") {
+  if (params.mode === "FLOOR_PLAN_TO_3D" || params.mode === "TOPDOWN_TO_3D") {
     parts.push(MODE_SUFFIXES[params.mode]);
     if (params.stylePreset?.prompt) parts.push(`Interior style: ${params.stylePreset.prompt}.`);
     if (params.userPrompt.trim()) parts.push(`User notes: ${params.userPrompt.trim()}.`);
