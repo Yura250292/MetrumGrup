@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
-import { Bell, Loader2 } from "lucide-react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Bell, Loader2, Smartphone } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProfileData, NotificationPrefs, NotificationCategory, NotificationChannel } from "../_lib/types";
 import {
@@ -9,6 +9,12 @@ import {
   NOTIFICATION_CHANNELS,
   DEFAULT_NOTIFICATION_PREFS,
 } from "../_lib/constants";
+import {
+  subscribeToPush,
+  unsubscribeFromPush,
+  isPushSupported,
+  hasActivePushSubscription,
+} from "@/lib/notifications/push-client";
 
 type Props = {
   profile: ProfileData;
@@ -21,6 +27,13 @@ export function SectionNotifications({ profile, onSave }: Props) {
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pushSupported, setPushSupported] = useState(false);
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+
+  useEffect(() => {
+    setPushSupported(isPushSupported());
+    hasActivePushSubscription().then(setPushSubscribed);
+  }, []);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -42,14 +55,38 @@ export function SectionNotifications({ profile, onSave }: Props) {
     [onSave]
   );
 
-  const toggleCategory = (cat: NotificationCategory, ch: NotificationChannel) => {
+  const handlePushSubscribe = async () => {
+    const ok = await subscribeToPush();
+    if (ok) {
+      setPushSubscribed(true);
+    } else {
+      setError("Не вдалося увімкнути push-сповіщення. Перевірте дозволи браузера.");
+    }
+  };
+
+  const handlePushUnsubscribe = async () => {
+    await unsubscribeFromPush();
+    setPushSubscribed(false);
+  };
+
+  const toggleCategory = async (cat: NotificationCategory, ch: NotificationChannel) => {
+    const newValue = !prefs.categories[cat]?.[ch];
+
+    // If enabling push for the first time, trigger browser permission
+    if (ch === "push" && newValue && !pushSubscribed) {
+      await handlePushSubscribe();
+      // If subscription failed, don't toggle
+      const isNowSubscribed = await hasActivePushSubscription();
+      if (!isNowSubscribed) return;
+    }
+
     const updated = {
       ...prefs,
       categories: {
         ...prefs.categories,
         [cat]: {
           ...prefs.categories[cat],
-          [ch]: !prefs.categories[cat]?.[ch],
+          [ch]: newValue,
         },
       },
     };
@@ -148,6 +185,40 @@ export function SectionNotifications({ profile, onSave }: Props) {
           </button>
         ))}
       </div>
+
+      {/* Push notification status */}
+      {pushSupported && (
+        <div
+          className="flex items-center justify-between rounded-xl px-4 py-3 mb-5"
+          style={{ backgroundColor: T.panelSoft, border: "1px solid " + T.borderSoft }}
+        >
+          <div className="flex items-center gap-2">
+            <Smartphone size={16} style={{ color: pushSubscribed ? T.accentPrimary : T.textMuted }} />
+            <span className="text-[13px]" style={{ color: T.textPrimary }}>
+              Push-сповіщення
+            </span>
+            <span
+              className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+              style={{
+                backgroundColor: pushSubscribed ? T.accentPrimarySoft : T.borderSoft,
+                color: pushSubscribed ? T.accentPrimary : T.textMuted,
+              }}
+            >
+              {pushSubscribed ? "Активні" : "Вимкнені"}
+            </span>
+          </div>
+          <button
+            onClick={pushSubscribed ? handlePushUnsubscribe : handlePushSubscribe}
+            className="rounded-lg px-3 py-1.5 text-[12px] font-medium transition"
+            style={{
+              backgroundColor: pushSubscribed ? T.dangerSoft : T.accentPrimarySoft,
+              color: pushSubscribed ? T.danger : T.accentPrimary,
+            }}
+          >
+            {pushSubscribed ? "Вимкнути" : "Увімкнути"}
+          </button>
+        </div>
+      )}
 
       {/* Toggle grid */}
       <div className="overflow-x-auto">

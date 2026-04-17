@@ -1,4 +1,4 @@
-const CACHE_NAME = 'metrum-v3.0.0';
+const CACHE_NAME = 'metrum-v4.0.0';
 const STATIC_CACHE = 'metrum-static-v3';
 const IMAGE_CACHE = 'metrum-images-v3';
 const API_CACHE = 'metrum-api-v3';
@@ -73,5 +73,48 @@ self.addEventListener('fetch', (event) => {
     fetch(request)
       .catch(() => caches.match(request))
       .catch(() => caches.match('/offline.html'))
+  );
+});
+
+// Push notification received
+self.addEventListener('push', (event) => {
+  if (!event.data) return;
+
+  let data;
+  try {
+    data = event.data.json();
+  } catch {
+    data = { title: event.data.text() };
+  }
+
+  const options = {
+    body: data.body || '',
+    icon: data.icon || '/icons/icon-192x192.png',
+    badge: '/icons/icon-72x72.png',
+    data: { url: data.url || '/admin-v2' },
+    vibrate: [100, 50, 100],
+    tag: data.tag || 'metrum-' + Date.now(),
+    renotify: true,
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Metrum Group', options)
+  );
+});
+
+// Notification click — open or focus the target page
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/admin-v2';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.includes(url) && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow(url);
+    })
   );
 });

@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { STAFF_ROLES } from "@/lib/auth-utils";
 import { listActiveMembers } from "@/lib/projects/members-service";
+import { notificationTypeToCategory } from "./categories";
+import { getBatchUserPrefs, shouldDeliver, isQuietHours } from "./preferences";
+import { sendPush } from "./push";
+import { sendNotificationEmail } from "./email";
+import { relatedEntityLink } from "./links";
 
 const MENTION_REGEX = /<@([a-z0-9_-]+)>/gi;
 
@@ -17,6 +22,69 @@ export type ProjectNotificationType =
   | "TASK_STATUS_CHANGED"
   | "TASK_DUE_SOON"
   | "TASK_CREATED";
+
+type NotificationRow = {
+  userId: string;
+  type: string;
+  title: string;
+  body: string | null;
+  relatedEntity: string;
+  relatedId: string;
+};
+
+/**
+ * Dispatch push and email notifications based on user preferences.
+ * Fire-and-forget: never throws, never blocks the caller.
+ */
+async function dispatchExtraChannels(notifications: NotificationRow[]): Promise<void> {
+  try {
+    const userIds = [...new Set(notifications.map((n) => n.userId))];
+    const userPrefsMap = await getBatchUserPrefs(userIds);
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "";
+
+    const promises: Promise<void>[] = [];
+
+    for (const n of notifications) {
+      const userInfo = userPrefsMap.get(n.userId);
+      if (!userInfo) continue;
+
+      const category = notificationTypeToCategory(n.type);
+      if (isQuietHours(userInfo.prefs, userInfo.timezone)) continue;
+
+      const url = relatedEntityLink({
+        relatedEntity: n.relatedEntity,
+        relatedId: n.relatedId,
+      });
+
+      // Push
+      if (shouldDeliver(userInfo.prefs, category, "push")) {
+        promises.push(
+          sendPush(n.userId, {
+            title: n.title,
+            body: n.body || undefined,
+            url,
+          }).catch((err) => console.error("[Dispatch] Push error:", err)),
+        );
+      }
+
+      // Email
+      if (shouldDeliver(userInfo.prefs, category, "email")) {
+        promises.push(
+          sendNotificationEmail({
+            to: userInfo.email,
+            subject: n.title,
+            body: n.body || "",
+            actionUrl: baseUrl + url,
+          }).catch((err) => console.error("[Dispatch] Email error:", err)),
+        );
+      }
+    }
+
+    await Promise.allSettled(promises);
+  } catch (err) {
+    console.error("[Dispatch] Unexpected error:", err);
+  }
+}
 
 /**
  * Parse <@userId> tags from a body of text and return unique userIds
@@ -65,33 +133,25 @@ export async function createMentionNotifications(opts: {
 
   const preview = opts.body.replace(MENTION_REGEX, "@…").trim().slice(0, 120);
 
-  await prisma.notification.createMany({
-    data: validIds.map((userId) => ({
-      userId,
-      type: opts.type,
-      title: opts.title,
-      body: preview,
-      relatedEntity: opts.relatedEntity,
-      relatedId: opts.relatedId,
-    })),
-  });
+  const data: NotificationRow[] = validIds.map((userId) => ({
+    userId,
+    type: opts.type,
+    title: opts.title,
+    body: preview,
+    relatedEntity: opts.relatedEntity,
+    relatedId: opts.relatedId,
+  }));
+
+  await prisma.notification.createMany({ data });
+
+  // Fire-and-forget: push + email dispatch
+  dispatchExtraChannels(data).catch(() => {});
 
   return validIds.length;
 }
 
 /**
- * Broadcast a Notification row to every active member of a project,
- * skipping the actor (the user who caused the change). Used for
- * project-change events: status updates, file uploads, photo reports,
- * estimates, member changes, comments.
- *
- * Best-effort: callers should wrap in try/catch so a notification
- * failure does not break the parent write operation.
- */
-/**
  * Create Notification rows for a specific set of user IDs (skipping the actor).
- * Useful for task assignments, mentions, due-date reminders — any case where
- * we want targeted delivery rather than broadcasting to all project members.
  */
 export async function notifyUsers(opts: {
   userIds: string[];
@@ -111,20 +171,27 @@ export async function notifyUsers(opts: {
     ? opts.body.replace(MENTION_REGEX, "@…").trim().slice(0, 160)
     : null;
 
-  await prisma.notification.createMany({
-    data: targets.map((userId) => ({
-      userId,
-      type: opts.type,
-      title: opts.title,
-      body: preview,
-      relatedEntity: opts.relatedEntity,
-      relatedId: opts.relatedId,
-    })),
-  });
+  const data: NotificationRow[] = targets.map((userId) => ({
+    userId,
+    type: opts.type,
+    title: opts.title,
+    body: preview,
+    relatedEntity: opts.relatedEntity,
+    relatedId: opts.relatedId,
+  }));
+
+  await prisma.notification.createMany({ data });
+
+  // Fire-and-forget: push + email dispatch
+  dispatchExtraChannels(data).catch(() => {});
 
   return targets.length;
 }
 
+/**
+ * Broadcast a Notification to every active member of a project,
+ * skipping the actor.
+ */
 export async function notifyProjectMembers(opts: {
   projectId: string;
   actorId: string;
@@ -144,16 +211,19 @@ export async function notifyProjectMembers(opts: {
 
   const preview = opts.body ? opts.body.replace(MENTION_REGEX, "@…").trim().slice(0, 160) : null;
 
-  await prisma.notification.createMany({
-    data: recipients.map((userId) => ({
-      userId,
-      type: opts.type,
-      title: opts.title,
-      body: preview,
-      relatedEntity: opts.relatedEntity,
-      relatedId: opts.relatedId,
-    })),
-  });
+  const data: NotificationRow[] = recipients.map((userId) => ({
+    userId,
+    type: opts.type,
+    title: opts.title,
+    body: preview,
+    relatedEntity: opts.relatedEntity,
+    relatedId: opts.relatedId,
+  }));
+
+  await prisma.notification.createMany({ data });
+
+  // Fire-and-forget: push + email dispatch
+  dispatchExtraChannels(data).catch(() => {});
 
   return recipients.length;
 }
