@@ -60,9 +60,9 @@ export function TabAiRender({ projectId }: { projectId: string }) {
 
   const handleGenerate3D = async (outputUrl: string) => {
     const views = [
-      { prompt: "3D cutaway perspective view showing all rooms at an angle", w: 1024, h: 768 },
-      { prompt: "isometric 3D architectural model, cutaway view showing interior, shadow on ground", w: 1024, h: 1024 },
-      { prompt: "eye-level interior view of the main living room, camera inside room, cozy atmosphere", w: 1024, h: 768 },
+      { prompt: "Transform into a close-up 3D cutaway view from the front-left corner, low camera angle at 30 degrees, walls cut at mid-height showing interior of all rooms, detailed furniture and textures visible, warm golden hour lighting through windows, photorealistic architectural visualization, 8k", w: 1024, h: 768 },
+      { prompt: "Transform into a close-up 3D cutaway view from the back-right corner, low camera angle at 30 degrees, opposite side of the apartment, walls cut showing kitchen and bathroom interiors, evening ambient lighting, photorealistic architectural render, 8k", w: 1024, h: 768 },
+      { prompt: "Transform into a dramatic close-up 3D isometric model of this apartment, camera very close, 45 degree angle, walls at half height, all rooms visible with furniture and decor, strong directional sunlight casting shadows, looks like a premium architectural scale model, photorealistic, ultra detailed 8k", w: 1024, h: 1024 },
     ];
 
     for (const view of views) {
