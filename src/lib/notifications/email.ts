@@ -1,7 +1,16 @@
 import { Resend } from "resend";
 import { buildEmailHtml } from "./email-template";
 
-const resend = new Resend(process.env.RESEND_API_KEY || undefined);
+let resend: Resend | null = null;
+
+function getResend(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (!resend) {
+    resend = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resend;
+}
+
 const from = process.env.EMAIL_FROM || "Metrum Group <noreply@metrum-group.com.ua>";
 
 /**
@@ -14,12 +23,12 @@ export async function sendNotificationEmail(opts: {
   actionUrl: string;
   actionLabel?: string;
 }): Promise<void> {
-  if (!process.env.RESEND_API_KEY) {
-    console.warn("[Email] RESEND_API_KEY not configured, skipping email");
+  const client = getResend();
+  if (!client) {
     return;
   }
 
-  await resend.emails.send({
+  await client.emails.send({
     from,
     to: opts.to,
     subject: opts.subject,
