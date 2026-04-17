@@ -11,6 +11,7 @@ import {
   List,
   FolderKanban,
   Users,
+  Table2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -29,6 +30,7 @@ import { TaskPeopleGlobal } from "./task-people-global";
 import { NewTaskModal } from "./new-task-modal";
 import { SelfContainedTaskDrawer } from "./task-drawer-shared";
 import { SavedViewBar, type SavedViewFilters } from "./saved-view-bar";
+import { TaskTableView } from "./task-table-view";
 
 const SCOPE_DEFS: { id: Scope; label: string }[] = [
   { id: "assigned", label: "Призначені мені" },
@@ -38,6 +40,7 @@ const SCOPE_DEFS: { id: Scope; label: string }[] = [
 ];
 
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
+  { id: "table", label: "Таблиця", icon: Table2 },
   { id: "flat", label: "Список", icon: List },
   { id: "by-project", label: "По проєктах", icon: FolderKanban },
   { id: "by-people", label: "По людях", icon: Users },
@@ -218,6 +221,19 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
       <ProjectFilter selectedIds={projectIds} onChange={setProjectIds} />
 
       {/* Task views */}
+      {viewMode === "table" && (
+        <TaskTableView
+          tasks={filteredTasks}
+          loading={loading}
+          activeTimerTaskId={activeTimer?.task.id ?? null}
+          pendingId={pendingId}
+          onOpenDrawer={setDrawerTaskId}
+          onStartTimer={(id) => void startTimer(id)}
+          onStopTimer={() => void stopTimer()}
+          onMarkDone={(t) => void markDone(t)}
+        />
+      )}
+
       {viewMode === "flat" && (
         <TaskListFlat
           tasks={filteredTasks}

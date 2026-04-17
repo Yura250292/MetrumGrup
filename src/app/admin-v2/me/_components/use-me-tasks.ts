@@ -55,7 +55,7 @@ export type ActiveTimer = {
 
 export type Scope = "assigned" | "created" | "watching" | "all";
 export type Focus = "all" | "overdue" | "today" | "next";
-export type ViewMode = "flat" | "by-project" | "by-people";
+export type ViewMode = "flat" | "by-project" | "by-people" | "table";
 
 export const PRIORITY_COLOR: Record<TaskItem["priority"], string> = {
   LOW: "#64748b",
@@ -88,7 +88,7 @@ export function useMeTasks({ projectIds }: { projectIds?: string[] } = {}) {
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
   const [scope, setScope] = useState<Scope>("assigned");
   const [focus, setFocus] = useState<Focus>("all");
-  const [viewMode, setViewMode] = useState<ViewMode>("flat");
+  const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [includeCompleted, setIncludeCompleted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
