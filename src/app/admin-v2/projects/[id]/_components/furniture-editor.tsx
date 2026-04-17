@@ -240,12 +240,13 @@ export function FurnitureEditor({
             {items.map((item) => {
               const tpl = FURNITURE_PALETTE.find((t) => t.type === item.type);
               const isSelected = item.id === selectedId;
+              const rotationArrow = item.rotation === 0 ? "↑" : item.rotation === 90 ? "→" : item.rotation === 180 ? "↓" : "←";
               return (
                 <div
                   key={item.id}
                   onPointerDown={(e) => handlePointerDown(e, item)}
                   onClick={(e) => { e.stopPropagation(); setSelectedId(item.id); }}
-                  className="absolute flex items-center justify-center rounded-md cursor-move select-none"
+                  className="absolute flex items-center justify-center rounded-md cursor-move select-none transition-all duration-150"
                   style={{
                     left: `${item.x}%`,
                     top: `${item.y}%`,
@@ -264,8 +265,35 @@ export function FurnitureEditor({
                     className="text-[10px] font-bold text-white drop-shadow-sm pointer-events-none text-center leading-tight px-0.5"
                     style={{ textShadow: "0 1px 2px rgba(0,0,0,0.6)" }}
                   >
-                    {item.label}
+                    {rotationArrow} {item.label}
                   </span>
+
+                  {/* Inline controls on selected item */}
+                  {isSelected && (
+                    <div
+                      className="absolute flex gap-1 pointer-events-auto"
+                      style={{ top: -28, right: 0 }}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); rotateItem(item.id); }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="flex items-center justify-center w-6 h-6 rounded-md"
+                        style={{ backgroundColor: tpl?.color ?? "#666", color: "#fff" }}
+                        title="Повернути"
+                      >
+                        <RotateCw size={12} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeItem(item.id); }}
+                        onPointerDown={(e) => e.stopPropagation()}
+                        className="flex items-center justify-center w-6 h-6 rounded-md"
+                        style={{ backgroundColor: T.danger, color: "#fff" }}
+                        title="Видалити"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
