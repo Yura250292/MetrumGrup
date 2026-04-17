@@ -94,7 +94,7 @@ export function ProjectTabs({
         }}
       >
         <div
-          className="flex gap-1 rounded-2xl p-1.5 md:w-full"
+          className="flex gap-1 rounded-2xl p-1.5 md:flex-wrap"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
           {TAB_DEFS.map((tab) => {
