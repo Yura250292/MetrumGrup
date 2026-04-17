@@ -1,278 +1,127 @@
 /*
- * Admin-v2 Dark Theme Overrides
+ * Admin-v2 Theme Variables
  *
- * The admin-v2 components use inline styles from T tokens (light by default).
- * When ThemeProvider applies the .admin-dark class, these CSS rules override
- * the inline styles with !important to render a dark theme.
+ * T tokens reference CSS custom properties (var(--t-bg), etc).
+ * Light values are set by default; .admin-dark overrides them.
  */
 
-/* ===== Base surfaces ===== */
+/* ===== Light theme (default) ===== */
+
+:root,
+.admin-light {
+  --t-bg:            #F8FAFC;
+  --t-panel:         #FFFFFF;
+  --t-panel-el:      #F1F5F9;
+  --t-panel-soft:    #F8FAFC;
+  --t-border:        #E2E8F0;
+  --t-border-strong: #CBD5E1;
+  --t-text-1:        #0F172A;
+  --t-text-2:        #475569;
+  --t-text-3:        #94A3B8;
+  --t-accent-soft:   #EEF2FF;
+  --t-accent2-soft:  #F5F3FF;
+  --t-success-soft:  #F0FDF4;
+  --t-warning-soft:  #FFF7ED;
+  --t-danger-soft:   #FEF2F2;
+  --t-teal-soft:     #F0FDFA;
+  --t-indigo-soft:   #EEF2FF;
+  --t-amber-soft:    #FFFBEB;
+  --t-rose-soft:     #FFF1F2;
+  --t-sky-soft:      #F0F9FF;
+  --t-emerald-soft:  #ECFDF5;
+  --t-violet-soft:   #F5F3FF;
+
+  /* Panel with alpha (for gradient overlays) */
+  --t-panel-94: rgba(255, 255, 255, 0.94);
+  --t-panel-56: rgba(255, 255, 255, 0.56);
+}
+
+/* ===== Dark theme ===== */
 
 .admin-dark {
-  background-color: #0B0F17 !important;
-  color: #F4F6FB !important;
+  --t-bg:            #0B0F17;
+  --t-panel:         #121826;
+  --t-panel-el:      #1A2233;
+  --t-panel-soft:    #0F1420;
+  --t-border:        #222B3D;
+  --t-border-strong: #2E3B55;
+  --t-text-1:        #F4F6FB;
+  --t-text-2:        #A8B3CC;
+  --t-text-3:        #6B7691;
+  --t-accent-soft:   #1D2A66;
+  --t-accent2-soft:  #1E1838;
+  --t-success-soft:  #0F2E22;
+  --t-warning-soft:  #332210;
+  --t-danger-soft:   #321015;
+  --t-teal-soft:     #0D2926;
+  --t-indigo-soft:   #1A1E44;
+  --t-amber-soft:    #2E2210;
+  --t-rose-soft:     #2E1018;
+  --t-sky-soft:      #0C1E33;
+  --t-emerald-soft:  #0D2E1E;
+  --t-violet-soft:   #1E1838;
+
+  --t-panel-94: rgba(18, 24, 38, 0.94);
+  --t-panel-56: rgba(18, 24, 38, 0.56);
 }
 
-.admin-dark main {
-  background-color: transparent !important;
-}
+/* ===== Dark KPI card gradients ===== */
 
-/* ===== Sidebar ===== */
-
-.admin-dark aside {
-  background-color: #121826 !important;
-  border-color: #222B3D !important;
-}
-
-/* Sidebar brand gradient */
-.admin-dark aside > div:first-child {
-  background: linear-gradient(135deg, #141C2E 0%, #1A1F35 100%) !important;
-  border-color: #3B5BFF18 !important;
-}
-
-/* ===== Header ===== */
-
-.admin-dark header {
-  background-color: #121826 !important;
-  border-color: #222B3D !important;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) !important;
-}
-
-/* ===== Mobile nav ===== */
-
-.admin-dark nav[class*="fixed"][class*="bottom-0"] {
-  background-color: #121826 !important;
-  border-color: #222B3D !important;
-}
-
-/* ===== Panels / cards (rounded-2xl, rounded-xl containers) ===== */
-
-.admin-dark [class*="rounded-2xl"],
-.admin-dark [class*="rounded-xl"] {
-  background-color: #121826 !important;
-  border-color: #222B3D !important;
-}
-
-/* Elevated panels inside panels */
-.admin-dark [class*="rounded-2xl"] [class*="rounded-xl"],
-.admin-dark [class*="rounded-2xl"] [class*="rounded-lg"] {
-  background-color: #1A2233 !important;
-  border-color: #222B3D !important;
-}
-
-/* ===== Text ===== */
-
-.admin-dark h1,
-.admin-dark h2,
-.admin-dark h3,
-.admin-dark h4 {
-  color: #F4F6FB !important;
-}
-
-.admin-dark p,
-.admin-dark span:not([class*="gradient"]):not([class*="rounded-full"]) {
-  color: #A8B3CC !important;
-}
-
-/* Primary text (bold values, names) */
-.admin-dark [class*="font-bold"],
-.admin-dark [class*="font-semibold"] {
-  color: #F4F6FB !important;
-}
-
-/* Muted text (labels, tracking-wider) */
-.admin-dark [class*="tracking-wider"],
-.admin-dark [class*="text-\\[10px\\]"],
-.admin-dark [class*="text-\\[11px\\]"] {
-  color: #6B7691 !important;
-}
-
-/* ===== Links ===== */
-
-.admin-dark a {
-  color: inherit;
-}
-
-/* ===== Inputs ===== */
-
-.admin-dark input,
-.admin-dark textarea,
-.admin-dark select {
-  background-color: #1A2233 !important;
-  border-color: #2E3B55 !important;
-  color: #F4F6FB !important;
-}
-
-.admin-dark input::placeholder,
-.admin-dark textarea::placeholder {
-  color: #6B7691 !important;
-}
-
-/* ===== Buttons — preserve accent colors on gradients ===== */
-
-.admin-dark button[class*="rounded-lg"] {
-  background-color: #1A2233 !important;
-  color: #A8B3CC !important;
-}
-
-/* Don't override accent-colored buttons */
-.admin-dark button[style*="background"][style*="3B5BFF"],
-.admin-dark a[style*="background"][style*="3B5BFF"],
-.admin-dark button[style*="background"][style*="gradient"],
-.admin-dark a[style*="background"][style*="gradient"] {
-  color: #FFFFFF !important;
-}
-
-/* ===== KPI card gradients — replace with dark gradients ===== */
-
-.admin-dark [style*="linear-gradient(135deg, #EEF2FF"] {
+.admin-dark [style*="linear-gradient(135deg, #EEF2FF 0%, #DBEAFE"] {
   background: linear-gradient(135deg, #1A2244 0%, #1D2A66 100%) !important;
 }
-
-.admin-dark [style*="linear-gradient(135deg, #F0FDFA"] {
-  background: linear-gradient(135deg, #0F2E22 0%, #0D3B2E 100%) !important;
+.admin-dark [style*="linear-gradient(135deg, #F0FDFA 0%, #CCFBF1"] {
+  background: linear-gradient(135deg, #0D2926 0%, #0F3D36 100%) !important;
 }
-
-.admin-dark [style*="linear-gradient(135deg, #F5F3FF"] {
+.admin-dark [style*="linear-gradient(135deg, #F5F3FF 0%, #EDE9FE"] {
   background: linear-gradient(135deg, #1E1838 0%, #261E46 100%) !important;
 }
-
-.admin-dark [style*="linear-gradient(135deg, #ECFDF5"] {
-  background: linear-gradient(135deg, #0F2E22 0%, #0D3022 100%) !important;
+.admin-dark [style*="linear-gradient(135deg, #ECFDF5 0%, #D1FAE5"] {
+  background: linear-gradient(135deg, #0D2E1E 0%, #0F3D28 100%) !important;
 }
-
-.admin-dark [style*="linear-gradient(135deg, #F0F9FF"] {
+.admin-dark [style*="linear-gradient(135deg, #F0F9FF 0%, #E0F2FE"] {
   background: linear-gradient(135deg, #0C1E33 0%, #102844 100%) !important;
 }
-
-.admin-dark [style*="linear-gradient(135deg, #FEF2F2"] {
+.admin-dark [style*="linear-gradient(135deg, #FEF2F2 0%, #FECACA"] {
   background: linear-gradient(135deg, #321015 0%, #3D1520 100%) !important;
 }
-
-.admin-dark [style*="linear-gradient(135deg, #FFFBEB"] {
-  background: linear-gradient(135deg, #332210 0%, #3D2A14 100%) !important;
+.admin-dark [style*="linear-gradient(135deg, #FFFBEB 0%, #FEF3C7"] {
+  background: linear-gradient(135deg, #2E2210 0%, #3D2A14 100%) !important;
 }
-
 .admin-dark [style*="linear-gradient(135deg, #EEF2FF 0%, #E0E7FF"] {
   background: linear-gradient(135deg, #1A2244 0%, #1E2860 100%) !important;
 }
 
-/* ===== Quick actions banner ===== */
-
+/* Quick actions banner */
 .admin-dark [style*="linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 30%"] {
   background: linear-gradient(135deg, #141C2E 0%, #1A2244 30%, #1E1838 70%, #261E46 100%) !important;
 }
 
-/* ===== Status badges — keep their colors ===== */
-
-.admin-dark [class*="rounded-full"][class*="px-2"] {
-  /* Preserve status badge colors */
-}
-
-/* ===== Progress bars — keep colors ===== */
-
-.admin-dark [class*="h-5"][class*="rounded-md"] div,
-.admin-dark [class*="h-2"][class*="rounded-full"] div,
-.admin-dark [class*="h-1\\.5"][class*="rounded-full"] div {
-  /* Progress bar fills keep their accent colors */
-}
-
-/* ===== Dialogs & modals ===== */
-
-.admin-dark [role="dialog"],
-.admin-dark [class*="dialog"],
-.admin-dark [class*="modal"] {
-  background-color: #121826 !important;
-  border-color: #222B3D !important;
-}
-
-/* ===== Mobile drawer ===== */
-
-.admin-dark [class*="max-h-\\[85vh\\]"] {
-  background-color: #121826 !important;
-  border-color: #222B3D !important;
-}
-
-/* User info gradient in drawer */
+/* Sidebar brand gradient */
 .admin-dark [style*="linear-gradient(135deg, #EEF2FF 0%, #F5F3FF"] {
   background: linear-gradient(135deg, #141C2E 0%, #1A1F35 100%) !important;
 }
 
-/* ===== Table ===== */
-
-.admin-dark table {
-  color: #F4F6FB;
+/* Mobile drawer user info gradient */
+.admin-dark aside > div:first-child[style*="linear-gradient"] {
+  background: linear-gradient(135deg, #141C2E 0%, #1A1F35 100%) !important;
 }
 
-.admin-dark thead {
-  background-color: #0F1420 !important;
-}
-
-.admin-dark thead th {
-  color: #6B7691 !important;
-}
-
-.admin-dark tbody tr {
-  border-color: #222B3D !important;
-}
-
-.admin-dark tbody tr:hover {
-  background-color: #1A2233 !important;
-}
-
-.admin-dark td {
-  color: #A8B3CC !important;
-}
-
-/* ===== Dividers ===== */
-
-.admin-dark hr,
-.admin-dark [class*="border-t"],
-.admin-dark [class*="border-b"] {
-  border-color: #222B3D !important;
-}
-
-/* ===== Scrollbar ===== */
-
-.admin-dark ::-webkit-scrollbar-track {
-  background: #0B0F17;
-}
-
-.admin-dark ::-webkit-scrollbar-thumb {
-  background: #222B3D;
-  border-radius: 4px;
-}
-
-.admin-dark ::-webkit-scrollbar-thumb:hover {
-  background: #2E3B55;
-}
-
-/* ===== Hover effects ===== */
+/* ===== Dark hover brightness inversion ===== */
 
 .admin-dark [class*="hover\\:brightness-\\[0\\.97\\]"]:hover {
   filter: brightness(1.15) !important;
 }
-
 .admin-dark [class*="hover\\:brightness-95"]:hover {
   filter: brightness(1.1) !important;
 }
-
-/* ===== Smooth transition on theme switch ===== */
-
-.admin-dark,
-.admin-dark aside,
-.admin-dark header,
-.admin-dark main,
-.admin-dark [class*="rounded-2xl"],
-.admin-dark [class*="rounded-xl"] {
-  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+.admin-dark [class*="hover\\:bg-\\[\\#F1F5F9\\]"]:hover {
+  background-color: #1A2233 !important;
 }
 
-.admin-light,
-.admin-light aside,
-.admin-light header,
-.admin-light main,
-.admin-light [class*="rounded-2xl"],
-.admin-light [class*="rounded-xl"] {
+/* ===== Smooth transitions ===== */
+
+.admin-dark,
+.admin-light {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }

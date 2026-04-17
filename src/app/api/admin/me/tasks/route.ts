@@ -19,9 +19,10 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const scope = url.searchParams.get("scope") ?? "assigned"; // assigned|created|watching|all
   const includeCompleted = url.searchParams.get("includeCompleted") === "true";
+  const projectIdsRaw = url.searchParams.get("projectIds");
 
   const uid = session.user.id;
-  const baseWhere = {
+  const baseWhere: Record<string, unknown> = {
     isArchived: false,
     ...(includeCompleted
       ? {}
@@ -30,6 +31,9 @@ export async function GET(request: NextRequest) {
             isDone: false,
           },
         }),
+    ...(projectIdsRaw
+      ? { projectId: { in: projectIdsRaw.split(",").filter(Boolean) } }
+      : {}),
   };
 
   let where;

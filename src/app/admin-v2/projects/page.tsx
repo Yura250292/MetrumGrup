@@ -206,7 +206,7 @@ function ProjectCard({
         <div
           className="absolute bottom-0 left-0 right-0 p-4"
           style={{
-            background: `linear-gradient(to top, ${T.panel}f0 0%, ${T.panel}90 50%, transparent 100%)`,
+            background: `linear-gradient(to top, var(--t-panel-94) 0%, var(--t-panel-56) 50%, transparent 100%)`,
           }}
         >
           <h3

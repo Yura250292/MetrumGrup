@@ -10,6 +10,60 @@
 @custom-variant admin-dark (&:where(.admin-dark, .admin-dark *));
 @custom-variant admin-light (&:where(.admin-light, .admin-light *));
 
+/* ===== Theme tokens (CSS custom properties) ===== */
+:root,
+.admin-light {
+  --t-bg:            #F8FAFC;
+  --t-panel:         #FFFFFF;
+  --t-panel-el:      #F1F5F9;
+  --t-panel-soft:    #F8FAFC;
+  --t-border:        #E2E8F0;
+  --t-border-strong: #CBD5E1;
+  --t-text-1:        #0F172A;
+  --t-text-2:        #475569;
+  --t-text-3:        #94A3B8;
+  --t-accent-soft:   #EEF2FF;
+  --t-accent2-soft:  #F5F3FF;
+  --t-success-soft:  #F0FDF4;
+  --t-warning-soft:  #FFF7ED;
+  --t-danger-soft:   #FEF2F2;
+  --t-teal-soft:     #F0FDFA;
+  --t-indigo-soft:   #EEF2FF;
+  --t-amber-soft:    #FFFBEB;
+  --t-rose-soft:     #FFF1F2;
+  --t-sky-soft:      #F0F9FF;
+  --t-emerald-soft:  #ECFDF5;
+  --t-violet-soft:   #F5F3FF;
+  --t-panel-94: rgba(255, 255, 255, 0.94);
+  --t-panel-56: rgba(255, 255, 255, 0.56);
+}
+
+.admin-dark {
+  --t-bg:            #0B0F17;
+  --t-panel:         #121826;
+  --t-panel-el:      #1A2233;
+  --t-panel-soft:    #0F1420;
+  --t-border:        #222B3D;
+  --t-border-strong: #2E3B55;
+  --t-text-1:        #F4F6FB;
+  --t-text-2:        #A8B3CC;
+  --t-text-3:        #6B7691;
+  --t-accent-soft:   #1D2A66;
+  --t-accent2-soft:  #1E1838;
+  --t-success-soft:  #0F2E22;
+  --t-warning-soft:  #332210;
+  --t-danger-soft:   #321015;
+  --t-teal-soft:     #0D2926;
+  --t-indigo-soft:   #1A1E44;
+  --t-amber-soft:    #2E2210;
+  --t-rose-soft:     #2E1018;
+  --t-sky-soft:      #0C1E33;
+  --t-emerald-soft:  #0D2E1E;
+  --t-violet-soft:   #1E1838;
+  --t-panel-94: rgba(18, 24, 38, 0.94);
+  --t-panel-56: rgba(18, 24, 38, 0.56);
+}
+
 /* Native number input spinners are white-on-white inside dark wrappers
    (Safari / Chrome). Invert their colors so they stay visible. */
 .admin-dark input[type="number"]::-webkit-inner-spin-button,

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
-import { Layers, ChevronLeft, Menu, LogOut } from "lucide-react";
+import { Layers, ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { NAV_GROUPS, isItemActive } from "../_lib/nav";
@@ -133,7 +133,10 @@ export function Sidebar() {
       <div className="border-t p-3" style={{ borderColor: T.borderSoft }}>
         <div className="flex items-center gap-3" style={{ justifyContent: collapsed ? "center" : "flex-start" }}>
           {!collapsed && (
-            <>
+            <Link
+              href="/admin-v2/profile"
+              className="flex flex-1 items-center gap-3 min-w-0 rounded-lg p-1 -m-1 transition hover:bg-[#F1F5F9]"
+            >
               <div
                 className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold flex-shrink-0"
                 style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`, color: "#FFFFFF" }}
@@ -148,16 +151,26 @@ export function Sidebar() {
                   {isSuperAdmin ? "Адмін" : "Менеджер"}
                 </p>
               </div>
-            </>
+            </Link>
           )}
-          <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
-            className="rounded-lg p-2 transition hover:brightness-[0.97]"
-            style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
-            title="Вийти"
-          >
-            <LogOut size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <Link
+              href="/admin-v2/profile"
+              className="rounded-lg p-2 transition hover:brightness-[0.97]"
+              style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
+              title="Мій профіль"
+            >
+              <Settings size={16} />
+            </Link>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="rounded-lg p-2 transition hover:brightness-[0.97]"
+              style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
+              title="Вийти"
+            >
+              <LogOut size={16} />
+            </button>
+          </div>
         </div>
       </div>
     </aside>

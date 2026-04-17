@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronRight, ArrowLeft } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { useState, useRef, useEffect } from "react";
+import { ChevronRight, ArrowLeft, User, LogOut } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
@@ -11,6 +13,19 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
+  const { data: session } = useSession();
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    }
+    if (userMenuOpen) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuOpen]);
 
   const segments = pathname.split("/").filter(Boolean);
   const crumbs: { label: string; href: string }[] = [];
@@ -81,6 +96,57 @@ export function Header() {
           variant="v2"
           buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
         />
+
+        {/* User avatar menu */}
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setUserMenuOpen((v) => !v)}
+            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 transition hover:ring-2 hover:ring-offset-1"
+            style={{
+              background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`,
+              color: "#FFFFFF",
+            }}
+            title={session?.user?.name || "Профіль"}
+          >
+            {(session?.user?.name || "?").charAt(0).toUpperCase()}
+          </button>
+
+          {userMenuOpen && (
+            <div
+              className="absolute right-0 top-full mt-2 w-48 rounded-xl py-1 shadow-lg z-50"
+              style={{
+                backgroundColor: T.panel,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+            >
+              <div className="px-3 py-2 border-b" style={{ borderColor: T.borderSoft }}>
+                <p className="text-[13px] font-semibold truncate" style={{ color: T.textPrimary }}>
+                  {session?.user?.name || "Користувач"}
+                </p>
+                <p className="text-[11px] truncate" style={{ color: T.textMuted }}>
+                  {session?.user?.email}
+                </p>
+              </div>
+              <Link
+                href="/admin-v2/profile"
+                onClick={() => setUserMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2 text-[13px] transition hover:bg-[#F1F5F9]"
+                style={{ color: T.textSecondary }}
+              >
+                <User size={14} />
+                Мій профіль
+              </Link>
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                className="flex items-center gap-2 w-full px-3 py-2 text-[13px] transition hover:bg-[#F1F5F9]"
+                style={{ color: T.danger }}
+              >
+                <LogOut size={14} />
+                Вийти
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

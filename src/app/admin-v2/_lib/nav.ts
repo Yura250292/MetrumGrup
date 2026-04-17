@@ -115,6 +115,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/chat": "Чат",
   "/admin-v2/finance": "Фінансовий облік",
   "/admin-v2/finance/templates": "Шаблони",
+  "/admin-v2/profile": "Мій профіль",
   "/admin-v2/financing": "Фінансування",
   "/admin": "Дашборд",
   "/admin/projects": "Проєкти",
