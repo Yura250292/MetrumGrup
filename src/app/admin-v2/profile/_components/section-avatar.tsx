@@ -91,7 +91,7 @@ export function SectionAvatar({ profile, onUpload, onDelete }: Props) {
           style={{ backgroundColor: T.warningSoft, color: T.warning }}
         >
           <AlertTriangle size={14} />
-          Аватар обов&apos;язковий для повного профілю
+          Аватар рекомендований для повного профілю
         </div>
       )}
 

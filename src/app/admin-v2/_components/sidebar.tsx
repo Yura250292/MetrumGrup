@@ -7,7 +7,17 @@ import { useState } from "react";
 import { Layers, ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive } from "../_lib/nav";
+
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: "Адміністратор",
+  MANAGER: "Менеджер",
+  ENGINEER: "Інженер",
+  FINANCIER: "Фінансист",
+  CLIENT: "Клієнт",
+  USER: "Користувач",
+};
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -137,18 +147,13 @@ export function Sidebar() {
               href="/admin-v2/profile"
               className="flex flex-1 items-center gap-3 min-w-0 rounded-lg p-1 -m-1 transition hover:bg-[#F1F5F9]"
             >
-              <div
-                className="flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold flex-shrink-0"
-                style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`, color: "#FFFFFF" }}
-              >
-                {session?.user?.name?.charAt(0)?.toUpperCase() || "А"}
-              </div>
+              <UserAvatar src={session?.user?.image} name={session?.user?.name} size={36} />
               <div className="flex flex-1 flex-col gap-0 min-w-0">
                 <p className="truncate text-[13px] font-semibold" style={{ color: T.textPrimary }}>
-                  {session?.user?.name || "Адміністратор"}
+                  {session?.user?.name || "Користувач"}
                 </p>
                 <p className="truncate text-[11px]" style={{ color: T.textMuted }}>
-                  {isSuperAdmin ? "Адмін" : "Менеджер"}
+                  {ROLE_LABELS[session?.user?.role ?? ""] || session?.user?.role}
                 </p>
               </div>
             </Link>

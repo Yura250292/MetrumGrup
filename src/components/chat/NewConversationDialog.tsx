@@ -6,6 +6,7 @@ import { X, MessageSquare, FolderKanban, Calculator } from "lucide-react";
 import { useCreateConversation, useStaffUsers } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адмін",
@@ -150,9 +151,7 @@ export function NewConversationDialog({
                   className="flex w-full items-center gap-3 px-4 py-3 border-b transition tap-highlight-none disabled:opacity-50"
                   style={{ borderColor: T.borderSoft }}
                 >
-                  <div className="h-9 w-9 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-sm font-semibold">
-                    {u.name?.charAt(0).toUpperCase() ?? "?"}
-                  </div>
+                  <UserAvatar src={u.avatar} name={u.name} size={36} gradient="linear-gradient(135deg, #3b82f6, #06b6d4)" />
                   <div className="text-left min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate" style={{ color: T.textPrimary }}>
                       {u.name}

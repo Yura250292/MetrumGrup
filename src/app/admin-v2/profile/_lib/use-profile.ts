@@ -8,9 +8,9 @@ export function useProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchProfile = useCallback(async () => {
+  const fetchProfile = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       setError(null);
       const res = await fetch("/api/admin/profile");
       if (!res.ok) throw new Error("Failed to load profile");
@@ -19,7 +19,7 @@ export function useProfile() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -38,11 +38,9 @@ export function useProfile() {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error || "Failed to update profile");
       }
-      const updated = await res.json();
-      setProfile(updated);
-      return updated;
+      await fetchProfile(true);
     },
-    []
+    [fetchProfile]
   );
 
   const uploadAvatar = useCallback(async (file: File) => {
@@ -57,15 +55,15 @@ export function useProfile() {
       throw new Error(body.error || "Failed to upload avatar");
     }
     const data = await res.json();
-    setProfile((prev) => (prev ? { ...prev, avatar: data.avatarUrl } : prev));
+    await fetchProfile(true);
     return data.avatarUrl as string;
-  }, []);
+  }, [fetchProfile]);
 
   const deleteAvatar = useCallback(async () => {
     const res = await fetch("/api/admin/profile/avatar", { method: "DELETE" });
     if (!res.ok) throw new Error("Failed to delete avatar");
-    setProfile((prev) => (prev ? { ...prev, avatar: null } : prev));
-  }, []);
+    await fetchProfile(true);
+  }, [fetchProfile]);
 
   const updateNotifications = useCallback(
     async (prefs: Record<string, unknown>) => {
@@ -75,12 +73,9 @@ export function useProfile() {
         body: JSON.stringify(prefs),
       });
       if (!res.ok) throw new Error("Failed to update notifications");
-      const data = await res.json();
-      setProfile((prev) =>
-        prev ? { ...prev, notificationPrefsJson: data.notificationPrefsJson } : prev
-      );
+      await fetchProfile(true);
     },
-    []
+    [fetchProfile]
   );
 
   const updatePreferences = useCallback(
@@ -91,18 +86,9 @@ export function useProfile() {
         body: JSON.stringify(prefs),
       });
       if (!res.ok) throw new Error("Failed to update preferences");
-      const data = await res.json();
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              workPrefsJson: data.workPrefsJson,
-              productivityPrefsJson: data.productivityPrefsJson,
-            }
-          : prev
-      );
+      await fetchProfile(true);
     },
-    []
+    [fetchProfile]
   );
 
   const changePassword = useCallback(

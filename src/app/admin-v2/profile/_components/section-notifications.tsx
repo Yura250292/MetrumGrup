@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Bell, Loader2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProfileData, NotificationPrefs, NotificationCategory, NotificationChannel } from "../_lib/types";
@@ -22,17 +22,22 @@ export function SectionNotifications({ profile, onSave }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const save = useCallback(
-    async (updated: NotificationPrefs) => {
-      try {
-        setSaving(true);
-        setError(null);
-        await onSave(updated as unknown as Record<string, unknown>);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Помилка збереження");
-      } finally {
-        setSaving(false);
-      }
+    (updated: NotificationPrefs) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
+        try {
+          setSaving(true);
+          setError(null);
+          await onSave(updated as unknown as Record<string, unknown>);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : "Помилка збереження");
+        } finally {
+          setSaving(false);
+        }
+      }, 400);
     },
     [onSave]
   );

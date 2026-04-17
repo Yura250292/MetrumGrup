@@ -161,8 +161,38 @@ export async function PATCH(request: NextRequest) {
       notificationPrefsJson: true,
       workPrefsJson: true,
       productivityPrefsJson: true,
+      teamMemberships: {
+        select: {
+          team: {
+            select: {
+              id: true,
+              name: true,
+              department: { select: { name: true } },
+            },
+          },
+        },
+      },
+      projectMemberships: {
+        select: {
+          roleInProject: true,
+          project: { select: { id: true, title: true } },
+        },
+        take: 20,
+      },
     },
   });
+
+  const teams = updated.teamMemberships.map((tm) => ({
+    id: tm.team.id,
+    name: tm.team.name,
+    departmentName: tm.team.department?.name ?? undefined,
+  }));
+
+  const projectRoles = updated.projectMemberships.map((pm) => ({
+    projectId: pm.project.id,
+    projectTitle: pm.project.title,
+    role: pm.roleInProject,
+  }));
 
   // Re-compute completeness
   let filled = 0;
@@ -177,8 +207,10 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({
     ...updated,
-    teams: [],
-    projectRoles: [],
+    teamMemberships: undefined,
+    projectMemberships: undefined,
+    teams,
+    projectRoles,
     profileCompleteness: Math.round((filled / total) * 100),
   });
 }

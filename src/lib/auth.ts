@@ -56,6 +56,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         token.id = user.id!;
         token.role = user.role;
+        token.image = user.image;
       }
       return token;
     },
@@ -63,6 +64,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (token) {
         session.user.id = token.id as string;
         session.user.role = token.role as import("@prisma/client").Role;
+        session.user.image = (token.image as string) ?? null;
       }
       return session;
     },

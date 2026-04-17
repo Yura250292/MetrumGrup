@@ -1,14 +1,15 @@
 "use client";
 
 import type { TeamMember } from "@/hooks/useProjectAggregations";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const ROLE_GRADIENTS: Record<string, string> = {
-  SUPER_ADMIN: "from-red-500 to-pink-500",
-  MANAGER: "from-blue-500 to-cyan-500",
-  ENGINEER: "from-purple-500 to-violet-500",
-  FINANCIER: "from-emerald-500 to-green-500",
-  CLIENT: "from-gray-500 to-gray-600",
-  USER: "from-gray-400 to-gray-500",
+  SUPER_ADMIN: "linear-gradient(135deg, #ef4444, #ec4899)",
+  MANAGER: "linear-gradient(135deg, #3b82f6, #06b6d4)",
+  ENGINEER: "linear-gradient(135deg, #a855f7, #7c3aed)",
+  FINANCIER: "linear-gradient(135deg, #10b981, #22c55e)",
+  CLIENT: "linear-gradient(135deg, #6b7280, #4b5563)",
+  USER: "linear-gradient(135deg, #9ca3af, #6b7280)",
 };
 
 export function TeamAvatarGroup({
@@ -35,14 +36,15 @@ export function TeamAvatarGroup({
   return (
     <div className="flex items-center">
       {visible.map((u, i) => {
-        const gradient = ROLE_GRADIENTS[u.role] ?? "from-gray-500 to-gray-600";
+        const gradient = ROLE_GRADIENTS[u.role] ?? "linear-gradient(135deg, #6b7280, #4b5563)";
+        const sz = size === "sm" ? 24 : 28;
         return (
           <div
             key={u.id}
             title={u.name}
-            className={`${dim} ${i > 0 ? "-ml-2" : ""} flex-shrink-0 rounded-full bg-gradient-to-br ${gradient} flex items-center justify-center text-white font-semibold border-2 admin-dark:border-gray-900 admin-light:border-white`}
+            className={`${i > 0 ? "-ml-2" : ""} border-2 admin-dark:border-gray-900 admin-light:border-white rounded-full`}
           >
-            {u.name?.charAt(0).toUpperCase() ?? "?"}
+            <UserAvatar src={u.avatar} name={u.name} size={sz} gradient={gradient} />
           </div>
         );
       })}

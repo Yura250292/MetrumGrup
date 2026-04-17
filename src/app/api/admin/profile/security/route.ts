@@ -34,6 +34,13 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Користувача не знайдено" }, { status: 404 });
     }
 
+    if (!user.password) {
+      return NextResponse.json(
+        { error: "Зміна пароля недоступна для цього типу авторизації" },
+        { status: 400 }
+      );
+    }
+
     const isValid = await bcrypt.compare(currentPassword, user.password);
     if (!isValid) {
       return NextResponse.json(

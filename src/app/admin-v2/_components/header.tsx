@@ -6,6 +6,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useState, useRef, useEffect } from "react";
 import { ChevronRight, ArrowLeft, User, LogOut } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -101,14 +102,10 @@ export function Header() {
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setUserMenuOpen((v) => !v)}
-            className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 transition hover:ring-2 hover:ring-offset-1"
-            style={{
-              background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`,
-              color: "#FFFFFF",
-            }}
+            className="transition hover:ring-2 hover:ring-offset-1 rounded-full"
             title={session?.user?.name || "Профіль"}
           >
-            {(session?.user?.name || "?").charAt(0).toUpperCase()}
+            <UserAvatar src={session?.user?.image} name={session?.user?.name} size={32} />
           </button>
 
           {userMenuOpen && (

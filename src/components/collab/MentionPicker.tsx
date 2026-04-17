@@ -2,6 +2,7 @@
 
 import { useEffect, useState, KeyboardEvent } from "react";
 import type { StaffUser } from "@/hooks/useChat";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адмін",
@@ -77,9 +78,7 @@ export function MentionPicker({
               : "admin-dark:hover:bg-white/5 admin-light:hover:bg-gray-50"
           }`}
         >
-          <div className="h-7 w-7 flex-shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white text-xs font-semibold">
-            {u.name?.charAt(0).toUpperCase() ?? "?"}
-          </div>
+          <UserAvatar src={u.avatar} name={u.name} size={28} gradient="linear-gradient(135deg, #3b82f6, #06b6d4)" />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
               {u.name}

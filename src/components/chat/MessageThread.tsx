@@ -15,6 +15,7 @@ import { MessageComposer } from "./MessageComposer";
 import { ReactionBar } from "@/components/collab/ReactionBar";
 import { RenderCommentBody } from "@/components/collab/RenderCommentBody";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 function formatStamp(iso: string) {
   const d = new Date(iso);
@@ -37,15 +38,14 @@ function MessageBubble({
 }) {
   return (
     <div className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""}`}>
-      <div
-        className={`h-8 w-8 flex-shrink-0 rounded-full flex items-center justify-center text-white text-xs font-semibold ${
-          isOwn
-            ? "bg-gradient-to-br from-blue-500 to-cyan-500"
-            : "bg-gradient-to-br from-purple-500 to-violet-500"
-        }`}
-      >
-        {message.author.name?.charAt(0).toUpperCase() ?? "?"}
-      </div>
+      <UserAvatar
+        src={message.author.avatar}
+        name={message.author.name}
+        size={32}
+        gradient={isOwn
+          ? "linear-gradient(135deg, #3b82f6, #06b6d4)"
+          : "linear-gradient(135deg, #a855f7, #7c3aed)"}
+      />
       <div className={`flex flex-col max-w-[70%] ${isOwn ? "items-end" : "items-start"}`}>
         {!isOwn && (
           <span className="text-[11px] mb-0.5" style={{ color: T.textSecondary }}>

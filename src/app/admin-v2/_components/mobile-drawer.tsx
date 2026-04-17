@@ -9,7 +9,17 @@ import { LogOut, X, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive } from "../_lib/nav";
+
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: "Адміністратор",
+  MANAGER: "Менеджер",
+  ENGINEER: "Інженер",
+  FINANCIER: "Фінансист",
+  CLIENT: "Клієнт",
+  USER: "Користувач",
+};
 
 export function MobileDrawer({
   open,
@@ -74,25 +84,21 @@ export function MobileDrawer({
             </div>
 
             {/* User info */}
-            <div
+            <Link
+              href="/admin-v2/profile"
               className="mx-5 mb-3 flex items-center gap-3 rounded-xl p-3"
               style={{ background: "var(--kpi-sidebar)" }}
             >
-              <div
-                className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold flex-shrink-0"
-                style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`, color: "#FFFFFF" }}
-              >
-                {session?.user?.name?.charAt(0)?.toUpperCase() || "A"}
-              </div>
+              <UserAvatar src={session?.user?.image} name={session?.user?.name} size={40} />
               <div className="flex flex-col gap-0 min-w-0">
                 <p className="truncate text-[14px] font-semibold" style={{ color: T.textPrimary }}>
                   {session?.user?.name || "Користувач"}
                 </p>
                 <p className="text-[11px]" style={{ color: T.textMuted }}>
-                  {isSuperAdmin ? "Адміністратор" : "Менеджер"}
+                  {ROLE_LABELS[session?.user?.role ?? ""] || session?.user?.role}
                 </p>
               </div>
-            </div>
+            </Link>
 
             {/* Nav groups */}
             <nav className="flex-1 overflow-y-auto px-5 pb-4">

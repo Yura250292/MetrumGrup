@@ -10,6 +10,7 @@ import {
 } from "@/hooks/useComments";
 import { ReactionBar } from "./ReactionBar";
 import { RenderCommentBody } from "./RenderCommentBody";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адмін",
@@ -50,9 +51,12 @@ export function CommentItem({
 
   return (
     <div className="flex gap-3 group">
-      <div className="h-9 w-9 flex-shrink-0 rounded-full bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-white text-sm font-semibold">
-        {comment.author.name?.charAt(0).toUpperCase() ?? "?"}
-      </div>
+      <UserAvatar
+        src={comment.author.avatar}
+        name={comment.author.name}
+        size={36}
+        gradient="linear-gradient(135deg, #a855f7, #7c3aed)"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline gap-2 flex-wrap">
           <span className="text-sm font-semibold admin-dark:text-white admin-light:text-gray-900">
