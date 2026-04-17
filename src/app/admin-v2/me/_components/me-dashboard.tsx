@@ -692,26 +692,38 @@ function NewTaskModal({
   const [priority, setPriority] = useState<"LOW" | "NORMAL" | "HIGH" | "URGENT">("NORMAL");
   const [dueDate, setDueDate] = useState("");
   const [assignToMe, setAssignToMe] = useState(true);
+  const [assigneeId, setAssigneeId] = useState("");
+  const [teamUsers, setTeamUsers] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const r = await fetch("/api/admin/me/projects");
-        if (r.ok) {
-          const j = await r.json();
+        const [projRes, usersRes] = await Promise.all([
+          fetch("/api/admin/me/projects"),
+          fetch("/api/admin/users?role=SUPER_ADMIN,MANAGER,ENGINEER,FINANCIER"),
+        ]);
+        if (projRes.ok) {
+          const j = await projRes.json();
           const items = (j.data ?? []) as MyProject[];
           setProjects(items);
           if (items.length > 0) {
             const first = items[0]!;
             setProjectId(first.id);
-            // Pick the stage matching currentStage, or the first one
             const currentStageRecord =
               first.stages.find((s) => s.stage === first.currentStage) ??
               first.stages[0];
             if (currentStageRecord) setStageId(currentStageRecord.id);
           }
+        }
+        if (usersRes.ok) {
+          const j = await usersRes.json();
+          setTeamUsers(
+            (j.data ?? [])
+              .filter((u: any) => u.isActive)
+              .map((u: any) => ({ id: u.id, name: u.name }))
+          );
         }
       } finally {
         setLoadingProjects(false);
@@ -734,7 +746,10 @@ function NewTaskModal({
     setSaving(true);
     setError(null);
     try {
-      const assigneeIds = assignToMe && currentUserId ? [currentUserId] : [];
+      const ids = new Set<string>();
+      if (assignToMe && currentUserId) ids.add(currentUserId);
+      if (assigneeId) ids.add(assigneeId);
+      const assigneeIds = [...ids];
       const res = await fetch(`/api/admin/projects/${projectId}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -873,6 +888,22 @@ function NewTaskModal({
               </Field>
             </div>
 
+            <Field label="ВИКОНАВЕЦЬ">
+              <select
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={inputStyle}
+              >
+                <option value="">— без виконавця —</option>
+                {teamUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}{u.id === currentUserId ? " (ви)" : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             <label
               className="flex items-center gap-2 text-xs"
               style={{ color: T.textSecondary }}
@@ -882,7 +913,7 @@ function NewTaskModal({
                 checked={assignToMe}
                 onChange={(e) => setAssignToMe(e.target.checked)}
               />
-              Призначити мені
+              Також призначити мені
             </label>
 
             {error && (
