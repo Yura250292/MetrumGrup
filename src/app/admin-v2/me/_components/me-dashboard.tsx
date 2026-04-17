@@ -25,7 +25,10 @@ import { FocusBanner, KpiTiles, FOCUS_DEFS } from "./dashboard-kpi";
 import { TaskListFlat } from "./task-list-flat";
 import { TaskListGrouped } from "./task-list-grouped";
 import { ProjectFilter } from "./project-filter";
+import { TaskPeopleGlobal } from "./task-people-global";
 import { NewTaskModal } from "./new-task-modal";
+import { SelfContainedTaskDrawer } from "./task-drawer-shared";
+import { SavedViewBar, type SavedViewFilters } from "./saved-view-bar";
 
 const SCOPE_DEFS: { id: Scope; label: string }[] = [
   { id: "assigned", label: "Призначені мені" },
@@ -37,6 +40,7 @@ const SCOPE_DEFS: { id: Scope; label: string }[] = [
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "flat", label: "Список", icon: List },
   { id: "by-project", label: "По проєктах", icon: FolderKanban },
+  { id: "by-people", label: "По людях", icon: Users },
 ];
 
 export function MeDashboard({ currentUserId }: { currentUserId: string }) {
@@ -198,6 +202,18 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
         </label>
       </div>
 
+      {/* Saved views */}
+      <SavedViewBar
+        currentFilters={{ scope, focus, viewMode, projectIds, includeCompleted }}
+        onApply={(f: SavedViewFilters) => {
+          if (f.scope) setScope(f.scope);
+          if (f.focus) setFocus(f.focus);
+          if (f.viewMode) setViewMode(f.viewMode);
+          if (f.projectIds) setProjectIds(f.projectIds);
+          if (f.includeCompleted !== undefined) setIncludeCompleted(f.includeCompleted);
+        }}
+      />
+
       {/* Project filter */}
       <ProjectFilter selectedIds={projectIds} onChange={setProjectIds} />
 
@@ -228,6 +244,19 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
           onDelete={(id, title) => void deleteTask(id, title)}
+        />
+      )}
+
+      {viewMode === "by-people" && (
+        <TaskPeopleGlobal onOpenDrawer={setDrawerTaskId} />
+      )}
+
+      {/* Task drawer */}
+      {drawerTaskId && (
+        <SelfContainedTaskDrawer
+          taskId={drawerTaskId}
+          onClose={() => setDrawerTaskId(null)}
+          onUpdate={() => void load()}
         />
       )}
 
