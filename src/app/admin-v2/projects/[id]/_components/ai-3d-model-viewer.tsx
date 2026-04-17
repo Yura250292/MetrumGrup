@@ -30,13 +30,15 @@ export function Ai3DModelViewer({ src }: { src: string }) {
         src={src}
         auto-rotate=""
         camera-controls=""
-        shadow-intensity="1"
-        exposure="1.5"
+        shadow-intensity="2"
+        exposure="2.5"
+        shadow-softness="0.8"
         environment-image="neutral"
+        tone-mapping="commerce"
         style={{
           width: "100%",
           height: "100%",
-          backgroundColor: T.panelElevated,
+          background: "linear-gradient(135deg, #2a2a4a, #1a1a2e)",
           borderRadius: "16px",
         }}
       >

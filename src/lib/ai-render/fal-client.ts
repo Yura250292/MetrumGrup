@@ -99,6 +99,10 @@ async function buildModelRequest(
       modelId: "fal-ai/trellis",
       input: {
         image_url: falImageUrl,
+        ss_sampling_steps: 50,
+        slat_sampling_steps: 50,
+        mesh_simplify: 0.90,
+        texture_size: 2048,
       },
     };
   }
