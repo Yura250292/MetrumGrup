@@ -33,6 +33,7 @@ export function useAiConversations() {
       const data = await res.json();
       return data.conversations;
     },
+    retry: 1,
   });
 }
 

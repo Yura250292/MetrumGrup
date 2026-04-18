@@ -4,14 +4,19 @@ import { unauthorizedResponse } from "@/lib/auth-utils";
 import { generateInsights } from "@/lib/ai-assistant/insights";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return unauthorizedResponse();
+  try {
+    const session = await auth();
+    if (!session?.user) return unauthorizedResponse();
 
-  // Only admins/managers get insights
-  if (!["SUPER_ADMIN", "MANAGER", "FINANCIER"].includes(session.user.role)) {
-    return NextResponse.json({ insights: [] });
+    // Only admins/managers get insights
+    if (!["SUPER_ADMIN", "MANAGER", "FINANCIER"].includes(session.user.role)) {
+      return NextResponse.json({ insights: [] });
+    }
+
+    const insights = await generateInsights(session.user.id);
+    return NextResponse.json({ insights });
+  } catch (err) {
+    console.error("[ai/insights] error:", err);
+    return NextResponse.json({ insights: [] }, { status: 200 });
   }
-
-  const insights = await generateInsights(session.user.id);
-  return NextResponse.json({ insights });
 }

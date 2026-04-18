@@ -4,21 +4,26 @@ import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) return unauthorizedResponse();
+  try {
+    const session = await auth();
+    if (!session?.user) return unauthorizedResponse();
 
-  const conversations = await prisma.aiConversation.findMany({
-    where: { userId: session.user.id },
-    orderBy: { updatedAt: "desc" },
-    take: 5,
-    select: {
-      id: true,
-      title: true,
-      createdAt: true,
-      updatedAt: true,
-      _count: { select: { messages: true } },
-    },
-  });
+    const conversations = await prisma.aiConversation.findMany({
+      where: { userId: session.user.id },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true,
+        _count: { select: { messages: true } },
+      },
+    });
 
-  return NextResponse.json({ conversations });
+    return NextResponse.json({ conversations });
+  } catch (err) {
+    console.error("[ai/conversations] error:", err);
+    return NextResponse.json({ conversations: [] }, { status: 200 });
+  }
 }

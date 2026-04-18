@@ -86,6 +86,7 @@ export function useConversations() {
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
+    retry: 1,
   });
 }
 

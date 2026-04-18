@@ -26,6 +26,7 @@ import {
  * insert a Setting row" step — admins can just start using tasks.
  */
 export async function GET() {
+  try {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
   if (session.user.role === "CLIENT") {
@@ -109,4 +110,8 @@ export async function GET() {
   }
 
   return NextResponse.json({ data: results });
+  } catch (err) {
+    console.error("[me/projects] error:", err);
+    return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
+  }
 }

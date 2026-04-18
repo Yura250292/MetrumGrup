@@ -21,7 +21,7 @@ import {
 } from '../auth-utils'
 
 // Отримуємо типізований мок
-const mockAuth = auth as jest.MockedFunction<typeof auth>
+const mockAuth = auth as jest.Mock<any>
 
 // Helper для створення mock session
 function createMockSession(role: Role = 'SUPER_ADMIN', userId: string = 'test-user-id') {

@@ -97,6 +97,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
+  try {
   const session = await auth();
   if (!session?.user?.id) return unauthorizedResponse();
 
@@ -213,4 +214,11 @@ export async function PATCH(request: NextRequest) {
     projectRoles,
     profileCompleteness: Math.round((filled / total) * 100),
   });
+  } catch (error) {
+    console.error("PATCH /api/admin/profile error:", error);
+    return NextResponse.json(
+      { error: "Помилка сервера" },
+      { status: 500 }
+    );
+  }
 }

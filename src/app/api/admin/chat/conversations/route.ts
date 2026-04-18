@@ -13,7 +13,7 @@ function handleError(err: unknown) {
   if (message === "Unauthorized") return unauthorizedResponse();
   if (message === "Forbidden") return forbiddenResponse();
   console.error("[chat/conversations] error:", err);
-  return NextResponse.json({ error: message }, { status: 400 });
+  return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
 }
 
 export async function GET() {

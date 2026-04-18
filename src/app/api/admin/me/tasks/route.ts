@@ -10,68 +10,76 @@ import { prisma } from "@/lib/prisma";
  * CLIENT role returns empty array since tasks are never visible to clients.
  */
 export async function GET(request: NextRequest) {
-  const session = await auth();
-  if (!session?.user) return unauthorizedResponse();
-  if (session.user.role === "CLIENT") {
-    return NextResponse.json({ data: { items: [] } });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user) return unauthorizedResponse();
+    if (session.user.role === "CLIENT") {
+      return NextResponse.json({ data: { items: [] } });
+    }
 
-  const url = new URL(request.url);
-  const scope = url.searchParams.get("scope") ?? "assigned"; // assigned|created|watching|all
-  const includeCompleted = url.searchParams.get("includeCompleted") === "true";
-  const projectIdsRaw = url.searchParams.get("projectIds");
+    const url = new URL(request.url);
+    const scope = url.searchParams.get("scope") ?? "assigned"; // assigned|created|watching|all
+    const includeCompleted = url.searchParams.get("includeCompleted") === "true";
+    const projectIdsRaw = url.searchParams.get("projectIds");
 
-  const uid = session.user.id;
-  const baseWhere: Record<string, unknown> = {
-    isArchived: false,
-    ...(includeCompleted
-      ? {}
-      : {
-          status: {
-            isDone: false,
-          },
-        }),
-    ...(projectIdsRaw
-      ? { projectId: { in: projectIdsRaw.split(",").filter(Boolean) } }
-      : {}),
-  };
-
-  let where;
-  if (scope === "created") {
-    where = { ...baseWhere, createdById: uid };
-  } else if (scope === "watching") {
-    where = { ...baseWhere, watchers: { some: { userId: uid } } };
-  } else if (scope === "all") {
-    where = {
-      ...baseWhere,
-      OR: [
-        { createdById: uid },
-        { assignees: { some: { userId: uid } } },
-        { watchers: { some: { userId: uid } } },
-      ],
+    const uid = session.user.id;
+    const baseWhere: Record<string, unknown> = {
+      isArchived: false,
+      ...(includeCompleted
+        ? {}
+        : {
+            status: {
+              isDone: false,
+            },
+          }),
+      ...(projectIdsRaw
+        ? { projectId: { in: projectIdsRaw.split(",").filter(Boolean) } }
+        : {}),
     };
-  } else {
-    where = { ...baseWhere, assignees: { some: { userId: uid } } };
-  }
 
-  const tasks = await prisma.task.findMany({
-    where,
-    include: {
-      project: { select: { id: true, title: true } },
-      status: true,
-      stage: { select: { id: true, stage: true } },
-      assignees: {
-        include: { user: { select: { id: true, name: true, avatar: true } } },
+    let where;
+    if (scope === "created") {
+      where = { ...baseWhere, createdById: uid };
+    } else if (scope === "watching") {
+      where = { ...baseWhere, watchers: { some: { userId: uid } } };
+    } else if (scope === "all") {
+      where = {
+        ...baseWhere,
+        OR: [
+          { createdById: uid },
+          { assignees: { some: { userId: uid } } },
+          { watchers: { some: { userId: uid } } },
+        ],
+      };
+    } else {
+      where = { ...baseWhere, assignees: { some: { userId: uid } } };
+    }
+
+    const tasks = await prisma.task.findMany({
+      where,
+      include: {
+        project: { select: { id: true, title: true } },
+        status: true,
+        stage: { select: { id: true, stage: true } },
+        assignees: {
+          include: { user: { select: { id: true, name: true, avatar: true } } },
+        },
+        labels: { include: { label: true } },
+        _count: { select: { checklist: true, subtasks: true } },
       },
-      labels: { include: { label: true } },
-      _count: { select: { checklist: true, subtasks: true } },
-    },
-    orderBy: [
-      { dueDate: { sort: "asc", nulls: "last" } },
-      { priority: "desc" },
-    ],
-    take: 200,
-  });
+      orderBy: [
+        { dueDate: { sort: "asc", nulls: "last" } },
+        { priority: "desc" },
+      ],
+      take: 200,
+    });
 
-  return NextResponse.json({ data: { items: tasks } });
+    return NextResponse.json({ data: { items: tasks } });
+  } catch (err) {
+    console.error("[me/tasks] error:", err);
+    return NextResponse.json(
+      { error: "Помилка сервера" },
+      { status: 500 }
+    );
+  }
 }
