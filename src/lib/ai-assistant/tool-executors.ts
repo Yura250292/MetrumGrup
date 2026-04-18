@@ -1606,47 +1606,81 @@ async function getUserMemories(ctx: AiUserContext) {
 
 // ── Global Team Overview ─────────────────────────────────────
 
+const ROLE_UA: Record<string, string> = {
+  SUPER_ADMIN: "Адміністратор", MANAGER: "Менеджер", ENGINEER: "Інженер",
+  FINANCIER: "Фінансист", CLIENT: "Клієнт", USER: "Користувач",
+  PROJECT_ADMIN: "Керівник", PROJECT_MANAGER: "PM", FOREMAN: "Прораб",
+  FINANCE: "Фінансист", PROCUREMENT: "Закупівлі", VIEWER: "Спостерігач",
+};
+
 async function getGlobalTeamOverview(ctx: AiUserContext) {
+  const now = new Date();
+
   const members = await prisma.projectMember.findMany({
     where: { isActive: true },
     include: {
-      user: { select: { id: true, name: true, role: true } },
-      project: { select: { id: true, title: true, status: true } },
+      user: { select: { id: true, name: true, role: true, email: true, phone: true } },
+      project: { select: { id: true, title: true, status: true, currentStage: true } },
     },
   });
 
+  // Group by user
   const byUser = new Map<string, {
-    name: string;
-    role: string;
-    projects: Array<{ title: string; role: string; projectId: string }>;
+    name: string; role: string; email: string; phone: string | null;
+    projects: Array<{ title: string; role: string; stage: string | null }>;
   }>();
 
   for (const m of members) {
     const existing = byUser.get(m.userId);
-    const proj = { title: m.project.title, role: m.roleInProject, projectId: m.project.id };
-    if (existing) {
-      existing.projects.push(proj);
-    } else {
-      byUser.set(m.userId, { name: m.user.name, role: m.user.role, projects: [proj] });
+    const proj = { title: m.project.title, role: ROLE_UA[m.roleInProject] || m.roleInProject, stage: m.project.currentStage };
+    if (existing) { existing.projects.push(proj); }
+    else { byUser.set(m.userId, { name: m.user.name, role: ROLE_UA[m.user.role] || m.user.role, email: m.user.email, phone: m.user.phone, projects: [proj] }); }
+  }
+
+  // Get tasks per user with details
+  const userIds = [...byUser.keys()];
+  const tasks = await prisma.task.findMany({
+    where: { isArchived: false, assignees: { some: { userId: { in: userIds } } } },
+    select: {
+      title: true, priority: true, dueDate: true,
+      status: { select: { name: true } },
+      project: { select: { title: true } },
+      assignees: { select: { userId: true } },
+    },
+    orderBy: { priority: "desc" },
+  });
+
+  const tasksByUser = new Map<string, typeof tasks>();
+  for (const t of tasks) {
+    for (const a of t.assignees) {
+      const list = tasksByUser.get(a.userId) || [];
+      list.push(t);
+      tasksByUser.set(a.userId, list);
     }
   }
 
-  const taskCounts = await prisma.taskAssignee.groupBy({
-    by: ["userId"],
-    where: { task: { isArchived: false } },
-    _count: true,
-  });
-  const taskMap = new Map(taskCounts.map((t) => [t.userId, t._count]));
+  const team = [...byUser.entries()].map(([userId, d]) => {
+    const userTasks = tasksByUser.get(userId) || [];
+    const overdue = userTasks.filter((t) => t.dueDate && t.dueDate < now).length;
 
-  return {
-    totalMembers: byUser.size,
-    team: [...byUser.entries()]
-      .map(([userId, d]) => ({
-        name: d.name,
-        globalRole: d.role,
-        activeTasks: taskMap.get(userId) ?? 0,
-        projects: d.projects,
-      }))
-      .sort((a, b) => b.activeTasks - a.activeTasks),
-  };
+    return {
+      name: d.name,
+      role: d.role,
+      contact: d.phone || d.email,
+      навантаження: userTasks.length >= 8 ? "🔴 перевантажений" : userTasks.length >= 4 ? "🟡 нормальне" : userTasks.length > 0 ? "🟢 легке" : "⚪ вільний",
+      завдань: userTasks.length,
+      прострочених: overdue,
+      проєкти: d.projects.map((p) => `${p.title} (${p.role})`).join(", "),
+      поточніЗавдання: userTasks.slice(0, 3).map((t) => ({
+        назва: t.title,
+        пріоритет: t.priority,
+        статус: t.status?.name ?? "—",
+        проєкт: t.project.title,
+        дедлайн: t.dueDate?.toISOString().split("T")[0] ?? "без дедлайну",
+        прострочено: t.dueDate ? t.dueDate < now : false,
+      })),
+    };
+  });
+
+  return { членівКоманди: team.length, команда: team.sort((a, b) => b.завдань - a.завдань) };
 }
