@@ -23,6 +23,7 @@ const schemas: Partial<Record<AiToolName, z.ZodType>> = {
   }),
   get_my_tasks: z.object({ limit: z.number().min(1).max(50).optional() }),
   get_team_workload: z.object({ projectId, daysBack: z.number().optional() }),
+  get_global_team_overview: z.object({}),
   get_estimate_summary: z.object({ projectId }),
   get_payment_status: z.object({ projectId }),
   get_stage_progress: z.object({ projectId }),

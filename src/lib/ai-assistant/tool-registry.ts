@@ -29,6 +29,7 @@ export const TOOL_REGISTRY: ToolMeta[] = [
   { name: "get_my_tasks", type: "read", domain: "tasks", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Мої завдання" },
   { name: "get_overdue_items", type: "read", domain: "tasks", requiresConfirmation: false, allowedRoles: ALL, description: "Прострочене" },
   { name: "get_team_workload", type: "read", domain: "team", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Навантаження команди" },
+  { name: "get_global_team_overview", type: "read", domain: "team", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Глобальний огляд команди" },
 
   // ── Read: Estimates & Finance ──
   { name: "get_estimate_summary", type: "read", domain: "estimates", requiresConfirmation: false, allowedRoles: ALL, description: "Кошторис" },

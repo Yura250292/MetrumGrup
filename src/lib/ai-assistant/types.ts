@@ -39,7 +39,10 @@ export type AiToolName =
   | "record_expense"
   // External
   | "web_search"
-  | "send_notification";
+  | "send_notification"
+  // Memory
+  | "save_memory"
+  | "get_memories";
 
 export type AiChatRequest = {
   conversationId?: string;

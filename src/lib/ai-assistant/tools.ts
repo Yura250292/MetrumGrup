@@ -105,6 +105,12 @@ const getTeamWorkload = fn(
   },
 );
 
+const getGlobalTeamOverview = fn(
+  "get_global_team_overview",
+  "Глобальний огляд команди по ВСІХ проєктах: хто на якому проєкті працює, роль, кількість активних завдань, останні дії. Не потребує projectId.",
+  { type: "object", properties: {} },
+);
+
 const getEstimateSummary = fn(
   "get_estimate_summary",
   "Підсумок кошторису проєкту: секції, загальна сума матеріалів, робіт, накладних, знижка, фінальна сума.",
@@ -439,10 +445,29 @@ const getMaterials = fn(
   },
 );
 
+const saveMemory = fn(
+  "save_memory",
+  "Зберегти вподобання або нотатку користувача для майбутніх розмов. Наприклад: улюблений проєкт, стиль відповідей, важливі контакти.",
+  {
+    type: "object",
+    properties: {
+      key: { type: "string", description: "Ключ (наприклад: 'favorite_project', 'response_style', 'important_contact')" },
+      value: { type: "string", description: "Значення для запам'ятовування" },
+    },
+    required: ["key", "value"],
+  },
+);
+
+const getMemories = fn(
+  "get_memories",
+  "Отримати збережені вподобання та нотатки користувача.",
+  { type: "object", properties: {} },
+);
+
 const ADMIN_TOOLS: ToolDef[] = [
   // Read
   listProjects, getProjectSummary, getProjectFinancials,
-  getTaskList, getMyTasks, getTeamWorkload,
+  getTaskList, getMyTasks, getTeamWorkload, getGlobalTeamOverview,
   getEstimateSummary, getPaymentStatus, getStageProgress,
   getDashboardKpis, compareProjects, getOverdueItems,
   getFinancialAnalysis, getComments, getTimeLogs,
@@ -452,17 +477,17 @@ const ADMIN_TOOLS: ToolDef[] = [
   createProject, updateProjectStage, addTeamMember,
   schedulePayment, markPaymentPaid, recordExpense,
   sendNotification,
-  // External
-  webSearch,
+  // External + Memory
+  webSearch, saveMemory, getMemories,
 ];
 
 const STAFF_TOOLS: ToolDef[] = [
   listProjects, getProjectSummary,
-  getTaskList, getMyTasks, getTeamWorkload,
+  getTaskList, getMyTasks, getTeamWorkload, getGlobalTeamOverview,
   getEstimateSummary, getStageProgress,
   getComments, getTimeLogs, getMaterials,
   createTask, updateTask, addComment,
-  webSearch,
+  webSearch, saveMemory, getMemories,
 ];
 
 const CLIENT_TOOLS: ToolDef[] = [

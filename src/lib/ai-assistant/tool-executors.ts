@@ -47,6 +47,8 @@ async function executeToolInner(
       return getMyTasks(input, ctx);
     case "get_team_workload":
       return getTeamWorkload(input, ctx);
+    case "get_global_team_overview":
+      return getGlobalTeamOverview(ctx);
     case "get_estimate_summary":
       return getEstimateSummary(input, ctx);
     case "get_payment_status":
@@ -93,6 +95,10 @@ async function executeToolInner(
       return getWorkersList(input, ctx);
     case "get_materials":
       return getMaterialsList(input);
+    case "save_memory":
+      return saveUserMemory(input, ctx);
+    case "get_memories":
+      return getUserMemories(ctx);
     default:
       return { error: `Невідомий інструмент: ${toolName}` };
   }
@@ -1521,5 +1527,85 @@ async function getMaterialsList(input: ToolInput) {
       laborRate: Number(m.laborRate ?? 0),
       markup: Number(m.markupPercent ?? 0),
     })),
+  };
+}
+
+// ── Memory ───────────────────────────────────────────────────
+
+async function saveUserMemory(input: ToolInput, ctx: AiUserContext) {
+  const key = input.key as string;
+  const value = input.value as string;
+
+  await prisma.aiMemory.upsert({
+    where: { userId_key: { userId: ctx.userId, key } },
+    create: { userId: ctx.userId, key, value },
+    update: { value },
+  });
+
+  return { success: true, message: `Запам'ятовано: ${key} = ${value}` };
+}
+
+async function getUserMemories(ctx: AiUserContext) {
+  const memories = await prisma.aiMemory.findMany({
+    where: { userId: ctx.userId },
+    select: { key: true, value: true, updatedAt: true },
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+  });
+
+  return {
+    count: memories.length,
+    memories: memories.map((m) => ({
+      key: m.key,
+      value: m.value,
+      updated: m.updatedAt.toISOString().split("T")[0],
+    })),
+  };
+}
+
+// ── Global Team Overview ─────────────────────────────────────
+
+async function getGlobalTeamOverview(ctx: AiUserContext) {
+  const members = await prisma.projectMember.findMany({
+    where: { isActive: true },
+    include: {
+      user: { select: { id: true, name: true, role: true } },
+      project: { select: { id: true, title: true, status: true } },
+    },
+  });
+
+  const byUser = new Map<string, {
+    name: string;
+    role: string;
+    projects: Array<{ title: string; role: string; projectId: string }>;
+  }>();
+
+  for (const m of members) {
+    const existing = byUser.get(m.userId);
+    const proj = { title: m.project.title, role: m.roleInProject, projectId: m.project.id };
+    if (existing) {
+      existing.projects.push(proj);
+    } else {
+      byUser.set(m.userId, { name: m.user.name, role: m.user.role, projects: [proj] });
+    }
+  }
+
+  const taskCounts = await prisma.taskAssignee.groupBy({
+    by: ["userId"],
+    where: { task: { isArchived: false } },
+    _count: true,
+  });
+  const taskMap = new Map(taskCounts.map((t) => [t.userId, t._count]));
+
+  return {
+    totalMembers: byUser.size,
+    team: [...byUser.entries()]
+      .map(([userId, d]) => ({
+        name: d.name,
+        globalRole: d.role,
+        activeTasks: taskMap.get(userId) ?? 0,
+        projects: d.projects,
+      }))
+      .sort((a, b) => b.activeTasks - a.activeTasks),
   };
 }
