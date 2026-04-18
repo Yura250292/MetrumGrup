@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { X, ChevronRight, ChevronLeft, GraduationCap } from "lucide-react";
+import { X, ChevronRight, ChevronLeft } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { AiAvatar, type AiMood } from "./AiAvatar";
 
 export type TutorialStep = {
   /** CSS selector of the element to highlight */
@@ -13,6 +14,8 @@ export type TutorialStep = {
   description: string;
   /** Position of tooltip relative to highlighted element */
   position?: "top" | "bottom" | "left" | "right";
+  /** AI avatar mood for this step */
+  mood?: AiMood;
 };
 
 export type TutorialScenario = {
@@ -33,43 +36,51 @@ const ADMIN_TUTORIAL: TutorialScenario = {
       selector: '[href="/admin-v2"]',
       title: "Дашборд",
       description: "Головна сторінка з KPI: кількість проєктів, бюджет, виручка, прострочені платежі та активні завдання. Тут ви бачите стан всієї компанії одним поглядом.",
+      mood: "wave",
     },
     {
       selector: '[href="/admin-v2/projects"]',
       title: "Проєкти",
       description: "Управління всіма будівельними проєктами. Створюйте нові, відстежуйте прогрес по етапах, контролюйте бюджет та команду кожного проєкту.",
+      mood: "building",
     },
     {
       selector: '[href="/admin-v2/estimates"]',
       title: "Кошториси",
       description: "Створення та управління кошторисами. AI генератор може створити кошторис за описом проєкту за лічені хвилини з реальними цінами.",
+      mood: "thinking",
     },
     {
       selector: '[href="/admin-v2/financing"]',
       title: "Фінансування",
       description: "Повний контроль фінансів: надходження, витрати, категорії витрат, аналітика. Фільтруйте по проєктах, виявляйте перевищення бюджету.",
+      mood: "typing",
     },
     {
       selector: '[href="/admin-v2/users"]',
       title: "Користувачі",
       description: "Управління командою: додавайте інженерів, менеджерів, фінансистів. Кожна роль має свої права доступу — від повного контролю до перегляду.",
+      mood: "idle",
     },
     {
       selector: '[href="/admin-v2/clients"]',
       title: "Клієнти",
       description: "База всіх клієнтів компанії. Контактні дані, пов'язані проєкти, історія співпраці.",
+      mood: "typing",
     },
     {
       selector: '[href="/admin-v2/resources"]',
       title: "Ресурси",
       description: "Працівники, обладнання та склад. Відстежуйте хто де працює, яка техніка доступна, які матеріали на складі.",
       position: "right",
+      mood: "building",
     },
     {
       selector: '[title="AI Помічник"]',
       title: "AI Помічник",
       description: "Ваш стратегічний бізнес-партнер! Запитайте про фінанси будь-якого проєкту, попросіть знайти підрядника в інтернеті, створити завдання або проаналізувати рентабельність.",
       position: "bottom",
+      mood: "thumbsup",
     },
   ],
 };
@@ -83,32 +94,38 @@ const MANAGER_TUTORIAL: TutorialScenario = {
       selector: '[href="/admin-v2"]',
       title: "Ваш дашборд",
       description: "Швидкий огляд: активні проєкти, прострочені завдання, завдання на сьогодні, фінанси за місяць. Починайте день звідси.",
+      mood: "wave",
     },
     {
       selector: '[href="/admin-v2/projects"]',
       title: "Ваші проєкти",
       description: "Список всіх проєктів. Натисніть на проєкт щоб побачити деталі: етапи будівництва, команду, завдання, фото-звіти та фінанси.",
+      mood: "building",
     },
     {
       selector: '[href="/admin-v2/me"]',
       title: "Мої задачі",
       description: "Ваші персональні завдання по всіх проєктах. Пріоритети, дедлайни, статуси — все в одному місці. Фільтруйте по проєкту чи пріоритету.",
+      mood: "typing",
     },
     {
       selector: '[href="/admin-v2/chat"]',
       title: "Командний чат",
       description: "Спілкуйтесь з командою напряму або в контексті проєкту. Обговорюйте кошториси, діліться файлами, вирішуйте питання оперативно.",
+      mood: "idle",
     },
     {
       selector: '[href="/admin-v2/estimates"]',
       title: "Кошториси",
       description: "Переглядайте та затверджуйте кошториси. Використовуйте AI генератор для швидкого створення — він знає ціни на матеріали та роботи.",
+      mood: "thinking",
     },
     {
       selector: '[title="AI Помічник"]',
       title: "AI Помічник",
       description: "Ваш розумний помічник! Запитайте: 'Які мої завдання на сьогодні?', 'Покажи прострочені платежі', або 'Створи завдання в проєкті X'.",
       position: "bottom",
+      mood: "thumbsup",
     },
   ],
 };
@@ -123,33 +140,39 @@ const MARKETER_TUTORIAL: TutorialScenario = {
       title: "CMS — Контент",
       description: "Публікуйте новини компанії та оновлюйте портфоліо завершених проєктів. Контент автоматично з'являється на сайті.",
       position: "right",
+      mood: "wave",
     },
     {
       selector: '[href="/admin-v2/clients"]',
       title: "База клієнтів",
       description: "Всі клієнти компанії з контактами та проєктами. Використовуйте для підготовки маркетингових кампаній та follow-up.",
+      mood: "typing",
     },
     {
       selector: '[href="/admin-v2/projects"]',
       title: "Проєкти для кейсів",
       description: "Використовуйте дані проєктів для створення кейсів: фото до/після, етапи будівництва, бюджети. Фото-звіти — готовий матеріал для соцмереж.",
+      mood: "building",
     },
     {
       selector: '[href="/admin-v2/estimates"]',
       title: "AI Кошториси",
       description: "Покажіть клієнтам можливості AI: за описом проєкту система генерує детальний кошторис. Відмінний інструмент для демонстрації технологічності компанії.",
+      mood: "thinking",
     },
     {
       selector: '[href="/admin-v2/feed"]',
       title: "Стрічка активності",
       description: "Слідкуйте за подіями компанії: нові фото-звіти, завершені етапи, затверджені кошториси — джерело контенту для публікацій.",
       position: "right",
+      mood: "idle",
     },
     {
       selector: '[title="AI Помічник"]',
       title: "AI Помічник",
       description: "Запитайте: 'Покажи завершені проєкти для портфоліо', 'Які фото-звіти є за цей місяць?', або 'Розкажи як працює AI візуалізація для клієнтів'.",
       position: "bottom",
+      mood: "thumbsup",
     },
   ],
 };
@@ -215,14 +238,16 @@ export function AiTutorial({ scenario, onClose }: TutorialProps) {
   const tooltipStyle: React.CSSProperties = {};
   if (targetRect) {
     const pad = 12;
+    // Account for avatar (76px) + gap (8px) on desktop
+    const totalW = 420;
     switch (pos) {
       case "bottom":
         tooltipStyle.top = targetRect.bottom + pad;
-        tooltipStyle.left = Math.max(16, Math.min(targetRect.left, window.innerWidth - 340));
+        tooltipStyle.left = Math.max(16, Math.min(targetRect.left, window.innerWidth - totalW));
         break;
       case "top":
         tooltipStyle.bottom = window.innerHeight - targetRect.top + pad;
-        tooltipStyle.left = Math.max(16, Math.min(targetRect.left, window.innerWidth - 340));
+        tooltipStyle.left = Math.max(16, Math.min(targetRect.left, window.innerWidth - totalW));
         break;
       case "right":
         tooltipStyle.top = targetRect.top;
@@ -282,71 +307,89 @@ export function AiTutorial({ scenario, onClose }: TutorialProps) {
         />
       )}
 
-      {/* Tooltip card */}
+      {/* Tooltip card with avatar */}
       <div
-        className="absolute w-[320px] rounded-2xl p-5 shadow-2xl animate-fade-up"
-        style={{
-          ...tooltipStyle,
-          backgroundColor: T.panel,
-          border: `1px solid ${T.borderSoft}`,
-        }}
+        className="absolute flex items-end gap-2 animate-fade-up"
+        style={tooltipStyle}
       >
-        {/* Step indicator */}
-        <div className="mb-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <GraduationCap className="h-4 w-4" style={{ color: T.accentPrimary }} />
-            <span className="text-xs font-medium" style={{ color: T.textMuted }}>
-              {step + 1} / {scenario.steps.length}
-            </span>
+        {/* Avatar — floating beside the card */}
+        <div
+          className="shrink-0 rounded-2xl p-1.5 shadow-xl hidden md:block"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <AiAvatar size="lg" mood={current.mood ?? "idle"} />
+        </div>
+
+        {/* Card */}
+        <div
+          className="w-[300px] md:w-[320px] rounded-2xl p-5 shadow-2xl"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          {/* Header: mobile avatar + step indicator */}
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="md:hidden">
+                <AiAvatar size="sm" mood={current.mood ?? "idle"} />
+              </div>
+              <span className="text-xs font-medium" style={{ color: T.textMuted }}>
+                {step + 1} / {scenario.steps.length}
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-1 transition-colors hover:opacity-80"
+              style={{ color: T.textMuted }}
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1 transition-colors hover:opacity-80"
-            style={{ color: T.textMuted }}
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
 
-        {/* Progress bar */}
-        <div className="mb-3 h-1 rounded-full overflow-hidden" style={{ backgroundColor: T.panelSoft }}>
-          <div
-            className="h-full rounded-full transition-all duration-500"
-            style={{
-              width: `${((step + 1) / scenario.steps.length) * 100}%`,
-              background: `linear-gradient(90deg, ${T.accentPrimary}, ${T.accentSecondary})`,
-            }}
-          />
-        </div>
+          {/* Progress bar */}
+          <div className="mb-3 h-1 rounded-full overflow-hidden" style={{ backgroundColor: T.panelSoft }}>
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${((step + 1) / scenario.steps.length) * 100}%`,
+                background: `linear-gradient(90deg, ${T.accentPrimary}, ${T.accentSecondary})`,
+              }}
+            />
+          </div>
 
-        <h3 className="mb-2 text-sm font-bold" style={{ color: T.textPrimary }}>
-          {current.title}
-        </h3>
-        <p className="mb-4 text-xs leading-relaxed" style={{ color: T.textSecondary }}>
-          {current.description}
-        </p>
+          <h3 className="mb-2 text-sm font-bold" style={{ color: T.textPrimary }}>
+            {current.title}
+          </h3>
+          <p className="mb-4 text-xs leading-relaxed" style={{ color: T.textSecondary }}>
+            {current.description}
+          </p>
 
-        {/* Navigation */}
-        <div className="flex items-center justify-between">
-          <button
-            onClick={handlePrev}
-            disabled={isFirst}
-            className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-30"
-            style={{ color: T.textSecondary }}
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Назад
-          </button>
-          <button
-            onClick={handleNext}
-            className="flex items-center gap-1 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all active:scale-95"
-            style={{
-              background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`,
-            }}
-          >
-            {isLast ? "Завершити" : "Далі"}
-            {!isLast && <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
+          {/* Navigation */}
+          <div className="flex items-center justify-between">
+            <button
+              onClick={handlePrev}
+              disabled={isFirst}
+              className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-30"
+              style={{ color: T.textSecondary }}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Назад
+            </button>
+            <button
+              onClick={handleNext}
+              className="flex items-center gap-1 rounded-lg px-4 py-1.5 text-xs font-semibold text-white transition-all active:scale-95"
+              style={{
+                background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`,
+              }}
+            >
+              {isLast ? "Завершити" : "Далі"}
+              {!isLast && <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+          </div>
         </div>
       </div>
     </div>
