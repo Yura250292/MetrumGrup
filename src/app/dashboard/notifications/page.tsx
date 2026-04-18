@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { formatDate } from "@/lib/utils";
 import { Bell, Camera, Wallet, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { PushToggle } from "./_components/push-toggle";
 
 const typeIcons: Record<string, typeof Bell> = {
   PHOTO_REPORT: Camera,
@@ -32,7 +33,12 @@ export default async function NotificationsPage() {
 
   return (
     <div>
-      <h1 className="mb-6 text-2xl font-bold">Сповіщення</h1>
+      <h1 className="mb-4 text-2xl font-bold hidden md:block">Сповіщення</h1>
+
+      {/* Push toggle */}
+      <div className="mb-4">
+        <PushToggle />
+      </div>
 
       {notifications.length > 0 ? (
         <div className="space-y-2">
@@ -62,6 +68,9 @@ export default async function NotificationsPage() {
         <div className="rounded-xl border bg-card p-12 text-center">
           <Bell className="mx-auto h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium">Немає сповіщень</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Увімкніть push-сповіщення вище, щоб отримувати оновлення
+          </p>
         </div>
       )}
     </div>
