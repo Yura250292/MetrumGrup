@@ -40,21 +40,19 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="min-h-screen admin-dark:bg-[#0F0F0F] admin-light:bg-gray-50 pb-20 md:pb-6 transition-colors">
-      {/* Header with gradient */}
-      <div className="admin-dark:bg-gradient-to-r admin-dark:from-gray-800 admin-dark:via-gray-900 admin-dark:to-black admin-dark:border-white/10 admin-dark:shadow-neon-top admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-white admin-light:to-green-50 border-b admin-light:border-gray-200 admin-light:shadow-sm transition-colors">
-        <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900">
-            Вітаємо, {session.user.name?.split(" ")[0]}!
-          </h1>
-          <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
-            Огляд ваших проєктів
-          </p>
-        </div>
+    <div className="pb-4 md:pb-6">
+      {/* Header — desktop only (mobile has DashboardMobileHeader) */}
+      <div className="hidden md:block admin-dark:bg-gradient-to-r admin-dark:from-gray-800 admin-dark:via-gray-900 admin-dark:to-black admin-dark:border-white/10 admin-dark:shadow-neon-top admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-white admin-light:to-green-50 border-b admin-light:border-gray-200 admin-light:shadow-sm transition-colors -mx-8 -mt-8 mb-6 px-8 py-6">
+        <h1 className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900">
+          Вітаємо, {session.user.name?.split(" ")[0]}!
+        </h1>
+        <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
+          Огляд ваших проєктів
+        </p>
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-4">
+      <div className="space-y-4">
         {/* Stats Grid - 2 колонки на мобільному */}
         <div className="grid grid-cols-2 gap-3">
           <CompactStatsCard

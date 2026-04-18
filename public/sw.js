@@ -1,7 +1,7 @@
-const CACHE_NAME = 'metrum-v4.0.0';
-const STATIC_CACHE = 'metrum-static-v3';
-const IMAGE_CACHE = 'metrum-images-v3';
-const API_CACHE = 'metrum-api-v3';
+const CACHE_NAME = 'metrum-v5.0.0';
+const STATIC_CACHE = 'metrum-static-v4';
+const IMAGE_CACHE = 'metrum-images-v4';
+const API_CACHE = 'metrum-api-v4';
 
 const STATIC_ASSETS = [
   '/',
@@ -21,13 +21,14 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate event
+// Activate event — purge all old caches
 self.addEventListener('activate', (event) => {
+  const currentCaches = [STATIC_CACHE, IMAGE_CACHE, API_CACHE];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== STATIC_CACHE && name !== IMAGE_CACHE && name !== API_CACHE)
+          .filter((name) => !currentCaches.includes(name))
           .map((name) => caches.delete(name))
       );
     })

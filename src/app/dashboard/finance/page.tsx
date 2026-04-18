@@ -61,20 +61,18 @@ export default async function DashboardFinancePage() {
   const paid = payments.filter((p) => p.status === "PAID");
 
   return (
-    <div className="min-h-screen admin-dark:bg-[#0F0F0F] admin-light:bg-gray-50 pb-24 md:pb-6 transition-colors">
-      {/* Header */}
-      <div className="admin-dark:bg-gradient-to-r admin-dark:from-gray-800 admin-dark:via-gray-900 admin-dark:to-black admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-white admin-light:to-green-50 border-b admin-dark:border-white/10 admin-light:border-gray-200 transition-colors">
-        <div className="px-4 py-4">
-          <h1 className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900">
-            Фінанси
-          </h1>
-          <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
-            Платежі та бюджет по всіх проєктах
-          </p>
-        </div>
+    <div className="pb-4 md:pb-6">
+      {/* Header — desktop only */}
+      <div className="hidden md:block -mx-8 -mt-8 mb-6 px-8 py-6 admin-dark:bg-gradient-to-r admin-dark:from-gray-800 admin-dark:via-gray-900 admin-dark:to-black admin-light:bg-gradient-to-r admin-light:from-blue-50 admin-light:via-white admin-light:to-green-50 border-b admin-dark:border-white/10 admin-light:border-gray-200 transition-colors">
+        <h1 className="text-2xl font-bold admin-dark:text-white admin-light:text-gray-900">
+          Фінанси
+        </h1>
+        <p className="mt-1 text-sm admin-dark:text-gray-400 admin-light:text-gray-600">
+          Платежі та бюджет по всіх проєктах
+        </p>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="space-y-4">
         {/* Overall progress */}
         <Card className="p-5 admin-dark:bg-gray-900/50 admin-dark:border-white/10 admin-light:shadow-sm">
           <div className="flex items-center justify-between mb-3">
