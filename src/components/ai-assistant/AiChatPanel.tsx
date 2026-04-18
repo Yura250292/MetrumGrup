@@ -27,6 +27,7 @@ type Props = {
 export function AiChatPanel({ onClose }: Props) {
   const pathname = usePathname();
   const [conversationId, setConversationId] = useState<string | null>(null);
+  const [isNewChat, setIsNewChat] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<AiMessageItem[]>([]);
   const [showTutorialMenu, setShowTutorialMenu] = useState(false);
   const { startTutorial } = useAiPanel();
@@ -42,12 +43,12 @@ export function AiChatPanel({ onClose }: Props) {
   const { send, abort, isStreaming, streamingText, activeToolCall } = useAiSendMessage();
   const deleteMutation = useDeleteAiConversation();
 
-  // Auto-select first conversation on load
+  // Auto-select first conversation on load (but not when user clicked "new chat")
   useEffect(() => {
-    if (!conversationId && conversations && conversations.length > 0) {
+    if (!conversationId && !isNewChat && conversations && conversations.length > 0) {
       setConversationId(conversations[0].id);
     }
-  }, [conversations, conversationId]);
+  }, [conversations, conversationId, isNewChat]);
 
   // Lock body scroll on mobile when panel is open
   useEffect(() => {
@@ -80,6 +81,7 @@ export function AiChatPanel({ onClose }: Props) {
         pathname,
         onConversationId: (id) => {
           setConversationId(id);
+          setIsNewChat(false);
           setOptimisticMessages([]);
         },
       });
@@ -88,16 +90,19 @@ export function AiChatPanel({ onClose }: Props) {
   );
 
   const handleNewConversation = useCallback(() => {
+    // Clean up oldest if at limit (async, non-blocking)
     if (conversations && conversations.length >= MAX_CONVERSATIONS) {
       const oldest = conversations[conversations.length - 1];
-      deleteMutation.mutate(oldest.id);
+      deleteMutation.mutate(oldest.id, { onError: () => {} });
     }
     setConversationId(null);
+    setIsNewChat(true);
     setOptimisticMessages([]);
   }, [conversations, deleteMutation]);
 
   const handleSelectConversation = useCallback((id: string) => {
     setConversationId(id);
+    setIsNewChat(false);
     setOptimisticMessages([]);
   }, []);
 
