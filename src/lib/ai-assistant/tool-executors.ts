@@ -104,6 +104,23 @@ async function executeToolInner(
   }
 }
 
+// ── Labels ──────────────────────────────────────────────────
+
+const STATUS_UA: Record<string, string> = {
+  DRAFT: "Чернетка", ACTIVE: "Активний", ON_HOLD: "Призупинено",
+  COMPLETED: "Завершено", CANCELLED: "Скасовано",
+};
+const STAGE_UA: Record<string, string> = {
+  DESIGN: "Проєктування", FOUNDATION: "Фундамент", WALLS: "Стіни",
+  ROOF: "Дах", ENGINEERING: "Інженерія", FINISHING: "Оздоблення", HANDOVER: "Здача",
+};
+const PRIORITY_UA: Record<string, string> = {
+  LOW: "Низький", NORMAL: "Звичайний", HIGH: "Високий", URGENT: "Терміновий",
+};
+const PAY_STATUS_UA: Record<string, string> = {
+  PENDING: "Очікує", PARTIAL: "Частково", PAID: "Сплачено", OVERDUE: "Прострочено",
+};
+
 // ── Helpers ──────────────────────────────────────────────────
 
 function requireAdmin(role: Role) {
@@ -175,22 +192,27 @@ async function listProjects(input: ToolInput, ctx: AiUserContext) {
 
   return {
     count: projects.length,
-    projects: projects.map((p) => ({
-      id: p.id,
-      title: p.title,
-      status: p.status,
-      stage: p.currentStage,
-      stageProgress: p.stageProgress,
-      budget: Number(p.totalBudget),
-      paid: Number(p.totalPaid),
-      address: p.address,
-      startDate: p.startDate?.toISOString().split("T")[0],
-      expectedEndDate: p.expectedEndDate?.toISOString().split("T")[0],
-      client: p.client?.name,
-      manager: p.manager?.name,
-      tasksCount: p._count.tasks,
-      estimatesCount: p._count.estimates,
-    })),
+    projects: projects.map((p) => {
+      const budget = Number(p.totalBudget);
+      const paid = Number(p.totalPaid);
+      return {
+        id: p.id,
+        назва: p.title,
+        статус: STATUS_UA[p.status] || p.status,
+        етап: STAGE_UA[p.currentStage ?? ""] || p.currentStage,
+        прогрес: `${p.stageProgress ?? 0}%`,
+        бюджет: budget,
+        сплачено: paid,
+        залишок: budget - paid,
+        адреса: p.address,
+        початок: p.startDate?.toISOString().split("T")[0],
+        дедлайн: p.expectedEndDate?.toISOString().split("T")[0],
+        клієнт: p.client?.name,
+        менеджер: p.manager?.name,
+        завдань: p._count.tasks,
+        кошторисів: p._count.estimates,
+      };
+    }),
   };
 }
 
@@ -394,20 +416,24 @@ async function getTaskList(input: ToolInput, ctx: AiUserContext) {
   );
 
   return {
-    count: tasks.length,
-    tasks: tasks.map((t) => ({
-      id: t.id,
-      title: t.title,
-      status: t.status?.name ?? "Без статусу",
-      priority: t.priority,
-      dueDate: t.dueDate?.toISOString().split("T")[0],
-      estimatedHours: t.estimatedHours,
-      actualHours: Number(t.actualHours ?? 0),
-      assignees: t.assignees.map((a) => a.user.name),
-      labels: t.labels.map((l) => l.label.name),
-      checklistItems: t._count.checklist,
-      comments: commentCountByTaskId.get(t.id) ?? 0,
-    })),
+    всього: tasks.length,
+    завдання: tasks.map((t) => {
+      const now = new Date();
+      return {
+        id: t.id,
+        назва: t.title,
+        статус: t.status?.name ?? "Без статусу",
+        пріоритет: PRIORITY_UA[t.priority] || t.priority,
+        дедлайн: t.dueDate?.toISOString().split("T")[0] ?? "без дедлайну",
+        прострочено: t.dueDate ? t.dueDate < now : false,
+        годинПлан: t.estimatedHours ? Number(t.estimatedHours) : null,
+        годинФакт: Number(t.actualHours ?? 0),
+        виконавці: t.assignees.map((a) => a.user.name).join(", ") || "не призначено",
+        мітки: t.labels.map((l) => l.label.name).join(", "),
+        чеклістПунктів: t._count.checklist,
+        коментарів: commentCountByTaskId.get(t.id) ?? 0,
+      };
+    }),
   };
 }
 
@@ -436,19 +462,17 @@ async function getMyTasks(input: ToolInput, ctx: AiUserContext) {
 
   const now = new Date();
   return {
-    count: tasks.length,
-    tasks: tasks.map((t) => ({
+    всього: tasks.length,
+    завдання: tasks.map((t) => ({
       id: t.id,
-      title: t.title,
-      project: t.project.title,
+      назва: t.title,
+      проєкт: t.project.title,
       projectId: t.project.id,
-      status: t.status?.name ?? "Без статусу",
-      priority: t.priority,
-      dueDate: t.dueDate?.toISOString().split("T")[0],
-      isOverdue: t.dueDate ? t.dueDate < now : false,
-      estimatedHours: t.estimatedHours,
-      actualHours: Number(t.actualHours ?? 0),
-      labels: t.labels.map((l) => l.label.name),
+      статус: t.status?.name ?? "Без статусу",
+      пріоритет: PRIORITY_UA[t.priority] || t.priority,
+      дедлайн: t.dueDate?.toISOString().split("T")[0] ?? "без дедлайну",
+      прострочено: t.dueDate ? t.dueDate < now : false,
+      мітки: t.labels.map((l) => l.label.name).join(", "),
     })),
   };
 }
@@ -549,19 +573,20 @@ async function getPaymentStatus(input: ToolInput, ctx: AiUserContext) {
   );
 
   return {
-    totalScheduled,
-    totalPaid,
-    remaining: totalScheduled - totalPaid,
-    overdueCount: overdue.length,
-    overdueAmount: overdue.reduce((s, p) => s + Number(p.amount), 0),
-    payments: payments.map((p) => ({
-      amount: Number(p.amount),
-      status: p.status,
-      method: p.method,
-      scheduledDate: p.scheduledDate?.toISOString().split("T")[0],
-      paidDate: p.paidDate?.toISOString().split("T")[0],
-      description: p.description,
-      invoiceNumber: p.invoiceNumber,
+    загальноЗаплановано: totalScheduled,
+    сплачено: totalPaid,
+    залишок: totalScheduled - totalPaid,
+    простроченоКількість: overdue.length,
+    простроченоСума: overdue.reduce((s, p) => s + Number(p.amount), 0),
+    платежі: payments.map((p) => ({
+      сума: Number(p.amount),
+      статус: PAY_STATUS_UA[p.status] || p.status,
+      метод: p.method === "BANK_TRANSFER" ? "Банк" : p.method === "CASH" ? "Готівка" : "Картка",
+      датаПлану: p.scheduledDate?.toISOString().split("T")[0],
+      датаОплати: p.paidDate?.toISOString().split("T")[0],
+      опис: p.description,
+      рахунок: p.invoiceNumber,
+      прострочено: p.scheduledDate && p.scheduledDate < now && p.status !== "PAID",
     })),
   };
 }
@@ -581,16 +606,18 @@ async function getStageProgress(input: ToolInput, ctx: AiUserContext) {
     }),
   ]);
 
+  const STAGE_STATUS_UA: Record<string, string> = { PENDING: "Очікує", IN_PROGRESS: "В роботі", COMPLETED: "Завершено" };
+
   return {
-    projectTitle: project?.title,
-    currentStage: project?.currentStage,
-    overallProgress: project?.stageProgress,
-    stages: stages.map((s) => ({
-      stage: s.stage,
-      status: s.status,
-      progress: s.progress,
-      startDate: s.startDate?.toISOString().split("T")[0],
-      endDate: s.endDate?.toISOString().split("T")[0],
+    проєкт: project?.title,
+    поточнийЕтап: STAGE_UA[project?.currentStage ?? ""] || project?.currentStage,
+    загальнийПрогрес: `${project?.stageProgress ?? 0}%`,
+    етапи: stages.map((s) => ({
+      етап: STAGE_UA[s.stage] || s.stage,
+      статус: STAGE_STATUS_UA[s.status] || s.status,
+      прогрес: `${s.progress ?? 0}%`,
+      початок: s.startDate?.toISOString().split("T")[0],
+      кінець: s.endDate?.toISOString().split("T")[0],
       notes: s.notes,
     })),
   };
