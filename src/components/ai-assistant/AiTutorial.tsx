@@ -54,19 +54,19 @@ const ADMIN_TUTORIAL: TutorialScenario = {
       selector: '[href="/admin-v2/financing"]',
       title: "Фінансування",
       description: "Повний контроль фінансів: надходження, витрати, категорії витрат, аналітика. Фільтруйте по проєктах, виявляйте перевищення бюджету.",
-      mood: "typing",
+      mood: "pointing",
     },
     {
       selector: '[href="/admin-v2/users"]',
       title: "Користувачі",
       description: "Управління командою: додавайте інженерів, менеджерів, фінансистів. Кожна роль має свої права доступу — від повного контролю до перегляду.",
-      mood: "idle",
+      mood: "typing",
     },
     {
       selector: '[href="/admin-v2/clients"]',
       title: "Клієнти",
       description: "База всіх клієнтів компанії. Контактні дані, пов'язані проєкти, історія співпраці.",
-      mood: "typing",
+      mood: "pointing",
     },
     {
       selector: '[href="/admin-v2/resources"]',
@@ -112,7 +112,7 @@ const MANAGER_TUTORIAL: TutorialScenario = {
       selector: '[href="/admin-v2/chat"]',
       title: "Командний чат",
       description: "Спілкуйтесь з командою напряму або в контексті проєкту. Обговорюйте кошториси, діліться файлами, вирішуйте питання оперативно.",
-      mood: "idle",
+      mood: "pointing",
     },
     {
       selector: '[href="/admin-v2/estimates"]',
@@ -165,7 +165,7 @@ const MARKETER_TUTORIAL: TutorialScenario = {
       title: "Стрічка активності",
       description: "Слідкуйте за подіями компанії: нові фото-звіти, завершені етапи, затверджені кошториси — джерело контенту для публікацій.",
       position: "right",
-      mood: "idle",
+      mood: "pointing",
     },
     {
       selector: '[title="AI Помічник"]',

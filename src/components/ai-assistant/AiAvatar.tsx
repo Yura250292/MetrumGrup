@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 
-export type AiMood = "idle" | "thinking" | "typing" | "wave" | "thumbsup" | "building";
+export type AiMood = "idle" | "thinking" | "typing" | "wave" | "thumbsup" | "building" | "pointing";
 
 const MOOD_GIFS: Record<AiMood, string> = {
   idle: "/images/ai-avatar.gif",
@@ -11,6 +11,7 @@ const MOOD_GIFS: Record<AiMood, string> = {
   wave: "/images/ai-avatar-wave.gif",
   thumbsup: "/images/ai-avatar-thumbsup.gif",
   building: "/images/ai-avatar-building.gif",
+  pointing: "/images/ai-avatar-pointing.gif",
 };
 
 type Props = {
