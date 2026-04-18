@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiMessageItem } from "@/hooks/useAiChat";
 import { AiToolCallIndicator } from "./AiToolCallIndicator";
-import { AiAvatar } from "./AiAvatar";
+import { AiAvatar, type AiMood } from "./AiAvatar";
 import { AiQuickActions } from "./AiQuickActions";
 
 type Props = {
@@ -27,7 +27,7 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
   if (messages.length === 0 && !isStreaming) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
-        <AiAvatar size="lg" />
+        <AiAvatar size="lg" mood="wave" />
         <h3 className="text-base md:text-lg font-semibold" style={{ color: T.textPrimary }}>
           AI Помічник Metrum
         </h3>
@@ -58,10 +58,12 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
                 content: streamingText,
                 createdAt: new Date().toISOString(),
               }}
+              mood="typing"
             />
           )}
           {!streamingText && !activeToolCall && (
             <div className="flex items-center gap-2 px-2">
+              <AiAvatar size="sm" mood="thinking" />
               <div className="flex gap-1">
                 <span className="h-2 w-2 animate-bounce rounded-full" style={{ backgroundColor: T.accentPrimary, animationDelay: "0ms" }} />
                 <span className="h-2 w-2 animate-bounce rounded-full" style={{ backgroundColor: T.accentPrimary, animationDelay: "150ms" }} />
@@ -77,7 +79,7 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
   );
 }
 
-function MessageBubble({ message }: { message: AiMessageItem }) {
+function MessageBubble({ message, mood = "idle" }: { message: AiMessageItem; mood?: AiMood }) {
   const isUser = message.role === "USER";
 
   return (
@@ -90,7 +92,7 @@ function MessageBubble({ message }: { message: AiMessageItem }) {
           <User className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: T.accentSecondary }} />
         </div>
       ) : (
-        <AiAvatar size="sm" />
+        <AiAvatar size="sm" mood={mood} />
       )}
       <div
         className={`max-w-[85%] md:max-w-[80%] rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-mobile-sm md:text-sm leading-relaxed ${

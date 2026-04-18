@@ -2,6 +2,7 @@
 
 import { Loader2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { AiAvatar } from "./AiAvatar";
 
 const TOOL_LABELS: Record<string, string> = {
   list_projects: "Завантажую список проєктів...",
@@ -26,6 +27,7 @@ export function AiToolCallIndicator({ toolName }: { toolName: string }) {
       className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm"
       style={{ backgroundColor: T.accentPrimarySoft, color: T.textSecondary }}
     >
+      <AiAvatar size="sm" mood="building" />
       <Loader2 className="h-4 w-4 animate-spin" style={{ color: T.accentPrimary }} />
       <span>{label}</span>
     </div>
