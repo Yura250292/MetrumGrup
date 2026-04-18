@@ -114,10 +114,26 @@ async function listProjects(input: ToolInput, ctx: AiUserContext) {
   const limit = Math.min((input.limit as number) || 20, 50);
 
   const scope = scopeByClient({ user: { id: ctx.userId, role: ctx.role } });
+
+  // Split search into words and match ALL of them (fuzzy multi-word search)
+  let searchFilter: Record<string, unknown> | undefined;
+  if (search) {
+    const words = search.split(/\s+/).filter((w) => w.length >= 2);
+    if (words.length > 1) {
+      searchFilter = {
+        AND: words.map((word) => ({
+          title: { contains: word, mode: "insensitive" },
+        })),
+      };
+    } else if (words.length === 1) {
+      searchFilter = { title: { contains: words[0], mode: "insensitive" } };
+    }
+  }
+
   const where: Record<string, unknown> = {
     ...scope,
     ...(status ? { status } : {}),
-    ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
+    ...searchFilter,
   };
 
   const projects = await prisma.project.findMany({
