@@ -71,13 +71,15 @@ export function AiChatPanel({ onClose }: Props) {
     <>
       {/* Backdrop overlay */}
       <div
-        className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm"
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm"
+        style={{ zIndex: 9998 }}
         onClick={onClose}
       />
       {/* Chat panel */}
       <div
-        className="fixed inset-y-0 right-0 z-[70] flex w-full flex-col shadow-2xl md:w-[420px]"
+        className="fixed inset-y-0 right-0 flex w-full flex-col shadow-2xl md:w-[420px]"
         style={{
+          zIndex: 9999,
           backgroundColor: T.background,
           borderLeft: `1px solid ${T.borderSoft}`,
         }}
