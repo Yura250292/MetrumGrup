@@ -6,6 +6,7 @@ import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { LayoutDashboard, FolderKanban, Wallet, Bell, User, LogOut } from "lucide-react";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const navItems = [
   { href: "/dashboard", label: "Огляд", icon: LayoutDashboard },
@@ -75,9 +76,13 @@ export function ClientSidebar() {
       {/* User info */}
       <div className="border-t admin-dark:border-white/10 admin-light:border-border/50 p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-green-500 text-white text-xs font-bold shadow-lg">
-            {session?.user?.name?.charAt(0) || "U"}
-          </div>
+          <UserAvatar
+            src={session?.user?.image}
+            name={session?.user?.name}
+            size={36}
+            className="rounded-xl"
+            gradient="linear-gradient(135deg, #3B82F6, #10B981)"
+          />
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-medium admin-dark:text-white admin-light:text-gray-900">
               {session?.user?.name || "Користувач"}
