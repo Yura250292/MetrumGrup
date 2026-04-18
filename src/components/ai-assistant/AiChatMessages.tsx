@@ -104,10 +104,10 @@ function MessageBubble({
     <div className={`flex gap-2 md:gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
       {isUser ? (
         <div
-          className="flex h-10 w-10 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-xl"
+          className="flex h-7 w-7 md:h-12 md:w-12 shrink-0 items-center justify-center rounded-full md:rounded-xl"
           style={{ backgroundColor: T.accentSecondarySoft }}
         >
-          <User className="h-5 w-5 md:h-6 md:w-6" style={{ color: T.accentSecondary }} />
+          <User className="h-3.5 w-3.5 md:h-6 md:w-6" style={{ color: T.accentSecondary }} />
         </div>
       ) : (
         <AiAvatar size="sm" mood={mood} />

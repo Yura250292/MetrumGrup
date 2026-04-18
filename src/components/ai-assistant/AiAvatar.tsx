@@ -19,24 +19,23 @@ type Props = {
   mood?: AiMood;
 };
 
-const sizes = {
-  sm: 52,
-  md: 52,
-  lg: 120,
+// mobile → desktop
+const responsiveClasses = {
+  sm: "h-7 w-7 md:h-[52px] md:w-[52px]",
+  md: "h-7 w-7 md:h-[52px] md:w-[52px]",
+  lg: "h-16 w-16 md:h-[120px] md:w-[120px]",
 } as const;
 
 export function AiAvatar({ size = "sm", mood = "idle" }: Props) {
-  const px = sizes[size];
-
   return (
-    <div className="shrink-0" style={{ width: px, height: px }}>
+    <div className={`shrink-0 ${responsiveClasses[size]}`}>
       <Image
         src={MOOD_GIFS[mood]}
         alt="AI Помічник"
-        width={px}
-        height={px}
-        className="rounded-lg"
-        style={{ width: px, height: px, objectFit: "cover" }}
+        width={240}
+        height={240}
+        className={`rounded-lg ${responsiveClasses[size]}`}
+        style={{ objectFit: "cover" }}
         unoptimized
       />
     </div>
