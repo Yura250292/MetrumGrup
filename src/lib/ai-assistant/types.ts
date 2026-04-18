@@ -12,7 +12,9 @@ export type AiToolName =
   | "get_stage_progress"
   | "get_dashboard_kpis"
   | "compare_projects"
-  | "get_overdue_items";
+  | "get_overdue_items"
+  | "web_search"
+  | "get_financial_analysis";
 
 export type AiChatRequest = {
   conversationId?: string;

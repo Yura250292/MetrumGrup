@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Bot, User } from "lucide-react";
+import { User } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiMessageItem } from "@/hooks/useAiChat";
 import { AiToolCallIndicator } from "./AiToolCallIndicator";
+import { AiAvatar } from "./AiAvatar";
 
 type Props = {
   messages: AiMessageItem[];
@@ -23,12 +24,7 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
   if (messages.length === 0 && !isStreaming) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
-        <div
-          className="flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-2xl"
-          style={{ backgroundColor: T.accentPrimarySoft }}
-        >
-          <Bot className="h-7 w-7 md:h-8 md:w-8" style={{ color: T.accentPrimary }} />
-        </div>
+        <AiAvatar size="lg" />
         <h3 className="text-base md:text-lg font-semibold" style={{ color: T.textPrimary }}>
           AI Помічник Metrum
         </h3>
@@ -80,18 +76,16 @@ function MessageBubble({ message }: { message: AiMessageItem }) {
 
   return (
     <div className={`flex gap-2 md:gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
-      <div
-        className="flex h-7 w-7 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-full"
-        style={{
-          backgroundColor: isUser ? T.accentSecondarySoft : T.accentPrimarySoft,
-        }}
-      >
-        {isUser ? (
+      {isUser ? (
+        <div
+          className="flex h-7 w-7 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundColor: T.accentSecondarySoft }}
+        >
           <User className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: T.accentSecondary }} />
-        ) : (
-          <Bot className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: T.accentPrimary }} />
-        )}
-      </div>
+        </div>
+      ) : (
+        <AiAvatar size="sm" animate={false} />
+      )}
       <div
         className={`max-w-[85%] md:max-w-[80%] rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-mobile-sm md:text-sm leading-relaxed ${
           isUser ? "rounded-tr-md" : "rounded-tl-md"

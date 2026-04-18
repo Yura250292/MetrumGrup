@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { X, Plus, MessageSquare } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { AiAvatar } from "./AiAvatar";
 import {
   useAiConversations,
   useAiMessages,
@@ -125,14 +126,7 @@ export function AiChatPanel({ onClose }: Props) {
           }}
         >
           <div className="flex flex-1 items-center gap-2">
-            <div
-              className="flex h-7 w-7 items-center justify-center rounded-lg"
-              style={{
-                background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`,
-              }}
-            >
-              <span className="text-xs font-bold text-white">AI</span>
-            </div>
+            <AiAvatar size="md" animate={false} />
             <h2 className="text-sm font-semibold" style={{ color: T.textPrimary }}>
               Помічник
             </h2>

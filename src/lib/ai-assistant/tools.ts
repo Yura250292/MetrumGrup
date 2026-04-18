@@ -173,6 +173,39 @@ const getOverdueItems = fn(
   },
 );
 
+const webSearch = fn(
+  "web_search",
+  "Пошук в інтернеті: підрядники, ціни на матеріали, бригади, техніка, оголошення OLX/Prom.ua, будівельні послуги. Повертає реальні результати з URL-посиланнями. ЗАВЖДИ вказуй джерело.",
+  {
+    type: "object",
+    properties: {
+      query: {
+        type: "string",
+        description: "Пошуковий запит українською або англійською (наприклад: 'демонтаж стін Київ ціна 2024')",
+      },
+      location: {
+        type: "string",
+        description: "Локація для пошуку (місто, район) — додається до запиту якщо вказана",
+      },
+    },
+    required: ["query"],
+  },
+);
+
+const getFinancialAnalysis = fn(
+  "get_financial_analysis",
+  "Повний фінансовий аналіз: всі надходження/витрати по всіх проєктах, рентабельність, тренди, категорії витрат. Для стратегічних рішень.",
+  {
+    type: "object",
+    properties: {
+      daysBack: {
+        type: "number",
+        description: "Період аналізу в днях (за замовчуванням 90)",
+      },
+    },
+  },
+);
+
 const ADMIN_TOOLS: ToolDef[] = [
   listProjects,
   getProjectSummary,
@@ -186,6 +219,8 @@ const ADMIN_TOOLS: ToolDef[] = [
   getDashboardKpis,
   compareProjects,
   getOverdueItems,
+  webSearch,
+  getFinancialAnalysis,
 ];
 
 const STAFF_TOOLS: ToolDef[] = [
@@ -196,6 +231,7 @@ const STAFF_TOOLS: ToolDef[] = [
   getTeamWorkload,
   getEstimateSummary,
   getStageProgress,
+  webSearch,
 ];
 
 const CLIENT_TOOLS: ToolDef[] = [

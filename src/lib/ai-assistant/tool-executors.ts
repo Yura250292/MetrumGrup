@@ -51,6 +51,10 @@ async function executeToolInner(
       return compareProjects(input, ctx);
     case "get_overdue_items":
       return getOverdueItems(input, ctx);
+    case "web_search":
+      return webSearch(input);
+    case "get_financial_analysis":
+      return getFinancialAnalysis(input, ctx);
     default:
       return { error: `Невідомий інструмент: ${toolName}` };
   }
@@ -697,5 +701,195 @@ async function getOverdueItems(input: ToolInput, ctx: AiUserContext) {
           assignees: t.assignees.map((a) => a.user.name),
         }))
       : [],
+  };
+}
+
+// ── Web Search (Tavily API) ──────────────────────────────────
+
+async function webSearch(input: ToolInput) {
+  const query = input.query as string;
+  const location = input.location as string | undefined;
+  const searchQuery = location ? `${query} ${location}` : query;
+
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) {
+    return {
+      error: "TAVILY_API_KEY не налаштований. Веб-пошук недоступний.",
+      suggestion: "Адміністратор може додати ключ на tavily.com (є безкоштовний тариф)",
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: searchQuery,
+        search_depth: "advanced",
+        max_results: 8,
+        include_answer: true,
+        include_raw_content: false,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => "Unknown error");
+      return { error: `Помилка пошуку: ${res.status}`, details: err };
+    }
+
+    const data = await res.json();
+
+    return {
+      answer: data.answer ?? null,
+      results: (data.results ?? []).slice(0, 8).map((r: { title: string; url: string; content: string; score: number }) => ({
+        title: r.title,
+        url: r.url,
+        snippet: r.content?.slice(0, 300),
+        relevance: r.score,
+      })),
+      query: searchQuery,
+    };
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      return { error: "Пошук перевищив час очікування (15с). Спробуйте простіший запит." };
+    }
+    return { error: `Помилка пошуку: ${err instanceof Error ? err.message : "невідома"}` };
+  }
+}
+
+// ── Financial Analysis (cross-project) ───────────────────────
+
+async function getFinancialAnalysis(input: ToolInput, ctx: AiUserContext) {
+  requireAdmin(ctx.role);
+
+  const daysBack = (input.daysBack as number) || 90;
+  const from = new Date();
+  from.setDate(from.getDate() - daysBack);
+
+  const [
+    allProjects,
+    financeEntries,
+    payments,
+    estimates,
+  ] = await Promise.all([
+    prisma.project.findMany({
+      where: { status: { in: ["ACTIVE", "ON_HOLD"] } },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        totalBudget: true,
+        totalPaid: true,
+        currentStage: true,
+        stageProgress: true,
+      },
+    }),
+    prisma.financeEntry.findMany({
+      where: { isArchived: false, occurredAt: { gte: from } },
+      select: {
+        type: true,
+        amount: true,
+        category: true,
+        subcategory: true,
+        projectId: true,
+        occurredAt: true,
+        project: { select: { title: true } },
+      },
+    }),
+    prisma.payment.findMany({
+      where: { createdAt: { gte: from } },
+      select: {
+        amount: true,
+        status: true,
+        projectId: true,
+        scheduledDate: true,
+        paidDate: true,
+        project: { select: { title: true } },
+      },
+    }),
+    prisma.estimate.findMany({
+      where: { createdAt: { gte: from } },
+      select: {
+        title: true,
+        status: true,
+        finalAmount: true,
+        profitAmount: true,
+        projectId: true,
+        project: { select: { title: true } },
+      },
+    }),
+  ]);
+
+  // Aggregate finance entries by category
+  const byCategory: Record<string, { income: number; expense: number }> = {};
+  let totalIncome = 0;
+  let totalExpense = 0;
+
+  for (const entry of financeEntries) {
+    const cat = entry.category || "Інше";
+    if (!byCategory[cat]) byCategory[cat] = { income: 0, expense: 0 };
+    const amount = Number(entry.amount);
+    if (entry.type === "INCOME") {
+      byCategory[cat].income += amount;
+      totalIncome += amount;
+    } else {
+      byCategory[cat].expense += amount;
+      totalExpense += amount;
+    }
+  }
+
+  // Project profitability
+  const projectProfitability = allProjects.map((p) => {
+    const budget = Number(p.totalBudget);
+    const paid = Number(p.totalPaid);
+    const projectExpenses = financeEntries
+      .filter((e) => e.projectId === p.id && e.type === "EXPENSE")
+      .reduce((s, e) => s + Number(e.amount), 0);
+
+    return {
+      title: p.title,
+      status: p.status,
+      stage: p.currentStage,
+      progress: p.stageProgress,
+      budget,
+      paid,
+      expenses: projectExpenses,
+      profit: paid - projectExpenses,
+      budgetUsage: budget > 0 ? Math.round((projectExpenses / budget) * 100) : 0,
+    };
+  });
+
+  // Top expense categories
+  const topExpenses = Object.entries(byCategory)
+    .map(([cat, data]) => ({ category: cat, ...data }))
+    .sort((a, b) => b.expense - a.expense)
+    .slice(0, 10);
+
+  return {
+    period: `Останні ${daysBack} днів`,
+    summary: {
+      totalIncome,
+      totalExpense,
+      netProfit: totalIncome - totalExpense,
+      activeProjects: allProjects.length,
+      totalBudget: allProjects.reduce((s, p) => s + Number(p.totalBudget), 0),
+      totalPaid: allProjects.reduce((s, p) => s + Number(p.totalPaid), 0),
+    },
+    topExpenseCategories: topExpenses,
+    projectProfitability: projectProfitability.sort((a, b) => b.profit - a.profit),
+    estimatesCreated: estimates.length,
+    estimatesTotalValue: estimates.reduce((s, e) => s + Number(e.finalAmount ?? 0), 0),
+    paymentsReceived: payments.filter((p) => p.status === "PAID").length,
+    paymentsOverdue: payments.filter(
+      (p) => p.status !== "PAID" && p.scheduledDate && p.scheduledDate < new Date(),
+    ).length,
   };
 }
