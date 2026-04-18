@@ -111,7 +111,7 @@ export async function POST(request: NextRequest) {
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
+            model: "gpt-4o",
             max_tokens: 4096,
             temperature: 0.3,
             messages: currentMessages,

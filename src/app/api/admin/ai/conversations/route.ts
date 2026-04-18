@@ -10,7 +10,7 @@ export async function GET() {
   const conversations = await prisma.aiConversation.findMany({
     where: { userId: session.user.id },
     orderBy: { updatedAt: "desc" },
-    take: 50,
+    take: 5,
     select: {
       id: true,
       title: true,
