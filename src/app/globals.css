@@ -510,6 +510,21 @@
   }
 }
 
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0.8;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.4s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
 @keyframes slideIn {
   from {
     opacity: 0;

@@ -5,6 +5,9 @@ import { Header } from "./_components/header";
 import { MobileShell } from "./_components/mobile-shell";
 import { TimerPill } from "./_components/timer-pill";
 import { ThemeShell } from "./_components/theme-shell";
+import { AiPanelProvider } from "@/contexts/AiPanelContext";
+import { AiPanelPortal } from "@/components/ai-assistant/AiPanelPortal";
+import { SqueezeWrapper } from "@/components/ai-assistant/SqueezeWrapper";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 
@@ -18,15 +21,20 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
 
   return (
     <ThemeShell>
-      <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
-        <Sidebar />
-        <MobileShell />
-        <div className="md:pl-[264px] flex flex-col min-h-screen">
-          <Header />
-          <main className="flex-1 px-6 py-6 md:px-8 md:py-8 pb-24 md:pb-8">{children}</main>
-        </div>
-        {!isClient && <TimerPill />}
-      </div>
+      <AiPanelProvider>
+        <SqueezeWrapper>
+          <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
+            <Sidebar />
+            <MobileShell />
+            <div className="md:pl-[264px] flex flex-col min-h-screen">
+              <Header />
+              <main className="flex-1 px-6 py-6 md:px-8 md:py-8 pb-24 md:pb-8">{children}</main>
+            </div>
+            {!isClient && <TimerPill />}
+          </div>
+        </SqueezeWrapper>
+        <AiPanelPortal />
+      </AiPanelProvider>
     </ThemeShell>
   );
 }

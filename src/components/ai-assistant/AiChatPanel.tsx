@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { X, Plus, MessageSquare } from "lucide-react";
+import { X, Plus, MessageSquare, GraduationCap } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { AiAvatar } from "./AiAvatar";
 import {
@@ -15,6 +15,7 @@ import {
 import { AiChatMessages } from "./AiChatMessages";
 import { AiChatComposer } from "./AiChatComposer";
 import { AiQuickActions } from "./AiQuickActions";
+import { AiTutorial, TUTORIAL_SCENARIOS, type TutorialScenario } from "./AiTutorial";
 
 const MAX_CONVERSATIONS = 5;
 
@@ -26,6 +27,8 @@ export function AiChatPanel({ onClose }: Props) {
   const pathname = usePathname();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<AiMessageItem[]>([]);
+  const [activeTutorial, setActiveTutorial] = useState<TutorialScenario | null>(null);
+  const [showTutorialMenu, setShowTutorialMenu] = useState(false);
 
   // Auto-detect projectId from current URL
   const projectId = useMemo(() => {
@@ -112,15 +115,15 @@ export function AiChatPanel({ onClose }: Props) {
 
   return (
     <>
-      {/* Backdrop overlay */}
+      {/* Dim overlay — click to close (mobile only, desktop uses squeeze) */}
       <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm"
-        style={{ zIndex: 9998 }}
+        className="fixed inset-0 md:hidden"
+        style={{ zIndex: 9998, backgroundColor: "rgba(0,0,0,0.3)" }}
         onClick={onClose}
       />
-      {/* Chat panel — fullscreen on mobile, side panel on desktop */}
+      {/* Chat panel — slide in from right */}
       <div
-        className="fixed inset-0 flex flex-col md:inset-y-0 md:left-auto md:right-0 md:w-[440px]"
+        className="fixed inset-0 flex flex-col md:inset-y-0 md:left-auto md:right-0 md:w-[440px] animate-slide-in-right"
         style={{
           zIndex: 9999,
           backgroundColor: "var(--t-bg, #F8FAFC)",
@@ -136,19 +139,56 @@ export function AiChatPanel({ onClose }: Props) {
           }}
         >
           <div className="flex flex-1 items-center gap-2">
-            <AiAvatar size="md" animate={false} />
+            <AiAvatar size="md" />
             <h2 className="text-sm font-semibold" style={{ color: T.textPrimary }}>
               Помічник
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors active:scale-95 tap-highlight-none"
-            style={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
-            title="Закрити"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Tutorial button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTutorialMenu((v) => !v)}
+                className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors active:scale-95 tap-highlight-none"
+                style={{ color: T.accentPrimary, backgroundColor: T.accentPrimarySoft }}
+                title="Навчання"
+              >
+                <GraduationCap className="h-4.5 w-4.5" />
+              </button>
+              {showTutorialMenu && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 w-56 rounded-xl py-1.5 shadow-xl"
+                  style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, zIndex: 10 }}
+                >
+                  <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: T.textMuted }}>
+                    Обрати тур
+                  </p>
+                  {TUTORIAL_SCENARIOS.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setShowTutorialMenu(false);
+                        onClose();
+                        setTimeout(() => setActiveTutorial(s), 400);
+                      }}
+                      className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:opacity-80"
+                    >
+                      <span className="text-xs font-medium" style={{ color: T.textPrimary }}>{s.name}</span>
+                      <span className="text-[11px]" style={{ color: T.textMuted }}>{s.description}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={onClose}
+              className="flex h-9 w-9 items-center justify-center rounded-lg transition-colors active:scale-95 tap-highlight-none"
+              style={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
+              title="Закрити"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         {/* Conversation tabs — horizontal scroll on mobile */}
@@ -200,6 +240,14 @@ export function AiChatPanel({ onClose }: Props) {
           isStreaming={isStreaming}
         />
       </div>
+
+      {/* Tutorial overlay */}
+      {activeTutorial && (
+        <AiTutorial
+          scenario={activeTutorial}
+          onClose={() => setActiveTutorial(null)}
+        />
+      )}
     </>
   );
 }

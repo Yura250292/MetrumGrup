@@ -90,7 +90,7 @@ function MessageBubble({ message }: { message: AiMessageItem }) {
           <User className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: T.accentSecondary }} />
         </div>
       ) : (
-        <AiAvatar size="sm" animate={false} />
+        <AiAvatar size="sm" />
       )}
       <div
         className={`max-w-[85%] md:max-w-[80%] rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-mobile-sm md:text-sm leading-relaxed ${
