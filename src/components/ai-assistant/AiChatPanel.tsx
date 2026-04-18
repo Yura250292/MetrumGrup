@@ -80,7 +80,7 @@ export function AiChatPanel({ onClose }: Props) {
         className="fixed inset-y-0 right-0 flex w-full flex-col shadow-2xl md:w-[420px]"
         style={{
           zIndex: 9999,
-          backgroundColor: T.background,
+          backgroundColor: "var(--t-bg, #F8FAFC)",
           borderLeft: `1px solid ${T.borderSoft}`,
         }}
       >

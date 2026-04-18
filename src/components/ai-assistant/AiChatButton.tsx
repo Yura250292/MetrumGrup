@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { Sparkles } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { AiChatPanel } from "./AiChatPanel";
@@ -22,7 +23,12 @@ export function AiChatButton() {
         <Sparkles className="h-4 w-4" />
       </button>
 
-      {isOpen && <AiChatPanel onClose={() => setIsOpen(false)} />}
+      {isOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <AiChatPanel onClose={() => setIsOpen(false)} />,
+          document.body,
+        )}
     </>
   );
 }
