@@ -11,6 +11,7 @@ import {
   Activity,
   Calculator,
   Wallet,
+  Banknote,
   Sparkles,
   ListTodo,
 } from "lucide-react";
@@ -36,7 +37,7 @@ const BASE_TAB_DEFS = [
   { id: "activity", label: "Активність", icon: Activity },
   { id: "estimates", label: "Кошториси", icon: Calculator },
   { id: "finances", label: "Платежі", icon: Wallet },
-  { id: "financing", label: "Фінансування", icon: Wallet },
+  { id: "financing", label: "Фінансування", icon: Banknote },
   { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
   { id: "tasks", label: "Задачі", icon: ListTodo },
 ] as const;

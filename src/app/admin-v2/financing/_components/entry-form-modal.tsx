@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { financeCategoriesForType } from "@/lib/constants";
-import type { FinanceEntryDTO, ProjectOption } from "./financing-view";
+import type { FinanceEntryDTO, ProjectOption } from "./types";
 
 export type EntryFormValues = {
   kind: "PLAN" | "FACT";

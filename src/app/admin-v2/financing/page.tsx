@@ -14,15 +14,23 @@ export default async function AdminV2FinancingPage() {
     redirect("/admin-v2");
   }
 
-  const projects = await prisma.project.findMany({
-    where: { status: { in: ["DRAFT", "ACTIVE", "ON_HOLD"] } },
-    select: { id: true, title: true },
-    orderBy: { title: "asc" },
-  });
+  const [projects, users] = await Promise.all([
+    prisma.project.findMany({
+      where: { status: { in: ["DRAFT", "ACTIVE", "ON_HOLD"] } },
+      select: { id: true, title: true },
+      orderBy: { title: "asc" },
+    }),
+    prisma.user.findMany({
+      where: { role: { in: ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"] } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   return (
     <FinancingView
       projects={projects}
+      users={users.map((u) => ({ id: u.id, name: u.name ?? "Без імені" }))}
       currentUserId={session.user.id}
       currentUserName={session.user.name ?? session.user.email ?? "Ви"}
     />
