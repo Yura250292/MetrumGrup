@@ -39,6 +39,7 @@ export type AiToolName =
   | "record_expense"
   // External
   | "web_search"
+  | "read_webpage"
   | "send_notification"
   // Memory
   | "save_memory"

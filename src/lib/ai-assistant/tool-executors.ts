@@ -63,6 +63,8 @@ async function executeToolInner(
       return getOverdueItems(input, ctx);
     case "web_search":
       return webSearch(input);
+    case "read_webpage":
+      return readWebpage(input);
     case "get_financial_analysis":
       return getFinancialAnalysis(input, ctx);
     case "create_task":
@@ -851,6 +853,56 @@ async function serperSearch(query: string, apiKey: string) {
   } catch {
     clearTimeout(timeout);
     return duckDuckGoSearch(query);
+  }
+}
+
+async function readWebpage(input: ToolInput) {
+  const url = input.url as string;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MetrumBot/1.0; +https://metrum-group.com.ua)",
+        "Accept": "text/html,application/xhtml+xml",
+        "Accept-Language": "uk-UA,uk;q=0.9",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return { error: `Не вдалося відкрити сторінку: HTTP ${res.status}`, url };
+
+    const html = await res.text();
+
+    // Strip scripts, styles, nav, footer, header tags
+    let text = html
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, "")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, "")
+      .replace(/<header[\s\S]*?<\/header>/gi, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#?\w+;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // Limit to ~4000 chars to not overwhelm the context
+    if (text.length > 4000) {
+      text = text.slice(0, 4000) + "... (обрізано)";
+    }
+
+    return { url, content: text, length: text.length };
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof Error && err.name === "AbortError") {
+      return { error: "Час очікування вичерпано (15с)", url };
+    }
+    return { error: `Помилка: ${err instanceof Error ? err.message : "невідома"}`, url };
   }
 }
 

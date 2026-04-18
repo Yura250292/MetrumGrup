@@ -53,6 +53,9 @@ const schemas: Partial<Record<AiToolName, z.ZodType>> = {
     query: z.string().min(2, "Пошуковий запит занадто короткий"),
     location: z.string().optional(),
   }),
+  read_webpage: z.object({
+    url: z.string().url("Невалідний URL"),
+  }),
   create_task: z.object({
     projectId,
     title: z.string().min(1, "Назва завдання обов'язкова"),

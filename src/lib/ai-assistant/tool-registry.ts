@@ -62,6 +62,7 @@ export const TOOL_REGISTRY: ToolMeta[] = [
 
   // ── External ──
   { name: "web_search", type: "read", domain: "external", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Веб-пошук" },
+  { name: "read_webpage", type: "read", domain: "external", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Читання веб-сторінки" },
 ];
 
 export function getToolMeta(name: AiToolName): ToolMeta | undefined {

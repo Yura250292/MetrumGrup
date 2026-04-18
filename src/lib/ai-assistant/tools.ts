@@ -183,9 +183,21 @@ const getOverdueItems = fn(
   },
 );
 
+const readWebpage = fn(
+  "read_webpage",
+  "Відкрити веб-сторінку за URL і прочитати її текстовий вміст. Використовуй після web_search щоб подивитись ціни, контакти, деталі на знайденому сайті.",
+  {
+    type: "object",
+    properties: {
+      url: { type: "string", description: "URL сторінки для читання (наприклад: 'https://example.com/prices')" },
+    },
+    required: ["url"],
+  },
+);
+
 const webSearch = fn(
   "web_search",
-  "Пошук в інтернеті: підрядники, ціни на матеріали, бригади, техніка, оголошення OLX/Prom.ua, будівельні послуги. Повертає реальні результати з URL-посиланнями. ЗАВЖДИ вказуй джерело.",
+  "Пошук в інтернеті: підрядники, ціни на матеріали, бригади, техніка, оголошення OLX/Prom.ua, будівельні послуги. Повертає реальні результати з URL-посиланнями. Після пошуку використовуй read_webpage щоб відкрити сайт і прочитати деталі/ціни.",
   {
     type: "object",
     properties: {
@@ -478,7 +490,7 @@ const ADMIN_TOOLS: ToolDef[] = [
   schedulePayment, markPaymentPaid, recordExpense,
   sendNotification,
   // External + Memory
-  webSearch, saveMemory, getMemories,
+  webSearch, readWebpage, saveMemory, getMemories,
 ];
 
 const STAFF_TOOLS: ToolDef[] = [
@@ -487,7 +499,7 @@ const STAFF_TOOLS: ToolDef[] = [
   getEstimateSummary, getStageProgress,
   getComments, getTimeLogs, getMaterials,
   createTask, updateTask, addComment,
-  webSearch, saveMemory, getMemories,
+  webSearch, readWebpage, saveMemory, getMemories,
 ];
 
 const CLIENT_TOOLS: ToolDef[] = [
