@@ -3,6 +3,11 @@
  * Runs in browser only — do not import from server code.
  */
 
+// Public VAPID key — safe to embed in client code (this is NOT a secret).
+// Fallback for when NEXT_PUBLIC_VAPID_PUBLIC_KEY is not set at build time.
+const VAPID_PUBLIC_KEY_FALLBACK =
+  "BN8U1ZTLqU3V4fHex6u0G_LIyEBTLK3gLR88KuErFHXD29qIECHZx6ai55hsQl-JFPFqldE6k6cFAH9_CD88hgk";
+
 function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
@@ -36,11 +41,7 @@ export function getPushPermission(): NotificationPermission | "unsupported" {
 export async function subscribeToPush(): Promise<boolean> {
   if (!isPushSupported()) return false;
 
-  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-  if (!vapidKey) {
-    console.error("[Push] VAPID public key not configured");
-    return false;
-  }
+  const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || VAPID_PUBLIC_KEY_FALLBACK;
 
   const permission = await Notification.requestPermission();
   if (permission !== "granted") return false;
