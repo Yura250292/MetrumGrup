@@ -20,9 +20,9 @@ type Props = {
 };
 
 const sizes = {
-  sm: 28,
-  md: 28,
-  lg: 64,
+  sm: 52,
+  md: 52,
+  lg: 120,
 } as const;
 
 export function AiAvatar({ size = "sm", mood = "idle" }: Props) {

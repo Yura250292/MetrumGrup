@@ -10,9 +10,9 @@ export function AiChatButton() {
   return (
     <button
       onClick={toggle}
-      className="flex h-8 w-8 items-center justify-center rounded-lg transition-all hover:scale-105 active:scale-95"
+      className="flex items-center justify-center rounded-xl transition-all hover:scale-105 active:scale-95 overflow-hidden"
       style={{
-        backgroundColor: isOpen ? T.accentPrimarySoft : T.panelElevated,
+        backgroundColor: isOpen ? T.accentPrimarySoft : "transparent",
       }}
       title="AI Помічник"
     >
