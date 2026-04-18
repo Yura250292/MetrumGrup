@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { User } from "lucide-react";
+import { User, Copy, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiMessageItem } from "@/hooks/useAiChat";
@@ -131,15 +131,20 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Tool transparency + feedback */}
-        {!isUser && (
-          <div className="mt-2 pt-2 flex items-center justify-between" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
-            {toolCalls && toolCalls.length > 0 ? (
-              <ToolTransparency tools={toolCalls} />
-            ) : <span />}
-            {message.id && !message.id.startsWith("opt-") && !message.id.startsWith("streaming") && (
-              <AiFeedback messageId={message.id} />
-            )}
+        {/* Tool transparency + feedback + copy */}
+        {!isUser && message.id !== "streaming" && (
+          <div className="mt-2 pt-2 flex items-center justify-between gap-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+            <div className="flex items-center gap-2 min-w-0">
+              {toolCalls && toolCalls.length > 0 && (
+                <ToolTransparency tools={toolCalls} />
+              )}
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <CopyButton text={message.content} />
+              {message.id && !message.id.startsWith("opt-") && (
+                <AiFeedback messageId={message.id} />
+              )}
+            </div>
           </div>
         )}
       </div>
@@ -283,5 +288,25 @@ function ReactMarkdownBlock({ content }: { content: string }) {
             >
               {content}
             </ReactMarkdown>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      className="rounded p-0.5 transition-colors hover:opacity-80"
+      style={{ color: copied ? T.success : T.textMuted }}
+      title="Копіювати"
+    >
+      {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+    </button>
   );
 }

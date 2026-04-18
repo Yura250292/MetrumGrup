@@ -69,10 +69,9 @@ export async function POST(request: NextRequest) {
   });
 
   // Load history
-  const history = await prisma.aiMessage.findMany({
+  const allHistory = await prisma.aiMessage.findMany({
     where: { conversationId },
     orderBy: { createdAt: "asc" },
-    take: MAX_HISTORY * 2,
     select: { role: true, content: true },
   });
 
@@ -85,6 +84,16 @@ export async function POST(request: NextRequest) {
     if (ctxPacket) {
       systemPrompt += `\n\n## КОНТЕКСТ ПОТОЧНОЇ СТОРІНКИ\n${contextPacketToPrompt(ctxPacket)}`;
     }
+  }
+
+  // Conversation compaction: if >20 messages, summarize older ones
+  let history = allHistory;
+  if (allHistory.length > MAX_HISTORY) {
+    const oldMessages = allHistory.slice(0, allHistory.length - MAX_HISTORY);
+    const recentMessages = allHistory.slice(allHistory.length - MAX_HISTORY);
+    const summaryText = oldMessages.map((m) => `${m.role}: ${m.content.slice(0, 150)}`).join("\n");
+    systemPrompt += `\n\n## РЕЗЮМЕ ПОПЕРЕДНЬОЇ РОЗМОВИ\n${summaryText.slice(0, 2000)}`;
+    history = recentMessages;
   }
 
   // Build messages for OpenAI

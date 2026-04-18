@@ -1887,3 +1887,15 @@ model AiMessage {
   @@index([conversationId, createdAt])
   @@map("ai_messages")
 }
+
+model AiMemory {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String
+  value     String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, key])
+  @@map("ai_memories")
+}
