@@ -226,11 +226,12 @@ export function AiChatPanel({ onClose }: Props) {
           isStreaming={isStreaming}
           activeToolCall={activeToolCall}
           onQuickAction={handleSend}
+          onConfirmAction={handleSend}
         />
 
         {/* Quick actions above composer when there are messages */}
         {displayMessages.length > 0 && !isStreaming && (
-          <AiQuickActions onAction={handleSend} variant="inline" />
+          <AiQuickActions onAction={handleSend} variant="inline" pathname={pathname} />
         )}
 
         {/* Composer — safe area bottom for notch devices */}

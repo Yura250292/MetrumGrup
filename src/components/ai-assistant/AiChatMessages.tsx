@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { User } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -10,6 +10,7 @@ import { AiAvatar, type AiMood } from "./AiAvatar";
 import { AiQuickActions } from "./AiQuickActions";
 import { AiInsights } from "./AiInsights";
 import { AiInlineChart, parseChartBlocks } from "./AiInlineChart";
+import { AiActionCard, parseActionBlocks } from "./AiActionCard";
 
 type Props = {
   messages: AiMessageItem[];
@@ -17,9 +18,10 @@ type Props = {
   isStreaming: boolean;
   activeToolCall: string | null;
   onQuickAction?: (prompt: string) => void;
+  onConfirmAction?: (message: string) => void;
 };
 
-export function AiChatMessages({ messages, streamingText, isStreaming, activeToolCall, onQuickAction }: Props) {
+export function AiChatMessages({ messages, streamingText, isStreaming, activeToolCall, onQuickAction, onConfirmAction }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,7 +53,7 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
   return (
     <div className="flex flex-1 flex-col gap-3 md:gap-4 overflow-y-auto overscroll-contain px-3 md:px-4 py-3 md:py-4">
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} message={msg} />
+        <MessageBubble key={msg.id} message={msg} onConfirm={onConfirmAction} />
       ))}
 
       {isStreaming && (
@@ -86,8 +88,17 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
   );
 }
 
-function MessageBubble({ message, mood = "idle" }: { message: AiMessageItem; mood?: AiMood }) {
+function MessageBubble({
+  message,
+  mood = "idle",
+  onConfirm,
+}: {
+  message: AiMessageItem;
+  mood?: AiMood;
+  onConfirm?: (msg: string) => void;
+}) {
   const isUser = message.role === "USER";
+  const toolCalls = message.toolCalls;
 
   return (
     <div className={`flex gap-2 md:gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
@@ -115,16 +126,64 @@ function MessageBubble({ message, mood = "idle" }: { message: AiMessageItem; moo
           <div className="whitespace-pre-wrap break-words">{message.content}</div>
         ) : (
           <div className="ai-md break-words">
-            {parseChartBlocks(message.content).map((block, i) =>
-              block.type === "chart" ? (
-                <AiInlineChart key={i} chartJson={block.content} />
-              ) : (
-                <ReactMarkdownBlock key={i} content={block.content} />
-              ),
-            )}
+            {renderAssistantContent(message.content, onConfirm)}
           </div>
         )}
+
+        {/* Tool transparency — show which tools were used */}
+        {!isUser && toolCalls && toolCalls.length > 0 && (
+          <ToolTransparency tools={toolCalls} />
+        )}
       </div>
+    </div>
+  );
+}
+
+function renderAssistantContent(content: string, onConfirm?: (msg: string) => void) {
+  // First parse action blocks, then chart blocks, then markdown
+  const actionParts = parseActionBlocks(content);
+  return actionParts.map((part, i) => {
+    if (part.type === "action") {
+      return <AiActionCard key={`a-${i}`} actionJson={part.content} onConfirm={onConfirm || (() => {})} />;
+    }
+    // Parse chart blocks within text
+    return parseChartBlocks(part.content).map((block, j) =>
+      block.type === "chart" ? (
+        <AiInlineChart key={`c-${i}-${j}`} chartJson={block.content} />
+      ) : (
+        <ReactMarkdownBlock key={`m-${i}-${j}`} content={block.content} />
+      ),
+    );
+  });
+}
+
+function ToolTransparency({ tools }: { tools: Array<{ toolName: string; result: unknown }> }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="mt-2 pt-2" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-1 text-[10px] font-medium transition-colors"
+        style={{ color: T.textMuted }}
+      >
+        <span>{expanded ? "▾" : "▸"}</span>
+        Використано {tools.length} джерел даних
+      </button>
+      {expanded && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {tools.map((t, i) => (
+            <span
+              key={i}
+              className="rounded px-1.5 py-0.5 text-[10px] font-mono"
+              style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+            >
+              {t.toolName}
+              {t.result === "OK" ? " ✓" : ""}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
