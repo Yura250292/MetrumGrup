@@ -739,65 +739,117 @@ async function getOverdueItems(input: ToolInput, ctx: AiUserContext) {
   };
 }
 
-// ── Web Search (Tavily API) ──────────────────────────────────
+// ── Web Search (Tavily API → DuckDuckGo fallback) ────────────
 
 async function webSearch(input: ToolInput) {
   const query = input.query as string;
   const location = input.location as string | undefined;
   const searchQuery = location ? `${query} ${location}` : query;
 
-  const apiKey = process.env.TAVILY_API_KEY;
-  if (!apiKey) {
-    return {
-      error: "TAVILY_API_KEY не налаштований. Веб-пошук недоступний.",
-      suggestion: "Адміністратор може додати ключ на tavily.com (є безкоштовний тариф)",
-    };
+  // Try Tavily first (better quality), fallback to DuckDuckGo (free)
+  const tavilyKey = process.env.TAVILY_API_KEY;
+  if (tavilyKey) {
+    return tavilySearch(searchQuery, tavilyKey);
   }
+  return duckDuckGoSearch(searchQuery);
+}
 
+async function tavilySearch(query: string, apiKey: string) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
-
   try {
     const res = await fetch("https://api.tavily.com/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        api_key: apiKey,
-        query: searchQuery,
-        search_depth: "advanced",
-        max_results: 8,
-        include_answer: true,
-        include_raw_content: false,
-      }),
+      body: JSON.stringify({ api_key: apiKey, query, search_depth: "advanced", max_results: 8, include_answer: true, include_raw_content: false }),
       signal: controller.signal,
     });
-
     clearTimeout(timeout);
-
-    if (!res.ok) {
-      const err = await res.text().catch(() => "Unknown error");
-      return { error: `Помилка пошуку: ${res.status}`, details: err };
-    }
-
+    if (!res.ok) return duckDuckGoSearch(query); // fallback
     const data = await res.json();
-
     return {
       answer: data.answer ?? null,
       results: (data.results ?? []).slice(0, 8).map((r: { title: string; url: string; content: string; score: number }) => ({
-        title: r.title,
-        url: r.url,
-        snippet: r.content?.slice(0, 300),
-        relevance: r.score,
+        title: r.title, url: r.url, snippet: r.content?.slice(0, 300), relevance: r.score,
       })),
-      query: searchQuery,
+      query,
+    };
+  } catch {
+    clearTimeout(timeout);
+    return duckDuckGoSearch(query);
+  }
+}
+
+async function duckDuckGoSearch(query: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    // DuckDuckGo HTML lite — no API key needed
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; MetrumBot/1.0)",
+        "Accept": "text/html",
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      return { error: `Помилка пошуку: ${res.status}`, query };
+    }
+
+    const html = await res.text();
+    const results = parseDuckDuckGoHTML(html);
+
+    return {
+      answer: null,
+      results: results.slice(0, 8),
+      query,
+      source: "DuckDuckGo",
     };
   } catch (err) {
     clearTimeout(timeout);
     if (err instanceof Error && err.name === "AbortError") {
-      return { error: "Пошук перевищив час очікування (15с). Спробуйте простіший запит." };
+      return { error: "Пошук перевищив час очікування (15с)." };
     }
     return { error: `Помилка пошуку: ${err instanceof Error ? err.message : "невідома"}` };
   }
+}
+
+function parseDuckDuckGoHTML(html: string): Array<{ title: string; url: string; snippet: string }> {
+  const results: Array<{ title: string; url: string; snippet: string }> = [];
+  // Parse DuckDuckGo HTML results using regex (no DOM parser on server)
+  const resultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g;
+  const snippetRegex = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+
+  const links: Array<{ url: string; title: string }> = [];
+  let match;
+  while ((match = resultRegex.exec(html)) !== null) {
+    const rawUrl = match[1];
+    const title = match[2].replace(/<[^>]*>/g, "").trim();
+    // DuckDuckGo wraps URLs in redirect — extract actual URL
+    const urlMatch = rawUrl.match(/uddg=([^&]+)/);
+    const url = urlMatch ? decodeURIComponent(urlMatch[1]) : rawUrl;
+    if (title && url && !url.includes("duckduckgo.com")) {
+      links.push({ url, title });
+    }
+  }
+
+  const snippets: string[] = [];
+  while ((match = snippetRegex.exec(html)) !== null) {
+    snippets.push(match[1].replace(/<[^>]*>/g, "").trim());
+  }
+
+  for (let i = 0; i < links.length && i < 8; i++) {
+    results.push({
+      title: links[i].title,
+      url: links[i].url,
+      snippet: snippets[i] || "",
+    });
+  }
+
+  return results;
 }
 
 // ── Financial Analysis (cross-project) ───────────────────────
