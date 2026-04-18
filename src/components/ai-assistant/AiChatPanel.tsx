@@ -15,7 +15,8 @@ import {
 import { AiChatMessages } from "./AiChatMessages";
 import { AiChatComposer } from "./AiChatComposer";
 import { AiQuickActions } from "./AiQuickActions";
-import { AiTutorial, TUTORIAL_SCENARIOS, type TutorialScenario } from "./AiTutorial";
+import { TUTORIAL_SCENARIOS } from "./AiTutorial";
+import { useAiPanel } from "@/contexts/AiPanelContext";
 
 const MAX_CONVERSATIONS = 5;
 
@@ -27,8 +28,8 @@ export function AiChatPanel({ onClose }: Props) {
   const pathname = usePathname();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<AiMessageItem[]>([]);
-  const [activeTutorial, setActiveTutorial] = useState<TutorialScenario | null>(null);
   const [showTutorialMenu, setShowTutorialMenu] = useState(false);
+  const { startTutorial } = useAiPanel();
 
   // Auto-detect projectId from current URL
   const projectId = useMemo(() => {
@@ -168,8 +169,7 @@ export function AiChatPanel({ onClose }: Props) {
                       key={s.id}
                       onClick={() => {
                         setShowTutorialMenu(false);
-                        onClose();
-                        setTimeout(() => setActiveTutorial(s), 400);
+                        startTutorial(s);
                       }}
                       className="flex w-full flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:opacity-80"
                     >
@@ -241,13 +241,6 @@ export function AiChatPanel({ onClose }: Props) {
         />
       </div>
 
-      {/* Tutorial overlay */}
-      {activeTutorial && (
-        <AiTutorial
-          scenario={activeTutorial}
-          onClose={() => setActiveTutorial(null)}
-        />
-      )}
     </>
   );
 }
