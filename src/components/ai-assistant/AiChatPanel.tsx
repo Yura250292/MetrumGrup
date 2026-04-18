@@ -77,6 +77,7 @@ export function AiChatPanel({ onClose }: Props) {
         message,
         conversationId: conversationId ?? undefined,
         projectId,
+        pathname,
         onConversationId: (id) => {
           setConversationId(id);
           setOptimisticMessages([]);

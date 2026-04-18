@@ -6,6 +6,7 @@ import { buildSystemPrompt } from "@/lib/ai-assistant/system-prompts";
 import { getToolsForRole } from "@/lib/ai-assistant/tools";
 import { executeTool } from "@/lib/ai-assistant/tool-executors";
 import type { AiUserContext, AiToolName, ToolCallRecord } from "@/lib/ai-assistant/types";
+import { buildContextPacket, contextPacketToPrompt } from "@/lib/ai-assistant/context-packet";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -25,10 +26,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { conversationId: existingConvId, message, projectId } = body as {
+  const { conversationId: existingConvId, message, projectId, pathname } = body as {
     conversationId?: string;
     message: string;
     projectId?: string;
+    pathname?: string;
   };
 
   if (!message?.trim()) {
@@ -74,8 +76,16 @@ export async function POST(request: NextRequest) {
     select: { role: true, content: true },
   });
 
-  const systemPrompt = buildSystemPrompt(userCtx);
+  let systemPrompt = buildSystemPrompt(userCtx);
   const tools = getToolsForRole(userCtx.role);
+
+  // Inject context packet if on a project page
+  if (pathname) {
+    const ctxPacket = await buildContextPacket(pathname, userCtx.userId);
+    if (ctxPacket) {
+      systemPrompt += `\n\n## КОНТЕКСТ ПОТОЧНОЇ СТОРІНКИ\n${contextPacketToPrompt(ctxPacket)}`;
+    }
+  }
 
   // Build messages for OpenAI
   const chatMessages: OpenAI.ChatCompletionMessageParam[] = [

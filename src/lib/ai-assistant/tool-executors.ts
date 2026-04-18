@@ -4,6 +4,8 @@ import { scopeByClient } from "@/lib/auth-utils";
 import { timeReport } from "@/lib/time/reports";
 import type { Role } from "@prisma/client";
 import type { AiToolName, AiUserContext } from "./types";
+import { validateToolInput } from "./tool-schemas";
+import { isToolAllowedForRole } from "./tool-registry";
 
 type ToolInput = Record<string, unknown>;
 
@@ -13,7 +15,13 @@ export async function executeTool(
   ctx: AiUserContext,
 ): Promise<string> {
   try {
-    const result = await executeToolInner(toolName, input, ctx);
+    // Role check
+    if (!isToolAllowedForRole(toolName, ctx.role)) {
+      return JSON.stringify({ error: "Недостатньо прав для цієї операції" });
+    }
+    // Validate input with Zod
+    const validatedInput = validateToolInput(toolName, input);
+    const result = await executeToolInner(toolName, validatedInput, ctx);
     return typeof result === "string" ? result : JSON.stringify(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Невідома помилка";

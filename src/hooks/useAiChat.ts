@@ -83,6 +83,7 @@ export function useAiSendMessage() {
       message: string;
       conversationId?: string;
       projectId?: string;
+      pathname?: string;
       onConversationId?: (id: string) => void;
     }) => {
       abortRef.current?.abort();
@@ -99,6 +100,7 @@ export function useAiSendMessage() {
             conversationId: opts.conversationId,
             message: opts.message,
             projectId: opts.projectId,
+            pathname: opts.pathname,
           }),
           signal: controller.signal,
         });

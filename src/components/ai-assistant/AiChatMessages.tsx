@@ -11,6 +11,7 @@ import { AiQuickActions } from "./AiQuickActions";
 import { AiInsights } from "./AiInsights";
 import { AiInlineChart, parseChartBlocks } from "./AiInlineChart";
 import { AiActionCard, parseActionBlocks } from "./AiActionCard";
+import { AiFeedback } from "./AiFeedback";
 
 type Props = {
   messages: AiMessageItem[];
@@ -130,9 +131,16 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Tool transparency — show which tools were used */}
-        {!isUser && toolCalls && toolCalls.length > 0 && (
-          <ToolTransparency tools={toolCalls} />
+        {/* Tool transparency + feedback */}
+        {!isUser && (
+          <div className="mt-2 pt-2 flex items-center justify-between" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+            {toolCalls && toolCalls.length > 0 ? (
+              <ToolTransparency tools={toolCalls} />
+            ) : <span />}
+            {message.id && !message.id.startsWith("opt-") && !message.id.startsWith("streaming") && (
+              <AiFeedback messageId={message.id} />
+            )}
+          </div>
         )}
       </div>
     </div>
