@@ -169,5 +169,46 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
     });
   }
 
+  // 9. Projects with no tasks assigned
+  const projectsNoTasks = await prisma.project.findMany({
+    where: {
+      status: "ACTIVE",
+      tasks: { none: {} },
+    },
+    select: { title: true },
+    take: 5,
+  });
+  if (projectsNoTasks.length > 0) {
+    insights.push({
+      type: "warning",
+      title: `${projectsNoTasks.length} активних проєктів без завдань`,
+      detail: `${projectsNoTasks.map((p) => p.title).join(", ")}. Можливо потрібно створити завдання.`,
+    });
+  }
+
+  // 10. Expense trend — compare last 30 days vs previous 30 days
+  const prev30 = new Date(now.getTime() - 60 * 86400000);
+  const [recentTotal, previousTotal] = await Promise.all([
+    prisma.financeEntry.aggregate({
+      where: { type: "EXPENSE", isArchived: false, occurredAt: { gte: new Date(now.getTime() - 30 * 86400000) } },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.aggregate({
+      where: { type: "EXPENSE", isArchived: false, occurredAt: { gte: prev30, lt: new Date(now.getTime() - 30 * 86400000) } },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const recent = Number(recentTotal._sum.amount ?? 0);
+  const previous = Number(previousTotal._sum.amount ?? 0);
+  if (previous > 0 && recent > previous * 1.3) {
+    const growthPct = Math.round(((recent - previous) / previous) * 100);
+    insights.push({
+      type: "warning",
+      title: `Витрати зросли на ${growthPct}%`,
+      detail: `Останні 30 днів: ${Math.round(recent).toLocaleString("uk-UA")} ₴ vs попередні: ${Math.round(previous).toLocaleString("uk-UA")} ₴`,
+    });
+  }
+
   return insights.slice(0, 8);
 }

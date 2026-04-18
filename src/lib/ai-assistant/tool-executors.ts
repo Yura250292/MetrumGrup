@@ -123,18 +123,20 @@ async function listProjects(input: ToolInput, ctx: AiUserContext) {
 
   const scope = scopeByClient({ user: { id: ctx.userId, role: ctx.role } });
 
-  // Split search into words and match ALL of them (fuzzy multi-word search)
+  // Fuzzy multi-word search across title, address, and client name
   let searchFilter: Record<string, unknown> | undefined;
   if (search) {
     const words = search.split(/\s+/).filter((w) => w.length >= 2);
-    if (words.length > 1) {
+    if (words.length > 0) {
       searchFilter = {
         AND: words.map((word) => ({
-          title: { contains: word, mode: "insensitive" },
+          OR: [
+            { title: { contains: word, mode: "insensitive" } },
+            { address: { contains: word, mode: "insensitive" } },
+            { client: { name: { contains: word, mode: "insensitive" } } },
+          ],
         })),
       };
-    } else if (words.length === 1) {
-      searchFilter = { title: { contains: words[0], mode: "insensitive" } };
     }
   }
 

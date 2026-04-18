@@ -14,6 +14,7 @@ export type AiToolName =
   | "get_my_tasks"
   | "get_overdue_items"
   | "get_team_workload"
+  | "get_global_team_overview"
   // Read — estimates & materials
   | "get_estimate_summary"
   | "get_payment_status"

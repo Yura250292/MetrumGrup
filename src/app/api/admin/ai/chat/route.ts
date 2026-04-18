@@ -206,6 +206,11 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Auto-generate title for new conversations (first message pair)
+        if (!existingConvId && conversationId && fullResponse) {
+          generateTitle(conversationId, message, fullResponse).catch(() => {});
+        }
+
         sendEvent("done", { conversationId, tokenUsage: totalTokens });
         controller.close();
       } catch (err) {
@@ -223,4 +228,35 @@ export async function POST(request: NextRequest) {
       Connection: "keep-alive",
     },
   });
+}
+
+/** Generate a short title for the conversation based on first exchange. */
+async function generateTitle(conversationId: string, userMessage: string, assistantResponse: string) {
+  try {
+    const result = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      max_tokens: 30,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content: "Створи короткий заголовок (3-6 слів, українською) для розмови. Тільки заголовок, без лапок.",
+        },
+        {
+          role: "user",
+          content: `Питання: ${userMessage.slice(0, 200)}\nВідповідь: ${assistantResponse.slice(0, 300)}`,
+        },
+      ],
+    });
+
+    const title = result.choices[0]?.message?.content?.trim();
+    if (title && title.length > 2) {
+      await prisma.aiConversation.update({
+        where: { id: conversationId },
+        data: { title: title.slice(0, 100) },
+      });
+    }
+  } catch {
+    // Non-critical — ignore errors
+  }
 }
