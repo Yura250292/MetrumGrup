@@ -55,6 +55,10 @@ async function executeToolInner(
       return webSearch(input);
     case "get_financial_analysis":
       return getFinancialAnalysis(input, ctx);
+    case "create_task":
+      return createNewTask(input, ctx);
+    case "schedule_payment":
+      return scheduleNewPayment(input, ctx);
     default:
       return { error: `Невідомий інструмент: ${toolName}` };
   }
@@ -891,5 +895,131 @@ async function getFinancialAnalysis(input: ToolInput, ctx: AiUserContext) {
     paymentsOverdue: payments.filter(
       (p) => p.status !== "PAID" && p.scheduledDate && p.scheduledDate < new Date(),
     ).length,
+  };
+}
+
+// ── Write Actions ────────────────────────────────────────────
+
+async function createNewTask(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  const title = input.title as string;
+  const description = (input.description as string) || undefined;
+  const priority = (input.priority as string) || "NORMAL";
+  const dueDateStr = input.dueDate as string | undefined;
+
+  if (!title?.trim()) throw new Error("Назва завдання обов'язкова");
+
+  const access = await requireProjectAccess(projectId, ctx.userId);
+  if (!access.canCreateTasks) throw new Error("Немає прав на створення завдань в цьому проєкті");
+
+  // Get first stage and default status
+  const [stage, status] = await Promise.all([
+    prisma.projectStageRecord.findFirst({
+      where: { projectId },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    }),
+    prisma.taskStatus.findFirst({
+      where: { projectId, isDefault: true },
+      select: { id: true },
+    }),
+  ]);
+
+  if (!stage) throw new Error("Проєкт не має етапів — спочатку створіть етапи");
+  if (!status) throw new Error("Проєкт не має статусів завдань — спочатку налаштуйте статуси");
+
+  // Get next position
+  const lastPos = await prisma.task.aggregate({
+    where: { projectId, statusId: status.id },
+    _max: { position: true },
+  });
+
+  const task = await prisma.task.create({
+    data: {
+      title: title.trim(),
+      description,
+      priority: priority as "LOW" | "NORMAL" | "HIGH" | "URGENT",
+      dueDate: dueDateStr ? new Date(dueDateStr) : undefined,
+      projectId,
+      stageId: stage.id,
+      statusId: status.id,
+      createdById: ctx.userId,
+      position: (lastPos._max.position ?? -1) + 1,
+      assignees: {
+        create: { userId: ctx.userId },
+      },
+    },
+    select: {
+      id: true,
+      title: true,
+      priority: true,
+      dueDate: true,
+      status: { select: { name: true } },
+    },
+  });
+
+  return {
+    success: true,
+    message: `Завдання "${task.title}" створено`,
+    task: {
+      id: task.id,
+      title: task.title,
+      priority: task.priority,
+      status: task.status?.name,
+      dueDate: task.dueDate?.toISOString().split("T")[0],
+    },
+  };
+}
+
+async function scheduleNewPayment(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  const amount = input.amount as number;
+  const scheduledDateStr = input.scheduledDate as string;
+  const description = (input.description as string) || undefined;
+  const method = (input.method as string) || "BANK_TRANSFER";
+
+  if (!amount || amount <= 0) throw new Error("Сума повинна бути більше 0");
+
+  const access = await requireProjectAccess(projectId, ctx.userId);
+  if (!access.canViewFinancials) throw new Error("Немає прав на управління платежами");
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { title: true },
+  });
+  if (!project) throw new Error("Проєкт не знайдено");
+
+  const payment = await prisma.payment.create({
+    data: {
+      projectId,
+      amount,
+      scheduledDate: new Date(scheduledDateStr),
+      notes: description,
+      method: method as "BANK_TRANSFER" | "CASH" | "CARD",
+      status: "PENDING",
+      createdById: ctx.userId,
+    },
+    select: {
+      id: true,
+      amount: true,
+      scheduledDate: true,
+      notes: true,
+      method: true,
+      status: true,
+    },
+  });
+
+  return {
+    success: true,
+    message: `Платіж на ${Number(payment.amount).toLocaleString("uk-UA")} ₴ заплановано на ${payment.scheduledDate?.toLocaleDateString("uk-UA")}`,
+    payment: {
+      id: payment.id,
+      amount: Number(payment.amount),
+      scheduledDate: payment.scheduledDate?.toISOString().split("T")[0],
+      notes: payment.notes,
+      method: payment.method,
+      status: payment.status,
+      project: project.title,
+    },
   };
 }

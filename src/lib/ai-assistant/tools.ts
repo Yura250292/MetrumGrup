@@ -206,6 +206,46 @@ const getFinancialAnalysis = fn(
   },
 );
 
+const createTask = fn(
+  "create_task",
+  "Створити нове завдання в проєкті. Використовуй коли користувач просить створити задачу/таску.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      title: { type: "string", description: "Назва завдання" },
+      description: { type: "string", description: "Опис завдання (необов'язково)" },
+      priority: {
+        type: "string",
+        enum: ["LOW", "NORMAL", "HIGH", "URGENT"],
+        description: "Пріоритет (за замовчуванням NORMAL)",
+      },
+      dueDate: { type: "string", description: "Дедлайн у форматі YYYY-MM-DD (необов'язково)" },
+    },
+    required: ["projectId", "title"],
+  },
+);
+
+const schedulePayment = fn(
+  "schedule_payment",
+  "Запланувати платіж для проєкту. Використовуй коли користувач просить додати/запланувати оплату.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      amount: { type: "number", description: "Сума платежу в гривнях" },
+      scheduledDate: { type: "string", description: "Дата платежу у форматі YYYY-MM-DD" },
+      description: { type: "string", description: "Опис платежу (наприклад: 'Оплата за матеріали')" },
+      method: {
+        type: "string",
+        enum: ["BANK_TRANSFER", "CASH", "CARD"],
+        description: "Метод оплати (за замовчуванням BANK_TRANSFER)",
+      },
+    },
+    required: ["projectId", "amount", "scheduledDate"],
+  },
+);
+
 const ADMIN_TOOLS: ToolDef[] = [
   listProjects,
   getProjectSummary,
@@ -221,6 +261,8 @@ const ADMIN_TOOLS: ToolDef[] = [
   getOverdueItems,
   webSearch,
   getFinancialAnalysis,
+  createTask,
+  schedulePayment,
 ];
 
 const STAFF_TOOLS: ToolDef[] = [
@@ -232,6 +274,7 @@ const STAFF_TOOLS: ToolDef[] = [
   getEstimateSummary,
   getStageProgress,
   webSearch,
+  createTask,
 ];
 
 const CLIENT_TOOLS: ToolDef[] = [

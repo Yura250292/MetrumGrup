@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname } from "next/navigation";
 import { X, Plus, MessageSquare } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { AiAvatar } from "./AiAvatar";
@@ -13,6 +14,7 @@ import {
 } from "@/hooks/useAiChat";
 import { AiChatMessages } from "./AiChatMessages";
 import { AiChatComposer } from "./AiChatComposer";
+import { AiQuickActions } from "./AiQuickActions";
 
 const MAX_CONVERSATIONS = 5;
 
@@ -21,8 +23,15 @@ type Props = {
 };
 
 export function AiChatPanel({ onClose }: Props) {
+  const pathname = usePathname();
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [optimisticMessages, setOptimisticMessages] = useState<AiMessageItem[]>([]);
+
+  // Auto-detect projectId from current URL
+  const projectId = useMemo(() => {
+    const match = pathname.match(/\/projects\/([^/]+)/);
+    return match?.[1] ?? undefined;
+  }, [pathname]);
 
   const { data: conversations } = useAiConversations();
   const { data: savedMessages } = useAiMessages(conversationId);
@@ -63,6 +72,7 @@ export function AiChatPanel({ onClose }: Props) {
       send({
         message,
         conversationId: conversationId ?? undefined,
+        projectId,
         onConversationId: (id) => {
           setConversationId(id);
           setOptimisticMessages([]);
@@ -175,7 +185,13 @@ export function AiChatPanel({ onClose }: Props) {
           streamingText={streamingText}
           isStreaming={isStreaming}
           activeToolCall={activeToolCall}
+          onQuickAction={handleSend}
         />
+
+        {/* Quick actions above composer when there are messages */}
+        {displayMessages.length > 0 && !isStreaming && (
+          <AiQuickActions onAction={handleSend} variant="inline" />
+        )}
 
         {/* Composer — safe area bottom for notch devices */}
         <AiChatComposer

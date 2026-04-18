@@ -14,7 +14,9 @@ export type AiToolName =
   | "compare_projects"
   | "get_overdue_items"
   | "web_search"
-  | "get_financial_analysis";
+  | "get_financial_analysis"
+  | "create_task"
+  | "schedule_payment";
 
 export type AiChatRequest = {
   conversationId?: string;

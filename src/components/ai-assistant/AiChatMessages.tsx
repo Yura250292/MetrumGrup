@@ -2,19 +2,22 @@
 
 import { useEffect, useRef } from "react";
 import { User } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { AiMessageItem } from "@/hooks/useAiChat";
 import { AiToolCallIndicator } from "./AiToolCallIndicator";
 import { AiAvatar } from "./AiAvatar";
+import { AiQuickActions } from "./AiQuickActions";
 
 type Props = {
   messages: AiMessageItem[];
   streamingText: string;
   isStreaming: boolean;
   activeToolCall: string | null;
+  onQuickAction?: (prompt: string) => void;
 };
 
-export function AiChatMessages({ messages, streamingText, isStreaming, activeToolCall }: Props) {
+export function AiChatMessages({ messages, streamingText, isStreaming, activeToolCall, onQuickAction }: Props) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,9 +31,12 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
         <h3 className="text-base md:text-lg font-semibold" style={{ color: T.textPrimary }}>
           AI Помічник Metrum
         </h3>
-        <p className="text-center text-mobile-sm md:text-sm max-w-[280px]" style={{ color: T.textMuted }}>
+        <p className="text-center text-mobile-sm md:text-sm max-w-[280px] mb-4" style={{ color: T.textMuted }}>
           Запитайте про проєкти, завдання, фінанси або аналітику.
         </p>
+        {onQuickAction && (
+          <AiQuickActions onAction={onQuickAction} variant="empty-state" />
+        )}
       </div>
     );
   }
@@ -96,9 +102,97 @@ function MessageBubble({ message }: { message: AiMessageItem }) {
           border: `1px solid ${T.borderSoft}`,
         }}
       >
-        <div className="ai-markdown whitespace-pre-wrap break-words">
-          {message.content}
-        </div>
+        {isUser ? (
+          <div className="whitespace-pre-wrap break-words">{message.content}</div>
+        ) : (
+          <div className="ai-md break-words">
+            <ReactMarkdown
+              components={{
+                h1: ({ children }) => (
+                  <h3 className="mb-2 mt-3 text-base font-bold first:mt-0" style={{ color: T.textPrimary }}>{children}</h3>
+                ),
+                h2: ({ children }) => (
+                  <h4 className="mb-1.5 mt-2.5 text-sm font-bold first:mt-0" style={{ color: T.textPrimary }}>{children}</h4>
+                ),
+                h3: ({ children }) => (
+                  <h5 className="mb-1 mt-2 text-sm font-semibold first:mt-0" style={{ color: T.textPrimary }}>{children}</h5>
+                ),
+                p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                ul: ({ children }) => <ul className="mb-2 ml-4 list-disc space-y-0.5 last:mb-0">{children}</ul>,
+                ol: ({ children }) => <ol className="mb-2 ml-4 list-decimal space-y-0.5 last:mb-0">{children}</ol>,
+                li: ({ children }) => <li className="pl-0.5">{children}</li>,
+                strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+                em: ({ children }) => <em className="italic" style={{ color: T.textSecondary }}>{children}</em>,
+                a: ({ href, children }) => (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline underline-offset-2 transition-colors hover:opacity-80"
+                    style={{ color: T.accentPrimary }}
+                  >
+                    {children}
+                  </a>
+                ),
+                code: ({ children, className }) => {
+                  const isBlock = className?.includes("language-");
+                  if (isBlock) {
+                    return (
+                      <pre
+                        className="my-2 overflow-x-auto rounded-lg p-3 text-xs"
+                        style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+                      >
+                        <code>{children}</code>
+                      </pre>
+                    );
+                  }
+                  return (
+                    <code
+                      className="rounded px-1 py-0.5 text-xs"
+                      style={{ backgroundColor: T.panelSoft, color: T.accentPrimary }}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
+                pre: ({ children }) => <>{children}</>,
+                table: ({ children }) => (
+                  <div className="my-2 overflow-x-auto rounded-lg" style={{ border: `1px solid ${T.borderSoft}` }}>
+                    <table className="w-full text-xs">{children}</table>
+                  </div>
+                ),
+                thead: ({ children }) => (
+                  <thead style={{ backgroundColor: T.panelSoft }}>{children}</thead>
+                ),
+                th: ({ children }) => (
+                  <th className="px-2.5 py-1.5 text-left font-semibold" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
+                    {children}
+                  </th>
+                ),
+                td: ({ children }) => (
+                  <td className="px-2.5 py-1.5" style={{ borderBottom: `1px solid ${T.borderSoft}` }}>
+                    {children}
+                  </td>
+                ),
+                blockquote: ({ children }) => (
+                  <blockquote
+                    className="my-2 rounded-r-lg py-1 pl-3"
+                    style={{
+                      borderLeft: `3px solid ${T.accentPrimary}`,
+                      backgroundColor: T.accentPrimarySoft,
+                      color: T.textSecondary,
+                    }}
+                  >
+                    {children}
+                  </blockquote>
+                ),
+                hr: () => <hr className="my-3" style={{ borderColor: T.borderSoft }} />,
+              }}
+            >
+              {message.content}
+            </ReactMarkdown>
+          </div>
+        )}
       </div>
     </div>
   );
