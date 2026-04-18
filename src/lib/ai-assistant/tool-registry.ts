@@ -40,6 +40,8 @@ export const TOOL_REGISTRY: ToolMeta[] = [
   { name: "get_comments", type: "read", domain: "comments", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Коментарі" },
   { name: "get_time_logs", type: "read", domain: "team", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Часові логи" },
   { name: "get_workers", type: "read", domain: "resources", requiresConfirmation: false, allowedRoles: ADMINS, description: "Працівники" },
+  { name: "get_project_files", type: "read", domain: "projects", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Файли проєкту" },
+  { name: "get_photo_reports", type: "read", domain: "projects", requiresConfirmation: false, allowedRoles: ALL, description: "Фото-звіти" },
 
   // ── Write: Tasks ──
   { name: "create_task", type: "write", domain: "tasks", requiresConfirmation: true, allowedRoles: ALL_STAFF, description: "Створити завдання" },

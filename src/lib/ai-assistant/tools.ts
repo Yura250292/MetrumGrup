@@ -183,6 +183,33 @@ const getOverdueItems = fn(
   },
 );
 
+const getProjectFiles = fn(
+  "get_project_files",
+  "Файли та документи проєкту: плани, креслення, договори, кошториси, фото, AI-візуалізації. Використовуй для розуміння контексту проєкту.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      type: { type: "string", enum: ["PHOTO_REPORT", "DOCUMENT", "PLAN", "COMPLETION_ACT", "ESTIMATE", "AI_RENDER"], description: "Тип файлу (необов'язково)" },
+      category: { type: "string", enum: ["PLAN", "CONTRACT", "TECH_DOC", "NOTE", "PHOTO_ATTACHMENT", "AI_VISUALIZATION", "TASK_ATTACHMENT", "OTHER"], description: "Категорія (необов'язково)" },
+    },
+    required: ["projectId"],
+  },
+);
+
+const getPhotoReports = fn(
+  "get_photo_reports",
+  "Фото-звіти з будівельного об'єкту: фото кожного етапу будівництва з підписами. Дозволяє побачити реальний стан об'єкту, рельєф, техніку, матеріали.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      stage: { type: "string", enum: ["DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER"], description: "Етап будівництва (необов'язково — без нього покаже всі)" },
+    },
+    required: ["projectId"],
+  },
+);
+
 const readWebpage = fn(
   "read_webpage",
   "Відкрити веб-сторінку за URL і прочитати її текстовий вміст. Використовуй після web_search щоб подивитись ціни, контакти, деталі на знайденому сайті.",
@@ -484,6 +511,7 @@ const ADMIN_TOOLS: ToolDef[] = [
   getDashboardKpis, compareProjects, getOverdueItems,
   getFinancialAnalysis, getComments, getTimeLogs,
   getWorkers, getMaterials,
+  getProjectFiles, getPhotoReports,
   // Write
   createTask, updateTask, assignTask, addComment,
   createProject, updateProjectStage, addTeamMember,
@@ -498,6 +526,7 @@ const STAFF_TOOLS: ToolDef[] = [
   getTaskList, getMyTasks, getTeamWorkload, getGlobalTeamOverview,
   getEstimateSummary, getStageProgress,
   getComments, getTimeLogs, getMaterials,
+  getProjectFiles, getPhotoReports,
   createTask, updateTask, addComment,
   webSearch, readWebpage, saveMemory, getMemories,
 ];

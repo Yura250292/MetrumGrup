@@ -24,6 +24,9 @@ export type AiToolName =
   | "get_time_logs"
   // Read — resources
   | "get_workers"
+  // Read — files & documents (RAG)
+  | "get_project_files"
+  | "get_photo_reports"
   // Write — tasks
   | "create_task"
   | "update_task"

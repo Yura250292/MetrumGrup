@@ -97,6 +97,10 @@ async function executeToolInner(
       return getWorkersList(input, ctx);
     case "get_materials":
       return getMaterialsList(input);
+    case "get_project_files":
+      return getProjectFilesList(input, ctx);
+    case "get_photo_reports":
+      return getProjectPhotoReports(input, ctx);
     case "save_memory":
       return saveUserMemory(input, ctx);
     case "get_memories":
@@ -1646,6 +1650,95 @@ async function getMaterialsList(input: ToolInput) {
       price: Number(m.basePrice ?? 0),
       laborRate: Number(m.laborRate ?? 0),
       markup: Number(m.markupPercent ?? 0),
+    })),
+  };
+}
+
+// ── Project Files & Photo Reports (RAG) ─────────────────────
+
+const FILE_TYPE_UA: Record<string, string> = {
+  PHOTO_REPORT: "Фото-звіт", DOCUMENT: "Документ", PLAN: "План/Креслення",
+  COMPLETION_ACT: "Акт виконання", ESTIMATE: "Кошторис", AI_RENDER: "AI-візуалізація",
+};
+
+async function getProjectFilesList(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  await requireProjectAccess(projectId, ctx.userId);
+
+  const where: Record<string, unknown> = { projectId };
+  if (input.type) where.type = input.type;
+  if (input.category) where.category = input.category;
+
+  const files = await prisma.projectFile.findMany({
+    where,
+    select: {
+      id: true,
+      type: true,
+      category: true,
+      name: true,
+      url: true,
+      mimeType: true,
+      size: true,
+      textContent: true,
+      createdAt: true,
+      uploadedBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
+
+  return {
+    total: files.length,
+    файли: files.map((f) => ({
+      id: f.id,
+      назва: f.name,
+      тип: FILE_TYPE_UA[f.type] || f.type,
+      категорія: f.category,
+      url: f.url,
+      розмір: `${Math.round(f.size / 1024)} KB`,
+      формат: f.mimeType,
+      текст: f.textContent?.slice(0, 500) || null,
+      завантажив: f.uploadedBy.name,
+      дата: f.createdAt.toISOString().split("T")[0],
+    })),
+  };
+}
+
+async function getProjectPhotoReports(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  await requireProjectAccess(projectId, ctx.userId);
+
+  const where: Record<string, unknown> = { projectId };
+  if (input.stage) where.stage = input.stage;
+
+  const reports = await prisma.photoReport.findMany({
+    where,
+    include: {
+      images: {
+        select: { url: true, thumbnailUrl: true, caption: true, sortOrder: true },
+        orderBy: { sortOrder: "asc" },
+      },
+      createdBy: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 10,
+  });
+
+  return {
+    total: reports.length,
+    звіти: reports.map((r) => ({
+      id: r.id,
+      назва: r.title,
+      опис: r.description,
+      етап: STAGE_UA[r.stage] || r.stage,
+      дата: r.createdAt.toISOString().split("T")[0],
+      автор: r.createdBy.name,
+      кількістьФото: r.images.length,
+      фото: r.images.map((img) => ({
+        url: img.url,
+        мініатюра: img.thumbnailUrl,
+        підпис: img.caption,
+      })),
     })),
   };
 }

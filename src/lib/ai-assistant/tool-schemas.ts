@@ -44,6 +44,15 @@ const schemas: Partial<Record<AiToolName, z.ZodType>> = {
     daysBack: z.number().optional(),
   }),
   get_workers: z.object({ projectId: z.string().optional() }),
+  get_project_files: z.object({
+    projectId,
+    type: z.enum(["PHOTO_REPORT", "DOCUMENT", "PLAN", "COMPLETION_ACT", "ESTIMATE", "AI_RENDER"]).optional(),
+    category: z.enum(["PLAN", "CONTRACT", "TECH_DOC", "NOTE", "PHOTO_ATTACHMENT", "AI_VISUALIZATION", "TASK_ATTACHMENT", "OTHER"]).optional(),
+  }),
+  get_photo_reports: z.object({
+    projectId,
+    stage: z.enum(["DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER"]).optional(),
+  }),
   get_materials: z.object({
     search: z.string().optional(),
     category: z.string().optional(),
