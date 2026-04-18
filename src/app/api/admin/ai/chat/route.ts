@@ -1,14 +1,14 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { buildSystemPrompt } from "@/lib/ai-assistant/system-prompts";
 import { getToolsForRole } from "@/lib/ai-assistant/tools";
 import { executeTool } from "@/lib/ai-assistant/tool-executors";
 import type { AiUserContext, AiToolName, ToolCallRecord } from "@/lib/ai-assistant/types";
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "",
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "",
 });
 
 const MAX_HISTORY = 20;
@@ -20,8 +20,8 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return new Response(JSON.stringify({ error: "ANTHROPIC_API_KEY не налаштований" }), { status: 500 });
+  if (!process.env.OPENAI_API_KEY) {
+    return new Response(JSON.stringify({ error: "OPENAI_API_KEY не налаштований" }), { status: 500 });
   }
 
   const body = await request.json();
@@ -77,15 +77,18 @@ export async function POST(request: NextRequest) {
   const systemPrompt = buildSystemPrompt(userCtx);
   const tools = getToolsForRole(userCtx.role);
 
-  // Build messages for Anthropic
-  const messages: Anthropic.MessageParam[] = history.map((m) => ({
-    role: m.role === "USER" ? ("user" as const) : ("assistant" as const),
-    content: m.content,
-  }));
+  // Build messages for OpenAI
+  const chatMessages: OpenAI.ChatCompletionMessageParam[] = [
+    { role: "system", content: systemPrompt },
+    ...history.map((m): OpenAI.ChatCompletionMessageParam => ({
+      role: m.role === "USER" ? "user" : "assistant",
+      content: m.content,
+    })),
+  ];
 
   // Add project context hint if projectId provided
-  if (projectId && !message.toLowerCase().includes(projectId)) {
-    const lastMsg = messages[messages.length - 1];
+  if (projectId) {
+    const lastMsg = chatMessages[chatMessages.length - 1];
     if (lastMsg && lastMsg.role === "user" && typeof lastMsg.content === "string") {
       lastMsg.content = `[Контекст: користувач знаходиться на сторінці проєкту ${projectId}]\n\n${lastMsg.content}`;
     }
@@ -103,80 +106,83 @@ export async function POST(request: NextRequest) {
       try {
         let fullResponse = "";
         const toolCallRecords: ToolCallRecord[] = [];
-        let currentMessages = [...messages];
-        let tokenUsage = { inputTokens: 0, outputTokens: 0 };
+        let currentMessages = [...chatMessages];
+        let totalTokens = { inputTokens: 0, outputTokens: 0 };
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-          const response = await anthropic.messages.create({
-            model: "claude-sonnet-4-20250514",
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
             max_tokens: 4096,
-            system: systemPrompt,
-            tools,
+            temperature: 0.3,
             messages: currentMessages,
+            tools,
+            tool_choice: "auto",
           });
 
-          tokenUsage.inputTokens += response.usage.input_tokens;
-          tokenUsage.outputTokens += response.usage.output_tokens;
+          const choice = response.choices[0];
+          if (!choice) break;
 
-          let hasToolUse = false;
-          const toolResults: Anthropic.MessageParam[] = [];
+          totalTokens.inputTokens += response.usage?.prompt_tokens ?? 0;
+          totalTokens.outputTokens += response.usage?.completion_tokens ?? 0;
 
-          for (const block of response.content) {
-            if (block.type === "text") {
-              fullResponse += block.text;
-              sendEvent("text", block.text);
-            } else if (block.type === "tool_use") {
-              hasToolUse = true;
-              sendEvent("tool_use", { toolName: block.name });
+          const msg = choice.message;
+
+          // Handle text content
+          if (msg.content) {
+            fullResponse += msg.content;
+            sendEvent("text", msg.content);
+          }
+
+          // Handle tool calls
+          if (msg.tool_calls && msg.tool_calls.length > 0) {
+            // Add assistant message with tool calls to history
+            currentMessages.push(msg as OpenAI.ChatCompletionMessageParam);
+
+            for (const toolCall of msg.tool_calls) {
+              if (toolCall.type !== "function") continue;
+              const fnName = toolCall.function.name;
+              let fnArgs: Record<string, unknown> = {};
+              try {
+                fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+              } catch {
+                fnArgs = {};
+              }
+
+              sendEvent("tool_use", { toolName: fnName });
 
               const result = await executeTool(
-                block.name as AiToolName,
-                block.input as Record<string, unknown>,
+                fnName as AiToolName,
+                fnArgs,
                 userCtx,
               );
 
               toolCallRecords.push({
-                toolName: block.name,
-                input: block.input as Record<string, unknown>,
-                result: JSON.parse(result).error ? { error: JSON.parse(result).error } : "OK",
+                toolName: fnName,
+                input: fnArgs,
+                result: (() => {
+                  try {
+                    const parsed = JSON.parse(result);
+                    return parsed.error ? { error: parsed.error } : "OK";
+                  } catch {
+                    return "OK";
+                  }
+                })(),
               });
 
-              // Build tool_result for next round
-              if (toolResults.length === 0) {
-                // Push the assistant message with tool_use blocks first
-                currentMessages.push({
-                  role: "assistant",
-                  content: response.content,
-                });
-              }
-
-              toolResults.push({
-                role: "user",
-                content: [
-                  {
-                    type: "tool_result",
-                    tool_use_id: block.id,
-                    content: result,
-                  },
-                ],
-              } as Anthropic.MessageParam);
+              // Add tool result to messages
+              currentMessages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: result,
+              } as OpenAI.ChatCompletionMessageParam);
             }
+
+            // Continue loop — model needs to process tool results
+            continue;
           }
 
-          if (!hasToolUse) {
-            // No more tool calls — done
-            break;
-          }
-
-          // Add tool results for next round
-          // Combine all tool results into single user message
-          const allToolResults = toolResults.flatMap((tr) =>
-            Array.isArray(tr.content) ? tr.content : [],
-          );
-          currentMessages.push({
-            role: "user",
-            content: allToolResults,
-          } as Anthropic.MessageParam);
+          // No tool calls and we have content — done
+          break;
         }
 
         // Save assistant message
@@ -186,11 +192,11 @@ export async function POST(request: NextRequest) {
             role: "ASSISTANT",
             content: fullResponse,
             toolCalls: toolCallRecords.length > 0 ? JSON.parse(JSON.stringify(toolCallRecords)) : undefined,
-            tokenUsage,
+            tokenUsage: totalTokens,
           },
         });
 
-        sendEvent("done", { conversationId, tokenUsage });
+        sendEvent("done", { conversationId, tokenUsage: totalTokens });
         controller.close();
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Внутрішня помилка";
