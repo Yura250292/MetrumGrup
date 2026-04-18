@@ -24,24 +24,23 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
         <div
-          className="flex h-16 w-16 items-center justify-center rounded-2xl"
+          className="flex h-14 w-14 md:h-16 md:w-16 items-center justify-center rounded-2xl"
           style={{ backgroundColor: T.accentPrimarySoft }}
         >
-          <Bot className="h-8 w-8" style={{ color: T.accentPrimary }} />
+          <Bot className="h-7 w-7 md:h-8 md:w-8" style={{ color: T.accentPrimary }} />
         </div>
-        <h3 className="text-lg font-semibold" style={{ color: T.textPrimary }}>
+        <h3 className="text-base md:text-lg font-semibold" style={{ color: T.textPrimary }}>
           AI Помічник Metrum
         </h3>
-        <p className="text-center text-sm" style={{ color: T.textMuted }}>
+        <p className="text-center text-mobile-sm md:text-sm max-w-[280px]" style={{ color: T.textMuted }}>
           Запитайте про проєкти, завдання, фінанси або аналітику.
-          Я допоможу знайти потрібну інформацію.
         </p>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4 py-4">
+    <div className="flex flex-1 flex-col gap-3 md:gap-4 overflow-y-auto overscroll-contain px-3 md:px-4 py-3 md:py-4">
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />
       ))}
@@ -80,21 +79,21 @@ function MessageBubble({ message }: { message: AiMessageItem }) {
   const isUser = message.role === "USER";
 
   return (
-    <div className={`flex gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
+    <div className={`flex gap-2 md:gap-3 ${isUser ? "flex-row-reverse" : ""}`}>
       <div
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+        className="flex h-7 w-7 md:h-8 md:w-8 shrink-0 items-center justify-center rounded-full"
         style={{
           backgroundColor: isUser ? T.accentSecondarySoft : T.accentPrimarySoft,
         }}
       >
         {isUser ? (
-          <User className="h-4 w-4" style={{ color: T.accentSecondary }} />
+          <User className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: T.accentSecondary }} />
         ) : (
-          <Bot className="h-4 w-4" style={{ color: T.accentPrimary }} />
+          <Bot className="h-3.5 w-3.5 md:h-4 md:w-4" style={{ color: T.accentPrimary }} />
         )}
       </div>
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+        className={`max-w-[85%] md:max-w-[80%] rounded-2xl px-3 py-2.5 md:px-4 md:py-3 text-mobile-sm md:text-sm leading-relaxed ${
           isUser ? "rounded-tr-md" : "rounded-tl-md"
         }`}
         style={{

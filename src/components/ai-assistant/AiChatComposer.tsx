@@ -41,7 +41,7 @@ export function AiChatComposer({ onSend, onAbort, isStreaming, disabled }: Props
 
   return (
     <div
-      className="flex items-end gap-2 border-t px-4 py-3"
+      className="flex shrink-0 items-end gap-2 border-t px-3 py-2.5 md:px-4 md:py-3 safe-area-pb"
       style={{ borderColor: T.borderSoft, backgroundColor: T.panel }}
     >
       <textarea
@@ -53,17 +53,19 @@ export function AiChatComposer({ onSend, onAbort, isStreaming, disabled }: Props
         placeholder="Напишіть повідомлення..."
         rows={1}
         disabled={disabled}
-        className="flex-1 resize-none rounded-xl border px-4 py-2.5 text-sm outline-none transition-colors focus:border-[var(--t-border-strong)]"
+        className="flex-1 resize-none rounded-xl border px-3 py-2.5 md:px-4 outline-none transition-colors focus:border-[var(--t-border-strong)]"
         style={{
           backgroundColor: T.panelSoft,
           borderColor: T.borderSoft,
           color: T.textPrimary,
+          fontSize: "16px", // prevents iOS zoom on focus
+          lineHeight: "1.5",
         }}
       />
       {isStreaming ? (
         <button
           onClick={onAbort}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors hover:opacity-80"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors active:scale-95 tap-highlight-none"
           style={{ backgroundColor: T.dangerSoft, color: T.danger }}
           title="Зупинити"
         >
@@ -73,7 +75,7 @@ export function AiChatComposer({ onSend, onAbort, isStreaming, disabled }: Props
         <button
           onClick={handleSubmit}
           disabled={!value.trim() || disabled}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-30"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-all active:scale-95 tap-highlight-none disabled:opacity-30"
           style={{
             background: value.trim()
               ? `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})`
