@@ -164,7 +164,7 @@ export function TabCalendar({
               return (
                 <div
                   key={i}
-                  className="flex items-center gap-4 border-b px-4 py-3"
+                  className="border-b px-3 sm:px-4 py-3"
                   style={{
                     borderColor: T.borderSoft,
                     backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",
@@ -174,59 +174,82 @@ export function TabCalendar({
                       : "3px solid transparent",
                   }}
                 >
-                  <div className="w-32 flex-shrink-0">
-                    <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
-                      {period.label}
-                    </span>
-                    {period.sublabel && (
-                      <span className="text-[10px] ml-1" style={{ color: T.textMuted }}>
-                        {period.sublabel}
+                  {/* Mobile: stacked layout */}
+                  <div className="sm:hidden">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                        {period.label}
+                        {period.sublabel && (
+                          <span className="text-[10px] ml-1" style={{ color: T.textMuted }}>{period.sublabel}</span>
+                        )}
                       </span>
-                    )}
-                  </div>
-
-                  {hasEntries ? (
-                    <>
-                      <div className="flex items-center gap-1.5 w-28">
-                        <TrendingUp size={11} style={{ color: T.success }} />
+                      {period.isPast && hasEntries && (
+                        <span className="text-[9px] font-bold" style={{ color: T.danger }}>МИНУЛО</span>
+                      )}
+                    </div>
+                    {hasEntries ? (
+                      <div className="flex items-center gap-3 flex-wrap">
                         <span className="text-[11px] font-semibold" style={{ color: T.success }}>
                           +{formatCurrency(period.income)}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 w-28">
-                        <TrendingDown size={11} style={{ color: T.danger }} />
                         <span className="text-[11px] font-semibold" style={{ color: T.danger }}>
                           −{formatCurrency(period.expense)}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 w-28">
-                        <span
-                          className="text-[12px] font-bold"
-                          style={{ color: period.net >= 0 ? T.success : T.danger }}
-                        >
-                          {period.net >= 0 ? "+" : ""}
-                          {formatCurrency(period.net)}
+                        <span className="text-[11px] font-bold" style={{ color: period.net >= 0 ? T.success : T.danger }}>
+                          = {period.net >= 0 ? "+" : ""}{formatCurrency(period.net)}
                         </span>
                         {period.net < 0 && (
                           <span title="Касовий розрив"><AlertTriangle size={11} style={{ color: T.warning }} /></span>
                         )}
                       </div>
-                      <div className="flex-1 text-right">
-                        <span className="text-[10px]" style={{ color: T.textMuted }}>
-                          {period.entries.length} оп.
-                        </span>
-                        {period.isPast && (
-                          <span className="ml-2 text-[9px] font-bold" style={{ color: T.danger }}>
-                            МИНУЛО
+                    ) : (
+                      <span className="text-[11px]" style={{ color: T.textMuted }}>—</span>
+                    )}
+                  </div>
+
+                  {/* Desktop: row layout */}
+                  <div className="hidden sm:flex items-center gap-4">
+                    <div className="w-32 flex-shrink-0">
+                      <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                        {period.label}
+                      </span>
+                      {period.sublabel && (
+                        <span className="text-[10px] ml-1" style={{ color: T.textMuted }}>{period.sublabel}</span>
+                      )}
+                    </div>
+                    {hasEntries ? (
+                      <>
+                        <div className="flex items-center gap-1.5 w-28">
+                          <TrendingUp size={11} style={{ color: T.success }} />
+                          <span className="text-[11px] font-semibold" style={{ color: T.success }}>
+                            +{formatCurrency(period.income)}
                           </span>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <span className="text-[11px]" style={{ color: T.textMuted }}>
-                      —
-                    </span>
-                  )}
+                        </div>
+                        <div className="flex items-center gap-1.5 w-28">
+                          <TrendingDown size={11} style={{ color: T.danger }} />
+                          <span className="text-[11px] font-semibold" style={{ color: T.danger }}>
+                            −{formatCurrency(period.expense)}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 w-28">
+                          <span className="text-[12px] font-bold" style={{ color: period.net >= 0 ? T.success : T.danger }}>
+                            {period.net >= 0 ? "+" : ""}{formatCurrency(period.net)}
+                          </span>
+                          {period.net < 0 && (
+                            <span title="Касовий розрив"><AlertTriangle size={11} style={{ color: T.warning }} /></span>
+                          )}
+                        </div>
+                        <div className="flex-1 text-right">
+                          <span className="text-[10px]" style={{ color: T.textMuted }}>{period.entries.length} оп.</span>
+                          {period.isPast && (
+                            <span className="ml-2 text-[9px] font-bold" style={{ color: T.danger }}>МИНУЛО</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <span className="text-[11px]" style={{ color: T.textMuted }}>—</span>
+                    )}
+                  </div>
                 </div>
               );
             })}

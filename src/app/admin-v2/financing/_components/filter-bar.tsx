@@ -41,7 +41,7 @@ export function FilterBar({
 
   return (
     <section
-      className="rounded-2xl p-4"
+      className="rounded-2xl p-3 sm:p-4"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <div className="flex items-center gap-2 mb-3">
@@ -69,8 +69,30 @@ export function FilterBar({
         </div>
       </div>
 
+      {/* Search — always visible */}
+      <div className="relative mb-3">
+        <Search
+          size={14}
+          className="absolute left-3 top-1/2 -translate-y-1/2"
+          style={{ color: T.textMuted }}
+        />
+        <input
+          value={filters.search}
+          onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
+          placeholder="Пошук…"
+          className="w-full rounded-xl pl-9 pr-3 py-2.5 text-[13px] outline-none"
+          style={{
+            backgroundColor: T.panelSoft,
+            border: `1px solid ${T.borderStrong}`,
+            color: T.textPrimary,
+          }}
+        />
+      </div>
+
       {/* Date presets */}
-      <DatePresets filters={filters} setFilters={setFilters} />
+      <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
+        <DatePresets filters={filters} setFilters={setFilters} />
+      </div>
 
       {/* Row 1: main filters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 mt-3">
@@ -145,26 +167,7 @@ export function FilterBar({
 
       {/* Row 2: extended filters */}
       {showMore && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 mt-3">
-          <div className="relative">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: T.textMuted }}
-            />
-            <input
-              value={filters.search}
-              onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-              placeholder="Пошук за назвою, описом, контрагентом…"
-              className="w-full rounded-xl pl-9 pr-3 py-2.5 text-[13px] outline-none"
-              style={{
-                backgroundColor: T.panelSoft,
-                border: `1px solid ${T.borderStrong}`,
-                color: T.textPrimary,
-              }}
-            />
-          </div>
-
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3">
           <FilterInput
             value={filters.subcategory}
             onChange={(v) => setFilters((p) => ({ ...p, subcategory: v }))}

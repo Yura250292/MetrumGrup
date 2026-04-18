@@ -294,142 +294,176 @@ function OperationRow({
     entry.type === "INCOME" ? T.success : T.danger;
 
   return (
-    <div
-      className="group flex flex-col lg:grid gap-2 lg:gap-0 border-b px-4 py-3 hover:brightness-[0.97] transition"
-      style={{
-        gridTemplateColumns: showProject
-          ? "80px 60px 70px 1fr 120px 120px 120px 80px 60px"
-          : "80px 60px 70px 1fr 120px 120px 80px 60px",
-        borderColor: T.borderSoft,
-        backgroundColor: isZebra ? T.panelSoft : "transparent",
-        borderLeft: isOverdue ? `3px solid ${T.danger}` : "3px solid transparent",
-      }}
-    >
-      {/* Date */}
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-mono" style={{ color: T.textMuted }}>
-          {formatDateShort(entry.occurredAt)}
-        </span>
-      </div>
-
-      {/* Kind badge */}
-      <div className="flex items-center">
-        <span
-          className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
-          style={{
-            backgroundColor: entry.kind === "PLAN" ? T.accentPrimarySoft : T.successSoft,
-            color: entry.kind === "PLAN" ? T.accentPrimary : T.success,
-          }}
-        >
-          {entry.kind === "PLAN" ? "ПЛАН" : "ФАКТ"}
-        </span>
-      </div>
-
-      {/* Type badge */}
-      <div className="flex items-center">
-        <span
-          className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
-          style={{
-            backgroundColor: entry.type === "INCOME" ? T.successSoft : T.dangerSoft,
-            color: entry.type === "INCOME" ? T.success : T.danger,
-          }}
-        >
-          {entry.type === "INCOME" ? "ДОХІД" : "ВИТРАТА"}
-        </span>
-      </div>
-
-      {/* Title */}
-      <div className="flex flex-col min-w-0">
-        <span className="text-[12.5px] font-semibold truncate" style={{ color: T.textPrimary }}>
-          {entry.title}
-        </span>
-        {entry.counterparty && (
-          <span className="text-[10px] truncate" style={{ color: T.textMuted }}>
-            {entry.counterparty}
-          </span>
-        )}
-        {isOverdue && (
-          <span className="flex items-center gap-1 text-[9px] font-bold mt-0.5" style={{ color: T.danger }}>
-            <Clock size={9} /> Прострочено
-          </span>
-        )}
-      </div>
-
-      {/* Category */}
-      <div className="flex items-center">
-        <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
-          {FINANCE_CATEGORY_LABELS[entry.category] ?? entry.category}
-        </span>
-      </div>
-
-      {/* Project */}
-      {showProject && (
-        <div className="flex items-center">
-          <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
-            {entry.project?.title ?? <em>Постійна</em>}
+    <>
+      {/* ═══ MOBILE card ═══ */}
+      <div
+        className="lg:hidden group border-b px-4 py-3"
+        style={{
+          borderColor: T.borderSoft,
+          backgroundColor: isZebra ? T.panelSoft : "transparent",
+          borderLeft: isOverdue ? `3px solid ${T.danger}` : "3px solid transparent",
+        }}
+      >
+        {/* Row 1: badges + amount */}
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          <div className="flex items-center gap-1.5">
+            <span
+              className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
+              style={{
+                backgroundColor: entry.kind === "PLAN" ? T.accentPrimarySoft : T.successSoft,
+                color: entry.kind === "PLAN" ? T.accentPrimary : T.success,
+              }}
+            >
+              {entry.kind === "PLAN" ? "ПЛАН" : "ФАКТ"}
+            </span>
+            <span
+              className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
+              style={{
+                backgroundColor: entry.type === "INCOME" ? T.successSoft : T.dangerSoft,
+                color: entry.type === "INCOME" ? T.success : T.danger,
+              }}
+            >
+              {entry.type === "INCOME" ? "ДОХІД" : "ВИТРАТА"}
+            </span>
+            {isOverdue && (
+              <span className="flex items-center gap-0.5 text-[9px] font-bold" style={{ color: T.danger }}>
+                <Clock size={9} /> Простр.
+              </span>
+            )}
+          </div>
+          <span className="text-[14px] font-bold whitespace-nowrap" style={{ color: amountColor }}>
+            {entry.type === "INCOME" ? "+" : "−"}{formatCurrency(amount)}
           </span>
         </div>
-      )}
 
-      {/* Amount */}
-      <div className="flex items-center justify-end">
-        <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: amountColor }}>
-          {entry.type === "INCOME" ? "+" : "−"}{formatCurrency(amount)}
-        </span>
+        {/* Row 2: title */}
+        <div className="text-[13px] font-semibold truncate mb-0.5" style={{ color: T.textPrimary }}>
+          {entry.title}
+        </div>
+
+        {/* Row 3: meta */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 text-[10px] truncate min-w-0" style={{ color: T.textMuted }}>
+            <span className="font-mono">{formatDateShort(entry.occurredAt)}</span>
+            <span>·</span>
+            <span className="truncate">{FINANCE_CATEGORY_LABELS[entry.category] ?? entry.category}</span>
+            {showProject && entry.project && (
+              <>
+                <span>·</span>
+                <span className="truncate">{entry.project.title}</span>
+              </>
+            )}
+            {entry.attachments.length > 0 && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-0.5"><Paperclip size={8} />{entry.attachments.length}</span>
+              </>
+            )}
+          </div>
+          <div className="flex gap-1 flex-shrink-0">
+            <button
+              onClick={onEdit}
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ backgroundColor: T.panelElevated, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}
+            >
+              <Edit size={12} />
+            </button>
+            <button
+              onClick={onArchive}
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}
+            >
+              <Archive size={12} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Quality flags */}
-      <div className="flex items-center gap-1.5">
-        <QualityDot
-          icon={<Paperclip size={9} />}
-          ok={entry.attachments.length > 0}
-          title={entry.attachments.length > 0 ? `${entry.attachments.length} файл(ів)` : "Без файлів"}
-        />
-        <QualityDot
-          icon={<User size={9} />}
-          ok={!!entry.counterparty}
-          title={entry.counterparty || "Без контрагента"}
-        />
-        <QualityDot
-          icon={<AlignLeft size={9} />}
-          ok={!!entry.description}
-          title={entry.description ? "Є опис" : "Без опису"}
-        />
-        <QualityDot
-          icon={<FolderOpen size={9} />}
-          ok={!!entry.projectId}
-          title={entry.project?.title || "Без проєкту"}
-        />
+      {/* ═══ DESKTOP row ═══ */}
+      <div
+        className="hidden lg:grid group gap-0 border-b px-4 py-3 hover:brightness-[0.97] transition"
+        style={{
+          gridTemplateColumns: showProject
+            ? "80px 60px 70px 1fr 120px 120px 120px 80px 60px"
+            : "80px 60px 70px 1fr 120px 120px 80px 60px",
+          borderColor: T.borderSoft,
+          backgroundColor: isZebra ? T.panelSoft : "transparent",
+          borderLeft: isOverdue ? `3px solid ${T.danger}` : "3px solid transparent",
+        }}
+      >
+        <div className="flex items-center">
+          <span className="text-[11px] font-mono" style={{ color: T.textMuted }}>
+            {formatDateShort(entry.occurredAt)}
+          </span>
+        </div>
+        <div className="flex items-center">
+          <span
+            className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
+            style={{
+              backgroundColor: entry.kind === "PLAN" ? T.accentPrimarySoft : T.successSoft,
+              color: entry.kind === "PLAN" ? T.accentPrimary : T.success,
+            }}
+          >
+            {entry.kind === "PLAN" ? "ПЛАН" : "ФАКТ"}
+          </span>
+        </div>
+        <div className="flex items-center">
+          <span
+            className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
+            style={{
+              backgroundColor: entry.type === "INCOME" ? T.successSoft : T.dangerSoft,
+              color: entry.type === "INCOME" ? T.success : T.danger,
+            }}
+          >
+            {entry.type === "INCOME" ? "ДОХІД" : "ВИТРАТА"}
+          </span>
+        </div>
+        <div className="flex flex-col min-w-0">
+          <span className="text-[12.5px] font-semibold truncate" style={{ color: T.textPrimary }}>
+            {entry.title}
+          </span>
+          {entry.counterparty && (
+            <span className="text-[10px] truncate" style={{ color: T.textMuted }}>{entry.counterparty}</span>
+          )}
+          {isOverdue && (
+            <span className="flex items-center gap-1 text-[9px] font-bold mt-0.5" style={{ color: T.danger }}>
+              <Clock size={9} /> Прострочено
+            </span>
+          )}
+        </div>
+        <div className="flex items-center">
+          <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
+            {FINANCE_CATEGORY_LABELS[entry.category] ?? entry.category}
+          </span>
+        </div>
+        {showProject && (
+          <div className="flex items-center">
+            <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
+              {entry.project?.title ?? <em>Постійна</em>}
+            </span>
+          </div>
+        )}
+        <div className="flex items-center justify-end">
+          <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: amountColor }}>
+            {entry.type === "INCOME" ? "+" : "−"}{formatCurrency(amount)}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <QualityDot icon={<Paperclip size={9} />} ok={entry.attachments.length > 0} title={entry.attachments.length > 0 ? `${entry.attachments.length} файл(ів)` : "Без файлів"} />
+          <QualityDot icon={<User size={9} />} ok={!!entry.counterparty} title={entry.counterparty || "Без контрагента"} />
+          <QualityDot icon={<AlignLeft size={9} />} ok={!!entry.description} title={entry.description ? "Є опис" : "Без опису"} />
+          <QualityDot icon={<FolderOpen size={9} />} ok={!!entry.projectId} title={entry.project?.title || "Без проєкту"} />
+        </div>
+        <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+          <button onClick={onEdit} title="Редагувати" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.panelElevated, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}>
+            <Edit size={10} />
+          </button>
+          <button onClick={onArchive} title="Архівувати" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}>
+            <Archive size={10} />
+          </button>
+        </div>
       </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
-        <button
-          onClick={onEdit}
-          title="Редагувати"
-          className="flex h-6 w-6 items-center justify-center rounded-md"
-          style={{
-            backgroundColor: T.panelElevated,
-            color: T.textSecondary,
-            border: `1px solid ${T.borderStrong}`,
-          }}
-        >
-          <Edit size={10} />
-        </button>
-        <button
-          onClick={onArchive}
-          title="Архівувати"
-          className="flex h-6 w-6 items-center justify-center rounded-md"
-          style={{
-            backgroundColor: T.dangerSoft,
-            color: T.danger,
-            border: `1px solid ${T.danger}`,
-          }}
-        >
-          <Archive size={10} />
-        </button>
-      </div>
-    </div>
+    </>
   );
 }
 

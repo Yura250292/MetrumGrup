@@ -182,39 +182,30 @@ export function NeedsAttention({
           return (
             <div
               key={item.id}
-              className="flex items-center gap-3 rounded-xl px-4 py-3"
+              className="flex items-center gap-2 sm:gap-3 rounded-xl px-3 sm:px-4 py-3 cursor-pointer"
               style={{
                 backgroundColor: bgColor,
                 borderLeft: `3px solid ${borderColor}`,
               }}
+              onClick={item.onAction}
             >
-              <span style={{ color: borderColor }}>{item.icon}</span>
+              <span className="flex-shrink-0" style={{ color: borderColor }}>{item.icon}</span>
               <div className="flex-1 min-w-0">
                 <span className="text-[12px] font-bold" style={{ color: T.textPrimary }}>
                   {item.label}
                 </span>
-                <p className="text-[11px]" style={{ color: T.textSecondary }}>
+                <p className="text-[10px] sm:text-[11px] truncate sm:whitespace-normal" style={{ color: T.textSecondary }}>
                   {item.description}
                 </p>
               </div>
               <span
-                className="flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white"
+                className="flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white flex-shrink-0"
                 style={{ backgroundColor: borderColor }}
               >
                 {item.count}
               </span>
               {item.onAction && (
-                <button
-                  onClick={item.onAction}
-                  className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[10px] font-semibold transition hover:brightness-110"
-                  style={{
-                    backgroundColor: T.panel,
-                    color: borderColor,
-                    border: `1px solid ${borderColor}`,
-                  }}
-                >
-                  Перегляд <ArrowRight size={10} />
-                </button>
+                <ArrowRight size={14} className="flex-shrink-0 hidden sm:block" style={{ color: borderColor }} />
               )}
             </div>
           );
