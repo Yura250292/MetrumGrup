@@ -23,6 +23,7 @@ import {
   Zap,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { AiDashboardWidgetWrapper } from "./_components/ai-widget-wrapper";
 
 export const dynamic = "force-dynamic";
 
@@ -728,6 +729,9 @@ export default async function AdminV2Dashboard() {
           </div>
         </div>
       </section>
+
+      {/* AI Insights Widget */}
+      <AiDashboardWidgetWrapper />
 
       {/* Quick actions */}
       <section

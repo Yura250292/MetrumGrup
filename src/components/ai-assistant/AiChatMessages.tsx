@@ -8,6 +8,8 @@ import type { AiMessageItem } from "@/hooks/useAiChat";
 import { AiToolCallIndicator } from "./AiToolCallIndicator";
 import { AiAvatar, type AiMood } from "./AiAvatar";
 import { AiQuickActions } from "./AiQuickActions";
+import { AiInsights } from "./AiInsights";
+import { AiInlineChart, parseChartBlocks } from "./AiInlineChart";
 
 type Props = {
   messages: AiMessageItem[];
@@ -26,17 +28,22 @@ export function AiChatMessages({ messages, streamingText, isStreaming, activeToo
 
   if (messages.length === 0 && !isStreaming) {
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6">
-        <AiAvatar size="lg" mood="wave" />
-        <h3 className="text-base md:text-lg font-semibold" style={{ color: T.textPrimary }}>
-          AI Помічник Metrum
-        </h3>
-        <p className="text-center text-mobile-sm md:text-sm max-w-[280px] mb-4" style={{ color: T.textMuted }}>
-          Запитайте про проєкти, завдання, фінанси або аналітику.
-        </p>
-        {onQuickAction && (
-          <AiQuickActions onAction={onQuickAction} variant="empty-state" />
-        )}
+      <div className="flex flex-1 flex-col overflow-y-auto overscroll-contain">
+        <div className="flex flex-col items-center gap-2 px-6 pt-6 pb-3">
+          <AiAvatar size="lg" mood="wave" />
+          <h3 className="text-base md:text-lg font-semibold" style={{ color: T.textPrimary }}>
+            AI Помічник Metrum
+          </h3>
+          <p className="text-center text-mobile-sm md:text-sm max-w-[280px]" style={{ color: T.textMuted }}>
+            Запитайте або натисніть на інсайт нижче.
+          </p>
+        </div>
+        {/* Proactive insights */}
+        {onQuickAction && <AiInsights onAsk={onQuickAction} />}
+        {/* Quick actions */}
+        <div className="mt-auto pb-3">
+          {onQuickAction && <AiQuickActions onAction={onQuickAction} variant="empty-state" />}
+        </div>
       </div>
     );
   }
@@ -108,6 +115,22 @@ function MessageBubble({ message, mood = "idle" }: { message: AiMessageItem; moo
           <div className="whitespace-pre-wrap break-words">{message.content}</div>
         ) : (
           <div className="ai-md break-words">
+            {parseChartBlocks(message.content).map((block, i) =>
+              block.type === "chart" ? (
+                <AiInlineChart key={i} chartJson={block.content} />
+              ) : (
+                <ReactMarkdownBlock key={i} content={block.content} />
+              ),
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReactMarkdownBlock({ content }: { content: string }) {
+  return (
             <ReactMarkdown
               components={{
                 h1: ({ children }) => (
@@ -191,11 +214,7 @@ function MessageBubble({ message, mood = "idle" }: { message: AiMessageItem; moo
                 hr: () => <hr className="my-3" style={{ borderColor: T.borderSoft }} />,
               }}
             >
-              {message.content}
+              {content}
             </ReactMarkdown>
-          </div>
-        )}
-      </div>
-    </div>
   );
 }

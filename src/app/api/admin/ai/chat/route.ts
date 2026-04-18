@@ -12,7 +12,7 @@ const openai = new OpenAI({
 });
 
 const MAX_HISTORY = 20;
-const MAX_TOOL_ROUNDS = 8;
+const MAX_TOOL_ROUNDS = 15;
 
 export async function POST(request: NextRequest) {
   const session = await auth();
