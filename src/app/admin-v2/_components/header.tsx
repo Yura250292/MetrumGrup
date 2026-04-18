@@ -10,6 +10,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
 
 export function Header() {
   const pathname = usePathname();
@@ -92,6 +93,7 @@ export function Header() {
       </nav>
 
       <div className="flex items-center gap-3">
+        <AiChatButton />
         <ThemeToggle />
         <NotificationBell
           variant="v2"
