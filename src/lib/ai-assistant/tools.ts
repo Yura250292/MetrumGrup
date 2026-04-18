@@ -16,10 +16,14 @@ function fn(
 
 const listProjects = fn(
   "list_projects",
-  "Отримати список проєктів. Повертає назву, статус, етап, бюджет та прогрес кожного проєкту.",
+  "Отримати список проєктів. Можна шукати по назві. Повертає назву, адресу, статус, етап, бюджет та прогрес.",
   {
     type: "object",
     properties: {
+      search: {
+        type: "string",
+        description: "Пошук по назві проєкту (наприклад: 'АТБ', 'Гірник'). Шукає часткове співпадіння.",
+      },
       status: {
         type: "string",
         enum: ["DRAFT", "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"],

@@ -83,11 +83,16 @@ async function requireProjectAccess(projectId: string, userId: string) {
 // ── Tool Implementations ─────────────────────────────────────
 
 async function listProjects(input: ToolInput, ctx: AiUserContext) {
+  const search = input.search as string | undefined;
   const status = input.status as string | undefined;
   const limit = Math.min((input.limit as number) || 20, 50);
 
   const scope = scopeByClient({ user: { id: ctx.userId, role: ctx.role } });
-  const where = { ...scope, ...(status ? { status: status as never } : {}) };
+  const where: Record<string, unknown> = {
+    ...scope,
+    ...(status ? { status } : {}),
+    ...(search ? { title: { contains: search, mode: "insensitive" } } : {}),
+  };
 
   const projects = await prisma.project.findMany({
     where,
