@@ -250,35 +250,219 @@ const schedulePayment = fn(
   },
 );
 
+// ── NEW: Write actions ────────────────────────────────────────
+
+const updateTask = fn(
+  "update_task",
+  "Оновити завдання: змінити статус, пріоритет, дедлайн, опис. Використовуй для 'зроби завдання терміновим', 'зміни дедлайн', 'закрий завдання'.",
+  {
+    type: "object",
+    properties: {
+      taskId: { type: "string", description: "ID завдання" },
+      title: { type: "string", description: "Нова назва (необов'язково)" },
+      description: { type: "string", description: "Новий опис (необов'язково)" },
+      priority: { type: "string", enum: ["LOW", "NORMAL", "HIGH", "URGENT"], description: "Новий пріоритет" },
+      dueDate: { type: "string", description: "Новий дедлайн YYYY-MM-DD" },
+      statusName: { type: "string", description: "Назва нового статусу (наприклад: 'В роботі', 'Завершено')" },
+    },
+    required: ["taskId"],
+  },
+);
+
+const assignTask = fn(
+  "assign_task",
+  "Призначити виконавця на завдання або зняти. Потрібен userId виконавця.",
+  {
+    type: "object",
+    properties: {
+      taskId: { type: "string", description: "ID завдання" },
+      userId: { type: "string", description: "ID користувача для призначення" },
+      action: { type: "string", enum: ["add", "remove"], description: "Додати або зняти (за замовч. add)" },
+    },
+    required: ["taskId", "userId"],
+  },
+);
+
+const addComment = fn(
+  "add_comment",
+  "Додати коментар до завдання, проєкту або кошторису. Для комунікації з командою.",
+  {
+    type: "object",
+    properties: {
+      entityType: { type: "string", enum: ["TASK", "PROJECT", "ESTIMATE"], description: "Тип сутності" },
+      entityId: { type: "string", description: "ID сутності (завдання, проєкту, кошторису)" },
+      body: { type: "string", description: "Текст коментаря" },
+    },
+    required: ["entityType", "entityId", "body"],
+  },
+);
+
+const createProject = fn(
+  "create_project",
+  "Створити новий проєкт. Потрібна назва, адреса, бюджет.",
+  {
+    type: "object",
+    properties: {
+      title: { type: "string", description: "Назва проєкту" },
+      description: { type: "string", description: "Опис проєкту" },
+      address: { type: "string", description: "Адреса об'єкту" },
+      totalBudget: { type: "number", description: "Загальний бюджет в гривнях" },
+      clientId: { type: "string", description: "ID клієнта (необов'язково)" },
+    },
+    required: ["title"],
+  },
+);
+
+const updateProjectStage = fn(
+  "update_project_stage",
+  "Оновити прогрес етапу проєкту (Проєктування, Фундамент, Стіни тощо).",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      stage: { type: "string", enum: ["DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER"], description: "Етап" },
+      progress: { type: "number", description: "Прогрес у відсотках (0-100)" },
+      status: { type: "string", enum: ["PENDING", "IN_PROGRESS", "COMPLETED"], description: "Статус етапу" },
+    },
+    required: ["projectId", "stage"],
+  },
+);
+
+const addTeamMember = fn(
+  "add_team_member",
+  "Додати учасника до команди проєкту з роллю.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      userId: { type: "string", description: "ID користувача" },
+      role: { type: "string", enum: ["PROJECT_ADMIN", "PROJECT_MANAGER", "ENGINEER", "FOREMAN", "FINANCE", "PROCUREMENT", "VIEWER"], description: "Роль в проєкті" },
+    },
+    required: ["projectId", "userId", "role"],
+  },
+);
+
+const markPaymentPaid = fn(
+  "mark_payment_paid",
+  "Відмітити платіж як сплачений.",
+  {
+    type: "object",
+    properties: {
+      paymentId: { type: "string", description: "ID платежу" },
+    },
+    required: ["paymentId"],
+  },
+);
+
+const recordExpense = fn(
+  "record_expense",
+  "Записати фактичну витрату по проєкту (матеріали, зарплата, логістика тощо).",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      amount: { type: "number", description: "Сума витрати" },
+      category: { type: "string", description: "Категорія: materials, salary, rent, equipment, logistics, taxes, other" },
+      description: { type: "string", description: "Опис витрати" },
+      occurredAt: { type: "string", description: "Дата витрати YYYY-MM-DD (за замовчуванням сьогодні)" },
+    },
+    required: ["projectId", "amount", "category"],
+  },
+);
+
+const sendNotification = fn(
+  "send_notification",
+  "Надіслати сповіщення користувачу або команді проєкту.",
+  {
+    type: "object",
+    properties: {
+      userId: { type: "string", description: "ID конкретного користувача (або вказати projectId для всієї команди)" },
+      projectId: { type: "string", description: "ID проєкту — сповістити всю команду" },
+      title: { type: "string", description: "Заголовок сповіщення" },
+      message: { type: "string", description: "Текст сповіщення" },
+    },
+    required: ["title", "message"],
+  },
+);
+
+// ── NEW: Deep read tools ──────────────────────────────────────
+
+const getComments = fn(
+  "get_comments",
+  "Отримати коментарі до завдання, проєкту або кошторису. Для розуміння обговорення.",
+  {
+    type: "object",
+    properties: {
+      entityType: { type: "string", enum: ["TASK", "PROJECT", "ESTIMATE"], description: "Тип сутності" },
+      entityId: { type: "string", description: "ID сутності" },
+      limit: { type: "number", description: "Кількість (за замовч. 20)" },
+    },
+    required: ["entityType", "entityId"],
+  },
+);
+
+const getTimeLogs = fn(
+  "get_time_logs",
+  "Детальні часові логи: хто, коли, скільки годин, на яке завдання, вартість.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "ID проєкту" },
+      userId: { type: "string", description: "ID конкретного користувача (необов'язково)" },
+      daysBack: { type: "number", description: "Період в днях (за замовч. 30)" },
+    },
+    required: ["projectId"],
+  },
+);
+
+const getWorkers = fn(
+  "get_workers",
+  "Список працівників/бригад: ім'я, спеціальність, денна ставка, поточний проєкт.",
+  {
+    type: "object",
+    properties: {
+      projectId: { type: "string", description: "Фільтр по проєкту (необов'язково)" },
+    },
+  },
+);
+
+const getMaterials = fn(
+  "get_materials",
+  "База матеріалів з цінами, артикулами, одиницями виміру. Для порівняння цін та підбору.",
+  {
+    type: "object",
+    properties: {
+      search: { type: "string", description: "Пошук по назві або артикулу" },
+      category: { type: "string", description: "Фільтр по категорії" },
+      limit: { type: "number", description: "Кількість (за замовч. 30)" },
+    },
+  },
+);
+
 const ADMIN_TOOLS: ToolDef[] = [
-  listProjects,
-  getProjectSummary,
-  getProjectFinancials,
-  getTaskList,
-  getMyTasks,
-  getTeamWorkload,
-  getEstimateSummary,
-  getPaymentStatus,
-  getStageProgress,
-  getDashboardKpis,
-  compareProjects,
-  getOverdueItems,
+  // Read
+  listProjects, getProjectSummary, getProjectFinancials,
+  getTaskList, getMyTasks, getTeamWorkload,
+  getEstimateSummary, getPaymentStatus, getStageProgress,
+  getDashboardKpis, compareProjects, getOverdueItems,
+  getFinancialAnalysis, getComments, getTimeLogs,
+  getWorkers, getMaterials,
+  // Write
+  createTask, updateTask, assignTask, addComment,
+  createProject, updateProjectStage, addTeamMember,
+  schedulePayment, markPaymentPaid, recordExpense,
+  sendNotification,
+  // External
   webSearch,
-  getFinancialAnalysis,
-  createTask,
-  schedulePayment,
 ];
 
 const STAFF_TOOLS: ToolDef[] = [
-  listProjects,
-  getProjectSummary,
-  getTaskList,
-  getMyTasks,
-  getTeamWorkload,
-  getEstimateSummary,
-  getStageProgress,
+  listProjects, getProjectSummary,
+  getTaskList, getMyTasks, getTeamWorkload,
+  getEstimateSummary, getStageProgress,
+  getComments, getTimeLogs, getMaterials,
+  createTask, updateTask, addComment,
   webSearch,
-  createTask,
 ];
 
 const CLIENT_TOOLS: ToolDef[] = [

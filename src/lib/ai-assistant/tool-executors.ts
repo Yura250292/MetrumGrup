@@ -57,8 +57,34 @@ async function executeToolInner(
       return getFinancialAnalysis(input, ctx);
     case "create_task":
       return createNewTask(input, ctx);
+    case "update_task":
+      return updateExistingTask(input, ctx);
+    case "assign_task":
+      return assignTaskToUser(input, ctx);
+    case "add_comment":
+      return addNewComment(input, ctx);
+    case "create_project":
+      return createNewProject(input, ctx);
+    case "update_project_stage":
+      return updateStageProgress(input, ctx);
+    case "add_team_member":
+      return addProjectMember(input, ctx);
     case "schedule_payment":
       return scheduleNewPayment(input, ctx);
+    case "mark_payment_paid":
+      return markPaymentAsPaid(input, ctx);
+    case "record_expense":
+      return recordNewExpense(input, ctx);
+    case "send_notification":
+      return sendUserNotification(input, ctx);
+    case "get_comments":
+      return getEntityComments(input, ctx);
+    case "get_time_logs":
+      return getDetailedTimeLogs(input, ctx);
+    case "get_workers":
+      return getWorkersList(input, ctx);
+    case "get_materials":
+      return getMaterialsList(input);
     default:
       return { error: `Невідомий інструмент: ${toolName}` };
   }
@@ -1026,5 +1052,396 @@ async function scheduleNewPayment(input: ToolInput, ctx: AiUserContext) {
       status: payment.status,
       project: project.title,
     },
+  };
+}
+
+// ── NEW: Write actions ───────────────────────────────────────
+
+async function updateExistingTask(input: ToolInput, ctx: AiUserContext) {
+  const taskId = input.taskId as string;
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { id: true, projectId: true, title: true },
+  });
+  if (!task) throw new Error("Завдання не знайдено");
+
+  const access = await requireProjectAccess(task.projectId, ctx.userId);
+  if (!access.canEditAnyTask) throw new Error("Немає прав на редагування завдань");
+
+  const data: Record<string, unknown> = {};
+  if (input.title) data.title = input.title;
+  if (input.description !== undefined) data.description = input.description;
+  if (input.priority) data.priority = input.priority;
+  if (input.dueDate) data.dueDate = new Date(input.dueDate as string);
+
+  // Find status by name
+  if (input.statusName) {
+    const status = await prisma.taskStatus.findFirst({
+      where: {
+        projectId: task.projectId,
+        name: { contains: input.statusName as string, mode: "insensitive" },
+      },
+    });
+    if (status) data.statusId = status.id;
+  }
+
+  if (Object.keys(data).length === 0) return { message: "Нічого не змінено" };
+
+  const updated = await prisma.task.update({
+    where: { id: taskId },
+    data,
+    select: { id: true, title: true, priority: true, dueDate: true, status: { select: { name: true } } },
+  });
+
+  return { success: true, message: `Завдання "${updated.title}" оновлено`, task: { ...updated, dueDate: updated.dueDate?.toISOString().split("T")[0] } };
+}
+
+async function assignTaskToUser(input: ToolInput, ctx: AiUserContext) {
+  const taskId = input.taskId as string;
+  const userId = input.userId as string;
+  const action = (input.action as string) || "add";
+
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { projectId: true, title: true } });
+  if (!task) throw new Error("Завдання не знайдено");
+
+  const access = await requireProjectAccess(task.projectId, ctx.userId);
+  if (!access.canAssignTasks) throw new Error("Немає прав на призначення завдань");
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  if (!user) throw new Error("Користувача не знайдено");
+
+  if (action === "remove") {
+    await prisma.taskAssignee.deleteMany({ where: { taskId, userId } });
+    return { success: true, message: `${user.name} знятий з завдання "${task.title}"` };
+  }
+
+  await prisma.taskAssignee.upsert({
+    where: { taskId_userId: { taskId, userId } },
+    create: { taskId, userId },
+    update: {},
+  });
+  return { success: true, message: `${user.name} призначений на завдання "${task.title}"` };
+}
+
+async function addNewComment(input: ToolInput, ctx: AiUserContext) {
+  const entityType = input.entityType as string;
+  const entityId = input.entityId as string;
+  const body = input.body as string;
+  if (!body?.trim()) throw new Error("Текст коментаря обов'язковий");
+
+  const comment = await prisma.comment.create({
+    data: {
+      entityType: entityType as "TASK" | "PROJECT" | "ESTIMATE",
+      entityId,
+      body: body.trim(),
+      authorId: ctx.userId,
+    },
+    select: { id: true, body: true, createdAt: true },
+  });
+
+  return { success: true, message: "Коментар додано", commentId: comment.id };
+}
+
+async function createNewProject(input: ToolInput, ctx: AiUserContext) {
+  requireAdmin(ctx.role);
+
+  const title = input.title as string;
+  if (!title?.trim()) throw new Error("Назва проєкту обов'язкова");
+
+  const slug = title.toLowerCase().replace(/[^a-zA-Zа-яА-ЯіІїЇєЄґҐ0-9]+/g, "-").replace(/^-|-$/g, "") + "-" + Date.now().toString(36);
+
+  const clientId = (input.clientId as string) || ctx.userId;
+  const project = await prisma.project.create({
+    data: {
+      title: title.trim(),
+      slug,
+      description: (input.description as string) || undefined,
+      address: (input.address as string) || undefined,
+      totalBudget: (input.totalBudget as number) || 0,
+      status: "DRAFT",
+      clientId,
+    },
+    select: { id: true, title: true, slug: true, status: true },
+  });
+
+  return { success: true, message: `Проєкт "${project.title}" створено (чернетка)`, project };
+}
+
+async function updateStageProgress(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  await requireProjectAccess(projectId, ctx.userId);
+
+  const stage = input.stage as string;
+  const progress = input.progress as number | undefined;
+  const status = input.status as string | undefined;
+
+  const data: Record<string, unknown> = {};
+  if (progress !== undefined) data.progress = progress;
+  if (status) data.status = status;
+
+  const updated = await prisma.projectStageRecord.updateMany({
+    where: { projectId, stage: stage as never },
+    data,
+  });
+
+  if (updated.count === 0) throw new Error(`Етап ${stage} не знайдено в цьому проєкті`);
+
+  // Update project's current stage if this stage is now in progress
+  if (status === "IN_PROGRESS") {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { currentStage: stage as never, stageProgress: progress ?? undefined },
+    });
+  }
+
+  return { success: true, message: `Етап ${stage} оновлено${progress !== undefined ? `: ${progress}%` : ""}` };
+}
+
+async function addProjectMember(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  const userId = input.userId as string;
+  const role = input.role as string;
+
+  const access = await requireProjectAccess(projectId, ctx.userId);
+  if (!access.canManageMembers) throw new Error("Немає прав на управління командою");
+
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+  if (!user) throw new Error("Користувача не знайдено");
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId } },
+    create: { projectId, userId, roleInProject: role as never, isActive: true, invitedById: ctx.userId },
+    update: { roleInProject: role as never, isActive: true },
+  });
+
+  return { success: true, message: `${user.name} додано до проєкту як ${role}` };
+}
+
+async function markPaymentAsPaid(input: ToolInput, ctx: AiUserContext) {
+  const paymentId = input.paymentId as string;
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
+    select: { projectId: true, amount: true },
+  });
+  if (!payment) throw new Error("Платіж не знайдено");
+
+  const access = await requireProjectAccess(payment.projectId, ctx.userId);
+  if (!access.canViewFinancials) throw new Error("Немає прав");
+
+  await prisma.payment.update({
+    where: { id: paymentId },
+    data: { status: "PAID", paidDate: new Date() },
+  });
+
+  return { success: true, message: `Платіж на ${Number(payment.amount).toLocaleString("uk-UA")} ₴ відмічено як сплачений` };
+}
+
+async function recordNewExpense(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  requireAdmin(ctx.role);
+
+  const desc = (input.description as string) || "";
+  const cat = (input.category as string) || "other";
+  const entry = await prisma.financeEntry.create({
+    data: {
+      projectId,
+      type: "EXPENSE",
+      kind: "FACT",
+      amount: input.amount as number,
+      category: cat,
+      title: desc || `Витрата: ${cat}`,
+      description: desc || undefined,
+      occurredAt: input.occurredAt ? new Date(input.occurredAt as string) : new Date(),
+      createdById: ctx.userId,
+    },
+    select: { id: true, amount: true, category: true, description: true },
+  });
+
+  return { success: true, message: `Витрату ${Number(entry.amount).toLocaleString("uk-UA")} ₴ (${entry.category}) записано` };
+}
+
+async function sendUserNotification(input: ToolInput, ctx: AiUserContext) {
+  requireAdmin(ctx.role);
+
+  const title = input.title as string;
+  const message = input.message as string;
+  const userId = input.userId as string | undefined;
+  const projectId = input.projectId as string | undefined;
+
+  if (userId) {
+    await prisma.notification.create({
+      data: { userId, title, message, type: "SYSTEM" },
+    });
+    return { success: true, message: `Сповіщення надіслано користувачу` };
+  }
+
+  if (projectId) {
+    const members = await prisma.projectMember.findMany({
+      where: { projectId, isActive: true },
+      select: { userId: true },
+    });
+    await prisma.notification.createMany({
+      data: members.map((m) => ({ userId: m.userId, title, message, type: "SYSTEM" as const })),
+    });
+    return { success: true, message: `Сповіщення надіслано ${members.length} учасникам проєкту` };
+  }
+
+  throw new Error("Вкажіть userId або projectId");
+}
+
+// ── NEW: Deep read tools ─────────────────────────────────────
+
+async function getEntityComments(input: ToolInput, ctx: AiUserContext) {
+  const entityType = input.entityType as string;
+  const entityId = input.entityId as string;
+  const limit = Math.min((input.limit as number) || 20, 50);
+
+  const comments = await prisma.comment.findMany({
+    where: { entityType: entityType as never, entityId, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      body: true,
+      createdAt: true,
+      author: { select: { name: true } },
+    },
+  });
+
+  return {
+    count: comments.length,
+    comments: comments.map((c) => ({
+      author: c.author.name,
+      body: c.body,
+      date: c.createdAt.toISOString().split("T")[0],
+    })),
+  };
+}
+
+async function getDetailedTimeLogs(input: ToolInput, ctx: AiUserContext) {
+  const projectId = input.projectId as string;
+  const access = await requireProjectAccess(projectId, ctx.userId);
+  if (!access.canViewTimeReports) throw new Error("Немає доступу до часових звітів");
+
+  const daysBack = (input.daysBack as number) || 30;
+  const from = new Date();
+  from.setDate(from.getDate() - daysBack);
+
+  const where: Record<string, unknown> = {
+    task: { projectId },
+    startedAt: { gte: from },
+    endedAt: { not: null },
+  };
+  if (input.userId) where.userId = input.userId;
+
+  const logs = await prisma.timeLog.findMany({
+    where,
+    orderBy: { startedAt: "desc" },
+    take: 50,
+    select: {
+      minutes: true,
+      startedAt: true,
+      costSnapshot: true,
+      billable: true,
+      description: true,
+      user: { select: { name: true } },
+      task: { select: { title: true } },
+    },
+  });
+
+  return {
+    count: logs.length,
+    totalHours: Math.round(logs.reduce((s, l) => s + (l.minutes ?? 0), 0) / 60 * 10) / 10,
+    totalCost: logs.reduce((s, l) => s + Number(l.costSnapshot ?? 0), 0),
+    logs: logs.map((l) => ({
+      user: l.user.name,
+      task: l.task.title,
+      hours: Math.round((l.minutes ?? 0) / 60 * 10) / 10,
+      cost: Number(l.costSnapshot ?? 0),
+      date: l.startedAt?.toISOString().split("T")[0],
+      billable: l.billable,
+      description: l.description,
+    })),
+  };
+}
+
+async function getWorkersList(input: ToolInput, ctx: AiUserContext) {
+  requireAdmin(ctx.role);
+
+  const where: Record<string, unknown> = {};
+  if (input.projectId) {
+    where.crewAssignments = { some: { projectId: input.projectId as string } };
+  }
+
+  const workers = await prisma.worker.findMany({
+    where,
+    take: 50,
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      specialty: true,
+      dailyRate: true,
+      isActive: true,
+      crewAssignments: {
+        select: { project: { select: { title: true } } },
+      },
+    },
+  });
+
+  return {
+    count: workers.length,
+    workers: workers.map((w) => ({
+      id: w.id,
+      name: w.name,
+      phone: w.phone,
+      specialty: w.specialty,
+      dailyRate: Number(w.dailyRate ?? 0),
+      active: w.isActive,
+      currentProjects: w.crewAssignments.map((a) => a.project.title),
+    })),
+  };
+}
+
+async function getMaterialsList(input: ToolInput) {
+  const search = input.search as string | undefined;
+  const category = input.category as string | undefined;
+  const limit = Math.min((input.limit as number) || 30, 50);
+
+  const where: Record<string, unknown> = { isActive: true };
+  if (search) where.OR = [
+    { name: { contains: search, mode: "insensitive" } },
+    { sku: { contains: search, mode: "insensitive" } },
+  ];
+  if (category) where.category = category;
+
+  const materials = await prisma.material.findMany({
+    where,
+    take: limit,
+    orderBy: { name: "asc" },
+    select: {
+      id: true,
+      name: true,
+      sku: true,
+      category: true,
+      unit: true,
+      basePrice: true,
+      laborRate: true,
+      markupPercent: true,
+    },
+  });
+
+  return {
+    count: materials.length,
+    materials: materials.map((m) => ({
+      id: m.id,
+      name: m.name,
+      sku: m.sku,
+      category: m.category,
+      unit: m.unit,
+      price: Number(m.basePrice ?? 0),
+      laborRate: Number(m.laborRate ?? 0),
+      markup: Number(m.markupPercent ?? 0),
+    })),
   };
 }

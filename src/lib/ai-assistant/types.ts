@@ -1,22 +1,44 @@
 import type { Role } from "@prisma/client";
 
 export type AiToolName =
+  // Read — projects
   | "list_projects"
   | "get_project_summary"
   | "get_project_financials"
+  | "get_stage_progress"
+  | "compare_projects"
+  | "get_dashboard_kpis"
+  | "get_financial_analysis"
+  // Read — tasks
   | "get_task_list"
   | "get_my_tasks"
+  | "get_overdue_items"
   | "get_team_workload"
+  // Read — estimates & materials
   | "get_estimate_summary"
   | "get_payment_status"
-  | "get_stage_progress"
-  | "get_dashboard_kpis"
-  | "compare_projects"
-  | "get_overdue_items"
-  | "web_search"
-  | "get_financial_analysis"
+  | "get_materials"
+  // Read — communications
+  | "get_comments"
+  | "get_time_logs"
+  // Read — resources
+  | "get_workers"
+  // Write — tasks
   | "create_task"
-  | "schedule_payment";
+  | "update_task"
+  | "assign_task"
+  | "add_comment"
+  // Write — projects
+  | "create_project"
+  | "update_project_stage"
+  | "add_team_member"
+  // Write — finance
+  | "schedule_payment"
+  | "mark_payment_paid"
+  | "record_expense"
+  // External
+  | "web_search"
+  | "send_notification";
 
 export type AiChatRequest = {
   conversationId?: string;
