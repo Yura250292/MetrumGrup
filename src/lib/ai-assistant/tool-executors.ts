@@ -778,12 +778,53 @@ async function webSearch(input: ToolInput) {
   const location = input.location as string | undefined;
   const searchQuery = location ? `${query} ${location}` : query;
 
-  // Try Tavily first (better quality), fallback to DuckDuckGo (free)
+  // Priority: Serper (Google) → Tavily → DuckDuckGo
+  const serperKey = process.env.SERPER_API_KEY;
+  if (serperKey) {
+    return serperSearch(searchQuery, serperKey);
+  }
   const tavilyKey = process.env.TAVILY_API_KEY;
   if (tavilyKey) {
     return tavilySearch(searchQuery, tavilyKey);
   }
   return duckDuckGoSearch(searchQuery);
+}
+
+async function serperSearch(query: string, apiKey: string) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch("https://google.serper.dev/search", {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ q: query, gl: "ua", hl: "uk", num: 10 }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (!res.ok) {
+      console.error("[serper] error", res.status);
+      return duckDuckGoSearch(query);
+    }
+    const data = await res.json();
+    const organic = data.organic ?? [];
+    return {
+      answer: data.answerBox?.answer ?? data.answerBox?.snippet ?? null,
+      results: organic.slice(0, 8).map((r: { title: string; link: string; snippet: string; position: number }) => ({
+        title: r.title,
+        url: r.link,
+        snippet: r.snippet?.slice(0, 300) ?? "",
+        position: r.position,
+      })),
+      query,
+      source: "Google",
+    };
+  } catch {
+    clearTimeout(timeout);
+    return duckDuckGoSearch(query);
+  }
 }
 
 async function tavilySearch(query: string, apiKey: string) {
