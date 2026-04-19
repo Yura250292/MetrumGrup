@@ -19,32 +19,49 @@ export function FinanceTile({
 }) {
   return (
     <div
-      className="flex items-center gap-4 rounded-2xl p-5"
+      className="relative flex items-center gap-4 rounded-2xl p-5 overflow-hidden transition-all duration-200"
       style={{
-        background: emphasize
-          ? `linear-gradient(135deg, ${color}08 0%, ${color}18 100%)`
-          : T.panel,
-        border: `1px solid ${emphasize ? color : color + "30"}`,
-        boxShadow: emphasize ? `0 4px 12px ${color}18` : `0 1px 4px ${color}10`,
+        background: T.panel,
+        border: `1px solid ${emphasize ? color + "40" : T.borderSoft}`,
       }}
     >
+      {/* Left accent bar */}
       <div
-        className="flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0"
-        style={{ backgroundColor: color + "18", border: `1px solid ${color}30` }}
+        className="absolute left-0 top-3 bottom-3 w-1 rounded-r-full"
+        style={{ backgroundColor: color }}
+      />
+
+      {/* Background glow for emphasized */}
+      {emphasize && (
+        <div
+          className="absolute -right-8 -bottom-8 h-28 w-28 rounded-full opacity-[0.08] blur-3xl"
+          style={{ backgroundColor: color }}
+        />
+      )}
+
+      {/* Icon */}
+      <div
+        className="relative flex h-12 w-12 items-center justify-center rounded-xl flex-shrink-0"
+        style={{
+          background: `linear-gradient(135deg, ${color}18, ${color}08)`,
+          border: `1px solid ${color}20`,
+        }}
       >
-        <Icon size={20} style={{ color }} />
+        <Icon size={22} style={{ color }} />
       </div>
-      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+
+      {/* Content */}
+      <div className="relative flex flex-col gap-0.5 min-w-0 flex-1">
         <span
           className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: T.textSecondary }}
+          style={{ color: T.textMuted }}
         >
           {label}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2.5">
           <span
-            className="text-xl font-bold truncate"
-            style={{ color }}
+            className={`font-extrabold truncate ${emphasize ? "text-2xl" : "text-xl"}`}
+            style={{ color: emphasize ? color : T.textPrimary }}
           >
             {formatCurrencyCompact(value)}
           </span>
@@ -65,7 +82,7 @@ function FinanceDelta({ value, label }: { value: number; label: string }) {
 
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold flex-shrink-0"
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold flex-shrink-0"
       style={{ backgroundColor: color + "14", color }}
       title={label}
     >
