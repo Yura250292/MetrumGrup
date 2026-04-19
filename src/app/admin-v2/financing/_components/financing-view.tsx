@@ -20,7 +20,7 @@ import {
   FolderPlus,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
 import { FINANCE_CATEGORIES } from "@/lib/constants";
 import { EntryFormModal } from "./entry-form-modal";
 import { QuadrantCard } from "./quadrant-card";
@@ -303,13 +303,13 @@ export function FinancingView({
         >
           <SummaryStat
             label="ПЛАН БАЛАНС"
-            value={formatCurrency(planBalance)}
+            value={formatCurrencyCompact(planBalance)}
             accent={planBalance >= 0 ? T.accentPrimary : T.warning}
             icon={<CircleDot size={12} />}
           />
           <SummaryStat
             label="ФАКТ БАЛАНС"
-            value={formatCurrency(factBalance)}
+            value={formatCurrencyCompact(factBalance)}
             accent={factBalance >= 0 ? T.success : T.danger}
             icon={<Wallet size={12} />}
           />

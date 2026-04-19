@@ -2,7 +2,7 @@
 
 import { Plus, Edit, Archive, Trash2, Paperclip, FileText, FolderInput } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { formatCurrency, formatDateShort } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateShort } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import type { FinanceEntryDTO, QuadrantStats } from "./types";
 
@@ -81,7 +81,7 @@ export function QuadrantCard({
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <span className="text-[15px] sm:text-lg font-bold" style={{ color: accent }}>
-            {formatCurrency(stats.sum)}
+            {formatCurrencyCompact(stats.sum)}
           </span>
           <button
             onClick={onAdd}

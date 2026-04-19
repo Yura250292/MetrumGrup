@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Folder, MoreHorizontal, Pencil, Trash2, FolderInput } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrencyCompact } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
 import type { FolderItem } from "@/hooks/useFolders";
 
@@ -115,19 +115,19 @@ export function FolderCard({
               className="flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5"
               style={{ backgroundColor: T.successSoft, color: T.success }}
             >
-              {formatCurrency(folder.finance.income)}
+              {formatCurrencyCompact(folder.finance.income)}
             </span>
             <span
               className="flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5"
               style={{ backgroundColor: T.dangerSoft, color: T.danger }}
             >
-              {formatCurrency(folder.finance.expense)}
+              {formatCurrencyCompact(folder.finance.expense)}
             </span>
             <span
               className="flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5"
               style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
             >
-              {formatCurrency(folder.finance.balance)}
+              {formatCurrencyCompact(folder.finance.balance)}
             </span>
           </div>
         )}
