@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { X, Folder, FolderInput, ChevronRight, Home } from "lucide-react";
+import { createPortal } from "react-dom";
+import { X, Folder, FolderInput, Home } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { FolderDomain } from "@prisma/client";
 
@@ -32,32 +33,49 @@ export function MoveToFolderDialog({
   itemCount,
 }: Props) {
   const [tree, setTree] = useState<FolderTreeItem[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>("__root__");
   const [loadingTree, setLoadingTree] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setLoadingTree(true);
-    setSelected(null);
-    // Load flat folder list and reconstruct tree client-side
-    loadTree(domain).then((t) => {
-      setTree(t);
-      setLoadingTree(false);
-    });
+    setSelected("__root__");
+    // Single API call for all folders
+    fetch(`/api/admin/folders/tree?domain=${domain}`)
+      .then((r) => r.ok ? r.json() : { folders: [] })
+      .then(({ folders }) => {
+        setTree(buildTree(folders));
+        setLoadingTree(false);
+      })
+      .catch(() => setLoadingTree(false));
   }, [open, domain]);
 
-  if (!open) return null;
+  if (!open || typeof document === "undefined") return null;
 
-  return (
+  const handleMove = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const targetId = selected === "__root__" ? null : selected;
+    onMove(targetId);
+  };
+
+  const dialog = (
     <div
-      className="fixed inset-0 flex items-center justify-center z-50"
-      style={{ backgroundColor: "rgba(0,0,0,0.4)" }}
-      onClick={onClose}
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ backgroundColor: "rgba(0,0,0,0.4)", zIndex: 10000 }}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClose();
+      }}
     >
       <div
         className="rounded-2xl p-6 w-full max-w-sm mx-4 shadow-xl max-h-[70vh] flex flex-col"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+        }}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -67,7 +85,11 @@ export function MoveToFolderDialog({
             </h3>
           </div>
           <button
-            onClick={onClose}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
             className="flex h-7 w-7 items-center justify-center rounded-lg"
             style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
           >
@@ -78,14 +100,18 @@ export function MoveToFolderDialog({
         <div className="flex-1 overflow-y-auto flex flex-col gap-0.5 mb-4">
           {/* Root option */}
           <button
-            onClick={() => setSelected(null)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setSelected("__root__");
+            }}
             className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-left transition"
             style={{
               backgroundColor:
-                selected === null ? T.accentPrimarySoft : "transparent",
-              color: selected === null ? T.accentPrimary : T.textPrimary,
+                selected === "__root__" ? T.accentPrimarySoft : "transparent",
+              color: selected === "__root__" ? T.accentPrimary : T.textPrimary,
               border:
-                selected === null
+                selected === "__root__"
                   ? `1px solid ${T.accentPrimary}30`
                   : "1px solid transparent",
             }}
@@ -107,7 +133,11 @@ export function MoveToFolderDialog({
               .map((f) => (
                 <button
                   key={f.id}
-                  onClick={() => setSelected(f.id)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelected(f.id);
+                  }}
                   className="flex items-center gap-2 rounded-lg px-3 py-2 text-[13px] font-medium text-left transition"
                   style={{
                     paddingLeft: `${12 + f.depth * 20}px`,
@@ -137,7 +167,7 @@ export function MoveToFolderDialog({
         </div>
 
         <button
-          onClick={() => onMove(selected)}
+          onClick={handleMove}
           disabled={loading}
           className="w-full rounded-xl py-2.5 text-sm font-bold text-white transition disabled:opacity-50"
           style={{
@@ -149,34 +179,18 @@ export function MoveToFolderDialog({
       </div>
     </div>
   );
+
+  // Portal to body to escape any parent <Link> or scroll context
+  return createPortal(dialog, document.body);
 }
 
-async function loadTree(domain: FolderDomain): Promise<FolderTreeItem[]> {
-  // Load all folders for this domain, level by level
-  const all: { id: string; name: string; parentId: string | null }[] = [];
-
-  async function loadLevel(parentId: string | null) {
-    const p = parentId ?? "root";
-    const res = await fetch(
-      `/api/admin/folders?domain=${domain}&parentId=${p}`,
-    );
-    if (!res.ok) return;
-    const { folders } = await res.json();
-    for (const f of folders) {
-      all.push({ id: f.id, name: f.name, parentId: f.parentId });
-      if (f.childFolderCount > 0) {
-        await loadLevel(f.id);
-      }
-    }
-  }
-
-  await loadLevel(null);
-
-  // Build with depths
+function buildTree(
+  flat: { id: string; name: string; parentId: string | null }[],
+): FolderTreeItem[] {
   const result: FolderTreeItem[] = [];
   function walk(parentId: string | null, depth: number) {
-    for (const f of all.filter((x) => x.parentId === parentId)) {
-      result.push({ ...f, depth });
+    for (const f of flat.filter((x) => x.parentId === parentId)) {
+      result.push({ id: f.id, name: f.name, parentId: f.parentId, depth });
       walk(f.id, depth + 1);
     }
   }
