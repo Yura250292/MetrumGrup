@@ -38,6 +38,14 @@ export function AiChatComposer({ onSend, onAbort, isStreaming, disabled }: Props
     }
   }
 
+  // Auto-resize when value changes (e.g. from voice input)
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+  }, [value]);
+
   function handleInput() {
     const el = textareaRef.current;
     if (!el) return;
