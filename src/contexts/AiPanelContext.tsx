@@ -3,11 +3,16 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { TutorialScenario } from "@/components/ai-assistant/AiTutorial";
 
+export type AnimationPhase = "idle" | "breaking" | "done";
+
 type AiPanelState = {
   isOpen: boolean;
   open: () => void;
   close: () => void;
   toggle: () => void;
+  animationPhase: AnimationPhase;
+  setAnimationPhase: (phase: AnimationPhase) => void;
+  completeAnimation: () => void;
   activeTutorial: TutorialScenario | null;
   startTutorial: (scenario: TutorialScenario) => void;
   closeTutorial: () => void;
@@ -18,6 +23,9 @@ const AiPanelContext = createContext<AiPanelState>({
   open: () => {},
   close: () => {},
   toggle: () => {},
+  animationPhase: "idle",
+  setAnimationPhase: () => {},
+  completeAnimation: () => {},
   activeTutorial: null,
   startTutorial: () => {},
   closeTutorial: () => {},
@@ -25,11 +33,16 @@ const AiPanelContext = createContext<AiPanelState>({
 
 export function AiPanelProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [animationPhase, setAnimationPhase] = useState<AnimationPhase>("idle");
   const [activeTutorial, setActiveTutorial] = useState<TutorialScenario | null>(null);
 
   const open = useCallback(() => setIsOpen(true), []);
-  const close = useCallback(() => setIsOpen(false), []);
+  const close = useCallback(() => {
+    setIsOpen(false);
+    setAnimationPhase("idle");
+  }, []);
   const toggle = useCallback(() => setIsOpen((v) => !v), []);
+  const completeAnimation = useCallback(() => setAnimationPhase("done"), []);
 
   const startTutorial = useCallback((scenario: TutorialScenario) => {
     setIsOpen(false); // close AI panel
@@ -41,7 +54,7 @@ export function AiPanelProvider({ children }: { children: ReactNode }) {
 
   return (
     <AiPanelContext.Provider
-      value={{ isOpen, open, close, toggle, activeTutorial, startTutorial, closeTutorial }}
+      value={{ isOpen, open, close, toggle, animationPhase, setAnimationPhase, completeAnimation, activeTutorial, startTutorial, closeTutorial }}
     >
       {children}
     </AiPanelContext.Provider>
