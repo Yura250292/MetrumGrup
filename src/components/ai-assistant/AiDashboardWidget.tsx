@@ -1,7 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Sparkles, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight } from "lucide-react";
+import Link from "next/link";
+import { Sparkles, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight, ArrowRight } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useAiPanel } from "@/contexts/AiPanelContext";
 import type { Insight } from "@/lib/ai-assistant/insights";
@@ -71,19 +72,30 @@ export function AiDashboardWidget() {
         {insights.slice(0, 4).map((insight, i) => {
           const Icon = ICONS[insight.type];
           return (
-            <button
+            <div
               key={i}
-              onClick={open}
-              className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-all hover:opacity-90 active:scale-[0.99] tap-highlight-none"
+              className="flex items-center gap-2.5 rounded-lg px-3 py-2 transition-all"
               style={{ backgroundColor: T.panelSoft }}
             >
               <Icon className="h-4 w-4 shrink-0" style={{ color: COLORS[insight.type] }} />
-              <div className="flex-1 min-w-0">
+              <button
+                onClick={open}
+                className="flex-1 min-w-0 text-left hover:opacity-90 tap-highlight-none"
+              >
                 <p className="text-[12px] font-medium truncate" style={{ color: T.textPrimary }}>
                   {insight.title}
                 </p>
-              </div>
-            </button>
+              </button>
+              {insight.actionHref && (
+                <Link
+                  href={insight.actionHref}
+                  className="flex items-center gap-0.5 text-[10px] font-semibold shrink-0 hover:opacity-80"
+                  style={{ color: COLORS[insight.type] }}
+                >
+                  Перейти <ArrowRight className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
           );
         })}
       </div>

@@ -4,18 +4,15 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { formatCurrencyCompact, formatHours } from "@/lib/utils";
-import { STAGE_LABELS } from "@/lib/constants";
-import type { ProjectStage } from "@prisma/client";
+import type { ProjectStage, Role } from "@prisma/client";
 import {
   FolderKanban,
   Users,
   TrendingUp,
-  TrendingDown,
   AlertCircle,
   Sparkles,
   ListTodo,
   Clock,
-  Activity,
   Wallet,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -25,11 +22,13 @@ import { NeedsAttention } from "./_components/dashboard/needs-attention";
 import { ProjectsAtRisk } from "./_components/dashboard/projects-at-risk";
 import { ActivityFeed, buildFeedEvents } from "./_components/dashboard/activity-feed";
 import { KpiCard } from "./_components/dashboard/kpi-card";
-import { FinanceTile } from "./_components/dashboard/finance-tile";
 import { DashboardTabs, type DashboardTabId } from "./_components/dashboard/dashboard-tabs";
 import { PeriodSwitcher, type PeriodId } from "./_components/dashboard/period-switcher";
 import { TeamPulse } from "./_components/dashboard/team-pulse";
 import { UtilityRail } from "./_components/dashboard/utility-rail";
+import { FinancePulse } from "./_components/dashboard/finance-pulse";
+import { StageAnalytics } from "./_components/dashboard/stage-analytics";
+import { SavedViews } from "./_components/dashboard/saved-views";
 
 export const dynamic = "force-dynamic";
 
@@ -172,6 +171,11 @@ export default async function AdminV2Dashboard({
     projectDeadlines,
     // Previous period time
     prevWeekTimeLogs,
+    // P2: Finance breakdowns
+    expenseByCategoryRaw,
+    incomeByCategoryRaw,
+    // P2: Stage analytics
+    completedStageRecords,
   ] = await Promise.all([
     prisma.project.count(),
     prisma.project.count({ where: { status: "ACTIVE" } }),
@@ -465,6 +469,43 @@ export default async function AdminV2Dashboard({
       },
       _sum: { minutes: true },
     }),
+    // P2: Expense breakdown by category
+    prisma.financeEntry.groupBy({
+      by: ["category"],
+      where: {
+        type: "EXPENSE",
+        isArchived: false,
+        occurredAt: { gte: periodStart, lte: periodEnd },
+      },
+      _sum: { amount: true },
+      orderBy: { _sum: { amount: "desc" } },
+      take: 5,
+    }),
+    // P2: Income breakdown by category
+    prisma.financeEntry.groupBy({
+      by: ["category"],
+      where: {
+        type: "INCOME",
+        isArchived: false,
+        occurredAt: { gte: periodStart, lte: periodEnd },
+      },
+      _sum: { amount: true },
+      orderBy: { _sum: { amount: "desc" } },
+      take: 5,
+    }),
+    // P2: Stage analytics — completed stages with dates
+    prisma.projectStageRecord.findMany({
+      where: {
+        status: "COMPLETED",
+        startDate: { not: null },
+        endDate: { not: null },
+      },
+      select: {
+        stage: true,
+        startDate: true,
+        endDate: true,
+      },
+    }),
   ]);
 
   const revenue = Number(totalRevenuePaid._sum.amount || 0);
@@ -533,17 +574,6 @@ export default async function AdminV2Dashboard({
   for (const s of stageDistribution) {
     stageMap.set(s.currentStage, s._count.currentStage);
   }
-  const stageOrder: ProjectStage[] = [
-    "DESIGN",
-    "FOUNDATION",
-    "WALLS",
-    "ROOF",
-    "ENGINEERING",
-    "FINISHING",
-    "HANDOVER",
-  ];
-  const stageMax = Math.max(...Array.from(stageMap.values()), 1);
-
   // Build Projects at Risk
   const overdueTaskMap = new Map(
     overdueTasksByProject.map((g) => [g.projectId, g._count.id]),
@@ -572,6 +602,47 @@ export default async function AdminV2Dashboard({
     updatedProjects: recentUpdatedProjects,
   });
 
+  // P2: Finance category breakdowns
+  const expenseByCategory = expenseByCategoryRaw.map((e) => ({
+    category: e.category,
+    amount: Number(e._sum.amount ?? 0),
+  }));
+  const incomeByCategory = incomeByCategoryRaw.map((e) => ({
+    category: e.category,
+    amount: Number(e._sum.amount ?? 0),
+  }));
+
+  // P2: Stage analytics — average days per stage
+  const stageDurations = new Map<ProjectStage, number[]>();
+  for (const rec of completedStageRecords) {
+    if (!rec.startDate || !rec.endDate) continue;
+    const days = Math.round(
+      (rec.endDate.getTime() - rec.startDate.getTime()) / 86400000,
+    );
+    if (days <= 0) continue;
+    const arr = stageDurations.get(rec.stage) ?? [];
+    arr.push(days);
+    stageDurations.set(rec.stage, arr);
+  }
+  const stageAverages = Array.from(stageDurations.entries()).map(
+    ([stage, durations]) => ({
+      stage,
+      avgDays: Math.round(durations.reduce((a, b) => a + b, 0) / durations.length),
+      count: durations.length,
+    }),
+  );
+
+  // P2: Role-based visibility
+  const role = (session.user as { role?: Role }).role ?? "USER";
+  const isAdmin = role === "SUPER_ADMIN" || role === "MANAGER";
+  const isFinancier = role === "FINANCIER";
+  const isEngineer = role === "ENGINEER";
+  const showBusinessKpis = isAdmin || isFinancier;
+  const showTaskKpis = isAdmin || isEngineer;
+  const showFinance = isAdmin || isFinancier;
+  const showTeam = isAdmin;
+  const showStages = isAdmin || isEngineer;
+
   // Period label for finance
   const periodLabels: Record<PeriodId, string> = {
     today: "СЬОГОДНІ",
@@ -592,6 +663,11 @@ export default async function AdminV2Dashboard({
           <PeriodSwitcher active={activePeriod} />
         </Suspense>
       </div>
+
+      {/* Saved Views */}
+      <Suspense>
+        <SavedViews />
+      </Suspense>
 
       {/* Overview tab content */}
       {activeTab === "overview" && (
@@ -615,6 +691,7 @@ export default async function AdminV2Dashboard({
           />
 
           {/* Row 1 — business KPIs */}
+          {showBusinessKpis && (
           <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <KpiCard
               label="ПРОЄКТИ"
@@ -652,8 +729,10 @@ export default async function AdminV2Dashboard({
               gradient="var(--kpi-emerald)"
             />
           </section>
+          )}
 
           {/* Row 2 — Tasks & Time */}
+          {showTaskKpis && (
           <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <KpiCard
               label="АКТИВНІ ЗАДАЧІ"
@@ -692,105 +771,40 @@ export default async function AdminV2Dashboard({
               href="/ai-estimate-v2"
             />
           </section>
+          )}
 
-          {/* Row 3 — Finance */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-            <FinanceTile
-              label={`ДОХІД (${finPeriod})`}
-              value={income}
-              icon={TrendingUp}
-              color={T.success}
-              delta={incomeDelta}
+          {/* Finance Pulse */}
+          {showFinance && (
+            <FinancePulse
+              income={income}
+              expense={expense}
+              netProfit={netProfit}
+              incomeDelta={incomeDelta}
+              expenseDelta={expenseDelta}
+              netDelta={netDelta}
+              periodLabel={finPeriod}
+              expenseByCategory={expenseByCategory}
+              incomeByCategory={incomeByCategory}
+              overduePaymentsCount={overduePayments.length}
             />
-            <FinanceTile
-              label={`ВИТРАТИ (${finPeriod})`}
-              value={expense}
-              icon={TrendingDown}
-              color={T.danger}
-              delta={expenseDelta}
-            />
-            <FinanceTile
-              label="ЧИСТИЙ ПРИБУТОК"
-              value={netProfit}
-              icon={Activity}
-              color={netProfit >= 0 ? T.success : T.danger}
-              emphasize
-              delta={netDelta}
-            />
-          </section>
+          )}
 
-          {/* Row 4 — Stage distribution + Team Pulse */}
+          {/* Stage Analytics + Team Pulse */}
           <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {/* Stages */}
-            <div
-              className="rounded-2xl p-6"
-              style={{
-                backgroundColor: T.panel,
-                border: `1px solid ${T.borderSoft}`,
-              }}
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                    ПОТОК РОБОТИ
-                  </span>
-                  <h2 className="text-base font-bold" style={{ color: T.textPrimary }}>
-                    Розподіл активних проєктів
-                  </h2>
-                </div>
-                <span className="text-[11px]" style={{ color: T.textMuted }}>
-                  разом {activeProjectsCount}
-                </span>
-              </div>
-              {activeProjectsCount === 0 ? (
-                <p className="text-[12px]" style={{ color: T.textMuted }}>
-                  Немає активних проєктів
-                </p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {stageOrder.map((stage) => {
-                    const count = stageMap.get(stage) ?? 0;
-                    const pct = (count / stageMax) * 100;
-                    const stageColors: Record<string, string> = {
-                      DESIGN: T.violet,
-                      FOUNDATION: T.sky,
-                      WALLS: T.accentPrimary,
-                      ROOF: T.teal,
-                      ENGINEERING: T.amber,
-                      FINISHING: T.indigo,
-                      HANDOVER: T.emerald,
-                    };
-                    const barColor = stageColors[stage] || T.accentPrimary;
-                    return (
-                      <div key={stage} className="flex items-center gap-3">
-                        <span className="text-[11px] font-semibold w-28 flex-shrink-0" style={{ color: T.textSecondary }}>
-                          {STAGE_LABELS[stage]}
-                        </span>
-                        <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ backgroundColor: barColor + "12" }}>
-                          <div
-                            className="h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-bold"
-                            style={{
-                              width: `${Math.max(pct, count > 0 ? 6 : 0)}%`,
-                              background: count > 0 ? `linear-gradient(90deg, ${barColor}cc, ${barColor})` : "transparent",
-                              color: "#fff",
-                            }}
-                          >
-                            {count > 0 ? count : ""}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Team Pulse 2.0 */}
-            <TeamPulse
-              members={teamMembers}
-              totalMinutes={weekHoursTotal}
-              periodLabel={periodLabel}
-            />
+            {showStages && (
+              <StageAnalytics
+                stageMap={stageMap}
+                activeProjectsCount={activeProjectsCount}
+                stageAverages={stageAverages}
+              />
+            )}
+            {showTeam && (
+              <TeamPulse
+                members={teamMembers}
+                totalMinutes={weekHoursTotal}
+                periodLabel={periodLabel}
+              />
+            )}
           </section>
 
           {/* Row 5 — Activity Feed + Projects/Utility */}

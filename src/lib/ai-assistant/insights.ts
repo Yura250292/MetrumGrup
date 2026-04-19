@@ -5,6 +5,7 @@ export type Insight = {
   title: string;
   detail: string;
   projectId?: string;
+  actionHref?: string;
 };
 
 /**
@@ -62,6 +63,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       type: "danger",
       title: `${overduePayments.length} прострочених платежів`,
       detail: `Загальна сума: ${Math.round(total).toLocaleString("uk-UA")} ₴. Проєкти: ${[...new Set(overduePayments.map((p) => p.project.title))].join(", ")}`,
+      actionHref: "/admin-v2/finance",
     });
   }
 
@@ -74,6 +76,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       detail: urgent.length > 0
         ? `${urgent.length} з них HIGH/URGENT: ${urgent.slice(0, 3).map((t) => `"${t.title}"`).join(", ")}`
         : `Найстаріше: "${overdueTasks[0].title}" (${overdueTasks[0].dueDate?.toLocaleDateString("uk-UA")})`,
+      actionHref: "/admin-v2/me",
     });
   }
 
@@ -90,6 +93,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       title: `${p.title}: бюджет ${pct > 100 ? "перевищено" : "майже вичерпано"}`,
       detail: `Використано ${pct}% бюджету (${Math.round(Number(p.totalPaid)).toLocaleString("uk-UA")} / ${Math.round(Number(p.totalBudget)).toLocaleString("uk-UA")} ₴)`,
       projectId: p.id,
+      actionHref: `/admin-v2/projects/${p.id}`,
     });
   }
 
@@ -105,6 +109,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
         type: "warning",
         title: "Нерівномірне навантаження",
         detail: `${maxUser?.name}: ${max._count} завдань, ${minUser?.name}: ${min._count}. Рекомендую перерозподілити.`,
+        actionHref: "/admin-v2/me?scope=all",
       });
     }
   }
@@ -115,6 +120,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       type: "info",
       title: `${recentStalled.length} проєктів без оновлень 14+ днів`,
       detail: recentStalled.map((p) => p.title).join(", "),
+      actionHref: "/admin-v2/projects",
     });
   }
 
@@ -183,6 +189,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       type: "warning",
       title: `${projectsNoTasks.length} активних проєктів без завдань`,
       detail: `${projectsNoTasks.map((p) => p.title).join(", ")}. Можливо потрібно створити завдання.`,
+      actionHref: "/admin-v2/projects",
     });
   }
 
@@ -207,6 +214,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       type: "warning",
       title: `Витрати зросли на ${growthPct}%`,
       detail: `Останні 30 днів: ${Math.round(recent).toLocaleString("uk-UA")} ₴ vs попередні: ${Math.round(previous).toLocaleString("uk-UA")} ₴`,
+      actionHref: "/admin-v2/finance",
     });
   }
 
