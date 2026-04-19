@@ -118,7 +118,7 @@ export default async function AdminV2ProjectsPage({
       </section>
 
       {/* KPI strip */}
-      <section className="grid grid-cols-3 gap-3 sm:gap-4">
+      <section className="grid grid-cols-3 gap-2 sm:gap-4">
         <KpiCard
           label="ВСЬОГО"
           value={String(projects.length)}
@@ -225,9 +225,11 @@ function ProjectCard({
           </div>
         )}
         {/* Status pill in top-right corner */}
-        <div className="absolute top-3 right-3 flex items-center gap-2">
+        <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center gap-1.5 sm:gap-2">
           <StatusBadge status={project.status} />
-          <MoveProjectButton projectId={project.id} currentFolderId={currentFolderId} />
+          <span className="hidden sm:inline-flex">
+            <MoveProjectButton projectId={project.id} currentFolderId={currentFolderId} />
+          </span>
           {canDelete && (
             <DeleteProjectButton projectId={project.id} projectTitle={project.title} />
           )}
@@ -249,7 +251,7 @@ function ProjectCard({
       </div>
 
       {/* Card body */}
-      <div className="flex flex-1 flex-col gap-4 p-5">
+      <div className="flex flex-1 flex-col gap-3 sm:gap-4 p-3 sm:p-5">
         {/* Status checks row */}
         <div className="flex flex-wrap gap-2">
           <CheckChip
@@ -335,7 +337,7 @@ function ProjectCard({
 
           {/* Dates */}
           {(project.startDate || extra.expectedEndDate) && (
-            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] truncate" style={{ color: T.textMuted }}>
+            <div className="flex items-center gap-1 text-[10px] sm:text-[11px] min-w-0 truncate" style={{ color: T.textMuted }}>
               <Calendar size={11} className="flex-shrink-0" />
               <span>
                 {project.startDate ? formatDateShort(project.startDate) : "—"}
@@ -369,7 +371,7 @@ function CheckChip({
   const c = colors[tone];
   return (
     <span
-      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold max-w-full"
+      className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold max-w-full min-w-0"
       style={{ backgroundColor: c.bg, color: c.fg }}
     >
       <span className="flex-shrink-0"><Icon size={11} style={{ color: c.fg }} /></span>
@@ -393,20 +395,20 @@ function KpiCard({
 }) {
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-3 sm:p-5 min-w-0 overflow-hidden"
+      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-2.5 sm:p-5 min-w-0 overflow-hidden"
       style={{
         background: gradient || T.panel,
         border: `1px solid ${accent}20`,
         boxShadow: `0 2px 8px ${accent}12`,
       }}
     >
-      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textSecondary }}>
+      <span className="text-[8px] sm:text-[10px] font-bold tracking-wider truncate uppercase" style={{ color: T.textSecondary }}>
         {label}
       </span>
-      <span className="text-lg sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate" style={{ color: accent }}>
+      <span className="text-sm sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate" style={{ color: accent }}>
         {value}
       </span>
-      <span className="text-[10px] sm:text-[11px] hidden sm:block truncate" style={{ color: T.textSecondary }}>
+      <span className="text-[9px] sm:text-[11px] truncate" style={{ color: T.textSecondary }}>
         {sub}
       </span>
     </div>
