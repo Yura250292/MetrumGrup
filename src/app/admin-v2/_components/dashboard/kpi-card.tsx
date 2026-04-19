@@ -23,7 +23,7 @@ export function KpiCard({
 }) {
   const content = (
     <div
-      className="relative flex flex-col justify-between rounded-2xl p-4 sm:p-5 h-full transition-all duration-200 overflow-hidden group"
+      className="relative flex flex-col justify-between rounded-xl sm:rounded-2xl p-3 sm:p-5 h-full transition-all duration-200 overflow-hidden group"
       style={{
         background: T.panel,
         border: `1px solid ${T.borderSoft}`,
@@ -42,9 +42,9 @@ export function KpiCard({
       />
 
       {/* Top row: icon + label */}
-      <div className="flex items-center gap-2.5 mb-3 relative z-10">
+      <div className="flex items-center gap-2 sm:gap-2.5 mb-2 sm:mb-3 relative z-10">
         <div
-          className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl"
+          className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl"
           style={{
             background: `linear-gradient(135deg, ${accent}22, ${accent}10)`,
             border: `1px solid ${accent}25`,
@@ -70,7 +70,7 @@ export function KpiCard({
       {/* Value */}
       <div className="relative z-10">
         <div
-          className="text-2xl sm:text-3xl font-extrabold tracking-tight truncate leading-tight"
+          className="text-lg sm:text-3xl font-extrabold tracking-tight truncate leading-tight"
           style={{ color: T.textPrimary }}
         >
           {value}

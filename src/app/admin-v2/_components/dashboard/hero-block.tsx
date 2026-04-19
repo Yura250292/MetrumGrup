@@ -80,29 +80,29 @@ export function HeroBlock({
 
   return (
     <section
-      className="rounded-2xl p-6 sm:p-8 relative overflow-hidden"
+      className="rounded-xl sm:rounded-2xl p-4 sm:p-8 relative overflow-hidden"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
         borderLeft: `4px solid ${isStable ? T.success : attentionZones >= 2 ? T.danger : T.warning}`,
       }}
     >
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-3 sm:gap-4">
         {/* Date + greeting */}
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0.5 sm:gap-1">
           <span
-            className="text-[11px] font-bold tracking-wider"
+            className="text-[10px] sm:text-[11px] font-bold tracking-wider"
             style={{ color: T.textMuted }}
           >
             {today.toUpperCase()}
           </span>
           <h1
-            className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight"
+            className="text-xl sm:text-3xl md:text-4xl font-bold tracking-tight"
             style={{ color: T.textPrimary }}
           >
             {greeting}
           </h1>
-          <p className="text-[14px]" style={{ color: T.textSecondary }}>
+          <p className="text-[13px] sm:text-[14px]" style={{ color: T.textSecondary }}>
             {subtitle}
           </p>
         </div>

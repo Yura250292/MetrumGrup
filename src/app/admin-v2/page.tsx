@@ -655,7 +655,7 @@ export default async function AdminV2Dashboard({
   const finPeriod = periodLabels[activePeriod];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4 sm:gap-6">
       {/* Dashboard Tabs + Period Switcher + Widget Config */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <Suspense>
@@ -810,7 +810,7 @@ export default async function AdminV2Dashboard({
           )}
 
           {/* Stage Analytics + Team Pulse */}
-          <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             {showStages && (
             <Widget id="stages">
               <StageAnalytics
@@ -832,9 +832,9 @@ export default async function AdminV2Dashboard({
           </section>
 
           {/* Row 5 — Activity Feed + Projects/Utility */}
-          <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
             {/* Left 2/3: Activity + Projects at Risk */}
-            <div className="xl:col-span-2 flex flex-col gap-6">
+            <div className="xl:col-span-2 flex flex-col gap-4 sm:gap-6">
               <Widget id="activity"><ActivityFeed events={feedEvents} /></Widget>
               <Widget id="projects-risk"><ProjectsAtRisk projects={projectsAtRisk} /></Widget>
             </div>
@@ -857,7 +857,7 @@ export default async function AdminV2Dashboard({
 
           {/* Quick actions */}
           <section
-            className="rounded-2xl p-6"
+            className="rounded-xl sm:rounded-2xl p-4 sm:p-6"
             style={{
               background: "var(--kpi-banner)",
               border: `1px solid ${T.accentPrimary}25`,
