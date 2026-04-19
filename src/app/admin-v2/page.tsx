@@ -31,6 +31,7 @@ import { StageAnalytics } from "./_components/dashboard/stage-analytics";
 import { SavedViews } from "./_components/dashboard/saved-views";
 import { DashboardShell, Widget } from "./_components/dashboard/dashboard-shell";
 import { AiSummary } from "./_components/dashboard/ai-summary";
+import { CollapsibleMobile } from "./_components/dashboard/collapsible-mobile";
 
 export const dynamic = "force-dynamic";
 
@@ -794,6 +795,12 @@ export default async function AdminV2Dashboard({
           {/* Finance Pulse */}
           {showFinance && (
           <Widget id="finance">
+            <CollapsibleMobile
+              title="Фінанси"
+              icon={<Wallet size={16} />}
+              accent={T.success}
+              preview={`Дохід ${formatCurrencyCompact(income)} · Витрати ${formatCurrencyCompact(expense)}`}
+            >
             <FinancePulse
               income={income}
               expense={expense}
@@ -806,10 +813,17 @@ export default async function AdminV2Dashboard({
               incomeByCategory={incomeByCategory}
               overduePaymentsCount={overduePayments.length}
             />
+            </CollapsibleMobile>
           </Widget>
           )}
 
           {/* Stage Analytics + Team Pulse */}
+          <CollapsibleMobile
+            title="Розподіл та аналітика"
+            icon={<FolderKanban size={16} />}
+            accent={T.violet}
+            preview={`${activeProjectsCount} активних проєктів · ${teamMembers.length} в команді`}
+          >
           <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
             {showStages && (
             <Widget id="stages">
@@ -830,16 +844,20 @@ export default async function AdminV2Dashboard({
             </Widget>
             )}
           </section>
+          </CollapsibleMobile>
 
           {/* Row 5 — Activity Feed + Projects/Utility */}
+          <CollapsibleMobile
+            title="Остання активність"
+            icon={<Clock size={16} />}
+            accent={T.accentPrimary}
+            preview={`${feedEvents.length} подій · ${projectsAtRisk.length} проєктів під ризиком`}
+          >
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6">
-            {/* Left 2/3: Activity + Projects at Risk */}
             <div className="xl:col-span-2 flex flex-col gap-4 sm:gap-6">
               <Widget id="activity"><ActivityFeed events={feedEvents} /></Widget>
               <Widget id="projects-risk"><ProjectsAtRisk projects={projectsAtRisk} /></Widget>
             </div>
-
-            {/* Right 1/3: Utility Rail */}
             <Widget id="utility">
             <UtilityRail
               overduePayments={overduePayments}
@@ -851,6 +869,7 @@ export default async function AdminV2Dashboard({
             />
             </Widget>
           </section>
+          </CollapsibleMobile>
 
           {/* AI Insights Widget */}
           <Widget id="ai-widget"><AiDashboardWidgetWrapper /></Widget>

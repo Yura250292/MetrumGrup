@@ -38,8 +38,8 @@ export function FinancePulse({
 
   return (
     <section className="flex flex-col gap-4">
-      {/* Finance tiles row */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+      {/* Finance tiles: 2 cols mobile, 3 cols desktop */}
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
         <FinanceTile
           label={`ДОХІД (${periodLabel})`}
           value={income}
@@ -54,14 +54,16 @@ export function FinancePulse({
           color={T.danger}
           delta={expenseDelta}
         />
-        <FinanceTile
-          label="ЧИСТИЙ ПРИБУТОК"
-          value={netProfit}
-          icon={Activity}
-          color={netProfit >= 0 ? T.success : T.danger}
-          emphasize
-          delta={netDelta}
-        />
+        <div className="col-span-2 md:col-span-1">
+          <FinanceTile
+            label="ЧИСТИЙ ПРИБУТОК"
+            value={netProfit}
+            icon={Activity}
+            color={netProfit >= 0 ? T.success : T.danger}
+            emphasize
+            delta={netDelta}
+          />
+        </div>
       </div>
 
       {/* Category breakdown + Cashflow risk */}
