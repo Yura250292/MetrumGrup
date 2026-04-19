@@ -34,7 +34,7 @@ export function AiPanelPortal() {
 
   return createPortal(
     <div className={theme === "dark" ? "admin-dark" : "admin-light"}>
-      {isOpen && <AiChatPanel onClose={close} />}
+      {isOpen && animationPhase === "done" && <AiChatPanel onClose={close} />}
       {isOpen && animationPhase === "breaking" && (
         <GlassBreakOverlay
           onComplete={() => {

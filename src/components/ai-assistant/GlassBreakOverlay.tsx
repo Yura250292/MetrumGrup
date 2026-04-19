@@ -5,12 +5,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import Image from "next/image";
 import { SHARDS, CRACK_LINES } from "./glass-shards";
 
+/**
+ * Phases:
+ * 1. "intro"    — dark overlay fades in, AI avatar appears (pointing mood) + stone appears
+ * 2. "ready"    — window (шиба) with owner photo appears, stone pulses — waiting for user click
+ * 3. "throwing" — stone flies toward window
+ * 4. "impact"   — cracks appear, flash
+ * 5. "breaking" — shards fly away
+ * 6. "done"     — overlay unmounts
+ */
+type Phase = "intro" | "ready" | "throwing" | "impact" | "breaking" | "done";
+
 type Props = {
   onComplete: () => void;
 };
 
 export function GlassBreakOverlay({ onComplete }: Props) {
-  const [phase, setPhase] = useState<"glass" | "cracking" | "breaking" | "done">("glass");
+  const [phase, setPhase] = useState<Phase>("intro");
   const completedCount = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -18,32 +29,39 @@ export function GlassBreakOverlay({ onComplete }: Props) {
   useEffect(() => {
     try {
       audioRef.current = new Audio("/sounds/glass-break.mp3");
-      audioRef.current.volume = 0.4;
+      audioRef.current.volume = 0.5;
     } catch {
       // Audio not available
     }
   }, []);
 
-  // Animation timeline
+  // Intro → ready transition
   useEffect(() => {
-    // Wait for panel slide-in (400ms), then show cracks
-    const crackTimer = setTimeout(() => setPhase("cracking"), 400);
-    // Start breaking after cracks appear (100ms later)
-    const breakTimer = setTimeout(() => {
-      setPhase("breaking");
-      // Play sound
-      try {
-        audioRef.current?.play();
-      } catch {
-        // Autoplay blocked — ignore
-      }
-    }, 500);
-
-    return () => {
-      clearTimeout(crackTimer);
-      clearTimeout(breakTimer);
-    };
+    const timer = setTimeout(() => setPhase("ready"), 800);
+    return () => clearTimeout(timer);
   }, []);
+
+  const handleThrow = () => {
+    if (phase !== "ready") return;
+    setPhase("throwing");
+  };
+
+  // Throwing → impact → breaking chain
+  useEffect(() => {
+    if (phase !== "throwing") return;
+    // Stone reaches window after 0.5s
+    const impactTimer = setTimeout(() => {
+      setPhase("impact");
+      try { audioRef.current?.play(); } catch { /* blocked */ }
+    }, 500);
+    return () => clearTimeout(impactTimer);
+  }, [phase]);
+
+  useEffect(() => {
+    if (phase !== "impact") return;
+    const breakTimer = setTimeout(() => setPhase("breaking"), 200);
+    return () => clearTimeout(breakTimer);
+  }, [phase]);
 
   const handleShardComplete = () => {
     completedCount.current += 1;
@@ -57,134 +75,281 @@ export function GlassBreakOverlay({ onComplete }: Props) {
 
   return (
     <div
-      className="fixed inset-0 md:inset-y-0 md:left-auto md:right-0 md:w-[440px]"
+      className="fixed inset-0"
       style={{ zIndex: 10000 }}
       aria-hidden="true"
     >
+      {/* Dark backdrop */}
+      <motion.div
+        className="absolute inset-0"
+        style={{ backgroundColor: "rgba(0,0,0,0.7)" }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: phase === "breaking" ? 0 : 1 }}
+        transition={{ duration: phase === "breaking" ? 0.6 : 0.4 }}
+      />
+
+      {/* ── AI Avatar (pointing mood) — bottom left ── */}
       <AnimatePresence>
-        {/* Each shard is a separate div with the same layered background, clipped differently */}
-        {SHARDS.map((shard) => (
+        {(phase === "intro" || phase === "ready" || phase === "throwing") && (
           <motion.div
-            key={shard.id}
-            className="absolute inset-0 overflow-hidden"
-            style={{
-              clipPath: `polygon(${shard.clipPath})`,
-              transformOrigin: `${shard.cx}% ${shard.cy}%`,
-              willChange: "transform, opacity",
-            }}
-            initial={{ x: 0, y: 0, rotate: 0, opacity: 1, scale: 1 }}
-            animate={
-              phase === "breaking"
-                ? {
-                    x: shard.exitX,
-                    y: shard.exitY,
-                    rotate: shard.exitRotate,
-                    opacity: 0,
-                    scale: 0.8,
-                  }
-                : phase === "cracking"
-                  ? { scale: [1, 1.005, 1] }
-                  : {}
-            }
-            transition={
-              phase === "breaking"
-                ? {
-                    duration: 0.7,
-                    delay: shard.delay,
-                    ease: [0.36, 0, 0.66, -0.56],
-                  }
-                : { duration: 0.1 }
-            }
-            onAnimationComplete={() => {
-              if (phase === "breaking") handleShardComplete();
-            }}
+            className="absolute bottom-8 left-4 md:left-8 z-20"
+            initial={{ x: -100, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: -100, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 200, damping: 20 }}
           >
-            {/* Layer 1: Frosted glass */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(255,255,255,0.45) 0%, rgba(200,220,240,0.25) 50%, rgba(255,255,255,0.15) 100%)",
-                backdropFilter: "blur(12px) saturate(1.3)",
-                WebkitBackdropFilter: "blur(12px) saturate(1.3)",
-              }}
+            <Image
+              src="/images/ai-avatar-pointing.gif"
+              alt="AI Помічник"
+              width={120}
+              height={120}
+              className="h-20 w-20 md:h-[120px] md:w-[120px] rounded-2xl"
+              style={{ objectFit: "cover" }}
+              unoptimized
+              priority
             />
-
-            {/* Layer 2: Owner photo (subtle, behind glass) */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-25">
-              <Image
-                src="/images/owner-shiba.webp"
-                alt=""
-                fill
-                className="object-cover"
-                priority
-                unoptimized
+            {/* Speech bubble */}
+            <motion.div
+              className="absolute -top-12 left-16 md:left-24 whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-medium"
+              style={{
+                backgroundColor: "rgba(255,255,255,0.95)",
+                color: "#1a1a1a",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              }}
+              initial={{ opacity: 0, y: 10, scale: 0.9 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ delay: 0.4, duration: 0.3 }}
+            >
+              {phase === "ready" || phase === "throwing"
+                ? "Тисни на камінь! 👆"
+                : "Давай розіб'ємо шибу!"}
+              {/* Bubble tail */}
+              <div
+                className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45"
+                style={{ backgroundColor: "rgba(255,255,255,0.95)" }}
               />
-            </div>
-
-            {/* Layer 3: Glass reflection / highlight */}
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(255,255,255,0.5) 0%, transparent 40%, rgba(255,255,255,0.1) 60%, transparent 100%)",
-              }}
-            />
-
-            {/* Layer 4: Subtle border on each shard */}
-            <div
-              className="absolute inset-0"
-              style={{
-                boxShadow: "inset 0 0 1px rgba(255,255,255,0.6)",
-              }}
-            />
+            </motion.div>
           </motion.div>
-        ))}
+        )}
       </AnimatePresence>
 
-      {/* Crack lines — visible during "cracking" and "breaking" phases */}
-      {(phase === "cracking" || phase === "breaking") && (
-        <motion.svg
-          className="absolute inset-0 h-full w-full pointer-events-none"
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.1 }}
+      {/* ── Stone — bottom center, clickable ── */}
+      <AnimatePresence>
+        {(phase === "intro" || phase === "ready") && (
+          <motion.button
+            className="absolute z-30 cursor-pointer select-none"
+            style={{
+              bottom: "15%",
+              left: "50%",
+              fontSize: 48,
+              lineHeight: 1,
+              filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+            }}
+            initial={{ x: "-50%", opacity: 0, scale: 0 }}
+            animate={{
+              x: "-50%",
+              opacity: 1,
+              scale: phase === "ready" ? [1, 1.15, 1] : 1,
+            }}
+            exit={{ opacity: 0 }}
+            transition={
+              phase === "ready"
+                ? { scale: { repeat: Infinity, duration: 1.2, ease: "easeInOut" }, opacity: { duration: 0.3 } }
+                : { type: "spring", stiffness: 300, damping: 15, delay: 0.3 }
+            }
+            onClick={handleThrow}
+            aria-label="Кинути камінь"
+          >
+            🪨
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      {/* ── Stone flying toward window ── */}
+      {phase === "throwing" && (
+        <motion.div
+          className="absolute z-30 pointer-events-none"
+          style={{
+            bottom: "15%",
+            left: "50%",
+            fontSize: 48,
+            lineHeight: 1,
+            filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
+          }}
+          initial={{ x: "-50%", y: 0, scale: 1, rotate: 0 }}
+          animate={{
+            x: "calc(-50% + 0px)",
+            y: "-35vh",
+            scale: 0.6,
+            rotate: 360,
+          }}
+          transition={{ duration: 0.5, ease: [0.2, 0, 0.3, 1] }}
         >
-          {CRACK_LINES.map((line, i) => (
-            <motion.line
-              key={i}
-              x1={line.x1}
-              y1={line.y1}
-              x2={line.x2}
-              y2={line.y2}
-              stroke="rgba(255,255,255,0.7)"
-              strokeWidth="0.25"
-              initial={{ pathLength: 0 }}
-              animate={{ pathLength: 1 }}
-              transition={{
-                duration: 0.08,
-                delay: i * 0.004,
-              }}
-            />
-          ))}
-        </motion.svg>
+          🪨
+        </motion.div>
       )}
 
-      {/* Impact flash — brief white flash at centre on crack */}
-      {phase === "cracking" && (
-        <motion.div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background:
-              "radial-gradient(circle at 50% 40%, rgba(255,255,255,0.4) 0%, transparent 60%)",
-          }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: [0, 1, 0] }}
-          transition={{ duration: 0.15 }}
-        />
-      )}
+      {/* ── Window (шиба) with owner photo ── */}
+      <AnimatePresence>
+        {phase !== "intro" && (
+          <motion.div
+            className="absolute z-10"
+            style={{
+              top: "10%",
+              left: "50%",
+              width: "min(320px, 80vw)",
+              height: "min(400px, 55vh)",
+            }}
+            initial={{ x: "-50%", opacity: 0, scale: 0.8 }}
+            animate={{ x: "-50%", opacity: 1, scale: 1 }}
+            transition={{ type: "spring", stiffness: 200, damping: 20 }}
+          >
+            {/* Window frame */}
+            <div
+              className="relative h-full w-full overflow-hidden rounded-lg"
+              style={{
+                border: "6px solid #8B6F47",
+                boxShadow: "0 8px 32px rgba(0,0,0,0.4), inset 0 0 0 2px #A0845C",
+                background: "#6B5433",
+              }}
+            >
+              {/* Cross bar (window divider) */}
+              <div className="absolute left-1/2 top-0 bottom-0 w-1.5 -translate-x-1/2 z-[5]" style={{ backgroundColor: "#8B6F47" }} />
+              <div className="absolute top-1/2 left-0 right-0 h-1.5 -translate-y-1/2 z-[5]" style={{ backgroundColor: "#8B6F47" }} />
+
+              {/* Owner photo behind glass */}
+              {phase !== "breaking" && (
+                <div className="absolute inset-0">
+                  <Image
+                    src="/images/owner-shiba.webp"
+                    alt=""
+                    fill
+                    className="object-cover"
+                    priority
+                    unoptimized
+                  />
+                </div>
+              )}
+
+              {/* Glass layer (frosted) — before breaking */}
+              {(phase === "ready" || phase === "throwing") && (
+                <div
+                  className="absolute inset-0 z-[2]"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(200,220,240,0.2) 50%, rgba(255,255,255,0.1) 100%)",
+                    backdropFilter: "blur(6px) saturate(1.2)",
+                    WebkitBackdropFilter: "blur(6px) saturate(1.2)",
+                  }}
+                />
+              )}
+
+              {/* Glass reflection */}
+              {(phase === "ready" || phase === "throwing") && (
+                <div
+                  className="absolute inset-0 z-[3]"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.4) 0%, transparent 35%, rgba(255,255,255,0.08) 60%, transparent 100%)",
+                  }}
+                />
+              )}
+
+              {/* ── IMPACT: cracks + flash ── */}
+              {(phase === "impact" || phase === "breaking") && (
+                <>
+                  {/* Flash */}
+                  <motion.div
+                    className="absolute inset-0 z-[6] pointer-events-none"
+                    style={{
+                      background: "radial-gradient(circle at 50% 50%, rgba(255,255,255,0.8) 0%, transparent 60%)",
+                    }}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0, 1, 0] }}
+                    transition={{ duration: 0.2 }}
+                  />
+
+                  {/* Crack lines */}
+                  <motion.svg
+                    className="absolute inset-0 h-full w-full z-[4] pointer-events-none"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.05 }}
+                  >
+                    {CRACK_LINES.map((line, i) => (
+                      <motion.line
+                        key={i}
+                        x1={line.x1}
+                        y1={line.y1}
+                        x2={line.x2}
+                        y2={line.y2}
+                        stroke="rgba(255,255,255,0.8)"
+                        strokeWidth="0.4"
+                        initial={{ pathLength: 0 }}
+                        animate={{ pathLength: 1 }}
+                        transition={{ duration: 0.06, delay: i * 0.003 }}
+                      />
+                    ))}
+                  </motion.svg>
+                </>
+              )}
+
+              {/* ── BREAKING: shards fly away ── */}
+              {phase === "breaking" && (
+                <>
+                  {SHARDS.map((shard) => (
+                    <motion.div
+                      key={shard.id}
+                      className="absolute inset-0 overflow-hidden z-[3]"
+                      style={{
+                        clipPath: `polygon(${shard.clipPath})`,
+                        transformOrigin: `${shard.cx}% ${shard.cy}%`,
+                        willChange: "transform, opacity",
+                      }}
+                      initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
+                      animate={{
+                        x: shard.exitX * 0.7,
+                        y: shard.exitY * 0.7,
+                        rotate: shard.exitRotate,
+                        opacity: 0,
+                        scale: 0.7,
+                      }}
+                      transition={{
+                        duration: 0.6,
+                        delay: shard.delay,
+                        ease: [0.36, 0, 0.66, -0.56],
+                      }}
+                      onAnimationComplete={handleShardComplete}
+                    >
+                      {/* Glass in shard */}
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          background: "linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(200,220,240,0.3) 50%, rgba(255,255,255,0.15) 100%)",
+                        }}
+                      />
+                      {/* Photo fragment in shard */}
+                      <div className="absolute inset-0 opacity-40">
+                        <Image
+                          src="/images/owner-shiba.webp"
+                          alt=""
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      </div>
+                      <div
+                        className="absolute inset-0"
+                        style={{ boxShadow: "inset 0 0 1px rgba(255,255,255,0.6)" }}
+                      />
+                    </motion.div>
+                  ))}
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
