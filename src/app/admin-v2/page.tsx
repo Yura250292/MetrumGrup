@@ -29,7 +29,7 @@ import { UtilityRail } from "./_components/dashboard/utility-rail";
 import { FinancePulse } from "./_components/dashboard/finance-pulse";
 import { StageAnalytics } from "./_components/dashboard/stage-analytics";
 import { SavedViews } from "./_components/dashboard/saved-views";
-import { DashboardShell } from "./_components/dashboard/dashboard-shell";
+import { DashboardShell, Widget } from "./_components/dashboard/dashboard-shell";
 import { AiSummary } from "./_components/dashboard/ai-summary";
 
 export const dynamic = "force-dynamic";
@@ -677,13 +677,11 @@ export default async function AdminV2Dashboard({
       {activeTab === "overview" && (
         <Suspense>
         <DashboardShell>
-          {(visibleWidgets) => (
-        <>
           {/* AI Summary */}
-          {visibleWidgets.has("ai-summary") && <AiSummary />}
+          <Widget id="ai-summary"><AiSummary /></Widget>
 
           {/* Hero / State of Business */}
-          {visibleWidgets.has("hero") && (
+          <Widget id="hero">
           <HeroBlock
             firstName={firstName}
             today={today}
@@ -694,20 +692,21 @@ export default async function AdminV2Dashboard({
             role={role}
             dueTodayCount={dueTodayTasksCount}
           />
-          )}
+          </Widget>
 
           {/* Needs Attention */}
-          {visibleWidgets.has("attention") && (
+          <Widget id="attention">
           <NeedsAttention
             overdueTasks={overdueTasksDetailed}
             overduePayments={overduePayments}
             staleProjects={staleProjects}
             dueTodayTasks={dueTodayTasksDetailed}
           />
-          )}
+          </Widget>
 
           {/* Row 1 — business KPIs */}
-          {showBusinessKpis && visibleWidgets.has("kpi-business") && (
+          {showBusinessKpis && (
+          <Widget id="kpi-business">
           <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <KpiCard
               label="ПРОЄКТИ"
@@ -745,10 +744,12 @@ export default async function AdminV2Dashboard({
               gradient="var(--kpi-emerald)"
             />
           </section>
+          </Widget>
           )}
 
           {/* Row 2 — Tasks & Time */}
-          {showTaskKpis && visibleWidgets.has("kpi-tasks") && (
+          {showTaskKpis && (
+          <Widget id="kpi-tasks">
           <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             <KpiCard
               label="АКТИВНІ ЗАДАЧІ"
@@ -787,10 +788,12 @@ export default async function AdminV2Dashboard({
               href="/ai-estimate-v2"
             />
           </section>
+          </Widget>
           )}
 
           {/* Finance Pulse */}
-          {showFinance && visibleWidgets.has("finance") && (
+          {showFinance && (
+          <Widget id="finance">
             <FinancePulse
               income={income}
               expense={expense}
@@ -803,23 +806,28 @@ export default async function AdminV2Dashboard({
               incomeByCategory={incomeByCategory}
               overduePaymentsCount={overduePayments.length}
             />
+          </Widget>
           )}
 
           {/* Stage Analytics + Team Pulse */}
           <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-            {showStages && visibleWidgets.has("stages") && (
+            {showStages && (
+            <Widget id="stages">
               <StageAnalytics
                 stageMap={stageMap}
                 activeProjectsCount={activeProjectsCount}
                 stageAverages={stageAverages}
               />
+            </Widget>
             )}
-            {showTeam && visibleWidgets.has("team") && (
+            {showTeam && (
+            <Widget id="team">
               <TeamPulse
                 members={teamMembers}
                 totalMinutes={weekHoursTotal}
                 periodLabel={periodLabel}
               />
+            </Widget>
             )}
           </section>
 
@@ -827,12 +835,12 @@ export default async function AdminV2Dashboard({
           <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
             {/* Left 2/3: Activity + Projects at Risk */}
             <div className="xl:col-span-2 flex flex-col gap-6">
-              {visibleWidgets.has("activity") && <ActivityFeed events={feedEvents} />}
-              {visibleWidgets.has("projects-risk") && <ProjectsAtRisk projects={projectsAtRisk} />}
+              <Widget id="activity"><ActivityFeed events={feedEvents} /></Widget>
+              <Widget id="projects-risk"><ProjectsAtRisk projects={projectsAtRisk} /></Widget>
             </div>
 
             {/* Right 1/3: Utility Rail */}
-            {visibleWidgets.has("utility") && (
+            <Widget id="utility">
             <UtilityRail
               overduePayments={overduePayments}
               upcomingTasks={upcomingTasks}
@@ -841,11 +849,11 @@ export default async function AdminV2Dashboard({
                 expectedEndDate: p.expectedEndDate!,
               }))}
             />
-            )}
+            </Widget>
           </section>
 
           {/* AI Insights Widget */}
-          {visibleWidgets.has("ai-widget") && <AiDashboardWidgetWrapper />}
+          <Widget id="ai-widget"><AiDashboardWidgetWrapper /></Widget>
 
           {/* Quick actions */}
           <section
@@ -886,8 +894,6 @@ export default async function AdminV2Dashboard({
           <p className="text-[11px] text-center" style={{ color: T.textMuted }}>
             Кошторисів у системі: {estimatesCount}
           </p>
-        </>
-          )}
         </DashboardShell>
         </Suspense>
       )}
