@@ -29,7 +29,8 @@ export type ProjectWithAggregations = {
 };
 
 export async function listProjectsWithAggregations(
-  currentUserId: string
+  currentUserId: string,
+  opts?: { folderId?: string | null },
 ): Promise<ProjectWithAggregations[]> {
   // HOTFIX: production may not have project_members migration applied yet.
   // If `members` include fails, fall back to a query without it. The team
@@ -53,7 +54,10 @@ export async function listProjectsWithAggregations(
   // Hide auto-generated AI-estimate scratch projects (slug `temp-…`) from
   // every listing — they are an implementation detail of the chunked
   // generation flow and should never appear as user-facing projects.
-  const where = { slug: { not: { startsWith: "temp-" } } };
+  const where: Record<string, unknown> = { slug: { not: { startsWith: "temp-" } } };
+  if (opts?.folderId !== undefined) {
+    where.folderId = opts.folderId;
+  }
 
   const fetchProjects = async () => {
     try {

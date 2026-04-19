@@ -107,6 +107,7 @@ model Project {
   updatedAt         DateTime               @updatedAt
   clientId          String
   managerId         String?
+  folderId          String?
   auditLogs         AuditLog[]
   completionActs    CompletionAct[]
   crewAssignments   CrewAssignment[]
@@ -133,7 +134,9 @@ model Project {
   taskTemplates     TaskTemplate[]         @relation("TaskTemplateProject")
   emailInbox        EmailToTaskInbox?      @relation("EmailInboxProject")
   financeEntries    FinanceEntry[]
+  folder            Folder?                @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
+  @@index([folderId])
   @@map("projects")
 }
 
@@ -236,16 +239,19 @@ model Estimate {
   prozorroAnalysis      String?                  @db.Text // Аналіз конкурентних тендерів Prozorro
   structuredReport      Json? // StructuredEngineerReport v2 (JSON)
   bidIntelligence       Json? // BidIntelligenceResult (JSON)
+  folderId              String?
   createdBy             User                     @relation("EstimateCreator", fields: [createdById], references: [id])
   engineerReviewedBy    User?                    @relation("EngineerReviews", fields: [engineerReviewedById], references: [id])
   financeReviewedBy     User?                    @relation("FinanceReviews", fields: [financeReviewedById], references: [id])
   project               Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folder                Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   similarTenders        EstimateTenderMatch[]
   conversation          Conversation?
   // Refine history (Stage 6.2)
   refineHistory         EstimateRefineHistory[]  @relation("RefineHistoryEstimate")
   refinedFromHistory    EstimateRefineHistory[]  @relation("RefineHistoryPrevious")
 
+  @@index([folderId])
   @@map("estimates")
 }
 
@@ -403,9 +409,12 @@ model FinanceEntry {
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
+  folderId    String?
+
   project     Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy   User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
   updatedBy   User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
+  folder      Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   attachments FinanceEntryAttachment[]
 
   @@index([projectId, occurredAt])
@@ -413,6 +422,7 @@ model FinanceEntry {
   @@index([kind, type])
   @@index([category])
   @@index([isArchived])
+  @@index([folderId])
   @@map("finance_entries")
 }
 
@@ -1127,6 +1137,33 @@ enum FinanceEntryType {
 enum FinanceEntryKind {
   PLAN
   FACT
+}
+
+enum FolderDomain {
+  PROJECT
+  ESTIMATE
+  FINANCE
+}
+
+model Folder {
+  id        String       @id @default(cuid())
+  domain    FolderDomain
+  name      String
+  color     String?
+  parentId  String?
+  sortOrder Int          @default(0)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  parent         Folder?        @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children       Folder[]       @relation("FolderTree")
+  projects       Project[]
+  estimates      Estimate[]
+  financeEntries FinanceEntry[]
+
+  @@unique([domain, parentId, name])
+  @@index([domain, parentId, sortOrder])
+  @@map("folders")
 }
 
 enum EstimateStatus {

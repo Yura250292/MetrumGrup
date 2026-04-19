@@ -27,9 +27,11 @@ const DEFAULT_FILTERS: FinancingFilters = {
 export function useFinancingData({
   scope,
   overrideArchived,
+  folderId,
 }: {
   scope?: { id: string; title: string };
   overrideArchived?: boolean;
+  folderId?: string | null;
 }) {
   const [entries, setEntries] = useState<FinanceEntryDTO[]>([]);
   const [summary, setSummary] = useState<FinanceSummaryDTO>(EMPTY_SUMMARY);
@@ -86,8 +88,11 @@ export function useFinancingData({
     const archived = overrideArchived ?? filters.archived;
     if (archived) p.set("archived", "true");
 
+    // Folder
+    if (folderId) p.set("folderId", folderId);
+
     return p.toString();
-  }, [filters, scope, overrideArchived]);
+  }, [filters, scope, overrideArchived, folderId]);
 
   const loadData = useCallback(async () => {
     setLoading(true);

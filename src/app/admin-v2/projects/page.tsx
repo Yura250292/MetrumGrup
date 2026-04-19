@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { listProjectsWithAggregations } from "@/lib/projects/aggregations";
+import { listFolders } from "@/lib/folders/queries";
+import { getFolderBreadcrumbs } from "@/lib/folders/queries";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { PROJECT_STATUS_LABELS, STAGE_LABELS } from "@/lib/constants";
 import {
@@ -19,6 +21,7 @@ import {
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DeleteProjectButton } from "./_components/delete-project-button";
+import { ProjectFoldersClient, MoveProjectButton } from "./_components/project-folders-client";
 
 export const dynamic = "force-dynamic";
 
@@ -29,14 +32,26 @@ type ExtraInfo = {
   coverImage: string | null;
 };
 
-export default async function AdminV2ProjectsPage() {
+export default async function AdminV2ProjectsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ folderId?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+  const params = await searchParams;
+  const folderId = params.folderId ?? null;
 
-  // 1) Reuse existing aggregations (team / status / progress / budget / address)
-  const projects = await listProjectsWithAggregations(session.user.id);
+  // Fetch folders at current level + breadcrumbs
+  const [folders, breadcrumbs] = await Promise.all([
+    listFolders("PROJECT", folderId),
+    folderId ? getFolderBreadcrumbs(folderId) : Promise.resolve([]),
+  ]);
+
+  // 1) Reuse existing aggregations, filtered by folderId
+  const projects = await listProjectsWithAggregations(session.user.id, { folderId });
 
   // 2) Extra fields not in aggregations: estimates count + approved flag + end date + cover photo
   const extrasMap = new Map<string, ExtraInfo>();
@@ -127,9 +142,20 @@ export default async function AdminV2ProjectsPage() {
         />
       </section>
 
+      {/* Folders */}
+      <ProjectFoldersClient
+        folders={JSON.parse(JSON.stringify(folders))}
+        breadcrumbs={breadcrumbs}
+        currentFolderId={folderId}
+      />
+
       {/* Card grid */}
-      {projects.length === 0 ? (
+      {projects.length === 0 && folders.length === 0 ? (
         <EmptyState />
+      ) : projects.length === 0 ? (
+        <p className="text-[12px] text-center py-8" style={{ color: T.textMuted }}>
+          Немає проєктів у цій папці
+        </p>
       ) : (
         <section className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5">
           {projects.map((project) => {
@@ -145,6 +171,7 @@ export default async function AdminV2ProjectsPage() {
                 project={project}
                 extra={extra}
                 canDelete={isSuperAdmin}
+                currentFolderId={folderId}
               />
             );
           })}
@@ -160,10 +187,12 @@ function ProjectCard({
   project,
   extra,
   canDelete,
+  currentFolderId,
 }: {
   project: Awaited<ReturnType<typeof listProjectsWithAggregations>>[number];
   extra: ExtraInfo;
   canDelete: boolean;
+  currentFolderId?: string | null;
 }) {
   const teamCount = project.team.length;
   const isActive = project.status === "ACTIVE";
@@ -198,6 +227,7 @@ function ProjectCard({
         {/* Status pill in top-right corner */}
         <div className="absolute top-3 right-3 flex items-center gap-2">
           <StatusBadge status={project.status} />
+          <MoveProjectButton projectId={project.id} currentFolderId={currentFolderId} />
           {canDelete && (
             <DeleteProjectButton projectId={project.id} projectTitle={project.title} />
           )}

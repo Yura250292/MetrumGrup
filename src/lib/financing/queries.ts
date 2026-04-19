@@ -4,6 +4,7 @@ import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 
 export type FinanceListFilters = {
   projectId?: string | null;
+  folderId?: string | null;
   type?: "INCOME" | "EXPENSE";
   kind?: "PLAN" | "FACT";
   category?: string;
@@ -29,6 +30,8 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
   const hasAttachmentsRaw = searchParams.get("hasAttachments");
   const archivedRaw = searchParams.get("archived");
 
+  const folderIdRaw = searchParams.get("folderId");
+
   return {
     projectId:
       projectIdRaw === null
@@ -36,6 +39,7 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
         : projectIdRaw === "null" || projectIdRaw === ""
           ? null
           : projectIdRaw,
+    folderId: folderIdRaw ?? undefined,
     type: typeRaw === "INCOME" || typeRaw === "EXPENSE" ? typeRaw : undefined,
     kind: kindRaw === "PLAN" || kindRaw === "FACT" ? kindRaw : undefined,
     category: category && FINANCE_CATEGORY_LABELS[category] ? category : undefined,
@@ -57,6 +61,9 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
 
   if (filters.projectId !== undefined) {
     where.projectId = filters.projectId;
+  }
+  if (filters.folderId !== undefined) {
+    where.folderId = filters.folderId;
   }
   if (filters.type) where.type = filters.type;
   if (filters.kind) where.kind = filters.kind;

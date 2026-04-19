@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const statusFilter = searchParams.get("status");
+    const folderIdFilter = searchParams.get("folderId");
 
     // Build where clause
     const where: any = {};
@@ -26,6 +27,9 @@ export async function GET(request: NextRequest) {
       // Support multiple statuses separated by comma
       const statuses = statusFilter.split(",").map(s => s.trim());
       where.status = { in: statuses };
+    }
+    if (folderIdFilter !== null && folderIdFilter !== undefined) {
+      where.folderId = folderIdFilter === "root" ? null : folderIdFilter;
     }
 
     const estimates = await prisma.estimate.findMany({

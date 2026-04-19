@@ -2,17 +2,32 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Loader2,
   Calculator,
   ArrowRight,
   FileText,
   AlertCircle,
+  FolderPlus,
+  FolderInput,
 } from "lucide-react";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { EstimateStatus } from "@prisma/client";
+import { FolderCard } from "@/components/folders/FolderCard";
+import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
+import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
+import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
+import {
+  useFolders,
+  useFolderDetail,
+  useCreateFolder,
+  useUpdateFolder,
+  useDeleteFolder,
+  useMoveItems,
+} from "@/hooks/useFolders";
 
 type Estimate = {
   id: string;
@@ -31,19 +46,37 @@ const FILTERS = [
 ];
 
 export default function AdminV2FinancePage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const folderId = searchParams.get("folderId") ?? null;
+
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("FINANCE_REVIEW");
+  const [showCreate, setShowCreate] = useState(false);
+  const [moveEstimateId, setMoveEstimateId] = useState<string | null>(null);
+
+  const { data: folders = [] } = useFolders("ESTIMATE", folderId);
+  const { data: detailData } = useFolderDetail(folderId);
+  const breadcrumbs = detailData?.breadcrumbs ?? [];
+
+  const createMutation = useCreateFolder();
+  const updateMutation = useUpdateFolder();
+  const deleteMutation = useDeleteFolder();
+  const moveMutation = useMoveItems();
 
   useEffect(() => {
     setLoading(true);
-    fetch(`/api/admin/estimates?status=${filter}`)
+    const params = new URLSearchParams();
+    if (filter) params.set("status", filter);
+    if (folderId) params.set("folderId", folderId);
+    fetch(`/api/admin/estimates?${params}`)
       .then((r) => r.json())
       .then((data) => {
         setEstimates(data.data || []);
         setLoading(false);
       });
-  }, [filter]);
+  }, [filter, folderId]);
 
   const totalReview = estimates.filter((e) => e.status === "FINANCE_REVIEW").length;
   const totalApproved = estimates.filter((e) => e.status === "APPROVED").length;
@@ -101,6 +134,70 @@ export default function AdminV2FinancePage() {
           );
         })}
       </div>
+
+      {/* Folders */}
+      {breadcrumbs.length > 0 && (
+        <FolderBreadcrumb
+          breadcrumbs={breadcrumbs}
+          basePath="/admin-v2/finance"
+          rootLabel="Усі кошториси"
+        />
+      )}
+
+      {folders.length > 0 && (
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+          {folders.map((f) => (
+            <FolderCard
+              key={f.id}
+              folder={f}
+              href={`/admin-v2/finance?folderId=${f.id}`}
+              onRename={(id, name) =>
+                updateMutation.mutate({ id, name }, { onSuccess: () => router.refresh() })
+              }
+              onDelete={(id) => {
+                if (!confirm("Видалити папку? Кошториси повернуться в корінь.")) return;
+                deleteMutation.mutate(id, { onSuccess: () => router.refresh() });
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      <button
+        onClick={() => setShowCreate(true)}
+        className="flex items-center gap-2 text-[12px] font-semibold transition hover:opacity-80"
+        style={{ color: T.accentPrimary }}
+      >
+        <FolderPlus size={14} /> Нова папка
+      </button>
+
+      <CreateFolderDialog
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        onSubmit={(data) => {
+          createMutation.mutate(
+            { domain: "ESTIMATE", name: data.name, parentId: folderId, color: data.color },
+            { onSuccess: () => { setShowCreate(false); router.refresh(); } },
+          );
+        }}
+        loading={createMutation.isPending}
+      />
+
+      <MoveToFolderDialog
+        open={!!moveEstimateId}
+        onClose={() => setMoveEstimateId(null)}
+        domain="ESTIMATE"
+        currentFolderId={folderId}
+        itemCount={1}
+        loading={moveMutation.isPending}
+        onMove={(targetFolderId) => {
+          if (!moveEstimateId) return;
+          moveMutation.mutate(
+            { domain: "ESTIMATE", itemIds: [moveEstimateId], targetFolderId },
+            { onSuccess: () => { setMoveEstimateId(null); router.refresh(); window.location.reload(); } },
+          );
+        }}
+      />
 
       {/* List */}
       <section
@@ -183,18 +280,31 @@ export default function AdminV2FinancePage() {
                       {e.finalAmount > 0 ? formatCurrency(Number(e.finalAmount)) : "—"}
                     </td>
                     <td className="px-4 py-3.5 text-right">
-                      <Link
-                        href={`/admin-v2/finance/configure/${e.id}`}
-                        className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold"
-                        style={{
-                          backgroundColor: T.accentPrimarySoft,
-                          color: T.accentPrimary,
-                          border: `1px solid ${T.accentPrimary}`,
-                        }}
-                      >
-                        {e.status === "FINANCE_REVIEW" ? "Налаштувати" : "Переглянути"}
-                        <ArrowRight size={11} />
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => setMoveEstimateId(e.id)}
+                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-semibold transition hover:opacity-80"
+                          style={{
+                            backgroundColor: T.panelElevated,
+                            color: T.textMuted,
+                          }}
+                          title="Перемістити в папку"
+                        >
+                          <FolderInput size={11} />
+                        </button>
+                        <Link
+                          href={`/admin-v2/finance/configure/${e.id}`}
+                          className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                          style={{
+                            backgroundColor: T.accentPrimarySoft,
+                            color: T.accentPrimary,
+                            border: `1px solid ${T.accentPrimary}`,
+                          }}
+                        >
+                          {e.status === "FINANCE_REVIEW" ? "Налаштувати" : "Переглянути"}
+                          <ArrowRight size={11} />
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}

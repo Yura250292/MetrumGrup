@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
   Loader2,
@@ -16,6 +17,7 @@ import {
   CalendarDays,
   Archive,
   Plus,
+  FolderPlus,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
@@ -31,6 +33,16 @@ import { TabCalendar } from "./tab-calendar";
 import { TabArchive } from "./tab-archive";
 import { FilterBar } from "./filter-bar";
 import type { ProjectOption, UserOption } from "./types";
+import { FolderCard } from "@/components/folders/FolderCard";
+import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
+import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
+import {
+  useFolders,
+  useFolderDetail,
+  useCreateFolder,
+  useUpdateFolder,
+  useDeleteFolder,
+} from "@/hooks/useFolders";
 
 export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types";
 
@@ -56,10 +68,23 @@ export function FinancingView({
   currentUserId: string;
   currentUserName: string;
 }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const folderId = scope ? null : (searchParams.get("folderId") ?? null);
+
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [showQuickAdd, setShowQuickAdd] = useState(false);
+  const [showCreateFolder, setShowCreateFolder] = useState(false);
 
-  const data = useFinancingData({ scope });
+  const { data: folders = [] } = useFolders("FINANCE", folderId);
+  const { data: detailData } = useFolderDetail(folderId);
+  const folderBreadcrumbs = detailData?.breadcrumbs ?? [];
+
+  const createFolderMutation = useCreateFolder();
+  const updateFolderMutation = useUpdateFolder();
+  const deleteFolderMutation = useDeleteFolder();
+
+  const data = useFinancingData({ scope, folderId });
 
   const {
     entries,
@@ -92,6 +117,59 @@ export function FinancingView({
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-20 sm:pb-0">
+      {/* Finance Folders */}
+      {!scope && (
+        <>
+          {folderBreadcrumbs.length > 0 && (
+            <FolderBreadcrumb
+              breadcrumbs={folderBreadcrumbs}
+              basePath="/admin-v2/financing"
+              rootLabel="Усі фінанси"
+            />
+          )}
+
+          {folders.length > 0 && (
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              {folders.map((f) => (
+                <FolderCard
+                  key={f.id}
+                  folder={f}
+                  href={`/admin-v2/financing?folderId=${f.id}`}
+                  showFinanceIndicators
+                  onRename={(id, name) =>
+                    updateFolderMutation.mutate({ id, name }, { onSuccess: () => router.refresh() })
+                  }
+                  onDelete={(id) => {
+                    if (!confirm("Видалити папку? Записи повернуться в корінь.")) return;
+                    deleteFolderMutation.mutate(id, { onSuccess: () => router.refresh() });
+                  }}
+                />
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowCreateFolder(true)}
+            className="flex items-center gap-2 text-[12px] font-semibold transition hover:opacity-80"
+            style={{ color: T.accentPrimary }}
+          >
+            <FolderPlus size={14} /> Нова папка
+          </button>
+
+          <CreateFolderDialog
+            open={showCreateFolder}
+            onClose={() => setShowCreateFolder(false)}
+            onSubmit={(d) => {
+              createFolderMutation.mutate(
+                { domain: "FINANCE", name: d.name, parentId: folderId, color: d.color },
+                { onSuccess: () => { setShowCreateFolder(false); router.refresh(); } },
+              );
+            }}
+            loading={createFolderMutation.isPending}
+          />
+        </>
+      )}
+
       {/* Hero — global */}
       {!scope && (
         <section className="flex flex-col gap-3">
