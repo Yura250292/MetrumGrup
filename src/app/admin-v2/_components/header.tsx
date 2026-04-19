@@ -95,7 +95,7 @@ export function Header() {
 
       <div className="flex items-center gap-3">
         <TeamAvatars />
-        <div className="hidden md:block h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
+        <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
         <AiChatButton />
         <ThemeToggle />
         <NotificationBell

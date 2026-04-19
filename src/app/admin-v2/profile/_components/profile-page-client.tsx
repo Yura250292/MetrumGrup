@@ -16,6 +16,7 @@ import { SectionNotifications } from "./section-notifications";
 import { SectionWorkSettings } from "./section-work-settings";
 import { SectionProductivity } from "./section-productivity";
 import { SectionSecurity } from "./section-security";
+import { SectionQuickChat } from "./section-quick-chat";
 
 export function ProfilePageClient() {
   const {
@@ -120,6 +121,9 @@ export function ProfilePageClient() {
               profile={profile}
               onSave={updateNotifications}
             />
+          </div>
+          <div ref={(el) => { sectionRefs.current.quickChat = el; }}>
+            <SectionQuickChat />
           </div>
           <div ref={(el) => { sectionRefs.current.workSettings = el; }}>
             <SectionWorkSettings profile={profile} onSave={updateProfile} />

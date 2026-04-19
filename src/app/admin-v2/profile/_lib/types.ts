@@ -71,6 +71,7 @@ export type ProfileSection =
   | "about"
   | "role"
   | "notifications"
+  | "quickChat"
   | "workSettings"
   | "productivity"
   | "security";
