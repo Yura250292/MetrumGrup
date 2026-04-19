@@ -10,6 +10,45 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 
+function getGreeting(firstName: string): string {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return `Доброго ранку, ${firstName}`;
+  if (hour >= 12 && hour < 18) return `Добрий день, ${firstName}`;
+  if (hour >= 18 && hour < 23) return `Добрий вечір, ${firstName}`;
+  return `Доброї ночі, ${firstName}`;
+}
+
+function getRoleSubtitle(
+  role: string,
+  overdueTasksCount: number,
+  overduePaymentsCount: number,
+  activeProjectsCount: number,
+  dueTodayCount: number,
+): string {
+  switch (role) {
+    case "FINANCIER":
+      return overduePaymentsCount > 0
+        ? `Є ${overduePaymentsCount} прострочених платежів — потребують уваги`
+        : "Фінансовий стан стабільний";
+    case "ENGINEER":
+      return dueTodayCount > 0
+        ? `У вас ${dueTodayCount} задач на сьогодні`
+        : overdueTasksCount > 0
+          ? `${overdueTasksCount} прострочених задач потребують уваги`
+          : "Всі задачі в нормі";
+    case "MANAGER":
+      if (overdueTasksCount > 0 || overduePaymentsCount > 0) {
+        const parts = [];
+        if (overdueTasksCount > 0) parts.push(`${overdueTasksCount} прострочених задач`);
+        if (overduePaymentsCount > 0) parts.push(`${overduePaymentsCount} прострочених платежів`);
+        return parts.join(", ");
+      }
+      return `${activeProjectsCount} активних проєктів під контролем`;
+    default: // SUPER_ADMIN
+      return "Огляд показників компанії на сьогодні";
+  }
+}
+
 export function HeroBlock({
   firstName,
   today,
@@ -17,6 +56,8 @@ export function HeroBlock({
   overdueTasksCount,
   overduePaymentsCount,
   netProfit,
+  role = "SUPER_ADMIN",
+  dueTodayCount = 0,
 }: {
   firstName: string;
   today: string;
@@ -24,6 +65,8 @@ export function HeroBlock({
   overdueTasksCount: number;
   overduePaymentsCount: number;
   netProfit: number;
+  role?: string;
+  dueTodayCount?: number;
 }) {
   const attentionZones = [
     overdueTasksCount > 0,
@@ -32,6 +75,8 @@ export function HeroBlock({
   ].filter(Boolean).length;
 
   const isStable = attentionZones === 0;
+  const greeting = getGreeting(firstName);
+  const subtitle = getRoleSubtitle(role, overdueTasksCount, overduePaymentsCount, activeProjectsCount, dueTodayCount);
 
   return (
     <section
@@ -55,8 +100,11 @@ export function HeroBlock({
             className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight"
             style={{ color: T.textPrimary }}
           >
-            Вітаємо, {firstName}
+            {greeting}
           </h1>
+          <p className="text-[14px]" style={{ color: T.textSecondary }}>
+            {subtitle}
+          </p>
         </div>
 
         {/* Mini KPI chips */}
