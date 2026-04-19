@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 import type { TutorialScenario } from "@/components/ai-assistant/AiTutorial";
 
-export type AnimationPhase = "idle" | "breaking" | "done";
+export type AnimationPhase = "idle" | "asking" | "breaking" | "done";
 
 type AiPanelState = {
   isOpen: boolean;

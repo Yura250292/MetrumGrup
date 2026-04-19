@@ -7,6 +7,7 @@ import { useTheme } from "@/contexts/ThemeContext";
 import { AiChatPanel } from "./AiChatPanel";
 import { AiTutorial } from "./AiTutorial";
 import { GlassBreakOverlay } from "./GlassBreakOverlay";
+import { ShivaPrompt } from "./ShivaPrompt";
 import { useGlassBreak } from "./useGlassBreak";
 
 export function AiPanelPortal() {
@@ -19,7 +20,7 @@ export function AiPanelPortal() {
   useEffect(() => {
     if (isOpen && !prevOpen.current) {
       if (shouldAnimate) {
-        setAnimationPhase("breaking");
+        setAnimationPhase("asking");
       } else {
         setAnimationPhase("done");
       }
@@ -34,7 +35,21 @@ export function AiPanelPortal() {
 
   return createPortal(
     <div className={theme === "dark" ? "admin-dark" : "admin-light"}>
+      {/* Chat panel — only when animation is done or skipped */}
       {isOpen && animationPhase === "done" && <AiChatPanel onClose={close} />}
+
+      {/* Prompt: "Хочеш розбити шибу?" */}
+      {isOpen && animationPhase === "asking" && (
+        <ShivaPrompt
+          onYes={() => setAnimationPhase("breaking")}
+          onNo={() => {
+            markPlayed();
+            completeAnimation();
+          }}
+        />
+      )}
+
+      {/* Glass break animation */}
       {isOpen && animationPhase === "breaking" && (
         <GlassBreakOverlay
           onComplete={() => {
@@ -43,6 +58,7 @@ export function AiPanelPortal() {
           }}
         />
       )}
+
       {activeTutorial && (
         <AiTutorial scenario={activeTutorial} onClose={closeTutorial} />
       )}
