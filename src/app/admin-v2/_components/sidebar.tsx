@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useState } from "react";
-import { Layers, ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
+import { ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -47,25 +47,18 @@ export function Sidebar() {
         }}
       >
         {!collapsed && (
-          <div className="flex items-center gap-2.5">
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-              style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
-            >
-              <Layers size={16} color="#FFFFFF" />
-            </div>
-            <div className="flex flex-col gap-0">
-              <span className="text-[13px] font-bold leading-none" style={{ color: T.textPrimary }}>
-                Metrum
-              </span>
-              <span
-                className="text-[9px] font-semibold uppercase tracking-[0.15em] mt-0.5"
-                style={{ color: T.accentSecondary }}
-              >
-                Адмін-панель
-              </span>
-            </div>
-          </div>
+          <img
+            src="/images/metrum-logo.svg"
+            alt="Metrum"
+            className="h-5 w-auto flex-shrink-0 admin-dark:brightness-0 admin-dark:invert admin-light:brightness-100"
+          />
+        )}
+        {collapsed && (
+          <img
+            src="/images/metrum-logo.svg"
+            alt="M"
+            className="h-4 w-auto flex-shrink-0 admin-dark:brightness-0 admin-dark:invert admin-light:brightness-100"
+          />
         )}
         <button
           onClick={() => setCollapsed((c) => !c)}
