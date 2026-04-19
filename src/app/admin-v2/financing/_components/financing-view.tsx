@@ -349,6 +349,7 @@ export function FinancingView({
           onAdd={(preset) => setCreatePreset(preset)}
           onEdit={(e) => setEditing(e)}
           onArchive={handleArchive}
+          onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
           onSwitchTab={setActiveTab}
           setFilters={setFilters}
         />

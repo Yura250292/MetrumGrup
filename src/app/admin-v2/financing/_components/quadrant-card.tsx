@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Edit, Archive, Paperclip, FileText } from "lucide-react";
+import { Plus, Edit, Archive, Paperclip, FileText, FolderInput } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
@@ -15,6 +15,7 @@ export function QuadrantCard({
   onAdd,
   onEdit,
   onArchive,
+  onMoveToFolder,
   showProject,
   planned = false,
 }: {
@@ -26,6 +27,7 @@ export function QuadrantCard({
   onAdd: () => void;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
+  onMoveToFolder?: (e: FinanceEntryDTO) => void;
   showProject: boolean;
   planned?: boolean;
 }) {
@@ -124,6 +126,7 @@ export function QuadrantCard({
               showProject={showProject}
               onEdit={() => onEdit(e)}
               onArchive={() => onArchive(e)}
+              onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(e) : undefined}
             />
           ))}
         </div>
@@ -139,6 +142,7 @@ function EntryRow({
   showProject,
   onEdit,
   onArchive,
+  onMoveToFolder,
 }: {
   entry: FinanceEntryDTO;
   accent: string;
@@ -146,6 +150,7 @@ function EntryRow({
   showProject: boolean;
   onEdit: () => void;
   onArchive: () => void;
+  onMoveToFolder?: () => void;
 }) {
   const amount = Number(entry.amount);
   return (
@@ -202,6 +207,20 @@ function EntryRow({
         {formatCurrency(amount)}
       </div>
       <div className="flex gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+        {onMoveToFolder && (
+          <button
+            onClick={onMoveToFolder}
+            title="В папку"
+            className="flex h-6 w-6 items-center justify-center rounded-md"
+            style={{
+              backgroundColor: T.accentPrimarySoft,
+              color: T.accentPrimary,
+              border: `1px solid ${T.accentPrimary}40`,
+            }}
+          >
+            <FolderInput size={10} />
+          </button>
+        )}
         <button
           onClick={onEdit}
           title="Редагувати"
