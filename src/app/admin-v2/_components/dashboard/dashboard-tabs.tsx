@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Users,
-  Wallet,
+  Banknote,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
@@ -14,7 +14,7 @@ const TAB_DEFS = [
   { id: "overview", label: "Огляд", icon: LayoutDashboard },
   { id: "projects", label: "Проєкти", icon: FolderKanban },
   { id: "team", label: "Команда", icon: Users },
-  { id: "finance", label: "Фінанси", icon: Wallet },
+  { id: "financing", label: "Фінансування", icon: Banknote },
 ] as const;
 
 export type DashboardTabId = (typeof TAB_DEFS)[number]["id"];
@@ -27,6 +27,10 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
   const activeRef = useRef<HTMLButtonElement>(null);
 
   const switchTab = (tab: DashboardTabId) => {
+    if (tab === "financing") {
+      router.push("/admin-v2/financing");
+      return;
+    }
     const params = new URLSearchParams(searchParams.toString());
     if (tab === "overview") {
       params.delete("tab");

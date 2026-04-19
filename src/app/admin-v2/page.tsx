@@ -922,17 +922,7 @@ export default async function AdminV2Dashboard({
         </div>
       )}
 
-      {/* Finance tab - placeholder */}
-      {activeTab === "finance" && (
-        <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
-          <Wallet size={40} style={{ color: T.emerald }} className="mx-auto mb-3" />
-          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>Огляд фінансів</h2>
-          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>Розширений Finance Pulse скоро буде доступний</p>
-          <Link href="/admin-v2/finance" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white" style={{ backgroundColor: T.emerald }}>
-            Переглянути фінанси
-          </Link>
-        </div>
-      )}
+      {/* Financing tab — redirects via dashboard-tabs.tsx */}
     </div>
   );
 }
