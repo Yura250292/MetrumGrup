@@ -84,7 +84,7 @@ export function WidgetConfig({
         }}
       >
         <Settings size={14} />
-        Налаштувати
+        <span className="hidden sm:inline">Налаштувати</span>
       </button>
 
       {open && (

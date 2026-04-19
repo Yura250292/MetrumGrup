@@ -28,7 +28,7 @@ import { TeamPulse } from "./_components/dashboard/team-pulse";
 import { UtilityRail } from "./_components/dashboard/utility-rail";
 import { FinancePulse } from "./_components/dashboard/finance-pulse";
 import { StageAnalytics } from "./_components/dashboard/stage-analytics";
-import { DashboardShell, Widget } from "./_components/dashboard/dashboard-shell";
+import { DashboardShell, DashboardWidgetConfigButton, Widget } from "./_components/dashboard/dashboard-shell";
 import { AiSummary } from "./_components/dashboard/ai-summary";
 import { CollapsibleMobile } from "./_components/dashboard/collapsible-mobile";
 
@@ -656,38 +656,37 @@ export default async function AdminV2Dashboard({
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
-      {/* Dashboard Tabs + Period Switcher + Widget Config */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-        <Suspense>
-          <DashboardTabs active={activeTab} />
-        </Suspense>
-        <div className="flex items-center gap-2">
-          <Suspense>
-            <PeriodSwitcher active={activePeriod} />
-          </Suspense>
-        </div>
-      </div>
+      {/* Hero — always on top */}
+      <HeroBlock
+        firstName={firstName}
+        today={today}
+        activeProjectsCount={activeProjectsCount}
+        overdueTasksCount={overdueTasksCount}
+        overduePaymentsCount={overduePayments.length}
+        netProfit={netProfit}
+        role={role}
+        dueTodayCount={dueTodayTasksCount}
+      />
+
+      {/* Dashboard Tabs */}
+      <Suspense>
+        <DashboardTabs active={activeTab} />
+      </Suspense>
 
       {/* Overview tab content */}
       {activeTab === "overview" && (
         <Suspense>
         <DashboardShell>
+          {/* Period Switcher + Config button */}
+          <div className="flex items-center justify-between gap-2">
+            <Suspense>
+              <PeriodSwitcher active={activePeriod} />
+            </Suspense>
+            <DashboardWidgetConfigButton />
+          </div>
+
           {/* AI Summary */}
           <Widget id="ai-summary"><AiSummary /></Widget>
-
-          {/* Hero / State of Business */}
-          <Widget id="hero">
-          <HeroBlock
-            firstName={firstName}
-            today={today}
-            activeProjectsCount={activeProjectsCount}
-            overdueTasksCount={overdueTasksCount}
-            overduePaymentsCount={overduePayments.length}
-            netProfit={netProfit}
-            role={role}
-            dueTodayCount={dueTodayTasksCount}
-          />
-          </Widget>
 
           {/* Needs Attention */}
           <Widget id="attention">

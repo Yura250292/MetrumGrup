@@ -140,38 +140,29 @@ export function HeroBlock({
         )}
       </div>
 
-      {/* === DESKTOP: full layout === */}
-      <div className="hidden sm:block p-6 sm:p-8">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+      {/* === DESKTOP: compact layout === */}
+      <div className="hidden sm:block p-4 sm:p-5">
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Left: greeting */}
+          <div className="flex flex-col gap-0 min-w-0">
+            <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
               {today.toUpperCase()}
             </span>
-            <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: T.textPrimary }}>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight" style={{ color: T.textPrimary }}>
               {greeting}
             </h1>
           </div>
 
-          <div className="flex flex-wrap gap-3">
-            <MiniChip icon={FolderKanban} label={`${activeProjectsCount} активних проєктів`} color={T.accentPrimary} />
-            <MiniChip icon={AlertCircle} label={`${overdueTasksCount} прострочених задач`} color={overdueTasksCount > 0 ? T.danger : T.success} alert={overdueTasksCount > 0} />
-            <MiniChip icon={Wallet} label={`${overduePaymentsCount} прострочених платежів`} color={overduePaymentsCount > 0 ? T.danger : T.success} alert={overduePaymentsCount > 0} />
-            <MiniChip icon={netProfit >= 0 ? TrendingUp : TrendingDown} label={`${formatCurrencyCompact(netProfit)} чистий`} color={netProfit >= 0 ? T.success : T.danger} alert={netProfit < 0} />
-          </div>
-
-          <div className="flex items-center gap-2">
+          {/* Right: chips */}
+          <div className="flex flex-wrap gap-2 ml-auto">
+            <MiniChip icon={FolderKanban} label={`${activeProjectsCount} проєктів`} color={T.accentPrimary} />
+            <MiniChip icon={AlertCircle} label={`${overdueTasksCount} прострочених`} color={overdueTasksCount > 0 ? T.danger : T.success} alert={overdueTasksCount > 0} />
+            <MiniChip icon={Wallet} label={`${overduePaymentsCount} платежів`} color={overduePaymentsCount > 0 ? T.danger : T.success} alert={overduePaymentsCount > 0} />
+            <MiniChip icon={netProfit >= 0 ? TrendingUp : TrendingDown} label={`${formatCurrencyCompact(netProfit)}`} color={netProfit >= 0 ? T.success : T.danger} alert={netProfit < 0} />
             {isStable ? (
-              <>
-                <CheckCircle2 size={16} style={{ color: T.success }} />
-                <span className="text-[13px] font-semibold" style={{ color: T.success }}>Сьогодні стабільний день</span>
-              </>
+              <MiniChip icon={CheckCircle2} label="Стабільно" color={T.success} />
             ) : (
-              <>
-                <ShieldAlert size={16} style={{ color: attentionZones >= 2 ? T.danger : T.warning }} />
-                <span className="text-[13px] font-semibold" style={{ color: attentionZones >= 2 ? T.danger : T.warning }}>
-                  Є {attentionZones} {attentionZones === 1 ? "зона" : attentionZones < 5 ? "зони" : "зон"} уваги
-                </span>
-              </>
+              <MiniChip icon={ShieldAlert} label={`${attentionZones} зони уваги`} color={attentionZones >= 2 ? T.danger : T.warning} alert />
             )}
           </div>
         </div>
