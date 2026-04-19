@@ -54,8 +54,13 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
   return (
     <div
       ref={scrollRef}
-      className="flex items-center gap-1 overflow-x-auto scrollbar-hide rounded-xl p-1"
-      style={{ backgroundColor: T.panelElevated }}
+      className="flex items-center gap-1 overflow-x-auto rounded-xl p-1"
+      style={{
+        backgroundColor: T.panelElevated,
+        WebkitOverflowScrolling: "touch",
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
     >
       {TAB_DEFS.map((tab) => {
         const isActive = tab.id === active;
@@ -65,14 +70,14 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
             key={tab.id}
             ref={isActive ? activeRef : null}
             onClick={() => switchTab(tab.id)}
-            className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold transition whitespace-nowrap"
+            className="flex items-center gap-1.5 sm:gap-2 rounded-lg px-3 sm:px-4 py-2 text-[12px] sm:text-[13px] font-semibold transition whitespace-nowrap flex-shrink-0"
             style={{
               backgroundColor: isActive ? T.panel : "transparent",
               color: isActive ? T.accentPrimary : T.textMuted,
               boxShadow: isActive ? `0 1px 3px ${T.borderSoft}` : "none",
             }}
           >
-            <Icon size={16} />
+            <Icon size={14} className="flex-shrink-0 sm:w-4 sm:h-4" />
             {tab.label}
           </button>
         );
