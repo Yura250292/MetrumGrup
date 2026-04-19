@@ -33,7 +33,7 @@ export function Sidebar() {
       className="fixed inset-y-0 left-0 z-40 hidden md:flex flex-col"
       style={{
         width,
-        backgroundColor: T.panel,
+        background: "var(--sidebar-bg)",
         borderRight: `1px solid ${T.borderSoft}`,
         transition: "width 0.2s ease",
       }}
