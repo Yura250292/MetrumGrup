@@ -1,7 +1,7 @@
-const CACHE_NAME = 'metrum-v5.0.0';
-const STATIC_CACHE = 'metrum-static-v4';
-const IMAGE_CACHE = 'metrum-images-v4';
-const API_CACHE = 'metrum-api-v4';
+const CACHE_NAME = 'metrum-v5.1.0';
+const STATIC_CACHE = 'metrum-static-v5';
+const IMAGE_CACHE = 'metrum-images-v5';
+const API_CACHE = 'metrum-api-v5';
 
 const STATIC_ASSETS = [
   '/',
