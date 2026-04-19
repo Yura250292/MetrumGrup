@@ -95,6 +95,8 @@ async function executeToolInner(
       return getDetailedTimeLogs(input, ctx);
     case "get_workers":
       return getWorkersList(input, ctx);
+    case "get_users":
+      return getUsersList(input, ctx);
     case "get_materials":
       return getMaterialsList(input);
     case "get_project_files":
@@ -1855,4 +1857,73 @@ async function getGlobalTeamOverview(ctx: AiUserContext) {
   });
 
   return { членівКоманди: team.length, команда: team.sort((a, b) => b.завдань - a.завдань) };
+}
+
+// ── Users (staff) ────────────────────────────────────────────
+
+async function getUsersList(input: ToolInput, ctx: AiUserContext) {
+  requireAdmin(ctx.role);
+
+  const role = input.role as string | undefined;
+  const search = input.search as string | undefined;
+
+  const where: Record<string, unknown> = {};
+  if (role) where.role = role;
+  if (search) {
+    where.OR = [
+      { name: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  const users = await prisma.user.findMany({
+    where,
+    orderBy: { name: "asc" },
+    take: 50,
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      jobTitle: true,
+      isActive: true,
+      createdAt: true,
+      projectMemberships: {
+        where: { isActive: true },
+        select: {
+          roleInProject: true,
+          project: { select: { title: true, status: true } },
+        },
+      },
+      _count: {
+        select: {
+          taskAssignments: true,
+          createdEstimates: true,
+          timeLogs: true,
+        },
+      },
+    },
+  });
+
+  return {
+    всьогоКористувачів: users.length,
+    користувачі: users.map((u) => ({
+      id: u.id,
+      імя: u.name,
+      роль: ROLE_UA[u.role] || u.role,
+      посада: u.jobTitle,
+      email: u.email,
+      телефон: u.phone,
+      активний: u.isActive,
+      проєкти: u.projectMemberships
+        .filter((m) => m.project.status === "ACTIVE")
+        .map((m) => `${m.project.title} (${ROLE_UA[m.roleInProject] || m.roleInProject})`)
+        .join(", ") || "—",
+      завдань: u._count.taskAssignments,
+      кошторисівСтворив: u._count.createdEstimates,
+      записівЧасу: u._count.timeLogs,
+      зареєстрований: u.createdAt.toISOString().split("T")[0],
+    })),
+  };
 }

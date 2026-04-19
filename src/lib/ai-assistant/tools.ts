@@ -462,11 +462,23 @@ const getTimeLogs = fn(
 
 const getWorkers = fn(
   "get_workers",
-  "Список працівників/бригад: ім'я, спеціальність, денна ставка, поточний проєкт.",
+  "Список ЗОВНІШНІХ працівників/бригад: ім'я, спеціальність, денна ставка. Для штатних — get_users.",
   {
     type: "object",
     properties: {
       projectId: { type: "string", description: "Фільтр по проєкту (необов'язково)" },
+    },
+  },
+);
+
+const getUsers = fn(
+  "get_users",
+  "Список ВСІХ штатних співробітників системи: ім'я, роль, email, телефон, на яких проєктах працює, кількість завдань. Використовуй коли питають 'хто працює', 'скільки працівників', 'покажи команду'.",
+  {
+    type: "object",
+    properties: {
+      role: { type: "string", enum: ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER", "CLIENT", "USER"], description: "Фільтр по ролі" },
+      search: { type: "string", description: "Пошук по імені або email" },
     },
   },
 );
@@ -510,7 +522,7 @@ const ADMIN_TOOLS: ToolDef[] = [
   getEstimateSummary, getPaymentStatus, getStageProgress,
   getDashboardKpis, compareProjects, getOverdueItems,
   getFinancialAnalysis, getComments, getTimeLogs,
-  getWorkers, getMaterials,
+  getWorkers, getUsers, getMaterials,
   getProjectFiles, getPhotoReports,
   // Write
   createTask, updateTask, assignTask, addComment,
