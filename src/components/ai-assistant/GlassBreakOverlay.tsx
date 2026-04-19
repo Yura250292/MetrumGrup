@@ -7,10 +7,10 @@ import { SHARDS, CRACK_LINES } from "./glass-shards";
 
 /**
  * Phases:
- * 1. "intro"    — dark overlay fades in, AI avatar appears (pointing mood) + stone appears
- * 2. "ready"    — window (шиба) with owner photo appears, stone pulses — waiting for user click
+ * 1. "intro"    — dark overlay fades in, AI avatar appears (pointing) + stone appears
+ * 2. "ready"    — window (шиба) with owner photo appears, stone pulses — waiting for tap
  * 3. "throwing" — stone flies toward window
- * 4. "impact"   — cracks appear, flash
+ * 4. "impact"   — cracks appear, flash, sound
  * 5. "breaking" — shards fly away
  * 6. "done"     — overlay unmounts
  */
@@ -20,10 +20,23 @@ type Props = {
   onComplete: () => void;
 };
 
+/** Reduce shards on mobile for better performance */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    setMobile(window.innerWidth < 768);
+  }, []);
+  return mobile;
+}
+
 export function GlassBreakOverlay({ onComplete }: Props) {
   const [phase, setPhase] = useState<Phase>("intro");
   const completedCount = useRef(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isMobile = useIsMobile();
+
+  // On mobile use fewer shards for GPU perf
+  const activeShards = isMobile ? SHARDS.filter((_, i) => i % 2 === 0) : SHARDS;
 
   // Preload audio
   useEffect(() => {
@@ -49,7 +62,6 @@ export function GlassBreakOverlay({ onComplete }: Props) {
   // Throwing → impact → breaking chain
   useEffect(() => {
     if (phase !== "throwing") return;
-    // Stone reaches window after 0.5s
     const impactTimer = setTimeout(() => {
       setPhase("impact");
       try { audioRef.current?.play(); } catch { /* blocked */ }
@@ -65,7 +77,7 @@ export function GlassBreakOverlay({ onComplete }: Props) {
 
   const handleShardComplete = () => {
     completedCount.current += 1;
-    if (completedCount.current >= SHARDS.length) {
+    if (completedCount.current >= activeShards.length) {
       setPhase("done");
       onComplete();
     }
@@ -75,7 +87,7 @@ export function GlassBreakOverlay({ onComplete }: Props) {
 
   return (
     <div
-      className="fixed inset-0"
+      className="fixed inset-0 safe-area-pt safe-area-pb"
       style={{ zIndex: 10000 }}
       aria-hidden="true"
     >
@@ -88,11 +100,11 @@ export function GlassBreakOverlay({ onComplete }: Props) {
         transition={{ duration: phase === "breaking" ? 0.6 : 0.4 }}
       />
 
-      {/* ── AI Avatar (pointing mood) — bottom left ── */}
+      {/* ── AI Avatar (pointing) — bottom left ── */}
       <AnimatePresence>
         {(phase === "intro" || phase === "ready" || phase === "throwing") && (
           <motion.div
-            className="absolute bottom-8 left-4 md:left-8 z-20"
+            className="absolute bottom-20 md:bottom-8 left-4 md:left-8 z-20"
             initial={{ x: -100, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: -100, opacity: 0 }}
@@ -103,14 +115,14 @@ export function GlassBreakOverlay({ onComplete }: Props) {
               alt="AI Помічник"
               width={120}
               height={120}
-              className="h-20 w-20 md:h-[120px] md:w-[120px] rounded-2xl"
+              className="h-16 w-16 md:h-[120px] md:w-[120px] rounded-2xl"
               style={{ objectFit: "cover" }}
               unoptimized
               priority
             />
             {/* Speech bubble */}
             <motion.div
-              className="absolute -top-12 left-16 md:left-24 whitespace-nowrap rounded-xl px-3 py-2 text-[13px] font-medium"
+              className="absolute -top-10 md:-top-12 left-14 md:left-24 whitespace-nowrap rounded-xl px-2.5 py-1.5 md:px-3 md:py-2 text-[11px] md:text-[13px] font-medium"
               style={{
                 backgroundColor: "rgba(255,255,255,0.95)",
                 color: "#1a1a1a",
@@ -123,9 +135,8 @@ export function GlassBreakOverlay({ onComplete }: Props) {
               {phase === "ready" || phase === "throwing"
                 ? "Тисни на камінь! 👆"
                 : "Давай розіб'ємо шибу!"}
-              {/* Bubble tail */}
               <div
-                className="absolute -bottom-1.5 left-4 h-3 w-3 rotate-45"
+                className="absolute -bottom-1.5 left-3 h-2.5 w-2.5 rotate-45"
                 style={{ backgroundColor: "rgba(255,255,255,0.95)" }}
               />
             </motion.div>
@@ -137,11 +148,11 @@ export function GlassBreakOverlay({ onComplete }: Props) {
       <AnimatePresence>
         {(phase === "intro" || phase === "ready") && (
           <motion.button
-            className="absolute z-30 cursor-pointer select-none"
+            className="absolute z-30 cursor-pointer select-none tap-highlight-none touch-target"
             style={{
-              bottom: "15%",
+              bottom: "25%",
               left: "50%",
-              fontSize: 48,
+              fontSize: 40,
               lineHeight: 1,
               filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
             }}
@@ -170,16 +181,16 @@ export function GlassBreakOverlay({ onComplete }: Props) {
         <motion.div
           className="absolute z-30 pointer-events-none"
           style={{
-            bottom: "15%",
+            bottom: "25%",
             left: "50%",
-            fontSize: 48,
+            fontSize: 40,
             lineHeight: 1,
             filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.4))",
           }}
           initial={{ x: "-50%", y: 0, scale: 1, rotate: 0 }}
           animate={{
-            x: "calc(-50% + 0px)",
-            y: "-35vh",
+            x: "-50%",
+            y: isMobile ? "-25vh" : "-30vh",
             scale: 0.6,
             rotate: 360,
           }}
@@ -195,10 +206,10 @@ export function GlassBreakOverlay({ onComplete }: Props) {
           <motion.div
             className="absolute z-10"
             style={{
-              top: "10%",
+              top: isMobile ? "8%" : "10%",
               left: "50%",
-              width: "min(320px, 80vw)",
-              height: "min(400px, 55vh)",
+              width: isMobile ? "min(260px, 75vw)" : "min(320px, 80vw)",
+              height: isMobile ? "min(320px, 45vh)" : "min(400px, 55vh)",
             }}
             initial={{ x: "-50%", opacity: 0, scale: 0.8 }}
             animate={{ x: "-50%", opacity: 1, scale: 1 }}
@@ -208,14 +219,14 @@ export function GlassBreakOverlay({ onComplete }: Props) {
             <div
               className="relative h-full w-full overflow-hidden rounded-lg"
               style={{
-                border: "6px solid #8B6F47",
+                border: isMobile ? "4px solid #8B6F47" : "6px solid #8B6F47",
                 boxShadow: "0 8px 32px rgba(0,0,0,0.4), inset 0 0 0 2px #A0845C",
                 background: "#6B5433",
               }}
             >
-              {/* Cross bar (window divider) */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-1.5 -translate-x-1/2 z-[5]" style={{ backgroundColor: "#8B6F47" }} />
-              <div className="absolute top-1/2 left-0 right-0 h-1.5 -translate-y-1/2 z-[5]" style={{ backgroundColor: "#8B6F47" }} />
+              {/* Cross bars */}
+              <div className="absolute left-1/2 top-0 bottom-0 w-1 md:w-1.5 -translate-x-1/2 z-[5]" style={{ backgroundColor: "#8B6F47" }} />
+              <div className="absolute top-1/2 left-0 right-0 h-1 md:h-1.5 -translate-y-1/2 z-[5]" style={{ backgroundColor: "#8B6F47" }} />
 
               {/* Owner photo behind glass */}
               {phase !== "breaking" && (
@@ -231,14 +242,14 @@ export function GlassBreakOverlay({ onComplete }: Props) {
                 </div>
               )}
 
-              {/* Glass layer (frosted) — before breaking */}
+              {/* Glass layer (frosted) */}
               {(phase === "ready" || phase === "throwing") && (
                 <div
                   className="absolute inset-0 z-[2]"
                   style={{
                     background: "linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(200,220,240,0.2) 50%, rgba(255,255,255,0.1) 100%)",
-                    backdropFilter: "blur(6px) saturate(1.2)",
-                    WebkitBackdropFilter: "blur(6px) saturate(1.2)",
+                    backdropFilter: isMobile ? "blur(4px)" : "blur(6px) saturate(1.2)",
+                    WebkitBackdropFilter: isMobile ? "blur(4px)" : "blur(6px) saturate(1.2)",
                   }}
                 />
               )}
@@ -256,7 +267,6 @@ export function GlassBreakOverlay({ onComplete }: Props) {
               {/* ── IMPACT: cracks + flash ── */}
               {(phase === "impact" || phase === "breaking") && (
                 <>
-                  {/* Flash */}
                   <motion.div
                     className="absolute inset-0 z-[6] pointer-events-none"
                     style={{
@@ -266,8 +276,6 @@ export function GlassBreakOverlay({ onComplete }: Props) {
                     animate={{ opacity: [0, 1, 0] }}
                     transition={{ duration: 0.2 }}
                   />
-
-                  {/* Crack lines */}
                   <motion.svg
                     className="absolute inset-0 h-full w-full z-[4] pointer-events-none"
                     viewBox="0 0 100 100"
@@ -297,7 +305,7 @@ export function GlassBreakOverlay({ onComplete }: Props) {
               {/* ── BREAKING: shards fly away ── */}
               {phase === "breaking" && (
                 <>
-                  {SHARDS.map((shard) => (
+                  {activeShards.map((shard) => (
                     <motion.div
                       key={shard.id}
                       className="absolute inset-0 overflow-hidden z-[3]"
@@ -308,40 +316,29 @@ export function GlassBreakOverlay({ onComplete }: Props) {
                       }}
                       initial={{ x: 0, y: 0, rotate: 0, opacity: 1 }}
                       animate={{
-                        x: shard.exitX * 0.7,
-                        y: shard.exitY * 0.7,
+                        x: shard.exitX * (isMobile ? 0.5 : 0.7),
+                        y: shard.exitY * (isMobile ? 0.5 : 0.7),
                         rotate: shard.exitRotate,
                         opacity: 0,
                         scale: 0.7,
                       }}
                       transition={{
-                        duration: 0.6,
+                        duration: isMobile ? 0.5 : 0.6,
                         delay: shard.delay,
                         ease: [0.36, 0, 0.66, -0.56],
                       }}
                       onAnimationComplete={handleShardComplete}
                     >
-                      {/* Glass in shard */}
                       <div
                         className="absolute inset-0"
                         style={{
                           background: "linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(200,220,240,0.3) 50%, rgba(255,255,255,0.15) 100%)",
                         }}
                       />
-                      {/* Photo fragment in shard */}
                       <div className="absolute inset-0 opacity-40">
-                        <Image
-                          src="/images/owner-shiba.webp"
-                          alt=""
-                          fill
-                          className="object-cover"
-                          unoptimized
-                        />
+                        <Image src="/images/owner-shiba.webp" alt="" fill className="object-cover" unoptimized />
                       </div>
-                      <div
-                        className="absolute inset-0"
-                        style={{ boxShadow: "inset 0 0 1px rgba(255,255,255,0.6)" }}
-                      />
+                      <div className="absolute inset-0" style={{ boxShadow: "inset 0 0 1px rgba(255,255,255,0.6)" }} />
                     </motion.div>
                   ))}
                 </>

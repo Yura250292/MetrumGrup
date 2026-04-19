@@ -54,12 +54,12 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
   return (
     <div
       ref={scrollRef}
-      className="flex items-center gap-0.5 sm:gap-1 overflow-x-auto rounded-xl p-1"
+      className="flex items-center gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-none -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible rounded-xl p-1"
       style={{
         backgroundColor: T.panelElevated,
         WebkitOverflowScrolling: "touch",
-        scrollbarWidth: "none",
-        msOverflowStyle: "none",
+        WebkitMaskImage: "linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent)",
+        maskImage: "linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent)",
       }}
     >
       {TAB_DEFS.map((tab) => {
@@ -70,11 +70,12 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
             key={tab.id}
             ref={isActive ? activeRef : null}
             onClick={() => switchTab(tab.id)}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 rounded-lg px-2 sm:px-4 py-2 text-[11px] sm:text-[13px] font-semibold transition whitespace-nowrap"
+            className="snap-center flex-shrink-0 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-[12px] sm:text-[13px] font-semibold transition whitespace-nowrap tap-highlight-none active:scale-95 touch-target"
             style={{
               backgroundColor: isActive ? T.panel : "transparent",
               color: isActive ? T.accentPrimary : T.textMuted,
               boxShadow: isActive ? `0 1px 3px ${T.borderSoft}` : "none",
+              minWidth: "fit-content",
             }}
           >
             <Icon size={14} className="flex-shrink-0" />
