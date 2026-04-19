@@ -2,7 +2,7 @@ import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { formatCurrency, formatCurrencyCompact, formatDateShort } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact, formatDateShort, formatHours } from "@/lib/utils";
 import { PROJECT_STATUS_LABELS, STAGE_LABELS } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
 import {
@@ -24,6 +24,14 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { AiDashboardWidgetWrapper } from "./_components/ai-widget-wrapper";
+import { HeroBlock } from "./_components/dashboard/hero-block";
+import { NeedsAttention } from "./_components/dashboard/needs-attention";
+import { ProjectsAtRisk } from "./_components/dashboard/projects-at-risk";
+import { ActivityFeed, buildFeedEvents } from "./_components/dashboard/activity-feed";
+import { KpiCard } from "./_components/dashboard/kpi-card";
+import { FinanceTile } from "./_components/dashboard/finance-tile";
+import { StatusBadge } from "./_components/dashboard/status-badge";
+import { EmptyProjects } from "./_components/dashboard/empty-projects";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +48,7 @@ export default async function AdminV2Dashboard() {
   startOfToday.setHours(0, 0, 0, 0);
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
+  const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
 
   const [
     projectsCount,
@@ -48,7 +57,6 @@ export default async function AdminV2Dashboard() {
     estimatesCount,
     totalRevenuePaid,
     portfolioBudget,
-    recentProjects,
     overduePayments,
     // Tasks
     activeTasksCount,
@@ -66,6 +74,19 @@ export default async function AdminV2Dashboard() {
     upcomingTasks,
     // Recent AI estimates
     aiEstimatesMonth,
+    // --- NEW: Needs Attention data ---
+    overdueTasksDetailed,
+    staleProjects,
+    dueTodayTasksDetailed,
+    // --- NEW: Projects at Risk data ---
+    activeProjects,
+    overdueTasksByProject,
+    overduePaymentsByProject,
+    // --- NEW: Activity Feed data ---
+    recentCompletedTasks,
+    recentCreatedTasks,
+    recentPaidPayments,
+    recentUpdatedProjects,
   ] = await Promise.all([
     prisma.project.count(),
     prisma.project.count({ where: { status: "ACTIVE" } }),
@@ -79,20 +100,12 @@ export default async function AdminV2Dashboard() {
       where: { status: { in: ["ACTIVE", "DRAFT"] } },
       _sum: { totalBudget: true },
     }),
-    prisma.project.findMany({
-      take: 5,
-      orderBy: { updatedAt: "desc" },
-      include: {
-        client: { select: { name: true } },
-        manager: { select: { name: true } },
-      },
-    }),
     prisma.payment.findMany({
       where: {
         status: { in: ["PENDING", "PARTIAL"] },
         scheduledDate: { lt: now },
       },
-      include: { project: { select: { title: true } } },
+      include: { project: { select: { id: true, title: true } } },
       orderBy: { scheduledDate: "asc" },
       take: 5,
     }),
@@ -173,6 +186,139 @@ export default async function AdminV2Dashboard() {
     prisma.estimate.count({
       where: { createdAt: { gte: startOfMonth } },
     }),
+    // --- NEW: Overdue tasks detailed ---
+    prisma.task.findMany({
+      where: {
+        isArchived: false,
+        status: { isDone: false },
+        dueDate: { lt: now },
+      },
+      select: {
+        id: true,
+        title: true,
+        dueDate: true,
+        project: { select: { id: true, title: true } },
+      },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    // --- NEW: Stale projects (no updates 14+ days) ---
+    prisma.project.findMany({
+      where: {
+        status: "ACTIVE",
+        updatedAt: { lt: fourteenDaysAgo },
+      },
+      select: {
+        id: true,
+        title: true,
+        updatedAt: true,
+        manager: { select: { name: true } },
+      },
+      take: 5,
+    }),
+    // --- NEW: Due today tasks detailed ---
+    prisma.task.findMany({
+      where: {
+        isArchived: false,
+        status: { isDone: false },
+        dueDate: { gte: startOfToday, lte: endOfToday },
+      },
+      select: {
+        id: true,
+        title: true,
+        project: { select: { id: true, title: true } },
+        status: { select: { name: true, color: true } },
+      },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
+    // --- NEW: Active projects for risk scoring ---
+    prisma.project.findMany({
+      where: { status: "ACTIVE" },
+      include: {
+        client: { select: { name: true } },
+        manager: { select: { name: true } },
+      },
+    }),
+    // --- NEW: Overdue tasks grouped by project ---
+    prisma.task.groupBy({
+      by: ["projectId"],
+      where: {
+        isArchived: false,
+        status: { isDone: false },
+        dueDate: { lt: now },
+      },
+      _count: { id: true },
+    }),
+    // --- NEW: Overdue payments grouped by project ---
+    prisma.payment.groupBy({
+      by: ["projectId"],
+      where: {
+        status: { in: ["PENDING", "PARTIAL"] },
+        scheduledDate: { lt: now },
+      },
+      _count: { id: true },
+    }),
+    // --- NEW: Activity Feed - completed tasks ---
+    prisma.task.findMany({
+      where: {
+        status: { isDone: true },
+        completedAt: { gte: startOfWeek },
+      },
+      select: {
+        id: true,
+        title: true,
+        completedAt: true,
+        project: { select: { id: true, title: true } },
+      },
+      orderBy: { completedAt: "desc" },
+      take: 10,
+    }),
+    // --- NEW: Activity Feed - created tasks ---
+    prisma.task.findMany({
+      where: {
+        isArchived: false,
+        createdAt: { gte: startOfWeek },
+      },
+      select: {
+        id: true,
+        title: true,
+        createdAt: true,
+        project: { select: { id: true, title: true } },
+        createdBy: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    // --- NEW: Activity Feed - paid payments ---
+    prisma.payment.findMany({
+      where: {
+        paidDate: { gte: startOfWeek },
+        status: "PAID",
+      },
+      select: {
+        id: true,
+        amount: true,
+        paidDate: true,
+        project: { select: { id: true, title: true } },
+      },
+      orderBy: { paidDate: "desc" },
+      take: 10,
+    }),
+    // --- NEW: Activity Feed - updated projects ---
+    prisma.project.findMany({
+      where: {
+        updatedAt: { gte: startOfWeek },
+      },
+      select: {
+        id: true,
+        title: true,
+        currentStage: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 10,
+    }),
   ]);
 
   const revenue = Number(totalRevenuePaid._sum.amount || 0);
@@ -205,7 +351,7 @@ export default async function AdminV2Dashboard() {
 
   const firstName = session.user.name?.split(" ")[0] || "Адміністратор";
 
-  // Stage distribution map (labelled)
+  // Stage distribution map
   const stageMap = new Map<ProjectStage, number>();
   for (const s of stageDistribution) {
     stageMap.set(s.currentStage, s._count.currentStage);
@@ -221,26 +367,59 @@ export default async function AdminV2Dashboard() {
   ];
   const stageMax = Math.max(...Array.from(stageMap.values()), 1);
 
+  // --- Build Projects at Risk ---
+  const overdueTaskMap = new Map(
+    overdueTasksByProject.map((g) => [g.projectId, g._count.id]),
+  );
+  const overduePaymentMap = new Map(
+    overduePaymentsByProject.map((g) => [g.projectId, g._count.id]),
+  );
+  const projectsAtRisk = activeProjects
+    .map((p) => {
+      const overdueTaskCount = overdueTaskMap.get(p.id) ?? 0;
+      const overduePaymentCount = overduePaymentMap.get(p.id) ?? 0;
+      const isStale = p.updatedAt < fourteenDaysAgo;
+      const riskScore =
+        overdueTaskCount * 3 + overduePaymentCount * 5 + (isStale ? 1 : 0);
+      return {
+        ...p,
+        overdueTaskCount,
+        overduePaymentCount,
+        isStale,
+        riskScore,
+      };
+    })
+    .filter((p) => p.riskScore > 0)
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 5);
+
+  // --- Build Activity Feed ---
+  const feedEvents = buildFeedEvents({
+    completedTasks: recentCompletedTasks,
+    createdTasks: recentCreatedTasks,
+    paidPayments: recentPaidPayments,
+    updatedProjects: recentUpdatedProjects,
+  });
+
   return (
     <div className="flex flex-col gap-8">
-      {/* Hero */}
-      <section className="flex flex-col gap-2">
-        <span
-          className="text-[11px] font-bold tracking-wider"
-          style={{ color: T.textMuted }}
-        >
-          {today.toUpperCase()}
-        </span>
-        <h1
-          className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight truncate"
-          style={{ color: T.textPrimary }}
-        >
-          Вітаємо, {firstName}
-        </h1>
-        <p className="text-[15px]" style={{ color: T.textSecondary }}>
-          Огляд показників компанії на сьогодні
-        </p>
-      </section>
+      {/* Hero / State of Business */}
+      <HeroBlock
+        firstName={firstName}
+        today={today}
+        activeProjectsCount={activeProjectsCount}
+        overdueTasksCount={overdueTasksCount}
+        overduePaymentsCount={overduePayments.length}
+        netProfit={netProfit}
+      />
+
+      {/* Needs Attention */}
+      <NeedsAttention
+        overdueTasks={overdueTasksDetailed}
+        overduePayments={overduePayments}
+        staleProjects={staleProjects}
+        dueTodayTasks={dueTodayTasksDetailed}
+      />
 
       {/* Row 1 — business KPIs */}
       <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
@@ -523,83 +702,13 @@ export default async function AdminV2Dashboard() {
         </div>
       </section>
 
-      {/* Row 5 — Recent projects + Overdue/Upcoming */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Recent projects */}
-        <div
-          className="xl:col-span-2 rounded-2xl p-6"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                ОСТАННЯ АКТИВНІСТЬ
-              </span>
-              <h2 className="text-base font-bold" style={{ color: T.textPrimary }}>
-                Останні проєкти
-              </h2>
-            </div>
-            <Link
-              href="/admin-v2/projects"
-              className="flex items-center gap-1.5 text-xs font-semibold transition hover:brightness-[0.97]"
-              style={{ color: T.accentPrimary }}
-            >
-              Усі проєкти <ArrowRight size={14} />
-            </Link>
-          </div>
+      {/* Activity Feed */}
+      <ActivityFeed events={feedEvents} />
 
-          {recentProjects.length === 0 ? (
-            <EmptyProjects />
-          ) : (
-            <div className="flex flex-col gap-2">
-              {recentProjects.map((project, idx) => {
-                const projectColors = [
-                  { bg: T.accentPrimarySoft, fg: T.accentPrimary },
-                  { bg: T.emeraldSoft, fg: T.emerald },
-                  { bg: T.violetSoft, fg: T.violet },
-                  { bg: T.skySoft, fg: T.sky },
-                  { bg: T.amberSoft, fg: T.amber },
-                ];
-                const pc = projectColors[idx % projectColors.length];
-                return (
-                <Link
-                  key={project.id}
-                  href={`/admin-v2/projects/${project.id}`}
-                  className="flex items-center gap-3 rounded-xl p-3.5 transition hover:brightness-[0.97]"
-                  style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
-                >
-                  <div
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg text-sm font-bold"
-                    style={{ backgroundColor: pc.bg, color: pc.fg }}
-                  >
-                    {project.client?.name?.charAt(0)?.toUpperCase() || "?"}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-[14px] font-semibold" style={{ color: T.textPrimary }}>
-                        {project.title}
-                      </span>
-                      <StatusBadge status={project.status} />
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] min-w-0" style={{ color: T.textMuted }}>
-                      <span className="truncate flex-shrink min-w-0">{project.client?.name}</span>
-                      {project.manager?.name && (
-                        <>
-                          <span className="flex-shrink-0">·</span>
-                          <span className="truncate flex-shrink min-w-0">{project.manager.name}</span>
-                        </>
-                      )}
-                      <span className="flex-shrink-0">·</span>
-                      <span className="flex-shrink-0">{STAGE_LABELS[project.currentStage]}</span>
-                    </div>
-                  </div>
-                  <ArrowRight size={16} style={{ color: T.textMuted }} className="flex-shrink-0" />
-                </Link>
-                );
-              })}
-            </div>
-          )}
-        </div>
+      {/* Row 5 — Projects at Risk + Overdue/Upcoming */}
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Projects at Risk */}
+        <ProjectsAtRisk projects={projectsAtRisk} />
 
         {/* Overdue payments + upcoming tasks */}
         <div className="flex flex-col gap-4">
@@ -772,176 +881,6 @@ export default async function AdminV2Dashboard() {
       <p className="text-[11px] text-center" style={{ color: T.textMuted }}>
         Кошторисів у системі: {estimatesCount}
       </p>
-    </div>
-  );
-}
-
-function formatHours(minutes: number): string {
-  if (!minutes) return "0год";
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h === 0) return `${m}хв`;
-  if (m === 0) return `${h}год`;
-  return `${h}год ${m}хв`;
-}
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  icon: Icon,
-  accent,
-  gradient,
-  href,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
-  accent: string;
-  gradient?: string;
-  href?: string;
-}) {
-  const content = (
-    <div
-      className="flex flex-col gap-1.5 rounded-xl sm:rounded-2xl p-3 sm:p-6 h-full transition"
-      style={{
-        background: gradient || T.panel,
-        border: `1px solid ${accent}20`,
-        boxShadow: `0 2px 8px ${accent}12`,
-      }}
-    >
-      <div className="flex items-center justify-between">
-        <span
-          className="text-[9px] sm:text-[10px] font-bold tracking-wider"
-          style={{ color: T.textSecondary }}
-        >
-          {label}
-        </span>
-        <div
-          className="flex h-7 w-7 sm:h-9 sm:w-9 items-center justify-center rounded-lg"
-          style={{ backgroundColor: accent + "18", border: `1px solid ${accent}30` }}
-        >
-          <Icon size={16} style={{ color: accent }} />
-        </div>
-      </div>
-      <div
-        className="text-xl sm:text-3xl md:text-4xl font-bold mt-1 sm:mt-2 truncate"
-        style={{ color: T.textPrimary }}
-      >
-        {value}
-      </div>
-      <div
-        className="text-[10px] sm:text-xs hidden sm:block truncate"
-        style={{ color: T.textSecondary }}
-      >
-        {sub}
-      </div>
-    </div>
-  );
-  if (href) {
-    return (
-      <Link href={href} className="hover:brightness-[0.97] transition">
-        {content}
-      </Link>
-    );
-  }
-  return content;
-}
-
-function FinanceTile({
-  label,
-  value,
-  icon: Icon,
-  color,
-  emphasize,
-}: {
-  label: string;
-  value: number;
-  icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
-  color: string;
-  emphasize?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-center gap-4 rounded-2xl p-5"
-      style={{
-        background: emphasize
-          ? `linear-gradient(135deg, ${color}08 0%, ${color}18 100%)`
-          : T.panel,
-        border: `1px solid ${emphasize ? color : color + "30"}`,
-        boxShadow: emphasize ? `0 4px 12px ${color}18` : `0 1px 4px ${color}10`,
-      }}
-    >
-      <div
-        className="flex h-11 w-11 items-center justify-center rounded-xl flex-shrink-0"
-        style={{ backgroundColor: color + "18", border: `1px solid ${color}30` }}
-      >
-        <Icon size={20} style={{ color }} />
-      </div>
-      <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider"
-          style={{ color: T.textSecondary }}
-        >
-          {label}
-        </span>
-        <span
-          className="text-xl font-bold truncate"
-          style={{ color }}
-        >
-          {formatCurrencyCompact(value)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: keyof typeof PROJECT_STATUS_LABELS }) {
-  const label = PROJECT_STATUS_LABELS[status] ?? status;
-  const colors: Record<string, { bg: string; fg: string }> = {
-    DRAFT: { bg: T.panelElevated, fg: T.textMuted },
-    ACTIVE: { bg: T.successSoft, fg: T.success },
-    ON_HOLD: { bg: T.warningSoft, fg: T.warning },
-    COMPLETED: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
-    CANCELLED: { bg: T.dangerSoft, fg: T.danger },
-  };
-  const c = colors[status] ?? colors.DRAFT;
-  return (
-    <span
-      className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0"
-      style={{ backgroundColor: c.bg, color: c.fg }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function EmptyProjects() {
-  return (
-    <div
-      className="flex flex-col items-center gap-3 rounded-xl p-8 text-center"
-      style={{ backgroundColor: T.panelElevated }}
-    >
-      <div
-        className="flex h-12 w-12 items-center justify-center rounded-full"
-        style={{ backgroundColor: T.accentPrimarySoft }}
-      >
-        <FolderKanban size={24} style={{ color: T.accentPrimary }} />
-      </div>
-      <span className="text-[14px] font-semibold" style={{ color: T.textPrimary }}>
-        Немає проєктів
-      </span>
-      <span className="text-[12px]" style={{ color: T.textMuted }}>
-        Створіть перший проєкт, щоб почати роботу
-      </span>
-      <Link
-        href="/admin-v2/projects/new"
-        className="mt-2 flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white"
-        style={{ backgroundColor: T.accentPrimary }}
-      >
-        <Plus size={16} /> Створити проєкт
-      </Link>
     </div>
   );
 }

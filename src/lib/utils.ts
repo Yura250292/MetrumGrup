@@ -73,6 +73,30 @@ export function slugify(text: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+export function formatHours(minutes: number): string {
+  if (!minutes) return "0год";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}хв`;
+  if (m === 0) return `${h}год`;
+  return `${h}год ${m}хв`;
+}
+
+export function formatRelativeTime(date: Date): string {
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMin < 1) return "щойно";
+  if (diffMin < 60) return `${diffMin} хв тому`;
+  if (diffHours < 24) return `${diffHours} год тому`;
+  if (diffDays === 1) return "вчора";
+  if (diffDays < 7) return `${diffDays} дн тому`;
+  return `${Math.floor(diffDays / 7)} тижн тому`;
+}
+
 export function calculateProgress(stages: { status: string }[]): number {
   if (stages.length === 0) return 0;
   const completed = stages.filter((s) => s.status === "COMPLETED").length;
