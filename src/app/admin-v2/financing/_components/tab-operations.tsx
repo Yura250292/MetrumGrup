@@ -10,6 +10,7 @@ import {
   User,
   FileText,
   FolderOpen,
+  FolderInput,
   AlignLeft,
   ArrowUpDown,
   Clock,
@@ -54,6 +55,7 @@ export function TabOperations({
   setFilters,
   onEdit,
   onArchive,
+  onMoveToFolder,
 }: {
   entries: FinanceEntryDTO[];
   loading: boolean;
@@ -63,6 +65,7 @@ export function TabOperations({
   setFilters: React.Dispatch<React.SetStateAction<FinancingFilters>>;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
+  onMoveToFolder?: (e: FinanceEntryDTO) => void;
 }) {
   const [activeChips, setActiveChips] = useState<Set<ChipKey>>(new Set(["all"]));
   const [sortField, setSortField] = useState<SortField>("date");
@@ -219,6 +222,7 @@ export function TabOperations({
                   showProject={!scope}
                   onEdit={() => onEdit(entry)}
                   onArchive={() => onArchive(entry)}
+                  onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(entry) : undefined}
                 />
               );
             })}
@@ -281,6 +285,7 @@ function OperationRow({
   showProject,
   onEdit,
   onArchive,
+  onMoveToFolder,
 }: {
   entry: FinanceEntryDTO;
   isZebra: boolean;
@@ -288,6 +293,7 @@ function OperationRow({
   showProject: boolean;
   onEdit: () => void;
   onArchive: () => void;
+  onMoveToFolder?: () => void;
 }) {
   const amount = Number(entry.amount);
   const amountColor =
@@ -361,6 +367,16 @@ function OperationRow({
             )}
           </div>
           <div className="flex gap-1 flex-shrink-0">
+            {onMoveToFolder && (
+              <button
+                onClick={onMoveToFolder}
+                className="flex h-7 w-7 items-center justify-center rounded-lg"
+                style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
+                title="В папку"
+              >
+                <FolderInput size={12} />
+              </button>
+            )}
             <button
               onClick={onEdit}
               className="flex h-7 w-7 items-center justify-center rounded-lg"
@@ -455,6 +471,11 @@ function OperationRow({
           <QualityDot icon={<FolderOpen size={9} />} ok={!!entry.projectId} title={entry.project?.title || "Без проєкту"} />
         </div>
         <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+          {onMoveToFolder && (
+            <button onClick={onMoveToFolder} title="В папку" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}>
+              <FolderInput size={10} />
+            </button>
+          )}
           <button onClick={onEdit} title="Редагувати" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.panelElevated, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}>
             <Edit size={10} />
           </button>

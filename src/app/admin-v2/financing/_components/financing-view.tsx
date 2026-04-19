@@ -36,12 +36,14 @@ import type { ProjectOption, UserOption } from "./types";
 import { FolderCard } from "@/components/folders/FolderCard";
 import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
 import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
+import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
 import {
   useFolders,
   useFolderDetail,
   useCreateFolder,
   useUpdateFolder,
   useDeleteFolder,
+  useMoveItems,
 } from "@/hooks/useFolders";
 
 export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types";
@@ -80,9 +82,12 @@ export function FinancingView({
   const { data: detailData } = useFolderDetail(folderId);
   const folderBreadcrumbs = detailData?.breadcrumbs ?? [];
 
+  const [moveEntryId, setMoveEntryId] = useState<string | null>(null);
+
   const createFolderMutation = useCreateFolder();
   const updateFolderMutation = useUpdateFolder();
   const deleteFolderMutation = useDeleteFolder();
+  const moveItemsMutation = useMoveItems();
 
   const data = useFinancingData({ scope, folderId });
 
@@ -95,6 +100,7 @@ export function FinancingView({
     filters,
     setFilters,
     resetFilters,
+    loadData,
     handleSave,
     handleArchive,
     handleExport,
@@ -358,8 +364,31 @@ export function FinancingView({
           setFilters={setFilters}
           onEdit={(e) => setEditing(e)}
           onArchive={handleArchive}
+          onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
         />
       )}
+
+      {/* Move finance entry to folder dialog */}
+      <MoveToFolderDialog
+        open={!!moveEntryId}
+        onClose={() => setMoveEntryId(null)}
+        domain="FINANCE"
+        currentFolderId={folderId}
+        itemCount={1}
+        loading={moveItemsMutation.isPending}
+        onMove={(targetFolderId) => {
+          if (!moveEntryId) return;
+          moveItemsMutation.mutate(
+            { domain: "FINANCE", itemIds: [moveEntryId], targetFolderId },
+            {
+              onSuccess: () => {
+                setMoveEntryId(null);
+                loadData();
+              },
+            },
+          );
+        }}
+      />
 
       {activeTab === "calendar" && (
         <TabCalendar entries={entries} loading={loading} />
