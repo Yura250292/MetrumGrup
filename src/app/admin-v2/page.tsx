@@ -28,7 +28,6 @@ import { TeamPulse } from "./_components/dashboard/team-pulse";
 import { UtilityRail } from "./_components/dashboard/utility-rail";
 import { FinancePulse } from "./_components/dashboard/finance-pulse";
 import { StageAnalytics } from "./_components/dashboard/stage-analytics";
-import { SavedViews } from "./_components/dashboard/saved-views";
 import { DashboardShell, Widget } from "./_components/dashboard/dashboard-shell";
 import { AiSummary } from "./_components/dashboard/ai-summary";
 import { CollapsibleMobile } from "./_components/dashboard/collapsible-mobile";
@@ -668,11 +667,6 @@ export default async function AdminV2Dashboard({
           </Suspense>
         </div>
       </div>
-
-      {/* Saved Views */}
-      <Suspense>
-        <SavedViews />
-      </Suspense>
 
       {/* Overview tab content */}
       {activeTab === "overview" && (
