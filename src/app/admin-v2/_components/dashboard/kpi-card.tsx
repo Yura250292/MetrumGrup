@@ -23,7 +23,7 @@ export function KpiCard({
 }) {
   const content = (
     <div
-      className="relative flex flex-col justify-between rounded-xl sm:rounded-2xl p-3 sm:p-5 h-full transition-all duration-200 overflow-hidden group"
+      className="relative flex flex-col items-center justify-center text-center rounded-xl sm:rounded-2xl p-3 sm:p-5 h-full transition-all duration-200 overflow-hidden group"
       style={{
         background: T.panel,
         border: `1px solid ${T.borderSoft}`,
@@ -41,53 +41,53 @@ export function KpiCard({
         style={{ backgroundColor: accent }}
       />
 
-      {/* Top row: icon + label */}
-      <div className="flex items-center gap-2 sm:gap-2.5 mb-2 sm:mb-3 relative z-10">
-        <div
-          className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl"
-          style={{
-            background: `linear-gradient(135deg, ${accent}22, ${accent}10)`,
-            border: `1px solid ${accent}25`,
-          }}
-        >
-          <Icon size={18} style={{ color: accent }} />
-        </div>
-        <span
-          className="text-[10px] sm:text-[11px] font-bold tracking-wider uppercase"
+      {/* Navigate arrow (desktop hover) */}
+      {href && (
+        <ArrowUpRight
+          size={14}
+          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
           style={{ color: T.textMuted }}
-        >
-          {label}
-        </span>
-        {href && (
-          <ArrowUpRight
-            size={14}
-            className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-            style={{ color: T.textMuted }}
-          />
-        )}
+        />
+      )}
+
+      {/* Icon */}
+      <div
+        className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl mb-2 sm:mb-3 relative z-10"
+        style={{
+          background: `linear-gradient(135deg, ${accent}22, ${accent}10)`,
+          border: `1px solid ${accent}25`,
+        }}
+      >
+        <Icon size={18} style={{ color: accent }} />
       </div>
 
-      {/* Value */}
-      <div className="relative z-10">
-        <div
-          className="text-lg sm:text-3xl font-extrabold tracking-tight truncate leading-tight"
-          style={{ color: T.textPrimary }}
-        >
-          {value}
-        </div>
+      {/* Label */}
+      <span
+        className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase mb-1 relative z-10"
+        style={{ color: T.textMuted }}
+      >
+        {label}
+      </span>
 
-        {/* Sub + delta */}
-        <div className="flex items-center gap-2 mt-1.5">
-          <span
-            className="text-[11px] sm:text-[12px] truncate"
-            style={{ color: T.textSecondary }}
-          >
-            {sub}
-          </span>
-          {delta && delta.value !== 0 && (
-            <DeltaBadge value={delta.value} label={delta.label} />
-          )}
-        </div>
+      {/* Value */}
+      <div
+        className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate leading-tight relative z-10 max-w-full"
+        style={{ color: T.textPrimary }}
+      >
+        {value}
+      </div>
+
+      {/* Sub + delta */}
+      <div className="flex items-center justify-center gap-2 mt-1 relative z-10">
+        <span
+          className="text-[10px] sm:text-[11px] truncate"
+          style={{ color: T.textSecondary }}
+        >
+          {sub}
+        </span>
+        {delta && delta.value !== 0 && (
+          <DeltaBadge value={delta.value} label={delta.label} />
+        )}
       </div>
     </div>
   );

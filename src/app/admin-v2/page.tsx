@@ -873,46 +873,6 @@ export default async function AdminV2Dashboard({
 
           {/* AI Insights Widget */}
           <Widget id="ai-widget"><AiDashboardWidgetWrapper /></Widget>
-
-          {/* Quick actions */}
-          <section
-            className="rounded-xl sm:rounded-2xl p-4 sm:p-6"
-            style={{
-              background: "var(--kpi-banner)",
-              border: `1px solid ${T.accentPrimary}25`,
-              boxShadow: `0 4px 16px ${T.accentPrimary}12`,
-            }}
-          >
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
-                  style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
-                >
-                  <Sparkles size={20} color="#FFFFFF" />
-                </div>
-                <div className="flex flex-col gap-0">
-                  <div className="text-sm font-bold" style={{ color: T.textPrimary }}>
-                    Спробуйте AI генератор кошторисів
-                  </div>
-                  <div className="text-[12px]" style={{ color: T.textSecondary }}>
-                    Створіть детальний кошторис із PDF-документів за ~3 хвилини
-                  </div>
-                </div>
-              </div>
-              <Link
-                href="/ai-estimate-v2"
-                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
-                style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
-              >
-                <Sparkles size={16} /> Згенерувати
-              </Link>
-            </div>
-          </section>
-
-          <p className="text-[11px] text-center" style={{ color: T.textMuted }}>
-            Кошторисів у системі: {estimatesCount}
-          </p>
         </DashboardShell>
         </Suspense>
       )}
