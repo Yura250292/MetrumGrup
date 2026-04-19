@@ -26,7 +26,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
           <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
             <Sidebar />
             <MobileShell />
-            <div className="md:pl-[264px] flex flex-col min-h-screen">
+            <div className="flex flex-col min-h-screen sidebar-push">
               <Header />
               <main className="flex-1 px-6 py-6 md:px-8 md:py-8 pb-24 md:pb-8">{children}</main>
             </div>
