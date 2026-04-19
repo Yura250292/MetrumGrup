@@ -1,3 +1,4 @@
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 
@@ -7,12 +8,14 @@ export function FinanceTile({
   icon: Icon,
   color,
   emphasize,
+  delta,
 }: {
   label: string;
   value: number;
   icon: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
   color: string;
   emphasize?: boolean;
+  delta?: { value: number; label: string };
 }) {
   return (
     <div
@@ -38,13 +41,36 @@ export function FinanceTile({
         >
           {label}
         </span>
-        <span
-          className="text-xl font-bold truncate"
-          style={{ color }}
-        >
-          {formatCurrencyCompact(value)}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            className="text-xl font-bold truncate"
+            style={{ color }}
+          >
+            {formatCurrencyCompact(value)}
+          </span>
+          {delta && delta.value !== 0 && (
+            <FinanceDelta value={delta.value} label={delta.label} />
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function FinanceDelta({ value, label }: { value: number; label: string }) {
+  const isPositive = value > 0;
+  const color = isPositive ? T.success : T.danger;
+  const Arrow = isPositive ? TrendingUp : TrendingDown;
+  const sign = isPositive ? "+" : "";
+
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold flex-shrink-0"
+      style={{ backgroundColor: color + "14", color }}
+      title={label}
+    >
+      <Arrow size={10} />
+      {sign}{value.toFixed(value % 1 === 0 ? 0 : 1)}%
+    </span>
   );
 }

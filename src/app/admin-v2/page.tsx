@@ -1,26 +1,22 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
-import { formatCurrency, formatCurrencyCompact, formatDateShort, formatHours } from "@/lib/utils";
-import { PROJECT_STATUS_LABELS, STAGE_LABELS } from "@/lib/constants";
+import { formatCurrencyCompact, formatHours } from "@/lib/utils";
+import { STAGE_LABELS } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
 import {
   FolderKanban,
   Users,
-  Calculator,
   TrendingUp,
   TrendingDown,
-  ArrowRight,
   AlertCircle,
   Sparkles,
-  Plus,
-  CheckCircle2,
   ListTodo,
   Clock,
   Activity,
   Wallet,
-  Zap,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { AiDashboardWidgetWrapper } from "./_components/ai-widget-wrapper";
@@ -30,18 +26,96 @@ import { ProjectsAtRisk } from "./_components/dashboard/projects-at-risk";
 import { ActivityFeed, buildFeedEvents } from "./_components/dashboard/activity-feed";
 import { KpiCard } from "./_components/dashboard/kpi-card";
 import { FinanceTile } from "./_components/dashboard/finance-tile";
-import { StatusBadge } from "./_components/dashboard/status-badge";
-import { EmptyProjects } from "./_components/dashboard/empty-projects";
+import { DashboardTabs, type DashboardTabId } from "./_components/dashboard/dashboard-tabs";
+import { PeriodSwitcher, type PeriodId } from "./_components/dashboard/period-switcher";
+import { TeamPulse } from "./_components/dashboard/team-pulse";
+import { UtilityRail } from "./_components/dashboard/utility-rail";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminV2Dashboard() {
+// --- Period date helpers ---
+function getPeriodRange(period: PeriodId, now: Date) {
+  switch (period) {
+    case "today": {
+      const start = new Date(now);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(now);
+      end.setHours(23, 59, 59, 999);
+      return { start, end, label: "сьогодні" };
+    }
+    case "week": {
+      const start = new Date(now);
+      start.setDate(now.getDate() - 7);
+      return { start, end: now, label: "7 днів" };
+    }
+    case "quarter": {
+      const qMonth = Math.floor(now.getMonth() / 3) * 3;
+      const start = new Date(now.getFullYear(), qMonth, 1);
+      const end = new Date(now.getFullYear(), qMonth + 3, 0, 23, 59, 59, 999);
+      return { start, end, label: "квартал" };
+    }
+    default: { // month
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      return { start, end, label: "місяць" };
+    }
+  }
+}
+
+function getPrevPeriodRange(period: PeriodId, now: Date) {
+  switch (period) {
+    case "today": {
+      const start = new Date(now);
+      start.setDate(start.getDate() - 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
+    case "week": {
+      const end = new Date(now);
+      end.setDate(end.getDate() - 7);
+      const start = new Date(end);
+      start.setDate(start.getDate() - 7);
+      return { start, end };
+    }
+    case "quarter": {
+      const qMonth = Math.floor(now.getMonth() / 3) * 3;
+      const start = new Date(now.getFullYear(), qMonth - 3, 1);
+      const end = new Date(now.getFullYear(), qMonth, 0, 23, 59, 59, 999);
+      return { start, end };
+    }
+    default: { // month
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+      return { start, end };
+    }
+  }
+}
+
+function calcDelta(current: number, previous: number): { value: number; label: string } | undefined {
+  if (previous === 0 && current === 0) return undefined;
+  if (previous === 0) return { value: 100, label: "новий" };
+  const pct = ((current - previous) / previous) * 100;
+  if (Math.abs(pct) < 0.5) return undefined;
+  return { value: Math.round(pct * 10) / 10, label: `${pct > 0 ? "+" : ""}${pct.toFixed(1)}% до попереднього періоду` };
+}
+
+export default async function AdminV2Dashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; period?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const sp = await searchParams;
+  const activeTab = (sp.tab || "overview") as DashboardTabId;
+  const activePeriod = (sp.period || "month") as PeriodId;
+
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const { start: periodStart, end: periodEnd, label: periodLabel } = getPeriodRange(activePeriod, now);
+  const { start: prevStart, end: prevEnd } = getPrevPeriodRange(activePeriod, now);
   const startOfWeek = new Date(now);
   startOfWeek.setDate(now.getDate() - 7);
   const startOfToday = new Date();
@@ -63,9 +137,12 @@ export default async function AdminV2Dashboard() {
     overdueTasksCount,
     dueTodayTasksCount,
     completedWeekTasksCount,
-    // Finance (this month)
-    monthIncome,
-    monthExpense,
+    // Finance (current period)
+    periodIncome,
+    periodExpense,
+    // Finance (previous period)
+    prevPeriodIncome,
+    prevPeriodExpense,
     // Stages distribution
     stageDistribution,
     // Time logs this week
@@ -74,19 +151,27 @@ export default async function AdminV2Dashboard() {
     upcomingTasks,
     // Recent AI estimates
     aiEstimatesMonth,
-    // --- NEW: Needs Attention data ---
+    // Needs Attention data
     overdueTasksDetailed,
     staleProjects,
     dueTodayTasksDetailed,
-    // --- NEW: Projects at Risk data ---
+    // Projects at Risk data
     activeProjects,
     overdueTasksByProject,
     overduePaymentsByProject,
-    // --- NEW: Activity Feed data ---
+    // Activity Feed data
     recentCompletedTasks,
     recentCreatedTasks,
     recentPaidPayments,
     recentUpdatedProjects,
+    // Team Pulse: active tasks per user
+    activeTasksByUser,
+    // Team Pulse: overdue tasks per user
+    overdueTasksByUser,
+    // Project deadlines
+    projectDeadlines,
+    // Previous period time
+    prevWeekTimeLogs,
   ] = await Promise.all([
     prisma.project.count(),
     prisma.project.count({ where: { status: "ACTIVE" } }),
@@ -133,12 +218,12 @@ export default async function AdminV2Dashboard() {
         completedAt: { gte: startOfWeek },
       },
     }),
-    // Finance this month
+    // Finance (current period)
     prisma.financeEntry.aggregate({
       where: {
         type: "INCOME",
         isArchived: false,
-        occurredAt: { gte: startOfMonth, lte: endOfMonth },
+        occurredAt: { gte: periodStart, lte: periodEnd },
       },
       _sum: { amount: true },
     }),
@@ -146,7 +231,24 @@ export default async function AdminV2Dashboard() {
       where: {
         type: "EXPENSE",
         isArchived: false,
-        occurredAt: { gte: startOfMonth, lte: endOfMonth },
+        occurredAt: { gte: periodStart, lte: periodEnd },
+      },
+      _sum: { amount: true },
+    }),
+    // Finance (previous period for delta)
+    prisma.financeEntry.aggregate({
+      where: {
+        type: "INCOME",
+        isArchived: false,
+        occurredAt: { gte: prevStart, lte: prevEnd },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.aggregate({
+      where: {
+        type: "EXPENSE",
+        isArchived: false,
+        occurredAt: { gte: prevStart, lte: prevEnd },
       },
       _sum: { amount: true },
     }),
@@ -165,7 +267,7 @@ export default async function AdminV2Dashboard() {
       },
       _sum: { minutes: true },
       orderBy: { _sum: { minutes: "desc" } },
-      take: 5,
+      take: 10,
     }),
     prisma.task.findMany({
       where: {
@@ -184,9 +286,9 @@ export default async function AdminV2Dashboard() {
       take: 5,
     }),
     prisma.estimate.count({
-      where: { createdAt: { gte: startOfMonth } },
+      where: { createdAt: { gte: periodStart } },
     }),
-    // --- NEW: Overdue tasks detailed ---
+    // Overdue tasks detailed
     prisma.task.findMany({
       where: {
         isArchived: false,
@@ -202,7 +304,7 @@ export default async function AdminV2Dashboard() {
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
-    // --- NEW: Stale projects (no updates 14+ days) ---
+    // Stale projects
     prisma.project.findMany({
       where: {
         status: "ACTIVE",
@@ -216,7 +318,7 @@ export default async function AdminV2Dashboard() {
       },
       take: 5,
     }),
-    // --- NEW: Due today tasks detailed ---
+    // Due today tasks detailed
     prisma.task.findMany({
       where: {
         isArchived: false,
@@ -232,7 +334,7 @@ export default async function AdminV2Dashboard() {
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
-    // --- NEW: Active projects for risk scoring ---
+    // Active projects for risk scoring
     prisma.project.findMany({
       where: { status: "ACTIVE" },
       include: {
@@ -240,7 +342,7 @@ export default async function AdminV2Dashboard() {
         manager: { select: { name: true } },
       },
     }),
-    // --- NEW: Overdue tasks grouped by project ---
+    // Overdue tasks grouped by project
     prisma.task.groupBy({
       by: ["projectId"],
       where: {
@@ -250,7 +352,7 @@ export default async function AdminV2Dashboard() {
       },
       _count: { id: true },
     }),
-    // --- NEW: Overdue payments grouped by project ---
+    // Overdue payments grouped by project
     prisma.payment.groupBy({
       by: ["projectId"],
       where: {
@@ -259,7 +361,7 @@ export default async function AdminV2Dashboard() {
       },
       _count: { id: true },
     }),
-    // --- NEW: Activity Feed - completed tasks ---
+    // Activity Feed - completed tasks
     prisma.task.findMany({
       where: {
         status: { isDone: true },
@@ -274,7 +376,7 @@ export default async function AdminV2Dashboard() {
       orderBy: { completedAt: "desc" },
       take: 10,
     }),
-    // --- NEW: Activity Feed - created tasks ---
+    // Activity Feed - created tasks
     prisma.task.findMany({
       where: {
         isArchived: false,
@@ -290,7 +392,7 @@ export default async function AdminV2Dashboard() {
       orderBy: { createdAt: "desc" },
       take: 10,
     }),
-    // --- NEW: Activity Feed - paid payments ---
+    // Activity Feed - paid payments
     prisma.payment.findMany({
       where: {
         paidDate: { gte: startOfWeek },
@@ -305,7 +407,7 @@ export default async function AdminV2Dashboard() {
       orderBy: { paidDate: "desc" },
       take: 10,
     }),
-    // --- NEW: Activity Feed - updated projects ---
+    // Activity Feed - updated projects
     prisma.project.findMany({
       where: {
         updatedAt: { gte: startOfWeek },
@@ -319,28 +421,103 @@ export default async function AdminV2Dashboard() {
       orderBy: { updatedAt: "desc" },
       take: 10,
     }),
+    // Team Pulse: active tasks per user (via TaskAssignee)
+    prisma.taskAssignee.groupBy({
+      by: ["userId"],
+      where: {
+        task: { isArchived: false, status: { isDone: false } },
+      },
+      _count: { userId: true },
+    }),
+    // Team Pulse: overdue tasks per user
+    prisma.taskAssignee.groupBy({
+      by: ["userId"],
+      where: {
+        task: {
+          isArchived: false,
+          status: { isDone: false },
+          dueDate: { lt: now },
+        },
+      },
+      _count: { userId: true },
+    }),
+    // Project deadlines (next 30 days)
+    prisma.project.findMany({
+      where: {
+        status: "ACTIVE",
+        expectedEndDate: {
+          gte: now,
+          lte: new Date(now.getTime() + 30 * 24 * 3600 * 1000),
+        },
+      },
+      select: { id: true, title: true, expectedEndDate: true },
+      orderBy: { expectedEndDate: "asc" },
+      take: 5,
+    }),
+    // Previous period time logs total
+    prisma.timeLog.aggregate({
+      where: {
+        endedAt: { not: null },
+        startedAt: {
+          gte: new Date(startOfWeek.getTime() - 7 * 24 * 3600 * 1000),
+          lt: startOfWeek,
+        },
+      },
+      _sum: { minutes: true },
+    }),
   ]);
 
   const revenue = Number(totalRevenuePaid._sum.amount || 0);
   const portfolio = Number(portfolioBudget._sum.totalBudget || 0);
-  const income = Number(monthIncome._sum.amount || 0);
-  const expense = Number(monthExpense._sum.amount || 0);
+  const income = Number(periodIncome._sum.amount || 0);
+  const expense = Number(periodExpense._sum.amount || 0);
   const netProfit = income - expense;
+  const prevIncome = Number(prevPeriodIncome._sum.amount || 0);
+  const prevExpense = Number(prevPeriodExpense._sum.amount || 0);
+  const prevNetProfit = prevIncome - prevExpense;
+  const prevWeekMinutes = prevWeekTimeLogs._sum.minutes ?? 0;
+
+  // Deltas
+  const incomeDelta = calcDelta(income, prevIncome);
+  const expenseDelta = calcDelta(expense, prevExpense);
+  const netDelta = calcDelta(netProfit, prevNetProfit);
 
   // Load user names for time logs
-  const userIds = weekTimeLogs.map((l) => l.userId);
+  const allUserIds = [
+    ...weekTimeLogs.map((l) => l.userId),
+    ...activeTasksByUser.map((a) => a.userId),
+    ...overdueTasksByUser.map((a) => a.userId),
+  ];
+  const uniqueUserIds = [...new Set(allUserIds)];
   const users =
-    userIds.length > 0
+    uniqueUserIds.length > 0
       ? await prisma.user.findMany({
-          where: { id: { in: userIds } },
+          where: { id: { in: uniqueUserIds } },
           select: { id: true, name: true },
         })
       : [];
   const userMap = new Map(users.map((u) => [u.id, u.name]));
+
   const weekHoursTotal = weekTimeLogs.reduce(
     (acc, l) => acc + (l._sum.minutes ?? 0),
     0,
   );
+  const weekHoursDelta = calcDelta(weekHoursTotal, prevWeekMinutes);
+
+  // Build Team Pulse members
+  const activeTaskMap = new Map(
+    activeTasksByUser.map((a) => [a.userId, a._count.userId]),
+  );
+  const overdueTaskUserMap = new Map(
+    overdueTasksByUser.map((a) => [a.userId, a._count.userId]),
+  );
+  const teamMembers = weekTimeLogs.map((log) => ({
+    id: log.userId,
+    name: userMap.get(log.userId) ?? "—",
+    minutes: log._sum.minutes ?? 0,
+    activeTaskCount: activeTaskMap.get(log.userId) ?? 0,
+    overdueTaskCount: overdueTaskUserMap.get(log.userId) ?? 0,
+  }));
 
   const today = new Date().toLocaleDateString("uk-UA", {
     weekday: "long",
@@ -367,7 +544,7 @@ export default async function AdminV2Dashboard() {
   ];
   const stageMax = Math.max(...Array.from(stageMap.values()), 1);
 
-  // --- Build Projects at Risk ---
+  // Build Projects at Risk
   const overdueTaskMap = new Map(
     overdueTasksByProject.map((g) => [g.projectId, g._count.id]),
   );
@@ -381,19 +558,13 @@ export default async function AdminV2Dashboard() {
       const isStale = p.updatedAt < fourteenDaysAgo;
       const riskScore =
         overdueTaskCount * 3 + overduePaymentCount * 5 + (isStale ? 1 : 0);
-      return {
-        ...p,
-        overdueTaskCount,
-        overduePaymentCount,
-        isStale,
-        riskScore,
-      };
+      return { ...p, overdueTaskCount, overduePaymentCount, isStale, riskScore };
     })
     .filter((p) => p.riskScore > 0)
     .sort((a, b) => b.riskScore - a.riskScore)
     .slice(0, 5);
 
-  // --- Build Activity Feed ---
+  // Build Activity Feed
   const feedEvents = buildFeedEvents({
     completedTasks: recentCompletedTasks,
     createdTasks: recentCreatedTasks,
@@ -401,486 +572,326 @@ export default async function AdminV2Dashboard() {
     updatedProjects: recentUpdatedProjects,
   });
 
+  // Period label for finance
+  const periodLabels: Record<PeriodId, string> = {
+    today: "СЬОГОДНІ",
+    week: "ТИЖДЕНЬ",
+    month: "МІСЯЦЬ",
+    quarter: "КВАРТАЛ",
+  };
+  const finPeriod = periodLabels[activePeriod];
+
   return (
-    <div className="flex flex-col gap-8">
-      {/* Hero / State of Business */}
-      <HeroBlock
-        firstName={firstName}
-        today={today}
-        activeProjectsCount={activeProjectsCount}
-        overdueTasksCount={overdueTasksCount}
-        overduePaymentsCount={overduePayments.length}
-        netProfit={netProfit}
-      />
+    <div className="flex flex-col gap-6">
+      {/* Dashboard Tabs + Period Switcher */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <Suspense>
+          <DashboardTabs active={activeTab} />
+        </Suspense>
+        <Suspense>
+          <PeriodSwitcher active={activePeriod} />
+        </Suspense>
+      </div>
 
-      {/* Needs Attention */}
-      <NeedsAttention
-        overdueTasks={overdueTasksDetailed}
-        overduePayments={overduePayments}
-        staleProjects={staleProjects}
-        dueTodayTasks={dueTodayTasksDetailed}
-      />
+      {/* Overview tab content */}
+      {activeTab === "overview" && (
+        <>
+          {/* Hero / State of Business */}
+          <HeroBlock
+            firstName={firstName}
+            today={today}
+            activeProjectsCount={activeProjectsCount}
+            overdueTasksCount={overdueTasksCount}
+            overduePaymentsCount={overduePayments.length}
+            netProfit={netProfit}
+          />
 
-      {/* Row 1 — business KPIs */}
-      <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard
-          label="ПРОЄКТИ"
-          value={String(projectsCount)}
-          sub={`${activeProjectsCount} активних`}
-          icon={FolderKanban}
-          accent={T.accentPrimary}
-          gradient="var(--kpi-blue)"
-          href="/admin-v2/projects"
-        />
-        <KpiCard
-          label="КЛІЄНТИ"
-          value={String(clientsCount)}
-          sub="облікових записів"
-          icon={Users}
-          accent={T.teal}
-          gradient="var(--kpi-teal)"
-          href="/admin-v2/clients"
-        />
-        <KpiCard
-          label="ПОРТФЕЛЬ"
-          value={formatCurrencyCompact(portfolio)}
-          sub="загальний бюджет"
-          icon={Wallet}
-          accent={T.violet}
-          gradient="var(--kpi-violet)"
-          href="/admin-v2/projects"
-        />
-        <KpiCard
-          label="СПЛАЧЕНО"
-          value={formatCurrencyCompact(revenue)}
-          sub="усього по платежах"
-          icon={TrendingUp}
-          accent={T.emerald}
-          gradient="var(--kpi-emerald)"
-        />
-      </section>
+          {/* Needs Attention */}
+          <NeedsAttention
+            overdueTasks={overdueTasksDetailed}
+            overduePayments={overduePayments}
+            staleProjects={staleProjects}
+            dueTodayTasks={dueTodayTasksDetailed}
+          />
 
-      {/* Row 2 — Tasks & Time */}
-      <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
-        <KpiCard
-          label="АКТИВНІ ЗАДАЧІ"
-          value={String(activeTasksCount)}
-          sub={`${completedWeekTasksCount} завершено за тиждень`}
-          icon={ListTodo}
-          accent={T.sky}
-          gradient="var(--kpi-sky)"
-          href="/admin-v2/me"
-        />
-        <KpiCard
-          label="ПРОСТРОЧЕНО"
-          value={String(overdueTasksCount)}
-          sub={`${dueTodayTasksCount} на сьогодні`}
-          icon={AlertCircle}
-          accent={overdueTasksCount > 0 ? T.danger : T.textMuted}
-          gradient={overdueTasksCount > 0 ? "var(--kpi-danger)" : undefined}
-          href="/admin-v2/me"
-        />
-        <KpiCard
-          label="ГОДИН ЗА ТИЖДЕНЬ"
-          value={formatHours(weekHoursTotal)}
-          sub={`${weekTimeLogs.length} співробітників`}
-          icon={Clock}
-          accent={T.amber}
-          gradient="var(--kpi-amber)"
-        />
-        <KpiCard
-          label="AI КОШТОРИСИ"
-          value={String(aiEstimatesMonth)}
-          sub="за місяць"
-          icon={Sparkles}
-          accent={T.indigo}
-          gradient="var(--kpi-indigo)"
-          href="/ai-estimate-v2"
-        />
-      </section>
+          {/* Row 1 — business KPIs */}
+          <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <KpiCard
+              label="ПРОЄКТИ"
+              value={String(projectsCount)}
+              sub={`${activeProjectsCount} активних`}
+              icon={FolderKanban}
+              accent={T.accentPrimary}
+              gradient="var(--kpi-blue)"
+              href="/admin-v2/projects"
+            />
+            <KpiCard
+              label="КЛІЄНТИ"
+              value={String(clientsCount)}
+              sub="облікових записів"
+              icon={Users}
+              accent={T.teal}
+              gradient="var(--kpi-teal)"
+              href="/admin-v2/clients"
+            />
+            <KpiCard
+              label="ПОРТФЕЛЬ"
+              value={formatCurrencyCompact(portfolio)}
+              sub="загальний бюджет"
+              icon={Wallet}
+              accent={T.violet}
+              gradient="var(--kpi-violet)"
+              href="/admin-v2/projects"
+            />
+            <KpiCard
+              label="СПЛАЧЕНО"
+              value={formatCurrencyCompact(revenue)}
+              sub="усього по платежах"
+              icon={TrendingUp}
+              accent={T.emerald}
+              gradient="var(--kpi-emerald)"
+            />
+          </section>
 
-      {/* Row 3 — Finance this month */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
-        <FinanceTile
-          label="ДОХІД (МІСЯЦЬ)"
-          value={income}
-          icon={TrendingUp}
-          color={T.success}
-        />
-        <FinanceTile
-          label="ВИТРАТИ (МІСЯЦЬ)"
-          value={expense}
-          icon={TrendingDown}
-          color={T.danger}
-        />
-        <FinanceTile
-          label="ЧИСТИЙ ПРИБУТОК"
-          value={netProfit}
-          icon={Activity}
-          color={netProfit >= 0 ? T.success : T.danger}
-          emphasize
-        />
-      </section>
+          {/* Row 2 — Tasks & Time */}
+          <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <KpiCard
+              label="АКТИВНІ ЗАДАЧІ"
+              value={String(activeTasksCount)}
+              sub={`${completedWeekTasksCount} завершено за тиждень`}
+              icon={ListTodo}
+              accent={T.sky}
+              gradient="var(--kpi-sky)"
+              href="/admin-v2/me"
+            />
+            <KpiCard
+              label="ПРОСТРОЧЕНО"
+              value={String(overdueTasksCount)}
+              sub={`${dueTodayTasksCount} на сьогодні`}
+              icon={AlertCircle}
+              accent={overdueTasksCount > 0 ? T.danger : T.textMuted}
+              gradient={overdueTasksCount > 0 ? "var(--kpi-danger)" : undefined}
+              href="/admin-v2/me"
+            />
+            <KpiCard
+              label="ГОДИН ЗА ТИЖДЕНЬ"
+              value={formatHours(weekHoursTotal)}
+              sub={`${weekTimeLogs.length} співробітників`}
+              icon={Clock}
+              accent={T.amber}
+              gradient="var(--kpi-amber)"
+              delta={weekHoursDelta}
+            />
+            <KpiCard
+              label="AI КОШТОРИСИ"
+              value={String(aiEstimatesMonth)}
+              sub={`за ${periodLabel}`}
+              icon={Sparkles}
+              accent={T.indigo}
+              gradient="var(--kpi-indigo)"
+              href="/ai-estimate-v2"
+            />
+          </section>
 
-      {/* Row 4 — Stage distribution + Team this week */}
-      <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {/* Stages */}
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="text-[10px] font-bold tracking-wider"
-                style={{ color: T.textMuted }}
-              >
-                ПОТОК РОБОТИ
-              </span>
-              <h2
-                className="text-base font-bold"
-                style={{ color: T.textPrimary }}
-              >
-                Розподіл активних проєктів
-              </h2>
-            </div>
-            <span
-              className="text-[11px]"
-              style={{ color: T.textMuted }}
+          {/* Row 3 — Finance */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
+            <FinanceTile
+              label={`ДОХІД (${finPeriod})`}
+              value={income}
+              icon={TrendingUp}
+              color={T.success}
+              delta={incomeDelta}
+            />
+            <FinanceTile
+              label={`ВИТРАТИ (${finPeriod})`}
+              value={expense}
+              icon={TrendingDown}
+              color={T.danger}
+              delta={expenseDelta}
+            />
+            <FinanceTile
+              label="ЧИСТИЙ ПРИБУТОК"
+              value={netProfit}
+              icon={Activity}
+              color={netProfit >= 0 ? T.success : T.danger}
+              emphasize
+              delta={netDelta}
+            />
+          </section>
+
+          {/* Row 4 — Stage distribution + Team Pulse */}
+          <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Stages */}
+            <div
+              className="rounded-2xl p-6"
+              style={{
+                backgroundColor: T.panel,
+                border: `1px solid ${T.borderSoft}`,
+              }}
             >
-              разом {activeProjectsCount}
-            </span>
-          </div>
-          {activeProjectsCount === 0 ? (
-            <p className="text-[12px]" style={{ color: T.textMuted }}>
-              Немає активних проєктів
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {stageOrder.map((stage) => {
-                const count = stageMap.get(stage) ?? 0;
-                const pct = (count / stageMax) * 100;
-                const stageColors: Record<string, string> = {
-                  DESIGN: T.violet,
-                  FOUNDATION: T.sky,
-                  WALLS: T.accentPrimary,
-                  ROOF: T.teal,
-                  ENGINEERING: T.amber,
-                  FINISHING: T.indigo,
-                  HANDOVER: T.emerald,
-                };
-                const barColor = stageColors[stage] || T.accentPrimary;
-                return (
-                  <div key={stage} className="flex items-center gap-3">
-                    <span
-                      className="text-[11px] font-semibold w-28 flex-shrink-0"
-                      style={{ color: T.textSecondary }}
-                    >
-                      {STAGE_LABELS[stage]}
-                    </span>
-                    <div
-                      className="flex-1 h-5 rounded-md overflow-hidden"
-                      style={{ backgroundColor: barColor + "12" }}
-                    >
-                      <div
-                        className="h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-bold"
-                        style={{
-                          width: `${Math.max(pct, count > 0 ? 6 : 0)}%`,
-                          background: count > 0
-                            ? `linear-gradient(90deg, ${barColor}cc, ${barColor})`
-                            : "transparent",
-                          color: "#fff",
-                        }}
-                      >
-                        {count > 0 ? count : ""}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* Team this week */}
-        <div
-          className="rounded-2xl p-6"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex flex-col gap-0.5">
-              <span
-                className="text-[10px] font-bold tracking-wider"
-                style={{ color: T.textMuted }}
-              >
-                НАВАНТАЖЕННЯ
-              </span>
-              <h2
-                className="text-base font-bold"
-                style={{ color: T.textPrimary }}
-              >
-                Команда за 7 днів
-              </h2>
-            </div>
-            <span className="text-[11px]" style={{ color: T.textMuted }}>
-              {formatHours(weekHoursTotal)} · {weekTimeLogs.length} людей
-            </span>
-          </div>
-          {weekTimeLogs.length === 0 ? (
-            <p className="text-[12px]" style={{ color: T.textMuted }}>
-              Немає залогованого часу за останні 7 днів
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {weekTimeLogs.map((log, idx) => {
-                const name = userMap.get(log.userId) ?? "—";
-                const minutes = log._sum.minutes ?? 0;
-                const pct = weekHoursTotal
-                  ? (minutes / weekHoursTotal) * 100
-                  : 0;
-                const avatarColors = [
-                  { bg: T.accentPrimarySoft, fg: T.accentPrimary },
-                  { bg: T.tealSoft, fg: T.teal },
-                  { bg: T.violetSoft, fg: T.violet },
-                  { bg: T.amberSoft, fg: T.amber },
-                  { bg: T.roseSoft, fg: T.rose },
-                ];
-                const ac = avatarColors[idx % avatarColors.length];
-                return (
-                  <li
-                    key={log.userId}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2"
-                    style={{
-                      backgroundColor: T.panelElevated,
-                      border: `1px solid ${T.borderSoft}`,
-                    }}
-                  >
-                    <span
-                      className="inline-flex items-center justify-center h-7 w-7 rounded-full flex-shrink-0 text-[10px] font-bold"
-                      style={{
-                        backgroundColor: ac.bg,
-                        color: ac.fg,
-                      }}
-                    >
-                      {name.slice(0, 2).toUpperCase()}
-                    </span>
-                    <span
-                      className="flex-1 min-w-0 truncate text-[13px] font-semibold"
-                      style={{ color: T.textPrimary }}
-                    >
-                      {name}
-                    </span>
-                    <div
-                      className="w-20 h-1.5 rounded-full overflow-hidden flex-shrink-0"
-                      style={{ backgroundColor: ac.fg + "18" }}
-                    >
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: ac.fg,
-                        }}
-                      />
-                    </div>
-                    <span
-                      className="font-mono font-bold text-[12px] w-16 text-right flex-shrink-0"
-                      style={{ color: T.textPrimary }}
-                    >
-                      {formatHours(minutes)}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      </section>
-
-      {/* Activity Feed */}
-      <ActivityFeed events={feedEvents} />
-
-      {/* Row 5 — Projects at Risk + Overdue/Upcoming */}
-      <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        {/* Projects at Risk */}
-        <ProjectsAtRisk projects={projectsAtRisk} />
-
-        {/* Overdue payments + upcoming tasks */}
-        <div className="flex flex-col gap-4">
-          {/* Overdue payments */}
-          <div
-            className="rounded-2xl p-5"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
-                Прострочені платежі
-              </h3>
-              {overduePayments.length > 0 && (
-                <span
-                  className="rounded-full px-2 py-0.5 text-[10px] font-bold"
-                  style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-                >
-                  {overduePayments.length}
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+                    ПОТОК РОБОТИ
+                  </span>
+                  <h2 className="text-base font-bold" style={{ color: T.textPrimary }}>
+                    Розподіл активних проєктів
+                  </h2>
+                </div>
+                <span className="text-[11px]" style={{ color: T.textMuted }}>
+                  разом {activeProjectsCount}
                 </span>
+              </div>
+              {activeProjectsCount === 0 ? (
+                <p className="text-[12px]" style={{ color: T.textMuted }}>
+                  Немає активних проєктів
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {stageOrder.map((stage) => {
+                    const count = stageMap.get(stage) ?? 0;
+                    const pct = (count / stageMax) * 100;
+                    const stageColors: Record<string, string> = {
+                      DESIGN: T.violet,
+                      FOUNDATION: T.sky,
+                      WALLS: T.accentPrimary,
+                      ROOF: T.teal,
+                      ENGINEERING: T.amber,
+                      FINISHING: T.indigo,
+                      HANDOVER: T.emerald,
+                    };
+                    const barColor = stageColors[stage] || T.accentPrimary;
+                    return (
+                      <div key={stage} className="flex items-center gap-3">
+                        <span className="text-[11px] font-semibold w-28 flex-shrink-0" style={{ color: T.textSecondary }}>
+                          {STAGE_LABELS[stage]}
+                        </span>
+                        <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ backgroundColor: barColor + "12" }}>
+                          <div
+                            className="h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-bold"
+                            style={{
+                              width: `${Math.max(pct, count > 0 ? 6 : 0)}%`,
+                              background: count > 0 ? `linear-gradient(90deg, ${barColor}cc, ${barColor})` : "transparent",
+                              color: "#fff",
+                            }}
+                          >
+                            {count > 0 ? count : ""}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 
-            {overduePayments.length === 0 ? (
-              <div
-                className="flex items-center gap-2 rounded-lg p-3"
-                style={{ backgroundColor: T.successSoft }}
-              >
-                <CheckCircle2 size={16} style={{ color: T.success }} />
-                <span className="text-[11px] font-semibold" style={{ color: T.success }}>
-                  Всі платежі вчасно
-                </span>
-              </div>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {overduePayments.map((payment) => (
-                  <li
-                    key={payment.id}
-                    className="flex items-start gap-2 rounded-lg p-2.5"
-                    style={{
-                      backgroundColor: T.panelElevated,
-                      borderLeft: `3px solid ${T.danger}`,
-                    }}
-                  >
-                    <AlertCircle
-                      size={12}
-                      style={{ color: T.danger }}
-                      className="mt-1 flex-shrink-0"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className="truncate text-[12px] font-semibold"
-                        style={{ color: T.textPrimary }}
-                      >
-                        {payment.project.title}
-                      </div>
-                      <div className="text-[10px]" style={{ color: T.textMuted }}>
-                        {formatDateShort(payment.scheduledDate)}
-                      </div>
-                    </div>
-                    <span
-                      className="text-[11px] font-bold flex-shrink-0"
-                      style={{ color: T.danger }}
-                    >
-                      {formatCurrency(Number(payment.amount))}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+            {/* Team Pulse 2.0 */}
+            <TeamPulse
+              members={teamMembers}
+              totalMinutes={weekHoursTotal}
+              periodLabel={periodLabel}
+            />
+          </section>
 
-          {/* Upcoming tasks */}
-          <div
-            className="rounded-2xl p-5"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+          {/* Row 5 — Activity Feed + Projects/Utility */}
+          <section className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            {/* Left 2/3: Activity + Projects at Risk */}
+            <div className="xl:col-span-2 flex flex-col gap-6">
+              <ActivityFeed events={feedEvents} />
+              <ProjectsAtRisk projects={projectsAtRisk} />
+            </div>
+
+            {/* Right 1/3: Utility Rail */}
+            <UtilityRail
+              overduePayments={overduePayments}
+              upcomingTasks={upcomingTasks}
+              projectDeadlines={projectDeadlines.map((p) => ({
+                ...p,
+                expectedEndDate: p.expectedEndDate!,
+              }))}
+            />
+          </section>
+
+          {/* AI Insights Widget */}
+          <AiDashboardWidgetWrapper />
+
+          {/* Quick actions */}
+          <section
+            className="rounded-2xl p-6"
+            style={{
+              background: "var(--kpi-banner)",
+              border: `1px solid ${T.accentPrimary}25`,
+              boxShadow: `0 4px 16px ${T.accentPrimary}12`,
+            }}
           >
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
-                Найближчі задачі
-              </h3>
-              <span
-                className="text-[10px]"
-                style={{ color: T.textMuted }}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
+                  style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
+                >
+                  <Sparkles size={20} color="#FFFFFF" />
+                </div>
+                <div className="flex flex-col gap-0">
+                  <div className="text-sm font-bold" style={{ color: T.textPrimary }}>
+                    Спробуйте AI генератор кошторисів
+                  </div>
+                  <div className="text-[12px]" style={{ color: T.textSecondary }}>
+                    Створіть детальний кошторис із PDF-документів за ~3 хвилини
+                  </div>
+                </div>
+              </div>
+              <Link
+                href="/ai-estimate-v2"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
+                style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
               >
-                7 днів
-              </span>
+                <Sparkles size={16} /> Згенерувати
+              </Link>
             </div>
-            {upcomingTasks.length === 0 ? (
-              <p className="text-[11px]" style={{ color: T.textMuted }}>
-                Немає запланованих задач
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {upcomingTasks.map((t) => (
-                  <li key={t.id}>
-                    <Link
-                      href={`/admin-v2/projects/${t.project.id}?tab=tasks`}
-                      className="flex items-start gap-2 rounded-lg p-2.5 transition hover:brightness-[0.97]"
-                      style={{
-                        backgroundColor: T.panelElevated,
-                        borderLeft: `3px solid ${t.status.color}`,
-                      }}
-                    >
-                      <Zap size={12} style={{ color: t.status.color }} className="mt-1 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div
-                          className="truncate text-[12px] font-semibold"
-                          style={{ color: T.textPrimary }}
-                        >
-                          {t.title}
-                        </div>
-                        <div className="text-[10px] truncate" style={{ color: T.textMuted }}>
-                          {t.project.title}
-                        </div>
-                      </div>
-                      <span
-                        className="text-[10px] font-bold flex-shrink-0"
-                        style={{ color: T.textMuted }}
-                      >
-                        {t.dueDate ? formatDateShort(t.dueDate) : "—"}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </section>
+          </section>
 
-      {/* AI Insights Widget */}
-      <AiDashboardWidgetWrapper />
+          <p className="text-[11px] text-center" style={{ color: T.textMuted }}>
+            Кошторисів у системі: {estimatesCount}
+          </p>
+        </>
+      )}
 
-      {/* Quick actions */}
-      <section
-        className="rounded-2xl p-6"
-        style={{
-          background: "var(--kpi-banner)",
-          border: `1px solid ${T.accentPrimary}25`,
-          boxShadow: `0 4px 16px ${T.accentPrimary}12`,
-        }}
-      >
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
-              style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
-            >
-              <Sparkles size={20} color="#FFFFFF" />
-            </div>
-            <div className="flex flex-col gap-0">
-              <div className="text-sm font-bold" style={{ color: T.textPrimary }}>
-                Спробуйте AI генератор кошторисів
-              </div>
-              <div className="text-[12px]" style={{ color: T.textSecondary }}>
-                Створіть детальний кошторис із PDF-документів за ~3 хвилини
-              </div>
-            </div>
-          </div>
-          <Link
-            href="/ai-estimate-v2"
-            className="w-full sm:w-auto flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
-            style={{ background: `linear-gradient(135deg, ${T.accentPrimary}, ${T.accentSecondary})` }}
-          >
-            <Sparkles size={16} /> Згенерувати
+      {/* Projects tab - placeholder */}
+      {activeTab === "projects" && (
+        <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+          <FolderKanban size={40} style={{ color: T.accentPrimary }} className="mx-auto mb-3" />
+          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>Огляд проєктів</h2>
+          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>Розширений вигляд проєктів скоро буде доступний</p>
+          <Link href="/admin-v2/projects" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white" style={{ backgroundColor: T.accentPrimary }}>
+            Перейти до проєктів
           </Link>
         </div>
-      </section>
+      )}
 
-      <p className="text-[11px] text-center" style={{ color: T.textMuted }}>
-        Кошторисів у системі: {estimatesCount}
-      </p>
+      {/* Team tab - placeholder */}
+      {activeTab === "team" && (
+        <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+          <Users size={40} style={{ color: T.teal }} className="mx-auto mb-3" />
+          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>Огляд команди</h2>
+          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>Розширений Team Pulse скоро буде доступний</p>
+          <Link href="/admin-v2/me?scope=all" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white" style={{ backgroundColor: T.teal }}>
+            Переглянути команду
+          </Link>
+        </div>
+      )}
+
+      {/* Finance tab - placeholder */}
+      {activeTab === "finance" && (
+        <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+          <Wallet size={40} style={{ color: T.emerald }} className="mx-auto mb-3" />
+          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>Огляд фінансів</h2>
+          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>Розширений Finance Pulse скоро буде доступний</p>
+          <Link href="/admin-v2/finance" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white" style={{ backgroundColor: T.emerald }}>
+            Переглянути фінанси
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

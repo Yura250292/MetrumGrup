@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TrendingUp, TrendingDown } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 export function KpiCard({
@@ -9,6 +10,7 @@ export function KpiCard({
   accent,
   gradient,
   href,
+  delta,
 }: {
   label: string;
   value: string;
@@ -17,6 +19,7 @@ export function KpiCard({
   accent: string;
   gradient?: string;
   href?: string;
+  delta?: { value: number; label: string };
 }) {
   const content = (
     <div
@@ -47,11 +50,16 @@ export function KpiCard({
       >
         {value}
       </div>
-      <div
-        className="text-[10px] sm:text-xs hidden sm:block truncate"
-        style={{ color: T.textSecondary }}
-      >
-        {sub}
+      <div className="flex items-center gap-2">
+        <div
+          className="text-[10px] sm:text-xs hidden sm:block truncate"
+          style={{ color: T.textSecondary }}
+        >
+          {sub}
+        </div>
+        {delta && delta.value !== 0 && (
+          <DeltaBadge value={delta.value} label={delta.label} />
+        )}
       </div>
     </div>
   );
@@ -63,4 +71,25 @@ export function KpiCard({
     );
   }
   return content;
+}
+
+function DeltaBadge({ value, label }: { value: number; label: string }) {
+  const isPositive = value > 0;
+  const color = isPositive ? T.success : T.danger;
+  const Arrow = isPositive ? TrendingUp : TrendingDown;
+  const sign = isPositive ? "+" : "";
+  const displayValue = Math.abs(value) >= 1000
+    ? `${sign}${Math.round(value)}`
+    : `${sign}${value.toFixed(value % 1 === 0 ? 0 : 1)}%`;
+
+  return (
+    <span
+      className="hidden sm:inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold flex-shrink-0"
+      style={{ backgroundColor: color + "14", color }}
+      title={label}
+    >
+      <Arrow size={10} />
+      {displayValue}
+    </span>
+  );
 }
