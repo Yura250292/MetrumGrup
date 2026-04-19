@@ -232,6 +232,19 @@ export function useFinancingData({
     if (res.ok) await loadData();
   }
 
+  async function handleDelete(entry: FinanceEntryDTO) {
+    if (!confirm(`Видалити запис «${entry.title}» назавжди? Цю дію неможливо скасувати.`)) return;
+    const res = await fetch(`/api/admin/financing/${entry.id}?hard=true`, {
+      method: "DELETE",
+    });
+    if (res.ok) {
+      await loadData();
+    } else {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Не вдалося видалити");
+    }
+  }
+
   const resetFilters = () => {
     setFilters({
       ...DEFAULT_FILTERS,
@@ -266,6 +279,7 @@ export function useFinancingData({
     loadData,
     handleSave,
     handleArchive,
+    handleDelete,
     handleExport,
     editing,
     setEditing,

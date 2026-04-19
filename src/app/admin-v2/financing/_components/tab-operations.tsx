@@ -6,6 +6,7 @@ import {
   AlertCircle,
   Edit,
   Archive,
+  Trash2,
   Paperclip,
   User,
   FileText,
@@ -55,6 +56,7 @@ export function TabOperations({
   setFilters,
   onEdit,
   onArchive,
+  onDelete,
   onMoveToFolder,
 }: {
   entries: FinanceEntryDTO[];
@@ -65,6 +67,7 @@ export function TabOperations({
   setFilters: React.Dispatch<React.SetStateAction<FinancingFilters>>;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
+  onDelete?: (e: FinanceEntryDTO) => void;
   onMoveToFolder?: (e: FinanceEntryDTO) => void;
 }) {
   const [activeChips, setActiveChips] = useState<Set<ChipKey>>(new Set(["all"]));
@@ -222,6 +225,7 @@ export function TabOperations({
                   showProject={!scope}
                   onEdit={() => onEdit(entry)}
                   onArchive={() => onArchive(entry)}
+                  onDelete={onDelete ? () => onDelete(entry) : undefined}
                   onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(entry) : undefined}
                 />
               );
@@ -285,6 +289,7 @@ function OperationRow({
   showProject,
   onEdit,
   onArchive,
+  onDelete,
   onMoveToFolder,
 }: {
   entry: FinanceEntryDTO;
@@ -293,6 +298,7 @@ function OperationRow({
   showProject: boolean;
   onEdit: () => void;
   onArchive: () => void;
+  onDelete?: () => void;
   onMoveToFolder?: () => void;
 }) {
   const amount = Number(entry.amount);
@@ -391,6 +397,15 @@ function OperationRow({
             >
               <Archive size={12} />
             </button>
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                className="flex h-7 w-7 items-center justify-center rounded-lg"
+                style={{ backgroundColor: T.danger, color: "#fff", border: `1px solid ${T.danger}` }}
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -482,6 +497,11 @@ function OperationRow({
           <button onClick={onArchive} title="Архівувати" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}>
             <Archive size={10} />
           </button>
+          {onDelete && (
+            <button onClick={onDelete} title="Видалити назавжди" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.danger, color: "#fff", border: `1px solid ${T.danger}` }}>
+              <Trash2 size={10} />
+            </button>
+          )}
         </div>
       </div>
     </>

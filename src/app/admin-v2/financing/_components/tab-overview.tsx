@@ -22,6 +22,7 @@ export function TabOverview({
   onAdd,
   onEdit,
   onArchive,
+  onDelete,
   onMoveToFolder,
   onSwitchTab,
   setFilters,
@@ -35,6 +36,7 @@ export function TabOverview({
   onAdd: (preset: QuadrantPreset) => void;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
+  onDelete?: (e: FinanceEntryDTO) => void;
   onMoveToFolder?: (e: FinanceEntryDTO) => void;
   onSwitchTab: (tab: "overview" | "operations" | "calendar" | "archive") => void;
   setFilters: React.Dispatch<React.SetStateAction<FinancingFilters>>;
@@ -99,6 +101,7 @@ export function TabOverview({
             onAdd={() => onAdd({ kind: "PLAN", type: "EXPENSE" })}
             onEdit={onEdit}
             onArchive={onArchive}
+            onDelete={onDelete}
             onMoveToFolder={onMoveToFolder}
             showProject={!scope}
             planned
@@ -112,6 +115,7 @@ export function TabOverview({
             onAdd={() => onAdd({ kind: "PLAN", type: "INCOME" })}
             onEdit={onEdit}
             onArchive={onArchive}
+            onDelete={onDelete}
             onMoveToFolder={onMoveToFolder}
             showProject={!scope}
             planned
@@ -125,6 +129,7 @@ export function TabOverview({
             onAdd={() => onAdd({ kind: "FACT", type: "EXPENSE" })}
             onEdit={onEdit}
             onArchive={onArchive}
+            onDelete={onDelete}
             onMoveToFolder={onMoveToFolder}
             showProject={!scope}
           />
@@ -137,6 +142,7 @@ export function TabOverview({
             onAdd={() => onAdd({ kind: "FACT", type: "INCOME" })}
             onEdit={onEdit}
             onArchive={onArchive}
+            onDelete={onDelete}
             onMoveToFolder={onMoveToFolder}
             showProject={!scope}
           />

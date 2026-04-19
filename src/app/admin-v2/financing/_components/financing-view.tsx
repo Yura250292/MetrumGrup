@@ -103,6 +103,7 @@ export function FinancingView({
     loadData,
     handleSave,
     handleArchive,
+    handleDelete,
     handleExport,
     editing,
     setEditing,
@@ -349,6 +350,7 @@ export function FinancingView({
           onAdd={(preset) => setCreatePreset(preset)}
           onEdit={(e) => setEditing(e)}
           onArchive={handleArchive}
+          onDelete={handleDelete}
           onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
           onSwitchTab={setActiveTab}
           setFilters={setFilters}
@@ -365,6 +367,7 @@ export function FinancingView({
           setFilters={setFilters}
           onEdit={(e) => setEditing(e)}
           onArchive={handleArchive}
+          onDelete={handleDelete}
           onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
         />
       )}

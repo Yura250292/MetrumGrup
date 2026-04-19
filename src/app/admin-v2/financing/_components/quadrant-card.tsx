@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Edit, Archive, Paperclip, FileText, FolderInput } from "lucide-react";
+import { Plus, Edit, Archive, Trash2, Paperclip, FileText, FolderInput } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
@@ -15,6 +15,7 @@ export function QuadrantCard({
   onAdd,
   onEdit,
   onArchive,
+  onDelete,
   onMoveToFolder,
   showProject,
   planned = false,
@@ -27,6 +28,7 @@ export function QuadrantCard({
   onAdd: () => void;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
+  onDelete?: (e: FinanceEntryDTO) => void;
   onMoveToFolder?: (e: FinanceEntryDTO) => void;
   showProject: boolean;
   planned?: boolean;
@@ -126,6 +128,7 @@ export function QuadrantCard({
               showProject={showProject}
               onEdit={() => onEdit(e)}
               onArchive={() => onArchive(e)}
+              onDelete={onDelete ? () => onDelete(e) : undefined}
               onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(e) : undefined}
             />
           ))}
@@ -142,6 +145,7 @@ function EntryRow({
   showProject,
   onEdit,
   onArchive,
+  onDelete,
   onMoveToFolder,
 }: {
   entry: FinanceEntryDTO;
@@ -150,6 +154,7 @@ function EntryRow({
   showProject: boolean;
   onEdit: () => void;
   onArchive: () => void;
+  onDelete?: () => void;
   onMoveToFolder?: () => void;
 }) {
   const amount = Number(entry.amount);
@@ -245,6 +250,20 @@ function EntryRow({
         >
           <Archive size={10} />
         </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            title="Видалити назавжди"
+            className="flex h-6 w-6 items-center justify-center rounded-md"
+            style={{
+              backgroundColor: T.danger,
+              color: "#fff",
+              border: `1px solid ${T.danger}`,
+            }}
+          >
+            <Trash2 size={10} />
+          </button>
+        )}
       </div>
     </div>
   );
