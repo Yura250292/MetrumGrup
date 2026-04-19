@@ -11,6 +11,7 @@ import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
+import { TeamAvatars } from "@/components/layout/TeamAvatars";
 
 export function Header() {
   const pathname = usePathname();
@@ -93,6 +94,8 @@ export function Header() {
       </nav>
 
       <div className="flex items-center gap-3">
+        <TeamAvatars />
+        <div className="hidden md:block h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
         <AiChatButton />
         <ThemeToggle />
         <NotificationBell
