@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { useCreateConversation } from "@/hooks/useChat";
+import { useStaffUsers, useCreateConversation } from "@/hooks/useChat";
 import { useQuickContacts } from "@/hooks/useQuickContacts";
 
 const ROLE_COLORS: Record<string, string> = {
@@ -21,11 +22,22 @@ const ROLE_RING: Record<string, string> = {
 };
 
 export function TeamAvatars() {
-  const { data: contacts } = useQuickContacts();
+  const { data: session } = useSession();
+  const { data: quickContacts } = useQuickContacts();
+  const { data: allStaff } = useStaffUsers();
   const createConversation = useCreateConversation();
   const router = useRouter();
 
-  if (!contacts || contacts.length === 0) return null;
+  // Use configured contacts, or fall back to all colleagues (max 5)
+  const contacts = quickContacts && quickContacts.length > 0
+    ? quickContacts
+    : allStaff
+      ?.filter((u) => u.id !== session?.user?.id)
+      .slice(0, 5)
+      .map((u) => ({ id: u.id, name: u.name, avatar: u.avatar, role: u.role }))
+    ?? [];
+
+  if (contacts.length === 0) return null;
 
   const handleClick = async (userId: string) => {
     try {
