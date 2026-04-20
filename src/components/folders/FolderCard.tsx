@@ -99,21 +99,25 @@ export function FolderCard({
                 onClick={(e) => e.preventDefault()}
               />
             ) : (
-              <span
-                className="text-[14px] font-semibold truncate flex items-center gap-1.5"
-                style={{ color: T.textPrimary }}
-              >
-                <span className="truncate">{folder.name}</span>
+              <div className="flex items-start gap-1.5 min-w-0">
+                <span
+                  className={`font-semibold leading-tight break-words line-clamp-2 ${
+                    folder.name.length > 18 ? "text-[12px]" : "text-[13px] sm:text-[14px]"
+                  }`}
+                  style={{ color: T.textPrimary }}
+                >
+                  {folder.name}
+                </span>
                 {folder.isSystem && (
                   <Lock
-                    size={11}
+                    size={10}
                     aria-label="Системна папка"
-                    style={{ color: T.textMuted, flexShrink: 0 }}
+                    style={{ color: T.textMuted, flexShrink: 0, marginTop: 3 }}
                   />
                 )}
-              </span>
+              </div>
             )}
-            <span className="text-[11px]" style={{ color: T.textMuted }}>
+            <span className="text-[10px] sm:text-[11px]" style={{ color: T.textMuted }}>
               {totalItems} {totalItems === 1 ? "елемент" : "елементів"}
             </span>
           </div>

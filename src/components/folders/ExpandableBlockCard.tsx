@@ -78,16 +78,21 @@ export function ExpandableBlockCard({
           />
         </div>
         <div className="flex-1 min-w-0 text-left">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-start gap-1.5">
             <span
-              className="text-[15px] font-bold truncate"
+              className={`font-bold leading-tight break-words line-clamp-2 ${
+                folder.name.length > 22 ? "text-[13px] sm:text-[14px]" : "text-[14px] sm:text-[15px]"
+              }`}
               style={{ color: T.textPrimary }}
             >
               {folder.name}
             </span>
-            <Lock size={12} style={{ color: T.textMuted, flexShrink: 0 }} />
+            <Lock
+              size={12}
+              style={{ color: T.textMuted, flexShrink: 0, marginTop: 3 }}
+            />
           </div>
-          <span className="text-[11px]" style={{ color: T.textMuted }}>
+          <span className="text-[10px] sm:text-[11px]" style={{ color: T.textMuted }}>
             {folder.childFolderCount}{" "}
             {folder.childFolderCount === 1 ? "папка" : "папок"} ·{" "}
             {folder.itemCount} {folder.itemCount === 1 ? "запис" : "записів"}
@@ -127,7 +132,7 @@ export function ExpandableBlockCard({
               Завантаження…
             </div>
           ) : children.length > 0 ? (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {children.map((child) => (
                 <FolderCard
                   key={child.id}
