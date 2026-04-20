@@ -226,20 +226,15 @@ async function processReceiptWithOCR(ctx: BotContext) {
     const buffer = Buffer.from(await response.arrayBuffer());
     const base64 = buffer.toString('base64');
 
-    // OCR with Gemini Vision
-    const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+    if (!process.env.GEMINI_API_KEY) {
+      throw new Error('GEMINI_API_KEY не налаштовано');
+    }
 
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: receipt.mimeType!,
-          data: base64,
-        },
-      },
-      {
-        text: `Розпізнай цей чек/накладну/рахунок. Витягни структуровану інформацію українською мовою:
+    // OCR with Gemini Vision (try multiple models as fallback)
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
+    const prompt = `Розпізнай цей чек/накладну/рахунок. Витягни структуровану інформацію українською мовою:
 
 1. Назва документу (чек, накладна, рахунок)
 2. Контрагент/Постачальник
@@ -256,11 +251,31 @@ async function processReceiptWithOCR(ctx: BotContext) {
 💰 Сума: [загальна сума] грн
 📅 Дата: [дата або "не вказано"]
 
-Якщо щось не вдається розпізнати — напиши "не розпізнано". Відповідай ТІЛЬКИ структурованим текстом, без додаткових пояснень.`,
-      },
-    ]);
+Якщо щось не вдається розпізнати — напиши "не розпізнано". Відповідай ТІЛЬКИ структурованим текстом, без додаткових пояснень.`;
 
-    const ocrText = result.response.text();
+    const modelsToTry = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
+    let ocrText: string | null = null;
+    let lastError: unknown = null;
+
+    for (const modelName of modelsToTry) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const result = await model.generateContent([
+          { inlineData: { mimeType: receipt.mimeType!, data: base64 } },
+          { text: prompt },
+        ]);
+        ocrText = result.response.text();
+        console.log(`[receipt] OCR success with ${modelName}`);
+        break;
+      } catch (err) {
+        lastError = err;
+        console.error(`[receipt] OCR failed with ${modelName}:`, err instanceof Error ? err.message : err);
+      }
+    }
+
+    if (!ocrText) {
+      throw lastError instanceof Error ? lastError : new Error('Всі моделі Gemini недоступні');
+    }
 
     // Extract amount from OCR text
     const amountMatch = ocrText.match(/Сума:\s*([\d\s,.]+)/i);
