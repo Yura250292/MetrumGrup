@@ -105,6 +105,24 @@ export async function PATCH(
       data.currency = body.currency;
     if (body.isArchived === true || body.isArchived === false) data.isArchived = body.isArchived;
 
+    // Status workflow
+    const VALID_STATUSES = ["DRAFT", "PENDING", "APPROVED", "PAID"] as const;
+    if (body.status && VALID_STATUSES.includes(body.status)) {
+      data.status = body.status;
+      if (body.status === "APPROVED") {
+        data.approvedAt = new Date();
+        data.approvedById = session.user.id;
+      }
+      if (body.status === "PAID") {
+        data.paidAt = new Date();
+        // If going directly to PAID without prior approval, mark as approved too
+        if (!existing.approvedAt) {
+          data.approvedAt = new Date();
+          data.approvedById = session.user.id;
+        }
+      }
+    }
+
     const updated = await prisma.financeEntry.update({
       where: { id },
       data,

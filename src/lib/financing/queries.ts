@@ -7,6 +7,7 @@ export type FinanceListFilters = {
   folderId?: string | null;
   type?: "INCOME" | "EXPENSE";
   kind?: "PLAN" | "FACT";
+  status?: "DRAFT" | "PENDING" | "APPROVED" | "PAID";
   category?: string;
   subcategory?: string;
   from?: Date;
@@ -29,6 +30,7 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
   const search = searchParams.get("search")?.trim() || undefined;
   const hasAttachmentsRaw = searchParams.get("hasAttachments");
   const archivedRaw = searchParams.get("archived");
+  const statusRaw = searchParams.get("status");
 
   const folderIdRaw = searchParams.get("folderId");
 
@@ -50,6 +52,10 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
     search,
     hasAttachments:
       hasAttachmentsRaw === "true" ? true : hasAttachmentsRaw === "false" ? false : undefined,
+    status:
+      statusRaw === "DRAFT" || statusRaw === "PENDING" || statusRaw === "APPROVED" || statusRaw === "PAID"
+        ? statusRaw
+        : undefined,
     archived: archivedRaw === "true",
   };
 }
@@ -67,6 +73,7 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
   }
   if (filters.type) where.type = filters.type;
   if (filters.kind) where.kind = filters.kind;
+  if (filters.status) where.status = filters.status;
   if (filters.category) where.category = filters.category;
   if (filters.subcategory) where.subcategory = filters.subcategory;
   if (filters.responsibleId) where.createdById = filters.responsibleId;
@@ -157,11 +164,16 @@ export const FINANCE_ENTRY_SELECT = {
   description: true,
   counterparty: true,
   isArchived: true,
+  status: true,
+  approvedAt: true,
+  approvedById: true,
+  paidAt: true,
   createdAt: true,
   updatedAt: true,
   project: { select: { id: true, title: true, slug: true } },
   createdBy: { select: { id: true, name: true } },
   updatedBy: { select: { id: true, name: true } },
+  approvedBy: { select: { id: true, name: true } },
   attachments: {
     select: {
       id: true,

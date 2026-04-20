@@ -83,6 +83,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const folderId =
+      typeof body.folderId === "string" && body.folderId.trim()
+        ? body.folderId.trim()
+        : null;
+
     const entry = await prisma.financeEntry.create({
       data: {
         type,
@@ -99,6 +104,7 @@ export async function POST(request: NextRequest) {
         counterparty:
           typeof body.counterparty === "string" && body.counterparty.trim() ? body.counterparty.trim() : null,
         createdById: session.user.id,
+        folderId,
       },
       select: FINANCE_ENTRY_SELECT,
     });

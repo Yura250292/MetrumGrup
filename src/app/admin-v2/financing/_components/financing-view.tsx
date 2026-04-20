@@ -102,6 +102,7 @@ export function FinancingView({
     resetFilters,
     loadData,
     handleSave,
+    handleStatusChange,
     handleArchive,
     handleDelete,
     handleExport,
@@ -422,6 +423,7 @@ export function FinancingView({
             setEditing(null);
           }}
           onSave={handleSave}
+          onStatusChange={handleStatusChange}
         />
       )}
     </div>

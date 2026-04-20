@@ -78,9 +78,10 @@ model User {
   teamsLead             Team[]                    @relation("TeamLead")
   teamMemberships       TeamMember[]              @relation("TeamMemberUser")
   integrations          UserIntegration[]         @relation("UserIntegrationUser")
-  financeEntriesCreated FinanceEntry[]            @relation("FinanceEntryCreator")
-  financeEntriesUpdated FinanceEntry[]            @relation("FinanceEntryUpdater")
-  financeAttachments    FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
+  financeEntriesCreated  FinanceEntry[]            @relation("FinanceEntryCreator")
+  financeEntriesUpdated  FinanceEntry[]            @relation("FinanceEntryUpdater")
+  financeEntriesApproved FinanceEntry[]            @relation("FinanceEntryApprover")
+  financeAttachments     FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
   commentReadStates     CommentReadState[]
   aiConversations       AiConversation[]          @relation("AiConversationUser")
 
@@ -391,29 +392,34 @@ model Payment {
 // Факт руху грошей по проєктах і постійних витрат компанії.
 // Окрема сутність від Payment (планування) і Estimate (кошторис).
 model FinanceEntry {
-  id           String           @id @default(cuid())
+  id           String             @id @default(cuid())
   occurredAt   DateTime
-  kind         FinanceEntryKind @default(FACT)
+  kind         FinanceEntryKind   @default(FACT)
   type         FinanceEntryType
-  amount       Decimal          @db.Decimal(12, 2)
-  currency     String           @default("UAH")
+  amount       Decimal            @db.Decimal(12, 2)
+  currency     String             @default("UAH")
   projectId    String?
   category     String
   subcategory  String?
   title        String
   description  String?
   counterparty String?
-  isArchived   Boolean          @default(false)
+  isArchived   Boolean            @default(false)
+  status       FinanceEntryStatus @default(DRAFT)
+  approvedAt   DateTime?
+  approvedById String?
+  paidAt       DateTime?
   createdById  String
   updatedById  String?
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
 
   folderId    String?
 
   project     Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy   User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
   updatedBy   User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
+  approvedBy  User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
   folder      Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
   attachments FinanceEntryAttachment[]
 
@@ -423,6 +429,7 @@ model FinanceEntry {
   @@index([category])
   @@index([isArchived])
   @@index([folderId])
+  @@index([status])
   @@map("finance_entries")
 }
 
@@ -1065,6 +1072,7 @@ enum CommentEntityType {
   ESTIMATE
   PROJECT
   TASK
+  FINANCE_ENTRY
 }
 
 enum ConversationType {
@@ -1137,6 +1145,13 @@ enum FinanceEntryType {
 enum FinanceEntryKind {
   PLAN
   FACT
+}
+
+enum FinanceEntryStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PAID
 }
 
 enum FolderDomain {

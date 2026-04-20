@@ -9,6 +9,21 @@ import { materialsCommand } from './materials';
 import { paymentsCommand } from './payments';
 import { statusCommand } from './status';
 import { helpCommand } from './help';
+import {
+  receiptCommand,
+  handleReceiptPhoto,
+  handleReceiptDocument,
+  handleFolderNavigationCallback,
+  handleFolderBackCallback,
+  handleSelectFolderCallback,
+  handleReceiptConfirm,
+  handleEditAmountCallback,
+  handleReceiptTextInput,
+  handleReceiptCancel,
+  handleApproveCallback,
+  handleRemindCallback,
+  handleRejectCallback,
+} from './receipt';
 import { requireAdmin } from '../middleware/auth';
 import { getUserProjects } from '../services/database';
 import { formatProjectsList } from '../services/formatter';
@@ -27,6 +42,13 @@ export function registerCommands(bot: Telegraf<BotContext>) {
   bot.command('materials', requireAdmin, materialsCommand);
   bot.command('payments', requireAdmin, paymentsCommand);
   bot.command('status', requireAdmin, statusCommand);
+  bot.command('receipt', requireAdmin, receiptCommand);
+  bot.command('cancel', async (ctx) => {
+    if (ctx.session?.pendingReceipt) {
+      ctx.session.pendingReceipt = undefined;
+      await ctx.reply('❌ Скасовано.');
+    }
+  });
 
   // Функція обробки аудіо (для voice та audio)
   const handleAudioMessage = async (ctx: BotContext, fileId: string, duration: number) => {
@@ -97,9 +119,29 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     }
   });
 
+  // Обробка фото — перевіряємо чи це чек
+  bot.on('photo', async (ctx) => {
+    if (ctx.session?.isAdmin) {
+      await handleReceiptPhoto(ctx);
+    }
+  });
+
+  // Обробка документів — перевіряємо чи це чек
+  bot.on('document', async (ctx) => {
+    if (ctx.session?.isAdmin) {
+      await handleReceiptDocument(ctx);
+    }
+  });
+
   // Обробка текстових повідомлень
   bot.on('text', async (ctx) => {
     const text = ctx.message.text;
+
+    // Якщо є активний процес додавання чеку — обробляємо текст для receipt
+    if (ctx.session?.pendingReceipt && !text.startsWith('/')) {
+      const handled = await handleReceiptTextInput(ctx, text);
+      if (handled) return;
+    }
 
     // Якщо очікуємо пароль адміна
     if (ctx.session?.awaitingPassword) {
@@ -209,6 +251,53 @@ export function registerCommands(bot: Telegraf<BotContext>) {
         '✨ Повний цикл: від ідеї до ключів',
         { parse_mode: 'HTML' }
       );
+      return;
+    }
+
+    // Receipt flow callbacks
+    if (data.startsWith('rcpt_folder:')) {
+      await handleFolderNavigationCallback(ctx, data.replace('rcpt_folder:', ''));
+      return;
+    }
+    if (data.startsWith('rcpt_folder_back:')) {
+      await handleFolderBackCallback(ctx, data.replace('rcpt_folder_back:', ''));
+      return;
+    }
+    if (data === 'rcpt_folder_root') {
+      await ctx.answerCbQuery();
+      await receiptCommand(ctx);
+      return;
+    }
+    if (data.startsWith('rcpt_select_folder:')) {
+      await handleSelectFolderCallback(ctx, data.replace('rcpt_select_folder:', ''));
+      return;
+    }
+    if (data === 'rcpt_confirm') {
+      await handleReceiptConfirm(ctx);
+      return;
+    }
+    if (data === 'rcpt_edit_amount') {
+      await handleEditAmountCallback(ctx);
+      return;
+    }
+    if (data.startsWith('rcpt_approve:')) {
+      await handleApproveCallback(ctx, data.replace('rcpt_approve:', ''));
+      return;
+    }
+    if (data.startsWith('rcpt_remind:')) {
+      await handleRemindCallback(ctx, data.replace('rcpt_remind:', ''));
+      return;
+    }
+    if (data.startsWith('rcpt_reject:')) {
+      await handleRejectCallback(ctx, data.replace('rcpt_reject:', ''));
+      return;
+    }
+    if (data === 'receipt_cancel') {
+      await handleReceiptCancel(ctx);
+      return;
+    }
+    if (data === 'noop') {
+      await ctx.answerCbQuery();
       return;
     }
 

@@ -18,6 +18,7 @@ const DEFAULT_FILTERS: FinancingFilters = {
   search: "",
   kind: "",
   type: "",
+  status: "",
   subcategory: "",
   responsibleId: "",
   hasAttachments: "",
@@ -59,9 +60,10 @@ export function useFinancingData({
       else if (filters.projectId) p.set("projectId", filters.projectId);
     }
 
-    // Kind/Type
+    // Kind/Type/Status
     if (filters.kind) p.set("kind", filters.kind);
     if (filters.type) p.set("type", filters.type);
+    if (filters.status) p.set("status", filters.status);
 
     // Category
     if (filters.category) p.set("category", filters.category);
@@ -197,6 +199,7 @@ export function useFinancingData({
       description: values.description || null,
       counterparty: values.counterparty || null,
       currency: "UAH",
+      ...((!isEdit && folderId) ? { folderId } : {}),
     };
 
     const res = await fetch(url, {
@@ -221,6 +224,22 @@ export function useFinancingData({
     } else {
       setCreatePreset(null);
       setEditing(null);
+    }
+  }
+
+  async function handleStatusChange(
+    entry: FinanceEntryDTO,
+    newStatus: "DRAFT" | "PENDING" | "APPROVED" | "PAID"
+  ) {
+    const res = await fetch(`/api/admin/financing/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) await loadData();
+    else {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Помилка зміни статусу");
     }
   }
 
@@ -278,6 +297,7 @@ export function useFinancingData({
     resetFilters,
     loadData,
     handleSave,
+    handleStatusChange,
     handleArchive,
     handleDelete,
     handleExport,

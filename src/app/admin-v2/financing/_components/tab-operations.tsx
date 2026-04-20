@@ -19,7 +19,8 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
-import type { FinanceEntryDTO, FinancingFilters } from "./types";
+import type { FinanceEntryDTO, FinanceEntryStatus, FinancingFilters } from "./types";
+import { FINANCE_STATUS_LABELS, FINANCE_STATUS_COLORS } from "./types";
 
 type ChipKey =
   | "all"
@@ -337,6 +338,7 @@ function OperationRow({
             >
               {entry.type === "INCOME" ? "ДОХІД" : "ВИТРАТА"}
             </span>
+            <StatusBadge status={entry.status} />
             {isOverdue && (
               <span className="flex items-center gap-0.5 text-[9px] font-bold" style={{ color: T.danger }}>
                 <Clock size={9} /> Простр.
@@ -438,7 +440,7 @@ function OperationRow({
             {entry.kind === "PLAN" ? "ПЛАН" : "ФАКТ"}
           </span>
         </div>
-        <div className="flex items-center">
+        <div className="flex items-center gap-1">
           <span
             className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
             style={{
@@ -448,6 +450,7 @@ function OperationRow({
           >
             {entry.type === "INCOME" ? "ДОХІД" : "ВИТРАТА"}
           </span>
+          <StatusBadge status={entry.status} />
         </div>
         <div className="flex flex-col min-w-0">
           <span className="text-[12.5px] font-semibold truncate" style={{ color: T.textPrimary }}>
@@ -505,6 +508,16 @@ function OperationRow({
         </div>
       </div>
     </>
+  );
+}
+
+function StatusBadge({ status }: { status: FinanceEntryStatus }) {
+  return (
+    <span
+      className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold ${FINANCE_STATUS_COLORS[status]}`}
+    >
+      {FINANCE_STATUS_LABELS[status]}
+    </span>
   );
 }
 

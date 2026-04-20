@@ -30,6 +30,7 @@ export function FilterBar({
     !scope && filters.projectId,
     filters.kind,
     filters.type,
+    filters.status,
     filters.category,
     filters.from,
     filters.to,
@@ -127,6 +128,17 @@ export function FilterBar({
           <option value="">Доходи / Витрати</option>
           <option value="INCOME">Доходи</option>
           <option value="EXPENSE">Витрати</option>
+        </FilterSelect>
+
+        <FilterSelect
+          value={filters.status}
+          onChange={(v) => setFilters((p) => ({ ...p, status: v }))}
+        >
+          <option value="">Всі статуси</option>
+          <option value="DRAFT">Чернетка</option>
+          <option value="PENDING">На погодженні</option>
+          <option value="APPROVED">Підтверджено</option>
+          <option value="PAID">Оплачено</option>
         </FilterSelect>
 
         <FilterSelect

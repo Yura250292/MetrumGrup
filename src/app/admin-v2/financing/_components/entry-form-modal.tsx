@@ -9,10 +9,13 @@ import {
   Paperclip,
   Trash2,
   FileText,
+  MessageCircle,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { financeCategoriesForType } from "@/lib/constants";
-import type { FinanceEntryDTO, ProjectOption } from "./types";
+import { CommentThread } from "@/components/collab/CommentThread";
+import type { FinanceEntryDTO, FinanceEntryStatus, ProjectOption } from "./types";
+import { FINANCE_STATUS_LABELS, FINANCE_STATUS_COLORS } from "./types";
 
 export type EntryFormValues = {
   kind: "PLAN" | "FACT";
@@ -38,6 +41,7 @@ export function EntryFormModal({
   currentUserName,
   onClose,
   onSave,
+  onStatusChange,
 }: {
   mode: "create" | "edit";
   initial: FinanceEntryDTO | null;
@@ -48,6 +52,7 @@ export function EntryFormModal({
   currentUserName: string;
   onClose: () => void;
   onSave: (values: EntryFormValues, andCreateAnother: boolean) => Promise<void>;
+  onStatusChange?: (entry: FinanceEntryDTO, newStatus: FinanceEntryStatus) => Promise<void>;
 }) {
   const [values, setValues] = useState<EntryFormValues>(() => {
     if (initial) {
@@ -200,6 +205,63 @@ export function EntryFormModal({
         </div>
 
         <form onSubmit={(e) => handleSubmit(e, false)} className="flex flex-col gap-4 p-6">
+          {/* Status workflow (edit mode only) */}
+          {mode === "edit" && initial && onStatusChange && (
+            <div
+              className="flex items-center gap-2 rounded-xl p-3"
+              style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+            >
+              <span className="text-[10px] font-bold tracking-wider mr-2" style={{ color: T.textMuted }}>
+                СТАТУС:
+              </span>
+              <span className={`rounded-md px-2 py-1 text-[11px] font-bold ${FINANCE_STATUS_COLORS[initial.status]}`}>
+                {FINANCE_STATUS_LABELS[initial.status]}
+              </span>
+              <div className="ml-auto flex gap-1.5">
+                {initial.status === "DRAFT" && (
+                  <button
+                    type="button"
+                    onClick={() => onStatusChange(initial, "PENDING")}
+                    className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}` }}
+                  >
+                    На погодження
+                  </button>
+                )}
+                {initial.status === "PENDING" && (
+                  <button
+                    type="button"
+                    onClick={() => onStatusChange(initial, "APPROVED")}
+                    className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ backgroundColor: "#dbeafe", color: "#1d4ed8", border: "1px solid #1d4ed8" }}
+                  >
+                    Підтвердити
+                  </button>
+                )}
+                {(initial.status === "APPROVED" || initial.status === "PENDING") && (
+                  <button
+                    type="button"
+                    onClick={() => onStatusChange(initial, "PAID")}
+                    className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ backgroundColor: "#dcfce7", color: "#166534", border: "1px solid #166534" }}
+                  >
+                    Оплачено
+                  </button>
+                )}
+                {initial.status !== "DRAFT" && (
+                  <button
+                    type="button"
+                    onClick={() => onStatusChange(initial, "DRAFT")}
+                    className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                    style={{ backgroundColor: T.panelElevated, color: T.textMuted, border: `1px solid ${T.borderStrong}` }}
+                  >
+                    Повернути в чернетку
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Kind + Type segmented controls */}
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -570,6 +632,13 @@ export function EntryFormModal({
               </div>
             )}
           </div>
+
+          {/* Comments section (edit mode only) */}
+          {mode === "edit" && initial && (
+            <div className="border-t pt-4" style={{ borderColor: T.borderSoft }}>
+              <CommentThread entityType="FINANCE_ENTRY" entityId={initial.id} />
+            </div>
+          )}
 
           {error && (
             <div
