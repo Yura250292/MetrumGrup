@@ -153,22 +153,28 @@ export function registerCommands(bot: Telegraf<BotContext>) {
           ctx.session.awaitingPassword = false;
         }
 
-        await ctx.reply(
-          '✅ <b>Вхід виконано</b>\n\n' +
-          '🤖 <b>Режим прораба активний!</b>\n\n' +
-          '📝 Пишіть запити українською:\n' +
-          '• "Покажи всі проекти"\n' +
-          '• "Скільки витратили на фундамент?"\n' +
-          '• "Розрахуй ПДВ на 100000"\n\n' +
-          '🎙️ <b>Можна надсилати голосові повідомлення!</b>\n\n' +
-          'Або використовуйте /menu',
-          { parse_mode: 'HTML' }
-        );
+        // Mark user as admin in DB
+        const telegramId = ctx.from?.id;
+        if (telegramId) {
+          try {
+            const { prisma } = await import('../../src/lib/prisma');
+            await prisma.telegramBotUser.update({
+              where: { telegramId: BigInt(telegramId) },
+              data: { isAdmin: true },
+            });
+          } catch (err) {
+            console.error('[auth] flag admin error:', err);
+          }
+        }
+
+        await ctx.reply('✅ <b>Вхід виконано</b>', { parse_mode: 'HTML' });
+        const { menuCommand } = await import('./menu');
+        await menuCommand(ctx);
       } else {
         if (ctx.session) {
           ctx.session.awaitingPassword = false;
         }
-        await ctx.reply('❌ Невірний пароль. Спробуйте /admin ще раз.');
+        await ctx.reply('❌ Невірний пароль. Спробуйте ще раз через /start → 🔐 Адмінка.');
       }
       return;
     }
