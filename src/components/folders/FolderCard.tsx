@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Folder, MoreHorizontal, Pencil, Trash2, FolderInput } from "lucide-react";
+import { Folder, Lock, MoreHorizontal, Pencil, Trash2, FolderInput } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 import { useState, useRef, useEffect } from "react";
@@ -52,6 +52,9 @@ export function FolderCard({
 
   const accentColor = folder.color || T.accentPrimary;
   const totalItems = folder.itemCount + folder.childFolderCount;
+  const canRename = !folder.isSystem && !!onRename;
+  const canDelete = !folder.isSystem && !!onDelete;
+  const showMenu = canRename || canDelete;
 
   return (
     <div className="relative group">
@@ -97,10 +100,17 @@ export function FolderCard({
               />
             ) : (
               <span
-                className="text-[14px] font-semibold truncate block"
+                className="text-[14px] font-semibold truncate flex items-center gap-1.5"
                 style={{ color: T.textPrimary }}
               >
-                {folder.name}
+                <span className="truncate">{folder.name}</span>
+                {folder.isSystem && (
+                  <Lock
+                    size={11}
+                    aria-label="Системна папка"
+                    style={{ color: T.textMuted, flexShrink: 0 }}
+                  />
+                )}
               </span>
             )}
             <span className="text-[11px]" style={{ color: T.textMuted }}>
@@ -134,7 +144,7 @@ export function FolderCard({
       </Link>
 
       {/* Context menu button */}
-      {(onRename || onDelete) && (
+      {showMenu && (
         <div className="absolute top-2 right-2" ref={menuRef}>
           <button
             onClick={(e) => {
@@ -156,7 +166,7 @@ export function FolderCard({
                 border: `1px solid ${T.borderSoft}`,
               }}
             >
-              {onRename && (
+              {canRename && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -169,12 +179,12 @@ export function FolderCard({
                   <Pencil size={14} /> Перейменувати
                 </button>
               )}
-              {onDelete && (
+              {canDelete && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setMenuOpen(false);
-                    onDelete(folder.id);
+                    onDelete?.(folder.id);
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:opacity-80"
                   style={{ color: T.danger }}

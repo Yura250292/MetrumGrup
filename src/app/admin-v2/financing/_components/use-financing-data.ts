@@ -12,6 +12,7 @@ import {
 
 const DEFAULT_FILTERS: FinancingFilters = {
   projectId: "",
+  folderId: "",
   category: "",
   from: "",
   to: "",
@@ -19,6 +20,7 @@ const DEFAULT_FILTERS: FinancingFilters = {
   kind: "",
   type: "",
   status: "",
+  source: "",
   subcategory: "",
   responsibleId: "",
   hasAttachments: "",
@@ -55,15 +57,15 @@ export function useFinancingData({
     // Project filter
     if (scope) {
       p.set("projectId", scope.id);
-    } else {
-      if (filters.projectId === "__NULL__") p.set("projectId", "null");
-      else if (filters.projectId) p.set("projectId", filters.projectId);
+    } else if (filters.projectId) {
+      p.set("projectId", filters.projectId);
     }
 
-    // Kind/Type/Status
+    // Kind/Type/Status/Source
     if (filters.kind) p.set("kind", filters.kind);
     if (filters.type) p.set("type", filters.type);
     if (filters.status) p.set("status", filters.status);
+    if (filters.source) p.set("source", filters.source);
 
     // Category
     if (filters.category) p.set("category", filters.category);
@@ -90,8 +92,9 @@ export function useFinancingData({
     const archived = overrideArchived ?? filters.archived;
     if (archived) p.set("archived", "true");
 
-    // Folder
-    if (folderId) p.set("folderId", folderId);
+    // Folder — navigation context wins, otherwise filter value
+    const effectiveFolderId = folderId || filters.folderId;
+    if (effectiveFolderId) p.set("folderId", effectiveFolderId);
 
     return p.toString();
   }, [filters, scope, overrideArchived, folderId]);
@@ -187,6 +190,8 @@ export function useFinancingData({
       : `/api/admin/financing`;
     const method = isEdit ? "PATCH" : "POST";
 
+    const effectiveFolderId = folderId || createPreset?.folderId || values.folderId || null;
+
     const payload: Record<string, unknown> = {
       type: values.type,
       kind: values.kind,
@@ -199,7 +204,7 @@ export function useFinancingData({
       description: values.description || null,
       counterparty: values.counterparty || null,
       currency: "UAH",
-      ...((!isEdit && folderId) ? { folderId } : {}),
+      ...((!isEdit && effectiveFolderId) ? { folderId: effectiveFolderId } : {}),
     };
 
     const res = await fetch(url, {

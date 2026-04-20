@@ -92,20 +92,20 @@ export function NeedsAttention({
       });
     }
 
-    // 4. Entries without project
-    const noProject = entries.filter(
-      (e) => e.kind === "FACT" && e.projectId === null
+    // 4. Entries without project AND without folder — truly unclassified
+    const unclassified = entries.filter(
+      (e) => e.kind === "FACT" && e.projectId === null && e.folderId === null,
     );
-    if (noProject.length > 0) {
+    if (unclassified.length > 0) {
       result.push({
-        id: "no_project",
+        id: "unclassified",
         icon: <FolderX size={14} />,
-        label: "Без проєкту",
-        description: `${noProject.length} фактичних операцій не прив'язані до проєкту`,
-        count: noProject.length,
+        label: "Без проєкту і папки",
+        description: `${unclassified.length} фактичних операцій не прив'язані ні до проєкту, ні до папки`,
+        count: unclassified.length,
         severity: "info",
         onAction: () => {
-          setFilters((p) => ({ ...p, projectId: "__NULL__", kind: "FACT" }));
+          setFilters((p) => ({ ...p, kind: "FACT" }));
           onSwitchTab("operations");
         },
       });

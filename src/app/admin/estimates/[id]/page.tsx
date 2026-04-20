@@ -72,6 +72,7 @@ type Estimate = {
   taxAmount: number;
   finalClientPrice: number;
   logisticsCost: number;
+  financeSyncedAt: string | null;
   createdAt: string;
   project: { title: string; client: { name: string } };
   createdBy: { name: string };
@@ -104,6 +105,7 @@ export default function EstimateDetailPage({
   const [applyingFinance, setApplyingFinance] = useState(false);
   const [exporting, setExporting] = useState<string | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
+  const [syncingFinancing, setSyncingFinancing] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'history' | 'discussion'>('details');
   const [supplementModalOpen, setSupplementModalOpen] = useState(false);
   const [supplementInfo, setSupplementInfo] = useState("");
@@ -284,6 +286,38 @@ export default function EstimateDetailPage({
       alert("Помилка експорту кошторису");
     } finally {
       setExporting(null);
+    }
+  }
+
+  async function syncToFinancing() {
+    if (!estimate) return;
+    const alreadySynced = Boolean(estimate.financeSyncedAt);
+    const message = alreadySynced
+      ? `Перезаписати попередньо згенеровані планові витрати? Ручні записи у фінансуванні не зачепляться.`
+      : `Створити планові витрати та плановий дохід у модулі "Фінансування" на основі позицій кошторису?`;
+    if (!confirm(message)) return;
+
+    setSyncingFinancing(true);
+    try {
+      const response = await fetch(`/api/admin/estimates/${id}/sync-to-financing`, {
+        method: "POST",
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Помилка синхронізації");
+
+      alert(
+        `Перенесено ${data.data.itemsCreated} позицій у фінансування.\n` +
+          `План витрат: ${formatCurrency(data.data.totalExpense)}\n` +
+          `План доходу: ${formatCurrency(data.data.totalIncome)}`,
+      );
+      setEstimate((prev) =>
+        prev ? { ...prev, financeSyncedAt: data.data.syncedAt } : prev,
+      );
+    } catch (error) {
+      console.error("Sync to financing error:", error);
+      alert(error instanceof Error ? error.message : "Помилка синхронізації");
+    } finally {
+      setSyncingFinancing(false);
     }
   }
 
@@ -502,6 +536,33 @@ export default function EstimateDetailPage({
               <Calculator className="h-4 w-4" />
               Налаштувати фінанси
             </Button>
+          )}
+
+          {/* Sync to financing button */}
+          {(session?.user?.role === "FINANCIER" ||
+            session?.user?.role === "SUPER_ADMIN" ||
+            session?.user?.role === "MANAGER") && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={syncToFinancing}
+                disabled={syncingFinancing}
+                className="bg-indigo-50 border-indigo-200 hover:bg-indigo-100 text-indigo-700"
+              >
+                {syncingFinancing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <DollarSign className="h-4 w-4" />
+                )}
+                Перенести в фінансування
+              </Button>
+              {estimate.financeSyncedAt && (
+                <span className="text-xs text-muted-foreground">
+                  синхр. {formatDate(estimate.financeSyncedAt)}
+                </span>
+              )}
+            </div>
           )}
           {estimate.status === "DRAFT" && (
             <Button

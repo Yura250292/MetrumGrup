@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
         orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
         include: {
           project: { select: { title: true } },
+          folder: { select: { name: true } },
           createdBy: { select: { name: true } },
           updatedBy: { select: { name: true } },
         },
@@ -48,8 +49,14 @@ export async function GET(request: NextRequest) {
     ]);
 
     const appliedFilters: FinancingExportAppliedFilter[] = [];
-    if (filters.projectId === null) {
-      appliedFilters.push({ label: "Проєкт", value: "Постійні витрати компанії" });
+    if (filters.folderId) {
+      const folder = await prisma.folder.findUnique({
+        where: { id: filters.folderId },
+        select: { name: true },
+      });
+      if (folder) appliedFilters.push({ label: "Папка", value: folder.name });
+    } else if (filters.projectId === null) {
+      appliedFilters.push({ label: "Проєкт", value: "Без проєкту" });
     } else if (filters.projectId) {
       const proj = await prisma.project.findUnique({
         where: { id: filters.projectId },
@@ -88,7 +95,7 @@ export async function GET(request: NextRequest) {
         type: e.type,
         amount: Number(e.amount),
         currency: e.currency,
-        projectTitle: e.project?.title ?? null,
+        projectTitle: e.project?.title ?? e.folder?.name ?? null,
         category: e.category,
         subcategory: e.subcategory,
         title: e.title,

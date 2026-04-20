@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Filter, Search, ChevronDown, ChevronUp } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { FINANCE_CATEGORIES } from "@/lib/constants";
@@ -8,6 +8,37 @@ import { FilterSelect, FilterInput } from "./filter-controls";
 import { DatePresets } from "./date-presets";
 import { SavedViews } from "./saved-views";
 import type { FinancingFilters, ProjectOption, UserOption } from "./types";
+
+type FolderTreeOption = { id: string; name: string; depth: number };
+
+function useFinanceFolderTree(enabled: boolean) {
+  const [tree, setTree] = useState<FolderTreeOption[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    fetch("/api/admin/folders/tree?domain=FINANCE")
+      .then((r) => (r.ok ? r.json() : { folders: [] }))
+      .then(({ folders }) => {
+        if (!alive) return;
+        const result: FolderTreeOption[] = [];
+        const walk = (parentId: string | null, depth: number) => {
+          for (const f of folders.filter(
+            (x: { parentId: string | null }) => x.parentId === parentId,
+          )) {
+            result.push({ id: f.id, name: f.name, depth });
+            walk(f.id, depth + 1);
+          }
+        };
+        walk(null, 0);
+        setTree(result);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [enabled]);
+  return tree;
+}
 
 export function FilterBar({
   filters,
@@ -25,9 +56,11 @@ export function FilterBar({
   scope?: { id: string; title: string };
 }) {
   const [showMore, setShowMore] = useState(false);
+  const folderTree = useFinanceFolderTree(!scope);
 
   const activeCount = [
     !scope && filters.projectId,
+    !scope && filters.folderId,
     filters.kind,
     filters.type,
     filters.status,
@@ -103,10 +136,23 @@ export function FilterBar({
             onChange={(v) => setFilters((p) => ({ ...p, projectId: v }))}
           >
             <option value="">Всі проєкти</option>
-            <option value="__NULL__">Постійні витрати</option>
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.title}
+              </option>
+            ))}
+          </FilterSelect>
+        )}
+
+        {!scope && (
+          <FilterSelect
+            value={filters.folderId}
+            onChange={(v) => setFilters((p) => ({ ...p, folderId: v }))}
+          >
+            <option value="">Всі папки</option>
+            {folderTree.map((f) => (
+              <option key={f.id} value={f.id}>
+                {"— ".repeat(f.depth) + f.name}
               </option>
             ))}
           </FilterSelect>

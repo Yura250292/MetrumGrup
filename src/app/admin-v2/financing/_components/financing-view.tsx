@@ -37,6 +37,7 @@ import { FolderCard } from "@/components/folders/FolderCard";
 import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
 import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
+import { ExpandableBlockCard } from "@/components/folders/ExpandableBlockCard";
 import {
   useFolders,
   useFolderDetail,
@@ -45,6 +46,7 @@ import {
   useDeleteFolder,
   useMoveItems,
 } from "@/hooks/useFolders";
+import type { FolderItem } from "@/hooks/useFolders";
 
 export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types";
 
@@ -82,12 +84,25 @@ export function FinancingView({
   const { data: detailData } = useFolderDetail(folderId);
   const folderBreadcrumbs = detailData?.breadcrumbs ?? [];
 
+  const isRootView = !scope && !folderId;
+  const systemBlocks = isRootView ? folders.filter((f) => f.isSystem) : [];
+  const nonSystemFolders = isRootView ? folders.filter((f) => !f.isSystem) : folders;
+
   const [moveEntryId, setMoveEntryId] = useState<string | null>(null);
+  const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
 
   const createFolderMutation = useCreateFolder();
   const updateFolderMutation = useUpdateFolder();
   const deleteFolderMutation = useDeleteFolder();
   const moveItemsMutation = useMoveItems();
+
+  const handleRenameFolder = (id: string, name: string) =>
+    updateFolderMutation.mutate({ id, name }, { onSuccess: () => router.refresh() });
+
+  const handleDeleteFolder = (id: string) => {
+    if (!confirm("Видалити папку? Записи повернуться в корінь.")) return;
+    deleteFolderMutation.mutate(id, { onSuccess: () => router.refresh() });
+  };
 
   const data = useFinancingData({ scope, folderId });
 
@@ -136,29 +151,55 @@ export function FinancingView({
             />
           )}
 
-          {folders.length > 0 && (
+          {/* Root view: structural blocks (expandable) */}
+          {isRootView && systemBlocks.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {systemBlocks.map((block) => (
+                <ExpandableBlockCard
+                  key={block.id}
+                  folder={block}
+                  basePath="/admin-v2/financing"
+                  onCreateChildFolder={(parentId) => {
+                    setCreateFolderParentId(parentId);
+                    setShowCreateFolder(true);
+                  }}
+                  onCreateEntry={(blockId) =>
+                    setCreatePreset({
+                      kind: "FACT",
+                      type: "EXPENSE",
+                      folderId: blockId,
+                      folderName: block.name,
+                    })
+                  }
+                  onRenameChild={handleRenameFolder}
+                  onDeleteChild={handleDeleteFolder}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* User-created folders grid */}
+          {nonSystemFolders.length > 0 && (
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              {folders.map((f) => (
+              {nonSystemFolders.map((f: FolderItem) => (
                 <FolderCard
                   key={f.id}
                   folder={f}
                   href={`/admin-v2/financing?folderId=${f.id}`}
                   showFinanceIndicators
-                  onRename={(id, name) =>
-                    updateFolderMutation.mutate({ id, name }, { onSuccess: () => router.refresh() })
-                  }
-                  onDelete={(id) => {
-                    if (!confirm("Видалити папку? Записи повернуться в корінь.")) return;
-                    deleteFolderMutation.mutate(id, { onSuccess: () => router.refresh() });
-                  }}
+                  onRename={handleRenameFolder}
+                  onDelete={handleDeleteFolder}
                 />
               ))}
             </div>
           )}
 
           <button
-            onClick={() => setShowCreateFolder(true)}
-            className="flex items-center gap-2 text-[12px] font-semibold transition hover:opacity-80"
+            onClick={() => {
+              setCreateFolderParentId(folderId);
+              setShowCreateFolder(true);
+            }}
+            className="flex items-center gap-2 text-[12px] font-semibold transition hover:opacity-80 self-start"
             style={{ color: T.accentPrimary }}
           >
             <FolderPlus size={14} /> Нова папка
@@ -166,11 +207,25 @@ export function FinancingView({
 
           <CreateFolderDialog
             open={showCreateFolder}
-            onClose={() => setShowCreateFolder(false)}
+            onClose={() => {
+              setShowCreateFolder(false);
+              setCreateFolderParentId(null);
+            }}
             onSubmit={(d) => {
               createFolderMutation.mutate(
-                { domain: "FINANCE", name: d.name, parentId: folderId, color: d.color },
-                { onSuccess: () => { setShowCreateFolder(false); router.refresh(); } },
+                {
+                  domain: "FINANCE",
+                  name: d.name,
+                  parentId: createFolderParentId ?? folderId,
+                  color: d.color,
+                },
+                {
+                  onSuccess: () => {
+                    setShowCreateFolder(false);
+                    setCreateFolderParentId(null);
+                    router.refresh();
+                  },
+                },
               );
             }}
             loading={createFolderMutation.isPending}
@@ -416,6 +471,11 @@ export function FinancingView({
           preset={createPreset ?? undefined}
           projects={projects}
           scope={scope}
+          folderContext={
+            folderId && detailData?.folder
+              ? { id: folderId, name: detailData.folder.name }
+              : null
+          }
           currentUserId={currentUserId}
           currentUserName={currentUserName}
           onClose={() => {

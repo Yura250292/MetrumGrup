@@ -8,6 +8,7 @@ export type FinanceListFilters = {
   type?: "INCOME" | "EXPENSE";
   kind?: "PLAN" | "FACT";
   status?: "DRAFT" | "PENDING" | "APPROVED" | "PAID";
+  source?: "MANUAL" | "ESTIMATE_AUTO";
   category?: string;
   subcategory?: string;
   from?: Date;
@@ -31,6 +32,7 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
   const hasAttachmentsRaw = searchParams.get("hasAttachments");
   const archivedRaw = searchParams.get("archived");
   const statusRaw = searchParams.get("status");
+  const sourceRaw = searchParams.get("source");
 
   const folderIdRaw = searchParams.get("folderId");
 
@@ -56,6 +58,8 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
       statusRaw === "DRAFT" || statusRaw === "PENDING" || statusRaw === "APPROVED" || statusRaw === "PAID"
         ? statusRaw
         : undefined,
+    source:
+      sourceRaw === "MANUAL" || sourceRaw === "ESTIMATE_AUTO" ? sourceRaw : undefined,
     archived: archivedRaw === "true",
   };
 }
@@ -74,6 +78,7 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
   if (filters.type) where.type = filters.type;
   if (filters.kind) where.kind = filters.kind;
   if (filters.status) where.status = filters.status;
+  if (filters.source) where.source = filters.source;
   if (filters.category) where.category = filters.category;
   if (filters.subcategory) where.subcategory = filters.subcategory;
   if (filters.responsibleId) where.createdById = filters.responsibleId;
@@ -158,6 +163,7 @@ export const FINANCE_ENTRY_SELECT = {
   amount: true,
   currency: true,
   projectId: true,
+  folderId: true,
   category: true,
   subcategory: true,
   title: true,
@@ -170,7 +176,12 @@ export const FINANCE_ENTRY_SELECT = {
   paidAt: true,
   createdAt: true,
   updatedAt: true,
+  source: true,
+  estimateId: true,
+  estimateItemId: true,
   project: { select: { id: true, title: true, slug: true } },
+  folder: { select: { id: true, name: true } },
+  estimate: { select: { id: true, number: true, title: true } },
   createdBy: { select: { id: true, name: true } },
   updatedBy: { select: { id: true, name: true } },
   approvedBy: { select: { id: true, name: true } },

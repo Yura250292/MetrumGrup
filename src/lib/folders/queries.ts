@@ -8,6 +8,8 @@ export type FolderListItem = {
   domain: FolderDomain;
   parentId: string | null;
   sortOrder: number;
+  isSystem: boolean;
+  slug: string | null;
   createdAt: Date;
   childFolderCount: number;
   itemCount: number;
@@ -40,6 +42,8 @@ export async function listFolders(
     domain: f.domain,
     parentId: f.parentId,
     sortOrder: f.sortOrder,
+    isSystem: f.isSystem,
+    slug: f.slug,
     createdAt: f.createdAt,
     childFolderCount: f._count.children,
     itemCount:

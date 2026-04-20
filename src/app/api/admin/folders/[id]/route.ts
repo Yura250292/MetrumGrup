@@ -1,8 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireStaffAccess, unauthorizedResponse } from "@/lib/auth-utils";
 import { getFolderBreadcrumbs } from "@/lib/folders/queries";
-import { updateFolder, deleteFolder } from "@/lib/folders/actions";
+import {
+  updateFolder,
+  deleteFolder,
+  SYSTEM_FOLDER_RENAME_ERROR,
+  SYSTEM_FOLDER_MOVE_ERROR,
+  SYSTEM_FOLDER_DELETE_ERROR,
+} from "@/lib/folders/actions";
 import { prisma } from "@/lib/prisma";
+
+const SYSTEM_FOLDER_ERRORS = new Set<string>([
+  SYSTEM_FOLDER_RENAME_ERROR,
+  SYSTEM_FOLDER_MOVE_ERROR,
+  SYSTEM_FOLDER_DELETE_ERROR,
+]);
 
 export async function GET(
   _request: NextRequest,
@@ -47,6 +59,9 @@ export async function PATCH(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     if (msg === "Unauthorized") return unauthorizedResponse();
+    if (SYSTEM_FOLDER_ERRORS.has(msg)) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     if (msg.includes("Unique constraint")) {
       return NextResponse.json(
         { error: "Папка з такою назвою вже існує" },
@@ -71,6 +86,9 @@ export async function DELETE(
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     if (msg === "Unauthorized") return unauthorizedResponse();
+    if (SYSTEM_FOLDER_ERRORS.has(msg)) {
+      return NextResponse.json({ error: msg }, { status: 400 });
+    }
     console.error("[folders/id] DELETE error:", err);
     return NextResponse.json({ error: "Помилка сервера" }, { status: 500 });
   }

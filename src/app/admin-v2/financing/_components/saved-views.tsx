@@ -20,9 +20,9 @@ const BUILTIN_VIEWS: SavedView[] = [
     filters: { kind: "FACT", type: "EXPENSE" },
   },
   {
-    id: "__builtin_no_project",
-    name: "Без проєкту",
-    filters: { projectId: "__NULL__" },
+    id: "__builtin_company_expenses",
+    name: "Постійні витрати компанії",
+    filters: { folderId: "fld_sys_company_expenses" },
   },
   {
     id: "__builtin_plan_no_fact",

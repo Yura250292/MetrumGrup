@@ -42,6 +42,7 @@ export async function GET(
       taxAmount: true,
       finalClientPrice: true,
       logisticsCost: true,
+      financeSyncedAt: true,
       createdAt: true,
       sentAt: true,
       approvedAt: true,

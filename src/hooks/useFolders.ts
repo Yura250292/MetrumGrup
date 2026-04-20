@@ -10,6 +10,8 @@ export type FolderItem = {
   domain: string;
   parentId: string | null;
   sortOrder: number;
+  isSystem: boolean;
+  slug: string | null;
   childFolderCount: number;
   itemCount: number;
   finance?: { income: number; expense: number; balance: number };

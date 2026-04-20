@@ -10,7 +10,10 @@ import {
   Trash2,
   FileText,
   MessageCircle,
+  Calculator,
+  Lock,
 } from "lucide-react";
+import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { financeCategoriesForType } from "@/lib/constants";
 import { CommentThread } from "@/components/collab/CommentThread";
@@ -23,6 +26,7 @@ export type EntryFormValues = {
   amount: string;
   occurredAt: string;
   projectId: string;
+  folderId: string;
   category: string;
   subcategory: string;
   title: string;
@@ -37,6 +41,7 @@ export function EntryFormModal({
   preset,
   projects,
   scope,
+  folderContext,
   currentUserId: _currentUserId,
   currentUserName,
   onClose,
@@ -45,15 +50,19 @@ export function EntryFormModal({
 }: {
   mode: "create" | "edit";
   initial: FinanceEntryDTO | null;
-  preset?: { kind: "PLAN" | "FACT"; type: "INCOME" | "EXPENSE" };
+  preset?: { kind: "PLAN" | "FACT"; type: "INCOME" | "EXPENSE"; folderId?: string; folderName?: string };
   projects: ProjectOption[];
   scope?: { id: string; title: string };
+  folderContext?: { id: string; name: string } | null;
   currentUserId: string;
   currentUserName: string;
   onClose: () => void;
   onSave: (values: EntryFormValues, andCreateAnother: boolean) => Promise<void>;
   onStatusChange?: (entry: FinanceEntryDTO, newStatus: FinanceEntryStatus) => Promise<void>;
 }) {
+  const contextFolderId = preset?.folderId ?? folderContext?.id ?? null;
+  const contextFolderName = preset?.folderName ?? folderContext?.name ?? null;
+
   const [values, setValues] = useState<EntryFormValues>(() => {
     if (initial) {
       return {
@@ -62,6 +71,7 @@ export function EntryFormModal({
         amount: String(Number(initial.amount)),
         occurredAt: initial.occurredAt.slice(0, 10),
         projectId: initial.projectId ?? "",
+        folderId: initial.folderId ?? "",
         category: initial.category,
         subcategory: initial.subcategory ?? "",
         title: initial.title,
@@ -76,6 +86,7 @@ export function EntryFormModal({
       amount: "",
       occurredAt: new Date().toISOString().slice(0, 10),
       projectId: scope ? scope.id : "",
+      folderId: contextFolderId ?? "",
       category: "",
       subcategory: "",
       title: "",
@@ -85,11 +96,7 @@ export function EntryFormModal({
     };
   });
 
-  const [isCompanyExpense, setIsCompanyExpense] = useState<boolean>(() => {
-    if (scope) return false;
-    if (initial) return initial.projectId === null;
-    return false;
-  });
+  const folderLocked = mode === "create" && !!contextFolderId;
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -100,6 +107,8 @@ export function EntryFormModal({
     () => financeCategoriesForType(values.type),
     [values.type]
   );
+
+  const isAutoFromEstimate = mode === "edit" && initial?.source === "ESTIMATE_AUTO";
 
   useEffect(() => {
     if (values.category) {
@@ -126,16 +135,17 @@ export function EntryFormModal({
       return;
     }
 
-    const projectId = scope ? scope.id : isCompanyExpense ? "" : values.projectId;
+    const projectId = scope ? scope.id : values.projectId;
+    const folderId = folderLocked ? (contextFolderId ?? "") : values.folderId;
 
-    if (!scope && !isCompanyExpense && !projectId) {
-      setError("Виберіть проєкт або позначте як постійну витрату");
+    if (!scope && !projectId && !folderId) {
+      setError("Виберіть проєкт або папку");
       return;
     }
 
     setSaving(true);
     try {
-      await onSave({ ...values, projectId }, andCreateAnother);
+      await onSave({ ...values, projectId, folderId }, andCreateAnother);
       if (andCreateAnother) {
         setValues((p) => ({
           ...p,
@@ -205,6 +215,35 @@ export function EntryFormModal({
         </div>
 
         <form onSubmit={(e) => handleSubmit(e, false)} className="flex flex-col gap-4 p-6">
+          {isAutoFromEstimate && (
+            <div
+              className="flex items-start gap-2 rounded-xl px-4 py-3"
+              style={{ backgroundColor: T.accentPrimarySoft, border: `1px solid ${T.accentPrimary}40` }}
+            >
+              <Lock size={14} style={{ color: T.accentPrimary }} className="mt-0.5 flex-shrink-0" />
+              <div className="flex flex-col gap-1 flex-1">
+                <span className="text-[12px] font-bold" style={{ color: T.accentPrimary }}>
+                  Запис синхронізовано з кошторису
+                </span>
+                <span className="text-[11px]" style={{ color: T.textSecondary }}>
+                  Сума, категорія та опис керуються у
+                  {initial?.estimate ? (
+                    <Link
+                      href={`/admin/estimates/${initial.estimate.id}`}
+                      className="mx-1 inline-flex items-center gap-1 underline"
+                      style={{ color: T.accentPrimary }}
+                    >
+                      <Calculator size={10} /> кошторисі {initial.estimate.number}
+                    </Link>
+                  ) : (
+                    " пов'язаному кошторисі"
+                  )}
+                  . Тут можна лише змінювати статус та прикріплювати файли.
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Status workflow (edit mode only) */}
           {mode === "edit" && initial && onStatusChange && (
             <div
@@ -263,6 +302,7 @@ export function EntryFormModal({
           )}
 
           {/* Kind + Type segmented controls */}
+          <fieldset disabled={isAutoFromEstimate} className="contents">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <span
@@ -347,38 +387,30 @@ export function EntryFormModal({
             </div>
           </div>
 
-          {/* Project / company toggle */}
-          {!scope && (
+          {/* Folder context banner (create-in-block) */}
+          {!scope && folderLocked && contextFolderName && (
             <div
               className="flex items-center justify-between rounded-xl px-4 py-3"
               style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
             >
               <div>
                 <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
-                  Постійна витрата компанії
+                  У папці: {contextFolderName}
                 </span>
                 <p className="text-[10px]" style={{ color: T.textMuted }}>
-                  Без прив'язки до конкретного проєкту
+                  Запис прив'яжеться до цієї папки автоматично
                 </p>
               </div>
-              <Toggle
-                checked={isCompanyExpense}
-                onChange={(v) => {
-                  setIsCompanyExpense(v);
-                  if (v) setValues((p) => ({ ...p, projectId: "" }));
-                }}
-              />
             </div>
           )}
 
           {/* Grid of inputs */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {!scope && !isCompanyExpense && (
-              <Field label="Проєкт" required>
+            {!scope && !folderLocked && (
+              <Field label="Проєкт">
                 <select
                   value={values.projectId}
                   onChange={(e) => setValues((p) => ({ ...p, projectId: e.target.value }))}
-                  required
                   className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
                   style={{
                     backgroundColor: T.panelSoft,
@@ -386,7 +418,7 @@ export function EntryFormModal({
                     color: T.textPrimary,
                   }}
                 >
-                  <option value="">— виберіть —</option>
+                  <option value="">— без проєкту —</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.title}
@@ -517,6 +549,7 @@ export function EntryFormModal({
               </Field>
             </div>
           </div>
+          </fieldset>
 
           {/* Attachments */}
           <div className="flex flex-col gap-2">
@@ -670,7 +703,7 @@ export function EntryFormModal({
               <button
                 type="button"
                 onClick={(e) => handleSubmit(e, true)}
-                disabled={saving}
+                disabled={saving || isAutoFromEstimate}
                 className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
                 style={{
                   backgroundColor: T.panelElevated,
@@ -683,9 +716,10 @@ export function EntryFormModal({
             )}
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || isAutoFromEstimate}
               className="flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50"
               style={{ backgroundColor: T.accentPrimary }}
+              title={isAutoFromEstimate ? "Редагуйте через кошторис" : undefined}
             >
               {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
               Зберегти
@@ -724,32 +758,3 @@ function Field({
   );
 }
 
-function Toggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className="relative h-6 w-11 rounded-full transition"
-      style={{
-        backgroundColor: checked ? T.accentPrimary : T.panelElevated,
-        border: `1px solid ${checked ? T.accentPrimary : T.borderStrong}`,
-      }}
-    >
-      <span
-        className="absolute top-0.5 h-4 w-4 rounded-full transition"
-        style={{
-          left: checked ? "calc(100% - 20px)" : "2px",
-          backgroundColor: "#fff",
-        }}
-      />
-    </button>
-  );
-}

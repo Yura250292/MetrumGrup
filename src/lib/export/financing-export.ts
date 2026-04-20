@@ -324,7 +324,7 @@ export async function generateFinancingExcel(input: FinancingExportInput): Promi
     const row = ws.addRow([
       fmtDate(e.occurredAt),
       KIND_LABELS[e.kind] ?? e.kind,
-      e.projectTitle ?? "Постійна витрата",
+      e.projectTitle ?? "—",
       FINANCE_ENTRY_TYPE_LABELS[e.type] ?? e.type,
       FINANCE_CATEGORY_LABELS[e.category] ?? e.category,
       e.subcategory ?? "",

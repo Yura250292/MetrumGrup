@@ -45,9 +45,37 @@ export async function PATCH(
 
   try {
     const body = await request.json();
+    const isAutoFromEstimate = existing.source === "ESTIMATE_AUTO";
     const data: Parameters<typeof prisma.financeEntry.update>[0]["data"] = {
       updatedById: session.user.id,
     };
+
+    if (isAutoFromEstimate) {
+      const forbiddenKeys = [
+        "type",
+        "kind",
+        "amount",
+        "projectId",
+        "category",
+        "subcategory",
+        "title",
+        "description",
+        "counterparty",
+        "occurredAt",
+        "currency",
+      ] as const;
+      for (const key of forbiddenKeys) {
+        if (key in body) {
+          return NextResponse.json(
+            {
+              error:
+                "Запис синхронізовано з кошторису. Змінюйте ці поля через кошторис — тут дозволені лише статус, архівація та вкладення.",
+            },
+            { status: 409 },
+          );
+        }
+      }
+    }
 
     if (body.type === "INCOME" || body.type === "EXPENSE") data.type = body.type;
     if (body.kind === "PLAN" || body.kind === "FACT") data.kind = body.kind;

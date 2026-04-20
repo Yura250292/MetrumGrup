@@ -91,6 +91,43 @@ async function main() {
   console.log("✅ Users created");
 
   // ============================================
+  // FINANCE STRUCTURAL FOLDERS (idempotent)
+  // ============================================
+  const SEED_FINANCE_FOLDERS: Array<{
+    id: string;
+    name: string;
+    slug: string;
+    parentSlug: string | null;
+    sortOrder: number;
+  }> = [
+    { id: "fld_sys_company_expenses", name: "Постійні витрати", slug: "company-expenses",  parentSlug: null,              sortOrder: 0 },
+    { id: "fld_sys_office_expenses",  name: "Витрати офісу",    slug: "office-expenses",   parentSlug: null,              sortOrder: 1 },
+    { id: "fld_sys_office_fixed",     name: "Постійні",         slug: "office-fixed",      parentSlug: "office-expenses", sortOrder: 0 },
+    { id: "fld_sys_office_variable",  name: "Змінні",           slug: "office-variable",   parentSlug: "office-expenses", sortOrder: 1 },
+  ];
+
+  const seedFolderBySlug = new Map<string, string>();
+  for (const f of SEED_FINANCE_FOLDERS) {
+    const parentId = f.parentSlug ? seedFolderBySlug.get(f.parentSlug) ?? null : null;
+    const row = await prisma.folder.upsert({
+      where: { domain_slug: { domain: "FINANCE", slug: f.slug } },
+      update: { name: f.name, parentId, sortOrder: f.sortOrder, isSystem: true },
+      create: {
+        id: f.id,
+        domain: "FINANCE",
+        name: f.name,
+        slug: f.slug,
+        parentId,
+        sortOrder: f.sortOrder,
+        isSystem: true,
+      },
+    });
+    seedFolderBySlug.set(f.slug, row.id);
+  }
+
+  console.log("✅ Finance structural folders seeded");
+
+  // ============================================
   // PROJECTS
   // ============================================
   const project1 = await prisma.project.create({

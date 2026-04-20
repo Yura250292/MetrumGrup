@@ -1,4 +1,5 @@
 export type FinanceEntryStatus = "DRAFT" | "PENDING" | "APPROVED" | "PAID";
+export type FinanceEntrySource = "MANUAL" | "ESTIMATE_AUTO";
 
 export type FinanceEntryDTO = {
   id: string;
@@ -8,6 +9,7 @@ export type FinanceEntryDTO = {
   amount: number | string;
   currency: string;
   projectId: string | null;
+  folderId: string | null;
   category: string;
   subcategory: string | null;
   title: string;
@@ -15,12 +17,17 @@ export type FinanceEntryDTO = {
   counterparty: string | null;
   isArchived: boolean;
   status: FinanceEntryStatus;
+  source: FinanceEntrySource;
+  estimateId: string | null;
+  estimateItemId: string | null;
+  estimate: { id: string; number: string; title: string } | null;
   approvedAt: string | null;
   approvedById: string | null;
   paidAt: string | null;
   createdAt: string;
   updatedAt: string;
   project: { id: string; title: string; slug: string } | null;
+  folder: { id: string; name: string } | null;
   createdBy: { id: string; name: string } | null;
   updatedBy: { id: string; name: string } | null;
   approvedBy: { id: string; name: string } | null;
@@ -50,6 +57,8 @@ export type UserOption = { id: string; name: string };
 export type QuadrantPreset = {
   kind: "PLAN" | "FACT";
   type: "INCOME" | "EXPENSE";
+  folderId?: string;
+  folderName?: string;
 };
 
 export const EMPTY_SUMMARY: FinanceSummaryDTO = {
@@ -61,6 +70,7 @@ export const EMPTY_SUMMARY: FinanceSummaryDTO = {
 
 export type FinancingFilters = {
   projectId: string;
+  folderId: string;
   category: string;
   from: string;
   to: string;
@@ -68,6 +78,7 @@ export type FinancingFilters = {
   kind: string;
   type: string;
   status: string;
+  source: string;
   subcategory: string;
   responsibleId: string;
   hasAttachments: string;

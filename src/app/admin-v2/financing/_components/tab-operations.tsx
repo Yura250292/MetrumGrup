@@ -15,7 +15,9 @@ import {
   AlignLeft,
   ArrowUpDown,
   Clock,
+  Calculator,
 } from "lucide-react";
+import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
@@ -31,7 +33,8 @@ type ChipKey =
   | "no_project"
   | "with_files"
   | "no_files"
-  | "overdue";
+  | "overdue"
+  | "from_estimate";
 
 const CHIPS: { key: ChipKey; label: string }[] = [
   { key: "all", label: "Усі" },
@@ -40,6 +43,7 @@ const CHIPS: { key: ChipKey; label: string }[] = [
   { key: "income", label: "Доходи" },
   { key: "expense", label: "Витрати" },
   { key: "no_project", label: "Без проєкту" },
+  { key: "from_estimate", label: "З кошторису" },
   { key: "with_files", label: "З файлами" },
   { key: "no_files", label: "Без файлів" },
   { key: "overdue", label: "Прострочені" },
@@ -113,6 +117,7 @@ export function TabOperations({
         if (activeChips.has("income") && e.type !== "INCOME") return false;
         if (activeChips.has("expense") && e.type !== "EXPENSE") return false;
         if (activeChips.has("no_project") && e.projectId !== null) return false;
+        if (activeChips.has("from_estimate") && e.source !== "ESTIMATE_AUTO") return false;
         if (activeChips.has("with_files") && e.attachments.length === 0) return false;
         if (activeChips.has("no_files") && e.attachments.length > 0) return false;
         if (activeChips.has("overdue")) {
@@ -354,6 +359,15 @@ function OperationRow({
         <div className="text-[13px] font-semibold truncate mb-0.5" style={{ color: T.textPrimary }}>
           {entry.title}
         </div>
+        {entry.source === "ESTIMATE_AUTO" && entry.estimate && (
+          <Link
+            href={`/admin/estimates/${entry.estimate.id}`}
+            className="inline-flex items-center gap-1 self-start mb-0.5 rounded-md px-1.5 py-0.5 text-[9px] font-bold"
+            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
+          >
+            <Calculator size={9} /> З кошторису {entry.estimate.number}
+          </Link>
+        )}
 
         {/* Row 3: meta */}
         <div className="flex items-center justify-between gap-2">
@@ -459,6 +473,25 @@ function OperationRow({
           {entry.counterparty && (
             <span className="text-[10px] truncate" style={{ color: T.textMuted }}>{entry.counterparty}</span>
           )}
+          {entry.source === "ESTIMATE_AUTO" && (
+            entry.estimate ? (
+              <Link
+                href={`/admin/estimates/${entry.estimate.id}`}
+                className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 text-[9px] font-bold hover:brightness-110"
+                style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
+                title={`Кошторис ${entry.estimate.number}`}
+              >
+                <Calculator size={9} /> З кошторису {entry.estimate.number}
+              </Link>
+            ) : (
+              <span
+                className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 text-[9px] font-bold"
+                style={{ backgroundColor: T.panelSoft, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
+              >
+                <Calculator size={9} /> Кошторис видалено
+              </span>
+            )
+          )}
           {isOverdue && (
             <span className="flex items-center gap-1 text-[9px] font-bold mt-0.5" style={{ color: T.danger }}>
               <Clock size={9} /> Прострочено
@@ -473,7 +506,7 @@ function OperationRow({
         {showProject && (
           <div className="flex items-center">
             <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
-              {entry.project?.title ?? <em>Постійна</em>}
+              {entry.project?.title ?? entry.folder?.name ?? <em>—</em>}
             </span>
           </div>
         )}

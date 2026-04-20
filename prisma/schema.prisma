@@ -82,6 +82,7 @@ model User {
   financeEntriesUpdated  FinanceEntry[]            @relation("FinanceEntryUpdater")
   financeEntriesApproved FinanceEntry[]            @relation("FinanceEntryApprover")
   financeAttachments     FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
+  estimateFinanceSyncs   Estimate[]                @relation("EstimateFinanceSyncer")
   commentReadStates     CommentReadState[]
   aiConversations       AiConversation[]          @relation("AiConversationUser")
 
@@ -251,6 +252,10 @@ model Estimate {
   // Refine history (Stage 6.2)
   refineHistory         EstimateRefineHistory[]  @relation("RefineHistoryEstimate")
   refinedFromHistory    EstimateRefineHistory[]  @relation("RefineHistoryPrevious")
+  financeEntries        FinanceEntry[]           @relation("EstimateFinanceEntries")
+  financeSyncedAt       DateTime?
+  financeSyncedById     String?
+  financeSyncedBy       User?                    @relation("EstimateFinanceSyncer", fields: [financeSyncedById], references: [id])
 
   @@index([folderId])
   @@map("estimates")
@@ -332,6 +337,7 @@ model EstimateItem {
   estimate            Estimate         @relation(fields: [estimateId], references: [id], onDelete: Cascade)
   material            Material?        @relation(fields: [materialId], references: [id])
   section             EstimateSection? @relation(fields: [sectionId], references: [id])
+  financeEntries      FinanceEntry[]
 
   @@index([engineKey])
   @@index([confidence])
@@ -416,12 +422,18 @@ model FinanceEntry {
 
   folderId    String?
 
-  project     Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdBy   User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
-  updatedBy   User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
-  approvedBy  User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
-  folder      Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  attachments FinanceEntryAttachment[]
+  source         FinanceEntrySource @default(MANUAL)
+  estimateId     String?
+  estimateItemId String?
+
+  project      Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy    User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
+  updatedBy    User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
+  approvedBy   User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
+  folder       Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  estimate     Estimate?                @relation("EstimateFinanceEntries", fields: [estimateId], references: [id], onDelete: SetNull)
+  estimateItem EstimateItem?            @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
+  attachments  FinanceEntryAttachment[]
 
   @@index([projectId, occurredAt])
   @@index([type, occurredAt])
@@ -430,6 +442,8 @@ model FinanceEntry {
   @@index([isArchived])
   @@index([folderId])
   @@index([status])
+  @@index([estimateId])
+  @@index([source])
   @@map("finance_entries")
 }
 
@@ -1154,6 +1168,11 @@ enum FinanceEntryStatus {
   PAID
 }
 
+enum FinanceEntrySource {
+  MANUAL
+  ESTIMATE_AUTO
+}
+
 enum FolderDomain {
   PROJECT
   ESTIMATE
@@ -1167,6 +1186,8 @@ model Folder {
   color     String?
   parentId  String?
   sortOrder Int          @default(0)
+  isSystem  Boolean      @default(false)
+  slug      String?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -1177,7 +1198,9 @@ model Folder {
   financeEntries FinanceEntry[]
 
   @@unique([domain, parentId, name])
+  @@unique([domain, slug])
   @@index([domain, parentId, sortOrder])
+  @@index([isSystem])
   @@map("folders")
 }
 
