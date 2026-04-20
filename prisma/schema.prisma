@@ -1882,6 +1882,19 @@ model UserIntegration {
   @@map("user_integrations")
 }
 
+model TelegramBotUser {
+  id         String   @id @default(cuid())
+  telegramId BigInt   @unique
+  firstName  String
+  lastName   String?
+  username   String?
+  isAdmin    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("telegram_bot_users")
+}
+
 model SavedView {
   id          String       @id @default(cuid())
   userId      String?

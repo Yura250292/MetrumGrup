@@ -239,6 +239,24 @@ export function registerCommands(bot: Telegraf<BotContext>) {
       return;
     }
 
+    if (data === 'admin_login') {
+      await ctx.answerCbQuery();
+      if (ctx.session?.isAdmin) {
+        const { menuCommand } = await import('./menu');
+        await menuCommand(ctx);
+      } else {
+        if (ctx.session) {
+          ctx.session.awaitingPassword = true;
+        }
+        await ctx.reply(
+          '🔐 <b>Вхід в адмінку</b>\n\n' +
+          'Введіть пароль:',
+          { parse_mode: 'HTML' }
+        );
+      }
+      return;
+    }
+
     if (data === 'services') {
       await ctx.answerCbQuery();
       await ctx.reply(
