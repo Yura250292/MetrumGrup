@@ -14,6 +14,9 @@ export async function menuCommand(ctx: BotContext) {
     parse_mode: 'HTML',
     ...Markup.inlineKeyboard([
       [
+        Markup.button.callback('🧾 Додати чек / накладну', 'admin:receipt')
+      ],
+      [
         Markup.button.callback('📋 Проекти', 'admin:projects'),
         Markup.button.callback('💰 Платежі', 'admin:payments')
       ],

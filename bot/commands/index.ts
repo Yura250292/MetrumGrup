@@ -311,6 +311,11 @@ export function registerCommands(bot: Telegraf<BotContext>) {
       const action = data.replace('admin:', '');
 
       switch (action) {
+        case 'receipt':
+          await ctx.answerCbQuery();
+          await receiptCommand(ctx);
+          break;
+
         case 'projects':
           await ctx.answerCbQuery();
           // Показуємо всі проекти
