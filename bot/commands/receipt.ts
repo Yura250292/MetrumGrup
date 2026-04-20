@@ -76,12 +76,11 @@ async function showFolderNavigation(ctx: BotContext, parentId: string | null) {
 
   const folders = await prisma.folder.findMany({
     where: { domain: 'FINANCE', parentId },
-    orderBy: { sortOrder: 'asc' },
-    select: { id: true, name: true },
+    orderBy: [{ isSystem: 'desc' }, { sortOrder: 'asc' }, { name: 'asc' }],
+    select: { id: true, name: true, isSystem: true },
   });
 
   if (folders.length === 0 && parentId === null) {
-    // No folders at all — fall back to simple mode
     await ctx.reply(
       '📸 <b>Додати чек / накладну</b>\n\n' +
       'Надішліть фото чеку або файл.\n' +
@@ -98,34 +97,47 @@ async function showFolderNavigation(ctx: BotContext, parentId: string | null) {
     return;
   }
 
-  // Folder buttons — up to 3 per row
-  const folderBtns = folders.map((f) =>
-    Markup.button.callback(`📁 ${f.name}`, `rcpt_folder:${f.id}`)
-  );
   const buttons: InlineKeyboardButton[][] = [];
 
-  // If inside a subfolder — show "upload here" on its own row
+  // If inside a subfolder — show "upload here" on its own row at top
   if (parentId) {
     buttons.push([Markup.button.callback('📸 Завантажити чек сюди', `rcpt_select_folder:${parentId}`)]);
   }
 
-  // Folder grid (max 3 per row)
-  buttons.push(...chunkButtons(folderBtns, 3));
+  // System blocks first (full-width single column, emphasized)
+  const systemFolders = folders.filter((f) => f.isSystem);
+  const userFolders = folders.filter((f) => !f.isSystem);
 
-  // Footer actions — each on its own row for clarity
+  for (const sf of systemFolders) {
+    buttons.push([Markup.button.callback(`🏢 ${sf.name}`, `rcpt_folder:${sf.id}`)]);
+  }
+
+  // Separator hint if both kinds exist at this level
+  if (systemFolders.length > 0 && userFolders.length > 0) {
+    buttons.push([Markup.button.callback('— проєкти —', 'noop')]);
+  }
+
+  // User folders grid (max 3 per row)
+  if (userFolders.length > 0) {
+    const userBtns = userFolders.map((f) =>
+      Markup.button.callback(`📁 ${f.name}`, `rcpt_folder:${f.id}`)
+    );
+    buttons.push(...chunkButtons(userBtns, 3));
+  }
+
+  // Footer actions
   if (parentId) {
     buttons.push([
       Markup.button.callback('⬅️ Назад', `rcpt_folder_back:${parentId}`),
       Markup.button.callback('❌ Скасувати', 'receipt_cancel'),
     ]);
   } else {
-    buttons.push([Markup.button.callback('🏢 Без папки', 'rcpt_select_folder:__none__')]);
     buttons.push([Markup.button.callback('❌ Скасувати', 'receipt_cancel')]);
   }
 
   const title = parentId
     ? '📂 Оберіть підпапку або завантажте сюди:'
-    : '📁 <b>Оберіть папку (проєкт):</b>';
+    : '📁 <b>Куди віднести витрату?</b>\n\n🏢 — системні блоки (офіс, постійні)\n📁 — проєкти';
 
   await ctx.reply(title, {
     parse_mode: 'HTML',
