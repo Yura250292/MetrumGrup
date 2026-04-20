@@ -41,6 +41,7 @@ function MessageBubble({
       <UserAvatar
         src={message.author.avatar}
         name={message.author.name}
+        userId={message.author.id}
         size={32}
         gradient={isOwn
           ? "linear-gradient(135deg, #3b82f6, #06b6d4)"

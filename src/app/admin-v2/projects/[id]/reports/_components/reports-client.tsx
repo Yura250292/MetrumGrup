@@ -232,7 +232,7 @@ export function ReportsClient({
                   border: `1px solid ${T.borderSoft}`,
                 }}
               >
-                <UserAvatar src={r.avatar} name={r.name} size={28} />
+                <UserAvatar src={r.avatar} name={r.name} userId={r.userId} size={28} />
                 <span className="flex-1 text-sm" style={{ color: T.textPrimary }}>
                   {r.name}
                 </span>

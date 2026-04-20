@@ -44,7 +44,7 @@ export function TeamAvatarGroup({
             title={u.name}
             className={`${i > 0 ? "-ml-2" : ""} border-2 admin-dark:border-gray-900 admin-light:border-white rounded-full`}
           >
-            <UserAvatar src={u.avatar} name={u.name} size={sz} gradient={gradient} />
+            <UserAvatar src={u.avatar} name={u.name} userId={u.id} size={sz} gradient={gradient} />
           </div>
         );
       })}

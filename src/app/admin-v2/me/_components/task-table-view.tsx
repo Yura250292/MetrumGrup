@@ -254,7 +254,7 @@ function TaskTableRow({
       {/* Assignees */}
       <div className="flex -space-x-1.5" onClick={(e) => e.stopPropagation()}>
         {(task.assignees || []).slice(0, 3).map((a) => (
-          <UserAvatar key={a.user.id} src={a.user.avatar} name={a.user.name} size={24} />
+          <UserAvatar key={a.user.id} src={a.user.avatar} name={a.user.name} userId={a.user.id} size={24} />
         ))}
         {(task.assignees || []).length > 3 && (
           <span

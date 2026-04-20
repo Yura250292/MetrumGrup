@@ -254,7 +254,7 @@ function Card({
         {card.assignees.length > 0 && (
           <div className="flex -space-x-1.5">
             {card.assignees.slice(0, 3).map((a) => (
-              <UserAvatar key={a.user.id} src={a.user.avatar} name={a.user.name} size={20} />
+              <UserAvatar key={a.user.id} src={a.user.avatar} name={a.user.name} userId={a.user.id} size={20} />
             ))}
             {card.assignees.length > 3 && (
               <span

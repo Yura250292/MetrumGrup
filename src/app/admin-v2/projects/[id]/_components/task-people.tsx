@@ -82,7 +82,7 @@ export function TaskPeopleView({
             <header className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 {g.user ? (
-                  <UserAvatar src={g.user.avatar} name={g.user.name} size={32} />
+                  <UserAvatar src={g.user.avatar} name={g.user.name} userId={g.user.id} size={32} />
                 ) : (
                   <span
                     className="inline-flex items-center justify-center rounded-full h-8 w-8 text-[11px] font-bold"

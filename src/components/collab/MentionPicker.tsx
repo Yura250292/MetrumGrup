@@ -78,7 +78,7 @@ export function MentionPicker({
               : "admin-dark:hover:bg-white/5 admin-light:hover:bg-gray-50"
           }`}
         >
-          <UserAvatar src={u.avatar} name={u.name} size={28} gradient="linear-gradient(135deg, #3b82f6, #06b6d4)" />
+          <UserAvatar src={u.avatar} name={u.name} size={28} gradient="linear-gradient(135deg, #3b82f6, #06b6d4)" nonInteractive />
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
               {u.name}

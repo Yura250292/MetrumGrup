@@ -151,7 +151,7 @@ export function NewConversationDialog({
                   className="flex w-full items-center gap-3 px-4 py-3 border-b transition tap-highlight-none disabled:opacity-50"
                   style={{ borderColor: T.borderSoft }}
                 >
-                  <UserAvatar src={u.avatar} name={u.name} size={36} gradient="linear-gradient(135deg, #3b82f6, #06b6d4)" />
+                  <UserAvatar src={u.avatar} name={u.name} size={36} gradient="linear-gradient(135deg, #3b82f6, #06b6d4)" nonInteractive />
                   <div className="text-left min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate" style={{ color: T.textPrimary }}>
                       {u.name}

@@ -54,6 +54,7 @@ export function CommentItem({
       <UserAvatar
         src={comment.author.avatar}
         name={comment.author.name}
+        userId={comment.author.id}
         size={36}
         gradient="linear-gradient(135deg, #a855f7, #7c3aed)"
       />

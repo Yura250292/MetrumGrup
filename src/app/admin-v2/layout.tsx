@@ -8,6 +8,7 @@ import { ThemeShell } from "./_components/theme-shell";
 import { AiPanelProvider } from "@/contexts/AiPanelContext";
 import { AiPanelPortal } from "@/components/ai-assistant/AiPanelPortal";
 import { SqueezeWrapper } from "@/components/ai-assistant/SqueezeWrapper";
+import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 
@@ -22,18 +23,20 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
   return (
     <ThemeShell>
       <AiPanelProvider>
-        <SqueezeWrapper>
-          <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
-            <Sidebar />
-            <MobileShell />
-            <div className="flex flex-col min-h-screen sidebar-push">
-              <Header />
-              <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-24 md:pb-8">{children}</main>
+        <UserProfileProvider>
+          <SqueezeWrapper>
+            <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
+              <Sidebar />
+              <MobileShell />
+              <div className="flex flex-col min-h-screen sidebar-push">
+                <Header />
+                <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-24 md:pb-8">{children}</main>
+              </div>
+              {!isClient && <TimerPill />}
             </div>
-            {!isClient && <TimerPill />}
-          </div>
-        </SqueezeWrapper>
-        <AiPanelPortal />
+          </SqueezeWrapper>
+          <AiPanelPortal />
+        </UserProfileProvider>
       </AiPanelProvider>
     </ThemeShell>
   );
