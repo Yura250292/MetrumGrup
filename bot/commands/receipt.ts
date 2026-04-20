@@ -1,5 +1,15 @@
 import { Markup } from 'telegraf';
+import type { InlineKeyboardButton } from 'telegraf/types';
 import { BotContext, PendingReceipt } from '../types';
+
+/** Chunk flat array of buttons into rows of max `cols` */
+function chunkButtons(buttons: InlineKeyboardButton[], cols: number): InlineKeyboardButton[][] {
+  const rows: InlineKeyboardButton[][] = [];
+  for (let i = 0; i < buttons.length; i += cols) {
+    rows.push(buttons.slice(i, i + cols));
+  }
+  return rows;
+}
 
 /**
  * /receipt command — start the receipt upload flow
@@ -40,22 +50,30 @@ async function showFolderNavigation(ctx: BotContext, parentId: string | null) {
     return;
   }
 
-  const buttons = folders.map((f) => [
-    Markup.button.callback(`📁 ${f.name}`, `rcpt_folder:${f.id}`),
-  ]);
+  // Folder buttons — up to 3 per row
+  const folderBtns = folders.map((f) =>
+    Markup.button.callback(`📁 ${f.name}`, `rcpt_folder:${f.id}`)
+  );
+  const buttons: InlineKeyboardButton[][] = [];
 
-  // If we're inside a subfolder, show "upload here" button
+  // If inside a subfolder — show "upload here" on its own row
   if (parentId) {
-    buttons.unshift([
-      Markup.button.callback('📸 Завантажити чек сюди', `rcpt_select_folder:${parentId}`),
-    ]);
-    buttons.push([
-      Markup.button.callback('⬅️ Назад', parentId ? `rcpt_folder_back:${parentId}` : 'rcpt_folder_root'),
-    ]);
+    buttons.push([Markup.button.callback('📸 Завантажити чек сюди', `rcpt_select_folder:${parentId}`)]);
   }
 
-  buttons.push([Markup.button.callback('🏢 Без папки (постійна витрата)', 'rcpt_select_folder:__none__')]);
-  buttons.push([Markup.button.callback('❌ Скасувати', 'receipt_cancel')]);
+  // Folder grid (max 3 per row)
+  buttons.push(...chunkButtons(folderBtns, 3));
+
+  // Footer actions — each on its own row for clarity
+  if (parentId) {
+    buttons.push([
+      Markup.button.callback('⬅️ Назад', `rcpt_folder_back:${parentId}`),
+      Markup.button.callback('❌ Скасувати', 'receipt_cancel'),
+    ]);
+  } else {
+    buttons.push([Markup.button.callback('🏢 Без папки', 'rcpt_select_folder:__none__')]);
+    buttons.push([Markup.button.callback('❌ Скасувати', 'receipt_cancel')]);
+  }
 
   const title = parentId
     ? '📂 Оберіть підпапку або завантажте сюди:'
