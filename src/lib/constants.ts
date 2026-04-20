@@ -20,6 +20,20 @@ export const STAGE_ORDER: ProjectStage[] = [
   "HANDOVER",
 ];
 
+/**
+ * Resolve the display label for a stage record. Prefers customName (user rename),
+ * falls back to the STAGE_LABELS map for enum-backed stages, and finally to a
+ * placeholder when neither is set.
+ */
+export function stageDisplayName(record: {
+  stage: ProjectStage | null;
+  customName: string | null;
+}): string {
+  if (record.customName && record.customName.trim()) return record.customName.trim();
+  if (record.stage) return STAGE_LABELS[record.stage];
+  return "Етап";
+}
+
 export const PROJECT_STATUS_LABELS: Record<ProjectStatus, string> = {
   DRAFT: "Чернетка",
   ACTIVE: "Активний",

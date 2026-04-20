@@ -79,7 +79,7 @@ export async function GET() {
     status: string;
     currentStage: string;
     isInternal: boolean;
-    stages: { id: string; stage: string; status: string }[];
+    stages: { id: string; stage: string | null; status: string }[];
   }> = [];
 
   for (const p of rawProjects) {

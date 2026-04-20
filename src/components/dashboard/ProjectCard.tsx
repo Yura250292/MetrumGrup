@@ -40,8 +40,13 @@ export function ProjectCard({ project }: ProjectCardProps) {
         <div className="mt-3 md:mt-5">
           <ProjectProgressBar
             currentStage={project.currentStage}
+            currentStageRecordId={project.currentStageRecordId ?? null}
             stages={project.stages.map((s) => ({
+              id: s.id,
               stage: s.stage,
+              customName: s.customName ?? null,
+              isHidden: s.isHidden ?? false,
+              sortOrder: s.sortOrder ?? 0,
               status: s.status,
               progress: s.progress,
             }))}

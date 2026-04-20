@@ -180,6 +180,7 @@ export default async function AdminV2ProjectDetailPage({
           description: project.description,
           status: project.status,
           currentStage: project.currentStage,
+          currentStageRecordId: project.currentStageRecordId,
           stageProgress: project.stageProgress,
           totalBudget,
           totalPaid,
@@ -191,6 +192,9 @@ export default async function AdminV2ProjectDetailPage({
           stages: project.stages.map((s) => ({
             id: s.id,
             stage: s.stage,
+            customName: s.customName,
+            isHidden: s.isHidden,
+            sortOrder: s.sortOrder,
             status: s.status,
             progress: s.progress,
             startDate: s.startDate,

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { STAGE_LABELS } from "@/lib/constants";
+import { stageDisplayName } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
 import {
   Plus,
@@ -32,7 +32,8 @@ import { CommentThread } from "@/components/collab/CommentThread";
 
 type StageLite = {
   id: string;
-  stage: ProjectStage;
+  stage: ProjectStage | null;
+  customName?: string | null;
 };
 
 type TaskStatus = {
@@ -347,7 +348,7 @@ export function TabTasks({
         >
           {stages.map((s) => (
             <option key={s.id} value={s.id}>
-              {STAGE_LABELS[s.stage]}
+              {stageDisplayName({ stage: s.stage, customName: s.customName ?? null })}
             </option>
           ))}
         </select>
@@ -447,7 +448,7 @@ export function TabTasks({
                   className="text-[13px] font-bold"
                   style={{ color: T.textPrimary }}
                 >
-                  {STAGE_LABELS[stage.stage]}
+                  {stageDisplayName({ stage: stage.stage, customName: stage.customName ?? null })}
                 </h3>
                 <span
                   className="text-[11px] font-semibold"

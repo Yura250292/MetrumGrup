@@ -90,8 +90,13 @@ export default async function ProjectDetailPage({
         <h2 className="mb-2 text-sm font-medium text-muted-foreground">Прогрес проєкту</h2>
         <ProjectProgressBar
           currentStage={project.currentStage}
+          currentStageRecordId={project.currentStageRecordId}
           stages={project.stages.map((s) => ({
+            id: s.id,
             stage: s.stage,
+            customName: s.customName,
+            isHidden: s.isHidden,
+            sortOrder: s.sortOrder,
             status: s.status,
             progress: s.progress,
           }))}

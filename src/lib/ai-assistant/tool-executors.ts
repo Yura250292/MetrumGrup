@@ -621,7 +621,7 @@ async function getStageProgress(input: ToolInput, ctx: AiUserContext) {
     поточнийЕтап: STAGE_UA[project?.currentStage ?? ""] || project?.currentStage,
     загальнийПрогрес: `${project?.stageProgress ?? 0}%`,
     етапи: stages.map((s) => ({
-      етап: STAGE_UA[s.stage] || s.stage,
+      етап: (s as any).customName || (s.stage ? STAGE_UA[s.stage] || s.stage : "Етап"),
       статус: STAGE_STATUS_UA[s.status] || s.status,
       прогрес: `${s.progress ?? 0}%`,
       початок: s.startDate?.toISOString().split("T")[0],

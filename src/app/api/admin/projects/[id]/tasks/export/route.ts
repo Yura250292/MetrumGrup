@@ -5,7 +5,7 @@ import { unauthorizedResponse } from "@/lib/auth-utils";
 import { searchTasks, TaskError } from "@/lib/tasks/service";
 import { getProjectAccessContext } from "@/lib/projects/access";
 import { prisma } from "@/lib/prisma";
-import { STAGE_LABELS } from "@/lib/constants";
+import { stageDisplayName } from "@/lib/constants";
 
 export async function GET(
   request: NextRequest,
@@ -119,7 +119,7 @@ export async function GET(
       title: t.title,
       status: t.status.name,
       priority: t.priority,
-      stage: STAGE_LABELS[t.stage.stage] ?? t.stage.stage,
+      stage: stageDisplayName({ stage: t.stage.stage, customName: (t.stage as any).customName ?? null }),
       startDate: t.startDate ? new Date(t.startDate).toISOString().slice(0, 10) : "",
       due: t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : "",
       assignees: t.assignees.map((a) => a.user.name).join("; "),

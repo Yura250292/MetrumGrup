@@ -1,13 +1,15 @@
 import { cn } from "@/lib/utils";
-import { STAGE_LABELS } from "@/lib/constants";
-import { STAGE_STATUS_LABELS } from "@/lib/constants";
+import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
 import { ProjectStage, StageStatus } from "@prisma/client";
 import { Check, Clock, Circle } from "lucide-react";
 
 interface StageTimelineProps {
   stages: {
-    stage: ProjectStage;
+    id?: string;
+    stage: ProjectStage | null;
+    customName?: string | null;
+    isHidden?: boolean;
     status: StageStatus;
     progress: number;
     startDate: Date | string | null;
@@ -23,14 +25,15 @@ const statusIcons = {
 };
 
 export function StageTimeline({ stages }: StageTimelineProps) {
+  const visible = stages.filter((s) => !s.isHidden);
   return (
     <div className="space-y-0">
-      {stages.map((stage, index) => {
+      {visible.map((stage, index) => {
         const Icon = statusIcons[stage.status];
-        const isLast = index === stages.length - 1;
+        const isLast = index === visible.length - 1;
 
         return (
-          <div key={stage.stage} className="flex gap-4">
+          <div key={stage.id ?? stage.stage ?? index} className="flex gap-4">
             {/* Timeline line + icon */}
             <div className="flex flex-col items-center">
               <div
@@ -60,7 +63,7 @@ export function StageTimeline({ stages }: StageTimelineProps) {
                   "text-sm font-medium",
                   stage.status === "PENDING" && "text-muted-foreground"
                 )}>
-                  {STAGE_LABELS[stage.stage]}
+                  {stageDisplayName({ stage: stage.stage, customName: stage.customName ?? null })}
                 </h4>
                 <span
                   className={cn(

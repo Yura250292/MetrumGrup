@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Calendar, MapPin, Mail, Phone, Edit3 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { STAGE_LABELS } from "@/lib/constants";
+import { stageDisplayName } from "@/lib/constants";
 import { StageTimeline } from "@/components/dashboard/StageTimeline";
 import { ProjectProgressBar } from "@/components/dashboard/ProjectProgressBar";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -15,6 +15,7 @@ export type ProjectDetailData = {
   description: string | null;
   status: ProjectStatus;
   currentStage: ProjectStage;
+  currentStageRecordId: string | null;
   stageProgress: number;
   totalBudget: number;
   totalPaid: number;
@@ -25,7 +26,10 @@ export type ProjectDetailData = {
   manager: { id: string; name: string; email: string; phone: string | null } | null;
   stages: {
     id: string;
-    stage: ProjectStage;
+    stage: ProjectStage | null;
+    customName: string | null;
+    isHidden: boolean;
+    sortOrder: number;
     status: StageStatus;
     progress: number;
     startDate: Date | null;
@@ -62,13 +66,19 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
           <div className="mb-4">
             <ProjectProgressBar
               currentStage={project.currentStage}
+              currentStageRecordId={project.currentStageRecordId}
               stages={project.stages}
             />
           </div>
           <div className="text-[12px]" style={{ color: T.textMuted }}>
             Поточний етап:{" "}
             <span className="font-semibold" style={{ color: T.textPrimary }}>
-              {STAGE_LABELS[project.currentStage]}
+              {(() => {
+                const curr =
+                  project.stages.find((s) => s.id === project.currentStageRecordId) ??
+                  project.stages.find((s) => s.stage === project.currentStage);
+                return curr ? stageDisplayName(curr) : "—";
+              })()}
             </span>{" "}
             · {project.stageProgress}% завершено
           </div>

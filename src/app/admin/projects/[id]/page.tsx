@@ -112,8 +112,13 @@ export default async function AdminProjectDetailPage({
         </h2>
         <ProjectProgressBar
           currentStage={project.currentStage}
+          currentStageRecordId={project.currentStageRecordId}
           stages={project.stages.map((s) => ({
+            id: s.id,
             stage: s.stage,
+            customName: s.customName,
+            isHidden: s.isHidden,
+            sortOrder: s.sortOrder,
             status: s.status,
             progress: s.progress,
           }))}

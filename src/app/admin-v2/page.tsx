@@ -622,6 +622,7 @@ export default async function AdminV2Dashboard({
       (rec.endDate.getTime() - rec.startDate.getTime()) / 86400000,
     );
     if (days <= 0) continue;
+    if (!rec.stage) continue;
     const arr = stageDurations.get(rec.stage) ?? [];
     arr.push(days);
     stageDurations.set(rec.stage, arr);

@@ -11,13 +11,22 @@ import {
   Circle,
   Loader2,
   AlertCircle,
+  Plus,
+  Trash2,
+  EyeOff,
+  Eye,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
-import { STAGE_LABELS, STAGE_ORDER } from "@/lib/constants";
+import { STAGE_ORDER, stageDisplayName } from "@/lib/constants";
+import type { ProjectStage } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 type StageData = {
   id?: string;
-  stage: string;
+  stage: ProjectStage | null;
+  customName: string;
+  isHidden: boolean;
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
   progress: number;
   notes: string;
@@ -25,7 +34,10 @@ type StageData = {
   endDate: string;
 };
 
-const STATUS_COLORS: Record<StageData["status"], { bg: string; fg: string; icon: typeof Check }> = {
+const STATUS_COLORS: Record<
+  StageData["status"],
+  { bg: string; fg: string; icon: typeof Check }
+> = {
   COMPLETED: { bg: T.successSoft, fg: T.success, icon: Check },
   IN_PROGRESS: { bg: T.accentPrimarySoft, fg: T.accentPrimary, icon: Clock },
   PENDING: { bg: T.panelElevated, fg: T.textMuted, icon: Circle },
@@ -59,24 +71,28 @@ export default function AdminV2ProjectStagesPage({
           setStages(
             data.stages.map((s: Record<string, any>) => ({
               id: s.id,
-              stage: s.stage,
+              stage: s.stage ?? null,
+              customName: s.customName ?? "",
+              isHidden: Boolean(s.isHidden),
               status: s.status,
               progress: Number(s.progress),
               notes: s.notes || "",
               startDate: s.startDate ? String(s.startDate).split("T")[0] : "",
               endDate: s.endDate ? String(s.endDate).split("T")[0] : "",
-            }))
+            })),
           );
         } else {
           setStages(
             STAGE_ORDER.map((stage) => ({
               stage,
+              customName: "",
+              isHidden: false,
               status: "PENDING" as const,
               progress: 0,
               notes: "",
               startDate: "",
               endDate: "",
-            }))
+            })),
           );
         }
       })
@@ -94,14 +110,63 @@ export default function AdminV2ProjectStagesPage({
     });
   }
 
+  function moveStage(index: number, direction: -1 | 1) {
+    setStages((prev) => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function addCustomStage() {
+    setStages((prev) => [
+      ...prev,
+      {
+        stage: null,
+        customName: "Новий етап",
+        isHidden: false,
+        status: "PENDING",
+        progress: 0,
+        notes: "",
+        startDate: "",
+        endDate: "",
+      },
+    ]);
+  }
+
+  function removeStage(index: number) {
+    const stage = stages[index];
+    const label = displayLabel(stage) || "цей етап";
+    if (!confirm(`Видалити "${label}"?\n\nЯкщо до нього прив'язані задачі — етап буде прихований, а не видалений.`))
+      return;
+    setStages((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function toggleHidden(index: number) {
+    updateStage(index, { isHidden: !stages[index].isHidden });
+  }
+
   async function handleSave() {
     setSaving(true);
     setError(null);
     try {
+      const payload = stages.map((s) => ({
+        id: s.id,
+        stage: s.stage,
+        customName: s.customName.trim() || null,
+        isHidden: s.isHidden,
+        status: s.status,
+        progress: s.progress,
+        notes: s.notes || null,
+        startDate: s.startDate || null,
+        endDate: s.endDate || null,
+      }));
       const res = await fetch(`/api/admin/projects/${id}/stages`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ stages }),
+        body: JSON.stringify({ stages: payload }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -144,14 +209,20 @@ export default function AdminV2ProjectStagesPage({
       {/* Hero */}
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
-          <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+          <span
+            className="text-[11px] font-bold tracking-wider"
+            style={{ color: T.textMuted }}
+          >
             ЕТАПИ ВИКОНАННЯ
           </span>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: T.textPrimary }}>
+          <h1
+            className="text-3xl md:text-4xl font-bold tracking-tight"
+            style={{ color: T.textPrimary }}
+          >
             Управління етапами
           </h1>
           <p className="text-[15px]" style={{ color: T.textSecondary }}>
-            Налаштуйте статус, прогрес, дати та нотатки для кожного етапу
+            Перейменуйте, сховайте зайве або додайте власні етапи під проєкт
           </p>
         </div>
         <button
@@ -160,7 +231,11 @@ export default function AdminV2ProjectStagesPage({
           className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
           style={{ backgroundColor: T.accentPrimary }}
         >
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          {saving ? (
+            <Loader2 size={16} className="animate-spin" />
+          ) : (
+            <Save size={16} />
+          )}
           {saving ? "Збереження…" : "Зберегти"}
         </button>
       </section>
@@ -184,28 +259,65 @@ export default function AdminV2ProjectStagesPage({
         {stages.map((stage, index) => {
           const colors = STATUS_COLORS[stage.status];
           const Icon = colors.icon;
+          const label = displayLabel(stage);
           return (
             <div
-              key={stage.stage}
+              key={stage.id ?? `new-${index}`}
               className="flex flex-col gap-4 rounded-2xl p-5"
-              style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+              style={{
+                backgroundColor: T.panel,
+                border: `1px solid ${T.borderSoft}`,
+                opacity: stage.isHidden ? 0.55 : 1,
+              }}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
-                    style={{ backgroundColor: colors.bg }}
+              {/* Header: reorder | icon | name input | status | actions */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col">
+                  <button
+                    onClick={() => moveStage(index, -1)}
+                    disabled={index === 0}
+                    className="flex h-5 w-5 items-center justify-center rounded disabled:opacity-30"
+                    style={{ color: T.textMuted }}
+                    aria-label="Перемістити вгору"
                   >
-                    <Icon size={18} style={{ color: colors.fg }} />
-                  </div>
-                  <h3 className="text-base font-bold" style={{ color: T.textPrimary }}>
-                    {STAGE_LABELS[stage.stage as keyof typeof STAGE_LABELS]}
-                  </h3>
+                    <ArrowUp size={12} />
+                  </button>
+                  <button
+                    onClick={() => moveStage(index, 1)}
+                    disabled={index === stages.length - 1}
+                    className="flex h-5 w-5 items-center justify-center rounded disabled:opacity-30"
+                    style={{ color: T.textMuted }}
+                    aria-label="Перемістити вниз"
+                  >
+                    <ArrowDown size={12} />
+                  </button>
                 </div>
+                <div
+                  className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: colors.bg }}
+                >
+                  <Icon size={18} style={{ color: colors.fg }} />
+                </div>
+                <input
+                  type="text"
+                  value={stage.customName}
+                  onChange={(e) =>
+                    updateStage(index, { customName: e.target.value })
+                  }
+                  placeholder={stage.stage ? stageDisplayName({ stage: stage.stage, customName: null }) : "Назва етапу"}
+                  className="flex-1 min-w-[160px] rounded-xl px-3 py-2 text-base font-bold outline-none"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderStrong}`,
+                    color: T.textPrimary,
+                  }}
+                />
                 <select
                   value={stage.status}
                   onChange={(e) =>
-                    updateStage(index, { status: e.target.value as StageData["status"] })
+                    updateStage(index, {
+                      status: e.target.value as StageData["status"],
+                    })
                   }
                   className="rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
                   style={{
@@ -220,12 +332,50 @@ export default function AdminV2ProjectStagesPage({
                     </option>
                   ))}
                 </select>
+                <div className="flex items-center gap-1 ml-auto">
+                  <button
+                    onClick={() => toggleHidden(index)}
+                    className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold transition hover:brightness-[0.95]"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      color: stage.isHidden ? T.warning : T.textMuted,
+                      border: `1px solid ${T.borderStrong}`,
+                    }}
+                    title={stage.isHidden ? "Показати" : "Сховати"}
+                  >
+                    {stage.isHidden ? <Eye size={13} /> : <EyeOff size={13} />}
+                    <span className="hidden sm:inline">
+                      {stage.isHidden ? "Показати" : "Сховати"}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => removeStage(index)}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:brightness-[0.95]"
+                    style={{
+                      backgroundColor: T.dangerSoft,
+                      color: T.danger,
+                    }}
+                    title="Видалити"
+                    aria-label="Видалити етап"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
+
+              {stage.stage && !stage.customName && (
+                <div className="text-[11px]" style={{ color: T.textMuted }}>
+                  Стандартна назва: <strong>{label}</strong>
+                </div>
+              )}
 
               {stage.status === "IN_PROGRESS" && (
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
+                    <span
+                      className="text-[11px] font-semibold tracking-wide"
+                      style={{ color: T.textMuted }}
+                    >
                       ПРОГРЕС
                     </span>
                     <span
@@ -242,7 +392,9 @@ export default function AdminV2ProjectStagesPage({
                     step="5"
                     value={stage.progress}
                     onChange={(e) =>
-                      updateStage(index, { progress: parseInt(e.target.value) })
+                      updateStage(index, {
+                        progress: parseInt(e.target.value),
+                      })
                     }
                     className="w-full"
                     style={{ accentColor: T.accentPrimary }}
@@ -267,7 +419,9 @@ export default function AdminV2ProjectStagesPage({
                   <input
                     type="date"
                     value={stage.startDate}
-                    onChange={(e) => updateStage(index, { startDate: e.target.value })}
+                    onChange={(e) =>
+                      updateStage(index, { startDate: e.target.value })
+                    }
                     className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
                     style={{
                       backgroundColor: T.panelSoft,
@@ -281,7 +435,9 @@ export default function AdminV2ProjectStagesPage({
                   <input
                     type="date"
                     value={stage.endDate}
-                    onChange={(e) => updateStage(index, { endDate: e.target.value })}
+                    onChange={(e) =>
+                      updateStage(index, { endDate: e.target.value })
+                    }
                     className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
                     style={{
                       backgroundColor: T.panelSoft,
@@ -296,7 +452,9 @@ export default function AdminV2ProjectStagesPage({
               <Field label="Примітки">
                 <textarea
                   value={stage.notes}
-                  onChange={(e) => updateStage(index, { notes: e.target.value })}
+                  onChange={(e) =>
+                    updateStage(index, { notes: e.target.value })
+                  }
                   rows={2}
                   placeholder="Деталі по етапу…"
                   className="w-full resize-none rounded-xl px-3 py-2.5 text-sm outline-none"
@@ -310,15 +468,40 @@ export default function AdminV2ProjectStagesPage({
             </div>
           );
         })}
+
+        <button
+          onClick={addCustomStage}
+          className="flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition hover:brightness-[0.97]"
+          style={{
+            backgroundColor: T.panelSoft,
+            color: T.accentPrimary,
+            border: `1px dashed ${T.borderStrong}`,
+          }}
+        >
+          <Plus size={15} /> Додати етап
+        </button>
       </div>
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function displayLabel(s: Pick<StageData, "stage" | "customName">) {
+  return stageDisplayName({ stage: s.stage, customName: s.customName || null });
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+      <span
+        className="text-[10px] font-bold tracking-wider"
+        style={{ color: T.textMuted }}
+      >
         {label.toUpperCase()}
       </span>
       {children}
