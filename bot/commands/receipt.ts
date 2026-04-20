@@ -12,6 +12,54 @@ function chunkButtons(buttons: InlineKeyboardButton[], cols: number): InlineKeyb
 }
 
 /**
+ * Parse amount from Ukrainian/European text format.
+ * Handles "23 121,12" (UA), "23,121.12" (EN), "23121.12", "23121,12", etc.
+ * Thousand separators: space or comma (EN) or dot (EU)
+ * Decimal separator: comma (UA) or dot (EN)
+ */
+function parseAmount(raw: string): number | null {
+  if (!raw) return null;
+
+  // Strip everything except digits, spaces, commas, dots
+  let cleaned = raw.replace(/[^\d\s,.]/g, '').trim();
+  if (!cleaned) return null;
+
+  // Remove spaces (thousand separators in UA format)
+  cleaned = cleaned.replace(/\s/g, '');
+
+  // If both comma and dot — whichever is LAST is the decimal separator
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+
+  if (lastComma >= 0 && lastDot >= 0) {
+    if (lastComma > lastDot) {
+      // 23.121,12 → comma is decimal, dot is thousand
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else {
+      // 23,121.12 → dot is decimal, comma is thousand
+      cleaned = cleaned.replace(/,/g, '');
+    }
+  } else if (lastComma >= 0) {
+    // Only comma — decimal if 1-2 digits after, else thousand
+    const afterComma = cleaned.length - 1 - lastComma;
+    if (afterComma === 1 || afterComma === 2) {
+      cleaned = cleaned.replace(',', '.');
+    } else {
+      cleaned = cleaned.replace(/,/g, '');
+    }
+  } else if (lastDot >= 0) {
+    // Only dot — decimal if 1-2 digits after, else thousand
+    const afterDot = cleaned.length - 1 - lastDot;
+    if (afterDot !== 1 && afterDot !== 2) {
+      cleaned = cleaned.replace(/\./g, '');
+    }
+  }
+
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
  * /receipt command — start the receipt upload flow
  * Shows folder navigation (same structure as web financing module)
  */
@@ -279,9 +327,7 @@ async function processReceiptWithOCR(ctx: BotContext) {
 
     // Extract amount from OCR text
     const amountMatch = ocrText.match(/Сума:\s*([\d\s,.]+)/i);
-    const amount = amountMatch
-      ? parseFloat(amountMatch[1].replace(/[\s,]/g, '').replace(',', '.'))
-      : null;
+    const amount = amountMatch ? parseAmount(amountMatch[1]) : null;
 
     // Extract supplier
     const supplierMatch = ocrText.match(/Постачальник:\s*(.+)/i);
@@ -371,8 +417,8 @@ export async function handleReceiptTextInput(ctx: BotContext, text: string): Pro
   const receipt = ctx.session.pendingReceipt;
 
   if (receipt.step === 'awaiting_amount') {
-    const amount = parseFloat(text.replace(/[\s]/g, '').replace(',', '.'));
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = parseAmount(text);
+    if (!amount) {
       await ctx.reply('❌ Невірна сума. Введіть число більше 0:');
       return true;
     }
@@ -399,10 +445,8 @@ export async function handleReceiptTextInput(ctx: BotContext, text: string): Pro
     // Try to extract amount from corrected text
     const amountMatch = text.match(/([\d\s,.]+)\s*грн/i);
     if (amountMatch) {
-      const amount = parseFloat(amountMatch[1].replace(/[\s,]/g, '').replace(',', '.'));
-      if (Number.isFinite(amount) && amount > 0) {
-        receipt.amount = amount;
-      }
+      const amount = parseAmount(amountMatch[1]);
+      if (amount) receipt.amount = amount;
     }
 
     const buttons = [];
