@@ -12,6 +12,8 @@ import {
   Clock,
   FolderKanban,
   Loader2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -80,7 +82,6 @@ export function UserProfileModal({
     };
   }, [userId]);
 
-  // Esc to close
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -100,6 +101,22 @@ export function UserProfileModal({
     }
   };
 
+  // Group managed projects by title (shows one row per unique name with a count)
+  const managedProjects = (() => {
+    if (!profile) return [] as { id: string; title: string; count: number }[];
+    const map = new Map<string, { id: string; title: string; count: number }>();
+    for (const p of profile.managedProjects) {
+      const key = p.title.trim().toLowerCase();
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { id: p.id, title: p.title, count: 1 });
+      }
+    }
+    return Array.from(map.values());
+  })();
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center p-4"
@@ -108,121 +125,126 @@ export function UserProfileModal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md rounded-2xl overflow-hidden flex flex-col"
+        className="w-full max-w-md rounded-2xl flex flex-col"
         style={{
           backgroundColor: T.panel,
           border: "1px solid " + T.borderSoft,
-          boxShadow: "0 10px 40px rgba(0,0,0,0.15)",
-          maxHeight: "85vh",
+          boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+          maxHeight: "90vh",
         }}
       >
-        {/* Header cover with close button */}
-        <div
-          className="relative h-20"
-          style={{
-            background: "linear-gradient(135deg, " + T.accentPrimary + ", " + T.accentSecondary + ")",
-          }}
-        >
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 rounded-lg p-1.5 transition hover:bg-white/20"
-            style={{ color: "#FFFFFF" }}
-            title="Закрити"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-12">
+          <div className="flex flex-col items-center justify-center py-20">
             <Loader2 size={24} className="animate-spin" style={{ color: T.accentPrimary }} />
             <p className="mt-3 text-[13px]" style={{ color: T.textMuted }}>
-              Завантаження профілю...
+              Завантаження...
             </p>
           </div>
         ) : error || !profile ? (
-          <div className="px-6 py-10 text-center">
+          <div className="px-6 py-10 text-center flex flex-col gap-3">
             <p className="text-[13px]" style={{ color: T.danger }}>
               {error || "Профіль не знайдено"}
             </p>
+            <button
+              onClick={onClose}
+              className="mx-auto rounded-xl px-4 py-2 text-[13px] font-medium"
+              style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+            >
+              Закрити
+            </button>
           </div>
         ) : (
           <>
-            {/* Avatar (overlapping the cover) */}
-            <div className="-mt-10 px-6 flex items-end gap-4">
-              <div
-                className="rounded-full p-1 flex-shrink-0"
-                style={{ backgroundColor: T.panel }}
+            {/* ── Sticky header ── */}
+            <div
+              className="relative flex-shrink-0 rounded-t-2xl overflow-hidden"
+              style={{
+                background: "linear-gradient(135deg, " + T.accentPrimary + ", " + T.accentSecondary + ")",
+              }}
+            >
+              <button
+                onClick={onClose}
+                className="absolute top-3 right-3 z-10 rounded-lg p-1.5 transition hover:bg-white/20"
+                style={{ color: "#FFFFFF" }}
+                title="Закрити"
               >
-                <UserAvatar src={profile.avatar} name={profile.name} size={80} />
-              </div>
-              <div className="flex-1 min-w-0 pb-2">
-                <h2 className="text-[18px] font-bold truncate" style={{ color: T.textPrimary }}>
-                  {profile.name}
-                </h2>
-                <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                  <span
-                    className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                    style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-                  >
-                    {ROLE_LABELS[profile.role] ?? profile.role}
-                  </span>
-                  {!profile.isActive && (
-                    <span
-                      className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
-                      style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-                    >
-                      Неактивний
+                <X size={18} />
+              </button>
+              <div className="flex items-center gap-4 px-5 py-5">
+                <div className="rounded-full p-1" style={{ backgroundColor: T.panel }}>
+                  <UserAvatar src={profile.avatar} name={profile.name} size={72} nonInteractive />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-[18px] font-bold truncate text-white">
+                    {profile.name}
+                  </h2>
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-white/25 text-white">
+                      {ROLE_LABELS[profile.role] ?? profile.role}
                     </span>
+                    {!profile.isActive && (
+                      <span
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                      >
+                        Неактивний
+                      </span>
+                    )}
+                  </div>
+                  {profile.jobTitle && (
+                    <p className="text-[12px] text-white/90 mt-1 truncate">
+                      <Briefcase size={11} className="inline mr-1 -mt-0.5" />
+                      {profile.jobTitle}
+                    </p>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Scrollable content */}
-            <div className="flex-1 overflow-y-auto px-6 pt-4 pb-5 flex flex-col gap-4">
-              {/* Job title */}
-              {profile.jobTitle && (
-                <div className="flex items-start gap-2.5">
-                  <Briefcase size={15} className="flex-shrink-0 mt-0.5" style={{ color: T.textMuted }} />
-                  <span className="text-[13px]" style={{ color: T.textPrimary }}>
-                    {profile.jobTitle}
-                  </span>
-                </div>
-              )}
-
+            {/* ── Scrollable body ── */}
+            <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-4 min-h-0">
               {/* Bio */}
               {profile.bio && (
-                <div
-                  className="rounded-xl p-3"
-                  style={{ backgroundColor: T.panelSoft, border: "1px solid " + T.borderSoft }}
-                >
-                  <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: T.textPrimary }}>
-                    {profile.bio}
-                  </p>
+                <div>
+                  <SectionLabel>Про користувача</SectionLabel>
+                  <div
+                    className="rounded-xl p-3 mt-1.5"
+                    style={{ backgroundColor: T.panelSoft, border: "1px solid " + T.borderSoft }}
+                  >
+                    <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: T.textPrimary }}>
+                      {profile.bio}
+                    </p>
+                  </div>
                 </div>
               )}
 
-              {/* Contact + time */}
-              <div className="flex flex-col gap-1.5">
-                <InfoRow icon={<Mail size={14} />} label={profile.email} copyable />
-                {profile.phone && (
-                  <InfoRow icon={<Phone size={14} />} label={profile.phone} copyable />
-                )}
-                <InfoRow icon={<Clock size={14} />} label={profile.timezone} />
+              {/* Contacts */}
+              <div>
+                <SectionLabel>Контакти</SectionLabel>
+                <div className="mt-1.5 flex flex-col gap-1">
+                  <CopyableRow icon={<Mail size={13} />} value={profile.email} />
+                  {profile.phone && (
+                    <CopyableRow icon={<Phone size={13} />} value={profile.phone} />
+                  )}
+                  <div
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px]"
+                    style={{ backgroundColor: T.panelSoft, color: T.textPrimary }}
+                  >
+                    <Clock size={13} style={{ color: T.textMuted }} />
+                    <span>{profile.timezone}</span>
+                  </div>
+                </div>
               </div>
 
               {/* Teams */}
               {profile.teams.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: T.textMuted }}>
-                    Команди
-                  </span>
-                  <div className="flex flex-wrap gap-1.5">
+                <div>
+                  <SectionLabel>Команди</SectionLabel>
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
                     {profile.teams.map((t) => (
                       <span
                         key={t.id}
-                        className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[12px] font-medium"
+                        className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12px] font-medium"
                         style={{ backgroundColor: T.panelElevated, color: T.textPrimary }}
                       >
                         <UsersIcon size={11} style={{ color: T.textMuted }} />
@@ -239,22 +261,28 @@ export function UserProfileModal({
               )}
 
               {/* Managed projects */}
-              {profile.managedProjects.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: T.textMuted }}>
-                    Менеджер проєктів
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    {profile.managedProjects.map((p) => (
+              {managedProjects.length > 0 && (
+                <div>
+                  <SectionLabel>Менеджер проєктів</SectionLabel>
+                  <div className="flex flex-col gap-1 mt-1.5">
+                    {managedProjects.map((p) => (
                       <div
                         key={p.id}
-                        className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
-                        style={{ backgroundColor: T.panelSoft }}
+                        className="flex items-center gap-2 rounded-lg px-2.5 py-2"
+                        style={{ backgroundColor: T.panelSoft, border: "1px solid " + T.borderSoft }}
                       >
-                        <FolderKanban size={12} style={{ color: T.textMuted }} />
-                        <span className="text-[12px] truncate" style={{ color: T.textPrimary }}>
+                        <FolderKanban size={13} style={{ color: T.textMuted }} />
+                        <span className="text-[13px] truncate flex-1" style={{ color: T.textPrimary }}>
                           {p.title}
                         </span>
+                        {p.count > 1 && (
+                          <span
+                            className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                          >
+                            ×{p.count}
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -262,12 +290,23 @@ export function UserProfileModal({
               )}
             </div>
 
-            {/* Action bar */}
-            {!profile.isSelf && profile.isActive && (
-              <div
-                className="px-6 py-3 flex gap-2"
-                style={{ borderTop: "1px solid " + T.borderSoft, backgroundColor: T.panelSoft }}
-              >
+            {/* ── Sticky footer with actions ── */}
+            <div
+              className="flex-shrink-0 px-5 py-3 flex gap-2 rounded-b-2xl"
+              style={{ borderTop: "1px solid " + T.borderSoft, backgroundColor: T.panelSoft }}
+            >
+              {profile.isSelf ? (
+                <button
+                  onClick={() => {
+                    onClose();
+                    router.push("/admin-v2/profile");
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold"
+                  style={{ backgroundColor: T.accentPrimary, color: "#FFFFFF" }}
+                >
+                  Редагувати профіль
+                </button>
+              ) : profile.isActive ? (
                 <button
                   onClick={handleSendMessage}
                   disabled={createConv.isPending}
@@ -281,8 +320,16 @@ export function UserProfileModal({
                   )}
                   Написати повідомлення
                 </button>
-              </div>
-            )}
+              ) : (
+                <button
+                  onClick={onClose}
+                  className="flex-1 rounded-xl px-4 py-2.5 text-[13px] font-medium"
+                  style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+                >
+                  Закрити
+                </button>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -290,20 +337,21 @@ export function UserProfileModal({
   );
 }
 
-function InfoRow({
-  icon,
-  label,
-  copyable,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  copyable?: boolean;
-}) {
-  const [copied, setCopied] = useState(false);
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span
+      className="text-[10px] font-bold tracking-wider uppercase"
+      style={{ color: T.textMuted }}
+    >
+      {children}
+    </span>
+  );
+}
 
+function CopyableRow({ icon, value }: { icon: React.ReactNode; value: string }) {
+  const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    if (!copyable) return;
-    navigator.clipboard.writeText(label).then(() => {
+    navigator.clipboard.writeText(value).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -312,19 +360,15 @@ function InfoRow({
   return (
     <button
       onClick={handleCopy}
-      disabled={!copyable}
-      className="flex items-center gap-2.5 text-left disabled:cursor-default"
-      title={copyable ? "Копіювати" : undefined}
+      className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-left transition hover:brightness-95"
+      style={{ backgroundColor: T.panelSoft, color: T.textPrimary }}
+      title="Копіювати"
     >
       <span style={{ color: T.textMuted }}>{icon}</span>
-      <span className="text-[13px] truncate" style={{ color: T.textPrimary }}>
-        {label}
+      <span className="flex-1 truncate">{value}</span>
+      <span style={{ color: copied ? T.success : T.textMuted }}>
+        {copied ? <Check size={12} /> : <Copy size={12} />}
       </span>
-      {copied && (
-        <span className="text-[11px]" style={{ color: T.success }}>
-          Скопійовано
-        </span>
-      )}
     </button>
   );
 }
