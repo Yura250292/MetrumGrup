@@ -229,7 +229,7 @@ async function processReceiptWithOCR(ctx: BotContext) {
     // OCR with Gemini Vision
     const { GoogleGenerativeAI } = await import('@google/generative-ai');
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
     const result = await model.generateContent([
       {
@@ -301,11 +301,14 @@ async function processReceiptWithOCR(ctx: BotContext) {
       ...Markup.inlineKeyboard(buttons),
     });
   } catch (error) {
-    console.error('[receipt] OCR error:', error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    console.error('[receipt] OCR error:', errMsg, error);
     receipt.step = 'awaiting_amount';
     await ctx.reply(
-      '⚠️ Не вдалося розпізнати вміст автоматично.\n\n' +
+      '⚠️ Не вдалося розпізнати вміст автоматично.\n' +
+      `<i>(${escapeHtml(errMsg.slice(0, 100))})</i>\n\n` +
       '💰 Введіть суму вручну (в грн):',
+      { parse_mode: 'HTML' }
     );
   }
 }
