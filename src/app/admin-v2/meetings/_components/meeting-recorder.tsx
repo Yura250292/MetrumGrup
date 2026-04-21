@@ -11,7 +11,8 @@ type Props = {
 
 type RecState = "idle" | "recording" | "paused" | "stopped";
 
-const MAX_MS = 40 * 60 * 1000;
+const MAX_MS = 90 * 60 * 1000;
+const AUDIO_BITS_PER_SECOND = 32_000;
 
 export function MeetingRecorder({ onReady, disabled }: Props) {
   const [state, setState] = useState<RecState>("idle");
@@ -73,7 +74,10 @@ export function MeetingRecorder({ onReady, disabled }: Props) {
         mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ||
         "audio/webm";
 
-      const recorder = new MediaRecorder(stream, { mimeType });
+      const recorder = new MediaRecorder(stream, {
+        mimeType,
+        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
+      });
       recorderRef.current = recorder;
       chunksRef.current = [];
 
@@ -234,7 +238,8 @@ export function MeetingRecorder({ onReady, disabled }: Props) {
       )}
 
       <p className="mt-3 text-xs" style={{ color: T.textMuted }}>
-        Максимальна тривалість — 40 хв. Ліміт розміру аудіо для Whisper — 25 MB.
+        Максимальна тривалість — 90 хв. Запис стиснуто у 32 кбіт/с opus
+        (оптимально для мовлення і Whisper).
       </p>
     </div>
   );
