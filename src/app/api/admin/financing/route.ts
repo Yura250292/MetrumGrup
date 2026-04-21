@@ -7,7 +7,7 @@ import { auditLog } from "@/lib/audit";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import {
   parseListParams,
-  buildWhere,
+  expandFolderFilter,
   computeSummary,
   FINANCE_ENTRY_SELECT,
 } from "@/lib/financing/queries";
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const filters = parseListParams(searchParams);
-    const where = buildWhere(filters);
+    const where = await expandFolderFilter(filters);
 
     const [data, summary] = await Promise.all([
       prisma.financeEntry.findMany({

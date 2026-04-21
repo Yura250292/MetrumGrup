@@ -64,6 +64,60 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
   };
 }
 
+/**
+ * When user is inside a folder, they often expect to see project-level entries
+ * that were created before folderId was wired (legacy data). This helper
+ * expands the strict `folderId = X` match into:
+ *   folderId = X  OR  (folderId IS NULL AND projectId IN S)
+ * where S = set of projectIds found on estimates/entries already inside this folder.
+ * Only runs when folderId is set; otherwise falls back to the plain buildWhere.
+ */
+export async function expandFolderFilter(
+  filters: FinanceListFilters,
+): Promise<Prisma.FinanceEntryWhereInput> {
+  if (!filters.folderId) return buildWhere(filters);
+
+  const base = buildWhere({ ...filters, folderId: undefined });
+
+  const [estimateProjects, entryProjects] = await Promise.all([
+    prisma.estimate.findMany({
+      where: { folderId: filters.folderId, projectId: { not: "" } },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    }),
+    prisma.financeEntry.findMany({
+      where: { folderId: filters.folderId, projectId: { not: null } },
+      select: { projectId: true },
+      distinct: ["projectId"],
+    }),
+  ]);
+
+  const projectIds = Array.from(
+    new Set(
+      [
+        ...estimateProjects.map((e) => e.projectId),
+        ...entryProjects.map((e) => e.projectId),
+      ].filter((id): id is string => !!id),
+    ),
+  );
+
+  if (projectIds.length === 0) {
+    return buildWhere(filters);
+  }
+
+  return {
+    AND: [
+      base,
+      {
+        OR: [
+          { folderId: filters.folderId },
+          { AND: [{ folderId: null }, { projectId: { in: projectIds } }] },
+        ],
+      },
+    ],
+  };
+}
+
 export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWhereInput {
   const where: Prisma.FinanceEntryWhereInput = {
     isArchived: filters.archived,

@@ -12,7 +12,7 @@ import {
 const KIND_LABELS: Record<"PLAN" | "FACT", string> = { PLAN: "План", FACT: "Факт" };
 import {
   parseListParams,
-  buildWhere,
+  expandFolderFilter,
   computeSummary,
 } from "@/lib/financing/queries";
 import {
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const filters = parseListParams(searchParams);
-    const where = buildWhere(filters);
+    const where = await expandFolderFilter(filters);
 
     const [entries, summary] = await Promise.all([
       prisma.financeEntry.findMany({
