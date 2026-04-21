@@ -9,6 +9,7 @@ import {
   MeetingRecorder,
   MeetingUploader,
 } from "../_components/meeting-recorder";
+import { AudioPreview } from "../_components/audio-preview";
 
 type Project = {
   id: string;
@@ -16,13 +17,14 @@ type Project = {
   slug: string;
 };
 
-type Stage =
-  | "form"
-  | "creating"
-  | "recording"
-  | "uploading"
-  | "triggering"
-  | "done";
+type PendingAudio = {
+  blob: Blob;
+  mimeType: string;
+  durationMs: number;
+  fileName: string;
+};
+
+type Stage = "form" | "creating" | "uploading" | "triggering";
 
 export default function NewMeetingPage() {
   const router = useRouter();
@@ -36,8 +38,8 @@ export default function NewMeetingPage() {
   const [description, setDescription] = useState("");
   const [projectId, setProjectId] = useState(initialProject);
 
+  const [pending, setPending] = useState<PendingAudio | null>(null);
   const [stage, setStage] = useState<Stage>("form");
-  const [meetingId, setMeetingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -59,58 +61,59 @@ export default function NewMeetingPage() {
     })();
   }, [initialProject]);
 
-  async function createMeetingIfNeeded(): Promise<string> {
-    if (meetingId) return meetingId;
-
-    setStage("creating");
-    const res = await fetch("/api/admin/meetings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title.trim(),
-        description: description.trim() || null,
-        projectId,
-      }),
+  function handleRecorded(blob: Blob, mimeType: string, durationMs: number) {
+    const ext = extensionFor(mimeType);
+    setError(null);
+    setPending({
+      blob,
+      mimeType,
+      durationMs,
+      fileName: `recording-${Date.now()}.${ext}`,
     });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      throw new Error(j.error || "Не вдалося створити нараду");
-    }
-    const json = await res.json();
-    setMeetingId(json.meeting.id);
-    return json.meeting.id;
   }
 
-  async function handleAudio(blob: Blob, mimeType: string, durationMs: number) {
+  function handleFile(file: File) {
+    setError(null);
+    setPending({
+      blob: file,
+      mimeType: file.type,
+      durationMs: 0,
+      fileName: file.name,
+    });
+  }
+
+  async function saveAndProcess() {
+    if (!pending) return;
     setError(null);
     try {
       if (!title.trim()) throw new Error("Введіть назву наради");
       if (!projectId) throw new Error("Оберіть проєкт");
-      if (blob.size > 25 * 1024 * 1024) {
-        throw new Error("Файл завеликий. Максимум 25 MB.");
-      }
 
-      const id = await createMeetingIfNeeded();
+      setStage("creating");
+      const createRes = await fetch("/api/admin/meetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          description: description.trim() || null,
+          projectId,
+        }),
+      });
+      if (!createRes.ok) {
+        const j = await createRes.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося створити нараду");
+      }
+      const { meeting } = await createRes.json();
+      const id = meeting.id;
 
       setStage("uploading");
-      const extension = mimeType.includes("webm")
-        ? "webm"
-        : mimeType.includes("mp4") || mimeType.includes("m4a")
-        ? "m4a"
-        : mimeType.includes("mpeg")
-        ? "mp3"
-        : mimeType.includes("wav")
-        ? "wav"
-        : "webm";
-      const fileName = `recording-${Date.now()}.${extension}`;
-
       const urlRes = await fetch(`/api/admin/meetings/${id}/upload-url`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          fileName,
-          contentType: mimeType,
-          size: blob.size,
+          fileName: pending.fileName,
+          contentType: pending.mimeType,
+          size: pending.blob.size,
         }),
       });
       if (!urlRes.ok) {
@@ -119,8 +122,11 @@ export default function NewMeetingPage() {
       }
       const { uploadUrl, key, publicUrl } = await urlRes.json();
 
-      await uploadWithProgress(uploadUrl, blob, mimeType, (p) =>
-        setUploadProgress(p)
+      await uploadWithProgress(
+        uploadUrl,
+        pending.blob,
+        pending.mimeType,
+        setUploadProgress
       );
 
       const completeRes = await fetch(
@@ -131,15 +137,13 @@ export default function NewMeetingPage() {
           body: JSON.stringify({
             audioR2Key: key,
             audioUrl: publicUrl,
-            audioMimeType: mimeType,
-            audioSizeBytes: blob.size,
-            audioDurationMs: durationMs,
+            audioMimeType: pending.mimeType,
+            audioSizeBytes: pending.blob.size,
+            audioDurationMs: pending.durationMs,
           }),
         }
       );
-      if (!completeRes.ok) {
-        throw new Error("Не вдалося зафіксувати завантаження");
-      }
+      if (!completeRes.ok) throw new Error("Не вдалося зафіксувати завантаження");
 
       setStage("triggering");
       fetch(`/api/admin/meetings/${id}/transcribe`, { method: "POST" }).catch(
@@ -153,8 +157,9 @@ export default function NewMeetingPage() {
     }
   }
 
-  async function handleFile(file: File) {
-    await handleAudio(file, file.type, 0);
+  function resetPending() {
+    setPending(null);
+    setUploadProgress(0);
   }
 
   const formValid = title.trim() && projectId;
@@ -250,12 +255,24 @@ export default function NewMeetingPage() {
         </div>
       </div>
 
-      {formValid && (
+      {formValid && !pending && !busy && (
         <>
-          <MeetingRecorder onReady={handleAudio} disabled={busy} />
+          <MeetingRecorder onReady={handleRecorded} />
           <div className="my-3" />
-          <MeetingUploader onFile={handleFile} disabled={busy} />
+          <MeetingUploader onFile={handleFile} />
         </>
+      )}
+
+      {pending && (
+        <AudioPreview
+          blob={pending.blob}
+          mimeType={pending.mimeType}
+          durationMs={pending.durationMs}
+          fileName={pending.fileName}
+          onSave={saveAndProcess}
+          onReset={resetPending}
+          saving={busy}
+        />
       )}
 
       {error && (
@@ -283,6 +300,15 @@ export default function NewMeetingPage() {
       )}
     </div>
   );
+}
+
+function extensionFor(mimeType: string): string {
+  if (mimeType.includes("webm")) return "webm";
+  if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
+  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("wav")) return "wav";
+  if (mimeType.includes("ogg")) return "ogg";
+  return "webm";
 }
 
 function uploadWithProgress(

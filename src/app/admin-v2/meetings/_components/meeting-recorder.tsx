@@ -261,10 +261,6 @@ export function MeetingUploader({
       setError("Оберіть аудіо-файл (mp3, m4a, webm, wav)");
       return;
     }
-    if (file.size > 25 * 1024 * 1024) {
-      setError("Файл завеликий. Максимум 25 MB.");
-      return;
-    }
     onFile(file);
   }
 
@@ -288,7 +284,7 @@ export function MeetingUploader({
             Або завантажте готовий аудіо-файл
           </p>
           <p className="text-xs" style={{ color: T.textMuted }}>
-            mp3, m4a, webm, wav — до 25 MB
+            mp3, m4a, webm, wav — до 25 MB для AI-розпізнавання
           </p>
         </div>
         <input
