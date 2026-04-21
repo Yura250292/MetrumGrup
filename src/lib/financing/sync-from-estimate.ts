@@ -35,62 +35,106 @@ export async function syncEstimateToFinancing(
   const occurredAt = estimate.project?.startDate ?? new Date();
   const syncedAt = new Date();
 
+  // CLIENT role → per-item INCOME entries (client payments expected per line)
+  // INTERNAL role → per-item EXPENSE entries (our cost per line)
+  // STANDALONE role → legacy behavior: per-item EXPENSE + single INCOME of finalClientPrice
+  const role = estimate.role;
+
   const result = await prisma.$transaction(async (tx) => {
     await tx.financeEntry.deleteMany({
       where: { estimateId, source: "ESTIMATE_AUTO" },
     });
 
     let totalExpense = new Prisma.Decimal(0);
+    let totalIncome = new Prisma.Decimal(0);
 
-    for (const item of estimate.items) {
-      const amount =
-        item.useCustomMargin && Number(item.priceWithMargin) > 0
-          ? item.priceWithMargin
-          : item.amount;
+    if (role === "CLIENT") {
+      // Each item becomes an INCOME PLAN entry
+      for (const item of estimate.items) {
+        const amount =
+          item.useCustomMargin && Number(item.priceWithMargin) > 0
+            ? item.priceWithMargin
+            : item.amount;
 
-      await tx.financeEntry.create({
-        data: {
-          occurredAt,
-          kind: "PLAN",
-          type: "EXPENSE",
-          source: "ESTIMATE_AUTO",
-          amount,
-          currency: "UAH",
-          projectId: estimate.projectId,
-          category: mapItemToFinanceCategory(item, item.section),
-          title: item.description.slice(0, 200),
-          description: item.section?.title
-            ? `Кошторис ${estimate.number} • ${item.section.title}`
-            : `Кошторис ${estimate.number}`,
-          status: "DRAFT",
-          createdById: userId,
-          estimateId,
-          estimateItemId: item.id,
-        },
-      });
+        await tx.financeEntry.create({
+          data: {
+            occurredAt,
+            kind: "PLAN",
+            type: "INCOME",
+            source: "ESTIMATE_AUTO",
+            amount,
+            currency: "UAH",
+            projectId: estimate.projectId,
+            category: "client_advance",
+            title: item.description.slice(0, 200),
+            description: item.section?.title
+              ? `Кошторис клієнта ${estimate.number} • ${item.section.title}`
+              : `Кошторис клієнта ${estimate.number}`,
+            status: "DRAFT",
+            createdById: userId,
+            estimateId,
+            estimateItemId: item.id,
+          },
+        });
 
-      totalExpense = totalExpense.plus(amount);
-    }
+        totalIncome = totalIncome.plus(amount);
+      }
+    } else {
+      // INTERNAL or STANDALONE: per-item EXPENSE
+      for (const item of estimate.items) {
+        const amount =
+          item.useCustomMargin && Number(item.priceWithMargin) > 0
+            ? item.priceWithMargin
+            : item.amount;
 
-    const totalIncome = estimate.finalClientPrice;
-    if (Number(totalIncome) > 0) {
-      await tx.financeEntry.create({
-        data: {
-          occurredAt,
-          kind: "PLAN",
-          type: "INCOME",
-          source: "ESTIMATE_AUTO",
-          amount: totalIncome,
-          currency: "UAH",
-          projectId: estimate.projectId,
-          category: "client_advance",
-          title: `План доходу: ${estimate.title}`.slice(0, 200),
-          description: `Кошторис ${estimate.number} • finalClientPrice`,
-          status: "DRAFT",
-          createdById: userId,
-          estimateId,
-        },
-      });
+        await tx.financeEntry.create({
+          data: {
+            occurredAt,
+            kind: "PLAN",
+            type: "EXPENSE",
+            source: "ESTIMATE_AUTO",
+            amount,
+            currency: "UAH",
+            projectId: estimate.projectId,
+            category: mapItemToFinanceCategory(item, item.section),
+            title: item.description.slice(0, 200),
+            description: item.section?.title
+              ? `Кошторис ${estimate.number} • ${item.section.title}`
+              : `Кошторис ${estimate.number}`,
+            status: "DRAFT",
+            createdById: userId,
+            estimateId,
+            estimateItemId: item.id,
+          },
+        });
+
+        totalExpense = totalExpense.plus(amount);
+      }
+
+      // STANDALONE: also create a single aggregated INCOME from finalClientPrice
+      if (role === "STANDALONE") {
+        const clientPrice = estimate.finalClientPrice;
+        if (Number(clientPrice) > 0) {
+          await tx.financeEntry.create({
+            data: {
+              occurredAt,
+              kind: "PLAN",
+              type: "INCOME",
+              source: "ESTIMATE_AUTO",
+              amount: clientPrice,
+              currency: "UAH",
+              projectId: estimate.projectId,
+              category: "client_advance",
+              title: `План доходу: ${estimate.title}`.slice(0, 200),
+              description: `Кошторис ${estimate.number} • finalClientPrice`,
+              status: "DRAFT",
+              createdById: userId,
+              estimateId,
+            },
+          });
+          totalIncome = totalIncome.plus(clientPrice);
+        }
+      }
     }
 
     await tx.estimate.update({
@@ -101,7 +145,7 @@ export async function syncEstimateToFinancing(
     return {
       itemsCreated: estimate.items.length,
       totalExpense: totalExpense.toNumber(),
-      totalIncome: Number(totalIncome),
+      totalIncome: totalIncome.toNumber(),
     };
   });
 

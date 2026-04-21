@@ -262,7 +262,17 @@ model Estimate {
   financeSyncedById     String?
   financeSyncedBy       User?                    @relation("EstimateFinanceSyncer", fields: [financeSyncedById], references: [id])
 
+  // Pair grouping: CLIENT + INTERNAL pair for comparison view
+  role                  EstimateRole             @default(STANDALONE)
+  estimateGroupId       String?
+  pairedEstimateId      String?
+  sourceFileR2Key       String?
+  sourceFileName        String?
+  sourceFileMime        String?
+
   @@index([folderId])
+  @@index([estimateGroupId])
+  @@index([role])
   @@map("estimates")
 }
 
@@ -1217,6 +1227,12 @@ enum EstimateStatus {
   REVISION
   ENGINEER_REVIEW
   FINANCE_REVIEW
+}
+
+enum EstimateRole {
+  STANDALONE
+  CLIENT
+  INTERNAL
 }
 
 enum TaxationType {

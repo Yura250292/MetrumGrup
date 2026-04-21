@@ -19,12 +19,14 @@ import {
   Plus,
   FolderPlus,
   Sparkles,
+  FileSpreadsheet,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
 import { FINANCE_CATEGORIES } from "@/lib/constants";
 import { EntryFormModal } from "./entry-form-modal";
 import { OcrScanModal } from "./ocr-scan-modal";
+import { EstimateUploadModal } from "./estimate-upload-modal";
 import { QuadrantCard } from "./quadrant-card";
 import { SummaryStat, formatPercent } from "./summary-stat";
 import { FilterSelect, FilterInput } from "./filter-controls";
@@ -82,6 +84,7 @@ export function FinancingView({
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showOcrScan, setShowOcrScan] = useState(false);
+  const [showEstimateUpload, setShowEstimateUpload] = useState(false);
 
   const { data: folders = [] } = useFolders("FINANCE", folderId);
   const { data: detailData } = useFolderDetail(folderId);
@@ -187,6 +190,14 @@ export function FinancingView({
           {/* Quick add: 2x2 grid on mobile, row on desktop */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
             <button
+              onClick={() => setShowEstimateUpload(true)}
+              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              style={{ backgroundColor: T.accentPrimary }}
+            >
+              <FileSpreadsheet size={12} />
+              Завантажити кошторис
+            </button>
+            <button
               onClick={() => setShowOcrScan(true)}
               className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
               style={{ backgroundColor: T.accentPrimary }}
@@ -236,6 +247,14 @@ export function FinancingView({
             </button>
           </div>
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+            <button
+              onClick={() => setShowEstimateUpload(true)}
+              className="flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              style={{ backgroundColor: T.accentPrimary }}
+            >
+              <FileSpreadsheet size={11} />
+              Завантажити кошторис
+            </button>
             <button
               onClick={() => setShowOcrScan(true)}
               className="flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
@@ -514,6 +533,16 @@ export function FinancingView({
               : null
           }
           onClose={() => setShowOcrScan(false)}
+          onCreated={() => loadData()}
+        />
+      )}
+
+      {/* Estimate upload modal */}
+      {showEstimateUpload && (
+        <EstimateUploadModal
+          projects={projects}
+          scope={scope}
+          onClose={() => setShowEstimateUpload(false)}
           onCreated={() => loadData()}
         />
       )}
