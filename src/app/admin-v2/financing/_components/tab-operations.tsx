@@ -194,9 +194,11 @@ export function TabOperations({
       >
         {/* Table header */}
         <div
-          className="hidden lg:grid gap-0 border-b px-4 py-3"
+          className="hidden lg:grid gap-2 border-b px-4 py-3"
           style={{
-            gridTemplateColumns: "80px 60px 70px 1fr 120px 120px 120px 80px 60px",
+            gridTemplateColumns: scope
+              ? "90px 60px 70px 100px 1fr 130px 130px 70px 170px"
+              : "90px 60px 70px 100px 1fr 130px 140px 130px 70px 170px",
             borderColor: T.borderSoft,
             backgroundColor: T.panelElevated,
           }}
@@ -204,12 +206,13 @@ export function TabOperations({
           <HeaderCell label="Дата" sortable field="date" current={sortField} dir={sortDir} onSort={toggleSort} />
           <HeaderCell label="Вид" />
           <HeaderCell label="Тип" />
+          <HeaderCell label="Статус" />
           <HeaderCell label="Назва" />
           <HeaderCell label="Категорія" />
           {!scope && <HeaderCell label="Проєкт" />}
           <HeaderCell label="Сума" sortable field="amount" current={sortField} dir={sortDir} onSort={toggleSort} />
           <HeaderCell label="Якість" />
-          <HeaderCell label="" />
+          <HeaderCell label="Дії" />
         </div>
 
         {/* Rows */}
@@ -388,38 +391,41 @@ function OperationRow({
               </>
             )}
           </div>
-          <div className="flex gap-1 flex-shrink-0">
+          <div className="flex gap-1.5 flex-shrink-0">
             {onMoveToFolder && (
               <button
                 onClick={onMoveToFolder}
-                className="flex h-7 w-7 items-center justify-center rounded-lg"
+                className="flex h-9 w-9 items-center justify-center rounded-lg active:scale-95 transition"
                 style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
                 title="В папку"
               >
-                <FolderInput size={12} />
+                <FolderInput size={15} />
               </button>
             )}
             <button
               onClick={onEdit}
-              className="flex h-7 w-7 items-center justify-center rounded-lg"
-              style={{ backgroundColor: T.panelElevated, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}
+              className="flex h-9 w-9 items-center justify-center rounded-lg active:scale-95 transition"
+              style={{ backgroundColor: T.panelElevated, color: T.textPrimary, border: `1px solid ${T.borderStrong}` }}
+              title="Редагувати"
             >
-              <Edit size={12} />
+              <Edit size={15} />
             </button>
             <button
               onClick={onArchive}
-              className="flex h-7 w-7 items-center justify-center rounded-lg"
-              style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}
+              className="flex h-9 w-9 items-center justify-center rounded-lg active:scale-95 transition"
+              style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}60` }}
+              title="Архівувати"
             >
-              <Archive size={12} />
+              <Archive size={15} />
             </button>
             {onDelete && (
               <button
                 onClick={onDelete}
-                className="flex h-7 w-7 items-center justify-center rounded-lg"
+                className="flex h-9 w-9 items-center justify-center rounded-lg active:scale-95 transition"
                 style={{ backgroundColor: T.danger, color: "#fff", border: `1px solid ${T.danger}` }}
+                title="Видалити"
               >
-                <Trash2 size={12} />
+                <Trash2 size={15} />
               </button>
             )}
           </div>
@@ -428,11 +434,11 @@ function OperationRow({
 
       {/* ═══ DESKTOP row ═══ */}
       <div
-        className="hidden lg:grid group gap-0 border-b px-4 py-3 hover:brightness-[0.97] transition"
+        className="hidden lg:grid group gap-2 border-b px-4 py-3.5 hover:brightness-[0.97] transition items-center"
         style={{
           gridTemplateColumns: showProject
-            ? "80px 60px 70px 1fr 120px 120px 120px 80px 60px"
-            : "80px 60px 70px 1fr 120px 120px 80px 60px",
+            ? "90px 60px 70px 100px 1fr 130px 140px 130px 70px 170px"
+            : "90px 60px 70px 100px 1fr 130px 130px 70px 170px",
           borderColor: T.borderSoft,
           backgroundColor: isZebra ? T.panelSoft : "transparent",
           borderLeft: isOverdue ? `3px solid ${T.danger}` : "3px solid transparent",
@@ -454,7 +460,7 @@ function OperationRow({
             {entry.kind === "PLAN" ? "ПЛАН" : "ФАКТ"}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center">
           <span
             className="rounded-md px-1.5 py-0.5 text-[9px] font-bold"
             style={{
@@ -464,6 +470,8 @@ function OperationRow({
           >
             {entry.type === "INCOME" ? "ДОХІД" : "ВИТРАТА"}
           </span>
+        </div>
+        <div className="flex items-center">
           <StatusBadge status={entry.status} />
         </div>
         <div className="flex flex-col min-w-0">
@@ -521,21 +529,41 @@ function OperationRow({
           <QualityDot icon={<AlignLeft size={9} />} ok={!!entry.description} title={entry.description ? "Є опис" : "Без опису"} />
           <QualityDot icon={<FolderOpen size={9} />} ok={!!entry.projectId} title={entry.project?.title || "Без проєкту"} />
         </div>
-        <div className="flex items-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+        <div className="flex items-center justify-end gap-1.5">
           {onMoveToFolder && (
-            <button onClick={onMoveToFolder} title="В папку" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}>
-              <FolderInput size={10} />
+            <button
+              onClick={onMoveToFolder}
+              title="В папку"
+              className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:brightness-110 active:scale-95"
+              style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
+            >
+              <FolderInput size={15} />
             </button>
           )}
-          <button onClick={onEdit} title="Редагувати" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.panelElevated, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}>
-            <Edit size={10} />
+          <button
+            onClick={onEdit}
+            title="Редагувати"
+            className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:brightness-110 active:scale-95"
+            style={{ backgroundColor: T.panelElevated, color: T.textPrimary, border: `1px solid ${T.borderStrong}` }}
+          >
+            <Edit size={15} />
           </button>
-          <button onClick={onArchive} title="Архівувати" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}>
-            <Archive size={10} />
+          <button
+            onClick={onArchive}
+            title="Архівувати"
+            className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:brightness-110 active:scale-95"
+            style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}60` }}
+          >
+            <Archive size={15} />
           </button>
           {onDelete && (
-            <button onClick={onDelete} title="Видалити назавжди" className="flex h-6 w-6 items-center justify-center rounded-md" style={{ backgroundColor: T.danger, color: "#fff", border: `1px solid ${T.danger}` }}>
-              <Trash2 size={10} />
+            <button
+              onClick={onDelete}
+              title="Видалити назавжди"
+              className="flex h-9 w-9 items-center justify-center rounded-lg transition hover:brightness-110 active:scale-95"
+              style={{ backgroundColor: T.danger, color: "#fff", border: `1px solid ${T.danger}` }}
+            >
+              <Trash2 size={15} />
             </button>
           )}
         </div>
