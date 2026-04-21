@@ -367,8 +367,9 @@ function OperationRow({
             href={`/admin/estimates/${entry.estimate.id}`}
             className="inline-flex items-center gap-1 self-start mb-0.5 rounded-md px-1.5 py-0.5 text-[9px] font-bold"
             style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
+            title={`Кошторис ${entry.estimate.number}`}
           >
-            <Calculator size={9} /> З кошторису {entry.estimate.number}
+            <Calculator size={9} /> З кошторису
           </Link>
         )}
 
@@ -474,34 +475,42 @@ function OperationRow({
         <div className="flex items-center">
           <StatusBadge status={entry.status} />
         </div>
-        <div className="flex flex-col min-w-0">
-          <span className="text-[12.5px] font-semibold truncate" style={{ color: T.textPrimary }}>
-            {entry.title}
-          </span>
+        <div className="flex flex-col min-w-0 gap-0.5">
+          <div className="flex items-start gap-1.5 min-w-0">
+            <span
+              className="text-[12.5px] font-semibold line-clamp-2 flex-1 min-w-0 leading-snug"
+              style={{ color: T.textPrimary }}
+            >
+              {entry.title}
+            </span>
+            {entry.source === "ESTIMATE_AUTO" && (
+              entry.estimate ? (
+                <Link
+                  href={`/admin/estimates/${entry.estimate.id}`}
+                  className="inline-flex items-center gap-0.5 self-start rounded-md px-1 py-0.5 text-[9px] font-bold hover:brightness-110 flex-shrink-0"
+                  style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
+                  title={`З кошторису ${entry.estimate.number} • ${entry.estimate.title}`}
+                >
+                  <Calculator size={9} />
+                </Link>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-0.5 self-start rounded-md px-1 py-0.5 text-[9px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: T.panelSoft, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
+                  title="Кошторис видалено"
+                >
+                  <Calculator size={9} />
+                </span>
+              )
+            )}
+          </div>
           {entry.counterparty && (
-            <span className="text-[10px] truncate" style={{ color: T.textMuted }}>{entry.counterparty}</span>
-          )}
-          {entry.source === "ESTIMATE_AUTO" && (
-            entry.estimate ? (
-              <Link
-                href={`/admin/estimates/${entry.estimate.id}`}
-                className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 text-[9px] font-bold hover:brightness-110"
-                style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary, border: `1px solid ${T.accentPrimary}40` }}
-                title={`Кошторис ${entry.estimate.number}`}
-              >
-                <Calculator size={9} /> З кошторису {entry.estimate.number}
-              </Link>
-            ) : (
-              <span
-                className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md px-1.5 py-0.5 text-[9px] font-bold"
-                style={{ backgroundColor: T.panelSoft, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
-              >
-                <Calculator size={9} /> Кошторис видалено
-              </span>
-            )
+            <span className="text-[10px] truncate" style={{ color: T.textMuted }}>
+              {entry.counterparty}
+            </span>
           )}
           {isOverdue && (
-            <span className="flex items-center gap-1 text-[9px] font-bold mt-0.5" style={{ color: T.danger }}>
+            <span className="flex items-center gap-1 text-[9px] font-bold" style={{ color: T.danger }}>
               <Clock size={9} /> Прострочено
             </span>
           )}
