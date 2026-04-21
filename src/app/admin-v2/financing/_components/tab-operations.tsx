@@ -197,8 +197,8 @@ export function TabOperations({
           className="hidden lg:grid gap-2 border-b px-4 py-3"
           style={{
             gridTemplateColumns: scope
-              ? "90px 60px 70px 100px 1fr 130px 130px 70px 170px"
-              : "90px 60px 70px 100px 1fr 130px 140px 130px 70px 170px",
+              ? "85px 55px 65px 85px 2fr 110px 120px 60px 170px"
+              : "85px 55px 65px 85px 2fr 110px 120px 120px 60px 170px",
             borderColor: T.borderSoft,
             backgroundColor: T.panelElevated,
           }}
@@ -314,6 +314,19 @@ function OperationRow({
   const amountColor =
     entry.type === "INCOME" ? T.success : T.danger;
 
+  // Row tint by type × source.
+  // MANUAL aggregate entries get a more prominent tint,
+  // ESTIMATE_AUTO (per-line) get a subtle one so long lists are not overwhelming.
+  const isIncome = entry.type === "INCOME";
+  const isAuto = entry.source === "ESTIMATE_AUTO";
+  const rowBg = isIncome
+    ? isAuto
+      ? "rgba(22, 163, 74, 0.04)"
+      : "rgba(22, 163, 74, 0.11)"
+    : isAuto
+      ? "rgba(220, 38, 38, 0.035)"
+      : "rgba(220, 38, 38, 0.09)";
+
   return (
     <>
       {/* ═══ MOBILE card ═══ */}
@@ -321,7 +334,7 @@ function OperationRow({
         className="lg:hidden group border-b px-4 py-3"
         style={{
           borderColor: T.borderSoft,
-          backgroundColor: isZebra ? T.panelSoft : "transparent",
+          backgroundColor: rowBg,
           borderLeft: isOverdue ? `3px solid ${T.danger}` : "3px solid transparent",
         }}
       >
@@ -438,10 +451,10 @@ function OperationRow({
         className="hidden lg:grid group gap-2 border-b px-4 py-3.5 hover:brightness-[0.97] transition items-center"
         style={{
           gridTemplateColumns: showProject
-            ? "90px 60px 70px 100px 1fr 130px 140px 130px 70px 170px"
-            : "90px 60px 70px 100px 1fr 130px 130px 70px 170px",
+            ? "85px 55px 65px 85px 2fr 110px 120px 120px 60px 170px"
+            : "85px 55px 65px 85px 2fr 110px 120px 60px 170px",
           borderColor: T.borderSoft,
-          backgroundColor: isZebra ? T.panelSoft : "transparent",
+          backgroundColor: rowBg,
           borderLeft: isOverdue ? `3px solid ${T.danger}` : "3px solid transparent",
         }}
       >
