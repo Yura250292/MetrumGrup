@@ -35,6 +35,7 @@ type SideState = {
   items: ParsedItem[];
   totalAmount: number;
   error: string | null;
+  warnings: string[];
 };
 
 const emptySide: SideState = {
@@ -44,6 +45,7 @@ const emptySide: SideState = {
   items: [],
   totalAmount: 0,
   error: null,
+  warnings: [],
 };
 
 export function EstimateUploadModal({
@@ -124,6 +126,7 @@ export function EstimateUploadModal({
         items: data.items || [],
         totalAmount: data.totalAmount || 0,
         error: null,
+        warnings: Array.isArray(data.warnings) ? data.warnings : [],
       });
     } catch (err: any) {
       updateSide(side, {
@@ -569,6 +572,48 @@ function SideUploader({
             }}
           >
             {state.error}
+          </div>
+        )}
+
+        {state.warnings.length > 0 && (
+          <div
+            className="rounded-lg px-3 py-2 text-[10px] flex flex-col gap-0.5"
+            style={{
+              backgroundColor: T.warningSoft,
+              color: T.warning,
+              border: `1px solid ${T.warning}40`,
+            }}
+          >
+            {state.warnings.map((w, i) => (
+              <div key={i}>⚠️ {w}</div>
+            ))}
+          </div>
+        )}
+
+        {state.scanned && !state.scanning && state.items.length === 0 && !state.error && (
+          <div
+            className="rounded-lg px-3 py-3 text-[11px] flex flex-col gap-2"
+            style={{
+              backgroundColor: T.dangerSoft,
+              color: T.danger,
+              border: `1px solid ${T.danger}`,
+            }}
+          >
+            <span>
+              ❌ Не вдалося розпізнати жодну позицію. Файл може мати нестандартну структуру.
+            </span>
+            <button
+              type="button"
+              onClick={onItemAdd}
+              className="rounded-md px-2 py-1 text-[11px] font-semibold self-start"
+              style={{
+                backgroundColor: T.panel,
+                color: T.accentPrimary,
+                border: `1px solid ${T.accentPrimary}40`,
+              }}
+            >
+              + Додати позиції вручну
+            </button>
           </div>
         )}
 

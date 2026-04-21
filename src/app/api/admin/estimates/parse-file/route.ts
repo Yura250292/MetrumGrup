@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Role } from "@prisma/client";
+import * as XLSX from "xlsx";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -100,6 +101,67 @@ function parseAmount(raw: string | number | null | undefined): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
+async function parseCsvWithGemini(
+  csvText: string,
+): Promise<{ items: ParsedItem[]; totalAmount: number; model: string }> {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error("GEMINI_API_KEY не налаштовано");
+  }
+
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+  const truncated = csvText.length > 50000 ? csvText.slice(0, 50000) + "\n[...truncated]" : csvText;
+
+  const prompt = `${ESTIMATE_OCR_PROMPT}
+
+Нижче — дані з Excel у форматі CSV. Першими кілька рядків можуть бути заголовками компанії, проєкту тощо. Далі йде таблиця з позиціями. Витягни всі позиції:
+
+${truncated}`;
+
+  let lastError: unknown = null;
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: { responseMimeType: "application/json" },
+      });
+      const result = await model.generateContent(prompt);
+      const text = result.response.text().trim();
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) throw new Error("Gemini не повернув JSON");
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+      const items: ParsedItem[] = rawItems
+        .map((raw: any) => {
+          const quantity = parseAmount(raw.quantity);
+          const unitPrice = parseAmount(raw.unitPrice);
+          let totalPrice = parseAmount(raw.totalPrice);
+          if (!totalPrice && quantity && unitPrice) totalPrice = quantity * unitPrice;
+          return {
+            description: String(raw.description ?? "").trim(),
+            unit: String(raw.unit ?? "").trim() || "шт",
+            quantity,
+            unitPrice,
+            totalPrice,
+            category: raw.category && typeof raw.category === "string" ? raw.category : null,
+          };
+        })
+        .filter((item: ParsedItem) => item.description && (item.totalPrice > 0 || item.unitPrice > 0));
+
+      const totalAmount =
+        parseAmount(parsed.totalAmount) ||
+        items.reduce((sum: number, i: ParsedItem) => sum + i.totalPrice, 0);
+
+      return { items, totalAmount, model: modelName };
+    } catch (err) {
+      lastError = err;
+      console.error(`[parse-file] CSV/${modelName} failed:`, err instanceof Error ? err.message : err);
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Всі моделі Gemini недоступні");
+}
+
 async function parseWithGemini(
   buffer: Buffer,
   mimeType: string,
@@ -183,7 +245,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const warnings: string[] = [];
 
-    // Excel
+    // Excel — try native parser first, fallback to Gemini CSV parsing
     if (
       name.endsWith(".xlsx") ||
       name.endsWith(".xls") ||
@@ -196,11 +258,7 @@ export async function POST(request: NextRequest) {
       ) as ArrayBuffer;
       const result = await parseExcelEstimate(arrayBuffer);
 
-      if (!result.success) {
-        warnings.push(...result.errors);
-      }
-
-      const items: ParsedItem[] = result.items.map((it) => ({
+      let items: ParsedItem[] = result.items.map((it) => ({
         description: it.description,
         unit: it.unit,
         quantity: it.quantity,
@@ -208,16 +266,44 @@ export async function POST(request: NextRequest) {
         totalPrice: it.totalPrice,
         category: it.category ?? null,
       }));
+      let totalAmount = result.totalAmount;
+      let method: ParseResponse["metadata"]["method"] = "excel";
+      let model: string | undefined;
+
+      if (!result.success) {
+        warnings.push(...result.errors);
+      }
+
+      // Fallback: if native parser found nothing — convert to CSV and use Gemini
+      if (items.length === 0) {
+        warnings.push("Native парсер не знайшов позицій — використано AI");
+        try {
+          const workbook = XLSX.read(arrayBuffer, { type: "array" });
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          if (firstSheet) {
+            const csvText = XLSX.utils.sheet_to_csv(firstSheet, { FS: ";", blankrows: false });
+            const ai = await parseCsvWithGemini(csvText);
+            items = ai.items;
+            totalAmount = ai.totalAmount;
+            method = "gemini-pdf"; // reuse label for AI fallback
+            model = ai.model;
+          }
+        } catch (fallbackErr) {
+          const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          warnings.push(`AI fallback не спрацював: ${msg}`);
+        }
+      }
 
       const response: ParseResponse = {
         items,
-        totalAmount: result.totalAmount,
+        totalAmount,
         currency: "UAH",
         metadata: {
           totalRows: result.metadata.totalRows,
-          parsedRows: result.metadata.parsedRows,
-          skippedRows: result.metadata.skippedRows,
-          method: "excel",
+          parsedRows: items.length,
+          skippedRows: Math.max(0, result.metadata.totalRows - items.length),
+          method,
+          model,
         },
         warnings,
       };
