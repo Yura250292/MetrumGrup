@@ -13,6 +13,8 @@ import {
   ArrowDown,
   ArrowUp,
   ExternalLink,
+  FileText,
+  FileSpreadsheet,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
@@ -179,7 +181,7 @@ export function EstimateCompareView({ groupId }: { groupId: string }) {
             {data.project.title} · версія {data.version}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Link
             href={`/admin-v2/financing?projectId=${data.project.id}`}
             className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
@@ -188,6 +190,48 @@ export function EstimateCompareView({ groupId }: { groupId: string }) {
             <ExternalLink size={13} />
             Відкрити у Фінансуванні
           </Link>
+        </div>
+      </div>
+
+      {/* Export toolbar — separate buttons per estimate */}
+      <div
+        className="flex flex-col sm:flex-row gap-3 p-3 rounded-xl"
+        style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+      >
+        {data.client && (
+          <ExportGroup
+            label="Кошторис клієнта"
+            estimateId={data.client.id}
+            color={T.success}
+            icon={<Users size={13} />}
+          />
+        )}
+        {data.internal && (
+          <ExportGroup
+            label="Кошторис Metrum"
+            estimateId={data.internal.id}
+            color={T.danger}
+            icon={<Briefcase size={13} />}
+          />
+        )}
+      </div>
+
+      {/* Sync info banner */}
+      <div
+        className="flex items-start gap-2 rounded-xl p-3 text-[12px]"
+        style={{
+          backgroundColor: T.accentPrimarySoft,
+          border: `1px solid ${T.accentPrimary}30`,
+          color: T.accentPrimary,
+        }}
+      >
+        <ExternalLink size={14} className="flex-shrink-0 mt-0.5" />
+        <div className="flex flex-col gap-0.5">
+          <span className="font-semibold">Записи синхронізовано з Фінансуванням</span>
+          <span className="text-[11px]" style={{ color: T.textSecondary }}>
+            Кошторис Metrum → План витрати проекту · Кошторис клієнта → План доходи.
+            Далі додавайте фактичні витрати (чеки) — вони порівняються з планом автоматично.
+          </span>
         </div>
       </div>
 
@@ -314,6 +358,80 @@ function SummaryCard({
           {subtitle}
         </span>
       )}
+    </div>
+  );
+}
+
+function ExportGroup({
+  label,
+  estimateId,
+  color,
+  icon,
+}: {
+  label: string;
+  estimateId: string;
+  color: string;
+  icon: React.ReactNode;
+}) {
+  const [downloading, setDownloading] = useState<"excel" | "pdf" | null>(null);
+
+  async function handleExport(format: "excel" | "pdf") {
+    setDownloading(format);
+    try {
+      const res = await fetch(`/api/admin/estimates/${estimateId}/export?format=${format}`);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ext = format === "excel" ? "xlsx" : "pdf";
+      a.download = `estimate-${estimateId}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err?.message ?? "Помилка експорту");
+    } finally {
+      setDownloading(null);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2 flex-1">
+      <span className="flex items-center gap-1.5 text-[12px] font-bold flex-shrink-0" style={{ color }}>
+        {icon}
+        {label}:
+      </span>
+      <button
+        onClick={() => handleExport("excel")}
+        disabled={downloading !== null}
+        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+        style={{ backgroundColor: T.panel, color: T.textPrimary, border: `1px solid ${T.borderStrong}` }}
+      >
+        {downloading === "excel" ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : (
+          <FileSpreadsheet size={11} />
+        )}
+        Excel
+      </button>
+      <button
+        onClick={() => handleExport("pdf")}
+        disabled={downloading !== null}
+        className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+        style={{ backgroundColor: T.panel, color: T.textPrimary, border: `1px solid ${T.borderStrong}` }}
+      >
+        {downloading === "pdf" ? (
+          <Loader2 size={11} className="animate-spin" />
+        ) : (
+          <FileText size={11} />
+        )}
+        PDF
+      </button>
     </div>
   );
 }
