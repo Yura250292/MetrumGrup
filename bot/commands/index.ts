@@ -296,8 +296,12 @@ export function registerCommands(bot: Telegraf<BotContext>) {
       await handleSelectFolderCallback(ctx, data.replace('rcpt_select_folder:', ''));
       return;
     }
-    if (data === 'rcpt_confirm') {
-      await handleReceiptConfirm(ctx);
+    if (data === 'rcpt_confirm' || data === 'rcpt_confirm:EXPENSE') {
+      await handleReceiptConfirm(ctx, 'EXPENSE');
+      return;
+    }
+    if (data === 'rcpt_confirm:INCOME') {
+      await handleReceiptConfirm(ctx, 'INCOME');
       return;
     }
     if (data === 'rcpt_edit_amount') {

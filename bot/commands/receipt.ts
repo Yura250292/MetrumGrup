@@ -364,7 +364,10 @@ async function processReceiptWithOCR(ctx: BotContext) {
 
     const buttons = [];
     if (amount && Number.isFinite(amount)) {
-      buttons.push([Markup.button.callback('✅ Все вірно — створити запис', 'rcpt_confirm')]);
+      buttons.push([
+        Markup.button.callback('💸 Витрата', 'rcpt_confirm:EXPENSE'),
+        Markup.button.callback('💰 Дохід', 'rcpt_confirm:INCOME'),
+      ]);
     }
     buttons.push([Markup.button.callback('✏️ Ввести суму вручну', 'rcpt_edit_amount')]);
     buttons.push([Markup.button.callback('❌ Скасувати', 'receipt_cancel')]);
@@ -389,7 +392,10 @@ async function processReceiptWithOCR(ctx: BotContext) {
 /**
  * Handle confirmation — create entry and send to approver
  */
-export async function handleReceiptConfirm(ctx: BotContext) {
+export async function handleReceiptConfirm(
+  ctx: BotContext,
+  entryType: 'EXPENSE' | 'INCOME' = 'EXPENSE',
+) {
   const receipt = ctx.session?.pendingReceipt;
   if (!receipt || receipt.step !== 'awaiting_confirmation') {
     await ctx.answerCbQuery('Немає активного чеку');
@@ -397,6 +403,8 @@ export async function handleReceiptConfirm(ctx: BotContext) {
   }
 
   await ctx.answerCbQuery();
+
+  receipt.entryType = entryType;
 
   if (!receipt.amount || receipt.amount <= 0) {
     receipt.step = 'awaiting_amount';
@@ -504,16 +512,18 @@ async function createEntryAndNotifyApprover(ctx: BotContext) {
     const title = receipt.title || extractTitleFromOCR(receipt.ocrText) || 'Чек з Telegram';
 
     // Create the finance entry with PENDING status (awaiting approval)
+    const entryType = receipt.entryType || 'EXPENSE';
+
     const entry = await prisma.financeEntry.create({
       data: {
-        type: 'EXPENSE',
+        type: entryType,
         kind: 'FACT',
         amount: receipt.amount!,
         currency: 'UAH',
         occurredAt: new Date(),
         projectId: null, // Will be linked via folder
         folderId: receipt.folderId || null,
-        category: 'MATERIALS',
+        category: entryType === 'INCOME' ? 'client_advance' : 'MATERIALS',
         title,
         description: receipt.ocrText || `Додано через Telegram бот`,
         counterparty: receipt.counterparty || null,
@@ -572,12 +582,15 @@ async function createEntryAndNotifyApprover(ctx: BotContext) {
     }
 
     // Send approval message to the bot chat (for admin to approve inline)
+    const typeEmoji = entryType === 'INCOME' ? '💰' : '💸';
+    const typeLabel = entryType === 'INCOME' ? 'ДОХІД' : 'ВИТРАТА';
     const approvalMessage =
       `🧾 <b>НОВИЙ ЧЕК НА ПОГОДЖЕННЯ</b>\n\n` +
+      `${typeEmoji} Тип: <b>${typeLabel}</b>\n` +
       `📁 Папка: <b>${escapeHtml(folderName)}</b>\n` +
       `📄 ${escapeHtml(title)}\n` +
       `💰 Сума: <b>${receipt.amount} грн</b>\n` +
-      (receipt.counterparty ? `🏢 Постачальник: ${escapeHtml(receipt.counterparty)}\n` : '') +
+      (receipt.counterparty ? `🏢 Контрагент: ${escapeHtml(receipt.counterparty)}\n` : '') +
       `\n` +
       (receipt.ocrText ? `<blockquote>${escapeHtml(receipt.ocrText.slice(0, 500))}</blockquote>\n\n` : '') +
       `📊 Статус: На погодженні`;

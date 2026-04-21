@@ -9,6 +9,8 @@ import {
   Sparkles,
   FileText,
   RefreshCw,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { financeCategoriesForType } from "@/lib/constants";
@@ -36,6 +38,7 @@ export function OcrScanModal({
   const [amount, setAmount] = useState("");
   const [counterparty, setCounterparty] = useState("");
   const [title, setTitle] = useState("");
+  const [entryType, setEntryType] = useState<"EXPENSE" | "INCOME">("EXPENSE");
   const [category, setCategory] = useState("MATERIALS");
   const [projectId, setProjectId] = useState<string>(scope?.id ?? "");
   const [folderId, setFolderId] = useState<string>(folderContext?.id ?? "");
@@ -46,7 +49,17 @@ export function OcrScanModal({
 
   const [folderTree, setFolderTree] = useState<FolderTreeOption[]>([]);
 
-  const expenseCategories = useMemo(() => financeCategoriesForType("EXPENSE"), []);
+  const availableCategories = useMemo(
+    () => financeCategoriesForType(entryType),
+    [entryType],
+  );
+
+  useEffect(() => {
+    if (category && !availableCategories.some((c) => c.key === category)) {
+      setCategory(availableCategories[0]?.key ?? "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [availableCategories]);
 
   useEffect(() => {
     if (scope) return;
@@ -147,7 +160,7 @@ export function OcrScanModal({
     try {
       // Create entry
       const payload = {
-        type: "EXPENSE",
+        type: entryType,
         kind: "FACT",
         amount: amountNum,
         occurredAt: new Date(occurredAt).toISOString(),
@@ -368,6 +381,44 @@ export function OcrScanModal({
             </div>
           )}
 
+          {/* Type toggle — EXPENSE / INCOME */}
+          {(file || ocrText) && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+                ТИП ЗАПИСУ *
+              </span>
+              <div
+                className="grid grid-cols-2 gap-1 rounded-xl p-1"
+                style={{ backgroundColor: T.panelSoft }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setEntryType("EXPENSE")}
+                  className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold transition"
+                  style={{
+                    backgroundColor: entryType === "EXPENSE" ? T.success : "transparent",
+                    color: entryType === "EXPENSE" ? "#fff" : T.textSecondary,
+                  }}
+                >
+                  <TrendingDown size={13} />
+                  Факт Витрата
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEntryType("INCOME")}
+                  className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold transition"
+                  style={{
+                    backgroundColor: entryType === "INCOME" ? T.success : "transparent",
+                    color: entryType === "INCOME" ? "#fff" : T.textSecondary,
+                  }}
+                >
+                  <TrendingUp size={13} />
+                  Факт Дохід
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Extracted fields (editable) */}
           {(file || ocrText) && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -440,7 +491,7 @@ export function OcrScanModal({
                     color: T.textPrimary,
                   }}
                 >
-                  {expenseCategories.map((c) => (
+                  {availableCategories.map((c) => (
                     <option key={c.key} value={c.key}>
                       {c.label}
                     </option>

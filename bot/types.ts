@@ -9,6 +9,7 @@ export interface ConversationMessage {
 export interface PendingReceipt {
   step: 'awaiting_file' | 'awaiting_amount' | 'awaiting_title' | 'awaiting_confirmation';
   folderId: string | null;
+  entryType?: 'EXPENSE' | 'INCOME';
   fileId?: string;
   fileName?: string;
   mimeType?: string;
