@@ -52,12 +52,14 @@ export function EstimateUploadModal({
   projects,
   scope,
   defaultProjectId,
+  folderContext,
   onClose,
   onCreated,
 }: {
   projects: ProjectOption[];
   scope?: { id: string; title: string };
   defaultProjectId?: string | null;
+  folderContext?: { id: string; name: string } | null;
   onClose: () => void;
   onCreated: (groupId: string) => void;
 }) {
@@ -195,6 +197,7 @@ export function EstimateUploadModal({
     try {
       const body: Record<string, unknown> = {
         projectId,
+        folderId: folderContext?.id ?? null,
         ...options,
       };
       if (client.items.length > 0) {

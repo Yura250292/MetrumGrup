@@ -31,6 +31,7 @@ type SideInput = {
 
 type CreatePairBody = {
   projectId: string;
+  folderId?: string | null;
   clientEstimate?: SideInput;
   internalEstimate?: SideInput;
   replaceExisting?: boolean;
@@ -58,7 +59,8 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: CreatePairBody = await request.json();
-    const { projectId, clientEstimate, internalEstimate, replaceExisting, createNewVersion } = body;
+    const { projectId, folderId, clientEstimate, internalEstimate, replaceExisting, createNewVersion } = body;
+    const normalizedFolderId = typeof folderId === "string" && folderId.trim() ? folderId.trim() : null;
 
     if (!projectId) {
       return NextResponse.json({ error: "projectId обов'язковий" }, { status: 400 });
@@ -166,6 +168,7 @@ export async function POST(request: NextRequest) {
             totalAmount: new Prisma.Decimal(clientTotal),
             finalAmount: new Prisma.Decimal(clientTotal),
             finalClientPrice: new Prisma.Decimal(clientTotal),
+            folderId: normalizedFolderId,
             sourceFileR2Key: clientEstimate.fileR2Key ?? null,
             sourceFileName: clientEstimate.fileName ?? null,
             sourceFileMime: clientEstimate.fileMime ?? null,
@@ -200,6 +203,7 @@ export async function POST(request: NextRequest) {
             totalAmount: new Prisma.Decimal(internalTotal),
             finalAmount: new Prisma.Decimal(internalTotal),
             finalClientPrice: new Prisma.Decimal(0),
+            folderId: normalizedFolderId,
             sourceFileR2Key: internalEstimate.fileR2Key ?? null,
             sourceFileName: internalEstimate.fileName ?? null,
             sourceFileMime: internalEstimate.fileMime ?? null,

@@ -37,6 +37,7 @@ import { TabCalendar } from "./tab-calendar";
 import { TabArchive } from "./tab-archive";
 import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
+import { FolderEstimateCard } from "./folder-estimate-card";
 import { FilterBar } from "./filter-bar";
 import type { ProjectOption, UserOption } from "./types";
 import { FolderCard } from "@/components/folders/FolderCard";
@@ -349,6 +350,15 @@ export function FinancingView({
         </section>
       )}
 
+      {/* Estimate pair card — when inside a folder */}
+      {!scope && folderId && detailData?.folder && (
+        <FolderEstimateCard
+          folderId={folderId}
+          folderName={detailData.folder.name}
+          onUploadClick={() => setShowEstimateUpload(true)}
+        />
+      )}
+
       {/* Finance Folders (below Hero) */}
       {!scope && (
         <section className="flex flex-col gap-3">
@@ -644,6 +654,11 @@ export function FinancingView({
         <EstimateUploadModal
           projects={projects}
           scope={scope}
+          folderContext={
+            folderId && detailData?.folder
+              ? { id: folderId, name: detailData.folder.name }
+              : null
+          }
           onClose={() => setShowEstimateUpload(false)}
           onCreated={() => loadData()}
         />

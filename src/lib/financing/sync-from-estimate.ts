@@ -39,6 +39,7 @@ export async function syncEstimateToFinancing(
   // INTERNAL role → per-item EXPENSE entries (our cost per line)
   // STANDALONE role → legacy behavior: per-item EXPENSE + single INCOME of finalClientPrice
   const role = estimate.role;
+  const folderId = estimate.folderId;
 
   const result = await prisma.$transaction(async (tx) => {
     await tx.financeEntry.deleteMany({
@@ -65,6 +66,7 @@ export async function syncEstimateToFinancing(
             amount,
             currency: "UAH",
             projectId: estimate.projectId,
+            folderId,
             category: "client_advance",
             title: item.description.slice(0, 200),
             description: item.section?.title
@@ -96,6 +98,7 @@ export async function syncEstimateToFinancing(
             amount,
             currency: "UAH",
             projectId: estimate.projectId,
+            folderId,
             category: mapItemToFinanceCategory(item, item.section),
             title: item.description.slice(0, 200),
             description: item.section?.title
