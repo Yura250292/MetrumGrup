@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DeleteProjectButton } from "./_components/delete-project-button";
 
 export const dynamic = "force-dynamic";
 
@@ -231,13 +232,18 @@ export default async function AdminV2ProjectsDashboardPage() {
                         <StatusBadge status={p.status} />
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
-                          href={`/admin-v2/projects/${p.id}`}
-                          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
-                          style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-                        >
-                          Деталі <ArrowRight size={11} />
-                        </Link>
+                        <div className="inline-flex items-center gap-1.5">
+                          <Link
+                            href={`/admin-v2/projects/${p.id}`}
+                            className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
+                            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+                          >
+                            Деталі <ArrowRight size={11} />
+                          </Link>
+                          {session.user.role === "SUPER_ADMIN" && (
+                            <DeleteProjectButton projectId={p.id} projectTitle={p.title} />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
