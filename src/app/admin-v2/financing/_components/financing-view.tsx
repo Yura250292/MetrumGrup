@@ -223,11 +223,11 @@ export function FinancingView({
             </div>
           </div>
 
-          {/* Quick add — тільки AI-дії глобально. Ручні записи — в проекті/папці. */}
-          <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2">
+          {/* AI actions + manual quick-add (shown when inside a folder) */}
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setShowEstimateUpload(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
               <FileSpreadsheet size={13} />
@@ -235,15 +235,44 @@ export function FinancingView({
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
               <Sparkles size={13} />
               Scan чек з AI
             </button>
-            <p className="text-[11px] self-center sm:ml-2" style={{ color: T.textMuted }}>
-              Ручні записи додавайте всередині проекту
-            </p>
+
+            {/* Inside a folder — also show 4 quick-add buttons (compact) */}
+            {folderId && (
+              <>
+                <div className="h-7 w-px mx-1" style={{ backgroundColor: T.borderSoft }} />
+                {quickAddPresets.map((p) => {
+                  const Icon = p.icon;
+                  return (
+                    <button
+                      key={`${p.kind}:${p.type}`}
+                      onClick={() => setCreatePreset({ kind: p.kind, type: p.type })}
+                      className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold transition hover:brightness-110"
+                      style={{
+                        backgroundColor: p.bg,
+                        color: p.fg,
+                        border: `1px solid ${p.border}`,
+                      }}
+                      title={p.label}
+                    >
+                      <Icon size={12} />
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </>
+            )}
+
+            {!folderId && (
+              <p className="text-[11px]" style={{ color: T.textMuted }}>
+                Ручні записи додавайте всередині проекту
+              </p>
+            )}
           </div>
         </section>
       )}
