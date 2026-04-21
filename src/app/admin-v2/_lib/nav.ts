@@ -16,6 +16,7 @@ import {
   FileText,
   ListTodo,
   Wallet,
+  Mic,
   type LucideIcon,
 } from "lucide-react";
 
@@ -45,6 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
       { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
+      { href: "/admin-v2/meetings", label: "Наради", icon: Mic },
       { href: "/admin-v2/feed", label: "Стрічка", icon: Activity },
     ],
   },
@@ -117,6 +119,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/finance/templates": "Шаблони",
   "/admin-v2/profile": "Мій профіль",
   "/admin-v2/financing": "Фінансування",
+  "/admin-v2/meetings": "Наради",
+  "/admin-v2/meetings/new": "Нова нарада",
   "/admin": "Дашборд",
   "/admin/projects": "Проєкти",
   "/admin/projects/new": "Новий проєкт",

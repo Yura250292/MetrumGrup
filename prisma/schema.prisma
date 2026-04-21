@@ -85,6 +85,7 @@ model User {
   estimateFinanceSyncs   Estimate[]                @relation("EstimateFinanceSyncer")
   commentReadStates     CommentReadState[]
   aiConversations       AiConversation[]          @relation("AiConversationUser")
+  meetings              Meeting[]                 @relation("MeetingCreator")
 
   @@map("users")
 }
@@ -138,6 +139,7 @@ model Project {
   emailInbox        EmailToTaskInbox?      @relation("EmailInboxProject")
   financeEntries    FinanceEntry[]
   folder            Folder?                @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  meetings          Meeting[]
 
   @@index([folderId])
   @@map("projects")
@@ -1989,4 +1991,49 @@ model AiMemory {
 
   @@unique([userId, key])
   @@map("ai_memories")
+}
+
+model Meeting {
+  id              String        @id @default(cuid())
+  title           String
+  description     String?       @db.Text
+
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdById     String
+  createdBy       User          @relation("MeetingCreator", fields: [createdById], references: [id])
+
+  audioR2Key      String?
+  audioUrl        String?
+  audioMimeType   String?
+  audioDurationMs Int?
+  audioSizeBytes  Int?
+
+  status          MeetingStatus @default(DRAFT)
+  transcript      String?       @db.Text
+  summary         String?       @db.Text
+  structured      Json?
+  aiModelUsed     String?
+  aiTokensUsed    Int?
+  processingError String?       @db.Text
+
+  recordedAt      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([projectId])
+  @@index([createdById])
+  @@index([recordedAt])
+  @@map("meetings")
+}
+
+enum MeetingStatus {
+  DRAFT
+  UPLOADED
+  TRANSCRIBING
+  TRANSCRIBED
+  SUMMARIZING
+  READY
+  FAILED
 }
