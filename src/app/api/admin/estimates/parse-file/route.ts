@@ -13,35 +13,54 @@ const ALLOWED_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"
 
 const GEMINI_MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash"];
 
-const ESTIMATE_OCR_PROMPT = `Це кошторис (будівельний/ремонтний). Витягни ВСІ позиції з таблиці.
+const ESTIMATE_OCR_PROMPT = `Це кошторис (будівельний/ремонтний). Твоє завдання — витягнути АБСОЛЮТНО ВСІ рядки-позиції з таблиці. Жодного не пропускай.
 
 Верни ТІЛЬКИ JSON (без тексту навколо) у такому форматі:
 {
   "items": [
     {
-      "description": "Назва роботи або матеріалу",
-      "unit": "м2 | шт | м | м.п. | т | пог.м | компл.",
+      "description": "Повна назва роботи або матеріалу з усіма деталями",
+      "unit": "м2 | шт | м | м.п. | т | пог.м | компл. | м3 | кг",
       "quantity": 10.5,
       "unitPrice": 250.00,
       "totalPrice": 2625.00,
-      "category": "Демонтаж | Фундамент | Стіни | Покрівля | Електрика | Сантехніка | Опалення | Оздоблення | Матеріали | Роботи | null"
+      "category": "Демонтаж | Фундамент | Стіни | Покрівля | Електрика | Сантехніка | Опалення | Вентиляція | Оздоблення | Матеріали | Роботи | null"
     }
   ],
   "totalAmount": 125000.50,
   "currency": "UAH"
 }
 
-Правила:
-- description: повна назва, навіть якщо довга
-- unit: одиниця виміру
-- quantity: кількість (число, може бути дробове)
-- unitPrice: ціна за одиницю (число в грн)
-- totalPrice: quantity * unitPrice (якщо в таблиці є окрема колонка суми — бери звідти)
-- Якщо якогось поля немає — використовуй 0 або null
-- Суми українського формату "25 500,50" перетворюй на 25500.50
-- Ігноруй заголовки розділів (рядки без цін)
-- Ігноруй підсумкові рядки "Разом", "Всього" — їх значення йде в totalAmount
-- Якщо в кошторисі є колонка для загальної суми — просумуй усі рядки для totalAmount`;
+ОБОВ'ЯЗКОВІ ПРАВИЛА:
+
+1. ВИЧЕРПНІСТЬ — Витягни КОЖЕН рядок-позицію, навіть якщо їх 200+. Не зупиняйся на перших 30-50. Йди до кінця документа.
+
+2. НЕ ОБ'ЄДНУЙ — Кожен рядок з таблиці = одна позиція в items. Не комбінуй схожі позиції.
+
+3. НЕ РОЗБИВАЙ — Якщо один рядок у таблиці містить одну позицію (навіть якщо довгу) — це одна позиція в JSON.
+
+4. ПРАВИЛЬНО РОЗПІЗНАВАЙ ЧИСЛА:
+   - "25 500,50" → 25500.50 (пробіл = роздільник тисяч, кома = десяткова)
+   - "25,500.50" → 25500.50 (англо-формат)
+   - "25.500,50" → 25500.50 (європа)
+   - "2 625" → 2625
+   - Ніколи не додавай порожні/NaN значення
+
+5. ЩО ПРОПУСКАТИ:
+   - Шапку документа (назва компанії, "Рахунок №", дата)
+   - Заголовки розділів (рядки без цін: "1. Демонтажні роботи")
+   - Підсумкові рядки (Разом, Всього, Total, Сума по розділу) — їх значення має йти в totalAmount
+   - Порожні рядки
+
+6. ЩО ПРОПУСКАТИ НЕ МОЖНА:
+   - Позиції з маленькою сумою
+   - Позиції з однаковою назвою але різними одиницями
+   - Рядки де ціна = 0 але є опис (приймай unitPrice: 0)
+   - Матеріали навіть якщо вони згруповані в таблиці
+
+7. ПЕРЕВІР — наприкінці порахуй суму всіх items і порівняй з підсумком у документі. Якщо різниця > 1% — значить ти пропустив позиції, поверни назад і додай їх.
+
+8. totalAmount: якщо в кошторисі є фінальний рядок "Разом" або "Всього" з цифрою — використай цю цифру. Інакше просумуй items.`;
 
 type ParsedItem = {
   description: string;
@@ -109,11 +128,16 @@ async function parseCsvWithGemini(
   }
 
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const truncated = csvText.length > 50000 ? csvText.slice(0, 50000) + "\n[...truncated]" : csvText;
+  // Gemini Flash supports 1M tokens (~3-4M chars). Truncate only extreme files.
+  const MAX_CSV_CHARS = 400000;
+  const truncated =
+    csvText.length > MAX_CSV_CHARS
+      ? csvText.slice(0, MAX_CSV_CHARS) + "\n[...TRUNCATED — файл занадто великий]"
+      : csvText;
 
   const prompt = `${ESTIMATE_OCR_PROMPT}
 
-Нижче — дані з Excel у форматі CSV. Першими кілька рядків можуть бути заголовками компанії, проєкту тощо. Далі йде таблиця з позиціями. Витягни всі позиції:
+Нижче — повні дані з Excel у форматі CSV (роздільник ";"). На початку можуть бути рядки-шапка (назва компанії, проєкту, тощо) — їх пропусти. Далі йде таблиця. Витягни КОЖЕН рядок-позицію до самого кінця. Файл містить ${csvText.split("\n").length} рядків — будь готовий до великої кількості позицій.
 
 ${truncated}`;
 
@@ -122,7 +146,11 @@ ${truncated}`;
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,
-        generationConfig: { responseMimeType: "application/json" },
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0,
+          maxOutputTokens: 65536,
+        },
       });
       const result = await model.generateContent(prompt);
       const text = result.response.text().trim();
@@ -178,7 +206,11 @@ async function parseWithGemini(
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,
-        generationConfig: { responseMimeType: "application/json" },
+        generationConfig: {
+          responseMimeType: "application/json",
+          temperature: 0,
+          maxOutputTokens: 65536,
+        },
       });
       const result = await model.generateContent([
         { inlineData: { mimeType, data: base64 } },
@@ -285,8 +317,24 @@ export async function POST(request: NextRequest) {
             const ai = await parseCsvWithGemini(csvText);
             items = ai.items;
             totalAmount = ai.totalAmount;
-            method = "gemini-pdf"; // reuse label for AI fallback
+            method = "gemini-pdf";
             model = ai.model;
+
+            // Sanity check — look for a "Разом/Всього" line in CSV and compare
+            const totalRegex = /(?:разом|всього|total|загальн)[^\d]*([\d\s,.\u00a0]+)/i;
+            const csvTotalMatch = csvText.match(totalRegex);
+            if (csvTotalMatch) {
+              const detectedTotal = parseAmount(csvTotalMatch[1]);
+              if (detectedTotal > 0) {
+                const sumFromItems = items.reduce((s, i) => s + i.totalPrice, 0);
+                const drift = Math.abs(sumFromItems - detectedTotal) / detectedTotal;
+                if (drift > 0.02) {
+                  warnings.push(
+                    `⚠️ Можливо пропущено позиції: AI = ${sumFromItems.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} грн, в документі "Разом" = ${detectedTotal.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} грн (різниця ${(drift * 100).toFixed(1)}%)`,
+                  );
+                }
+              }
+            }
           }
         } catch (fallbackErr) {
           const msg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
