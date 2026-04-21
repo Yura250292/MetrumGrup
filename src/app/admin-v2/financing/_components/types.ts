@@ -24,6 +24,7 @@ export type FinanceEntryDTO = {
   approvedAt: string | null;
   approvedById: string | null;
   paidAt: string | null;
+  remindAt: string | null;
   createdAt: string;
   updatedAt: string;
   project: { id: string; title: string; slug: string } | null;

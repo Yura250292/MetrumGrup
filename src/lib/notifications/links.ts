@@ -37,6 +37,8 @@ export function relatedEntityLink(n: {
       return `/admin/projects/${n.relatedId}`;
     case "ProjectFile":
       return `/admin/projects/${n.relatedId}`;
+    case "FinanceEntry":
+      return `/admin-v2/financing?pendingId=${n.relatedId}`;
     default:
       return "/dashboard/notifications";
   }

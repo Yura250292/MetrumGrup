@@ -36,6 +36,7 @@ import { TabOperations } from "./tab-operations";
 import { TabCalendar } from "./tab-calendar";
 import { TabArchive } from "./tab-archive";
 import { TabScans } from "./tab-scans";
+import { TabApprovals } from "./tab-approvals";
 import { FilterBar } from "./filter-bar";
 import type { ProjectOption, UserOption } from "./types";
 import { FolderCard } from "@/components/folders/FolderCard";
@@ -57,6 +58,7 @@ export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types"
 
 const TABS = [
   { key: "overview", label: "Огляд", shortLabel: "Огляд", icon: LayoutDashboard },
+  { key: "approvals", label: "На погодженні", shortLabel: "Погодження", icon: CircleDot },
   { key: "operations", label: "Операції", shortLabel: "Операції", icon: List },
   { key: "scans", label: "Скани чеків", shortLabel: "Скани", icon: Sparkles },
   { key: "calendar", label: "Платіжний календар", shortLabel: "Календар", icon: CalendarDays },
@@ -460,6 +462,10 @@ export function FinancingView({
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
           const Icon = tab.icon;
+          const pendingCount =
+            tab.key === "approvals"
+              ? entries.filter((e) => e.status === "PENDING" && !e.isArchived).length
+              : 0;
           return (
             <button
               key={tab.key}
@@ -474,6 +480,14 @@ export function FinancingView({
             >
               <Icon size={14} />
               <span className="sm:inline">{tab.shortLabel}</span>
+              {pendingCount > 0 && (
+                <span
+                  className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-bold text-white"
+                  style={{ backgroundColor: T.warning }}
+                >
+                  {pendingCount}
+                </span>
+              )}
             </button>
           );
         })}
@@ -577,6 +591,16 @@ export function FinancingView({
           );
         }}
       />
+
+      {activeTab === "approvals" && (
+        <TabApprovals
+          entries={entries}
+          loading={loading}
+          error={error}
+          onEdit={(e) => setEditing(e)}
+          onRefresh={() => loadData()}
+        />
+      )}
 
       {activeTab === "scans" && (
         <TabScans

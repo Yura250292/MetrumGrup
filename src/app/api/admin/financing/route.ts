@@ -11,6 +11,7 @@ import {
   computeSummary,
   FINANCE_ENTRY_SELECT,
 } from "@/lib/financing/queries";
+import { notifyFinanceApprovers } from "@/lib/financing/notify-approval";
 
 export const runtime = "nodejs";
 
@@ -88,6 +89,12 @@ export async function POST(request: NextRequest) {
         ? body.folderId.trim()
         : null;
 
+    const validStatuses = ["DRAFT", "PENDING", "APPROVED", "PAID"] as const;
+    const status =
+      typeof body.status === "string" && validStatuses.includes(body.status as (typeof validStatuses)[number])
+        ? (body.status as (typeof validStatuses)[number])
+        : "DRAFT";
+
     const entry = await prisma.financeEntry.create({
       data: {
         type,
@@ -105,9 +112,24 @@ export async function POST(request: NextRequest) {
           typeof body.counterparty === "string" && body.counterparty.trim() ? body.counterparty.trim() : null,
         createdById: session.user.id,
         folderId,
+        status,
       },
       select: FINANCE_ENTRY_SELECT,
     });
+
+    if (status === "PENDING") {
+      notifyFinanceApprovers(
+        {
+          id: entry.id,
+          title: entry.title,
+          type: entry.type,
+          amount: entry.amount as unknown as number,
+          counterparty: entry.counterparty,
+          projectTitle: entry.project?.title ?? null,
+        },
+        session.user.id,
+      ).catch(() => {});
+    }
 
     await auditLog({
       userId: session.user.id,

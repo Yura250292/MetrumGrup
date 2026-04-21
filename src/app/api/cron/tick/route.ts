@@ -3,6 +3,7 @@ import { spawnRecurringOccurrences } from "@/lib/tasks/recurring";
 import { processPending as processWebhooks } from "@/lib/webhooks/deliver";
 import { prisma } from "@/lib/prisma";
 import { dispatchEvent } from "@/lib/automations/engine";
+import { notifyFinanceApprovers } from "@/lib/financing/notify-approval";
 
 /**
  * Vercel cron endpoint — fires every minute (configured in vercel.json).
@@ -41,7 +42,55 @@ export async function GET(request: NextRequest) {
     out.dueApproachingError = String(err);
   }
 
+  try {
+    out.financeRemindersSent = await fireFinanceReminders();
+  } catch (err) {
+    out.financeRemindersError = String(err);
+  }
+
   return NextResponse.json({ ok: true, ...out });
+}
+
+async function fireFinanceReminders(): Promise<number> {
+  const due = await prisma.financeEntry.findMany({
+    where: {
+      status: "PENDING",
+      remindAt: { lte: new Date(), not: null },
+    },
+    select: {
+      id: true,
+      title: true,
+      type: true,
+      amount: true,
+      counterparty: true,
+      createdById: true,
+      project: { select: { title: true } },
+    },
+    take: 50,
+  });
+
+  let sent = 0;
+  for (const e of due) {
+    await notifyFinanceApprovers(
+      {
+        id: e.id,
+        title: e.title,
+        type: e.type,
+        amount: Number(e.amount),
+        counterparty: e.counterparty,
+        projectTitle: e.project?.title ?? null,
+      },
+      e.createdById, // actorId to exclude
+      { isReminder: true },
+    );
+    // Clear remindAt so we don't send again (until a new "remind" click)
+    await prisma.financeEntry.update({
+      where: { id: e.id },
+      data: { remindAt: null },
+    });
+    sent += 1;
+  }
+  return sent;
 }
 
 async function fireDueApproaching(): Promise<number> {

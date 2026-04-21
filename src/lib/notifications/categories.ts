@@ -30,6 +30,10 @@ const TYPE_TO_CATEGORY: Record<string, NotificationCategory> = {
   TASK_CREATED: "projectChange",
   COMMENT_MENTION: "mention",
   CHAT_MENTION: "mention",
+  FINANCE_APPROVAL_NEEDED: "financeReview",
+  FINANCE_APPROVAL_REMINDER: "financeReview",
+  FINANCE_APPROVED: "financeReview",
+  FINANCE_REJECTED: "financeReview",
 };
 
 export function notificationTypeToCategory(type: string): NotificationCategory {

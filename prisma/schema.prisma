@@ -430,6 +430,7 @@ model FinanceEntry {
   approvedAt   DateTime?
   approvedById String?
   paidAt       DateTime?
+  remindAt     DateTime?
   createdById  String
   updatedById  String?
   createdAt    DateTime           @default(now())
@@ -459,6 +460,7 @@ model FinanceEntry {
   @@index([status])
   @@index([estimateId])
   @@index([source])
+  @@index([remindAt])
   @@map("finance_entries")
 }
 

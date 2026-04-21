@@ -172,6 +172,7 @@ export const FINANCE_ENTRY_SELECT = {
   isArchived: true,
   status: true,
   approvedAt: true,
+  remindAt: true,
   approvedById: true,
   paidAt: true,
   createdAt: true,

@@ -7,6 +7,10 @@ import { auditLog } from "@/lib/audit";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import { FINANCE_ENTRY_SELECT } from "@/lib/financing/queries";
 import { deleteFileFromR2 } from "@/lib/r2-client";
+import {
+  notifyFinanceApprovers,
+  notifyFinanceActor,
+} from "@/lib/financing/notify-approval";
 
 export const runtime = "nodejs";
 
@@ -140,15 +144,28 @@ export async function PATCH(
       if (body.status === "APPROVED") {
         data.approvedAt = new Date();
         data.approvedById = session.user.id;
+        data.remindAt = null;
       }
       if (body.status === "PAID") {
         data.paidAt = new Date();
+        data.remindAt = null;
         // If going directly to PAID without prior approval, mark as approved too
         if (!existing.approvedAt) {
           data.approvedAt = new Date();
           data.approvedById = session.user.id;
         }
       }
+      if (body.status === "DRAFT") {
+        data.remindAt = null;
+      }
+    }
+
+    // Reminder scheduling: body.remindInMinutes → remindAt = now + N minutes
+    if (typeof body.remindInMinutes === "number" && body.remindInMinutes > 0) {
+      data.remindAt = new Date(Date.now() + body.remindInMinutes * 60 * 1000);
+    }
+    if (body.remindAt === null) {
+      data.remindAt = null;
     }
 
     const updated = await prisma.financeEntry.update({
@@ -156,6 +173,28 @@ export async function PATCH(
       data,
       select: FINANCE_ENTRY_SELECT,
     });
+
+    // Notifications on status transitions
+    const oldStatus = existing.status;
+    const newStatus = updated.status;
+    if (oldStatus !== newStatus) {
+      const payload = {
+        id: updated.id,
+        title: updated.title,
+        type: updated.type,
+        amount: updated.amount as unknown as number,
+        counterparty: updated.counterparty,
+        projectTitle: updated.project?.title ?? null,
+        createdById: existing.createdById,
+      };
+      if (newStatus === "PENDING") {
+        notifyFinanceApprovers(payload, session.user.id).catch(() => {});
+      } else if (newStatus === "APPROVED" || newStatus === "PAID") {
+        notifyFinanceActor(payload, "APPROVED", session.user.id).catch(() => {});
+      } else if (newStatus === "DRAFT" && oldStatus === "PENDING") {
+        notifyFinanceActor(payload, "REJECTED", session.user.id).catch(() => {});
+      }
+    }
 
     await auditLog({
       userId: session.user.id,

@@ -651,6 +651,17 @@ export async function handleApproveCallback(ctx: BotContext, entryId: string) {
 export async function handleRemindCallback(ctx: BotContext, entryId: string) {
   await ctx.answerCbQuery('⏰ Нагадаю через 1 годину');
 
+  // Persist remindAt so web-side cron also re-notifies approvers
+  try {
+    const { prisma } = await import('../../src/lib/prisma');
+    await prisma.financeEntry.update({
+      where: { id: entryId },
+      data: { remindAt: new Date(Date.now() + 60 * 60 * 1000) },
+    });
+  } catch (err) {
+    console.error('[receipt] failed to set remindAt:', err);
+  }
+
   const chatId = ctx.chat?.id;
   const messageText = ctx.callbackQuery?.message && 'text' in ctx.callbackQuery.message
     ? ctx.callbackQuery.message.text
