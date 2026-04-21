@@ -82,6 +82,7 @@ model User {
   financeEntriesUpdated  FinanceEntry[]            @relation("FinanceEntryUpdater")
   financeEntriesApproved FinanceEntry[]            @relation("FinanceEntryApprover")
   financeAttachments     FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
+  financeTemplates       FinanceExpenseTemplate[]  @relation("FinanceTemplateCreator")
   estimateFinanceSyncs   Estimate[]                @relation("EstimateFinanceSyncer")
   commentReadStates     CommentReadState[]
   aiConversations       AiConversation[]          @relation("AiConversationUser")
@@ -462,6 +463,33 @@ model FinanceEntry {
   @@index([source])
   @@index([remindAt])
   @@map("finance_entries")
+}
+
+/// Reusable "+1 click" templates for recurring entries in system blocks
+/// (Постійні витрати, Витрати офісу). Each template is scoped to a folder
+/// and creates a FinanceEntry on apply.
+model FinanceExpenseTemplate {
+  id            String            @id @default(cuid())
+  folderId      String
+  name          String
+  defaultAmount Decimal           @db.Decimal(12, 2)
+  type          FinanceEntryType
+  category      String
+  counterparty  String?
+  description   String?
+  emoji         String?
+  sortOrder     Int               @default(0)
+  isActive      Boolean           @default(true)
+  createdById   String
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  folder    Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+  createdBy User   @relation("FinanceTemplateCreator", fields: [createdById], references: [id])
+
+  @@index([folderId, sortOrder])
+  @@index([folderId, isActive])
+  @@map("finance_expense_templates")
 }
 
 model FinanceEntryAttachment {
@@ -1213,6 +1241,7 @@ model Folder {
   projects       Project[]
   estimates      Estimate[]
   financeEntries FinanceEntry[]
+  financeTemplates FinanceExpenseTemplate[]
 
   @@unique([domain, parentId, name])
   @@unique([domain, slug])

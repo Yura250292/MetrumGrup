@@ -38,6 +38,7 @@ import { TabArchive } from "./tab-archive";
 import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
 import { FolderEstimateCard } from "./folder-estimate-card";
+import { TemplateConstructor } from "./template-constructor";
 import { FilterBar } from "./filter-bar";
 import type { ProjectOption, UserOption } from "./types";
 import { FolderCard } from "@/components/folders/FolderCard";
@@ -350,8 +351,17 @@ export function FinancingView({
         </section>
       )}
 
-      {/* Estimate pair card — when inside a folder */}
-      {!scope && folderId && detailData?.folder && (
+      {/* Template constructor — inside system folders (Постійні витрати, Витрати офісу) */}
+      {!scope && folderId && detailData?.folder?.isSystem && (
+        <TemplateConstructor
+          folderId={folderId}
+          folderName={detailData.folder.name}
+          onEntryCreated={() => loadData()}
+        />
+      )}
+
+      {/* Estimate pair card — when inside a non-system folder */}
+      {!scope && folderId && detailData?.folder && !detailData.folder.isSystem && (
         <FolderEstimateCard
           folderId={folderId}
           folderName={detailData.folder.name}
