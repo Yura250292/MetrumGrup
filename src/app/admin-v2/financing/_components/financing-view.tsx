@@ -143,97 +143,13 @@ export function FinancingView({
 
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-20 sm:pb-0">
-      {/* Finance Folders */}
-      {!scope && (
-        <>
-          {folderBreadcrumbs.length > 0 && (
-            <FolderBreadcrumb
-              breadcrumbs={folderBreadcrumbs}
-              basePath="/admin-v2/financing"
-              rootLabel="Усі фінанси"
-            />
-          )}
-
-          {/* Root view: structural blocks (expandable) */}
-          {isRootView && systemBlocks.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
-              {systemBlocks.map((block) => (
-                <ExpandableBlockCard
-                  key={block.id}
-                  folder={block}
-                  basePath="/admin-v2/financing"
-                  onCreateChildFolder={(parentId) => {
-                    setCreateFolderParentId(parentId);
-                    setShowCreateFolder(true);
-                  }}
-                  onCreateEntry={(blockId) =>
-                    setCreatePreset({
-                      kind: "FACT",
-                      type: "EXPENSE",
-                      folderId: blockId,
-                      folderName: block.name,
-                    })
-                  }
-                  onRenameChild={handleRenameFolder}
-                  onDeleteChild={handleDeleteFolder}
-                />
-              ))}
-            </div>
-          )}
-
-          {/* User-created folders grid */}
-          {nonSystemFolders.length > 0 && (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              {nonSystemFolders.map((f: FolderItem) => (
-                <FolderCard
-                  key={f.id}
-                  folder={f}
-                  href={`/admin-v2/financing?folderId=${f.id}`}
-                  showFinanceIndicators
-                  onRename={handleRenameFolder}
-                  onDelete={handleDeleteFolder}
-                />
-              ))}
-            </div>
-          )}
-
-          <button
-            onClick={() => {
-              setCreateFolderParentId(folderId);
-              setShowCreateFolder(true);
-            }}
-            className="flex items-center gap-2 text-[12px] font-semibold transition hover:opacity-80 self-start"
-            style={{ color: T.accentPrimary }}
-          >
-            <FolderPlus size={14} /> Нова папка
-          </button>
-
-          <CreateFolderDialog
-            open={showCreateFolder}
-            onClose={() => {
-              setShowCreateFolder(false);
-              setCreateFolderParentId(null);
-            }}
-            onSubmit={(d) => {
-              createFolderMutation.mutate(
-                {
-                  domain: "FINANCE",
-                  name: d.name,
-                  parentId: createFolderParentId ?? folderId,
-                  color: d.color,
-                },
-                {
-                  onSuccess: () => {
-                    setShowCreateFolder(false);
-                    setCreateFolderParentId(null);
-                    router.refresh();
-                  },
-                },
-              );
-            }}
-            loading={createFolderMutation.isPending}
-          />
-        </>
+      {/* Breadcrumbs (if inside a folder) */}
+      {!scope && folderBreadcrumbs.length > 0 && (
+        <FolderBreadcrumb
+          breadcrumbs={folderBreadcrumbs}
+          basePath="/admin-v2/financing"
+          rootLabel="Усі фінанси"
+        />
       )}
 
       {/* Hero — global */}
@@ -340,6 +256,91 @@ export function FinancingView({
               </button>
             ))}
           </div>
+        </section>
+      )}
+
+      {/* Finance Folders (below Hero) */}
+      {!scope && (
+        <section className="flex flex-col gap-3">
+          {/* Root view: structural blocks (expandable) */}
+          {isRootView && systemBlocks.length > 0 && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+              {systemBlocks.map((block) => (
+                <ExpandableBlockCard
+                  key={block.id}
+                  folder={block}
+                  basePath="/admin-v2/financing"
+                  onCreateChildFolder={(parentId) => {
+                    setCreateFolderParentId(parentId);
+                    setShowCreateFolder(true);
+                  }}
+                  onCreateEntry={(blockId) =>
+                    setCreatePreset({
+                      kind: "FACT",
+                      type: "EXPENSE",
+                      folderId: blockId,
+                      folderName: block.name,
+                    })
+                  }
+                  onRenameChild={handleRenameFolder}
+                  onDeleteChild={handleDeleteFolder}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* User-created folders grid */}
+          {nonSystemFolders.length > 0 && (
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+              {nonSystemFolders.map((f: FolderItem) => (
+                <FolderCard
+                  key={f.id}
+                  folder={f}
+                  href={`/admin-v2/financing?folderId=${f.id}`}
+                  showFinanceIndicators
+                  onRename={handleRenameFolder}
+                  onDelete={handleDeleteFolder}
+                />
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              setCreateFolderParentId(folderId);
+              setShowCreateFolder(true);
+            }}
+            className="flex items-center gap-2 text-[12px] font-semibold transition hover:opacity-80 self-start"
+            style={{ color: T.accentPrimary }}
+          >
+            <FolderPlus size={14} /> Нова папка
+          </button>
+
+          <CreateFolderDialog
+            open={showCreateFolder}
+            onClose={() => {
+              setShowCreateFolder(false);
+              setCreateFolderParentId(null);
+            }}
+            onSubmit={(d) => {
+              createFolderMutation.mutate(
+                {
+                  domain: "FINANCE",
+                  name: d.name,
+                  parentId: createFolderParentId ?? folderId,
+                  color: d.color,
+                },
+                {
+                  onSuccess: () => {
+                    setShowCreateFolder(false);
+                    setCreateFolderParentId(null);
+                    router.refresh();
+                  },
+                },
+              );
+            }}
+            loading={createFolderMutation.isPending}
+          />
         </section>
       )}
 
