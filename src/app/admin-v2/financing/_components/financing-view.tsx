@@ -394,6 +394,13 @@ export function FinancingView({
                   }
                   onRenameChild={handleRenameFolder}
                   onDeleteChild={handleDeleteFolder}
+                  extraContent={
+                    <TemplateConstructor
+                      folderId={block.id}
+                      folderName={block.name}
+                      onEntryCreated={() => loadData()}
+                    />
+                  }
                 />
               ))}
             </div>

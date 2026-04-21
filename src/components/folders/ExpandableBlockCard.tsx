@@ -16,6 +16,8 @@ type Props = {
   onCreateEntry: (folderId: string) => void;
   onRenameChild: (id: string, name: string) => void;
   onDeleteChild: (id: string) => void;
+  /** Extra content rendered inside the expanded body (e.g. template constructor) */
+  extraContent?: React.ReactNode;
 };
 
 const STORAGE_PREFIX = "financing:block-open:";
@@ -28,6 +30,7 @@ export function ExpandableBlockCard({
   onCreateEntry,
   onRenameChild,
   onDeleteChild,
+  extraContent,
 }: Props) {
   const storageKey = STORAGE_PREFIX + folder.id;
   const [open, setOpen] = useState<boolean>(defaultOpen);
@@ -156,6 +159,8 @@ export function ExpandableBlockCard({
               У цьому блоку ще немає папок.
             </div>
           )}
+
+          {extraContent}
 
           <div className="flex flex-wrap gap-2">
             <button
