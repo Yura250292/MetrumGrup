@@ -1,10 +1,30 @@
 "use client";
 
-import { CheckCircle2, ListTodo, MessageSquare, ArrowRight, HelpCircle, Sparkles } from "lucide-react";
+import {
+  CheckCircle2,
+  ListTodo,
+  MessageSquare,
+  ArrowRight,
+  HelpCircle,
+  Sparkles,
+  UserPlus,
+} from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import type { MeetingStructured } from "./types";
+import type { MeetingStructured, MeetingTask } from "./types";
 
-export function SummaryView({ data }: { data: MeetingStructured }) {
+export type DelegationState = {
+  [taskIndex: number]: { taskId: string };
+};
+
+export function SummaryView({
+  data,
+  onDelegate,
+  delegated,
+}: {
+  data: MeetingStructured;
+  onDelegate?: (index: number, task: MeetingTask) => void;
+  delegated?: DelegationState;
+}) {
   return (
     <div className="flex flex-col gap-4">
       {data.summary && (
@@ -30,21 +50,53 @@ export function SummaryView({ data }: { data: MeetingStructured }) {
       {data.tasks?.length > 0 && (
         <Card icon={<ListTodo size={18} />} title="Задачі" color={T.violet} tint={T.violetSoft}>
           <div className="flex flex-col gap-2">
-            {data.tasks.map((task, i) => (
-              <div
-                key={i}
-                className="rounded-lg p-3"
-                style={{ background: T.panelElevated }}
-              >
-                <p className="text-sm font-medium" style={{ color: T.textPrimary }}>
-                  {task.title}
-                </p>
-                <div className="mt-1 flex gap-4 text-xs" style={{ color: T.textMuted }}>
-                  {task.assignee && <span>Відповідальний: {task.assignee}</span>}
-                  {task.dueDate && <span>Дедлайн: {task.dueDate}</span>}
+            {data.tasks.map((task, i) => {
+              const isDelegated = !!delegated?.[i];
+              return (
+                <div
+                  key={i}
+                  className="flex items-start justify-between gap-3 rounded-lg p-3"
+                  style={{ background: T.panelElevated }}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: T.textPrimary }}
+                    >
+                      {task.title}
+                    </p>
+                    <div
+                      className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs"
+                      style={{ color: T.textMuted }}
+                    >
+                      {task.assignee && (
+                        <span>Відповідальний: {task.assignee}</span>
+                      )}
+                      {task.dueDate && <span>Дедлайн: {task.dueDate}</span>}
+                    </div>
+                  </div>
+                  {onDelegate &&
+                    (isDelegated ? (
+                      <span
+                        className="flex flex-shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
+                        style={{ background: T.successSoft, color: T.success }}
+                      >
+                        <CheckCircle2 size={14} />
+                        Делеговано
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => onDelegate(i, task)}
+                        className="flex flex-shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-white"
+                        style={{ background: T.violet }}
+                      >
+                        <UserPlus size={13} />
+                        Делегувати
+                      </button>
+                    ))}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </Card>
       )}

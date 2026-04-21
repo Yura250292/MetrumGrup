@@ -19,8 +19,13 @@ import {
   formatDuration,
   STATUS_LABELS,
   type Meeting,
+  type MeetingTask,
 } from "../_components/types";
-import { SummaryView } from "../_components/summary-view";
+import {
+  SummaryView,
+  type DelegationState,
+} from "../_components/summary-view";
+import { DelegateTaskModal } from "../_components/delegate-task-modal";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -42,6 +47,11 @@ export default function MeetingDetailPage() {
   const [activeTab, setActiveTab] = useState<"summary" | "transcript">(
     "summary"
   );
+  const [delegating, setDelegating] = useState<{
+    index: number;
+    task: MeetingTask;
+  } | null>(null);
+  const [delegated, setDelegated] = useState<DelegationState>({});
   const summaryTriggeredRef = useRef(false);
 
   async function refresh() {
@@ -285,7 +295,27 @@ export default function MeetingDetailPage() {
       )}
 
       {activeTab === "summary" && meeting.structured && (
-        <SummaryView data={meeting.structured} />
+        <SummaryView
+          data={meeting.structured}
+          delegated={delegated}
+          onDelegate={(index, task) => setDelegating({ index, task })}
+        />
+      )}
+
+      {delegating && (
+        <DelegateTaskModal
+          task={delegating.task}
+          projectId={meeting.project.id}
+          meetingTitle={meeting.title}
+          onClose={() => setDelegating(null)}
+          onCreated={(taskId) => {
+            setDelegated((prev) => ({
+              ...prev,
+              [delegating.index]: { taskId },
+            }));
+            setDelegating(null);
+          }}
+        />
       )}
 
       {activeTab === "transcript" && meeting.transcript && (
