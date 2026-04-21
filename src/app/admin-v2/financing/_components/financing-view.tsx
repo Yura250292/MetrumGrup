@@ -289,6 +289,26 @@ export function FinancingView({
             </div>
           )}
 
+          {/* Divider with "Проєкти" label (only on root view when both sections present) */}
+          {isRootView && systemBlocks.length > 0 && nonSystemFolders.length > 0 && (
+            <div className="flex items-center gap-3 my-2">
+              <div
+                className="h-px flex-1"
+                style={{ backgroundColor: T.borderSoft }}
+              />
+              <span
+                className="text-[11px] font-bold tracking-[0.12em] uppercase"
+                style={{ color: T.textMuted }}
+              >
+                Проєкти
+              </span>
+              <div
+                className="h-px flex-1"
+                style={{ backgroundColor: T.borderSoft }}
+              />
+            </div>
+          )}
+
           {/* User-created folders grid */}
           {nonSystemFolders.length > 0 && (
             <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
