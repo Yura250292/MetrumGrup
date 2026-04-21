@@ -137,11 +137,45 @@ export function FinancingView({
   const planBalance = summary.plan.income.sum - summary.plan.expense.sum;
   const factBalance = summary.balance;
 
+  // Grouped by Kind. Фактичні = зелений (реалізовано), Планові = оранжевий (майбутні).
+  // Within group: "Витрата" — solid/darker, "Дохід" — soft/lighter.
   const quickAddPresets = [
-    { label: "Факт Витрата", kind: "FACT" as const, type: "EXPENSE" as const, color: T.danger },
-    { label: "Факт Дохід", kind: "FACT" as const, type: "INCOME" as const, color: T.success },
-    { label: "План Витрата", kind: "PLAN" as const, type: "EXPENSE" as const, color: T.warning },
-    { label: "План Дохід", kind: "PLAN" as const, type: "INCOME" as const, color: T.accentPrimary },
+    {
+      label: "Факт Витрата",
+      kind: "FACT" as const,
+      type: "EXPENSE" as const,
+      bg: T.success,
+      fg: "#fff",
+      border: T.success,
+      icon: TrendingDown,
+    },
+    {
+      label: "Факт Дохід",
+      kind: "FACT" as const,
+      type: "INCOME" as const,
+      bg: T.successSoft,
+      fg: T.success,
+      border: T.success,
+      icon: TrendingUp,
+    },
+    {
+      label: "План Витрата",
+      kind: "PLAN" as const,
+      type: "EXPENSE" as const,
+      bg: T.warning,
+      fg: "#fff",
+      border: T.warning,
+      icon: TrendingDown,
+    },
+    {
+      label: "План Дохід",
+      kind: "PLAN" as const,
+      type: "INCOME" as const,
+      bg: T.warningSoft,
+      fg: T.warning,
+      border: T.warning,
+      icon: TrendingUp,
+    },
   ];
 
   return (
@@ -187,35 +221,27 @@ export function FinancingView({
             </div>
           </div>
 
-          {/* Quick add: 2x2 grid on mobile, row on desktop */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+          {/* Quick add — тільки AI-дії глобально. Ручні записи — в проекті/папці. */}
+          <div className="grid grid-cols-1 sm:flex sm:flex-wrap gap-2">
             <button
               onClick={() => setShowEstimateUpload(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <FileSpreadsheet size={12} />
+              <FileSpreadsheet size={13} />
               Завантажити кошторис
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <Sparkles size={12} />
+              <Sparkles size={13} />
               Scan чек з AI
             </button>
-            {quickAddPresets.map((p) => (
-              <button
-                key={`${p.kind}:${p.type}`}
-                onClick={() => setCreatePreset({ kind: p.kind, type: p.type })}
-                className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110"
-                style={{ backgroundColor: p.color }}
-              >
-                <Plus size={12} />
-                {p.label}
-              </button>
-            ))}
+            <p className="text-[11px] self-center sm:ml-2" style={{ color: T.textMuted }}>
+              Ручні записи додавайте всередині проекту
+            </p>
           </div>
         </section>
       )}
@@ -246,34 +272,46 @@ export function FinancingView({
               <span className="hidden sm:inline">Excel</span>
             </button>
           </div>
+          {/* Primary AI actions */}
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
             <button
               onClick={() => setShowEstimateUpload(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <FileSpreadsheet size={11} />
+              <FileSpreadsheet size={12} />
               Завантажити кошторис
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <Sparkles size={11} />
+              <Sparkles size={12} />
               Scan чек з AI
             </button>
-            {quickAddPresets.map((p) => (
-              <button
-                key={`${p.kind}:${p.type}`}
-                onClick={() => setCreatePreset({ kind: p.kind, type: p.type })}
-                className="flex items-center justify-center gap-1.5 rounded-xl px-2.5 py-2 text-[10px] sm:text-xs font-bold text-white transition hover:brightness-110"
-                style={{ backgroundColor: p.color }}
-              >
-                <Plus size={11} />
-                {p.label}
-              </button>
-            ))}
+          </div>
+
+          {/* Quick add — grouped by Kind with shade variants */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+            {quickAddPresets.map((p) => {
+              const Icon = p.icon;
+              return (
+                <button
+                  key={`${p.kind}:${p.type}`}
+                  onClick={() => setCreatePreset({ kind: p.kind, type: p.type })}
+                  className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold transition hover:brightness-110"
+                  style={{
+                    backgroundColor: p.bg,
+                    color: p.fg,
+                    border: `1px solid ${p.border}`,
+                  }}
+                >
+                  <Icon size={12} />
+                  {p.label}
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
