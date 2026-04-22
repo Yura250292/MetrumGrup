@@ -100,12 +100,15 @@ export function RadialProgress({
           id={labelId}
           style={{
             position: "absolute",
-            inset: 0,
+            // Keep content inside the ring stroke
+            inset: thickness + 2,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            lineHeight: 1,
+            lineHeight: 1.05,
             pointerEvents: "none",
+            textAlign: "center",
+            overflow: "hidden",
           }}
         >
           {children}
@@ -239,17 +242,20 @@ export function DualRadialProgress({
       {children !== undefined && (
         <div
           style={{
+            // Keep inner content inside the innermost ring stroke so text never
+            // crosses/overlaps the rings. Padding is computed from actual ring
+            // geometry (thickness * 2 for stroke on each side + gap).
             position: "absolute",
-            inset: 0,
+            inset: thickness * 2 + gap + 2,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             flexDirection: "column",
-            gap: 2,
-            lineHeight: 1.1,
+            gap: 1,
+            lineHeight: 1.05,
             pointerEvents: "none",
             textAlign: "center",
-            padding: 8,
+            overflow: "hidden",
           }}
         >
           {children}

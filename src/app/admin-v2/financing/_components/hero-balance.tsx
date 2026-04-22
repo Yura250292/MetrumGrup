@@ -240,13 +240,14 @@ function RingCard({
         animate={animate}
         ariaLabel={`${title}: ${formatCurrencyCompact(centerTarget)}`}
       >
-        {!isTiny && (
-          <span className="text-[7.5px] font-bold tracking-[0.14em]" style={{ color: T.textMuted }}>
-            {centerLabel}
-          </span>
-        )}
         <span
-          className={`${isTiny ? "text-[10.5px]" : "text-[12px] sm:text-[13px]"} font-bold tabular-nums`}
+          className="text-[7px] font-bold tracking-[0.12em]"
+          style={{ color: T.textMuted }}
+        >
+          {centerLabel}
+        </span>
+        <span
+          className={`${isTiny ? "text-[9.5px]" : "text-[10.5px] sm:text-[11.5px]"} font-bold tabular-nums whitespace-nowrap`}
           style={{ color: centerTone }}
         >
           {formatted}
@@ -312,23 +313,24 @@ function DeltaRingCard({
         animate={animate}
         ariaLabel={`Дельта: ${formatCurrencyCompact(delta)}`}
       >
-        <div className="flex flex-col items-center leading-tight gap-0.5 px-1">
-          {!isTiny && (
-            <span
-              className="text-[6.5px] font-bold tracking-[0.12em]"
-              style={{ color: T.textMuted }}
-            >
-              {deltaPositive ? "ПЕРЕВИК." : "НЕДОВИК."}
-            </span>
-          )}
+        <div className="flex flex-col items-center leading-none gap-0.5">
           <span
-            className={`${isTiny ? "text-[10px]" : "text-[12px] sm:text-[13px]"} font-bold tabular-nums`}
+            className="text-[6.5px] font-bold tracking-[0.1em]"
+            style={{ color: T.textMuted }}
+          >
+            {deltaPositive ? "ПЕРЕВИК." : "НЕДОВИК."}
+          </span>
+          <span
+            className={`${isTiny ? "text-[9.5px]" : "text-[10.5px] sm:text-[11.5px]"} font-bold tabular-nums whitespace-nowrap`}
             style={{ color }}
           >
             {animatedDelta >= 0 ? "+" : ""}
             {deltaStr}
           </span>
-          <span className={`${isTiny ? "text-[6.5px]" : "text-[7.5px]"} tabular-nums`} style={{ color: T.textMuted }}>
+          <span
+            className="text-[6.5px] tabular-nums"
+            style={{ color: T.textMuted }}
+          >
             {Math.round(animatedCoverage)}%
           </span>
         </div>
