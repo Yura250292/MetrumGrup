@@ -21,7 +21,8 @@ export type ProjectNotificationType =
   | "TASK_COMMENTED"
   | "TASK_STATUS_CHANGED"
   | "TASK_DUE_SOON"
-  | "TASK_CREATED";
+  | "TASK_CREATED"
+  | "CHAT_MESSAGE";
 
 type NotificationRow = {
   userId: string;

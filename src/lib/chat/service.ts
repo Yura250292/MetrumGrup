@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { STAFF_ROLES } from "@/lib/auth-utils";
 import { Prisma } from "@prisma/client";
-import { createMentionNotifications } from "@/lib/notifications/create";
+import {
+  createMentionNotifications,
+  notifyUsers,
+  parseMentionedIds,
+} from "@/lib/notifications/create";
 import {
   syncProjectConversationParticipants,
   syncEstimateConversationParticipants,
@@ -368,6 +372,32 @@ export async function postMessage(
     relatedEntity: "CONVERSATION",
     relatedId: conversationId,
   });
+
+  // Notify all other participants about a regular new message (push + email
+  // gated by each user's preferences). Skip users already notified via @mention
+  // to avoid duplicate push.
+  const participants = await prisma.conversationParticipant.findMany({
+    where: { conversationId, userId: { not: userId } },
+    select: { userId: true },
+  });
+  const mentionedIds = new Set(parseMentionedIds(trimmed, userId));
+  const recipients = participants
+    .map((p) => p.userId)
+    .filter((id) => !mentionedIds.has(id));
+  if (recipients.length > 0) {
+    const authorName = message.author.name ?? "Нове повідомлення";
+    notifyUsers({
+      userIds: recipients,
+      actorId: userId,
+      type: "CHAT_MESSAGE",
+      title: `Нове повідомлення від ${authorName}`,
+      body: trimmed,
+      relatedEntity: "CONVERSATION",
+      relatedId: conversationId,
+    }).catch((err) =>
+      console.error("[chat/postMessage] notifyUsers failed:", err),
+    );
+  }
 
   return {
     id: message.id,
