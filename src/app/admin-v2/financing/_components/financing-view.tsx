@@ -34,8 +34,8 @@ import { TabApprovals } from "./tab-approvals";
 import { FolderEstimateCard } from "./folder-estimate-card";
 import { TemplateConstructor } from "./template-constructor";
 import { FilterBar } from "./filter-bar";
+import { ProjectsFoldersSection } from "./projects-folders-section";
 import type { ProjectOption, UserOption } from "./types";
-import { FolderCard } from "@/components/folders/FolderCard";
 import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
 import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
@@ -48,7 +48,6 @@ import {
   useDeleteFolder,
   useMoveItems,
 } from "@/hooks/useFolders";
-import type { FolderItem } from "@/hooks/useFolders";
 
 export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types";
 
@@ -346,40 +345,14 @@ export function FinancingView({
             </div>
           )}
 
-          {/* Divider with "Проєкти" label (only on root view when both sections present) */}
-          {isRootView && systemBlocks.length > 0 && nonSystemFolders.length > 0 && (
-            <div className="flex items-center gap-3 my-2">
-              <div
-                className="h-px flex-1"
-                style={{ backgroundColor: T.borderSoft }}
-              />
-              <span
-                className="text-[11px] font-bold tracking-[0.12em] uppercase"
-                style={{ color: T.textMuted }}
-              >
-                Проєкти
-              </span>
-              <div
-                className="h-px flex-1"
-                style={{ backgroundColor: T.borderSoft }}
-              />
-            </div>
-          )}
-
-          {/* User-created folders grid */}
+          {/* Projects section (collapsible + search + favorites) */}
           {nonSystemFolders.length > 0 && (
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-              {nonSystemFolders.map((f: FolderItem) => (
-                <FolderCard
-                  key={f.id}
-                  folder={f}
-                  href={`/admin-v2/financing?folderId=${f.id}`}
-                  showFinanceIndicators
-                  onRename={handleRenameFolder}
-                  onDelete={handleDeleteFolder}
-                />
-              ))}
-            </div>
+            <ProjectsFoldersSection
+              folders={nonSystemFolders}
+              basePath="/admin-v2/financing"
+              onRename={handleRenameFolder}
+              onDelete={handleDeleteFolder}
+            />
           )}
 
           <button
