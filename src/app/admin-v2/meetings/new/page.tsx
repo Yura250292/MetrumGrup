@@ -10,6 +10,7 @@ import {
   MeetingUploader,
 } from "../_components/meeting-recorder";
 import { AudioPreview } from "../_components/audio-preview";
+import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
 type Project = {
   id: string;
@@ -43,6 +44,24 @@ export default function NewMeetingPage() {
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
+  const {
+    state: recState,
+    recorded,
+    reset: resetRecording,
+  } = useMeetingRecording();
+
+  useEffect(() => {
+    if (recorded && !pending) {
+      const ext = extensionFor(recorded.mimeType);
+      setPending({
+        blob: recorded.blob,
+        mimeType: recorded.mimeType,
+        durationMs: recorded.durationMs,
+        fileName: `recording-${Date.now()}.${ext}`,
+      });
+    }
+  }, [recorded, pending]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -60,17 +79,6 @@ export default function NewMeetingPage() {
       }
     })();
   }, [initialProject]);
-
-  function handleRecorded(blob: Blob, mimeType: string, durationMs: number) {
-    const ext = extensionFor(mimeType);
-    setError(null);
-    setPending({
-      blob,
-      mimeType,
-      durationMs,
-      fileName: `recording-${Date.now()}.${ext}`,
-    });
-  }
 
   function handleFile(file: File) {
     setError(null);
@@ -160,6 +168,7 @@ export default function NewMeetingPage() {
   function resetPending() {
     setPending(null);
     setUploadProgress(0);
+    resetRecording();
   }
 
   const formValid = title.trim() && projectId;
@@ -255,11 +264,15 @@ export default function NewMeetingPage() {
         </div>
       </div>
 
-      {formValid && !pending && !busy && (
+      {!pending && !busy && (formValid || recState !== "idle") && (
         <>
-          <MeetingRecorder onReady={handleRecorded} />
-          <div className="my-3" />
-          <MeetingUploader onFile={handleFile} />
+          <MeetingRecorder />
+          {recState === "idle" && formValid && (
+            <>
+              <div className="my-3" />
+              <MeetingUploader onFile={handleFile} />
+            </>
+          )}
         </>
       )}
 

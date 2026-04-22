@@ -1,139 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Mic, Square, Pause, Play, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { Mic, Square, Pause, Play, Upload, ShieldCheck } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
-type Props = {
-  onReady: (blob: Blob, mimeType: string, durationMs: number) => void;
-  disabled?: boolean;
-};
-
-type RecState = "idle" | "recording" | "paused" | "stopped";
-
-const MAX_MS = 90 * 60 * 1000;
-const AUDIO_BITS_PER_SECOND = 32_000;
-
-export function MeetingRecorder({ onReady, disabled }: Props) {
-  const [state, setState] = useState<RecState>("idle");
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  const recorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const startedAtRef = useRef<number>(0);
-  const pausedOffsetRef = useRef<number>(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, []);
-
-  function cleanup() {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    streamRef.current?.getTracks().forEach((t) => t.stop());
-    streamRef.current = null;
-  }
-
-  function startTimer() {
-    startedAtRef.current = Date.now() - pausedOffsetRef.current;
-    intervalRef.current = setInterval(() => {
-      const ms = Date.now() - startedAtRef.current;
-      setElapsedMs(ms);
-      if (ms >= MAX_MS) {
-        stop();
-      }
-    }, 200);
-  }
-
-  function stopTimer() {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }
-
-  async function start() {
-    setError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const mimeCandidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/mp4",
-      ];
-      const mimeType =
-        mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ||
-        "audio/webm";
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType,
-        audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
-      });
-      recorderRef.current = recorder;
-      chunksRef.current = [];
-
-      recorder.ondataavailable = (ev) => {
-        if (ev.data.size > 0) chunksRef.current.push(ev.data);
-      };
-      recorder.onstop = () => {
-        stopTimer();
-        const finalMs = Date.now() - startedAtRef.current;
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        chunksRef.current = [];
-        cleanup();
-        setState("stopped");
-        onReady(blob, mimeType, finalMs);
-      };
-
-      recorder.start(1000);
-      pausedOffsetRef.current = 0;
-      startTimer();
-      setState("recording");
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Не вдалося отримати доступ до мікрофона";
-      setError(message);
-      cleanup();
-    }
-  }
-
-  function pause() {
-    if (recorderRef.current?.state === "recording") {
-      recorderRef.current.pause();
-      pausedOffsetRef.current = Date.now() - startedAtRef.current;
-      stopTimer();
-      setState("paused");
-    }
-  }
-
-  function resume() {
-    if (recorderRef.current?.state === "paused") {
-      recorderRef.current.resume();
-      startTimer();
-      setState("recording");
-    }
-  }
-
-  function stop() {
-    if (
-      recorderRef.current &&
-      (recorderRef.current.state === "recording" ||
-        recorderRef.current.state === "paused")
-    ) {
-      recorderRef.current.stop();
-    }
-  }
+export function MeetingRecorder() {
+  const { state, elapsedMs, error, wakeLockActive, start, pause, resume, stop } =
+    useMeetingRecording();
 
   const mm = Math.floor(elapsedMs / 60000);
   const ss = Math.floor((elapsedMs % 60000) / 1000)
@@ -177,11 +51,10 @@ export function MeetingRecorder({ onReady, disabled }: Props) {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {state === "idle" && (
+          {(state === "idle" || state === "stopped") && (
             <button
-              onClick={start}
-              disabled={disabled}
-              className="rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              onClick={() => void start()}
+              className="rounded-lg px-4 py-2 text-sm font-semibold text-white"
               style={{ background: T.accentPrimary }}
             >
               Почати запис
@@ -235,6 +108,21 @@ export function MeetingRecorder({ onReady, disabled }: Props) {
         <p className="mt-3 text-sm" style={{ color: T.danger }}>
           {error}
         </p>
+      )}
+
+      {(state === "recording" || state === "paused") && (
+        <div
+          className="mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-xs"
+          style={{
+            background: wakeLockActive ? T.successSoft : T.warningSoft,
+            color: wakeLockActive ? T.success : T.warning,
+          }}
+        >
+          <ShieldCheck size={14} />
+          {wakeLockActive
+            ? "Екран не згасне. Можна переключатись на інші сторінки — запис триватиме."
+            : "Wake Lock недоступний у цьому браузері. Не вимикайте екран і не перемикайтесь на інші додатки."}
+        </div>
       )}
 
       <p className="mt-3 text-xs" style={{ color: T.textMuted }}>
