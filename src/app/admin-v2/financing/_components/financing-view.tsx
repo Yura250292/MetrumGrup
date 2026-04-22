@@ -180,7 +180,11 @@ export function FinancingView({
                 <Sparkles size={13} />
                 Scan AI
               </button>
-              {folderId && <QuickAddSplit onPick={(p) => setCreatePreset(p)} />}
+              {folderId && (
+                <div className="hidden sm:block">
+                  <QuickAddSplit onPick={(p) => setCreatePreset(p)} />
+                </div>
+              )}
               <button
                 onClick={handleExport}
                 disabled={exporting || loading}
