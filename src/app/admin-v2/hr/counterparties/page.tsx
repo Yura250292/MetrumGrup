@@ -13,8 +13,10 @@ import {
   Pencil,
   Trash2,
   Hash,
+  Upload,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { ExcelImportModal } from "../_components/excel-import-modal";
 
 type CounterpartyType = "LEGAL" | "INDIVIDUAL" | "FOP";
 
@@ -67,16 +69,21 @@ export default function HrCounterpartiesPage() {
   const [items, setItems] = useState<Counterparty[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  async function reload() {
+    const r = await fetch("/api/admin/hr/counterparties");
+    const d = await r.json();
+    setItems(d.data || []);
+  }
+
   useEffect(() => {
-    fetch("/api/admin/hr/counterparties")
-      .then((r) => r.json())
-      .then((d) => setItems(d.data || []))
+    reload()
       .catch(() => setError("Не вдалось завантажити"))
       .finally(() => setFetching(false));
   }, []);
@@ -172,14 +179,46 @@ export default function HrCounterpartiesPage() {
             {items.length} записів · {activeCount} активних
           </p>
         </div>
-        <button
-          onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
-          style={{ backgroundColor: T.accentPrimary }}
-        >
-          <Plus size={16} /> Додати контрагента
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.accentPrimary,
+              border: `1px solid ${T.borderStrong}`,
+            }}
+          >
+            <Upload size={16} /> Імпорт з Excel
+          </button>
+          <button
+            onClick={() => (showForm ? resetForm() : setShowForm(true))}
+            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
+            <Plus size={16} /> Додати контрагента
+          </button>
+        </div>
       </section>
+
+      <ExcelImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Імпорт контрагентів"
+        templateUrl="/api/admin/hr/counterparties/template"
+        importUrl="/api/admin/hr/counterparties/import"
+        previewColumns={[
+          { key: "name", label: "Назва" },
+          { key: "type", label: "Тип" },
+          { key: "taxId", label: "Код" },
+          { key: "phone", label: "Телефон" },
+          { key: "email", label: "Email" },
+          { key: "address", label: "Адреса" },
+        ]}
+        onImported={() => {
+          void reload();
+        }}
+      />
 
       {showForm && (
         <div

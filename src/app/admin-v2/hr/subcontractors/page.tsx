@@ -12,9 +12,11 @@ import {
   X,
   Pencil,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { ExcelImportModal } from "../_components/excel-import-modal";
 
 type RateType = "PER_HOUR" | "PER_DAY" | "PER_MONTH" | "PER_SQM" | "PER_PIECE";
 
@@ -92,16 +94,21 @@ export default function HrSubcontractorsPage() {
   const [items, setItems] = useState<Subcontractor[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  async function reload() {
+    const r = await fetch("/api/admin/hr/subcontractors");
+    const d = await r.json();
+    setItems(d.data || []);
+  }
+
   useEffect(() => {
-    fetch("/api/admin/hr/subcontractors")
-      .then((r) => r.json())
-      .then((d) => setItems(d.data || []))
+    reload()
       .catch(() => setError("Не вдалось завантажити"))
       .finally(() => setFetching(false));
   }, []);
@@ -213,14 +220,47 @@ export default function HrSubcontractorsPage() {
             {items.length} майстрів · {activeCount} активних
           </p>
         </div>
-        <button
-          onClick={() => (showForm ? resetForm() : setShowForm(true))}
-          className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
-          style={{ backgroundColor: T.accentPrimary }}
-        >
-          <Plus size={16} /> Додати підрядника
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.accentPrimary,
+              border: `1px solid ${T.borderStrong}`,
+            }}
+          >
+            <Upload size={16} /> Імпорт з Excel
+          </button>
+          <button
+            onClick={() => (showForm ? resetForm() : setShowForm(true))}
+            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
+            <Plus size={16} /> Додати підрядника
+          </button>
+        </div>
       </section>
+
+      <ExcelImportModal
+        open={showImport}
+        onClose={() => setShowImport(false)}
+        title="Імпорт підрядників"
+        templateUrl="/api/admin/hr/subcontractors/template"
+        importUrl="/api/admin/hr/subcontractors/import"
+        previewColumns={[
+          { key: "name", label: "ПІБ" },
+          { key: "specialty", label: "Спеціальність" },
+          { key: "phone", label: "Телефон" },
+          { key: "rateType", label: "Тип тарифу" },
+          { key: "rateAmount", label: "Сума" },
+          { key: "rateUnit", label: "Одиниця" },
+          { key: "availableFrom", label: "З дати" },
+        ]}
+        onImported={() => {
+          void reload();
+        }}
+      />
 
       {showForm && (
         <div
