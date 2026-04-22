@@ -16,6 +16,7 @@ import {
 import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { CommentThread } from "@/components/collab/CommentThread";
+import { TaskAiActions } from "./task-ai-actions";
 
 type DrawerStatus = {
   id: string;
@@ -454,6 +455,32 @@ export function SelfContainedTaskDrawer({
                 </ul>
               )}
             </Section>
+
+            {/* AI helper */}
+            {detail && (
+              <div
+                className="rounded-xl p-3"
+                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+              >
+                <TaskAiActions
+                  task={{
+                    id: detail.id,
+                    title: detail.title,
+                    description: detail.description,
+                    status: { name: detail.status.name },
+                    priority: detail.priority,
+                    dueDate: detail.dueDate,
+                    project: detail.project,
+                    assignees: detail.assignees,
+                    checklist: detail.checklist.map((c) => ({
+                      content: c.content,
+                      isDone: c.isDone,
+                    })),
+                    stage: detail.stage,
+                  }}
+                />
+              </div>
+            )}
 
             {/* Comments */}
             <CommentThread entityType="TASK" entityId={taskId} />

@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronUp,
   X,
+  LayoutGrid,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -32,6 +33,8 @@ import { TaskPeopleGlobal } from "./task-people-global";
 import { NewTaskModal } from "./new-task-modal";
 import { SelfContainedTaskDrawer } from "./task-drawer-shared";
 import { TaskTableView } from "./task-table-view";
+import { SectionsView } from "./sections-view";
+import { AiDaySummary } from "./ai-day-summary";
 
 const SCOPE_DEFS: { id: Scope; label: string }[] = [
   { id: "assigned", label: "Мої" },
@@ -41,6 +44,7 @@ const SCOPE_DEFS: { id: Scope; label: string }[] = [
 ];
 
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
+  { id: "sections", label: "Секції", icon: LayoutGrid },
   { id: "table", label: "Таблиця", icon: Table2 },
   { id: "flat", label: "Список", icon: List },
   { id: "by-project", label: "По проєктах", icon: FolderKanban },
@@ -307,6 +311,9 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
         </button>
       </div>
 
+      {/* ── Row 1.5: AI day summary ── */}
+      <AiDaySummary />
+
       {/* ── Row 2: Focus banner (timer or urgent task) ── */}
       <FocusBanner
         activeTimer={activeTimer}
@@ -422,6 +429,20 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
       )}
 
       {/* ── Task views ── */}
+      {viewMode === "sections" && (
+        <SectionsView
+          tasks={filteredTasks}
+          currentUserId={currentUserId}
+          loading={loading}
+          activeTimerTaskId={activeTimer?.task.id ?? null}
+          pendingId={pendingId}
+          onOpenDrawer={setDrawerTaskId}
+          onStartTimer={(id) => void startTimer(id)}
+          onStopTimer={() => void stopTimer()}
+          onMarkDone={(t) => void markDone(t)}
+        />
+      )}
+
       {viewMode === "table" && (
         <TaskTableView
           tasks={filteredTasks}
