@@ -27,6 +27,29 @@ const pct = (part: number, whole: number) => {
   return Math.max(0, Math.min(100, Math.round((part / whole) * 100)));
 };
 
+/**
+ * Ultra-compact currency for the tight ring interior (72-92px).
+ * Drops the ₴ sign (implied by context), uses short Ukrainian suffixes:
+ *   25 000   -> "25к"
+ *   -25 000  -> "−25к"
+ *   2 400 000 -> "2,4М"
+ *   -2 400 000 -> "−2,4М"
+ * `showPlus` puts "+" before positive numbers (useful for Δ).
+ */
+function formatRing(n: number, showPlus = false): string {
+  if (!isFinite(n) || n === 0) return "0";
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "−" : showPlus ? "+" : "";
+  const fmt = (v: number) => {
+    if (v % 1 === 0) return String(Math.round(v));
+    return v.toFixed(1).replace(".", ",");
+  };
+  if (abs >= 1_000_000_000) return `${sign}${fmt(abs / 1_000_000_000)}Г`;
+  if (abs >= 1_000_000) return `${sign}${fmt(abs / 1_000_000)}М`;
+  if (abs >= 1_000) return `${sign}${Math.round(abs / 1_000)}к`;
+  return `${sign}${Math.round(abs)}`;
+}
+
 /** Smoothly tween a number from 0 (or previous value) to `target` over `duration` ms. */
 function useCountUp(target: number, duration = 1100, delay = 0) {
   const [value, setValue] = useState(0);
@@ -66,10 +89,10 @@ function useCountUp(target: number, duration = 1100, delay = 0) {
 export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const isNarrow = useMediaQuery("(max-width: 420px)");
-  const ringSize = isNarrow ? 72 : 92;
+  const ringSize = isNarrow ? 84 : 96;
   const ringThickness = isNarrow ? 5 : 6;
   const deltaThickness = isNarrow ? 6 : 7;
-  const ringGap = isNarrow ? 2 : 3;
+  const ringGap = isNarrow ? 3 : 3;
   // Mobile: start collapsed to a tight summary bar; user toggles to expand.
   const [open, setOpen] = useState(!isNarrow);
   useEffect(() => {
@@ -125,17 +148,32 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
         }
       `}</style>
 
-      {/* Compact summary bar (toggle + 3 inline numbers) */}
+      {/* Compact summary bar (toggle + 3 inline numbers with dividers) */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-3 px-1 py-1 transition-colors"
+        className="w-full flex items-center justify-between gap-2 px-1 py-1 transition-colors"
       >
-        <div className="flex items-center gap-3 sm:gap-5 min-w-0 flex-1 justify-around">
-          <CompactStat label="Факт" value={formatCurrencyCompact(factBalance)} tone={factPositive ? T.success : T.danger} />
-          <CompactStat label="План" value={formatCurrencyCompact(planBalance)} tone={planPositive ? T.accentPrimary : T.danger} />
-          <CompactStat label="Δ" value={(delta >= 0 ? "+" : "") + formatCurrencyCompact(delta)} tone={deltaPositive ? T.success : T.danger} />
+        <div
+          className="flex items-stretch min-w-0 flex-1 divide-x"
+          style={{ borderColor: T.borderSoft }}
+        >
+          <CompactStat
+            label="Факт"
+            value={formatCurrencyCompact(factBalance)}
+            tone={factPositive ? T.success : T.danger}
+          />
+          <CompactStat
+            label="План"
+            value={formatCurrencyCompact(planBalance)}
+            tone={planPositive ? T.accentPrimary : T.danger}
+          />
+          <CompactStat
+            label="Δ"
+            value={(delta >= 0 ? "+" : "") + formatCurrencyCompact(delta)}
+            tone={deltaPositive ? T.success : T.danger}
+          />
         </div>
         <ChevronDown
           size={16}
@@ -148,7 +186,11 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
       </button>
 
       <Collapsible open={open} duration={320}>
-        <div className="pt-3 grid grid-cols-3 gap-1.5 sm:gap-3" key={mountKey}>
+        <div
+          className="pt-3 mt-2 grid grid-cols-3"
+          style={{ borderTop: `1px solid ${T.borderSoft}` }}
+          key={mountKey}
+        >
         {/* Ring 1 — Факт */}
         <RingCard
           title="Факт"
@@ -187,6 +229,7 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           size={ringSize}
           thickness={ringThickness}
           gap={ringGap}
+          withLeftDivider
         />
 
         {/* Ring 3 — Дельта план→факт */}
@@ -200,6 +243,7 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           animate={!prefersReducedMotion}
           size={ringSize}
           thickness={deltaThickness}
+          withLeftDivider
         />
         </div>
       </Collapsible>
@@ -217,7 +261,10 @@ function CompactStat({
   tone: string;
 }) {
   return (
-    <div className="flex flex-col items-center leading-tight min-w-0">
+    <div
+      className="flex-1 flex flex-col items-center justify-center leading-tight min-w-0 px-2 sm:px-3"
+      style={{ borderColor: T.borderSoft }}
+    >
       <span
         className="text-[9.5px] font-semibold tracking-wide"
         style={{ color: T.textMuted }}
@@ -225,7 +272,7 @@ function CompactStat({
         {label}
       </span>
       <span
-        className="text-[13px] sm:text-[14px] font-bold tabular-nums whitespace-nowrap"
+        className="text-[13px] sm:text-[14px] font-bold tabular-nums whitespace-nowrap truncate max-w-full"
         style={{ color: tone }}
       >
         {value}
@@ -251,6 +298,7 @@ function RingCard({
   size,
   thickness,
   gap,
+  withLeftDivider,
 }: {
   title: string;
   subtitle: string;
@@ -268,15 +316,19 @@ function RingCard({
   size: number;
   thickness: number;
   gap: number;
+  withLeftDivider?: boolean;
 }) {
   const animatedCenter = useCountUp(centerTarget, animate ? 1100 : 0, animate ? delay : 0);
-  const formatted = formatCurrencyCompact(Math.round(animatedCenter));
+  const formatted = formatRing(Math.round(animatedCenter));
   const isTiny = size < 88;
 
   return (
     <div
-      className="hero-ring-card flex flex-col items-center gap-1.5 min-w-0"
-      style={{ animationDelay: `${delay}ms` }}
+      className="hero-ring-card flex flex-col items-center gap-1.5 min-w-0 px-1.5 sm:px-2"
+      style={{
+        animationDelay: `${delay}ms`,
+        borderLeft: withLeftDivider ? `1px solid ${T.borderSoft}` : undefined,
+      }}
     >
       <div className="flex flex-col items-center">
         <span className="text-[11px] font-semibold" style={{ color: T.textPrimary }}>
@@ -305,7 +357,7 @@ function RingCard({
           {centerLabel}
         </span>
         <span
-          className={`${isTiny ? "text-[9.5px]" : "text-[10.5px] sm:text-[11.5px]"} font-bold tabular-nums whitespace-nowrap`}
+          className={`${isTiny ? "text-[11.5px]" : "text-[13px] sm:text-[14.5px]"} font-bold tabular-nums whitespace-nowrap`}
           style={{ color: centerTone }}
         >
           {formatted}
@@ -327,6 +379,7 @@ function DeltaRingCard({
   animate,
   size,
   thickness,
+  withLeftDivider,
 }: {
   coverage: number;
   delta: number;
@@ -337,19 +390,23 @@ function DeltaRingCard({
   animate: boolean;
   size: number;
   thickness: number;
+  withLeftDivider?: boolean;
 }) {
   const color = deltaPositive ? T.success : T.danger;
   const dur = animate ? 1100 : 0;
   const d = animate ? delay : 0;
   const animatedDelta = useCountUp(delta, dur, d);
   const animatedCoverage = useCountUp(coverage, dur, d);
-  const deltaStr = formatCurrencyCompact(Math.round(animatedDelta));
+  const deltaStr = formatRing(Math.round(animatedDelta), true);
   const isTiny = size < 88;
 
   return (
     <div
-      className="hero-ring-card flex flex-col items-center gap-1.5 min-w-0"
-      style={{ animationDelay: `${delay}ms` }}
+      className="hero-ring-card flex flex-col items-center gap-1.5 min-w-0 px-1.5 sm:px-2"
+      style={{
+        animationDelay: `${delay}ms`,
+        borderLeft: withLeftDivider ? `1px solid ${T.borderSoft}` : undefined,
+      }}
     >
       <div className="flex flex-col items-center">
         <span className="text-[11px] font-semibold" style={{ color: T.textPrimary }}>
@@ -379,10 +436,9 @@ function DeltaRingCard({
             {deltaPositive ? "ПЕРЕВИК." : "НЕДОВИК."}
           </span>
           <span
-            className={`${isTiny ? "text-[9.5px]" : "text-[10.5px] sm:text-[11.5px]"} font-bold tabular-nums whitespace-nowrap`}
+            className={`${isTiny ? "text-[10.5px]" : "text-[12px] sm:text-[13px]"} font-bold tabular-nums whitespace-nowrap`}
             style={{ color }}
           >
-            {animatedDelta >= 0 ? "+" : ""}
             {deltaStr}
           </span>
           <span
