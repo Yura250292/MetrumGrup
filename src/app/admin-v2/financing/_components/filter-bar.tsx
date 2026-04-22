@@ -27,6 +27,13 @@ import { ActiveFilterChips } from "./active-filter-chips";
 import type { FinancingFilters, ProjectOption, UserOption } from "./types";
 import { FINANCE_STATUS_LABELS, type FinanceEntryStatus } from "./types";
 
+const STATUS_SHORT: Record<FinanceEntryStatus, string> = {
+  DRAFT: "Чернетка",
+  PENDING: "На погодж.",
+  APPROVED: "Підтв.",
+  PAID: "Оплачено",
+};
+
 type FolderTreeOption = { id: string; name: string; depth: number };
 
 function useFinanceFolderTree(enabled: boolean) {
@@ -124,7 +131,7 @@ export function FilterBar({
             onChange={(e) =>
               setFilters((p) => ({ ...p, search: e.target.value }))
             }
-            placeholder="Пошук за назвою, описом, контрагентом…"
+            placeholder="Пошук…"
             className="w-full rounded-xl pl-10 pr-3 py-2.5 text-[13.5px] outline-none transition focus:ring-2"
             style={{
               backgroundColor: T.panelSoft,
@@ -172,6 +179,7 @@ export function FilterBar({
             (s) => ({
               value: s,
               label: FINANCE_STATUS_LABELS[s],
+              shortLabel: STATUS_SHORT[s],
             }),
           )}
         />

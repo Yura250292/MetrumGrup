@@ -95,6 +95,8 @@ export function FilterInput({
 export type SegmentedOption<V extends string = string> = {
   value: V;
   label: string;
+  /** Shorter label shown on narrow (<sm) screens. Falls back to `label`. */
+  shortLabel?: string;
   icon?: React.ReactNode;
   /** Custom accent color when this option is active. */
   color?: string;
@@ -133,6 +135,7 @@ export function SegmentedControl<V extends string = string>({
       {options.map((opt) => {
         const active = value === opt.value;
         const accent = opt.color ?? T.accentPrimary;
+        const short = opt.shortLabel ?? opt.label;
         return (
           <button
             key={opt.value}
@@ -140,7 +143,8 @@ export function SegmentedControl<V extends string = string>({
             role="radio"
             aria-checked={active}
             onClick={() => onChange(active && allowDeselect ? "" : opt.value)}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-lg ${padX} ${padY} ${fontSize} font-semibold transition`}
+            title={opt.label}
+            className={`flex-1 sm:flex-initial min-w-0 flex items-center justify-center gap-1 sm:gap-1.5 rounded-lg ${padX} ${padY} ${fontSize} font-semibold transition`}
             style={{
               backgroundColor: active ? accent : "transparent",
               color: active ? "#fff" : T.textSecondary,
@@ -148,7 +152,8 @@ export function SegmentedControl<V extends string = string>({
             }}
           >
             {opt.icon}
-            <span>{opt.label}</span>
+            <span className="truncate block sm:hidden">{short}</span>
+            <span className="truncate hidden sm:block">{opt.label}</span>
           </button>
         );
       })}

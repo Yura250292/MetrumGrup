@@ -54,7 +54,7 @@ export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types"
 
 const TABS = [
   { key: "overview", label: "Огляд", shortLabel: "Огляд", icon: LayoutDashboard },
-  { key: "approvals", label: "На погодженні", shortLabel: "Погодження", icon: CircleDot },
+  { key: "approvals", label: "На погодженні", shortLabel: "Погодж.", icon: CircleDot },
   { key: "operations", label: "Операції", shortLabel: "Операції", icon: List },
   { key: "scans", label: "Скани чеків", shortLabel: "Скани", icon: Sparkles },
   { key: "calendar", label: "Платіжний календар", shortLabel: "Календар", icon: CalendarDays },
