@@ -1,6 +1,6 @@
 "use client";
 
-import { useId } from "react";
+import { useEffect, useId, useState } from "react";
 
 type RadialProgressProps = {
   value: number;
@@ -13,6 +13,12 @@ type RadialProgressProps = {
   rounded?: boolean;
   children?: React.ReactNode;
   ariaLabel?: string;
+  /** Delay (ms) before animation starts — useful to stagger multiple rings. */
+  delay?: number;
+  /** Animation duration in ms. */
+  duration?: number;
+  /** Disable entry animation (for static previews). */
+  animate?: boolean;
 };
 
 export function RadialProgress({
@@ -26,11 +32,25 @@ export function RadialProgress({
   rounded = true,
   children,
   ariaLabel,
+  delay = 0,
+  duration = 900,
+  animate = true,
 }: RadialProgressProps) {
   const clamped = Math.max(0, Math.min(100, isFinite(value) ? value : 0));
+  const [rendered, setRendered] = useState(animate ? 0 : clamped);
+
+  useEffect(() => {
+    if (!animate) {
+      setRendered(clamped);
+      return;
+    }
+    const t = setTimeout(() => setRendered(clamped), delay);
+    return () => clearTimeout(t);
+  }, [clamped, delay, animate]);
+
   const radius = (size - thickness) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (clamped / 100) * circumference;
+  const offset = circumference - (rendered / 100) * circumference;
   const labelId = useId();
 
   return (
@@ -67,7 +87,9 @@ export function RadialProgress({
           strokeDasharray={circumference}
           strokeDashoffset={offset}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: "stroke-dashoffset 600ms ease" }}
+          style={{
+            transition: `stroke-dashoffset ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+          }}
         />
       </svg>
       {children !== undefined && (
@@ -100,6 +122,9 @@ type DualRadialProgressProps = {
   className?: string;
   children?: React.ReactNode;
   ariaLabel?: string;
+  delay?: number;
+  duration?: number;
+  animate?: boolean;
 };
 
 export function DualRadialProgress({
@@ -112,13 +137,39 @@ export function DualRadialProgress({
   className,
   children,
   ariaLabel,
+  delay = 0,
+  duration = 1000,
+  animate = true,
 }: DualRadialProgressProps) {
-  const outerR = (size - thickness) / 2;
-  const innerR = outerR - thickness - gap;
-  const outerC = 2 * Math.PI * outerR;
-  const innerC = 2 * Math.PI * innerR;
-  const outerOff = outerC - (Math.max(0, Math.min(100, outer.value)) / 100) * outerC;
-  const innerOff = innerC - (Math.max(0, Math.min(100, inner.value)) / 100) * innerC;
+  const outerClamped = Math.max(0, Math.min(100, isFinite(outer.value) ? outer.value : 0));
+  const innerClamped = Math.max(0, Math.min(100, isFinite(inner.value) ? inner.value : 0));
+
+  const [outerR, setOuterR] = useState(animate ? 0 : outerClamped);
+  const [innerR, setInnerR] = useState(animate ? 0 : innerClamped);
+
+  useEffect(() => {
+    if (!animate) {
+      setOuterR(outerClamped);
+      setInnerR(innerClamped);
+      return;
+    }
+    const t1 = setTimeout(() => setOuterR(outerClamped), delay);
+    // Inner ring follows outer with a 120ms lead — creates a pleasant cascade
+    const t2 = setTimeout(() => setInnerR(innerClamped), delay + 120);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [outerClamped, innerClamped, delay, animate]);
+
+  const outerRadius = (size - thickness) / 2;
+  const innerRadius = outerRadius - thickness - gap;
+  const outerC = 2 * Math.PI * outerRadius;
+  const innerC = 2 * Math.PI * innerRadius;
+  const outerOff = outerC - (outerR / 100) * outerC;
+  const innerOff = innerC - (innerR / 100) * innerC;
+
+  const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
 
   return (
     <div
@@ -138,7 +189,7 @@ export function DualRadialProgress({
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={outerR}
+          r={outerRadius}
           fill="none"
           stroke={trackColor}
           strokeWidth={thickness}
@@ -146,7 +197,7 @@ export function DualRadialProgress({
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={outerR}
+          r={outerRadius}
           fill="none"
           stroke={outer.color}
           strokeWidth={thickness}
@@ -154,13 +205,13 @@ export function DualRadialProgress({
           strokeDasharray={outerC}
           strokeDashoffset={outerOff}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: "stroke-dashoffset 700ms ease" }}
+          style={{ transition: `stroke-dashoffset ${duration}ms ${easing}` }}
         />
         {/* Inner track + fill */}
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={innerR}
+          r={innerRadius}
           fill="none"
           stroke={trackColor}
           strokeWidth={thickness}
@@ -168,7 +219,7 @@ export function DualRadialProgress({
         <circle
           cx={size / 2}
           cy={size / 2}
-          r={innerR}
+          r={innerRadius}
           fill="none"
           stroke={inner.color}
           strokeWidth={thickness}
@@ -176,7 +227,7 @@ export function DualRadialProgress({
           strokeDasharray={innerC}
           strokeDashoffset={innerOff}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: "stroke-dashoffset 700ms ease" }}
+          style={{ transition: `stroke-dashoffset ${duration}ms ${easing}` }}
         />
       </svg>
       {children !== undefined && (

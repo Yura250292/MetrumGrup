@@ -65,11 +65,41 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
 }
 
 /**
- * When user is inside a folder, they often expect to see project-level entries
- * that were created before folderId was wired (legacy data). This helper
- * expands the strict `folderId = X` match into:
- *   folderId = X  OR  (folderId IS NULL AND projectId IN S)
- * where S = set of projectIds found on estimates/entries already inside this folder.
+ * Walks the finance folder tree and returns the given folderId plus all
+ * descendants. Used so a parent folder view (e.g. "Avalon") aggregates
+ * entries from its sub-folders (e.g. "Holiday (2 phase)").
+ */
+async function collectFinanceFolderDescendants(rootId: string): Promise<string[]> {
+  const allFolders = await prisma.folder.findMany({
+    where: { domain: "FINANCE" },
+    select: { id: true, parentId: true },
+  });
+  const childrenMap = new Map<string, string[]>();
+  for (const f of allFolders) {
+    if (f.parentId) {
+      const arr = childrenMap.get(f.parentId) ?? [];
+      arr.push(f.id);
+      childrenMap.set(f.parentId, arr);
+    }
+  }
+  const result: string[] = [];
+  const stack = [rootId];
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    result.push(id);
+    const kids = childrenMap.get(id);
+    if (kids) stack.push(...kids);
+  }
+  return result;
+}
+
+/**
+ * When user is inside a folder, they often expect to see:
+ *   - entries in this folder AND all descendant folders
+ *   - legacy project-level entries (folderId IS NULL) whose project is
+ *     already tied to this folder subtree via another entry/estimate
+ * Expands the strict `folderId = X` match into:
+ *   folderId IN descendants(X)  OR  (folderId IS NULL AND projectId IN S)
  * Only runs when folderId is set; otherwise falls back to the plain buildWhere.
  */
 export async function expandFolderFilter(
@@ -79,14 +109,16 @@ export async function expandFolderFilter(
 
   const base = buildWhere({ ...filters, folderId: undefined });
 
+  const descendantIds = await collectFinanceFolderDescendants(filters.folderId);
+
   const [estimateProjects, entryProjects] = await Promise.all([
     prisma.estimate.findMany({
-      where: { folderId: filters.folderId, projectId: { not: "" } },
+      where: { folderId: { in: descendantIds }, projectId: { not: "" } },
       select: { projectId: true },
       distinct: ["projectId"],
     }),
     prisma.financeEntry.findMany({
-      where: { folderId: filters.folderId, projectId: { not: null } },
+      where: { folderId: { in: descendantIds }, projectId: { not: null } },
       select: { projectId: true },
       distinct: ["projectId"],
     }),
@@ -101,21 +133,17 @@ export async function expandFolderFilter(
     ),
   );
 
-  if (projectIds.length === 0) {
-    return buildWhere(filters);
-  }
+  const folderClause: Prisma.FinanceEntryWhereInput =
+    projectIds.length === 0
+      ? { folderId: { in: descendantIds } }
+      : {
+          OR: [
+            { folderId: { in: descendantIds } },
+            { AND: [{ folderId: null }, { projectId: { in: projectIds } }] },
+          ],
+        };
 
-  return {
-    AND: [
-      base,
-      {
-        OR: [
-          { folderId: filters.folderId },
-          { AND: [{ folderId: null }, { projectId: { in: projectIds } }] },
-        ],
-      },
-    ],
-  };
+  return { AND: [base, folderClause] };
 }
 
 export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWhereInput {
