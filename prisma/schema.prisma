@@ -87,6 +87,7 @@ model User {
   commentReadStates     CommentReadState[]
   aiConversations       AiConversation[]          @relation("AiConversationUser")
   meetings              Meeting[]                 @relation("MeetingCreator")
+  employeeProfile       Employee?                 @relation("EmployeeUser")
 
   @@map("users")
 }
@@ -661,14 +662,28 @@ model Worker {
   id              String           @id @default(cuid())
   name            String
   phone           String?
+  email           String?
   specialty       String
-  dailyRate       Decimal          @db.Decimal(10, 2)
+  dailyRate       Decimal?         @db.Decimal(10, 2)
+  rateType        WorkerRateType   @default(PER_DAY)
+  rateAmount      Decimal?         @db.Decimal(10, 2)
+  rateUnit        String?
+  availableFrom   DateTime?
+  notes           String?
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   crewAssignments CrewAssignment[]
 
   @@map("workers")
+}
+
+enum WorkerRateType {
+  PER_HOUR
+  PER_DAY
+  PER_MONTH
+  PER_SQM
+  PER_PIECE
 }
 
 model CrewAssignment {
@@ -2083,4 +2098,56 @@ enum MeetingStatus {
   SUMMARIZING
   READY
   FAILED
+}
+
+enum EmployeeSalaryType {
+  MONTHLY
+  HOURLY
+}
+
+model Employee {
+  id           String             @id @default(cuid())
+  fullName     String
+  phone        String?
+  email        String?
+  position     String?
+  salaryType   EmployeeSalaryType @default(MONTHLY)
+  salaryAmount Decimal?           @db.Decimal(12, 2)
+  currency     String             @default("UAH")
+  extraData    String?
+  notes        String?
+  isActive     Boolean            @default(true)
+  userId       String?            @unique
+  user         User?              @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([isActive])
+  @@index([fullName])
+  @@map("employees")
+}
+
+enum CounterpartyType {
+  LEGAL
+  INDIVIDUAL
+  FOP
+}
+
+model Counterparty {
+  id        String           @id @default(cuid())
+  name      String
+  type      CounterpartyType @default(LEGAL)
+  taxId     String?
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@index([isActive])
+  @@index([type])
+  @@index([name])
+  @@map("counterparties")
 }

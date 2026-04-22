@@ -335,38 +335,6 @@ export function FinancingView({
                   }
                   onRenameChild={handleRenameFolder}
                   onDeleteChild={handleDeleteFolder}
-                  renderChildren={(children) => (
-                    <div className="flex flex-col gap-3">
-                      {children.map((child) => (
-                        <ExpandableBlockCard
-                          key={child.id}
-                          folder={child}
-                          basePath="/admin-v2/financing"
-                          onCreateChildFolder={(parentId) => {
-                            setCreateFolderParentId(parentId);
-                            setShowCreateFolder(true);
-                          }}
-                          onCreateEntry={(blockId) =>
-                            setCreatePreset({
-                              kind: "FACT",
-                              type: "EXPENSE",
-                              folderId: blockId,
-                              folderName: child.name,
-                            })
-                          }
-                          onRenameChild={handleRenameFolder}
-                          onDeleteChild={handleDeleteFolder}
-                          extraContent={
-                            <TemplateConstructor
-                              folderId={child.id}
-                              folderName={child.name}
-                              onEntryCreated={() => loadData()}
-                            />
-                          }
-                        />
-                      ))}
-                    </div>
-                  )}
                 />
               ))}
             </div>
