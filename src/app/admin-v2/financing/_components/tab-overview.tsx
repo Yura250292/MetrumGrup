@@ -86,10 +86,10 @@ export function TabOverview({
       {/* Quadrant grid (compact summary) */}
       <div>
         <span
-          className="text-[11px] font-bold tracking-wider mb-3 block"
-          style={{ color: T.textMuted }}
+          className="text-[12px] font-semibold mb-3 block"
+          style={{ color: T.textSecondary }}
         >
-          ПЛАН / ФАКТ ПО КВАДРАНТАХ
+          План / факт по квадрантах
         </span>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <QuadrantCard
@@ -97,6 +97,8 @@ export function TabOverview({
             icon={<TrendingDown size={16} />}
             accent={T.warning}
             stats={summary.plan.expense}
+            pairedSum={summary.fact.expense.sum}
+            pairedLabel="факт"
             entries={quadrantEntries["PLAN:EXPENSE"]}
             onAdd={() => onAdd({ kind: "PLAN", type: "EXPENSE" })}
             onEdit={onEdit}
@@ -111,6 +113,8 @@ export function TabOverview({
             icon={<TrendingUp size={16} />}
             accent={T.accentPrimary}
             stats={summary.plan.income}
+            pairedSum={summary.fact.income.sum}
+            pairedLabel="факт"
             entries={quadrantEntries["PLAN:INCOME"]}
             onAdd={() => onAdd({ kind: "PLAN", type: "INCOME" })}
             onEdit={onEdit}
@@ -125,6 +129,8 @@ export function TabOverview({
             icon={<TrendingDown size={16} />}
             accent={T.danger}
             stats={summary.fact.expense}
+            pairedSum={summary.plan.expense.sum}
+            pairedLabel="план"
             entries={quadrantEntries["FACT:EXPENSE"]}
             onAdd={() => onAdd({ kind: "FACT", type: "EXPENSE" })}
             onEdit={onEdit}
@@ -138,6 +144,8 @@ export function TabOverview({
             icon={<TrendingUp size={16} />}
             accent={T.success}
             stats={summary.fact.income}
+            pairedSum={summary.plan.income.sum}
+            pairedLabel="план"
             entries={quadrantEntries["FACT:INCOME"]}
             onAdd={() => onAdd({ kind: "FACT", type: "INCOME" })}
             onEdit={onEdit}

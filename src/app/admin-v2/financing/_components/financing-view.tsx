@@ -5,31 +5,25 @@ import { useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
   Loader2,
-  Search,
-  AlertCircle,
-  TrendingUp,
-  TrendingDown,
-  Wallet,
-  Filter,
   CircleDot,
   LayoutDashboard,
   List,
   CalendarDays,
   Archive,
-  Plus,
   FolderPlus,
   Sparkles,
   FileSpreadsheet,
+  Wallet,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
-import { FINANCE_CATEGORIES } from "@/lib/constants";
+import { formatCurrencyCompact } from "@/lib/utils";
 import { EntryFormModal } from "./entry-form-modal";
 import { OcrScanModal } from "./ocr-scan-modal";
 import { EstimateUploadModal } from "./estimate-upload-modal";
 import { QuadrantCard } from "./quadrant-card";
-import { SummaryStat, formatPercent } from "./summary-stat";
-import { FilterSelect, FilterInput } from "./filter-controls";
+import { SummaryStat, formatPercent, rawPercent } from "./summary-stat";
+import { HeroBalance } from "./hero-balance";
+import { QuickAddSplit } from "./quick-add-split";
 import { useFinancingData } from "./use-financing-data";
 import { TabOverview } from "./tab-overview";
 import { TabOperations } from "./tab-operations";
@@ -87,7 +81,6 @@ export function FinancingView({
   const folderId = scope ? null : (searchParams.get("folderId") ?? null);
 
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showOcrScan, setShowOcrScan] = useState(false);
   const [showEstimateUpload, setShowEstimateUpload] = useState(false);
@@ -143,47 +136,6 @@ export function FinancingView({
   const planBalance = summary.plan.income.sum - summary.plan.expense.sum;
   const factBalance = summary.balance;
 
-  // Grouped by Kind. Фактичні = зелений (реалізовано), Планові = оранжевий (майбутні).
-  // Within group: "Витрата" — solid/darker, "Дохід" — soft/lighter.
-  const quickAddPresets = [
-    {
-      label: "Факт Витрата",
-      kind: "FACT" as const,
-      type: "EXPENSE" as const,
-      bg: T.success,
-      fg: "#fff",
-      border: T.success,
-      icon: TrendingDown,
-    },
-    {
-      label: "Факт Дохід",
-      kind: "FACT" as const,
-      type: "INCOME" as const,
-      bg: T.successSoft,
-      fg: T.success,
-      border: T.success,
-      icon: TrendingUp,
-    },
-    {
-      label: "План Витрата",
-      kind: "PLAN" as const,
-      type: "EXPENSE" as const,
-      bg: T.warning,
-      fg: "#fff",
-      border: T.warning,
-      icon: TrendingDown,
-    },
-    {
-      label: "План Дохід",
-      kind: "PLAN" as const,
-      type: "INCOME" as const,
-      bg: T.warningSoft,
-      fg: T.warning,
-      border: T.warning,
-      icon: TrendingUp,
-    },
-  ];
-
   return (
     <div className="flex flex-col gap-4 sm:gap-6 pb-20 sm:pb-0">
       {/* Breadcrumbs (if inside a folder) */}
@@ -197,11 +149,11 @@ export function FinancingView({
 
       {/* Hero — global */}
       {!scope && (
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-4">
           <div className="flex items-start justify-between gap-3">
             <div className="flex flex-col gap-1 min-w-0">
               <h1
-                className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight"
+                className="text-2xl sm:text-3xl md:text-[32px] font-bold tracking-tight"
                 style={{ color: T.textPrimary }}
               >
                 Фінансування
@@ -210,11 +162,31 @@ export function FinancingView({
                 Журнал планових і фактичних грошових операцій
               </p>
             </div>
-            <div className="flex gap-2 flex-shrink-0">
+            <div className="flex gap-2 flex-shrink-0 items-center">
+              <button
+                onClick={() => setShowEstimateUpload(true)}
+                title="Завантажити кошторис"
+                className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
+                style={{ backgroundColor: T.accentPrimary }}
+              >
+                <FileSpreadsheet size={13} />
+                Кошторис
+              </button>
+              <button
+                onClick={() => setShowOcrScan(true)}
+                title="Сканувати чек"
+                className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
+                style={{ backgroundColor: T.accentPrimary }}
+              >
+                <Sparkles size={13} />
+                Scan AI
+              </button>
+              {folderId && <QuickAddSplit onPick={(p) => setCreatePreset(p)} />}
               <button
                 onClick={handleExport}
                 disabled={exporting || loading}
-                className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold disabled:opacity-50"
+                title="Експорт в Excel"
+                className="flex items-center justify-center rounded-xl h-10 w-10 sm:w-auto sm:px-3 text-xs font-semibold disabled:opacity-50 transition hover:brightness-105"
                 style={{
                   backgroundColor: T.panelElevated,
                   color: T.textPrimary,
@@ -222,68 +194,50 @@ export function FinancingView({
                 }}
               >
                 {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                <span className="hidden sm:inline">Excel</span>
+                <span className="hidden sm:inline ml-1.5">Excel</span>
               </button>
             </div>
           </div>
 
-          {/* AI actions + manual quick-add (shown when inside a folder) */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Hero balance with dual radial */}
+          <HeroBalance summary={summary} />
+
+          {/* Mobile actions row */}
+          <div className="flex sm:hidden flex-wrap gap-2">
             <button
               onClick={() => setShowEstimateUpload(true)}
-              className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
+              className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
               <FileSpreadsheet size={13} />
-              Завантажити кошторис
+              Кошторис
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
-              className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110"
+              className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
               <Sparkles size={13} />
-              Scan чек з AI
+              Scan AI
             </button>
-
-            {/* Inside a folder — also show 4 quick-add buttons (compact) */}
             {folderId && (
-              <>
-                <div className="h-7 w-px mx-1" style={{ backgroundColor: T.borderSoft }} />
-                {quickAddPresets.map((p) => {
-                  const Icon = p.icon;
-                  return (
-                    <button
-                      key={`${p.kind}:${p.type}`}
-                      onClick={() => setCreatePreset({ kind: p.kind, type: p.type })}
-                      className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold transition hover:brightness-110"
-                      style={{
-                        backgroundColor: p.bg,
-                        color: p.fg,
-                        border: `1px solid ${p.border}`,
-                      }}
-                      title={p.label}
-                    >
-                      <Icon size={12} />
-                      {p.label}
-                    </button>
-                  );
-                })}
-              </>
-            )}
-
-            {!folderId && (
-              <p className="text-[11px]" style={{ color: T.textMuted }}>
-                Ручні записи додавайте всередині проекту
-              </p>
+              <div className="w-full">
+                <QuickAddSplit onPick={(p) => setCreatePreset(p)} compact />
+              </div>
             )}
           </div>
+
+          {!folderId && (
+            <p className="text-[11px]" style={{ color: T.textMuted }}>
+              Ручні записи додавайте всередині проекту або папки
+            </p>
+          )}
         </section>
       )}
 
       {/* Hero — project scoped */}
       {scope && (
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-bold truncate" style={{ color: T.textPrimary }}>
@@ -293,60 +247,46 @@ export function FinancingView({
                 {scope.title}
               </p>
             </div>
-            <button
-              onClick={handleExport}
-              disabled={exporting || loading}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold disabled:opacity-50 flex-shrink-0"
-              style={{
-                backgroundColor: T.panelElevated,
-                color: T.textPrimary,
-                border: `1px solid ${T.borderStrong}`,
-              }}
-            >
-              {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-              <span className="hidden sm:inline">Excel</span>
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <QuickAddSplit onPick={(p) => setCreatePreset(p)} compact />
+              <button
+                onClick={handleExport}
+                disabled={exporting || loading}
+                title="Експорт в Excel"
+                className="flex items-center justify-center rounded-xl h-9 w-9 sm:w-auto sm:px-3 text-xs font-semibold disabled:opacity-50 transition hover:brightness-105"
+                style={{
+                  backgroundColor: T.panelElevated,
+                  color: T.textPrimary,
+                  border: `1px solid ${T.borderStrong}`,
+                }}
+              >
+                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                <span className="hidden sm:inline ml-1.5">Excel</span>
+              </button>
+            </div>
           </div>
-          {/* Primary AI actions */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
+
+          {/* Hero balance with dual radial — also shown in scoped view */}
+          <HeroBalance summary={summary} />
+
+          {/* AI actions row */}
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setShowEstimateUpload(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
               <FileSpreadsheet size={12} />
-              Завантажити кошторис
+              Кошторис
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110 col-span-2 sm:col-span-1"
+              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
               <Sparkles size={12} />
               Scan чек з AI
             </button>
-          </div>
-
-          {/* Quick add — grouped by Kind with shade variants */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
-            {quickAddPresets.map((p) => {
-              const Icon = p.icon;
-              return (
-                <button
-                  key={`${p.kind}:${p.type}`}
-                  onClick={() => setCreatePreset({ kind: p.kind, type: p.type })}
-                  className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-[11px] sm:text-xs font-bold transition hover:brightness-110"
-                  style={{
-                    backgroundColor: p.bg,
-                    color: p.fg,
-                    border: `1px solid ${p.border}`,
-                  }}
-                >
-                  <Icon size={12} />
-                  {p.label}
-                </button>
-              );
-            })}
           </div>
         </section>
       )}
@@ -481,10 +421,10 @@ export function FinancingView({
         </section>
       )}
 
-      {/* Tabs — horizontal scroll on mobile */}
+      {/* Tabs — underline indicator, horizontal scroll on mobile */}
       <nav
-        className="flex gap-1 overflow-x-auto rounded-xl p-1 -mx-1 px-1 scrollbar-none"
-        style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+        className="flex gap-0 overflow-x-auto -mx-1 px-1 scrollbar-none border-b"
+        style={{ borderColor: T.borderSoft }}
       >
         {TABS.map((tab) => {
           const active = activeTab === tab.key;
@@ -497,19 +437,17 @@ export function FinancingView({
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className="flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 sm:px-4 py-2 sm:py-2.5 text-[12px] sm:text-[13px] font-semibold transition flex-shrink-0"
+              className="relative flex items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 text-[12.5px] sm:text-[13px] font-semibold transition-colors flex-shrink-0 -mb-px"
               style={{
-                backgroundColor: active ? T.panel : "transparent",
                 color: active ? T.accentPrimary : T.textMuted,
-                border: active ? `1px solid ${T.borderSoft}` : "1px solid transparent",
-                boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                borderBottom: `2px solid ${active ? T.accentPrimary : "transparent"}`,
               }}
             >
               <Icon size={14} />
-              <span className="sm:inline">{tab.shortLabel}</span>
+              <span>{tab.shortLabel}</span>
               {pendingCount > 0 && (
                 <span
-                  className="inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-bold text-white"
+                  className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1.5 rounded-full text-[10px] font-bold text-white"
                   style={{ backgroundColor: T.warning }}
                 >
                   {pendingCount}
@@ -521,32 +459,40 @@ export function FinancingView({
       </nav>
 
       {/* Summary KPIs */}
-      {(activeTab === "overview" || activeTab === "operations") && (
+      {activeTab === "operations" && (
         <section
-          className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3 rounded-2xl p-3 sm:p-4"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+          className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 rounded-2xl p-4"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+            boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+          }}
         >
           <SummaryStat
-            label="ПЛАН БАЛАНС"
+            label="План баланс"
             value={formatCurrencyCompact(planBalance)}
             accent={planBalance >= 0 ? T.accentPrimary : T.warning}
-            icon={<CircleDot size={12} />}
           />
           <SummaryStat
-            label="ФАКТ БАЛАНС"
+            label="Факт баланс"
             value={formatCurrencyCompact(factBalance)}
             accent={factBalance >= 0 ? T.success : T.danger}
-            icon={<Wallet size={12} />}
+            icon={<Wallet size={11} />}
+            emphasis="hero"
           />
           <SummaryStat
-            label="ПЛАН (ДОХ.)"
+            label="План → факт (доходи)"
             value={formatPercent(summary.fact.income.sum, summary.plan.income.sum)}
-            accent={T.textPrimary}
+            accent={T.accentPrimary}
+            ringPct={rawPercent(summary.fact.income.sum, summary.plan.income.sum)}
+            hint={`${formatCurrencyCompact(summary.fact.income.sum)} / ${formatCurrencyCompact(summary.plan.income.sum)}`}
           />
           <SummaryStat
-            label="ПЛАН (ВИТР.)"
+            label="План → факт (витрати)"
             value={formatPercent(summary.fact.expense.sum, summary.plan.expense.sum)}
-            accent={T.textPrimary}
+            accent={T.warning}
+            ringPct={rawPercent(summary.fact.expense.sum, summary.plan.expense.sum)}
+            hint={`${formatCurrencyCompact(summary.fact.expense.sum)} / ${formatCurrencyCompact(summary.plan.expense.sum)}`}
           />
         </section>
       )}

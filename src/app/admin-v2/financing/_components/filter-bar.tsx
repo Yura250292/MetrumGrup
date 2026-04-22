@@ -1,13 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Filter, Search, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Search,
+  ChevronDown,
+  SlidersHorizontal,
+  TrendingUp,
+  TrendingDown,
+  CalendarDays,
+  Folder,
+  Tag,
+  Paperclip,
+  User as UserIcon,
+  CircleDot,
+} from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { FINANCE_CATEGORIES } from "@/lib/constants";
-import { FilterSelect, FilterInput } from "./filter-controls";
+import {
+  FilterSelect,
+  FilterInput,
+  SegmentedControl,
+} from "./filter-controls";
 import { DatePresets } from "./date-presets";
 import { SavedViews } from "./saved-views";
+import { ActiveFilterChips } from "./active-filter-chips";
 import type { FinancingFilters, ProjectOption, UserOption } from "./types";
+import { FINANCE_STATUS_LABELS, type FinanceEntryStatus } from "./types";
 
 type FolderTreeOption = { id: string; name: string; depth: number };
 
@@ -55,7 +73,7 @@ export function FilterBar({
   users: UserOption[];
   scope?: { id: string; title: string };
 }) {
-  const [showMore, setShowMore] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const folderTree = useFinanceFolderTree(!scope);
 
   const activeCount = [
@@ -73,167 +91,207 @@ export function FilterBar({
     filters.hasAttachments,
   ].filter(Boolean).length;
 
+  const advancedCount = [
+    !scope && filters.projectId,
+    !scope && filters.folderId,
+    filters.category,
+    filters.subcategory,
+    filters.responsibleId,
+    filters.hasAttachments,
+    filters.from,
+    filters.to,
+  ].filter(Boolean).length;
+
   return (
     <section
-      className="rounded-2xl p-3 sm:p-4"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      className="rounded-2xl p-3 sm:p-4 flex flex-col gap-3"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
+      }}
     >
-      <div className="flex items-center gap-2 mb-3">
-        <Filter size={14} style={{ color: T.textMuted }} />
-        <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-          ФІЛЬТРИ
-          {activeCount > 0 && (
+      {/* Hero row: search + saved views */}
+      <div className="flex items-stretch gap-2">
+        <div className="relative flex-1">
+          <Search
+            size={16}
+            className="absolute left-3.5 top-1/2 -translate-y-1/2"
+            style={{ color: T.textMuted }}
+          />
+          <input
+            value={filters.search}
+            onChange={(e) =>
+              setFilters((p) => ({ ...p, search: e.target.value }))
+            }
+            placeholder="Пошук за назвою, описом, контрагентом…"
+            className="w-full rounded-xl pl-10 pr-3 py-2.5 text-[13.5px] outline-none transition focus:ring-2"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px solid ${
+                filters.search.trim() ? T.accentPrimary : T.borderSoft
+              }`,
+              color: T.textPrimary,
+            }}
+          />
+        </div>
+        <SavedViews filters={filters} setFilters={setFilters} />
+      </div>
+
+      {/* Segmented controls + period (single horizontal scroll row on mobile) */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Kind: План/Факт */}
+        <SegmentedControl
+          ariaLabel="Вид запису"
+          value={filters.kind}
+          onChange={(v) => setFilters((p) => ({ ...p, kind: v as string }))}
+          options={[
+            { value: "PLAN", label: "План", icon: <CircleDot size={11} />, color: T.warning },
+            { value: "FACT", label: "Факт", icon: <CircleDot size={11} />, color: T.success },
+          ]}
+        />
+
+        {/* Type: Доходи/Витрати */}
+        <SegmentedControl
+          ariaLabel="Тип"
+          value={filters.type}
+          onChange={(v) => setFilters((p) => ({ ...p, type: v as string }))}
+          options={[
+            { value: "INCOME", label: "Доходи", icon: <TrendingUp size={11} />, color: T.accentPrimary },
+            { value: "EXPENSE", label: "Витрати", icon: <TrendingDown size={11} />, color: T.warning },
+          ]}
+        />
+
+        {/* Status: 4 chip-like segmented */}
+        <SegmentedControl
+          size="sm"
+          ariaLabel="Статус"
+          value={filters.status}
+          onChange={(v) => setFilters((p) => ({ ...p, status: v as string }))}
+          options={(["DRAFT", "PENDING", "APPROVED", "PAID"] as FinanceEntryStatus[]).map(
+            (s) => ({
+              value: s,
+              label: FINANCE_STATUS_LABELS[s],
+            }),
+          )}
+        />
+
+        {/* Advanced toggle */}
+        <button
+          onClick={() => setShowAdvanced((v) => !v)}
+          className="ml-auto flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold transition hover:brightness-105"
+          style={{
+            backgroundColor: showAdvanced || advancedCount > 0 ? T.accentPrimarySoft : T.panelSoft,
+            color: showAdvanced || advancedCount > 0 ? T.accentPrimary : T.textSecondary,
+            border: `1px solid ${showAdvanced || advancedCount > 0 ? T.accentPrimary : T.borderSoft}`,
+          }}
+          aria-expanded={showAdvanced}
+        >
+          <SlidersHorizontal size={13} />
+          <span>Більше</span>
+          {advancedCount > 0 && (
             <span
-              className="ml-1.5 inline-flex items-center justify-center h-4 w-4 rounded-full text-[9px] font-bold text-white"
+              className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1.5 rounded-full text-[10px] font-bold text-white"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              {activeCount}
+              {advancedCount}
             </span>
           )}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={resetFilters}
-            className="text-[11px] font-medium"
-            style={{ color: T.accentPrimary }}
-          >
-            Скинути
-          </button>
-          <SavedViews filters={filters} setFilters={setFilters} />
-        </div>
+          <ChevronDown
+            size={12}
+            style={{
+              transition: "transform 200ms",
+              transform: showAdvanced ? "rotate(180deg)" : "rotate(0deg)",
+            }}
+          />
+        </button>
       </div>
 
-      {/* Search — always visible */}
-      <div className="relative mb-3">
-        <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2"
+      {/* Period chips */}
+      <div className="flex items-center gap-2 -mx-1 px-1 overflow-x-auto scrollbar-none">
+        <CalendarDays
+          size={13}
+          className="flex-shrink-0"
           style={{ color: T.textMuted }}
         />
-        <input
-          value={filters.search}
-          onChange={(e) => setFilters((p) => ({ ...p, search: e.target.value }))}
-          placeholder="Пошук…"
-          className="w-full rounded-xl pl-9 pr-3 py-2.5 text-[13px] outline-none"
-          style={{
-            backgroundColor: T.panelSoft,
-            border: `1px solid ${T.borderStrong}`,
-            color: T.textPrimary,
-          }}
-        />
-      </div>
-
-      {/* Date presets */}
-      <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
         <DatePresets filters={filters} setFilters={setFilters} />
       </div>
 
-      {/* Row 1: main filters */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-2.5 mt-3">
-        {!scope && (
+      {/* Active filter chips */}
+      {activeCount > 0 && (
+        <ActiveFilterChips
+          filters={filters}
+          setFilters={setFilters}
+          resetFilters={resetFilters}
+          projects={projects}
+          users={users}
+          scope={scope}
+        />
+      )}
+
+      {/* Advanced filters (collapsible) */}
+      {showAdvanced && (
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-3 border-t"
+          style={{ borderColor: T.borderSoft }}
+        >
+          {!scope && (
+            <FilterSelect
+              icon={<Folder size={13} />}
+              placeholder="Проєкт"
+              value={filters.projectId}
+              onChange={(v) => setFilters((p) => ({ ...p, projectId: v }))}
+            >
+              <option value="">Всі проєкти</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
+
+          {!scope && (
+            <FilterSelect
+              icon={<Folder size={13} />}
+              placeholder="Папка"
+              value={filters.folderId}
+              onChange={(v) => setFilters((p) => ({ ...p, folderId: v }))}
+            >
+              <option value="">Всі папки</option>
+              {folderTree.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {"— ".repeat(f.depth) + f.name}
+                </option>
+              ))}
+            </FilterSelect>
+          )}
+
           <FilterSelect
-            value={filters.projectId}
-            onChange={(v) => setFilters((p) => ({ ...p, projectId: v }))}
+            icon={<Tag size={13} />}
+            placeholder="Категорія"
+            value={filters.category}
+            onChange={(v) => setFilters((p) => ({ ...p, category: v }))}
           >
-            <option value="">Всі проєкти</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
+            <option value="">Всі категорії</option>
+            {FINANCE_CATEGORIES.map((c) => (
+              <option key={c.key} value={c.key}>
+                {c.label}
               </option>
             ))}
           </FilterSelect>
-        )}
 
-        {!scope && (
-          <FilterSelect
-            value={filters.folderId}
-            onChange={(v) => setFilters((p) => ({ ...p, folderId: v }))}
-          >
-            <option value="">Всі папки</option>
-            {folderTree.map((f) => (
-              <option key={f.id} value={f.id}>
-                {"— ".repeat(f.depth) + f.name}
-              </option>
-            ))}
-          </FilterSelect>
-        )}
-
-        <FilterSelect
-          value={filters.kind}
-          onChange={(v) => setFilters((p) => ({ ...p, kind: v }))}
-        >
-          <option value="">План / Факт</option>
-          <option value="PLAN">План</option>
-          <option value="FACT">Факт</option>
-        </FilterSelect>
-
-        <FilterSelect
-          value={filters.type}
-          onChange={(v) => setFilters((p) => ({ ...p, type: v }))}
-        >
-          <option value="">Доходи / Витрати</option>
-          <option value="INCOME">Доходи</option>
-          <option value="EXPENSE">Витрати</option>
-        </FilterSelect>
-
-        <FilterSelect
-          value={filters.status}
-          onChange={(v) => setFilters((p) => ({ ...p, status: v }))}
-        >
-          <option value="">Всі статуси</option>
-          <option value="DRAFT">Чернетка</option>
-          <option value="PENDING">На погодженні</option>
-          <option value="APPROVED">Підтверджено</option>
-          <option value="PAID">Оплачено</option>
-        </FilterSelect>
-
-        <FilterSelect
-          value={filters.category}
-          onChange={(v) => setFilters((p) => ({ ...p, category: v }))}
-        >
-          <option value="">Всі категорії</option>
-          {FINANCE_CATEGORIES.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
-            </option>
-          ))}
-        </FilterSelect>
-
-        <FilterInput
-          type="date"
-          value={filters.from}
-          onChange={(v) => setFilters((p) => ({ ...p, from: v }))}
-          placeholder="Від"
-        />
-        <FilterInput
-          type="date"
-          value={filters.to}
-          onChange={(v) => setFilters((p) => ({ ...p, to: v }))}
-          placeholder="До"
-        />
-      </div>
-
-      {/* More filters toggle */}
-      <button
-        onClick={() => setShowMore(!showMore)}
-        className="flex items-center gap-1 mt-3 text-[11px] font-semibold transition"
-        style={{ color: T.textMuted }}
-      >
-        {showMore ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-        {showMore ? "Менше фільтрів" : "Більше фільтрів"}
-      </button>
-
-      {/* Row 2: extended filters */}
-      {showMore && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-3">
           <FilterInput
             value={filters.subcategory}
             onChange={(v) => setFilters((p) => ({ ...p, subcategory: v }))}
             placeholder="Підкатегорія"
+            icon={<Tag size={13} />}
           />
 
           {users.length > 0 && (
             <FilterSelect
+              icon={<UserIcon size={13} />}
+              placeholder="Автор"
               value={filters.responsibleId}
               onChange={(v) => setFilters((p) => ({ ...p, responsibleId: v }))}
             >
@@ -247,6 +305,8 @@ export function FilterBar({
           )}
 
           <FilterSelect
+            icon={<Paperclip size={13} />}
+            placeholder="Вкладення"
             value={filters.hasAttachments}
             onChange={(v) => setFilters((p) => ({ ...p, hasAttachments: v }))}
           >
@@ -254,6 +314,21 @@ export function FilterBar({
             <option value="true">З файлами</option>
             <option value="false">Без файлів</option>
           </FilterSelect>
+
+          <FilterInput
+            type="date"
+            icon={<CalendarDays size={13} />}
+            value={filters.from}
+            onChange={(v) => setFilters((p) => ({ ...p, from: v }))}
+            placeholder="Від"
+          />
+          <FilterInput
+            type="date"
+            icon={<CalendarDays size={13} />}
+            value={filters.to}
+            onChange={(v) => setFilters((p) => ({ ...p, to: v }))}
+            placeholder="До"
+          />
         </div>
       )}
     </section>

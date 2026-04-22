@@ -4,16 +4,13 @@ import { redirect } from "next/navigation";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { RadialProgress } from "@/components/ui/RadialProgress";
 import {
   PAYMENT_STATUS_LABELS,
   PAYMENT_STATUS_COLORS,
 } from "@/lib/constants";
 import Link from "next/link";
 import {
-  Wallet,
-  TrendingUp,
-  Clock,
   AlertCircle,
   ChevronRight,
   CalendarDays,
@@ -73,48 +70,52 @@ export default async function DashboardFinancePage() {
       </div>
 
       <div className="space-y-4">
-        {/* Overall progress */}
+        {/* Overall progress — radial hero */}
         <Card className="p-5 admin-dark:bg-gray-900/50 admin-dark:border-white/10 admin-light:shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold admin-dark:text-white admin-light:text-gray-900">
-              Загальна оплата
-            </span>
-            <span className="text-2xl font-bold admin-dark:text-blue-400 admin-light:text-primary">
-              {percentage}%
-            </span>
-          </div>
-          <Progress
-            value={percentage}
-            className="h-3"
-            indicatorClassName="bg-gradient-to-r from-blue-500 to-green-500"
-          />
-          <div className="mt-2 flex justify-between text-xs admin-dark:text-gray-400 admin-light:text-muted-foreground">
-            <span>Сплачено: {formatCurrency(totalPaid)}</span>
-            <span>Всього: {formatCurrency(totalBudget)}</span>
+          <div className="flex items-center gap-5">
+            <RadialProgress
+              value={percentage}
+              size={108}
+              thickness={9}
+              fillColor="#3B5BFF"
+              trackColor="rgba(127,127,127,0.16)"
+            >
+              <div className="flex flex-col items-center leading-tight">
+                <span className="text-[26px] font-bold admin-dark:text-blue-400 admin-light:text-primary">
+                  {percentage}%
+                </span>
+                <span className="text-[10px] admin-dark:text-gray-500 admin-light:text-muted-foreground">
+                  оплачено
+                </span>
+              </div>
+            </RadialProgress>
+            <div className="flex-1 min-w-0 space-y-2">
+              <span className="block text-sm font-semibold admin-dark:text-white admin-light:text-gray-900">
+                Загальна оплата
+              </span>
+              <div className="space-y-1 text-xs admin-dark:text-gray-400 admin-light:text-muted-foreground">
+                <div className="flex justify-between gap-2">
+                  <span>Сплачено</span>
+                  <span className="font-semibold tabular-nums admin-dark:text-green-400 admin-light:text-green-600">
+                    {formatCurrency(totalPaid)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span>Залишок</span>
+                  <span className="font-semibold tabular-nums admin-dark:text-amber-400 admin-light:text-amber-700">
+                    {formatCurrency(totalRemaining)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2 pt-1 border-t admin-dark:border-white/10 admin-light:border-gray-200">
+                  <span>Бюджет</span>
+                  <span className="font-semibold tabular-nums admin-dark:text-white admin-light:text-gray-900">
+                    {formatCurrency(totalBudget)}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </Card>
-
-        {/* KPI cards */}
-        <div className="grid grid-cols-3 gap-3">
-          <KpiCard
-            icon={Wallet}
-            label="Бюджет"
-            value={formatCurrency(totalBudget)}
-            color="blue"
-          />
-          <KpiCard
-            icon={TrendingUp}
-            label="Сплачено"
-            value={formatCurrency(totalPaid)}
-            color="green"
-          />
-          <KpiCard
-            icon={Clock}
-            label="Залишок"
-            value={formatCurrency(totalRemaining)}
-            color="amber"
-          />
-        </div>
 
         {/* Overdue alert */}
         {overdue.length > 0 && (
@@ -200,33 +201,52 @@ export default async function DashboardFinancePage() {
                 (p) => p.status !== "PAID" && new Date(p.scheduledDate) < now
               );
 
+              const ringColor =
+                pct >= 100 ? "#16A34A" : pct >= 50 ? "#3B5BFF" : "#D97706";
+
               return (
                 <Link
                   key={project.id}
                   href={`/dashboard/projects/${project.id}/finances`}
                 >
                   <Card className="p-4 admin-dark:bg-gray-900/50 admin-dark:border-white/10 admin-dark:hover:bg-gray-800/50 admin-light:hover:shadow-md transition-all">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
-                        {project.title}
-                      </span>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        {projectOverdue.length > 0 && (
-                          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[9px] font-bold text-white">
-                            {projectOverdue.length}
+                    <div className="flex items-center gap-3">
+                      <RadialProgress
+                        value={pct}
+                        size={42}
+                        thickness={4}
+                        fillColor={ringColor}
+                        trackColor="rgba(127,127,127,0.16)"
+                      >
+                        <span
+                          className="text-[10px] font-bold"
+                          style={{ color: ringColor }}
+                        >
+                          {pct}%
+                        </span>
+                      </RadialProgress>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-sm font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
+                            {project.title}
                           </span>
-                        )}
-                        <ChevronRight className="h-4 w-4 admin-dark:text-gray-600 admin-light:text-gray-400" />
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {projectOverdue.length > 0 && (
+                              <span
+                                className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white"
+                                title={`${projectOverdue.length} прострочено`}
+                              >
+                                {projectOverdue.length}
+                              </span>
+                            )}
+                            <ChevronRight className="h-4 w-4 admin-dark:text-gray-600 admin-light:text-gray-400" />
+                          </div>
+                        </div>
+                        <div className="flex justify-between text-xs admin-dark:text-gray-400 admin-light:text-muted-foreground tabular-nums">
+                          <span>Сплачено: {formatCurrency(paidAmount)}</span>
+                          <span>Залишок: {formatCurrency(remaining)}</span>
+                        </div>
                       </div>
-                    </div>
-                    <Progress
-                      value={pct}
-                      className="h-1.5 mb-2"
-                      indicatorClassName="bg-gradient-to-r from-blue-500 to-green-500"
-                    />
-                    <div className="flex justify-between text-xs admin-dark:text-gray-400 admin-light:text-muted-foreground">
-                      <span>Сплачено: {formatCurrency(paidAmount)}</span>
-                      <span>Залишок: {formatCurrency(remaining)}</span>
                     </div>
                   </Card>
                 </Link>
@@ -270,47 +290,5 @@ export default async function DashboardFinancePage() {
         )}
       </div>
     </div>
-  );
-}
-
-function KpiCard({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-  color: "blue" | "green" | "amber";
-}) {
-  const colors = {
-    blue: {
-      bg: "admin-dark:bg-blue-500/10 admin-light:bg-blue-50",
-      icon: "text-blue-500",
-      text: "admin-dark:text-blue-400 admin-light:text-blue-600",
-    },
-    green: {
-      bg: "admin-dark:bg-green-500/10 admin-light:bg-green-50",
-      icon: "text-green-500",
-      text: "admin-dark:text-green-400 admin-light:text-green-600",
-    },
-    amber: {
-      bg: "admin-dark:bg-amber-500/10 admin-light:bg-amber-50",
-      icon: "text-amber-500",
-      text: "admin-dark:text-amber-400 admin-light:text-amber-600",
-    },
-  };
-
-  const c = colors[color];
-
-  return (
-    <Card className="p-3 admin-dark:bg-gray-900/50 admin-dark:border-white/10 admin-light:shadow-sm">
-      <div className={`flex h-8 w-8 items-center justify-center rounded-lg mb-2 ${c.bg}`}>
-        <Icon className={`h-4 w-4 ${c.icon}`} />
-      </div>
-      <p className="text-[10px] admin-dark:text-gray-500 admin-light:text-muted-foreground">{label}</p>
-      <p className={`text-sm font-bold truncate ${c.text}`}>{value}</p>
-    </Card>
   );
 }

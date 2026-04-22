@@ -92,11 +92,12 @@ export function DatePresets({
                 setFilters((p) => ({ ...p, from: range.from, to: range.to }));
               }
             }}
-            className="rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+            className="rounded-full px-3 py-1.5 text-[12px] font-semibold transition whitespace-nowrap"
             style={{
-              backgroundColor: isActive ? T.accentPrimarySoft : T.panelSoft,
-              color: isActive ? T.accentPrimary : T.textMuted,
+              backgroundColor: isActive ? T.accentPrimary : "transparent",
+              color: isActive ? "#fff" : T.textSecondary,
               border: `1px solid ${isActive ? T.accentPrimary : T.borderSoft}`,
+              boxShadow: isActive ? "0 1px 2px rgba(0,0,0,0.10)" : "none",
             }}
           >
             {preset.label}

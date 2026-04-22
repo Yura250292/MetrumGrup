@@ -105,26 +105,33 @@ export function SavedViews({
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition"
+        className="flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition hover:brightness-105"
         style={{
-          backgroundColor: T.panelElevated,
+          backgroundColor: T.panelSoft,
           color: T.textSecondary,
-          border: `1px solid ${T.borderStrong}`,
+          border: `1px solid ${T.borderSoft}`,
         }}
       >
         <Bookmark size={13} />
-        Збережені види
-        <ChevronDown size={12} />
+        <span className="hidden sm:inline">Збережені</span>
+        <ChevronDown
+          size={12}
+          style={{
+            transition: "transform 200ms",
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          }}
+        />
       </button>
 
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
-            className="absolute right-0 top-full mt-1 z-50 w-72 rounded-xl overflow-hidden shadow-xl"
+            className="absolute right-0 top-full mt-2 z-50 w-72 rounded-2xl overflow-hidden"
             style={{
-              backgroundColor: T.panel,
+              backgroundColor: T.panelElevated,
               border: `1px solid ${T.borderStrong}`,
+              boxShadow: "0 12px 32px -8px rgba(0,0,0,0.20), 0 2px 8px rgba(0,0,0,0.08)",
             }}
           >
             {/* Header */}
@@ -132,10 +139,10 @@ export function SavedViews({
               className="flex items-center justify-between px-4 py-3 border-b"
               style={{ borderColor: T.borderSoft }}
             >
-              <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                ЗБЕРЕЖЕНІ ВИДИ
+              <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+                Збережені види
               </span>
-              <button onClick={() => setOpen(false)}>
+              <button onClick={() => setOpen(false)} className="rounded-md p-1 hover:bg-[var(--t-panel-soft)]">
                 <X size={14} style={{ color: T.textMuted }} />
               </button>
             </div>

@@ -2,18 +2,15 @@
 
 import { useMemo } from "react";
 import {
-  AlertTriangle,
   Clock,
   Receipt,
   FolderX,
   TrendingUp,
   Banknote,
-  CheckCircle2,
   ArrowRight,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
-import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import type { FinanceEntryDTO, FinanceSummaryDTO, FinancingFilters } from "./types";
 
 type AttentionItem = {
@@ -24,6 +21,12 @@ type AttentionItem = {
   count: number;
   severity: "danger" | "warning" | "info";
   onAction?: () => void;
+};
+
+const SEVERITY_RANK: Record<AttentionItem["severity"], number> = {
+  danger: 0,
+  warning: 1,
+  info: 2,
 };
 
 export function NeedsAttention({
@@ -41,9 +44,8 @@ export function NeedsAttention({
     const result: AttentionItem[] = [];
     const now = new Date();
 
-    // 1. Overdue plan entries
     const overduePlans = entries.filter(
-      (e) => e.kind === "PLAN" && new Date(e.occurredAt) < now
+      (e) => e.kind === "PLAN" && new Date(e.occurredAt) < now,
     );
     if (overduePlans.length > 0) {
       result.push({
@@ -60,7 +62,6 @@ export function NeedsAttention({
       });
     }
 
-    // 2. Overspending (fact expense > plan expense)
     if (summary.fact.expense.sum > summary.plan.expense.sum && summary.plan.expense.sum > 0) {
       const diff = summary.fact.expense.sum - summary.plan.expense.sum;
       result.push({
@@ -73,9 +74,8 @@ export function NeedsAttention({
       });
     }
 
-    // 3. Fact expenses without attachments (receipts)
     const noReceipts = entries.filter(
-      (e) => e.kind === "FACT" && e.type === "EXPENSE" && e.attachments.length === 0
+      (e) => e.kind === "FACT" && e.type === "EXPENSE" && e.attachments.length === 0,
     );
     if (noReceipts.length > 0) {
       result.push({
@@ -92,7 +92,6 @@ export function NeedsAttention({
       });
     }
 
-    // 4. Entries without project AND without folder — truly unclassified
     const unclassified = entries.filter(
       (e) => e.kind === "FACT" && e.projectId === null && e.folderId === null,
     );
@@ -101,7 +100,7 @@ export function NeedsAttention({
         id: "unclassified",
         icon: <FolderX size={14} />,
         label: "Без проєкту і папки",
-        description: `${unclassified.length} фактичних операцій не прив'язані ні до проєкту, ні до папки`,
+        description: `${unclassified.length} фактичних операцій не прив'язані`,
         count: unclassified.length,
         severity: "info",
         onAction: () => {
@@ -111,17 +110,14 @@ export function NeedsAttention({
       });
     }
 
-    // 5. Large upcoming plan payments (next 7 days)
     const sevenDaysAhead = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const upcomingLarge = entries
-      .filter(
-        (e) =>
-          e.kind === "PLAN" &&
-          e.type === "EXPENSE" &&
-          new Date(e.occurredAt) >= now &&
-          new Date(e.occurredAt) <= sevenDaysAhead
-      )
-      .sort((a, b) => Number(b.amount) - Number(a.amount));
+    const upcomingLarge = entries.filter(
+      (e) =>
+        e.kind === "PLAN" &&
+        e.type === "EXPENSE" &&
+        new Date(e.occurredAt) >= now &&
+        new Date(e.occurredAt) <= sevenDaysAhead,
+    );
 
     if (upcomingLarge.length > 0) {
       const totalUpcoming = upcomingLarge.reduce((s, e) => s + Number(e.amount), 0);
@@ -129,7 +125,7 @@ export function NeedsAttention({
         id: "upcoming_large",
         icon: <Banknote size={14} />,
         label: "Великі витрати найближчими днями",
-        description: `${upcomingLarge.length} планових витрат на ${formatCurrency(totalUpcoming)} протягом 7 днів`,
+        description: `${upcomingLarge.length} планових на ${formatCurrency(totalUpcoming)} протягом 7 днів`,
         count: upcomingLarge.length,
         severity: "warning",
         onAction: () => {
@@ -139,78 +135,117 @@ export function NeedsAttention({
       });
     }
 
-    return result;
+    return result.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
   }, [entries, summary, onSwitchTab, setFilters]);
 
-  if (items.length === 0) {
-    return (
-      <div
-        className="flex items-center gap-3 rounded-2xl px-5 py-4"
-        style={{
-          backgroundColor: T.successSoft,
-          border: `1px solid ${T.success}`,
-        }}
-      >
-        <CheckCircle2 size={18} style={{ color: T.success }} />
-        <span className="text-[13px] font-semibold" style={{ color: T.success }}>
-          Все добре — немає проблемних точок
-        </span>
-      </div>
-    );
-  }
+  if (items.length === 0) return null;
+
+  const primary = items.filter((i) => i.severity === "danger");
+  const secondary = items.filter((i) => i.severity !== "danger");
 
   return (
-    <div className="flex flex-col gap-2">
-      <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-        ПОТРЕБУЄ УВАГИ
-      </span>
-      <div className="flex flex-col gap-2">
-        {items.map((item) => {
-          const borderColor =
-            item.severity === "danger"
-              ? T.danger
-              : item.severity === "warning"
-                ? T.warning
-                : T.accentPrimary;
-          const bgColor =
-            item.severity === "danger"
-              ? T.dangerSoft
-              : item.severity === "warning"
-                ? T.warningSoft
-                : T.accentPrimarySoft;
-
-          return (
-            <div
-              key={item.id}
-              className="flex items-center gap-2 sm:gap-3 rounded-xl px-3 sm:px-4 py-3 cursor-pointer"
-              style={{
-                backgroundColor: bgColor,
-                borderLeft: `3px solid ${borderColor}`,
-              }}
-              onClick={item.onAction}
-            >
-              <span className="flex-shrink-0" style={{ color: borderColor }}>{item.icon}</span>
-              <div className="flex-1 min-w-0">
-                <span className="text-[12px] font-bold" style={{ color: T.textPrimary }}>
-                  {item.label}
-                </span>
-                <p className="text-[10px] sm:text-[11px] truncate sm:whitespace-normal" style={{ color: T.textSecondary }}>
-                  {item.description}
-                </p>
-              </div>
-              <span
-                className="flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[10px] font-bold text-white flex-shrink-0"
-                style={{ backgroundColor: borderColor }}
-              >
-                {item.count}
-              </span>
-              {item.onAction && (
-                <ArrowRight size={14} className="flex-shrink-0 hidden sm:block" style={{ color: borderColor }} />
-              )}
-            </div>
-          );
-        })}
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline gap-2">
+        <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+          Потребує уваги
+        </span>
+        <span className="text-[11px]" style={{ color: T.textMuted }}>
+          ({items.length})
+        </span>
       </div>
+
+      {/* Primary: danger items as full cards */}
+      {primary.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {primary.map((item) => (
+            <PrimaryCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+
+      {/* Secondary: warning + info as compact chips */}
+      {secondary.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {secondary.map((item) => (
+            <Chip key={item.id} item={item} />
+          ))}
+        </div>
+      )}
     </div>
+  );
+}
+
+function PrimaryCard({ item }: { item: AttentionItem }) {
+  return (
+    <button
+      onClick={item.onAction}
+      disabled={!item.onAction}
+      className="flex items-center gap-3 rounded-xl px-4 py-3 text-left transition group disabled:cursor-default"
+      style={{
+        backgroundColor: T.dangerSoft,
+        borderLeft: `3px solid ${T.danger}`,
+      }}
+    >
+      <span
+        className="relative flex h-9 w-9 items-center justify-center rounded-full flex-shrink-0"
+        style={{ backgroundColor: `${T.danger}1f`, color: T.danger }}
+      >
+        {item.icon}
+        <span
+          className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full animate-pulse"
+          style={{ backgroundColor: T.danger, boxShadow: `0 0 0 2px var(--t-panel)` }}
+        />
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[12.5px] font-bold" style={{ color: T.textPrimary }}>
+          {item.label}
+        </div>
+        <div className="text-[11px] truncate sm:whitespace-normal" style={{ color: T.textSecondary }}>
+          {item.description}
+        </div>
+      </div>
+      <span
+        className="flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-[11px] font-bold text-white flex-shrink-0"
+        style={{ backgroundColor: T.danger }}
+      >
+        {item.count}
+      </span>
+      {item.onAction && (
+        <ArrowRight
+          size={14}
+          className="flex-shrink-0 transition-transform group-hover:translate-x-0.5"
+          style={{ color: T.danger }}
+        />
+      )}
+    </button>
+  );
+}
+
+function Chip({ item }: { item: AttentionItem }) {
+  const color = item.severity === "warning" ? T.warning : T.accentPrimary;
+  const bg = item.severity === "warning" ? T.warningSoft : T.accentPrimarySoft;
+
+  return (
+    <button
+      onClick={item.onAction}
+      disabled={!item.onAction}
+      className="flex items-center gap-2 rounded-full pl-2 pr-3 py-1.5 text-[11.5px] transition disabled:cursor-default hover:brightness-95"
+      style={{ backgroundColor: bg, color }}
+      title={item.description}
+    >
+      <span
+        className="flex h-5 w-5 items-center justify-center rounded-full"
+        style={{ backgroundColor: color, color: "#fff" }}
+      >
+        {item.icon}
+      </span>
+      <span className="font-semibold">{item.label}</span>
+      <span
+        className="flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9.5px] font-bold text-white"
+        style={{ backgroundColor: color }}
+      >
+        {item.count}
+      </span>
+    </button>
   );
 }
