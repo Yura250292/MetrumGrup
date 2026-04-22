@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Plus, MessageSquare, FolderKanban, Calculator } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, MessageSquare, FolderKanban, Calculator, Search, AlertCircle } from "lucide-react";
 import { useConversations, type ChatConversation } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { NewConversationDialog } from "./NewConversationDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+
+function getConversationTitle(c: ChatConversation): string {
+  if (c.type === "DM") return c.peer?.name ?? "Видалений користувач";
+  if (c.type === "PROJECT") return c.project?.title ?? c.title ?? "Канал проєкту";
+  return c.estimate ? `Кошторис ${c.estimate.number}` : c.title ?? "Канал кошторису";
+}
 
 function formatTime(iso: string | null) {
   if (!iso) return "";
@@ -26,23 +32,17 @@ function ConversationRow({
   conversation: ChatConversation;
   isActive: boolean;
 }) {
-  let title: string;
+  const title = getConversationTitle(conversation);
   let Icon: typeof MessageSquare;
   let avatarGradient: string;
 
   if (conversation.type === "DM") {
-    title = conversation.peer?.name ?? "Видалений користувач";
     Icon = MessageSquare;
     avatarGradient = "bg-gradient-to-br from-blue-500 to-cyan-500";
   } else if (conversation.type === "PROJECT") {
-    title = conversation.project?.title ?? conversation.title ?? "Канал проєкту";
     Icon = FolderKanban;
     avatarGradient = "bg-gradient-to-br from-orange-500 to-amber-500";
   } else {
-    // ESTIMATE
-    title = conversation.estimate
-      ? `Кошторис ${conversation.estimate.number}`
-      : conversation.title ?? "Канал кошторису";
     Icon = Calculator;
     avatarGradient = "bg-gradient-to-br from-purple-500 to-violet-500";
   }
@@ -99,8 +99,20 @@ function ConversationRow({
 }
 
 export function ConversationList({ activeId }: { activeId: string | null }) {
-  const { data: conversations, isLoading } = useConversations();
+  const { data: conversations, isLoading, isError, refetch, isFetching } = useConversations();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!conversations) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter((c) => {
+      const title = getConversationTitle(c).toLowerCase();
+      const last = c.lastMessage?.body?.toLowerCase() ?? "";
+      return title.includes(q) || last.includes(q);
+    });
+  }, [conversations, query]);
 
   return (
     <>
@@ -116,21 +128,63 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
           Нова
         </Button>
       </div>
+      <div
+        className="border-b px-3 py-2"
+        style={{ borderColor: T.borderSoft }}
+      >
+        <div
+          className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+          style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
+        >
+          <Search className="h-4 w-4 flex-shrink-0" style={{ color: T.textMuted }} />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Пошук по розмовах"
+            className="w-full bg-transparent text-sm outline-none"
+            style={{ color: T.textPrimary }}
+            aria-label="Пошук по розмовах"
+          />
+        </div>
+      </div>
       <div className="flex-1 overflow-y-auto scrollbar-thin">
         {isLoading && (
           <p className="p-4 text-sm" style={{ color: T.textMuted }}>
             Завантаження...
           </p>
         )}
-        {!isLoading && conversations?.length === 0 && (
+        {isError && !isLoading && (
+          <div className="p-6 text-center">
+            <AlertCircle className="mx-auto h-10 w-10" style={{ color: T.danger }} />
+            <p className="mt-2 text-sm" style={{ color: T.textSecondary }}>
+              Не вдалося завантажити розмови
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
+              {isFetching ? "Повторюємо…" : "Повторити"}
+            </Button>
+          </div>
+        )}
+        {!isLoading && !isError && conversations?.length === 0 && (
           <div className="p-6 text-center">
             <MessageSquare className="mx-auto h-10 w-10" style={{ color: T.textMuted }} />
             <p className="mt-2 text-sm" style={{ color: T.textMuted }}>
-              Поки немає розмов. Натисніть "Нова", щоб почати.
+              Поки немає розмов. Натисніть &quot;Нова&quot;, щоб почати.
             </p>
           </div>
         )}
-        {conversations?.map((c) => (
+        {!isLoading && !isError && conversations && conversations.length > 0 && filtered.length === 0 && (
+          <p className="p-6 text-center text-sm" style={{ color: T.textMuted }}>
+            Нічого не знайдено
+          </p>
+        )}
+        {filtered.map((c) => (
           <ConversationRow key={c.id} conversation={c} isActive={c.id === activeId} />
         ))}
       </div>
