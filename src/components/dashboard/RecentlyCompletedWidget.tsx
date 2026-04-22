@@ -28,7 +28,7 @@ export function RecentlyCompletedWidget() {
           </h2>
         </div>
         <Link
-          href="/admin/feed"
+          href="/admin-v2/feed"
           className="text-xs font-medium text-blue-500 hover:underline flex items-center gap-1"
         >
           Вся стрічка

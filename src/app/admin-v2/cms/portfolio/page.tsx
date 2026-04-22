@@ -33,7 +33,7 @@ export default async function AdminV2PortfolioPage() {
           </p>
         </div>
         <Link
-          href="/admin/cms/portfolio"
+          href="/admin-v2/cms/portfolio"
           className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white transition hover:brightness-95"
           style={{ backgroundColor: T.accentPrimary }}
         >
