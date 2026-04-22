@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 import { DualRadialProgress, RadialProgress } from "@/components/ui/RadialProgress";
+import { Collapsible } from "@/components/ui/Collapsible";
 import type { FinanceSummaryDTO } from "./types";
 
 /** SSR-safe media query hook */
@@ -64,10 +66,15 @@ function useCountUp(target: number, duration = 1100, delay = 0) {
 export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const isNarrow = useMediaQuery("(max-width: 420px)");
-  const ringSize = isNarrow ? 76 : 92;
+  const ringSize = isNarrow ? 72 : 92;
   const ringThickness = isNarrow ? 5 : 6;
   const deltaThickness = isNarrow ? 6 : 7;
   const ringGap = isNarrow ? 2 : 3;
+  // Mobile: start collapsed to a tight summary bar; user toggles to expand.
+  const [open, setOpen] = useState(!isNarrow);
+  useEffect(() => {
+    setOpen(!isNarrow);
+  }, [isNarrow]);
   const fi = summary.fact.income.sum;
   const fe = summary.fact.expense.sum;
   const pi = summary.plan.income.sum;
@@ -118,7 +125,30 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
         }
       `}</style>
 
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-3" key={mountKey}>
+      {/* Compact summary bar (toggle + 3 inline numbers) */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-1 py-1 transition-colors"
+      >
+        <div className="flex items-center gap-3 sm:gap-5 min-w-0 flex-1 justify-around">
+          <CompactStat label="Факт" value={formatCurrencyCompact(factBalance)} tone={factPositive ? T.success : T.danger} />
+          <CompactStat label="План" value={formatCurrencyCompact(planBalance)} tone={planPositive ? T.accentPrimary : T.danger} />
+          <CompactStat label="Δ" value={(delta >= 0 ? "+" : "") + formatCurrencyCompact(delta)} tone={deltaPositive ? T.success : T.danger} />
+        </div>
+        <ChevronDown
+          size={16}
+          className="flex-shrink-0 transition-transform"
+          style={{
+            color: T.textMuted,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+          }}
+        />
+      </button>
+
+      <Collapsible open={open} duration={320}>
+        <div className="pt-3 grid grid-cols-3 gap-1.5 sm:gap-3" key={mountKey}>
         {/* Ring 1 — Факт */}
         <RingCard
           title="Факт"
@@ -171,8 +201,36 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           size={ringSize}
           thickness={deltaThickness}
         />
-      </div>
+        </div>
+      </Collapsible>
     </section>
+  );
+}
+
+function CompactStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
+  return (
+    <div className="flex flex-col items-center leading-tight min-w-0">
+      <span
+        className="text-[9.5px] font-semibold tracking-wide"
+        style={{ color: T.textMuted }}
+      >
+        {label}
+      </span>
+      <span
+        className="text-[13px] sm:text-[14px] font-bold tabular-nums whitespace-nowrap"
+        style={{ color: tone }}
+      >
+        {value}
+      </span>
+    </div>
   );
 }
 

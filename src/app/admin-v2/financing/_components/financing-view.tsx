@@ -509,41 +509,75 @@ export function FinancingView({
         />
       )}
 
-      {/* Tab content */}
-      {activeTab === "overview" && (
-        <TabOverview
-          entries={entries}
-          summary={summary}
-          loading={loading}
-          error={error}
-          quadrantEntries={quadrantEntries}
-          scope={scope}
-          onAdd={(preset) => setCreatePreset(preset)}
-          onEdit={(e) => setEditing(e)}
-          onArchive={handleArchive}
-          onDelete={handleDelete}
-          onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
-          onSwitchTab={setActiveTab}
-          setFilters={setFilters}
-        />
-      )}
+      {/* Tab content — wrapped with key so each switch replays the slide-down */}
+      <div key={activeTab} className="animate-slide-in-down flex flex-col gap-4 sm:gap-6">
+        {activeTab === "overview" && (
+          <TabOverview
+            entries={entries}
+            summary={summary}
+            loading={loading}
+            error={error}
+            quadrantEntries={quadrantEntries}
+            scope={scope}
+            onAdd={(preset) => setCreatePreset(preset)}
+            onEdit={(e) => setEditing(e)}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
+            onSwitchTab={setActiveTab}
+            setFilters={setFilters}
+          />
+        )}
 
-      {activeTab === "operations" && (
-        <TabOperations
-          entries={entries}
-          loading={loading}
-          error={error}
-          scope={scope}
-          filters={filters}
-          setFilters={setFilters}
-          onEdit={(e) => setEditing(e)}
-          onArchive={handleArchive}
-          onDelete={handleDelete}
-          onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
-        />
-      )}
+        {activeTab === "operations" && (
+          <TabOperations
+            entries={entries}
+            loading={loading}
+            error={error}
+            scope={scope}
+            filters={filters}
+            setFilters={setFilters}
+            onEdit={(e) => setEditing(e)}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
+          />
+        )}
 
-      {/* Move finance entry to folder dialog */}
+        {activeTab === "approvals" && (
+          <TabApprovals
+            entries={entries}
+            loading={loading}
+            error={error}
+            onEdit={(e) => setEditing(e)}
+            onRefresh={() => loadData()}
+          />
+        )}
+
+        {activeTab === "scans" && (
+          <TabScans
+            entries={entries}
+            loading={loading}
+            error={error}
+            onEdit={(e) => setEditing(e)}
+          />
+        )}
+
+        {activeTab === "calendar" && (
+          <TabCalendar entries={entries} loading={loading} />
+        )}
+
+        {activeTab === "archive" && (
+          <TabArchive
+            scope={scope}
+            projects={projects}
+            users={users}
+            onEdit={(e) => setEditing(e)}
+          />
+        )}
+      </div>
+
+      {/* Move finance entry to folder dialog (modal — lives outside animated wrapper) */}
       <MoveToFolderDialog
         open={!!moveEntryId}
         onClose={() => setMoveEntryId(null)}
@@ -564,38 +598,6 @@ export function FinancingView({
           );
         }}
       />
-
-      {activeTab === "approvals" && (
-        <TabApprovals
-          entries={entries}
-          loading={loading}
-          error={error}
-          onEdit={(e) => setEditing(e)}
-          onRefresh={() => loadData()}
-        />
-      )}
-
-      {activeTab === "scans" && (
-        <TabScans
-          entries={entries}
-          loading={loading}
-          error={error}
-          onEdit={(e) => setEditing(e)}
-        />
-      )}
-
-      {activeTab === "calendar" && (
-        <TabCalendar entries={entries} loading={loading} />
-      )}
-
-      {activeTab === "archive" && (
-        <TabArchive
-          scope={scope}
-          projects={projects}
-          users={users}
-          onEdit={(e) => setEditing(e)}
-        />
-      )}
 
       {/* OCR Scan modal */}
       {showOcrScan && (

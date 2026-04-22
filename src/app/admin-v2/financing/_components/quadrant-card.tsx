@@ -10,12 +10,28 @@ import {
   FileText,
   FolderInput,
   MoreVertical,
+  ChevronDown,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatCurrencyCompact, formatDateShort } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import { RadialProgress } from "@/components/ui/RadialProgress";
+import { Collapsible } from "@/components/ui/Collapsible";
 import type { FinanceEntryDTO, QuadrantStats } from "./types";
+
+/** Track viewport once at mount — collapsed by default on <md */
+function useIsMobile() {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    setMobile(mq.matches);
+    const h = (e: MediaQueryListEvent) => setMobile(e.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
+  return mobile;
+}
 
 export function QuadrantCard({
   title,
@@ -49,8 +65,6 @@ export function QuadrantCard({
   planned?: boolean;
 }) {
   // Ratio: how much of the "paired" side is realized through this card
-  // For FACT cards: stats.sum / pairedSum (plan) → coverage of plan
-  // For PLAN cards: pairedSum (fact) / stats.sum → realization rate
   const ratioPct =
     typeof pairedSum === "number" && pairedSum > 0
       ? Math.min(
@@ -63,6 +77,14 @@ export function QuadrantCard({
         )
       : null;
 
+  // On mobile, quadrants start collapsed to reduce vertical scroll.
+  // Desktop shows them open.
+  const isMobile = useIsMobile();
+  const [open, setOpen] = useState(true);
+  useEffect(() => {
+    setOpen(!isMobile);
+  }, [isMobile]);
+
   return (
     <section
       className="flex flex-col overflow-hidden rounded-2xl transition-shadow hover:shadow-md"
@@ -72,9 +94,12 @@ export function QuadrantCard({
         boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
       }}
     >
-      {/* Header */}
-      <div
-        className="flex items-center justify-between gap-3 border-b px-4 py-3.5"
+      {/* Header (click to toggle on mobile) */}
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center justify-between gap-3 border-b px-4 py-3.5 text-left w-full transition-colors hover:brightness-[0.98]"
         style={{ borderColor: T.borderSoft, backgroundColor: T.panelElevated }}
       >
         <div className="flex items-center gap-3 min-w-0">
@@ -132,55 +157,77 @@ export function QuadrantCard({
           <span className="text-[15px] sm:text-base font-bold" style={{ color: accent }}>
             {formatCurrencyCompact(stats.sum)}
           </span>
-          <button
-            onClick={onAdd}
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdd();
+            }}
+            role="button"
+            tabIndex={0}
             title="Додати"
-            className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:brightness-110"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                onAdd();
+              }
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:brightness-110 cursor-pointer"
             style={{
               backgroundColor: accent,
               color: "#fff",
             }}
           >
             <Plus size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* List */}
-      {entries.length === 0 ? (
-        <div
-          className="flex flex-col items-center justify-center gap-2 py-10 text-center px-6"
-          style={{ color: T.textMuted }}
-        >
-          <FileText size={20} />
-          <span className="text-[12px]">Порожньо</span>
-          <button
-            onClick={onAdd}
-            className="mt-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition hover:opacity-80"
+          </span>
+          <ChevronDown
+            size={16}
+            className="transition-transform flex-shrink-0"
             style={{
-              backgroundColor: `${accent}12`,
-              color: accent,
+              color: T.textMuted,
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
             }}
+          />
+        </div>
+      </button>
+
+      {/* Collapsible list */}
+      <Collapsible open={open} duration={320}>
+        {entries.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center gap-2 py-10 text-center px-6"
+            style={{ color: T.textMuted }}
           >
-            + Додати перший запис
-          </button>
-        </div>
-      ) : (
-        <div className="max-h-[360px] overflow-y-auto">
-          {entries.map((e) => (
-            <EntryRow
-              key={e.id}
-              entry={e}
-              accent={accent}
-              showProject={showProject}
-              onEdit={() => onEdit(e)}
-              onArchive={() => onArchive(e)}
-              onDelete={onDelete ? () => onDelete(e) : undefined}
-              onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(e) : undefined}
-            />
-          ))}
-        </div>
-      )}
+            <FileText size={20} />
+            <span className="text-[12px]">Порожньо</span>
+            <button
+              onClick={onAdd}
+              className="mt-1 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition hover:opacity-80"
+              style={{
+                backgroundColor: `${accent}12`,
+                color: accent,
+              }}
+            >
+              + Додати перший запис
+            </button>
+          </div>
+        ) : (
+          <div className="max-h-[360px] overflow-y-auto">
+            {entries.map((e) => (
+              <EntryRow
+                key={e.id}
+                entry={e}
+                accent={accent}
+                showProject={showProject}
+                onEdit={() => onEdit(e)}
+                onArchive={() => onArchive(e)}
+                onDelete={onDelete ? () => onDelete(e) : undefined}
+                onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(e) : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </Collapsible>
     </section>
   );
 }
