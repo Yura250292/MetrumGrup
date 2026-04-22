@@ -6,7 +6,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 export async function GET() {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") return forbiddenResponse();
+  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) return forbiddenResponse();
 
   const workers = await prisma.worker.findMany({
     include: {
@@ -25,7 +25,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") return forbiddenResponse();
+  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) return forbiddenResponse();
 
   const body = await request.json();
   const worker = await prisma.worker.create({ data: body });

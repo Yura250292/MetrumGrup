@@ -8,13 +8,14 @@ import { ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { NAV_GROUPS, isItemActive } from "../_lib/nav";
+import { NAV_GROUPS, isItemActive, isItemVisibleForRole } from "../_lib/nav";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
   MANAGER: "Менеджер",
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",
+  HR: "HR",
   CLIENT: "Клієнт",
   USER: "Користувач",
 };
@@ -24,7 +25,7 @@ export function Sidebar() {
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const unreadCount = useUnreadChatCount();
-  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
+  const role = session?.user?.role;
 
   const width = collapsed ? 64 : 264;
 
@@ -75,7 +76,7 @@ export function Sidebar() {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-4">
         {NAV_GROUPS.map((group) => {
-          const visible = group.items.filter((it) => !it.superAdminOnly || isSuperAdmin);
+          const visible = group.items.filter((it) => isItemVisibleForRole(it, role));
           if (visible.length === 0) return null;
           return (
             <div key={group.label} className="mb-5">

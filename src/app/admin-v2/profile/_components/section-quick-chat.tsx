@@ -15,6 +15,7 @@ const ROLE_LABELS: Record<string, string> = {
   MANAGER: "Менеджер",
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",
+  HR: "HR",
 };
 
 const ROLE_COLORS: Record<string, string> = {

@@ -32,6 +32,7 @@ import { DashboardShell, DashboardWidgetConfigButton, Widget } from "./_componen
 import { AiSummary } from "./_components/dashboard/ai-summary";
 import { CollapsibleMobile } from "./_components/dashboard/collapsible-mobile";
 import { SectionHeader } from "./_components/dashboard/section-header";
+import { HrDashboard } from "./_components/dashboard/hr-dashboard";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,18 @@ export default async function AdminV2Dashboard({
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const firstName = session.user.name?.split(" ")[0] || "Адміністратор";
+  const today = new Date().toLocaleDateString("uk-UA", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  if (session.user.role === "HR") {
+    return <HrDashboard firstName={firstName} today={today} />;
+  }
 
   const sp = await searchParams;
   const activeTab = (sp.tab || "overview") as DashboardTabId;
@@ -562,15 +575,6 @@ export default async function AdminV2Dashboard({
     activeTaskCount: activeTaskMap.get(log.userId) ?? 0,
     overdueTaskCount: overdueTaskUserMap.get(log.userId) ?? 0,
   }));
-
-  const today = new Date().toLocaleDateString("uk-UA", {
-    weekday: "long",
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-
-  const firstName = session.user.name?.split(" ")[0] || "Адміністратор";
 
   // Stage distribution map
   const stageMap = new Map<ProjectStage, number>();

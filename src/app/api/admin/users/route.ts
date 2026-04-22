@@ -7,12 +7,16 @@ import bcrypt from "bcryptjs";
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
-    return forbiddenResponse();
-  }
 
   const roleParam = request.nextUrl.searchParams.get("role");
   const roles = roleParam ? roleParam.split(",") : undefined;
+
+  const isAdminOrManager = session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
+  const isHrReadingClients =
+    session.user.role === "HR" && roles?.length === 1 && roles[0] === "CLIENT";
+  if (!isAdminOrManager && !isHrReadingClients) {
+    return forbiddenResponse();
+  }
 
   const users = await prisma.user.findMany({
     where: roles ? { role: { in: roles as any[] } } : undefined,

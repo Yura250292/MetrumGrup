@@ -35,6 +35,7 @@ const ROLE_LABELS: Record<string, string> = {
   MANAGER: "Менеджер",
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",
+  HR: "HR",
   USER: "Користувач",
   CLIENT: "Клієнт",
 };
@@ -44,6 +45,7 @@ const ROLE_ICONS: Record<string, typeof Shield> = {
   MANAGER: UsersIcon,
   ENGINEER: Wrench,
   FINANCIER: Calculator,
+  HR: UsersIcon,
   USER: UserIcon,
   CLIENT: UserIcon,
 };
@@ -53,6 +55,7 @@ const ROLE_COLORS: Record<string, { bg: string; fg: string }> = {
   MANAGER: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
   ENGINEER: { bg: T.successSoft, fg: T.success },
   FINANCIER: { bg: T.warningSoft, fg: T.warning },
+  HR: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
   USER: { bg: T.panelElevated, fg: T.textMuted },
   CLIENT: { bg: T.panelElevated, fg: T.textMuted },
 };

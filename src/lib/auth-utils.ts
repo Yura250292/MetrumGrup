@@ -57,10 +57,21 @@ export const ADMIN_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];
 export const ESTIMATE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"];
 export const FINANCE_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
 export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
+// HR has read+write access to employees/counterparties/subcontractors/clients and read to
+// equipment/warehouse/workers/meetings/chat. Treated as an admin peer for its allowlist only.
+export const HR_ACCESSIBLE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "HR"];
 
 export async function requireAdminRole() {
   const session = await requireAuth();
   if (!ADMIN_ROLES.includes(session.user.role)) {
+    throw new Error("Forbidden");
+  }
+  return session;
+}
+
+export async function requireHrOrAdminRole() {
+  const session = await requireAuth();
+  if (!HR_ACCESSIBLE_ROLES.includes(session.user.role)) {
     throw new Error("Forbidden");
   }
   return session;

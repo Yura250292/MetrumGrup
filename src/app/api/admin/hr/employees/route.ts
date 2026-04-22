@@ -7,7 +7,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 async function guard() {
   const session = await auth();
   if (!session?.user) return { error: unauthorizedResponse() };
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
+  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) {
     return { error: forbiddenResponse() };
   }
   return { session };

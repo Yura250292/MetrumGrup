@@ -26,6 +26,7 @@ export type NavItem = {
   icon: LucideIcon;
   exact?: boolean;
   superAdminOnly?: boolean;
+  hrAllowed?: boolean;
   showUnreadBadge?: boolean;
 };
 
@@ -40,15 +41,15 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Головне",
     items: [
-      { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true },
-      { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo },
+      { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true, hrAllowed: true },
+      { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo, hrAllowed: true },
     ],
   },
   {
     label: "Проєкти",
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
-      { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
+      { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
       { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
     ],
   },
@@ -71,24 +72,24 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Ресурси",
     items: [
-      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck },
-      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse },
-      { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat },
+      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
+      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
+      { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat, hrAllowed: true },
     ],
   },
   {
     label: "HR",
     items: [
-      { href: "/admin-v2/hr/employees", label: "Співробітники", icon: Users },
-      { href: "/admin-v2/hr/counterparties", label: "Контрагенти", icon: Building2 },
-      { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat },
+      { href: "/admin-v2/hr/employees", label: "Співробітники", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/hr/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
+      { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
     ],
   },
   {
     label: "Комунікація",
     items: [
-      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
-      { href: "/admin-v2/meetings", label: "Наради", icon: Mic },
+      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true, hrAllowed: true },
+      { href: "/admin-v2/meetings", label: "Наради", icon: Mic, hrAllowed: true },
       { href: "/admin-v2/feed", label: "Активність", icon: Activity },
     ],
   },
@@ -172,3 +173,23 @@ export function isItemActive(href: string, exact: boolean | undefined, pathname:
   if (exact) return pathname === href;
   return pathname === href || pathname.startsWith(href + "/");
 }
+
+export function isItemVisibleForRole(item: NavItem, role: string | undefined): boolean {
+  if (item.superAdminOnly && role !== "SUPER_ADMIN") return false;
+  if (role === "HR" && !item.hrAllowed) return false;
+  return true;
+}
+
+// Page prefixes HR can access — enforced both in nav filtering and (defensively) in API/page guards.
+export const HR_ALLOWED_PREFIXES: string[] = [
+  "/admin-v2",
+  "/admin-v2/me",
+  "/admin-v2/profile",
+  "/admin-v2/clients",
+  "/admin-v2/resources/equipment",
+  "/admin-v2/resources/warehouse",
+  "/admin-v2/resources/workers",
+  "/admin-v2/hr",
+  "/admin-v2/chat",
+  "/admin-v2/meetings",
+];

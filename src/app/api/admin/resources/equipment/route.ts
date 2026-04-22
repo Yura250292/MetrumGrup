@@ -7,7 +7,7 @@ import { EquipmentStatus } from "@prisma/client";
 export async function GET() {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") return forbiddenResponse();
+  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) return forbiddenResponse();
 
   const equipment = await prisma.equipment.findMany({
     include: { currentProject: { select: { title: true } } },
@@ -20,7 +20,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") return forbiddenResponse();
+  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) return forbiddenResponse();
 
   const body = await request.json();
   const equipment = await prisma.equipment.create({ data: body });
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") return forbiddenResponse();
+  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) return forbiddenResponse();
 
   const { id, ...data } = await request.json();
   const equipment = await prisma.equipment.update({ where: { id }, data });
