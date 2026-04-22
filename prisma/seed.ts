@@ -100,8 +100,10 @@ async function main() {
     parentSlug: string | null;
     sortOrder: number;
   }> = [
-    { id: "fld_sys_company_expenses", name: "Постійні витрати", slug: "company-expenses",  parentSlug: null,              sortOrder: 0 },
-    { id: "fld_sys_office_expenses",  name: "Витрати офісу",    slug: "office-expenses",   parentSlug: null,              sortOrder: 1 },
+    { id: "fld_sys_general_expenses", name: "Загальні витрати", slug: "general-expenses",  parentSlug: null,              sortOrder: 0 },
+    { id: "fld_sys_company_expenses", name: "Постійні витрати", slug: "company-expenses",  parentSlug: "general-expenses", sortOrder: 0 },
+    { id: "fld_sys_variable_expenses", name: "Змінні витрати",  slug: "variable-expenses", parentSlug: "general-expenses", sortOrder: 1 },
+    { id: "fld_sys_office_expenses",  name: "Витрати офісу",    slug: "office-expenses",   parentSlug: "general-expenses", sortOrder: 2 },
     { id: "fld_sys_office_fixed",     name: "Постійні",         slug: "office-fixed",      parentSlug: "office-expenses", sortOrder: 0 },
     { id: "fld_sys_office_variable",  name: "Змінні",           slug: "office-variable",   parentSlug: "office-expenses", sortOrder: 1 },
   ];

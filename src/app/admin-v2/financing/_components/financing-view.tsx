@@ -319,6 +319,8 @@ export function FinancingView({
                   key={block.id}
                   folder={block}
                   basePath="/admin-v2/financing"
+                  defaultOpen
+                  hideActions
                   onCreateChildFolder={(parentId) => {
                     setCreateFolderParentId(parentId);
                     setShowCreateFolder(true);
@@ -333,13 +335,38 @@ export function FinancingView({
                   }
                   onRenameChild={handleRenameFolder}
                   onDeleteChild={handleDeleteFolder}
-                  extraContent={
-                    <TemplateConstructor
-                      folderId={block.id}
-                      folderName={block.name}
-                      onEntryCreated={() => loadData()}
-                    />
-                  }
+                  renderChildren={(children) => (
+                    <div className="flex flex-col gap-3">
+                      {children.map((child) => (
+                        <ExpandableBlockCard
+                          key={child.id}
+                          folder={child}
+                          basePath="/admin-v2/financing"
+                          onCreateChildFolder={(parentId) => {
+                            setCreateFolderParentId(parentId);
+                            setShowCreateFolder(true);
+                          }}
+                          onCreateEntry={(blockId) =>
+                            setCreatePreset({
+                              kind: "FACT",
+                              type: "EXPENSE",
+                              folderId: blockId,
+                              folderName: child.name,
+                            })
+                          }
+                          onRenameChild={handleRenameFolder}
+                          onDeleteChild={handleDeleteFolder}
+                          extraContent={
+                            <TemplateConstructor
+                              folderId={child.id}
+                              folderName={child.name}
+                              onEntryCreated={() => loadData()}
+                            />
+                          }
+                        />
+                      ))}
+                    </div>
+                  )}
                 />
               ))}
             </div>

@@ -18,6 +18,10 @@ type Props = {
   onDeleteChild: (id: string) => void;
   /** Extra content rendered inside the expanded body (e.g. template constructor) */
   extraContent?: React.ReactNode;
+  /** Override default FolderCard grid for children (e.g. render as nested blocks) */
+  renderChildren?: (children: FolderItem[]) => React.ReactNode;
+  /** Hide the default action buttons at bottom */
+  hideActions?: boolean;
 };
 
 const STORAGE_PREFIX = "financing:block-open:";
@@ -31,6 +35,8 @@ export function ExpandableBlockCard({
   onRenameChild,
   onDeleteChild,
   extraContent,
+  renderChildren,
+  hideActions,
 }: Props) {
   const storageKey = STORAGE_PREFIX + folder.id;
   const [open, setOpen] = useState<boolean>(defaultOpen);
@@ -135,18 +141,22 @@ export function ExpandableBlockCard({
               Завантаження…
             </div>
           ) : children.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2.5">
-              {children.map((child) => (
-                <FolderCard
-                  key={child.id}
-                  folder={child}
-                  href={`${basePath}?folderId=${child.id}`}
-                  showFinanceIndicators
-                  onRename={onRenameChild}
-                  onDelete={onDeleteChild}
-                />
-              ))}
-            </div>
+            renderChildren ? (
+              renderChildren(children)
+            ) : (
+              <div className="grid grid-cols-2 gap-2.5">
+                {children.map((child) => (
+                  <FolderCard
+                    key={child.id}
+                    folder={child}
+                    href={`${basePath}?folderId=${child.id}`}
+                    showFinanceIndicators
+                    onRename={onRenameChild}
+                    onDelete={onDeleteChild}
+                  />
+                ))}
+              </div>
+            )
           ) : (
             <div
               className="text-[12px] rounded-xl px-3 py-6 text-center"
@@ -162,6 +172,7 @@ export function ExpandableBlockCard({
 
           {extraContent}
 
+          {!hideActions && (
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => onCreateChildFolder(folder.id)}
@@ -182,6 +193,7 @@ export function ExpandableBlockCard({
               <Plus size={13} /> Додати запис
             </button>
           </div>
+          )}
         </div>
       )}
     </div>
