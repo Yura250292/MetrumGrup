@@ -313,7 +313,7 @@ export function FinancingView({
         <section className="flex flex-col gap-3">
           {/* Root view: structural blocks (expandable) */}
           {isRootView && systemBlocks.length > 0 && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 items-start">
+            <div className="flex flex-col gap-3">
               {systemBlocks.map((block) => (
                 <ExpandableBlockCard
                   key={block.id}

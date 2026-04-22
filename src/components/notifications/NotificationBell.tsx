@@ -174,7 +174,7 @@ export function NotificationBell({
 
       {open && (
         <div
-          className="absolute right-0 z-50 mt-2 w-[360px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl admin-dark:border-white/10 admin-dark:bg-gray-900"
+          className="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-24px))] max-w-[360px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl admin-dark:border-white/10 admin-dark:bg-gray-900"
           role="dialog"
           aria-label="Сповіщення"
         >
@@ -193,7 +193,7 @@ export function NotificationBell({
             )}
           </div>
 
-          <div className="max-h-[400px] overflow-y-auto">
+          <div className="max-h-[min(400px,60vh)] overflow-y-auto">
             {items.length === 0 ? (
               <div className="px-4 py-12 text-center">
                 <Bell className="mx-auto h-8 w-8 text-gray-300 admin-dark:text-gray-600" />

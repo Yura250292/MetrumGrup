@@ -91,10 +91,12 @@ export function Header() {
         ))}
       </nav>
 
-      <div className="flex items-center gap-3">
-        <TeamAvatars />
-        <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
-        <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 md:gap-3">
+        <div className="hidden md:flex items-center gap-3">
+          <TeamAvatars />
+          <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
+        </div>
+        <div className="flex items-center gap-1 md:gap-1.5">
           <AiChatButton />
           <NotificationBell
             variant="v2"
@@ -102,7 +104,7 @@ export function Header() {
           />
           <ThemeToggle />
         </div>
-        <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
+        <div className="hidden md:block h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
 
         {/* User avatar menu */}
         <div className="relative" ref={menuRef}>
@@ -116,7 +118,7 @@ export function Header() {
 
           {userMenuOpen && (
             <div
-              className="absolute right-0 top-full mt-2 w-48 rounded-xl py-1 shadow-lg z-50"
+              className="absolute right-0 top-full mt-2 w-[min(12rem,calc(100vw-24px))] rounded-xl py-1 shadow-lg z-50"
               style={{
                 backgroundColor: T.panel,
                 border: `1px solid ${T.borderSoft}`,
