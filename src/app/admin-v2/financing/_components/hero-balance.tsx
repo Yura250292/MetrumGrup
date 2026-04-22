@@ -75,7 +75,7 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
 
   return (
     <section
-      className="hero-balance-card rounded-2xl p-4 sm:p-5 transition-shadow hover:shadow-md"
+      className="hero-balance-card rounded-xl p-2.5 sm:p-3 transition-shadow hover:shadow-md"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
@@ -95,7 +95,7 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
         .hero-ring-card { animation: heroRingIn 620ms cubic-bezier(0.22, 1, 0.36, 1) both; }
       `}</style>
 
-      <div className="grid grid-cols-3 gap-3 sm:gap-5" key={mountKey}>
+      <div className="grid grid-cols-3 gap-2 sm:gap-3" key={mountKey}>
         {/* Ring 1 — Факт */}
         <RingCard
           title="Факт"
@@ -174,33 +174,33 @@ function RingCard({
 
   return (
     <div
-      className="hero-ring-card flex flex-col items-center gap-3 min-w-0"
+      className="hero-ring-card flex flex-col items-center gap-1.5 min-w-0"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="flex flex-col items-center gap-0.5">
-        <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+      <div className="flex flex-col items-center">
+        <span className="text-[11px] font-semibold" style={{ color: T.textPrimary }}>
           {title}
         </span>
-        <span className="text-[10.5px]" style={{ color: T.textMuted }}>
+        <span className="text-[9px]" style={{ color: T.textMuted }}>
           {subtitle}
         </span>
       </div>
 
       <DualRadialProgress
-        size={140}
-        thickness={9}
-        gap={5}
+        size={92}
+        thickness={6}
+        gap={3}
         outer={{ value: outerValue, color: outerColor }}
         inner={{ value: innerValue, color: innerColor }}
         delay={delay}
         duration={1100}
         ariaLabel={`${title}: ${formatCurrencyCompact(centerTarget)}`}
       >
-        <span className="text-[9px] font-bold tracking-[0.16em]" style={{ color: T.textMuted }}>
+        <span className="text-[7.5px] font-bold tracking-[0.14em]" style={{ color: T.textMuted }}>
           {centerLabel}
         </span>
         <span
-          className="text-[17px] sm:text-[19px] font-bold tabular-nums"
+          className="text-[12px] sm:text-[13px] font-bold tabular-nums"
           style={{ color: centerTone }}
         >
           {formatted}
@@ -234,21 +234,21 @@ function DeltaRingCard({
 
   return (
     <div
-      className="hero-ring-card flex flex-col items-center gap-3 min-w-0"
+      className="hero-ring-card flex flex-col items-center gap-1.5 min-w-0"
       style={{ animationDelay: `${delay}ms` }}
     >
-      <div className="flex flex-col items-center gap-0.5">
-        <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+      <div className="flex flex-col items-center">
+        <span className="text-[11px] font-semibold" style={{ color: T.textPrimary }}>
           Дельта
         </span>
-        <span className="text-[10.5px]" style={{ color: T.textMuted }}>
+        <span className="text-[9px]" style={{ color: T.textMuted }}>
           факт vs план
         </span>
       </div>
 
       <RadialProgress
-        size={140}
-        thickness={10}
+        size={92}
+        thickness={7}
         value={coverage}
         fillColor={color}
         trackColor={`${color}22`}
@@ -256,22 +256,22 @@ function DeltaRingCard({
         duration={1100}
         ariaLabel={`Дельта: ${formatCurrencyCompact(delta)}`}
       >
-        <div className="flex flex-col items-center leading-tight gap-0.5">
+        <div className="flex flex-col items-center leading-tight gap-0.5 px-1">
           <span
-            className="text-[9px] font-bold tracking-[0.16em]"
+            className="text-[6.5px] font-bold tracking-[0.12em]"
             style={{ color: T.textMuted }}
           >
-            {deltaPositive ? "ПЕРЕВИКОНАННЯ" : "НЕДОВИКОНАННЯ"}
+            {deltaPositive ? "ПЕРЕВИК." : "НЕДОВИК."}
           </span>
           <span
-            className="text-[17px] sm:text-[19px] font-bold tabular-nums"
+            className="text-[12px] sm:text-[13px] font-bold tabular-nums"
             style={{ color }}
           >
             {animatedDelta >= 0 ? "+" : ""}
             {deltaStr}
           </span>
-          <span className="text-[9px] tabular-nums" style={{ color: T.textMuted }}>
-            покриття {Math.round(animatedCoverage)}%
+          <span className="text-[7.5px] tabular-nums" style={{ color: T.textMuted }}>
+            {Math.round(animatedCoverage)}%
           </span>
         </div>
       </RadialProgress>
@@ -292,7 +292,7 @@ function LegendRow({
   right: { label: string; value: string; color: string };
 }) {
   return (
-    <div className="grid grid-cols-2 gap-3 w-full max-w-[220px] text-center">
+    <div className="grid grid-cols-2 gap-1.5 w-full max-w-[160px] text-center">
       <LegendItem {...left} />
       <LegendItem {...right} />
     </div>
@@ -309,16 +309,16 @@ function LegendItem({
   color: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 min-w-0">
-      <span className="flex items-center justify-center gap-1 text-[10.5px]" style={{ color: T.textMuted }}>
+    <div className="flex flex-col min-w-0">
+      <span className="flex items-center justify-center gap-1 text-[9px]" style={{ color: T.textMuted }}>
         <span
-          className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+          className="h-1 w-1 rounded-full flex-shrink-0"
           style={{ backgroundColor: color }}
         />
         {label}
       </span>
       <span
-        className="text-[12.5px] sm:text-[13px] font-semibold truncate"
+        className="text-[10.5px] font-semibold truncate"
         style={{ color: T.textPrimary }}
       >
         {value}
