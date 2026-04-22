@@ -60,7 +60,7 @@ export function AiDashboardWidget() {
           </h3>
         </div>
         <button
-          onClick={open}
+          onClick={() => open()}
           className="flex items-center gap-1 text-[11px] font-medium transition-colors hover:opacity-80"
           style={{ color: T.accentPrimary }}
         >
@@ -79,7 +79,7 @@ export function AiDashboardWidget() {
             >
               <Icon className="h-4 w-4 shrink-0" style={{ color: COLORS[insight.type] }} />
               <button
-                onClick={open}
+                onClick={() => open()}
                 className="flex-1 min-w-0 text-left hover:opacity-90 tap-highlight-none"
               >
                 <p className="text-[12px] font-medium truncate" style={{ color: T.textPrimary }}>

@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Sparkles,
   UserPlus,
+  Wand2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { MeetingStructured, MeetingTask } from "./types";
@@ -19,10 +20,12 @@ export type DelegationState = {
 export function SummaryView({
   data,
   onDelegate,
+  onAiHelp,
   delegated,
 }: {
   data: MeetingStructured;
   onDelegate?: (index: number, task: MeetingTask) => void;
+  onAiHelp?: (task: MeetingTask) => void;
   delegated?: DelegationState;
 }) {
   return (
@@ -75,25 +78,41 @@ export function SummaryView({
                       {task.dueDate && <span>Дедлайн: {task.dueDate}</span>}
                     </div>
                   </div>
-                  {onDelegate &&
-                    (isDelegated ? (
-                      <span
-                        className="flex flex-shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
-                        style={{ background: T.successSoft, color: T.success }}
-                      >
-                        <CheckCircle2 size={14} />
-                        Делеговано
-                      </span>
-                    ) : (
+                  <div className="flex flex-shrink-0 items-center gap-1.5">
+                    {onAiHelp && (
                       <button
-                        onClick={() => onDelegate(i, task)}
-                        className="flex flex-shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-white"
-                        style={{ background: T.violet }}
+                        onClick={() => onAiHelp(task)}
+                        className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium"
+                        style={{
+                          background: T.accentPrimarySoft,
+                          color: T.accentPrimary,
+                        }}
+                        title="Запитати AI-помічника як виконати"
                       >
-                        <UserPlus size={13} />
-                        Делегувати
+                        <Wand2 size={13} />
+                        AI-помічник
                       </button>
-                    ))}
+                    )}
+                    {onDelegate &&
+                      (isDelegated ? (
+                        <span
+                          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium"
+                          style={{ background: T.successSoft, color: T.success }}
+                        >
+                          <CheckCircle2 size={14} />
+                          Делеговано
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => onDelegate(i, task)}
+                          className="flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium text-white"
+                          style={{ background: T.violet }}
+                        >
+                          <UserPlus size={13} />
+                          Делегувати
+                        </button>
+                      ))}
+                  </div>
                 </div>
               );
             })}

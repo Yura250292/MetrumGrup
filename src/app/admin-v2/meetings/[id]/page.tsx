@@ -26,6 +26,7 @@ import {
   type DelegationState,
 } from "../_components/summary-view";
 import { DelegateTaskModal } from "../_components/delegate-task-modal";
+import { useAiPanel } from "@/contexts/AiPanelContext";
 
 const POLL_INTERVAL_MS = 3000;
 
@@ -53,6 +54,26 @@ export default function MeetingDetailPage() {
   } | null>(null);
   const [delegated, setDelegated] = useState<DelegationState>({});
   const summaryTriggeredRef = useRef(false);
+  const { open: openAiPanel } = useAiPanel();
+
+  function askAiAboutTask(task: MeetingTask) {
+    if (!meeting) return;
+    const lines = [
+      `Допоможи виконати цю задачу з наради «${meeting.title}» (проєкт «${meeting.project.title}»):`,
+      "",
+      `**${task.title}**`,
+    ];
+    if (task.assignee) lines.push(`Відповідальний за нарадою: ${task.assignee}`);
+    if (task.dueDate) lines.push(`Дедлайн: ${task.dueDate}`);
+    if (meeting.structured?.summary) {
+      lines.push("", `Контекст наради: ${meeting.structured.summary}`);
+    }
+    lines.push(
+      "",
+      "Розпиши покроковий план дій. Якщо потрібно — шукай довідкову інформацію в інтернеті (корисні посилання, норми, постачальники, приклади). Будь практичним і конкретним."
+    );
+    openAiPanel(lines.join("\n"));
+  }
 
   async function refresh() {
     try {
@@ -299,6 +320,7 @@ export default function MeetingDetailPage() {
           data={meeting.structured}
           delegated={delegated}
           onDelegate={(index, task) => setDelegating({ index, task })}
+          onAiHelp={askAiAboutTask}
         />
       )}
 

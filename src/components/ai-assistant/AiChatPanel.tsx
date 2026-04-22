@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { X, Plus, MessageSquare, GraduationCap } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -30,7 +30,8 @@ export function AiChatPanel({ onClose }: Props) {
   const [isNewChat, setIsNewChat] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<AiMessageItem[]>([]);
   const [showTutorialMenu, setShowTutorialMenu] = useState(false);
-  const { startTutorial } = useAiPanel();
+  const { startTutorial, consumePendingPrompt } = useAiPanel();
+  const initialPromptSentRef = useRef(false);
 
   // Auto-detect projectId from current URL
   const projectId = useMemo(() => {
@@ -88,6 +89,18 @@ export function AiChatPanel({ onClose }: Props) {
     },
     [conversationId, send],
   );
+
+  // Auto-send a prompt if one was queued via open(prompt). Runs in a new chat.
+  useEffect(() => {
+    if (initialPromptSentRef.current) return;
+    const prompt = consumePendingPrompt();
+    if (!prompt) return;
+    initialPromptSentRef.current = true;
+    setConversationId(null);
+    setIsNewChat(true);
+    setOptimisticMessages([]);
+    handleSend(prompt);
+  }, [consumePendingPrompt, handleSend]);
 
   const handleNewConversation = useCallback(() => {
     // Clean up oldest if at limit (async, non-blocking)
