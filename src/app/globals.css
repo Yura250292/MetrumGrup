@@ -51,9 +51,10 @@
   --kpi-amber:   linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
   --kpi-indigo:  linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%);
   --kpi-banner:  linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 30%, #F5F3FF 70%, #EDE9FE 100%);
-  --kpi-sidebar: linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 100%);
-  --nav-active:  linear-gradient(135deg, #EEF2FF, #DBEAFE);
-  --sidebar-bg:  linear-gradient(180deg, #F1F0FB 0%, #E8EAF6 40%, #EEF2FF 100%);
+  --kpi-sidebar:    transparent;
+  --nav-active:     rgba(59, 91, 255, 0.08);
+  --nav-active-bar: #3B5BFF;
+  --sidebar-bg:     #F8FAFC;
 }
 
 .admin-dark {
@@ -90,9 +91,10 @@
   --kpi-amber:   linear-gradient(135deg, #2E2210 0%, #3D2A14 100%);
   --kpi-indigo:  linear-gradient(135deg, #1A2244 0%, #1E2860 100%);
   --kpi-banner:  linear-gradient(135deg, #141C2E 0%, #1A2244 30%, #1E1838 70%, #261E46 100%);
-  --kpi-sidebar: linear-gradient(135deg, #141C2E 0%, #1A1F35 100%);
-  --nav-active:  linear-gradient(135deg, #1D2A66, #1A2244);
-  --sidebar-bg:  linear-gradient(180deg, #0E1322 0%, #111827 40%, #0F1628 100%);
+  --kpi-sidebar:    transparent;
+  --nav-active:     rgba(107, 130, 255, 0.14);
+  --nav-active-bar: #6B82FF;
+  --sidebar-bg:     #0F1525;
 }
 
 /* Sidebar push — main content follows sidebar width */

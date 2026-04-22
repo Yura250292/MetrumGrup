@@ -34,31 +34,38 @@ export type NavGroup = {
   items: NavItem[];
 };
 
-// Sidebar navigation — mirrors legacy AdminSidebar groups, hrefs point to existing
-// pages (legacy /admin/* for pages we haven't ported yet, /admin-v2 for the dashboard).
+// Sidebar navigation — 8-group calm enterprise structure.
+// Головне / Проєкти / Фінанси / Кошторисна база / Ресурси / Комунікація / Контент / Адміністрування.
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Головне",
     items: [
       { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true },
       { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo },
+    ],
+  },
+  {
+    label: "Проєкти",
+    items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
-      { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users },
-      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
-      { href: "/admin-v2/meetings", label: "Наради", icon: Mic },
-      { href: "/admin-v2/feed", label: "Стрічка", icon: Activity },
+      { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
     ],
   },
   {
     label: "Фінанси",
     items: [
-      { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
-      { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
-      { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
-      { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
+    ],
+  },
+  {
+    label: "Кошторисна база",
+    items: [
+      { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
+      { href: "/admin-v2/estimates", label: "Усі кошториси", icon: FileText },
+      { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
+      { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
     ],
   },
   {
@@ -70,6 +77,14 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
+    label: "Комунікація",
+    items: [
+      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
+      { href: "/admin-v2/meetings", label: "Наради", icon: Mic },
+      { href: "/admin-v2/feed", label: "Активність", icon: Activity },
+    ],
+  },
+  {
     label: "Контент",
     items: [
       { href: "/admin-v2/cms/portfolio", label: "Портфоліо", icon: Globe },
@@ -77,7 +92,7 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Система",
+    label: "Адміністрування",
     items: [
       { href: "/admin-v2/users", label: "Користувачі", icon: Users, superAdminOnly: true },
       { href: "/admin-v2/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
@@ -85,11 +100,12 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-// Mobile bottom-nav items
+// Mobile bottom-nav — 4 most-used daily entries. Rest reachable via "Ще" drawer.
+// User-confirmed critical: Дашборд, Проєкти, Задачі, Чат.
 export const MOBILE_NAV: NavItem[] = [
   { href: "/admin-v2", label: "Головна", icon: LayoutDashboard, exact: true },
   { href: "/admin-v2/projects", label: "Проєкти", icon: Building2 },
-  { href: "/ai-estimate-v2", label: "AI", icon: Calculator },
+  { href: "/admin-v2/me", label: "Задачі", icon: ListTodo },
   { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true },
 ];
 
@@ -113,7 +129,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/cms/news": "Новини",
   "/admin-v2/users": "Користувачі",
   "/admin-v2/settings": "Налаштування",
-  "/admin-v2/feed": "Стрічка",
+  "/admin-v2/feed": "Активність",
   "/admin-v2/chat": "Чат",
   "/admin-v2/finance": "Фінансовий облік",
   "/admin-v2/finance/templates": "Шаблони",

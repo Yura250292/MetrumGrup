@@ -48,8 +48,6 @@ export function Header() {
       style={{
         backgroundColor: T.panel,
         borderBottom: `1px solid ${T.borderSoft}`,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-        backdropFilter: "blur(12px)",
       }}
     >
       {/* Mobile: back button + page title */}
@@ -83,8 +81,8 @@ export function Header() {
             ) : (
               <Link
                 href={crumb.href}
-                className="font-medium transition"
-                style={{ color: T.accentPrimary + "90" }}
+                className="font-medium transition hover:opacity-80"
+                style={{ color: T.textSecondary }}
               >
                 {crumb.label}
               </Link>
@@ -96,12 +94,15 @@ export function Header() {
       <div className="flex items-center gap-3">
         <TeamAvatars />
         <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
-        <AiChatButton />
-        <ThemeToggle />
-        <NotificationBell
-          variant="v2"
-          buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
-        />
+        <div className="flex items-center gap-1.5">
+          <AiChatButton />
+          <NotificationBell
+            variant="v2"
+            buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
+          />
+          <ThemeToggle />
+        </div>
+        <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
 
         {/* User avatar menu */}
         <div className="relative" ref={menuRef}>

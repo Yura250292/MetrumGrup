@@ -8,14 +8,26 @@ import {
   Camera,
   FileText,
   MessageSquare,
-  Loader2,
   Users,
+  LayoutList,
+  Rows3,
+  ArrowUpRight,
 } from "lucide-react";
 import { useFeed, type FeedKind, type FeedItem } from "@/hooks/useFeed";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import {
+  PageToolbar,
+  ViewModeSwitcher,
+  usePersistedViewMode,
+  SavedViewsMenu,
+  useSavedViews,
+} from "@/components/shared/page-toolbar";
+import { EmptyState, LoadingState, ErrorState } from "@/components/shared/states";
 
-const FILTERS: { value: "all" | FeedKind | "completed"; label: string }[] = [
+type FeedFilter = "all" | FeedKind | "completed";
+
+const FILTERS: { value: FeedFilter; label: string }[] = [
   { value: "all", label: "Все" },
   { value: "completed", label: "Виконано" },
   { value: "photo_report", label: "Фото" },
@@ -29,47 +41,23 @@ const COMPLETED_KINDS = new Set<FeedKind>([
   "photo_report",
 ]);
 
+// Kinds worth flagging as priority (triggers left-bar accent).
+const PRIORITY_KINDS = new Set<FeedKind>(["completion_act", "estimate_approved"]);
+
 const KIND_META: Record<
   FeedKind,
   { icon: typeof Activity; label: string; bg: string; fg: string }
 > = {
-  completion_act: {
-    icon: CheckCircle2,
-    label: "Виконано",
-    bg: T.successSoft,
-    fg: T.success,
-  },
-  photo_report: {
-    icon: Camera,
-    label: "Фото-звіт",
-    bg: T.accentPrimarySoft,
-    fg: T.accentPrimary,
-  },
-  estimate_approved: {
-    icon: FileText,
-    label: "Кошторис",
-    bg: T.warningSoft,
-    fg: T.warning,
-  },
-  comment: {
-    icon: MessageSquare,
-    label: "Коментар",
-    bg: T.panelElevated,
-    fg: T.textSecondary,
-  },
-  chat_message: {
-    icon: MessageSquare,
-    label: "Чат",
-    bg: T.panelElevated,
-    fg: T.textSecondary,
-  },
-  member_change: {
-    icon: Users,
-    label: "Команда",
-    bg: T.accentPrimarySoft,
-    fg: T.accentPrimary,
-  },
+  completion_act: { icon: CheckCircle2, label: "Виконано", bg: T.successSoft, fg: T.success },
+  photo_report: { icon: Camera, label: "Фото-звіт", bg: T.accentPrimarySoft, fg: T.accentPrimary },
+  estimate_approved: { icon: FileText, label: "Кошторис", bg: T.warningSoft, fg: T.warning },
+  comment: { icon: MessageSquare, label: "Коментар", bg: T.panelElevated, fg: T.textSecondary },
+  chat_message: { icon: MessageSquare, label: "Чат", bg: T.panelElevated, fg: T.textSecondary },
+  member_change: { icon: Users, label: "Команда", bg: T.accentPrimarySoft, fg: T.accentPrimary },
 };
+
+type Density = "comfortable" | "compact";
+const DENSITIES: Density[] = ["comfortable", "compact"];
 
 function timeAgo(date: string): string {
   const now = Date.now();
@@ -86,9 +74,14 @@ function timeAgo(date: string): string {
   return `${months} міс. тому`;
 }
 
+type FeedViewState = { filter: FeedFilter; density: Density };
+
 export default function AdminV2FeedPage() {
-  const [filter, setFilter] = useState<typeof FILTERS[number]["value"]>("all");
-  const { data, isLoading, error } = useFeed(30);
+  const [filter, setFilter] = useState<FeedFilter>("all");
+  const [density, setDensity] = usePersistedViewMode<Density>("feed", DENSITIES, "comfortable");
+  const [activeViewId, setActiveViewId] = useState<string | null>(null);
+  const { views, save: saveView, remove: removeView } = useSavedViews<FeedViewState>("feed");
+  const { data, isLoading, error, refetch } = useFeed(30);
 
   const items = (data?.items ?? []).filter((item) => {
     if (filter === "all") return true;
@@ -97,91 +90,115 @@ export default function AdminV2FeedPage() {
   });
 
   return (
-    <div className="flex flex-col gap-8">
-      {/* Hero */}
-      <section className="flex flex-col gap-2">
-        <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-          АКТИВНІСТЬ КОМПАНІЇ
-        </span>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight" style={{ color: T.textPrimary }}>
-          Стрічка
-        </h1>
-        <p className="text-[15px]" style={{ color: T.textSecondary }}>
-          Усе, що відбувається в компанії — в одному місці
-        </p>
-      </section>
-
-      {/* Filter chips */}
-      <div className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => {
+    <div className="flex flex-col gap-4">
+      <PageToolbar
+        title="Стрічка"
+        subtitle="Усе, що відбувається в компанії — в одному місці"
+        sticky
+        viewMode={
+          <ViewModeSwitcher<Density>
+            value={density}
+            onChange={(v) => {
+              setDensity(v);
+              setActiveViewId(null);
+            }}
+            ariaLabel="Щільність стрічки"
+            options={[
+              { value: "comfortable", label: "Комфорт", icon: LayoutList },
+              { value: "compact", label: "Компакт", icon: Rows3 },
+            ]}
+          />
+        }
+        rightSlot={
+          <SavedViewsMenu<FeedViewState>
+            views={views}
+            activeId={activeViewId}
+            onApply={(state, id) => {
+              setFilter(state.filter);
+              setDensity(state.density);
+              setActiveViewId(id);
+            }}
+            onSave={(name) => {
+              const v = saveView(name, { filter, density });
+              setActiveViewId(v.id);
+            }}
+            onDelete={(id) => {
+              removeView(id);
+              if (activeViewId === id) setActiveViewId(null);
+            }}
+          />
+        }
+        filters={FILTERS.map((f) => {
           const active = filter === f.value;
           return (
             <button
               key={f.value}
-              onClick={() => setFilter(f.value)}
-              className="rounded-full px-4 py-2 text-xs font-semibold transition"
+              type="button"
+              onClick={() => {
+                setFilter(f.value);
+                setActiveViewId(null);
+              }}
+              className="rounded-full px-3 py-1.5 text-[12px] font-semibold transition"
               style={{
                 backgroundColor: active ? T.accentPrimary : T.panelElevated,
                 color: active ? "#FFFFFF" : T.textSecondary,
-                border: `1px solid ${active ? T.accentPrimary : T.borderStrong}`,
+                border: `1px solid ${active ? T.accentPrimary : T.borderSoft}`,
               }}
             >
               {f.label}
             </button>
           );
         })}
-      </div>
+      />
 
-      {/* Feed list */}
       <section className="flex flex-col gap-2">
         {isLoading ? (
-          <div
-            className="flex items-center justify-center gap-2 rounded-2xl py-12 text-sm"
-            style={{ backgroundColor: T.panel, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
-          >
-            <Loader2 size={16} className="animate-spin" /> Завантажуємо…
-          </div>
+          <LoadingState variant="skeleton-list" rows={6} label="Завантаження стрічки" />
         ) : error ? (
-          <div
-            className="rounded-2xl px-4 py-3 text-xs"
-            style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}
-          >
-            Помилка: {(error as Error).message}
-          </div>
+          <ErrorState
+            title="Не вдалось завантажити стрічку"
+            description={(error as Error).message}
+            onRetry={() => refetch()}
+          />
         ) : items.length === 0 ? (
-          <div
-            className="flex flex-col items-center gap-3 rounded-2xl py-16 text-center"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-          >
-            <Activity size={32} style={{ color: T.accentPrimary }} />
-            <span className="text-[14px] font-semibold" style={{ color: T.textPrimary }}>
-              Поки що нічого не відбулось
-            </span>
-          </div>
+          <EmptyState
+            icon={<Activity size={22} />}
+            title="Поки що нічого не відбулось"
+            description="Коли з'являться події по проєктах — вони з'являться тут."
+          />
         ) : (
-          items.map((item) => <FeedRow key={item.id} item={item} />)
+          items.map((item) => <FeedRow key={item.id} item={item} density={density} />)
         )}
       </section>
     </div>
   );
 }
 
-function FeedRow({ item }: { item: FeedItem }) {
+function FeedRow({ item, density }: { item: FeedItem; density: Density }) {
   const meta = KIND_META[item.kind];
   const Icon = meta.icon;
+  const isCompact = density === "compact";
+  const isPriority = PRIORITY_KINDS.has(item.kind);
 
   const content = (
     <div
-      className="flex items-start gap-3.5 rounded-2xl p-4"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      className={`flex items-start gap-3 rounded-xl ${isCompact ? "px-3 py-2" : "p-4"}`}
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+        boxShadow: isPriority ? `inset 3px 0 0 ${meta.fg}` : undefined,
+      }}
     >
       <div
-        className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+        className={`flex flex-shrink-0 items-center justify-center rounded-lg ${
+          isCompact ? "h-7 w-7" : "h-10 w-10"
+        }`}
         style={{ backgroundColor: meta.bg }}
       >
-        <Icon size={18} style={{ color: meta.fg }} />
+        <Icon size={isCompact ? 14 : 18} style={{ color: meta.fg }} />
       </div>
-      <div className="flex flex-1 flex-col gap-1 min-w-0">
+
+      <div className="flex flex-1 flex-col gap-0.5 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span
             className="rounded-full px-2 py-0.5 text-[10px] font-bold"
@@ -198,25 +215,36 @@ function FeedRow({ item }: { item: FeedItem }) {
             · {timeAgo(item.createdAt)}
           </span>
         </div>
-        <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+
+        <span
+          className={`${isCompact ? "text-[12px]" : "text-[13px]"} font-semibold truncate`}
+          style={{ color: T.textPrimary }}
+        >
           {item.title}
         </span>
-        {item.subtitle && (
+
+        {!isCompact && item.subtitle && (
           <span className="text-[12px]" style={{ color: T.textSecondary }}>
             {item.subtitle}
           </span>
         )}
-        {item.project && (
+
+        {!isCompact && item.project && (
           <span className="text-[11px]" style={{ color: T.textMuted }}>
             Проєкт: <span style={{ color: T.textSecondary }}>{item.project.title}</span>
           </span>
         )}
+
         {item.amount != null && (
-          <span className="text-[12px] font-bold" style={{ color: meta.fg }}>
+          <span className={`font-bold ${isCompact ? "text-[11px]" : "text-[12px]"}`} style={{ color: meta.fg }}>
             {formatCurrency(item.amount)}
           </span>
         )}
       </div>
+
+      {!isCompact && item.project && (
+        <QuickAction href={`/admin-v2/projects/${item.project.id}`} label="Проєкт" />
+      )}
     </div>
   );
 
@@ -226,5 +254,23 @@ function FeedRow({ item }: { item: FeedItem }) {
     </Link>
   ) : (
     content
+  );
+}
+
+function QuickAction({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      onClick={(e) => e.stopPropagation()}
+      className="flex-shrink-0 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition hover:brightness-95"
+      style={{
+        backgroundColor: T.panelElevated,
+        color: T.textSecondary,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      {label}
+      <ArrowUpRight size={11} />
+    </Link>
   );
 }

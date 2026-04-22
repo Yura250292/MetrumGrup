@@ -20,14 +20,11 @@ export function ProfileSectionNav({ sections, active, onSelect }: Props) {
           <button
             key={s.id}
             onClick={() => onSelect(s.id)}
-            className="flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition-all"
+            className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-left transition-all"
             style={{
-              background: isActive
-                ? "var(--nav-active)"
-                : undefined,
+              background: isActive ? "var(--nav-active)" : undefined,
               color: isActive ? T.accentPrimary : T.textSecondary,
-              border: "1px solid " + (isActive ? T.accentPrimary + "30" : "transparent"),
-              boxShadow: isActive ? "0 2px 8px " + T.accentPrimary + "15" : undefined,
+              boxShadow: isActive ? "inset 2px 0 0 var(--nav-active-bar)" : undefined,
             }}
           >
             <Icon size={16} />

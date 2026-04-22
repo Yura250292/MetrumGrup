@@ -87,7 +87,7 @@ export function MobileDrawer({
             <Link
               href="/admin-v2/profile"
               className="mx-5 mb-3 flex items-center gap-3 rounded-xl p-3"
-              style={{ background: "var(--kpi-sidebar)" }}
+              style={{ backgroundColor: "var(--t-panel-el)" }}
             >
               <UserAvatar src={session?.user?.image} name={session?.user?.name} size={40} />
               <div className="flex flex-col gap-0 min-w-0">
@@ -109,7 +109,7 @@ export function MobileDrawer({
                 return (
                   <div key={group.label} className="mb-4">
                     <p
-                      className="mb-2 text-[10px] font-bold uppercase tracking-wider"
+                      className="mb-2 text-[10px] font-semibold uppercase tracking-widest"
                       style={{ color: T.textMuted }}
                     >
                       {group.label}
@@ -124,14 +124,11 @@ export function MobileDrawer({
                           <Link
                             key={item.href}
                             href={item.href}
-                            className="relative flex items-center gap-3 rounded-xl px-4 py-3 transition tap-highlight-none active:scale-[0.98]"
+                            className="relative flex items-center gap-3 rounded-md px-4 py-3 transition tap-highlight-none active:scale-[0.98]"
                             style={{
-                              background: active
-                                ? "var(--nav-active)"
-                                : "transparent",
+                              background: active ? "var(--nav-active)" : "transparent",
                               color: active ? T.accentPrimary : T.textSecondary,
-                              border: `1px solid ${active ? T.accentPrimary + "30" : "transparent"}`,
-                              boxShadow: active ? `0 2px 6px ${T.accentPrimary}15` : undefined,
+                              boxShadow: active ? "inset 2px 0 0 var(--nav-active-bar)" : undefined,
                               minHeight: 48,
                             }}
                           >

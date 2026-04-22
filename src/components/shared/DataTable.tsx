@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { ChevronUp, ChevronDown, Search } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 export interface Column<T> {
   key: string;
@@ -11,7 +11,10 @@ export interface Column<T> {
   className?: string;
   hideOnMobile?: boolean;
   render: (item: T) => React.ReactNode;
+  sortValue?: (item: T) => string | number;
 }
+
+type Density = "comfortable" | "compact";
 
 interface DataTableProps<T> {
   data: T[];
@@ -22,6 +25,12 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   onRowClick?: (item: T) => void;
   mobileCardRenderer?: (item: T) => React.ReactNode;
+  rowClassName?: (item: T) => string | undefined;
+  density?: Density;
+  stickyHeader?: boolean;
+  rowActions?: (item: T) => ReactNode;
+  selectable?: boolean;
+  bulkActions?: (selected: T[], clear: () => void) => ReactNode;
 }
 
 export function DataTable<T extends { id: string }>({
@@ -33,10 +42,17 @@ export function DataTable<T extends { id: string }>({
   emptyMessage = "Немає даних",
   onRowClick,
   mobileCardRenderer,
+  rowClassName,
+  density = "comfortable",
+  stickyHeader = false,
+  rowActions,
+  selectable = false,
+  bulkActions,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const filtered = useMemo(() => {
     if (!search || !searchFn) return data;
@@ -48,11 +64,14 @@ export function DataTable<T extends { id: string }>({
     return [...filtered].sort((a, b) => {
       const col = columns.find((c) => c.key === sortKey);
       if (!col) return 0;
-      const aVal = String(col.render(a) || "");
-      const bVal = String(col.render(b) || "");
+      const aVal = col.sortValue ? col.sortValue(a) : String(col.render(a) || "");
+      const bVal = col.sortValue ? col.sortValue(b) : String(col.render(b) || "");
+      if (typeof aVal === "number" && typeof bVal === "number") {
+        return sortDir === "asc" ? aVal - bVal : bVal - aVal;
+      }
       return sortDir === "asc"
-        ? aVal.localeCompare(bVal)
-        : bVal.localeCompare(aVal);
+        ? String(aVal).localeCompare(String(bVal))
+        : String(bVal).localeCompare(String(aVal));
     });
   }, [filtered, sortKey, sortDir, columns]);
 
@@ -63,6 +82,26 @@ export function DataTable<T extends { id: string }>({
       setSortKey(key);
       setSortDir("asc");
     }
+  }
+
+  const cellPad = density === "compact" ? "px-3 py-1.5" : "px-4 py-3";
+  const headPad = density === "compact" ? "px-3 py-2" : "px-4 py-3";
+  const allChecked = sorted.length > 0 && sorted.every((i) => selected.has(i.id));
+  const someChecked = !allChecked && sorted.some((i) => selected.has(i.id));
+  const selectedItems = sorted.filter((i) => selected.has(i.id));
+  const clearSelection = () => setSelected(new Set());
+
+  function toggleRow(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  function toggleAll() {
+    if (allChecked) setSelected(new Set());
+    else setSelected(new Set(sorted.map((i) => i.id)));
   }
 
   return (
@@ -80,19 +119,58 @@ export function DataTable<T extends { id: string }>({
         </div>
       )}
 
+      {selectable && selectedItems.length > 0 && bulkActions && (
+        <div
+          className="mb-3 flex items-center justify-between gap-3 rounded-lg border px-4 py-2"
+          style={{
+            backgroundColor: "var(--t-accent-soft)",
+            borderColor: "var(--t-border)",
+          }}
+        >
+          <span className="text-[13px] font-semibold" style={{ color: "var(--t-text-1)" }}>
+            Обрано: {selectedItems.length}
+          </span>
+          <div className="flex items-center gap-2">
+            {bulkActions(selectedItems, clearSelection)}
+            <button
+              type="button"
+              onClick={clearSelection}
+              className="text-[12px] underline"
+              style={{ color: "var(--t-text-2)" }}
+            >
+              Скасувати
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Desktop view - Table */}
       <div className="hidden md:block rounded-xl border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead>
+            <thead className={cn(stickyHeader && "sticky top-0 z-10")}>
               <tr className="border-b bg-muted/50">
+                {selectable && (
+                  <th className={cn("w-10", headPad)}>
+                    <input
+                      type="checkbox"
+                      aria-label="Обрати всі"
+                      checked={allChecked}
+                      ref={(el) => {
+                        if (el) el.indeterminate = someChecked;
+                      }}
+                      onChange={toggleAll}
+                    />
+                  </th>
+                )}
                 {columns.map((col) => (
                   <th
                     key={col.key}
                     className={cn(
-                      "px-4 py-3 text-left text-xs font-medium text-muted-foreground",
+                      headPad,
+                      "text-left text-xs font-medium text-muted-foreground",
                       col.sortable && "cursor-pointer select-none hover:text-foreground",
-                      col.className
+                      col.className,
                     )}
                     onClick={() => col.sortable && toggleSort(col.key)}
                   >
@@ -108,6 +186,7 @@ export function DataTable<T extends { id: string }>({
                     </div>
                   </th>
                 ))}
+                {rowActions && <th className={cn("w-12", headPad)} />}
               </tr>
             </thead>
             <tbody>
@@ -116,21 +195,43 @@ export function DataTable<T extends { id: string }>({
                   key={item.id}
                   className={cn(
                     "border-b last:border-0 transition-colors",
-                    onRowClick && "cursor-pointer hover:bg-muted/50"
+                    onRowClick && "cursor-pointer hover:bg-muted/50",
+                    rowClassName?.(item),
                   )}
                   onClick={() => onRowClick?.(item)}
                 >
+                  {selectable && (
+                    <td
+                      className={cellPad}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        aria-label="Обрати рядок"
+                        checked={selected.has(item.id)}
+                        onChange={() => toggleRow(item.id)}
+                      />
+                    </td>
+                  )}
                   {columns.map((col) => (
-                    <td key={col.key} className={cn("px-4 py-3 text-sm", col.className)}>
+                    <td key={col.key} className={cn(cellPad, "text-sm", col.className)}>
                       {col.render(item)}
                     </td>
                   ))}
+                  {rowActions && (
+                    <td
+                      className={cn(cellPad, "text-right")}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {rowActions(item)}
+                    </td>
+                  )}
                 </tr>
               ))}
               {sorted.length === 0 && (
                 <tr>
                   <td
-                    colSpan={columns.length}
+                    colSpan={columns.length + (selectable ? 1 : 0) + (rowActions ? 1 : 0)}
                     className="px-4 py-12 text-center text-sm text-muted-foreground"
                   >
                     {emptyMessage}
@@ -149,7 +250,7 @@ export function DataTable<T extends { id: string }>({
             key={item.id}
             className={cn(
               "bg-card rounded-lg p-4 border border-border",
-              onRowClick && "cursor-pointer active:bg-muted/50 transition-colors"
+              onRowClick && "cursor-pointer active:bg-muted/50 transition-colors",
             )}
             onClick={() => onRowClick?.(item)}
           >

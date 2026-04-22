@@ -30,11 +30,8 @@ export function MobileNav({ onOpenDrawer }: { onOpenDrawer: () => void }) {
             href={item.href}
             className="relative flex flex-col items-center justify-center gap-1 w-16 h-12 rounded-lg transition tap-highlight-none active:scale-95"
             style={{
-              background: active
-                ? "var(--nav-active)"
-                : "transparent",
+              background: active ? "var(--nav-active)" : "transparent",
               color: active ? T.accentPrimary : T.textSecondary,
-              boxShadow: active ? `0 2px 6px ${T.accentPrimary}15` : undefined,
             }}
           >
             <Icon size={20} />

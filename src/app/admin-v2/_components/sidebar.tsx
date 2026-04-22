@@ -46,8 +46,7 @@ export function Sidebar() {
       <div
         className="flex h-16 items-center justify-between px-4"
         style={{
-          background: "var(--kpi-sidebar)",
-          borderBottom: `1px solid ${T.accentPrimary}18`,
+          borderBottom: `1px solid ${T.borderSoft}`,
         }}
       >
         {!collapsed && (
@@ -82,7 +81,7 @@ export function Sidebar() {
             <div key={group.label} className="mb-5">
               {!collapsed && (
                 <p
-                  className="mb-2 px-4 text-[10px] font-bold uppercase tracking-wider"
+                  className="mb-2 px-4 text-[10px] font-semibold uppercase tracking-widest"
                   style={{ color: T.textMuted }}
                 >
                   {group.label}
@@ -98,14 +97,11 @@ export function Sidebar() {
                       key={item.href}
                       href={item.href}
                       title={collapsed ? item.label : undefined}
-                      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[var(--t-panel-el)]"
+                      className="relative flex items-center gap-3 rounded-md px-3 py-2.5 transition hover:bg-[var(--t-panel-el)]"
                       style={{
-                        background: active
-                          ? "var(--nav-active)"
-                          : undefined,
+                        background: active ? "var(--nav-active)" : undefined,
                         color: active ? T.accentPrimary : T.textSecondary,
-                        border: `1px solid ${active ? T.accentPrimary + "30" : "transparent"}`,
-                        boxShadow: active ? `0 2px 8px ${T.accentPrimary}15` : undefined,
+                        boxShadow: active ? "inset 2px 0 0 var(--nav-active-bar)" : undefined,
                         justifyContent: collapsed ? "center" : "flex-start",
                       }}
                     >
