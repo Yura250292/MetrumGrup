@@ -98,7 +98,7 @@ export function Sidebar() {
                       key={item.href}
                       href={item.href}
                       title={collapsed ? item.label : undefined}
-                      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[#F1F5F9]"
+                      className="relative flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-[var(--t-panel-el)]"
                       style={{
                         background: active
                           ? "var(--nav-active)"
@@ -142,7 +142,7 @@ export function Sidebar() {
           {!collapsed && (
             <Link
               href="/admin-v2/profile"
-              className="flex flex-1 items-center gap-3 min-w-0 rounded-lg p-1 -m-1 transition hover:bg-[#F1F5F9]"
+              className="flex flex-1 items-center gap-3 min-w-0 rounded-lg p-1 -m-1 transition hover:bg-[var(--t-panel-el)]"
             >
               <UserAvatar src={session?.user?.image} name={session?.user?.name} size={36} />
               <div className="flex flex-1 flex-col gap-0 min-w-0">

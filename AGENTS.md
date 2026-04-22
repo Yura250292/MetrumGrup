@@ -59,8 +59,16 @@ Do not look for a separate backend service unless explicitly introduced later.
 The app has 3 major zones:
 
 - `/` public marketing site
-- `/admin/*` internal company operations
+- `/admin-v2/*` internal company operations (canonical admin UI)
 - `/dashboard/*` client-facing dashboard
+
+Admin routing notes:
+
+- `/admin-v2/*` is the only admin design. Add all new admin features here.
+- `/admin/*` is a legacy redirect shell. Most paths are rewritten to `/admin-v2/*` via `next.config.ts` redirects. The few routes that still render under `/admin/*` are:
+  - `/admin/migrate` (internal migration tool, no v2 equivalent)
+  - `/admin/finance/*`, `/admin/estimates/*` (active parallel integration work; do not modify without coordination)
+- Do not polish or extend `AdminSidebar.tsx` / `AdminHeader.tsx` / `AdminMobileNav.tsx` — they exist only to keep the above legacy routes rendering.
 
 Changes in one zone may affect shared auth, layout, database, and access-control assumptions.
 
