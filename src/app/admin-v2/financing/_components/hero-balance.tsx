@@ -1,10 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 import { DualRadialProgress, RadialProgress } from "@/components/ui/RadialProgress";
 import type { FinanceSummaryDTO } from "./types";
+
+/** SSR-safe media query hook */
+function useMediaQuery(query: string, defaultValue = false) {
+  const [match, setMatch] = useState(defaultValue);
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia(query);
+    setMatch(mq.matches);
+    const handler = (e: MediaQueryListEvent) => setMatch(e.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [query]);
+  return match;
+}
 
 const pct = (part: number, whole: number) => {
   if (!whole || whole === 0) return 0;
@@ -48,6 +62,12 @@ function useCountUp(target: number, duration = 1100, delay = 0) {
 }
 
 export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
+  const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const isNarrow = useMediaQuery("(max-width: 420px)");
+  const ringSize = isNarrow ? 76 : 92;
+  const ringThickness = isNarrow ? 5 : 6;
+  const deltaThickness = isNarrow ? 6 : 7;
+  const ringGap = isNarrow ? 2 : 3;
   const fi = summary.fact.income.sum;
   const fe = summary.fact.expense.sum;
   const pi = summary.plan.income.sum;
@@ -93,9 +113,12 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
         }
         .hero-balance-card { animation: heroCardIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both; }
         .hero-ring-card { animation: heroRingIn 620ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+        @media (prefers-reduced-motion: reduce) {
+          .hero-balance-card, .hero-ring-card { animation: none !important; }
+        }
       `}</style>
 
-      <div className="grid grid-cols-3 gap-2 sm:gap-3" key={mountKey}>
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-3" key={mountKey}>
         {/* Ring 1 — Факт */}
         <RingCard
           title="Факт"
@@ -109,7 +132,11 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           centerTone={factPositive ? T.success : T.danger}
           legendLeft={{ label: "Дохід", value: formatCurrencyCompact(fi), color: T.success }}
           legendRight={{ label: "Витрата", value: formatCurrencyCompact(fe), color: T.warning }}
-          delay={0}
+          delay={prefersReducedMotion ? 0 : 0}
+          animate={!prefersReducedMotion}
+          size={ringSize}
+          thickness={ringThickness}
+          gap={ringGap}
         />
 
         {/* Ring 2 — План */}
@@ -125,7 +152,11 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           centerTone={planPositive ? T.accentPrimary : T.danger}
           legendLeft={{ label: "Дохід", value: formatCurrencyCompact(pi), color: T.accentPrimary }}
           legendRight={{ label: "Витрата", value: formatCurrencyCompact(pe), color: T.violet }}
-          delay={140}
+          delay={prefersReducedMotion ? 0 : 140}
+          animate={!prefersReducedMotion}
+          size={ringSize}
+          thickness={ringThickness}
+          gap={ringGap}
         />
 
         {/* Ring 3 — Дельта план→факт */}
@@ -135,7 +166,10 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           deltaPositive={deltaPositive}
           factBalance={factBalance}
           planBalance={planBalance}
-          delay={280}
+          delay={prefersReducedMotion ? 0 : 280}
+          animate={!prefersReducedMotion}
+          size={ringSize}
+          thickness={deltaThickness}
         />
       </div>
     </section>
@@ -155,6 +189,10 @@ function RingCard({
   legendLeft,
   legendRight,
   delay,
+  animate,
+  size,
+  thickness,
+  gap,
 }: {
   title: string;
   subtitle: string;
@@ -168,9 +206,14 @@ function RingCard({
   legendLeft: { label: string; value: string; color: string };
   legendRight: { label: string; value: string; color: string };
   delay: number;
+  animate: boolean;
+  size: number;
+  thickness: number;
+  gap: number;
 }) {
-  const animatedCenter = useCountUp(centerTarget, 1100, delay);
+  const animatedCenter = useCountUp(centerTarget, animate ? 1100 : 0, animate ? delay : 0);
   const formatted = formatCurrencyCompact(Math.round(animatedCenter));
+  const isTiny = size < 88;
 
   return (
     <div
@@ -181,26 +224,29 @@ function RingCard({
         <span className="text-[11px] font-semibold" style={{ color: T.textPrimary }}>
           {title}
         </span>
-        <span className="text-[9px]" style={{ color: T.textMuted }}>
+        <span className="text-[9px] hidden sm:block" style={{ color: T.textMuted }}>
           {subtitle}
         </span>
       </div>
 
       <DualRadialProgress
-        size={92}
-        thickness={6}
-        gap={3}
+        size={size}
+        thickness={thickness}
+        gap={gap}
         outer={{ value: outerValue, color: outerColor }}
         inner={{ value: innerValue, color: innerColor }}
         delay={delay}
         duration={1100}
+        animate={animate}
         ariaLabel={`${title}: ${formatCurrencyCompact(centerTarget)}`}
       >
-        <span className="text-[7.5px] font-bold tracking-[0.14em]" style={{ color: T.textMuted }}>
-          {centerLabel}
-        </span>
+        {!isTiny && (
+          <span className="text-[7.5px] font-bold tracking-[0.14em]" style={{ color: T.textMuted }}>
+            {centerLabel}
+          </span>
+        )}
         <span
-          className="text-[12px] sm:text-[13px] font-bold tabular-nums"
+          className={`${isTiny ? "text-[10.5px]" : "text-[12px] sm:text-[13px]"} font-bold tabular-nums`}
           style={{ color: centerTone }}
         >
           {formatted}
@@ -219,6 +265,9 @@ function DeltaRingCard({
   factBalance,
   planBalance,
   delay,
+  animate,
+  size,
+  thickness,
 }: {
   coverage: number;
   delta: number;
@@ -226,11 +275,17 @@ function DeltaRingCard({
   factBalance: number;
   planBalance: number;
   delay: number;
+  animate: boolean;
+  size: number;
+  thickness: number;
 }) {
   const color = deltaPositive ? T.success : T.danger;
-  const animatedDelta = useCountUp(delta, 1100, delay);
-  const animatedCoverage = useCountUp(coverage, 1100, delay);
+  const dur = animate ? 1100 : 0;
+  const d = animate ? delay : 0;
+  const animatedDelta = useCountUp(delta, dur, d);
+  const animatedCoverage = useCountUp(coverage, dur, d);
   const deltaStr = formatCurrencyCompact(Math.round(animatedDelta));
+  const isTiny = size < 88;
 
   return (
     <div
@@ -241,36 +296,39 @@ function DeltaRingCard({
         <span className="text-[11px] font-semibold" style={{ color: T.textPrimary }}>
           Дельта
         </span>
-        <span className="text-[9px]" style={{ color: T.textMuted }}>
+        <span className="text-[9px] hidden sm:block" style={{ color: T.textMuted }}>
           факт vs план
         </span>
       </div>
 
       <RadialProgress
-        size={92}
-        thickness={7}
+        size={size}
+        thickness={thickness}
         value={coverage}
         fillColor={color}
         trackColor={`${color}22`}
-        delay={delay}
-        duration={1100}
+        delay={d}
+        duration={dur || 1}
+        animate={animate}
         ariaLabel={`Дельта: ${formatCurrencyCompact(delta)}`}
       >
         <div className="flex flex-col items-center leading-tight gap-0.5 px-1">
+          {!isTiny && (
+            <span
+              className="text-[6.5px] font-bold tracking-[0.12em]"
+              style={{ color: T.textMuted }}
+            >
+              {deltaPositive ? "ПЕРЕВИК." : "НЕДОВИК."}
+            </span>
+          )}
           <span
-            className="text-[6.5px] font-bold tracking-[0.12em]"
-            style={{ color: T.textMuted }}
-          >
-            {deltaPositive ? "ПЕРЕВИК." : "НЕДОВИК."}
-          </span>
-          <span
-            className="text-[12px] sm:text-[13px] font-bold tabular-nums"
+            className={`${isTiny ? "text-[10px]" : "text-[12px] sm:text-[13px]"} font-bold tabular-nums`}
             style={{ color }}
           >
             {animatedDelta >= 0 ? "+" : ""}
             {deltaStr}
           </span>
-          <span className="text-[7.5px] tabular-nums" style={{ color: T.textMuted }}>
+          <span className={`${isTiny ? "text-[6.5px]" : "text-[7.5px]"} tabular-nums`} style={{ color: T.textMuted }}>
             {Math.round(animatedCoverage)}%
           </span>
         </div>

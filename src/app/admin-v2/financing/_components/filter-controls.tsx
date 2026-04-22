@@ -115,8 +115,9 @@ export function SegmentedControl<V extends string = string>({
   ariaLabel?: string;
   size?: "sm" | "md";
 }) {
-  const padY = size === "sm" ? "py-1.5" : "py-2";
-  const padX = size === "sm" ? "px-2.5" : "px-3";
+  // Bump vertical padding on coarse-pointer devices to satisfy 44px touch targets.
+  const padY = size === "sm" ? "py-2 sm:py-1.5" : "py-2.5 sm:py-2";
+  const padX = size === "sm" ? "px-3 sm:px-2.5" : "px-3.5 sm:px-3";
   const fontSize = size === "sm" ? "text-[11.5px]" : "text-[12.5px]";
 
   return (

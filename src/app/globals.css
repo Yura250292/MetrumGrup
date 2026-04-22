@@ -598,3 +598,53 @@
     filter: hue-rotate(360deg);
   }
 }
+
+/* ── PWA / standalone-mode optimizations ──────────────────────────── */
+@media (display-mode: standalone) {
+  html,
+  body {
+    /* Prevent pull-to-refresh and rubber-band scrolling when running as app */
+    overscroll-behavior-y: contain;
+    /* Disable iOS tap highlight globally (feels native) */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    /* Reserve safe areas for notch/home-indicator at the body edges */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Prevent text selection on non-input elements — feels more app-like.
+     Inputs/textareas/contenteditable still select normally. */
+  button,
+  a,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Minimum 44×44 touch targets on coarse pointers (phones, tablets) */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="menuitem"] {
+    touch-action: manipulation;
+  }
+}
+
+/* Accessibility — reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

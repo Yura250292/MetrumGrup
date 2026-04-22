@@ -40,7 +40,10 @@ export function RadialProgress({
   const [rendered, setRendered] = useState(animate ? 0 : clamped);
 
   useEffect(() => {
-    if (!animate) {
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (!animate || reduced) {
       setRendered(clamped);
       return;
     }
@@ -148,7 +151,10 @@ export function DualRadialProgress({
   const [innerR, setInnerR] = useState(animate ? 0 : innerClamped);
 
   useEffect(() => {
-    if (!animate) {
+    const reduced =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+    if (!animate || reduced) {
       setOuterR(outerClamped);
       setInnerR(innerClamped);
       return;
