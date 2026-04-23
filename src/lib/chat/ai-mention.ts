@@ -1,11 +1,25 @@
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAiBotUser, parseAiMentionPrompt } from "@/lib/chat/ai-bot";
+import { buildConversationAiContext } from "@/lib/chat/ai-context";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
 
-const CONTEXT_MESSAGES = 20;
-const MAX_REPLY_TOKENS = 600;
+const MAX_REPLY_TOKENS = 800;
+
+const SYSTEM_PROMPT = `Ти AI-асистент у корпоративному чаті Metrum Group (будівельна компанія).
+Відповідай українською, стисло й по ділу. Використовуй наданий контекст:
+- Recent chat messages (із позначками автора).
+- Витягнутий текст файлів з чату (PDF / TXT / DOC): позначений "=== ФАЙЛ: … ===" / "=== PDF: … ===".
+- Транскрипти аудіо: позначені "=== АУДІО-ТРАНСКРИПТ: … ===".
+- Зображення — доступні тобі як vision input поряд з цим текстом.
+
+Коли користувач просить проаналізувати документ (наприклад договір):
+- Розкладай по пунктам.
+- Виділяй ризики, зобов'язання, дедлайни, суми, штрафи, умови виходу.
+- Уточнюй якщо запит неясний.
+
+НЕ вигадуй факти, яких немає в контексті чи документах. Якщо чогось не бачиш — чітко скажи.`;
 
 export async function handleAiMention(opts: {
   conversationId: string;
@@ -20,42 +34,37 @@ export async function handleAiMention(opts: {
   }
 
   try {
-    // Load last N messages for context (including the one that triggered this).
-    const recent = await prisma.chatMessage.findMany({
-      where: { conversationId: opts.conversationId, deletedAt: null },
-      orderBy: { createdAt: "desc" },
-      take: CONTEXT_MESSAGES,
-      include: { author: { select: { id: true, name: true } } },
-    });
-    recent.reverse(); // chronological
-
     const bot = await getOrCreateAiBotUser();
 
-    // Skip if the message we're reacting to is itself from the AI bot, to
-    // avoid infinite loops when the bot quotes @ai in its reply.
+    // Skip if the triggering message is itself the AI bot's reply.
     if (opts.authorId === bot.id) return;
 
-    const transcript = recent
-      .map((m) => {
-        const name = m.author?.id === bot.id ? "AI" : m.author?.name ?? "Користувач";
-        return `${name}: ${m.body?.trim() || "[вкладення]"}`;
-      })
-      .join("\n");
+    const ctx = await buildConversationAiContext(opts.conversationId, bot.id, {
+      messageLimit: 20,
+    });
+
+    const contextBlock = ctx.notes.length
+      ? `${ctx.transcript}\n\n[Службові примітки щодо контексту:\n${ctx.notes.join("\n")}]`
+      : ctx.transcript;
+
+    const userContent: OpenAI.Chat.Completions.ChatCompletionContentPart[] = [
+      {
+        type: "text",
+        text: `Контекст останніх повідомлень та файлів у чаті:\n\n${contextBlock}\n\n---\nПоточний запит до тебе: ${prompt}`,
+      },
+      ...ctx.images.map((img) => ({
+        type: "image_url" as const,
+        image_url: { url: img.url },
+      })),
+    ];
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
-      temperature: 0.4,
+      temperature: 0.35,
       max_tokens: MAX_REPLY_TOKENS,
       messages: [
-        {
-          role: "system",
-          content:
-            "Ти AI-асистент у корпоративному чаті Metrum Group (будівельна компанія). Відповідай українською, стисло і по ділу. Використовуй контекст останніх повідомлень. Якщо запит неясний — попроси уточнення. Не вигадуй факти про проекти/задачі чи конкретних людей, яких немає в контексті.",
-        },
-        {
-          role: "user",
-          content: `Останні повідомлення:\n${transcript}\n\nЗапит до тебе: ${prompt}`,
-        },
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userContent },
       ],
     });
 
