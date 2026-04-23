@@ -7,6 +7,7 @@ export type ChatPeer = {
   name: string;
   avatar: string | null;
   role: string;
+  isAi?: boolean;
 };
 
 export type ReactionGroup = {

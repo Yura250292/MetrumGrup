@@ -202,20 +202,36 @@ function MessageBubble({
   isOwn: boolean;
   onToggleReaction: (emoji: string) => void;
 }) {
+  const isAi = Boolean(message.author.isAi);
+  const aiGradient = "linear-gradient(135deg, #f97316, #ec4899)";
   return (
     <div className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""}`}>
-      <UserAvatar
-        src={message.author.avatar}
-        name={message.author.name}
-        userId={message.author.id}
-        size={32}
-        gradient={isOwn
-          ? "linear-gradient(135deg, #3b82f6, #06b6d4)"
-          : "linear-gradient(135deg, #a855f7, #7c3aed)"}
-      />
+      {isAi ? (
+        <div
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"
+          style={{ backgroundImage: aiGradient }}
+          title="AI асистент"
+        >
+          <Sparkles className="h-4 w-4" style={{ color: "#FFFFFF" }} />
+        </div>
+      ) : (
+        <UserAvatar
+          src={message.author.avatar}
+          name={message.author.name}
+          userId={message.author.id}
+          size={32}
+          gradient={isOwn
+            ? "linear-gradient(135deg, #3b82f6, #06b6d4)"
+            : "linear-gradient(135deg, #a855f7, #7c3aed)"}
+        />
+      )}
       <div className={`flex flex-col max-w-[70%] ${isOwn ? "items-end" : "items-start"}`}>
         {!isOwn && (
-          <span className="text-[11px] mb-0.5" style={{ color: T.textSecondary }}>
+          <span
+            className="text-[11px] mb-0.5 inline-flex items-center gap-1"
+            style={{ color: isAi ? "#ec4899" : T.textSecondary }}
+          >
+            {isAi && <Sparkles className="h-2.5 w-2.5" />}
             {message.author.name}
           </span>
         )}
@@ -225,7 +241,9 @@ function MessageBubble({
             style={
               isOwn
                 ? { backgroundColor: T.accentPrimary, color: "#FFFFFF" }
-                : { backgroundColor: T.panelElevated, color: T.textPrimary }
+                : isAi
+                  ? { backgroundColor: "rgba(236, 72, 153, 0.08)", color: T.textPrimary, border: "1px solid rgba(236, 72, 153, 0.25)" }
+                  : { backgroundColor: T.panelElevated, color: T.textPrimary }
             }
           >
             <RenderCommentBody body={message.body} mentions={[]} />

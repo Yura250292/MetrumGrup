@@ -11,6 +11,20 @@ import {
   syncEstimateConversationParticipants,
 } from "@/lib/chat/sync";
 import { canParticipateInProject } from "@/lib/projects/access";
+import { handleAiMention } from "@/lib/chat/ai-mention";
+import { AI_BOT_EMAIL } from "@/lib/chat/ai-bot";
+
+function shapeAuthor(
+  a: { id: string; name: string; avatar: string | null; role: string; email: string }
+) {
+  return {
+    id: a.id,
+    name: a.name,
+    avatar: a.avatar,
+    role: a.role,
+    isAi: a.email === AI_BOT_EMAIL,
+  };
+}
 
 type ReactionGroup = {
   emoji: string;
@@ -357,7 +371,7 @@ export async function getMessages(
     orderBy: { createdAt: opts.after ? "asc" : "desc" },
     take: limit + 1,
     include: {
-      author: { select: { id: true, name: true, avatar: true, role: true } },
+      author: { select: { id: true, name: true, avatar: true, role: true, email: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
       attachments: { orderBy: { createdAt: "asc" } },
     },
@@ -374,7 +388,7 @@ export async function getMessages(
     createdAt: m.createdAt,
     editedAt: m.editedAt,
     authorId: m.authorId,
-    author: m.author,
+    author: shapeAuthor(m.author),
     reactions: groupReactions(m.reactions, userId),
     attachments: m.attachments.map((a) => ({
       id: a.id,
@@ -432,7 +446,7 @@ export async function postMessage(
           : undefined,
       },
       include: {
-        author: { select: { id: true, name: true, avatar: true, role: true } },
+        author: { select: { id: true, name: true, avatar: true, role: true, email: true } },
         attachments: true,
       },
     }),
@@ -487,13 +501,20 @@ export async function postMessage(
     );
   }
 
+  // Fire-and-forget: if the message tags @ai, let the bot reply in-thread.
+  handleAiMention({
+    conversationId,
+    authorId: userId,
+    body: trimmed,
+  }).catch((err) => console.error("[chat/postMessage] handleAiMention failed:", err));
+
   return {
     id: message.id,
     body: message.body,
     createdAt: message.createdAt,
     editedAt: message.editedAt,
     authorId: message.authorId,
-    author: message.author,
+    author: shapeAuthor(message.author),
     reactions: [] as ReactionGroup[],
     attachments: message.attachments.map((a) => ({
       id: a.id,
