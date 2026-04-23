@@ -76,6 +76,27 @@ function emailValid(s: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
 }
 
+// ======== Raw cell reader (for AI fallback) ========
+
+export async function readSheetAsRows(buffer: Buffer): Promise<string[][]> {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+  const ws = workbook.worksheets[0];
+  if (!ws) throw new Error("Excel файл порожній");
+
+  const out: string[][] = [];
+  const total = ws.rowCount;
+  const maxCol = ws.columnCount;
+  for (let r = 1; r <= total; r++) {
+    const row: string[] = [];
+    for (let c = 1; c <= maxCol; c++) {
+      row.push(cellValue(ws, r, c));
+    }
+    out.push(row);
+  }
+  return out;
+}
+
 // ======== Employees ========
 
 export type EmployeeImportRow = {
@@ -439,6 +460,179 @@ export async function generateSubcontractorsTemplate(): Promise<Buffer> {
   });
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
+
+// ======== Mapping-based appliers (used after AI inference) ========
+
+type ColumnMap = Record<string, number | null>;
+
+function pick(rows: string[][], rowIdx: number, col: number | null | undefined): string {
+  if (col === null || col === undefined) return "";
+  return (rows[rowIdx]?.[col - 1] ?? "").trim();
+}
+
+export function applyEmployeeMapping(
+  rows: string[][],
+  headerRow: number,
+  cols: ColumnMap,
+): ImportResult<EmployeeImportRow> {
+  const data: EmployeeImportRow[] = [];
+  const errors: ImportError[] = [];
+  const startIdx = Math.max(headerRow, 0);
+
+  for (let i = startIdx; i < rows.length; i++) {
+    const fullName = pick(rows, i, cols.fullName);
+    if (!fullName) continue;
+
+    const emailRaw = pick(rows, i, cols.email);
+    if (emailRaw && !emailValid(emailRaw)) {
+      errors.push({ row: i + 1, field: "email", message: "Невірний email" });
+      continue;
+    }
+
+    const salaryTypeRaw = normalize(pick(rows, i, cols.salaryType));
+    const salaryType: "MONTHLY" | "HOURLY" =
+      salaryTypeRaw.includes("год") || salaryTypeRaw.includes("hour") ? "HOURLY" : "MONTHLY";
+
+    data.push({
+      fullName,
+      phone: pick(rows, i, cols.phone) || null,
+      email: emailRaw || null,
+      position: pick(rows, i, cols.position) || null,
+      salaryType,
+      salaryAmount: parseNumber(pick(rows, i, cols.salaryAmount)),
+      currency: pick(rows, i, cols.currency) || "UAH",
+      extraData: pick(rows, i, cols.extraData) || null,
+      notes: pick(rows, i, cols.notes) || null,
+      isActive: true,
+    });
+  }
+
+  return { data, errors, totalRows: rows.length - startIdx, validRows: data.length };
+}
+
+export function applyCounterpartyMapping(
+  rows: string[][],
+  headerRow: number,
+  cols: ColumnMap,
+): ImportResult<CounterpartyImportRow> {
+  const data: CounterpartyImportRow[] = [];
+  const errors: ImportError[] = [];
+  const startIdx = Math.max(headerRow, 0);
+
+  for (let i = startIdx; i < rows.length; i++) {
+    const name = pick(rows, i, cols.name);
+    if (!name) continue;
+
+    const typeRaw = normalize(pick(rows, i, cols.type));
+    let type: "LEGAL" | "INDIVIDUAL" | "FOP" = "LEGAL";
+    if (typeRaw.includes("фоп") || typeRaw === "fop") type = "FOP";
+    else if (typeRaw.includes("фіз") || typeRaw.includes("individual")) type = "INDIVIDUAL";
+
+    const emailRaw = pick(rows, i, cols.email);
+    if (emailRaw && !emailValid(emailRaw)) {
+      errors.push({ row: i + 1, field: "email", message: "Невірний email" });
+      continue;
+    }
+
+    data.push({
+      name,
+      type,
+      taxId: pick(rows, i, cols.taxId) || null,
+      phone: pick(rows, i, cols.phone) || null,
+      email: emailRaw || null,
+      address: pick(rows, i, cols.address) || null,
+      notes: pick(rows, i, cols.notes) || null,
+      isActive: true,
+    });
+  }
+
+  return { data, errors, totalRows: rows.length - startIdx, validRows: data.length };
+}
+
+export function applySubcontractorMapping(
+  rows: string[][],
+  headerRow: number,
+  cols: ColumnMap,
+): ImportResult<SubcontractorImportRow> {
+  const data: SubcontractorImportRow[] = [];
+  const errors: ImportError[] = [];
+  const startIdx = Math.max(headerRow, 0);
+
+  for (let i = startIdx; i < rows.length; i++) {
+    const name = pick(rows, i, cols.name);
+    if (!name) continue;
+    const specialty = pick(rows, i, cols.specialty);
+    if (!specialty) {
+      errors.push({ row: i + 1, field: "specialty", message: "Порожня спеціальність" });
+      continue;
+    }
+
+    const rateTypeRaw = normalize(pick(rows, i, cols.rateType));
+    let rateType: SubcontractorImportRow["rateType"] = "PER_DAY";
+    if (rateTypeRaw.includes("год") || rateTypeRaw.includes("hour")) rateType = "PER_HOUR";
+    else if (rateTypeRaw.includes("міс") || rateTypeRaw.includes("month")) rateType = "PER_MONTH";
+    else if (rateTypeRaw.includes("м²") || rateTypeRaw.includes("кв") || rateTypeRaw.includes("sqm"))
+      rateType = "PER_SQM";
+    else if (rateTypeRaw.includes("шт") || rateTypeRaw.includes("piece")) rateType = "PER_PIECE";
+
+    const emailRaw = pick(rows, i, cols.email);
+    if (emailRaw && !emailValid(emailRaw)) {
+      errors.push({ row: i + 1, field: "email", message: "Невірний email" });
+      continue;
+    }
+
+    data.push({
+      name,
+      specialty,
+      phone: pick(rows, i, cols.phone) || null,
+      email: emailRaw || null,
+      rateType,
+      rateAmount: parseNumber(pick(rows, i, cols.rateAmount)),
+      rateUnit: pick(rows, i, cols.rateUnit) || null,
+      availableFrom: parseDate(pick(rows, i, cols.availableFrom)),
+      notes: pick(rows, i, cols.notes) || null,
+      isActive: true,
+    });
+  }
+
+  return { data, errors, totalRows: rows.length - startIdx, validRows: data.length };
+}
+
+// ======== Field specs (для AI mapper) ========
+
+export const EMPLOYEE_FIELDS = [
+  { key: "fullName", label: "ПІБ", required: true, hint: "Прізвище Імʼя По-батькові; інколи розбито на колонки" },
+  { key: "phone", label: "Телефон" },
+  { key: "email", label: "Email" },
+  { key: "position", label: "Посада" },
+  { key: "salaryType", label: "Тип ЗП", hint: "Місячна / погодинна / hourly / monthly" },
+  { key: "salaryAmount", label: "Сума ЗП", hint: "Число" },
+  { key: "currency", label: "Валюта" },
+  { key: "extraData", label: "Додаткові дані" },
+  { key: "notes", label: "Коментар" },
+];
+
+export const COUNTERPARTY_FIELDS = [
+  { key: "name", label: "Назва", required: true },
+  { key: "type", label: "Тип контрагента", hint: "Юр / фіз / ФОП" },
+  { key: "taxId", label: "ЄДРПОУ або ІПН" },
+  { key: "phone", label: "Телефон" },
+  { key: "email", label: "Email" },
+  { key: "address", label: "Адреса" },
+  { key: "notes", label: "Коментар" },
+];
+
+export const SUBCONTRACTOR_FIELDS = [
+  { key: "name", label: "ПІБ", required: true },
+  { key: "specialty", label: "Спеціальність / фах", required: true },
+  { key: "phone", label: "Телефон" },
+  { key: "email", label: "Email" },
+  { key: "rateType", label: "Тип тарифу", hint: "година / день / місяць / м² / штука" },
+  { key: "rateAmount", label: "Сума тарифу", hint: "Число" },
+  { key: "rateUnit", label: "Одиниця (грн/м², грн/год)" },
+  { key: "availableFrom", label: "Доступний з (дата)" },
+  { key: "notes", label: "Коментар" },
+];
 
 // ======== Shared header styling ========
 

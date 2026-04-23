@@ -2,7 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
-import { parseSubcontractorsExcel } from "@/lib/import/hr-import";
+import {
+  parseSubcontractorsExcel,
+  readSheetAsRows,
+  applySubcontractorMapping,
+  SUBCONTRACTOR_FIELDS,
+  type ImportResult,
+  type SubcontractorImportRow,
+} from "@/lib/import/hr-import";
+import { inferColumnMapping } from "@/lib/import/ai-mapper";
+
+async function parseWithAi(buffer: Buffer): Promise<ImportResult<SubcontractorImportRow>> {
+  const rows = await readSheetAsRows(buffer);
+  const mapping = await inferColumnMapping(rows, SUBCONTRACTOR_FIELDS);
+  return applySubcontractorMapping(rows, mapping.headerRow, mapping.columnMap);
+}
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -23,14 +37,26 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parseSubcontractorsExcel(buffer);
+
+    let parsed: ImportResult<SubcontractorImportRow>;
+    let usedAi = false;
+    try {
+      parsed = await parseSubcontractorsExcel(buffer);
+      if (parsed.validRows === 0) {
+        parsed = await parseWithAi(buffer);
+        usedAi = true;
+      }
+    } catch {
+      parsed = await parseWithAi(buffer);
+      usedAi = true;
+    }
 
     const mode = request.nextUrl.searchParams.get("mode");
     if (mode === "validate") {
-      return NextResponse.json({ preview: parsed });
+      return NextResponse.json({ preview: parsed, usedAi });
     }
 
-    // For Worker, keep dailyRate synced when rateType is PER_DAY (backwards compat)
+    // Sync dailyRate when rateType=PER_DAY (legacy compatibility)
     const data = parsed.data.map((row) => ({
       ...row,
       dailyRate: row.rateType === "PER_DAY" ? row.rateAmount : null,
@@ -42,6 +68,7 @@ export async function POST(request: NextRequest) {
       created: result.count,
       totalRows: parsed.totalRows,
       errors: parsed.errors,
+      usedAi,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Помилка імпорту";

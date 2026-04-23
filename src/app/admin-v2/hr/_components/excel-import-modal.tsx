@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Upload, X, Loader2, Download, FileSpreadsheet, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, X, Loader2, Download, FileSpreadsheet, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 type PreviewResult = {
@@ -37,6 +37,7 @@ export function ExcelImportModal({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<PreviewResult | null>(null);
+  const [usedAi, setUsedAi] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function ExcelImportModal({
   function reset() {
     setFile(null);
     setPreview(null);
+    setUsedAi(false);
     setResult(null);
     setError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -68,6 +70,7 @@ export function ExcelImportModal({
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Помилка парсингу");
       setPreview(json.preview);
+      setUsedAi(Boolean(json.usedAi));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Помилка");
       setPreview(null);
@@ -202,12 +205,25 @@ export function ExcelImportModal({
 
           {loading && !preview && !result && (
             <div className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
-              <Loader2 size={14} className="animate-spin" /> Парсимо файл…
+              <Loader2 size={14} className="animate-spin" /> Парсимо файл (можливе AI-розпізнавання)…
             </div>
           )}
 
           {preview && !result && (
             <>
+              {usedAi && (
+                <div
+                  className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px]"
+                  style={{
+                    backgroundColor: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                    border: `1px solid ${T.borderAccent}`,
+                  }}
+                >
+                  <Sparkles size={14} /> Структуру файлу розпізнано через AI (Gemini) — перевірте
+                  перші рядки превʼю
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-4">
                 <Stat label="Усього рядків" value={String(preview.totalRows)} accent={T.textPrimary} />
                 <Stat label="Валідних" value={String(preview.validRows)} accent={T.success} />

@@ -2,7 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
-import { parseEmployeesExcel } from "@/lib/import/hr-import";
+import {
+  parseEmployeesExcel,
+  readSheetAsRows,
+  applyEmployeeMapping,
+  EMPLOYEE_FIELDS,
+  type ImportResult,
+  type EmployeeImportRow,
+} from "@/lib/import/hr-import";
+import { inferColumnMapping } from "@/lib/import/ai-mapper";
+
+async function parseWithAi(buffer: Buffer): Promise<ImportResult<EmployeeImportRow>> {
+  const rows = await readSheetAsRows(buffer);
+  const mapping = await inferColumnMapping(rows, EMPLOYEE_FIELDS);
+  return applyEmployeeMapping(rows, mapping.headerRow, mapping.columnMap);
+}
 
 export async function POST(request: NextRequest) {
   const session = await auth();
@@ -23,11 +37,23 @@ export async function POST(request: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());
-    const parsed = await parseEmployeesExcel(buffer);
+
+    let parsed: ImportResult<EmployeeImportRow>;
+    let usedAi = false;
+    try {
+      parsed = await parseEmployeesExcel(buffer);
+      if (parsed.validRows === 0) {
+        parsed = await parseWithAi(buffer);
+        usedAi = true;
+      }
+    } catch {
+      parsed = await parseWithAi(buffer);
+      usedAi = true;
+    }
 
     const mode = request.nextUrl.searchParams.get("mode");
     if (mode === "validate") {
-      return NextResponse.json({ preview: parsed });
+      return NextResponse.json({ preview: parsed, usedAi });
     }
 
     const result = await prisma.employee.createMany({ data: parsed.data });
@@ -36,6 +62,7 @@ export async function POST(request: NextRequest) {
       created: result.count,
       totalRows: parsed.totalRows,
       errors: parsed.errors,
+      usedAi,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Помилка імпорту";
