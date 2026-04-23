@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireStaffAccess, unauthorizedResponse } from "@/lib/auth-utils";
 import { listFolders } from "@/lib/folders/queries";
-import { createFolder } from "@/lib/folders/actions";
+import { createFolder, MIRROR_FOLDER_EDIT_ERROR } from "@/lib/folders/actions";
 import type { FolderDomain } from "@prisma/client";
 
 const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE"];
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     if (msg === "Unauthorized") return unauthorizedResponse();
-    if (msg === "Батьківська папка не знайдена") {
+    if (msg === "Батьківська папка не знайдена" || msg === MIRROR_FOLDER_EDIT_ERROR) {
       return NextResponse.json({ error: msg }, { status: 400 });
     }
     // Unique constraint violation

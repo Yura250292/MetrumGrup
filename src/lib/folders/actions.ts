@@ -1,9 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import type { FolderDomain } from "@prisma/client";
+import {
+  ensureMirror,
+  updateMirror,
+  deleteMirrorByProjectId,
+} from "@/lib/folders/mirror-service";
 
 export const SYSTEM_FOLDER_RENAME_ERROR = "Системну папку перейменувати не можна";
 export const SYSTEM_FOLDER_MOVE_ERROR = "Системну папку переміщувати не можна";
 export const SYSTEM_FOLDER_DELETE_ERROR = "Системну папку видалити не можна";
+export const MIRROR_FOLDER_EDIT_ERROR =
+  "Папка синхронізована з Проєктами — редагуйте її через розділ Проєкти";
+export const MIRROR_FOLDER_DELETE_ERROR =
+  "Папка синхронізована з Проєктами — видаляйте її через розділ Проєкти";
 
 const USER_ROOT_FINANCE_MIN_SORT = 100;
 
@@ -17,10 +26,15 @@ export async function createFolder(opts: {
   if (opts.parentId) {
     const parent = await prisma.folder.findUnique({
       where: { id: opts.parentId },
-      select: { domain: true },
+      select: { domain: true, mirroredFromId: true },
     });
     if (!parent || parent.domain !== opts.domain) {
       throw new Error("Батьківська папка не знайдена");
+    }
+    // Не дозволяємо створювати вручну підпапку під FINANCE-mirror —
+    // інакше вона ніколи не опиниться у PROJECT-дереві.
+    if (parent.mirroredFromId) {
+      throw new Error(MIRROR_FOLDER_EDIT_ERROR);
     }
   }
 
@@ -32,12 +46,11 @@ export async function createFolder(opts: {
   });
 
   let sortOrder = (last?.sortOrder ?? 0) + 1;
-  // Keep user-created root FINANCE folders below the system blocks (isSystem=true sit at 0,1)
   if (opts.domain === "FINANCE" && !opts.parentId && sortOrder < USER_ROOT_FINANCE_MIN_SORT) {
     sortOrder = USER_ROOT_FINANCE_MIN_SORT;
   }
 
-  return prisma.folder.create({
+  const folder = await prisma.folder.create({
     data: {
       domain: opts.domain,
       name: opts.name.trim(),
@@ -46,20 +59,33 @@ export async function createFolder(opts: {
       sortOrder,
     },
   });
+
+  if (folder.domain === "PROJECT") {
+    await ensureMirror(folder.id);
+  }
+
+  return folder;
 }
 
 export async function renameFolder(id: string, name: string) {
   const existing = await prisma.folder.findUnique({
     where: { id },
-    select: { isSystem: true },
+    select: { isSystem: true, domain: true, mirroredFromId: true },
   });
   if (!existing) throw new Error("Папку не знайдено");
   if (existing.isSystem) throw new Error(SYSTEM_FOLDER_RENAME_ERROR);
+  if (existing.mirroredFromId) throw new Error(MIRROR_FOLDER_EDIT_ERROR);
 
-  return prisma.folder.update({
+  const updated = await prisma.folder.update({
     where: { id },
     data: { name: name.trim() },
   });
+
+  if (updated.domain === "PROJECT") {
+    await updateMirror(updated.id);
+  }
+
+  return updated;
 }
 
 export async function updateFolder(
@@ -68,13 +94,16 @@ export async function updateFolder(
 ) {
   const existing = await prisma.folder.findUnique({
     where: { id },
-    select: { isSystem: true },
+    select: { isSystem: true, domain: true, mirroredFromId: true },
   });
   if (!existing) throw new Error("Папку не знайдено");
 
   if (existing.isSystem) {
     if (data.name !== undefined) throw new Error(SYSTEM_FOLDER_RENAME_ERROR);
     if (data.parentId !== undefined) throw new Error(SYSTEM_FOLDER_MOVE_ERROR);
+  }
+  if (existing.mirroredFromId) {
+    throw new Error(MIRROR_FOLDER_EDIT_ERROR);
   }
 
   const update: Record<string, unknown> = {};
@@ -83,18 +112,27 @@ export async function updateFolder(
   if (data.parentId !== undefined) update.parentId = data.parentId;
   if (data.sortOrder !== undefined) update.sortOrder = data.sortOrder;
 
-  return prisma.folder.update({ where: { id }, data: update });
+  const updated = await prisma.folder.update({ where: { id }, data: update });
+
+  if (updated.domain === "PROJECT") {
+    await updateMirror(updated.id);
+  }
+
+  return updated;
 }
 
 export async function deleteFolder(id: string) {
   const existing = await prisma.folder.findUnique({
     where: { id },
-    select: { isSystem: true },
+    select: { isSystem: true, domain: true, mirroredFromId: true },
   });
   if (existing?.isSystem) throw new Error(SYSTEM_FOLDER_DELETE_ERROR);
+  if (existing?.mirroredFromId) throw new Error(MIRROR_FOLDER_DELETE_ERROR);
 
-  // Items inside get folderId = null via onDelete: SetNull
-  // Subfolders cascade delete via onDelete: Cascade
+  if (existing?.domain === "PROJECT") {
+    await deleteMirrorByProjectId(id);
+  }
+
   return prisma.folder.delete({ where: { id } });
 }
 

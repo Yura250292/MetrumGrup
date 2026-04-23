@@ -1266,19 +1266,22 @@ enum FolderDomain {
 }
 
 model Folder {
-  id        String       @id @default(cuid())
-  domain    FolderDomain
-  name      String
-  color     String?
-  parentId  String?
-  sortOrder Int          @default(0)
-  isSystem  Boolean      @default(false)
-  slug      String?
-  createdAt DateTime     @default(now())
-  updatedAt DateTime     @updatedAt
+  id              String       @id @default(cuid())
+  domain          FolderDomain
+  name            String
+  color           String?
+  parentId        String?
+  sortOrder       Int          @default(0)
+  isSystem        Boolean      @default(false)
+  slug            String?
+  mirroredFromId  String?      @unique
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   parent           Folder?                  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children         Folder[]                 @relation("FolderTree")
+  mirroredFrom     Folder?                  @relation("FolderMirror", fields: [mirroredFromId], references: [id], onDelete: Cascade)
+  mirrors          Folder[]                 @relation("FolderMirror")
   projects         Project[]
   estimates        Estimate[]
   financeEntries   FinanceEntry[]
