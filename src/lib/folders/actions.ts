@@ -4,6 +4,7 @@ import {
   ensureMirror,
   updateMirror,
   deleteMirrorByProjectId,
+  autoCreateProjectMirrorForFinanceFolder,
 } from "@/lib/folders/mirror-service";
 
 export const SYSTEM_FOLDER_RENAME_ERROR = "Системну папку перейменувати не можна";
@@ -26,14 +27,14 @@ export async function createFolder(opts: {
   if (opts.parentId) {
     const parent = await prisma.folder.findUnique({
       where: { id: opts.parentId },
-      select: { domain: true, mirroredFromId: true },
+      select: { domain: true, mirroredFromProjectId: true },
     });
     if (!parent || parent.domain !== opts.domain) {
       throw new Error("Батьківська папка не знайдена");
     }
-    // Не дозволяємо створювати вручну підпапку під FINANCE-mirror —
-    // інакше вона ніколи не опиниться у PROJECT-дереві.
-    if (parent.mirroredFromId) {
+    // Не дозволяємо створювати папки-діти під FINANCE-mirror конкретного проєкту —
+    // проєкт не папка, у ньому не має бути підпапок у дереві.
+    if (parent.mirroredFromProjectId) {
       throw new Error(MIRROR_FOLDER_EDIT_ERROR);
     }
   }
@@ -62,6 +63,9 @@ export async function createFolder(opts: {
 
   if (folder.domain === "PROJECT") {
     await ensureMirror(folder.id);
+  } else if (folder.domain === "FINANCE") {
+    // Якщо FINANCE-папка створена під деревом "Проєкти" — створити PROJECT-джерело
+    await autoCreateProjectMirrorForFinanceFolder(folder.id);
   }
 
   return folder;

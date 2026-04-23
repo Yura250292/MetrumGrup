@@ -365,6 +365,147 @@ export function isMirror(folder: Pick<Folder, "mirroredFromId">): boolean {
 }
 
 /**
+ * Перевіряє, чи FINANCE-папка належить піддереву кореневої "Проєкти".
+ */
+export async function isInsideFinanceProjectsTree(
+  folderId: string,
+  tx: Tx = prisma,
+): Promise<boolean> {
+  const rootId = await ensureFinanceProjectsRoot(tx);
+  let currentId: string | null = folderId;
+  const visited = new Set<string>();
+  while (currentId) {
+    if (currentId === rootId) return true;
+    if (visited.has(currentId)) return false;
+    visited.add(currentId);
+    const row: { parentId: string | null } | null = await tx.folder.findUnique({
+      where: { id: currentId },
+      select: { parentId: true },
+    });
+    if (!row) return false;
+    currentId = row.parentId;
+  }
+  return false;
+}
+
+/**
+ * Створює PROJECT-папку для заданої FINANCE-папки (зворотній мирор FINANCE → PROJECT).
+ * Викликається після створення FINANCE-папки під "Проєкти" root. Ідемпотентно:
+ * якщо FINANCE-папка вже mirror — нічого не робить.
+ */
+export async function autoCreateProjectMirrorForFinanceFolder(
+  financeFolderId: string,
+  tx: Tx = prisma,
+): Promise<void> {
+  const f = await tx.folder.findUnique({
+    where: { id: financeFolderId },
+    select: {
+      id: true,
+      domain: true,
+      name: true,
+      color: true,
+      parentId: true,
+      sortOrder: true,
+      mirroredFromId: true,
+      mirroredFromProjectId: true,
+      isSystem: true,
+    },
+  });
+  if (!f) return;
+  if (f.domain !== "FINANCE") return;
+  if (f.isSystem) return;
+  if (f.mirroredFromId || f.mirroredFromProjectId) return;
+  if (!f.parentId) return;
+  if (!(await isInsideFinanceProjectsTree(f.id, tx))) return;
+
+  // Визначаємо PROJECT-parent: якщо finance-parent сам — mirror PROJECT-папки,
+  // використовуємо ту PROJECT-папку. Якщо finance-parent — mirror Project
+  // (mirroredFromProjectId), то підпапки проекту в PROJECT-домені не мають сенсу
+  // — не створюємо. Якщо parent — root "Проєкти", PROJECT-parent = null.
+  const parent = await tx.folder.findUnique({
+    where: { id: f.parentId },
+    select: { mirroredFromId: true, mirroredFromProjectId: true, slug: true },
+  });
+  let projectParentId: string | null = null;
+  if (parent) {
+    if (parent.mirroredFromProjectId) return; // не плодимо папки під Project-mirror
+    if (parent.mirroredFromId) projectParentId = parent.mirroredFromId;
+  }
+
+  const projectFolder = await tx.folder.create({
+    data: {
+      domain: "PROJECT",
+      name: f.name,
+      color: f.color,
+      parentId: projectParentId,
+      sortOrder: f.sortOrder,
+    },
+    select: { id: true },
+  });
+  await tx.folder.update({
+    where: { id: f.id },
+    data: { mirroredFromId: projectFolder.id },
+  });
+}
+
+/**
+ * Backfill FINANCE → PROJECT: для кожної FINANCE-папки під "Проєкти", яка ще не
+ * має mirroredFromId — створити PROJECT-папку і прив'язати.
+ */
+export async function backfillFinanceToProjectFolders(): Promise<{
+  created: number;
+}> {
+  const rootId = await ensureFinanceProjectsRoot();
+  let created = 0;
+
+  async function walk(
+    financeParentId: string,
+    projectParentId: string | null,
+  ): Promise<void> {
+    const children = await prisma.folder.findMany({
+      where: { parentId: financeParentId, isSystem: false },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        sortOrder: true,
+        mirroredFromId: true,
+        mirroredFromProjectId: true,
+      },
+      orderBy: { sortOrder: "asc" },
+    });
+
+    for (const f of children) {
+      if (f.mirroredFromProjectId) continue;
+      if (f.mirroredFromId) {
+        // Уже mirror на PROJECT-folder — спускаємось вглиб.
+        await walk(f.id, f.mirroredFromId);
+        continue;
+      }
+      const newProject = await prisma.folder.create({
+        data: {
+          domain: "PROJECT",
+          name: f.name,
+          color: f.color,
+          parentId: projectParentId,
+          sortOrder: f.sortOrder,
+        },
+        select: { id: true },
+      });
+      await prisma.folder.update({
+        where: { id: f.id },
+        data: { mirroredFromId: newProject.id },
+      });
+      created++;
+      await walk(f.id, newProject.id);
+    }
+  }
+
+  await walk(rootId, null);
+  return { created };
+}
+
+/**
  * Повертає id FINANCE-mirror для заданого Project. Якщо mirror ще нема —
  * створює. Parent mirror-папки = FINANCE-mirror від project.folderId
  * (якщо є), інакше = коренева системна "Проєкти".
