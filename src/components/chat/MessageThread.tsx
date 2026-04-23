@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { ArrowLeft, Calculator, ChevronDown, FileText, FolderKanban, Loader2, MessageSquare, Sparkles, Users, Wand2, X } from "lucide-react";
+import { ArrowLeft, Calculator, ChevronDown, Copy, FileText, FolderKanban, Loader2, Mail, MessageSquare, Sparkles, Users, Wand2, X } from "lucide-react";
 import {
   useConversation,
   useMarkRead,
@@ -285,6 +285,14 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
+  const [letterOpen, setLetterOpen] = useState(false);
+  const [letterTone, setLetterTone] = useState<"formal" | "friendly" | "concise">("formal");
+  const [letterLanguage, setLetterLanguage] = useState<"uk" | "en">("uk");
+  const [letterText, setLetterText] = useState<string | null>(null);
+  const [letterLoading, setLetterLoading] = useState(false);
+  const [letterError, setLetterError] = useState<string | null>(null);
+  const [letterCopied, setLetterCopied] = useState(false);
+
   const runSummary = async () => {
     setSummaryOpen(true);
     if (summaryText && !summaryError) return; // already loaded
@@ -312,6 +320,53 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
     setSummaryText(null);
     setSummaryError(null);
     await runSummary();
+  };
+
+  const runLetter = async () => {
+    try {
+      setLetterLoading(true);
+      setLetterError(null);
+      setLetterText(null);
+      setLetterCopied(false);
+
+      const recent = (messagesData?.messages ?? []).slice(-20);
+      if (recent.length === 0) {
+        setLetterError("У розмові немає повідомлень");
+        setLetterLoading(false);
+        return;
+      }
+      const res = await fetch("/api/admin/chat/ai/letter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId,
+          messageIds: recent.map((m) => m.id),
+          tone: letterTone,
+          language: letterLanguage,
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Не вдалось згенерувати лист");
+      }
+      const { letter } = (await res.json()) as { letter: string };
+      setLetterText(letter);
+    } catch (e) {
+      setLetterError(e instanceof Error ? e.message : "Помилка");
+    } finally {
+      setLetterLoading(false);
+    }
+  };
+
+  const copyLetter = async () => {
+    if (!letterText) return;
+    try {
+      await navigator.clipboard.writeText(letterText);
+      setLetterCopied(true);
+      setTimeout(() => setLetterCopied(false), 2000);
+    } catch {
+      setLetterError("Не вдалось скопіювати");
+    }
   };
 
   const messages = messagesData?.messages ?? [];
@@ -412,6 +467,23 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
           )}
           <span className="hidden sm:inline">Підсумок</span>
         </button>
+        <button
+          type="button"
+          onClick={() => {
+            setLetterOpen(true);
+            setLetterText(null);
+            setLetterError(null);
+          }}
+          title="Згенерувати лист на основі розмови"
+          className="flex-shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition active:scale-95"
+          style={{
+            color: T.textSecondary,
+            backgroundColor: T.panelElevated,
+          }}
+        >
+          <Mail className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Лист</span>
+        </button>
       </div>
 
       {/* Messages */}
@@ -443,6 +515,118 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
 
       {/* Composer */}
       <MessageComposer conversationId={conversationId} />
+
+      {/* AI Letter Dialog (overlay) */}
+      {letterOpen && (
+        <div
+          className="absolute inset-0 z-40 flex flex-col"
+          style={{ backgroundColor: T.panel }}
+        >
+          <div
+            className="flex items-center justify-between gap-3 border-b px-4 py-3"
+            style={{ borderColor: T.borderSoft }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Mail className="h-4 w-4 flex-shrink-0" style={{ color: T.accentPrimary }} />
+              <p className="truncate text-sm font-semibold" style={{ color: T.textPrimary }}>
+                AI-лист з розмови
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setLetterOpen(false)}
+              className="rounded-lg p-1 transition active:scale-95"
+              style={{ color: T.textSecondary }}
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 border-b px-4 py-2" style={{ borderColor: T.borderSoft }}>
+            <select
+              value={letterTone}
+              onChange={(e) => setLetterTone(e.target.value as typeof letterTone)}
+              disabled={letterLoading}
+              className="rounded-lg px-2 py-1 text-[12px] outline-none"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+            >
+              <option value="formal">Офіційний</option>
+              <option value="friendly">Дружній</option>
+              <option value="concise">Стислий</option>
+            </select>
+            <select
+              value={letterLanguage}
+              onChange={(e) => setLetterLanguage(e.target.value as typeof letterLanguage)}
+              disabled={letterLoading}
+              className="rounded-lg px-2 py-1 text-[12px] outline-none"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+            >
+              <option value="uk">Українською</option>
+              <option value="en">English</option>
+            </select>
+            <button
+              type="button"
+              onClick={runLetter}
+              disabled={letterLoading}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-semibold transition active:scale-95 disabled:opacity-60"
+              style={{ backgroundColor: T.accentPrimary, color: "#FFFFFF" }}
+            >
+              {letterLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {letterText ? "Перегенерувати" : "Згенерувати"}
+            </button>
+            {letterText && (
+              <button
+                type="button"
+                onClick={copyLetter}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-semibold transition active:scale-95"
+                style={{ backgroundColor: T.panelElevated, color: T.textPrimary, border: `1px solid ${T.borderSoft}` }}
+              >
+                <Copy className="h-3.5 w-3.5" />
+                {letterCopied ? "Скопійовано" : "Копіювати"}
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4">
+            {!letterLoading && !letterText && !letterError && (
+              <p className="text-sm" style={{ color: T.textMuted }}>
+                Обери тон і мову → «Згенерувати». AI підготує лист на основі останніх ~20 повідомлень розмови.
+              </p>
+            )}
+            {letterLoading && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Готую лист…
+              </div>
+            )}
+            {letterError && (
+              <p className="text-sm" style={{ color: T.danger }}>
+                {letterError}
+              </p>
+            )}
+            {!letterLoading && letterText && (
+              <div
+                className="prose prose-sm max-w-none admin-dark:prose-invert"
+                style={{ color: T.textPrimary }}
+              >
+                <ReactMarkdown>{letterText}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* AI Summary Panel (overlay) */}
       {summaryOpen && (
