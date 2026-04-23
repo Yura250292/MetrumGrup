@@ -24,6 +24,14 @@ import {
   handleRemindCallback,
   handleRejectCallback,
 } from './receipt';
+import {
+  scanwarehouseCommand,
+  handleProjectPickCallback,
+  handleWarehouseScanPhoto,
+  handleWarehouseScanDocument,
+  handleWarehouseApproveCallback,
+  handleWarehouseRejectCallback,
+} from './scanwarehouse';
 import { requireAdmin } from '../middleware/auth';
 import { getUserProjects } from '../services/database';
 import { formatProjectsList } from '../services/formatter';
@@ -43,11 +51,18 @@ export function registerCommands(bot: Telegraf<BotContext>) {
   bot.command('payments', requireAdmin, paymentsCommand);
   bot.command('status', requireAdmin, statusCommand);
   bot.command('receipt', requireAdmin, receiptCommand);
+  bot.command('scanwarehouse', requireAdmin, scanwarehouseCommand);
   bot.command('cancel', async (ctx) => {
+    let cancelled = false;
     if (ctx.session?.pendingReceipt) {
       ctx.session.pendingReceipt = undefined;
-      await ctx.reply('❌ Скасовано.');
+      cancelled = true;
     }
+    if (ctx.session?.pendingWarehouseScan) {
+      ctx.session.pendingWarehouseScan = undefined;
+      cancelled = true;
+    }
+    if (cancelled) await ctx.reply('❌ Скасовано.');
   });
 
   // Функція обробки аудіо (для voice та audio)
@@ -119,18 +134,20 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     }
   });
 
-  // Обробка фото — перевіряємо чи це чек
+  // Обробка фото — спершу warehouse-scan flow (якщо активний), потім receipt
   bot.on('photo', async (ctx) => {
-    if (ctx.session?.isAdmin) {
-      await handleReceiptPhoto(ctx);
-    }
+    if (!ctx.session?.isAdmin) return;
+    const handled = await handleWarehouseScanPhoto(ctx);
+    if (handled) return;
+    await handleReceiptPhoto(ctx);
   });
 
-  // Обробка документів — перевіряємо чи це чек
+  // Обробка документів — аналогічно
   bot.on('document', async (ctx) => {
-    if (ctx.session?.isAdmin) {
-      await handleReceiptDocument(ctx);
-    }
+    if (!ctx.session?.isAdmin) return;
+    const handled = await handleWarehouseScanDocument(ctx);
+    if (handled) return;
+    await handleReceiptDocument(ctx);
   });
 
   // Обробка текстових повідомлень
@@ -324,6 +341,21 @@ export function registerCommands(bot: Telegraf<BotContext>) {
       await handleReceiptCancel(ctx);
       return;
     }
+
+    // Warehouse scan flow callbacks
+    if (data.startsWith('wh_proj:')) {
+      await handleProjectPickCallback(ctx, data.replace('wh_proj:', ''));
+      return;
+    }
+    if (data.startsWith('wh_approve:')) {
+      await handleWarehouseApproveCallback(ctx, data.replace('wh_approve:', ''));
+      return;
+    }
+    if (data.startsWith('wh_reject:')) {
+      await handleWarehouseRejectCallback(ctx, data.replace('wh_reject:', ''));
+      return;
+    }
+
     if (data === 'noop') {
       await ctx.answerCbQuery();
       return;

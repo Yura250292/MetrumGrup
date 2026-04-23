@@ -1,6 +1,8 @@
 import { Markup } from 'telegraf';
 import type { InlineKeyboardButton } from 'telegraf/types';
 import { BotContext, PendingReceipt } from '../types';
+import { ocrReceiptText } from '../../src/lib/ocr/receipt-ocr';
+import { parseAmount } from '../../src/lib/ocr/parse-amount';
 
 /** Chunk flat array of buttons into rows of max `cols` */
 function chunkButtons(buttons: InlineKeyboardButton[], cols: number): InlineKeyboardButton[][] {
@@ -9,54 +11,6 @@ function chunkButtons(buttons: InlineKeyboardButton[], cols: number): InlineKeyb
     rows.push(buttons.slice(i, i + cols));
   }
   return rows;
-}
-
-/**
- * Parse amount from Ukrainian/European text format.
- * Handles "23 121,12" (UA), "23,121.12" (EN), "23121.12", "23121,12", etc.
- * Thousand separators: space or comma (EN) or dot (EU)
- * Decimal separator: comma (UA) or dot (EN)
- */
-function parseAmount(raw: string): number | null {
-  if (!raw) return null;
-
-  // Strip everything except digits, spaces, commas, dots
-  let cleaned = raw.replace(/[^\d\s,.]/g, '').trim();
-  if (!cleaned) return null;
-
-  // Remove spaces (thousand separators in UA format)
-  cleaned = cleaned.replace(/\s/g, '');
-
-  // If both comma and dot — whichever is LAST is the decimal separator
-  const lastComma = cleaned.lastIndexOf(',');
-  const lastDot = cleaned.lastIndexOf('.');
-
-  if (lastComma >= 0 && lastDot >= 0) {
-    if (lastComma > lastDot) {
-      // 23.121,12 → comma is decimal, dot is thousand
-      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
-    } else {
-      // 23,121.12 → dot is decimal, comma is thousand
-      cleaned = cleaned.replace(/,/g, '');
-    }
-  } else if (lastComma >= 0) {
-    // Only comma — decimal if 1-2 digits after, else thousand
-    const afterComma = cleaned.length - 1 - lastComma;
-    if (afterComma === 1 || afterComma === 2) {
-      cleaned = cleaned.replace(',', '.');
-    } else {
-      cleaned = cleaned.replace(/,/g, '');
-    }
-  } else if (lastDot >= 0) {
-    // Only dot — decimal if 1-2 digits after, else thousand
-    const afterDot = cleaned.length - 1 - lastDot;
-    if (afterDot !== 1 && afterDot !== 2) {
-      cleaned = cleaned.replace(/\./g, '');
-    }
-  }
-
-  const n = parseFloat(cleaned);
-  return Number.isFinite(n) && n > 0 ? n : null;
 }
 
 /**
@@ -284,66 +238,11 @@ async function processReceiptWithOCR(ctx: BotContext) {
     const fileUrl = await ctx.telegram.getFileLink(receipt.fileId!);
     const response = await fetch(fileUrl.href);
     const buffer = Buffer.from(await response.arrayBuffer());
-    const base64 = buffer.toString('base64');
 
-    if (!process.env.GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY не налаштовано');
-    }
-
-    // OCR with Gemini Vision (try multiple models as fallback)
-    const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-    const prompt = `Розпізнай цей чек/накладну/рахунок. Витягни структуровану інформацію українською мовою:
-
-1. Назва документу (чек, накладна, рахунок)
-2. Контрагент/Постачальник
-3. Список товарів/послуг з цінами (якщо є)
-4. Загальна сума
-5. Дата (якщо видно)
-
-Формат відповіді:
-📄 Тип: [тип документу]
-🏢 Постачальник: [назва]
-📋 Позиції:
-- [назва товару] — [ціна] грн
-- ...
-💰 Сума: [загальна сума] грн
-📅 Дата: [дата або "не вказано"]
-
-Якщо щось не вдається розпізнати — напиши "не розпізнано". Відповідай ТІЛЬКИ структурованим текстом, без додаткових пояснень.`;
-
-    const modelsToTry = ['gemini-3-flash-preview', 'gemini-2.5-flash'];
-    let ocrText: string | null = null;
-    let lastError: unknown = null;
-
-    for (const modelName of modelsToTry) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const result = await model.generateContent([
-          { inlineData: { mimeType: receipt.mimeType!, data: base64 } },
-          { text: prompt },
-        ]);
-        ocrText = result.response.text();
-        console.log(`[receipt] OCR success with ${modelName}`);
-        break;
-      } catch (err) {
-        lastError = err;
-        console.error(`[receipt] OCR failed with ${modelName}:`, err instanceof Error ? err.message : err);
-      }
-    }
-
-    if (!ocrText) {
-      throw lastError instanceof Error ? lastError : new Error('Всі моделі Gemini недоступні');
-    }
-
-    // Extract amount from OCR text
-    const amountMatch = ocrText.match(/Сума:\s*([\d\s,.]+)/i);
-    const amount = amountMatch ? parseAmount(amountMatch[1]) : null;
-
-    // Extract supplier
-    const supplierMatch = ocrText.match(/Постачальник:\s*(.+)/i);
-    const supplier = supplierMatch ? supplierMatch[1].trim() : null;
+    const ocr = await ocrReceiptText(buffer, receipt.mimeType!);
+    const ocrText = ocr.ocrText;
+    const amount = ocr.amount;
+    const supplier = ocr.counterparty;
 
     receipt.ocrText = ocrText;
     receipt.amount = amount && Number.isFinite(amount) ? amount : undefined;

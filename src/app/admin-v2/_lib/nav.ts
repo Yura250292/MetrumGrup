@@ -17,6 +17,7 @@ import {
   ListTodo,
   Wallet,
   Mic,
+  ScanLine,
   type LucideIcon,
 } from "lucide-react";
 
@@ -74,6 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
       { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
+      { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine },
       { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat, hrAllowed: true },
     ],
   },
@@ -147,6 +149,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/finance/templates": "Шаблони",
   "/admin-v2/profile": "Мій профіль",
   "/admin-v2/financing": "Фінансування",
+  "/admin-v2/receipts": "Накладні (скан)",
+  "/admin-v2/receipts/scan": "Сканувати накладну",
   "/admin-v2/meetings": "Наради",
   "/admin-v2/meetings/new": "Нова нарада",
   "/admin": "Дашборд",

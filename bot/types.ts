@@ -20,6 +20,19 @@ export interface PendingReceipt {
   ocrText?: string;
 }
 
+export interface PendingWarehouseScan {
+  step: 'awaiting_project' | 'awaiting_file' | 'processing' | 'awaiting_confirmation';
+  projectId?: string;
+  projectTitle?: string;
+  scanId?: string;
+  unmatchedCount?: number;
+  suggestedCount?: number;
+  matchedCount?: number;
+  totalItems?: number;
+  totalAmount?: number | null;
+  supplier?: string | null;
+}
+
 // Extend Telegraf Context with our custom state
 export interface BotContext extends TelegrafContext {
   session?: {
@@ -27,5 +40,6 @@ export interface BotContext extends TelegrafContext {
     awaitingPassword?: boolean;
     conversationHistory?: ConversationMessage[];
     pendingReceipt?: PendingReceipt;
+    pendingWarehouseScan?: PendingWarehouseScan;
   };
 }
