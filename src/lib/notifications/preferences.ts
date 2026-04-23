@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { NotificationCategory } from "./categories";
 
-type NotificationChannel = "inApp" | "email" | "push";
+type NotificationChannel = "inApp" | "email" | "push" | "telegram";
 
 type NotificationPrefs = {
   channels: Record<NotificationChannel, boolean>;
@@ -12,7 +12,7 @@ type NotificationPrefs = {
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
-  channels: { inApp: true, email: true, push: false },
+  channels: { inApp: true, email: true, push: false, telegram: true },
   categories: {},
   mode: "all",
 };
@@ -60,7 +60,7 @@ export async function getBatchUserPrefs(
 export function shouldDeliver(
   prefs: NotificationPrefs,
   category: NotificationCategory,
-  channel: "email" | "push",
+  channel: "email" | "push" | "telegram",
 ): boolean {
   // Global mode check
   if (prefs.mode === "silent") return false;

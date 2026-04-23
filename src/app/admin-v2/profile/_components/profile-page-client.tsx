@@ -13,6 +13,7 @@ import { SectionAvatar } from "./section-avatar";
 import { SectionAbout } from "./section-about";
 import { SectionRole } from "./section-role";
 import { SectionNotifications } from "./section-notifications";
+import { SectionTelegram } from "./section-telegram";
 import { SectionWorkSettings } from "./section-work-settings";
 import { SectionProductivity } from "./section-productivity";
 import { SectionSecurity } from "./section-security";
@@ -121,6 +122,9 @@ export function ProfilePageClient() {
               profile={profile}
               onSave={updateNotifications}
             />
+          </div>
+          <div ref={(el) => { sectionRefs.current.telegram = el; }}>
+            <SectionTelegram />
           </div>
           <div ref={(el) => { sectionRefs.current.quickChat = el; }}>
             <SectionQuickChat />

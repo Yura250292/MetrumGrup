@@ -2041,6 +2041,19 @@ model TelegramBotUser {
   @@map("telegram_bot_users")
 }
 
+model TelegramLinkToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("telegram_link_tokens")
+}
+
 model SavedView {
   id          String       @id @default(cuid())
   userId      String?

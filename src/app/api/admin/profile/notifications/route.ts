@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
-const VALID_CHANNELS = ["inApp", "email", "push"] as const;
+const VALID_CHANNELS = ["inApp", "email", "push", "telegram"] as const;
 const VALID_CATEGORIES = [
   "taskAssignment", "taskStatusChange", "taskComment", "mention",
   "deadlineToday", "overdueTask", "chatMessage", "projectChange",

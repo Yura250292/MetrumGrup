@@ -5,6 +5,7 @@ import { notificationTypeToCategory } from "./categories";
 import { getBatchUserPrefs, shouldDeliver, isQuietHours } from "./preferences";
 import { sendPush } from "./push";
 import { sendCustomHtmlEmail, sendNotificationEmail } from "./email";
+import { sendTelegramNotification } from "./telegram";
 import { buildTaskAssignedEmailHtml } from "./email-template";
 import { relatedEntityLink } from "./links";
 
@@ -87,6 +88,17 @@ async function dispatchExtraChannels(notifications: NotificationRow[]): Promise<
             body: n.body || undefined,
             url,
           }).catch((err) => console.error("[Dispatch] Push error:", err)),
+        );
+      }
+
+      // Telegram — short form like push
+      if (shouldDeliver(userInfo.prefs, category, "telegram")) {
+        promises.push(
+          sendTelegramNotification(n.userId, {
+            title: n.title,
+            body: n.body,
+            url,
+          }).catch((err) => console.error("[Dispatch] Telegram error:", err)),
         );
       }
 

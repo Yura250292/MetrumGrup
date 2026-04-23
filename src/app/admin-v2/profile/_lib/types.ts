@@ -1,4 +1,4 @@
-export type NotificationChannel = "inApp" | "email" | "push";
+export type NotificationChannel = "inApp" | "email" | "push" | "telegram";
 
 export type NotificationCategory =
   | "taskAssignment"
@@ -71,6 +71,7 @@ export type ProfileSection =
   | "about"
   | "role"
   | "notifications"
+  | "telegram"
   | "quickChat"
   | "workSettings"
   | "productivity"

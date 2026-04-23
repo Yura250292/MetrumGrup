@@ -5,6 +5,7 @@ import {
   Shield,
   Bell,
   MessageCircle,
+  Send,
   Settings,
   Clock,
   Lock,
@@ -24,6 +25,7 @@ export const SECTIONS: SectionDef[] = [
   { id: "about", label: "Про мене", icon: FileText },
   { id: "role", label: "Роль і повноваження", icon: Shield },
   { id: "notifications", label: "Сповіщення", icon: Bell },
+  { id: "telegram", label: "Telegram бот", icon: Send },
   { id: "quickChat", label: "Швидкий чат", icon: MessageCircle },
   { id: "workSettings", label: "Робочі налаштування", icon: Settings },
   { id: "productivity", label: "Час і продуктивність", icon: Clock },
@@ -47,16 +49,17 @@ export const NOTIFICATION_CHANNELS: { key: NotificationChannel; label: string }[
   { key: "inApp", label: "У системі" },
   { key: "email", label: "Email" },
   { key: "push", label: "Push" },
+  { key: "telegram", label: "Telegram" },
 ];
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
-  channels: { inApp: true, email: true, push: false },
+  channels: { inApp: true, email: true, push: false, telegram: true },
   categories: Object.fromEntries(
     [
       "taskAssignment", "taskStatusChange", "taskComment", "mention",
       "deadlineToday", "overdueTask", "chatMessage", "projectChange",
       "systemEvent", "financeReview",
-    ].map((k) => [k, { inApp: true, email: false, push: false }])
+    ].map((k) => [k, { inApp: true, email: false, push: false, telegram: false }])
   ) as NotificationPrefs["categories"],
   mode: "all",
 };

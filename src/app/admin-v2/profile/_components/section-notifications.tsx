@@ -97,7 +97,7 @@ export function SectionNotifications({ profile, onSave }: Props) {
   const enableAll = () => {
     const categories = { ...prefs.categories };
     for (const cat of NOTIFICATION_CATEGORIES) {
-      categories[cat.key] = { inApp: true, email: true, push: true };
+      categories[cat.key] = { inApp: true, email: true, push: true, telegram: true };
     }
     const updated = { ...prefs, categories, mode: "all" as const };
     setPrefs(updated);
@@ -107,7 +107,7 @@ export function SectionNotifications({ profile, onSave }: Props) {
   const disableAll = () => {
     const categories = { ...prefs.categories };
     for (const cat of NOTIFICATION_CATEGORIES) {
-      categories[cat.key] = { inApp: false, email: false, push: false };
+      categories[cat.key] = { inApp: false, email: false, push: false, telegram: false };
     }
     const updated = { ...prefs, categories, mode: "silent" as const };
     setPrefs(updated);
@@ -124,7 +124,7 @@ export function SectionNotifications({ profile, onSave }: Props) {
     const categories = { ...prefs.categories };
     for (const cat of NOTIFICATION_CATEGORIES) {
       const on = important.includes(cat.key);
-      categories[cat.key] = { inApp: on, email: on, push: false };
+      categories[cat.key] = { inApp: on, email: on, push: false, telegram: on };
     }
     const updated = { ...prefs, categories, mode: "important" as const };
     setPrefs(updated);
