@@ -318,9 +318,14 @@ export default function NewMeetingPage() {
 function extensionFor(mimeType: string): string {
   if (mimeType.includes("webm")) return "webm";
   if (mimeType.includes("mp4") || mimeType.includes("m4a")) return "m4a";
-  if (mimeType.includes("mpeg")) return "mp3";
+  if (mimeType.includes("mpeg") || mimeType.includes("mpga")) return "mp3";
   if (mimeType.includes("wav")) return "wav";
-  if (mimeType.includes("ogg")) return "ogg";
+  if (mimeType.includes("ogg") || mimeType.includes("oga")) return "ogg";
+  if (mimeType.includes("flac")) return "flac";
+  if (mimeType.includes("opus")) return "opus";
+  if (mimeType.includes("aac")) return "aac";
+  if (mimeType.includes("amr")) return "amr";
+  if (mimeType.includes("3gp")) return "3gp";
   return "webm";
 }
 

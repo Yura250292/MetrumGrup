@@ -133,6 +133,41 @@ export function MeetingRecorder() {
   );
 }
 
+const ACCEPTED_EXTENSIONS = [
+  "mp3",
+  "mp4",
+  "m4a",
+  "mpeg",
+  "mpga",
+  "wav",
+  "webm",
+  "ogg",
+  "oga",
+  "flac",
+  "aac",
+  "opus",
+  "amr",
+  "3gp",
+];
+
+const ACCEPT_ATTR = ACCEPTED_EXTENSIONS.map((e) => `.${e}`)
+  .concat("audio/*")
+  .join(",");
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf(".");
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : "";
+}
+
+function isAudioFile(file: File): boolean {
+  if (file.type.startsWith("audio/")) return true;
+  if (file.type.startsWith("video/mp4") || file.type === "video/webm") {
+    // Some phones tag .m4a/.mp4 audio as video/mp4.
+    return true;
+  }
+  return ACCEPTED_EXTENSIONS.includes(fileExtension(file.name));
+}
+
 export function MeetingUploader({
   onFile,
   disabled,
@@ -145,8 +180,10 @@ export function MeetingUploader({
 
   function handleFile(file: File) {
     setError(null);
-    if (!file.type.startsWith("audio/")) {
-      setError("Оберіть аудіо-файл (mp3, m4a, webm, wav)");
+    if (!isAudioFile(file)) {
+      setError(
+        `Непідтримуваний формат. Приймаються: ${ACCEPTED_EXTENSIONS.join(", ")}`
+      );
       return;
     }
     onFile(file);
@@ -172,13 +209,13 @@ export function MeetingUploader({
             Або завантажте готовий аудіо-файл
           </p>
           <p className="text-xs" style={{ color: T.textMuted }}>
-            mp3, m4a, webm, wav — до 25 MB для AI-розпізнавання
+            mp3, m4a, mp4, wav, webm, ogg, flac, aac, opus, amr, 3gp — до 25 MB
           </p>
         </div>
         <input
           ref={inputRef}
           type="file"
-          accept="audio/*"
+          accept={ACCEPT_ATTR}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

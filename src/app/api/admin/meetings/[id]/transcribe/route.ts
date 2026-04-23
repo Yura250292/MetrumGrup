@@ -99,9 +99,14 @@ function extractExtension(key: string, mime?: string | null): string {
   if (mime) {
     if (mime.includes("webm")) return ".webm";
     if (mime.includes("mp4") || mime.includes("m4a")) return ".m4a";
-    if (mime.includes("mpeg")) return ".mp3";
+    if (mime.includes("mpeg") || mime.includes("mpga")) return ".mp3";
     if (mime.includes("wav")) return ".wav";
-    if (mime.includes("ogg")) return ".ogg";
+    if (mime.includes("ogg") || mime.includes("oga")) return ".ogg";
+    if (mime.includes("flac")) return ".flac";
+    if (mime.includes("opus")) return ".opus";
+    if (mime.includes("aac")) return ".aac";
+    if (mime.includes("amr")) return ".amr";
+    if (mime.includes("3gp")) return ".3gp";
   }
   return ".webm";
 }
