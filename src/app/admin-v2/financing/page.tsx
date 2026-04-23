@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ListTodo, AlertCircle, FlaskConical } from "lucide-react";
+import { ArrowRight, ListTodo, AlertCircle, FlaskConical, Plus, FolderKanban } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FinancingView } from "./_components/financing-view";
@@ -62,8 +62,38 @@ export default async function AdminV2FinancingPage({
       : Promise.resolve(null),
   ]);
 
+  const canCreateProject =
+    session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
+
   return (
     <div className="flex flex-col gap-4">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <FolderKanban size={18} style={{ color: T.accentPrimary }} />
+          <h1
+            className="text-[18px] font-bold tracking-tight"
+            style={{ color: T.textPrimary }}
+          >
+            Фінансування
+          </h1>
+          <span
+            className="text-[11px]"
+            style={{ color: T.textMuted }}
+          >
+            — одна база з Проєктами
+          </span>
+        </div>
+        {canCreateProject && (
+          <Link
+            href="/admin-v2/projects/new"
+            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.97]"
+            style={{ backgroundColor: T.accentPrimary }}
+            title="Створити новий проєкт (з'явиться і тут, і у Проєктах)"
+          >
+            <Plus size={14} /> Новий проєкт
+          </Link>
+        )}
+      </header>
       {activeProject && (
         <section
           className="flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3"
