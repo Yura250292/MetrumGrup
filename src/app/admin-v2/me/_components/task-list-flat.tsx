@@ -4,6 +4,7 @@ import {
   CheckCircle2,
   ExternalLink,
   Play,
+  Sparkles,
   Square,
   Trash2,
 } from "lucide-react";
@@ -131,8 +132,23 @@ export function TaskRow({
         onClick={onOpen}
         className="flex-1 min-w-0 text-left"
       >
-        <div className="text-sm truncate" style={{ color: T.textPrimary }}>
-          {task.title}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-sm truncate" style={{ color: T.textPrimary }}>
+            {task.title}
+          </span>
+          {task.hasAiSpec && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold flex-shrink-0"
+              style={{
+                backgroundColor: T.accentSecondarySoft,
+                color: T.accentSecondary,
+              }}
+              title="ТЗ згенеровано AI"
+            >
+              <Sparkles size={9} />
+              ТЗ
+            </span>
+          )}
         </div>
         <div
           className="text-[10px] truncate flex items-center gap-1"

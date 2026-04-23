@@ -113,6 +113,7 @@ export function SectionsView({
                   <TaskRowExtended
                     key={t.id}
                     task={t}
+                    currentUserId={currentUserId}
                     isTimerActive={activeTimerTaskId === t.id}
                     pending={pendingId === t.id}
                     onOpen={() => onOpenDrawer(t.id)}

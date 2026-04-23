@@ -8,12 +8,14 @@ import {
   ArrowRight,
   AlertTriangle,
   Circle,
+  Sparkles,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { isOverdue, PRIORITY_COLOR, type TaskItem } from "./use-me-tasks";
 
 type Props = {
   task: TaskItem;
+  currentUserId?: string;
   isTimerActive: boolean;
   pending: boolean;
   onOpen: () => void;
@@ -34,6 +36,7 @@ function formatDue(dueIso: string | null): string {
 
 export function TaskRowExtended({
   task,
+  currentUserId,
   isTimerActive,
   pending,
   onOpen,
@@ -45,7 +48,9 @@ export function TaskRowExtended({
   const incoming = task.incomingDepsCount ?? 0;
   const outgoing = task.outgoingDepsCount ?? 0;
   const nextStep = task.firstUndoneChecklistItem;
-  const creatorName = task.createdBy?.name;
+  const showCreator =
+    task.createdById && task.createdById !== currentUserId;
+  const creatorName = showCreator ? task.createdBy?.name : undefined;
   const isUrgent = task.priority === "URGENT";
   const highlight = overdue || isUrgent;
 
@@ -75,6 +80,19 @@ export function TaskRowExtended({
           >
             {task.title}
           </span>
+          {task.hasAiSpec && (
+            <span
+              className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+              style={{
+                backgroundColor: T.accentSecondarySoft,
+                color: T.accentSecondary,
+              }}
+              title="Технічне завдання згенеровано AI"
+            >
+              <Sparkles size={9} />
+              ТЗ
+            </span>
+          )}
           <span
             className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
             style={{ backgroundColor: task.status.color + "20", color: task.status.color }}

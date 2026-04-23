@@ -28,6 +28,7 @@ export type TaskItem = {
   firstUndoneChecklistItem?: string | null;
   incomingDepsCount?: number;
   outgoingDepsCount?: number;
+  hasAiSpec?: boolean;
 };
 
 export type NotificationItem = {

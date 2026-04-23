@@ -83,6 +83,8 @@ export async function GET(request: NextRequest) {
         },
         _count: { select: { checklist: true, subtasks: true } },
       },
+      // description is cheap (@db.Text but trimmed below) and lets us surface
+      // an AI-generated spec indicator in the task row without a second fetch.
       orderBy: [
         { dueDate: { sort: "asc", nulls: "last" } },
         { priority: "desc" },
@@ -91,18 +93,27 @@ export async function GET(request: NextRequest) {
     });
 
     // Flatten to shape expected by UI — pull counts out of relation arrays.
-    const items = tasks.map((t) => ({
-      ...t,
-      firstUndoneChecklistItem: t.checklist[0]?.content ?? null,
-      incomingDepsCount: t.incomingDeps.length,
-      outgoingDepsCount: t.outgoingDeps.length,
-      // Keep only watcher user IDs on client for lightweight checks.
-      watchers: t.watchers.map((w) => ({ userId: w.userId })),
-      // Remove the raw relation arrays we just summarized.
-      checklist: undefined,
-      incomingDeps: undefined,
-      outgoingDeps: undefined,
-    }));
+    const items = tasks.map((t) => {
+      const desc = t.description ?? "";
+      const hasAiSpec =
+        desc.includes("## Мета") &&
+        (desc.includes("## Обсяг") || desc.includes("## Критерії приймання"));
+      return {
+        ...t,
+        firstUndoneChecklistItem: t.checklist[0]?.content ?? null,
+        incomingDepsCount: t.incomingDeps.length,
+        outgoingDepsCount: t.outgoingDeps.length,
+        // Keep only watcher user IDs on client for lightweight checks.
+        watchers: t.watchers.map((w) => ({ userId: w.userId })),
+        hasAiSpec,
+        // Drop full description and raw relation arrays — we've summarized
+        // them into booleans/counts above.
+        description: undefined,
+        checklist: undefined,
+        incomingDeps: undefined,
+        outgoingDeps: undefined,
+      };
+    });
 
     return NextResponse.json({ data: { items } });
   } catch (err) {
