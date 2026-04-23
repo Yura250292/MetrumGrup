@@ -1116,6 +1116,7 @@ model ChatMessageAttachment {
   size       Int
   mimeType   String
   durationMs Int?
+  transcript String?     @db.Text
   createdAt  DateTime    @default(now())
   message    ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
 

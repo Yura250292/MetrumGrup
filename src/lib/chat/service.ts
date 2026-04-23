@@ -383,6 +383,7 @@ export async function getMessages(
       size: a.size,
       mimeType: a.mimeType,
       durationMs: a.durationMs,
+      transcript: a.transcript,
     })),
   }));
 
@@ -501,6 +502,7 @@ export async function postMessage(
       size: a.size,
       mimeType: a.mimeType,
       durationMs: a.durationMs,
+      transcript: a.transcript,
     })),
   };
 }

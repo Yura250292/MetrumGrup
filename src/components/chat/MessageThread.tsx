@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { ArrowLeft, Calculator, FileText, FolderKanban, Loader2, MessageSquare, Sparkles, Users, X } from "lucide-react";
+import { ArrowLeft, Calculator, ChevronDown, FileText, FolderKanban, Loader2, MessageSquare, Sparkles, Users, Wand2, X } from "lucide-react";
 import {
   useConversation,
   useMarkRead,
@@ -34,6 +34,100 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function AudioAttachment({
+  attachment,
+  isOwn,
+}: {
+  attachment: ChatMessage["attachments"][number];
+  isOwn: boolean;
+}) {
+  const [transcript, setTranscript] = useState<string | null>(attachment.transcript ?? null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(Boolean(attachment.transcript));
+
+  const mutedColor = isOwn ? "rgba(255,255,255,0.75)" : T.textMuted;
+  const chipBg = isOwn ? "rgba(255,255,255,0.15)" : T.panel;
+  const chipBorder = isOwn ? "rgba(255,255,255,0.25)" : T.borderSoft;
+
+  const handleTranscribe = async () => {
+    if (loading) return;
+    if (transcript) {
+      setOpen((v) => !v);
+      return;
+    }
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch(
+        `/api/admin/chat/attachments/${attachment.id}/transcribe`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Не вдалось транскрибувати");
+      }
+      const { transcript: text } = (await res.json()) as { transcript: string };
+      setTranscript(text);
+      setOpen(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Помилка");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <audio controls src={attachment.url} className="max-w-[280px]" preload="metadata" />
+      <div className="flex items-center gap-2 text-[10px]">
+        <span style={{ color: mutedColor }}>{attachment.name}</span>
+        <button
+          type="button"
+          onClick={handleTranscribe}
+          disabled={loading}
+          className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-medium transition active:scale-95 disabled:opacity-60"
+          style={{
+            backgroundColor: chipBg,
+            color: isOwn ? "#FFFFFF" : T.accentPrimary,
+            border: `1px solid ${chipBorder}`,
+          }}
+          title={transcript ? "Показати / сховати текст" : "AI транскрипт"}
+        >
+          {loading ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : transcript ? (
+            <ChevronDown
+              className="h-3 w-3 transition-transform"
+              style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)" }}
+            />
+          ) : (
+            <Wand2 className="h-3 w-3" />
+          )}
+          <span>{transcript ? (open ? "Сховати" : "Показати текст") : "Транскрипт"}</span>
+        </button>
+      </div>
+      {error && (
+        <p className="text-[11px]" style={{ color: isOwn ? "#fecaca" : T.danger }}>
+          {error}
+        </p>
+      )}
+      {open && transcript && (
+        <div
+          className="rounded-lg px-2.5 py-2 text-[12px] whitespace-pre-wrap max-w-[280px]"
+          style={{
+            backgroundColor: chipBg,
+            color: isOwn ? "#FFFFFF" : T.textPrimary,
+            border: `1px solid ${chipBorder}`,
+          }}
+        >
+          {transcript}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AttachmentBlock({
   attachment,
   isOwn,
@@ -61,14 +155,7 @@ function AttachmentBlock({
   }
 
   if (attachment.mimeType.startsWith("audio/")) {
-    return (
-      <div className="flex flex-col gap-1">
-        <audio controls src={attachment.url} className="max-w-[280px]" preload="metadata" />
-        <span className="text-[10px]" style={{ color: isOwn ? "rgba(255,255,255,0.75)" : T.textMuted }}>
-          {attachment.name}
-        </span>
-      </div>
-    );
+    return <AudioAttachment attachment={attachment} isOwn={isOwn} />;
   }
 
   if (attachment.mimeType.startsWith("video/")) {

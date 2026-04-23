@@ -23,6 +23,7 @@ export type ChatAttachment = {
   size: number;
   mimeType: string;
   durationMs: number | null;
+  transcript: string | null;
 };
 
 export type ChatAttachmentInput = {
