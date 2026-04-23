@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bot, X } from "lucide-react";
+import { Bot, Globe, X } from "lucide-react";
 import { chatKeys, useSendMessage, type ChatAttachmentInput } from "@/hooks/useChat";
 import { CommentComposer } from "@/components/collab/CommentComposer";
 import { AudioRecorderButton } from "./AudioRecorderButton";
@@ -185,6 +185,16 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
           <span className="flex items-center gap-1.5 font-medium">
             <Bot className="h-3.5 w-3.5" />
             Запит до AI — побачать всі учасники чату
+            {aiModel === "gemini-2.5-flash" && (
+              <span
+                className="inline-flex items-center gap-0.5 ml-1 rounded px-1 py-0.5 text-[10px] font-semibold"
+                style={{ backgroundColor: "rgba(236, 72, 153, 0.2)" }}
+                title="Gemini з доступом до Google Search"
+              >
+                <Globe className="h-2.5 w-2.5" />
+                web
+              </span>
+            )}
           </span>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-1 text-[11px]">
@@ -231,6 +241,8 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
             }
             uploadEndpoint="/api/admin/chat/upload-url"
             aiComposeEndpoint="/api/admin/chat/ai/compose"
+            rows={4}
+            maxHeightClass="max-h-64"
           />
         </div>
         <div className="pb-[2px] flex items-center gap-1">

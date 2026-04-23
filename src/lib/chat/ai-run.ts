@@ -98,13 +98,32 @@ async function callGemini(prompt: string, ctx: AiContextResult): Promise<string>
       temperature: 0.35,
       maxOutputTokens: 900,
     },
+    tools: [{ googleSearchRetrieval: {} }],
   });
 
   const result = await model.generateContent({
     contents: [{ role: "user", parts }],
   });
 
-  return result.response.text().trim();
+  const text = result.response.text().trim();
+
+  // Append sources when grounding kicked in.
+  const grounding = result.response.candidates?.[0]?.groundingMetadata;
+  const chunks = grounding?.groundingChunks ?? [];
+  const sources = chunks
+    .map((c) => c.web)
+    .filter((w): w is { uri?: string; title?: string } => Boolean(w?.uri))
+    .slice(0, 5);
+
+  if (sources.length > 0) {
+    const lines = sources.map((s, i) => {
+      const title = s.title ?? s.uri ?? `Джерело ${i + 1}`;
+      return `${i + 1}. [${title}](${s.uri})`;
+    });
+    return `${text}\n\n---\n🌐 **Джерела (Google Search):**\n${lines.join("\n")}`;
+  }
+
+  return text;
 }
 
 /**

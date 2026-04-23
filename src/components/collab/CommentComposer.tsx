@@ -51,6 +51,8 @@ export function CommentComposer({
   placeholder = "Введіть коментар... (@ — згадати, Enter — надіслати)",
   uploadEndpoint = "/api/admin/comments/upload-presigned",
   aiComposeEndpoint,
+  rows = 2,
+  maxHeightClass = "max-h-40",
 }: {
   onSubmit: (body: string, attachments?: UploadedAttachment[]) => Promise<void> | void;
   isPending?: boolean;
@@ -61,6 +63,8 @@ export function CommentComposer({
    * endpoint and replaces the draft with the returned `{ text }`.
    */
   aiComposeEndpoint?: string;
+  rows?: number;
+  maxHeightClass?: string;
 }) {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<PendingFile[]>([]);
@@ -374,9 +378,9 @@ export function CommentComposer({
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          rows={2}
+          rows={rows}
           maxLength={4000}
-          className="flex-1 resize-none rounded-lg border admin-dark:border-white/10 admin-dark:bg-gray-900/40 admin-dark:text-white admin-light:border-gray-200 admin-light:bg-white admin-light:text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 max-h-40"
+          className={`flex-1 resize-none rounded-lg border admin-dark:border-white/10 admin-dark:bg-gray-900/40 admin-dark:text-white admin-light:border-gray-200 admin-light:bg-white admin-light:text-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${maxHeightClass}`}
         />
         <button
           type="button"
