@@ -137,14 +137,14 @@ export function NewConversationDialog({
               <button
                 key={item.id}
                 onClick={() => setTab(item.id)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium"
+                className="flex-1 min-w-0 flex items-center justify-center gap-1.5 px-2 py-2 text-xs sm:text-sm font-medium"
                 style={{
                   color: active ? T.textPrimary : T.textSecondary,
                   borderBottom: active ? `2px solid ${T.accentPrimary}` : "2px solid transparent",
                 }}
               >
-                <Icon className="h-4 w-4" />
-                {item.label}
+                <Icon className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate">{item.label}</span>
               </button>
             );
           })}
