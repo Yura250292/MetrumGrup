@@ -25,6 +25,7 @@ import {
   type Scope,
   type Focus,
   type ViewMode,
+  type TaskItem,
 } from "./use-me-tasks";
 import { FocusBanner } from "./dashboard-kpi";
 import { TaskListFlat } from "./task-list-flat";
@@ -35,6 +36,7 @@ import { SelfContainedTaskDrawer } from "./task-drawer-shared";
 import { TaskTableView } from "./task-table-view";
 import { SectionsView } from "./sections-view";
 import { AiDaySummary } from "./ai-day-summary";
+import { groupBySection } from "../_lib/sections";
 
 const SCOPE_DEFS: { id: Scope; label: string }[] = [
   { id: "assigned", label: "Мені призначено" },
@@ -201,6 +203,57 @@ function Pill({
   );
 }
 
+/* ─── Status chips (local derivation from section buckets) ─── */
+
+function StatusChips({
+  tasks,
+  currentUserId,
+}: {
+  tasks: TaskItem[];
+  currentUserId: string;
+}) {
+  const buckets = useMemo(
+    () => groupBySection(tasks, currentUserId),
+    [tasks, currentUserId],
+  );
+  const blockers = buckets["blocked-by"].length + buckets["blocking-others"].length;
+  const review = buckets["waiting-review"].length;
+  const delegated = buckets["delegated"].length;
+
+  if (blockers === 0 && review === 0 && delegated === 0) return null;
+
+  const chips: { key: string; label: string; value: number; color: string }[] = [];
+  if (blockers > 0) {
+    chips.push({ key: "blockers", label: "Блокери", value: blockers, color: "#ef4444" });
+  }
+  if (review > 0) {
+    chips.push({ key: "review", label: "Чекає рішення", value: review, color: T.accentSecondary });
+  }
+  if (delegated > 0) {
+    chips.push({ key: "delegated", label: "Делеговано", value: delegated, color: T.accentPrimary });
+  }
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((c) => (
+        <span
+          key={c.key}
+          className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+          style={{
+            backgroundColor: c.color + "15",
+            color: c.color,
+            border: `1px solid ${c.color}33`,
+          }}
+          title="Розраховано з переліку задач"
+        >
+          {c.label}
+          <span className="font-bold">{c.value}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /* ─── KPI strip (compact inline) ─── */
 
 function KpiStrip({
@@ -310,6 +363,8 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
       {/* ── Row 1: KPI counters + New task button ── */}
       <div className="flex flex-wrap items-center gap-3">
         <KpiStrip counts={counts} focus={focus} onFocusChange={setFocus} />
+
+        <StatusChips tasks={tasks} currentUserId={currentUserId} />
 
         <button
           onClick={() => setCreateOpen(true)}
