@@ -105,6 +105,7 @@ model Project {
   address                String?
   coverImageUrl          String?
   isInternal             Boolean                 @default(false)
+  isTestProject          Boolean                 @default(false)
   status                 ProjectStatus           @default(DRAFT)
   currentStage           ProjectStage            @default(DESIGN)
   currentStageRecordId   String?                 @unique
@@ -152,6 +153,7 @@ model Project {
   materialPriceSnapshots MaterialPriceSnapshot[]
 
   @@index([folderId])
+  @@index([isTestProject])
   @@map("projects")
 }
 

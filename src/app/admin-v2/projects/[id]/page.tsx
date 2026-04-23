@@ -17,6 +17,7 @@ import {
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
+import { TestProjectToggle } from "./_components/test-project-toggle";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 
@@ -63,7 +64,19 @@ export default async function AdminV2ProjectDetailPage({
   const tasksEnabled = await isTasksEnabledForProject(project.id);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div
+      className="flex flex-col gap-6"
+      style={
+        project.isTestProject
+          ? {
+              opacity: 0.55,
+              outline: `2px dashed ${T.warning}`,
+              outlineOffset: 8,
+              borderRadius: 12,
+            }
+          : undefined
+      }
+    >
       {/* Cover image upload */}
       <ProjectCoverUpload
         projectId={project.id}
@@ -93,6 +106,7 @@ export default async function AdminV2ProjectDetailPage({
                 {project.title}
               </h1>
               <StatusBadge status={project.status} />
+              {project.isTestProject && <TestBadge />}
             </div>
             <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]" style={{ color: T.textMuted }}>
               <span className="flex items-center gap-1 truncate">
@@ -116,7 +130,8 @@ export default async function AdminV2ProjectDetailPage({
             </div>
           </div>
 
-          <div className="flex w-full sm:w-auto gap-2 flex-shrink-0">
+          <div className="flex w-full sm:w-auto gap-2 flex-shrink-0 flex-wrap">
+            <TestProjectToggle projectId={project.id} initial={project.isTestProject} />
             <Link
               href={`/admin-v2/projects/${project.id}/photos/new`}
               className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
@@ -221,6 +236,22 @@ export default async function AdminV2ProjectDetailPage({
         }}
       />
     </div>
+  );
+}
+
+function TestBadge() {
+  return (
+    <span
+      className="rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wide flex-shrink-0"
+      style={{
+        backgroundColor: T.warningSoft,
+        color: T.warning,
+        border: `1px dashed ${T.warning}`,
+      }}
+      title="Тестовий проєкт — не враховується у фінансових KPI"
+    >
+      ТЕСТ
+    </span>
   );
 }
 

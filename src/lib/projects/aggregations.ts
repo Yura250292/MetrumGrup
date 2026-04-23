@@ -20,6 +20,7 @@ export type ProjectWithAggregations = {
   address: string | null;
   startDate: Date | null;
   updatedAt: Date;
+  isTestProject: boolean;
   client: { name: string };
   manager: TeamMember | null;
   team: TeamMember[];
@@ -165,6 +166,7 @@ export async function listProjectsWithAggregations(
         address: project.address,
         startDate: project.startDate,
         updatedAt: project.updatedAt,
+        isTestProject: project.isTestProject,
         client: { name: project.client.name },
         manager: project.manager,
         team: Array.from(teamMap.values()),

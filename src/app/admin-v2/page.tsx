@@ -33,6 +33,11 @@ import { AiSummary } from "./_components/dashboard/ai-summary";
 import { CollapsibleMobile } from "./_components/dashboard/collapsible-mobile";
 import { SectionHeader } from "./_components/dashboard/section-header";
 import { HrDashboard } from "./_components/dashboard/hr-dashboard";
+import {
+  PROJECT_NOT_TEST,
+  FINANCE_ENTRY_NOT_TEST,
+  PAYMENT_NOT_TEST,
+} from "@/lib/projects/filters";
 
 export const dynamic = "force-dynamic";
 
@@ -193,22 +198,23 @@ export default async function AdminV2Dashboard({
     // P2: Stage analytics
     completedStageRecords,
   ] = await Promise.all([
-    prisma.project.count(),
-    prisma.project.count({ where: { status: "ACTIVE" } }),
+    prisma.project.count({ where: PROJECT_NOT_TEST }),
+    prisma.project.count({ where: { status: "ACTIVE", ...PROJECT_NOT_TEST } }),
     prisma.user.count({ where: { role: "CLIENT" } }),
     prisma.estimate.count(),
     prisma.payment.aggregate({
-      where: { status: "PAID" },
+      where: { status: "PAID", ...PAYMENT_NOT_TEST },
       _sum: { amount: true },
     }),
     prisma.project.aggregate({
-      where: { status: { in: ["ACTIVE", "DRAFT"] } },
+      where: { status: { in: ["ACTIVE", "DRAFT"] }, ...PROJECT_NOT_TEST },
       _sum: { totalBudget: true },
     }),
     prisma.payment.findMany({
       where: {
         status: { in: ["PENDING", "PARTIAL"] },
         scheduledDate: { lt: now },
+        ...PAYMENT_NOT_TEST,
       },
       include: { project: { select: { id: true, title: true } } },
       orderBy: { scheduledDate: "asc" },
@@ -244,6 +250,7 @@ export default async function AdminV2Dashboard({
         type: "INCOME",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
+        ...FINANCE_ENTRY_NOT_TEST,
       },
       _sum: { amount: true },
     }),
@@ -252,6 +259,7 @@ export default async function AdminV2Dashboard({
         type: "EXPENSE",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
+        ...FINANCE_ENTRY_NOT_TEST,
       },
       _sum: { amount: true },
     }),
@@ -261,6 +269,7 @@ export default async function AdminV2Dashboard({
         type: "INCOME",
         isArchived: false,
         occurredAt: { gte: prevStart, lte: prevEnd },
+        ...FINANCE_ENTRY_NOT_TEST,
       },
       _sum: { amount: true },
     }),
@@ -269,13 +278,14 @@ export default async function AdminV2Dashboard({
         type: "EXPENSE",
         isArchived: false,
         occurredAt: { gte: prevStart, lte: prevEnd },
+        ...FINANCE_ENTRY_NOT_TEST,
       },
       _sum: { amount: true },
     }),
     // Stages
     prisma.project.groupBy({
       by: ["currentStage"],
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", ...PROJECT_NOT_TEST },
       _count: { currentStage: true },
     }),
     // Time logs this week
@@ -329,6 +339,7 @@ export default async function AdminV2Dashboard({
       where: {
         status: "ACTIVE",
         updatedAt: { lt: fourteenDaysAgo },
+        ...PROJECT_NOT_TEST,
       },
       select: {
         id: true,
@@ -356,7 +367,7 @@ export default async function AdminV2Dashboard({
     }),
     // Active projects for risk scoring
     prisma.project.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", ...PROJECT_NOT_TEST },
       include: {
         client: { select: { name: true } },
         manager: { select: { name: true } },
@@ -378,6 +389,7 @@ export default async function AdminV2Dashboard({
       where: {
         status: { in: ["PENDING", "PARTIAL"] },
         scheduledDate: { lt: now },
+        ...PAYMENT_NOT_TEST,
       },
       _count: { id: true },
     }),
@@ -469,6 +481,7 @@ export default async function AdminV2Dashboard({
           gte: now,
           lte: new Date(now.getTime() + 30 * 24 * 3600 * 1000),
         },
+        ...PROJECT_NOT_TEST,
       },
       select: { id: true, title: true, expectedEndDate: true },
       orderBy: { expectedEndDate: "asc" },
@@ -492,6 +505,7 @@ export default async function AdminV2Dashboard({
         type: "EXPENSE",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
+        ...FINANCE_ENTRY_NOT_TEST,
       },
       _sum: { amount: true },
       orderBy: { _sum: { amount: "desc" } },
@@ -504,6 +518,7 @@ export default async function AdminV2Dashboard({
         type: "INCOME",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
+        ...FINANCE_ENTRY_NOT_TEST,
       },
       _sum: { amount: true },
       orderBy: { _sum: { amount: "desc" } },

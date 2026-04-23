@@ -154,6 +154,7 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   ];
 
   const rowClassName = (p: ProjectRow): string | undefined => {
+    if (p.isTestProject) return "opacity-55";
     if (p.status === "CANCELLED") return "opacity-60";
     return undefined;
   };
@@ -180,7 +181,21 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
             <span className="font-semibold" style={{ color: T.textPrimary }}>
               {p.title}
             </span>
-            <StatusBadge status={p.status} />
+            <div className="flex items-center gap-1.5">
+              {p.isTestProject && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide"
+                  style={{
+                    backgroundColor: T.warningSoft,
+                    color: T.warning,
+                    border: `1px dashed ${T.warning}`,
+                  }}
+                >
+                  ТЕСТ
+                </span>
+              )}
+              <StatusBadge status={p.status} />
+            </div>
           </div>
           <div className="flex items-center justify-between text-[12px]">
             <span style={{ color: T.textSecondary }}>{p.client.name}</span>

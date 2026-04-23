@@ -62,7 +62,13 @@ function ProjectCard({
     <Link
       href={`/admin-v2/projects/${project.id}`}
       className="group flex flex-col overflow-hidden rounded-2xl transition hover:brightness-95"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      style={{
+        backgroundColor: T.panel,
+        border: project.isTestProject
+          ? `1px dashed ${T.warning}`
+          : `1px solid ${T.borderSoft}`,
+        opacity: project.isTestProject ? 0.55 : 1,
+      }}
     >
       <div
         className="relative aspect-[16/9] flex items-center justify-center overflow-hidden"
@@ -77,6 +83,19 @@ function ProjectCard({
           </div>
         )}
         <div className="absolute top-2 right-2 sm:top-3 sm:right-3 flex items-center gap-1.5 sm:gap-2">
+          {project.isTestProject && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+              style={{
+                backgroundColor: T.warningSoft,
+                color: T.warning,
+                border: `1px dashed ${T.warning}`,
+              }}
+              title="Тестовий проєкт — не враховується у KPI"
+            >
+              ТЕСТ
+            </span>
+          )}
           <StatusBadge status={project.status} />
           <span className="hidden sm:inline-flex">
             <MoveProjectButton projectId={project.id} currentFolderId={currentFolderId} />

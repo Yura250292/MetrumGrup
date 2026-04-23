@@ -54,7 +54,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { title, description, address, status, currentStage, stageProgress, managerId, totalBudget, totalPaid, startDate, expectedEndDate, actualEndDate, coverImageUrl } = body;
+  const { title, description, address, status, currentStage, stageProgress, managerId, totalBudget, totalPaid, startDate, expectedEndDate, actualEndDate, coverImageUrl, isTestProject } = body;
 
   // Read previous managerId to know if we need to sync ProjectMember
   const previous = await prisma.project.findUnique({
@@ -79,6 +79,7 @@ export async function PATCH(
   if (expectedEndDate !== undefined) updateData.expectedEndDate = expectedEndDate ? new Date(expectedEndDate) : null;
   if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
   if (coverImageUrl !== undefined) updateData.coverImageUrl = coverImageUrl || null;
+  if (isTestProject !== undefined) updateData.isTestProject = Boolean(isTestProject);
 
   const project = await prisma.project.update({
     where: { id },

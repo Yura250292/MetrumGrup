@@ -30,6 +30,7 @@ export function ProjectsCompact({ projects }: { projects: ProjectRow[] }) {
             className="flex items-center gap-3 px-4 py-2.5 transition hover:bg-[var(--t-panel-el)]"
             style={{
               borderTop: i === 0 ? undefined : `1px solid ${T.borderSoft}`,
+              opacity: p.isTestProject ? 0.55 : 1,
             }}
           >
             <div className="flex-1 min-w-0 flex items-center gap-3">
@@ -43,6 +44,19 @@ export function ProjectsCompact({ projects }: { projects: ProjectRow[] }) {
                 {p.client.name}
               </span>
               <StatusBadge status={p.status} />
+              {p.isTestProject && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[9px] font-bold tracking-wide"
+                  style={{
+                    backgroundColor: T.warningSoft,
+                    color: T.warning,
+                    border: `1px dashed ${T.warning}`,
+                  }}
+                  title="Тестовий проєкт"
+                >
+                  ТЕСТ
+                </span>
+              )}
               <span className="text-[11px] truncate hidden lg:inline" style={{ color: T.textMuted }}>
                 {STAGE_LABELS[p.currentStage]} · {p.stageProgress}%
               </span>
