@@ -414,6 +414,46 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
         </button>
       </div>
 
+      {/* ── Row 3b: Active filter chips — visible only when collapsed ── */}
+      {!showFilters && projectIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 px-1">
+          <span className="text-[10px] uppercase tracking-wider" style={{ color: T.textMuted }}>
+            Активні фільтри:
+          </span>
+          {projectIds.map((pid) => {
+            const project = allProjects.find((p) => p.id === pid);
+            if (!project) return null;
+            return (
+              <span
+                key={pid}
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{
+                  backgroundColor: T.accentPrimarySoft,
+                  color: T.accentPrimary,
+                  border: `1px solid ${T.accentPrimary}33`,
+                }}
+              >
+                <span className="truncate max-w-[160px]">{project.title}</span>
+                <button
+                  onClick={() => setProjectIds(projectIds.filter((x) => x !== pid))}
+                  className="hover:opacity-70"
+                  aria-label={`Прибрати фільтр ${project.title}`}
+                >
+                  ×
+                </button>
+              </span>
+            );
+          })}
+          <button
+            onClick={() => setProjectIds([])}
+            className="rounded-full px-2 py-0.5 text-[10px] font-semibold"
+            style={{ color: T.textMuted, textDecoration: "underline" }}
+          >
+            Очистити
+          </button>
+        </div>
+      )}
+
       {/* ── Row 4 (collapsible): Project filter ── */}
       {showFilters && (
         <div

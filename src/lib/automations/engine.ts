@@ -246,7 +246,9 @@ async function runAction(action: Action, ctx: EventContext): Promise<void> {
         title: action.title,
         body: action.body,
         relatedEntity: ctx.task ? "Task" : "Project",
-        relatedId: ctx.task?.id ?? ctx.projectId,
+        relatedId: ctx.task
+          ? `${ctx.projectId}:${ctx.task.id}`
+          : ctx.projectId,
       });
       return;
     }

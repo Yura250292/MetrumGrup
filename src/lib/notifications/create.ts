@@ -4,7 +4,8 @@ import { listActiveMembers } from "@/lib/projects/members-service";
 import { notificationTypeToCategory } from "./categories";
 import { getBatchUserPrefs, shouldDeliver, isQuietHours } from "./preferences";
 import { sendPush } from "./push";
-import { sendNotificationEmail } from "./email";
+import { sendCustomHtmlEmail, sendNotificationEmail } from "./email";
+import { buildTaskAssignedEmailHtml } from "./email-template";
 import { relatedEntityLink } from "./links";
 
 const MENTION_REGEX = /<@([a-z0-9_-]+)>/gi;
@@ -24,6 +25,20 @@ export type ProjectNotificationType =
   | "TASK_CREATED"
   | "CHAT_MESSAGE";
 
+export type TaskEmailOverride = {
+  kind: "task";
+  subject: string;
+  taskTitle: string;
+  projectTitle?: string | null;
+  assignerName?: string | null;
+  priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
+  dueDate?: Date | null;
+  specificationMarkdown?: string | null;
+  actionLabel?: string;
+};
+
+export type EmailOverride = TaskEmailOverride;
+
 type NotificationRow = {
   userId: string;
   type: string;
@@ -31,7 +46,14 @@ type NotificationRow = {
   body: string | null;
   relatedEntity: string;
   relatedId: string;
+  emailOverride?: EmailOverride;
 };
+
+type PersistedNotificationRow = Omit<NotificationRow, "emailOverride">;
+
+function stripEmailOverride(rows: NotificationRow[]): PersistedNotificationRow[] {
+  return rows.map(({ emailOverride: _unused, ...persisted }) => persisted);
+}
 
 /**
  * Dispatch push and email notifications based on user preferences.
@@ -57,7 +79,7 @@ async function dispatchExtraChannels(notifications: NotificationRow[]): Promise<
         relatedId: n.relatedId,
       });
 
-      // Push
+      // Push — always short form
       if (shouldDeliver(userInfo.prefs, category, "push")) {
         promises.push(
           sendPush(n.userId, {
@@ -68,16 +90,38 @@ async function dispatchExtraChannels(notifications: NotificationRow[]): Promise<
         );
       }
 
-      // Email
+      // Email — rich via override, otherwise short fallback
       if (shouldDeliver(userInfo.prefs, category, "email")) {
-        promises.push(
-          sendNotificationEmail({
-            to: userInfo.email,
-            subject: n.title,
-            body: n.body || "",
+        if (n.emailOverride?.kind === "task") {
+          const ov = n.emailOverride;
+          const html = buildTaskAssignedEmailHtml({
+            subject: ov.subject,
+            taskTitle: ov.taskTitle,
+            projectTitle: ov.projectTitle,
+            assignerName: ov.assignerName,
+            priority: ov.priority,
+            dueDate: ov.dueDate,
+            specificationMarkdown: ov.specificationMarkdown,
             actionUrl: baseUrl + url,
-          }).catch((err) => console.error("[Dispatch] Email error:", err)),
-        );
+            actionLabel: ov.actionLabel,
+          });
+          promises.push(
+            sendCustomHtmlEmail({
+              to: userInfo.email,
+              subject: ov.subject,
+              html,
+            }).catch((err) => console.error("[Dispatch] Email error:", err)),
+          );
+        } else {
+          promises.push(
+            sendNotificationEmail({
+              to: userInfo.email,
+              subject: n.title,
+              body: n.body || "",
+              actionUrl: baseUrl + url,
+            }).catch((err) => console.error("[Dispatch] Email error:", err)),
+          );
+        }
       }
     }
 
@@ -143,7 +187,7 @@ export async function createMentionNotifications(opts: {
     relatedId: opts.relatedId,
   }));
 
-  await prisma.notification.createMany({ data });
+  await prisma.notification.createMany({ data: stripEmailOverride(data) });
 
   // Fire-and-forget: push + email dispatch
   dispatchExtraChannels(data).catch(() => {});
@@ -162,6 +206,7 @@ export async function notifyUsers(opts: {
   body?: string;
   relatedEntity: string;
   relatedId: string;
+  emailOverride?: EmailOverride;
 }): Promise<number> {
   const targets = Array.from(
     new Set(opts.userIds.filter((id) => id && id !== opts.actorId)),
@@ -179,9 +224,10 @@ export async function notifyUsers(opts: {
     body: preview,
     relatedEntity: opts.relatedEntity,
     relatedId: opts.relatedId,
+    emailOverride: opts.emailOverride,
   }));
 
-  await prisma.notification.createMany({ data });
+  await prisma.notification.createMany({ data: stripEmailOverride(data) });
 
   // Fire-and-forget: push + email dispatch
   dispatchExtraChannels(data).catch(() => {});
@@ -202,6 +248,7 @@ export async function notifyProjectMembers(opts: {
   relatedEntity: string;
   relatedId: string;
   excludeUserIds?: string[];
+  emailOverride?: EmailOverride;
 }): Promise<number> {
   const members = await listActiveMembers(opts.projectId);
   const exclude = new Set<string>([opts.actorId, ...(opts.excludeUserIds ?? [])]);
@@ -219,9 +266,10 @@ export async function notifyProjectMembers(opts: {
     body: preview,
     relatedEntity: opts.relatedEntity,
     relatedId: opts.relatedId,
+    emailOverride: opts.emailOverride,
   }));
 
-  await prisma.notification.createMany({ data });
+  await prisma.notification.createMany({ data: stripEmailOverride(data) });
 
   // Fire-and-forget: push + email dispatch
   dispatchExtraChannels(data).catch(() => {});

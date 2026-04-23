@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import {
+  addChecklistItem,
   createTask,
   listTasks,
   TaskError,
@@ -95,6 +96,24 @@ export async function POST(
       },
       session.user.id,
     );
+
+    // Optional AI-generated checklist — best-effort, do not fail the create.
+    if (Array.isArray(body.checklist) && body.checklist.length > 0) {
+      for (const raw of body.checklist as unknown[]) {
+        const content = String(raw).trim();
+        if (!content) continue;
+        try {
+          await addChecklistItem(
+            task.id,
+            { content: content.slice(0, 500) },
+            session.user.id,
+          );
+        } catch (err) {
+          console.error("[tasks/create] checklist item failed:", err);
+        }
+      }
+    }
+
     return NextResponse.json({ data: task }, { status: 201 });
   } catch (e) {
     if (e instanceof TaskError) {

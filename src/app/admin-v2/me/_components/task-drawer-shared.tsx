@@ -12,8 +12,11 @@ import {
   Clock,
   Link2,
   ExternalLink,
+  Sparkles,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { CommentThread } from "@/components/collab/CommentThread";
 import { TaskAiActions } from "./task-ai-actions";
@@ -77,6 +80,8 @@ export function SelfContainedTaskDrawer({
   onUpdate: () => void;
 }) {
   const [detail, setDetail] = useState<DrawerDetail | null>(null);
+  const [rewritingSpec, setRewritingSpec] = useState(false);
+  const [specError, setSpecError] = useState<string | null>(null);
   const [statuses, setStatuses] = useState<DrawerStatus[]>([]);
   const [logs, setLogs] = useState<TimeLogEntry[]>([]);
   const [deps, setDeps] = useState<{ incoming: DependencyEntry[]; outgoing: DependencyEntry[] }>({
@@ -126,6 +131,44 @@ export function SelfContainedTaskDrawer({
   useEffect(() => {
     void load();
   }, [load]);
+
+  const rewriteSpec = async () => {
+    if (!detail) return;
+    if (
+      !window.confirm(
+        "Переписати опис задачі з AI? Поточний вміст буде замінено на новий.",
+      )
+    )
+      return;
+    setRewritingSpec(true);
+    setSpecError(null);
+    try {
+      const aiRes = await fetch("/api/admin/ai/task-spec", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: detail.title,
+          description: detail.description ?? undefined,
+          projectId: detail.projectId,
+        }),
+      });
+      const aiJson = await aiRes.json();
+      if (!aiRes.ok) throw new Error(aiJson.error ?? "Не вдалося згенерувати ТЗ");
+      const markdown: string | undefined = aiJson.markdown;
+      if (!markdown) throw new Error("AI не повернув ТЗ");
+      await fetch(`/api/admin/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: markdown }),
+      });
+      await load();
+      onUpdate();
+    } catch (e) {
+      setSpecError(e instanceof Error ? e.message : "Помилка AI");
+    } finally {
+      setRewritingSpec(false);
+    }
+  };
 
   const setStatus = async (statusId: string) => {
     setSaving(true);
@@ -256,11 +299,62 @@ export function SelfContainedTaskDrawer({
               )}
             </div>
 
-            {detail.description && (
-              <p className="text-sm whitespace-pre-wrap" style={{ color: T.textSecondary }}>
-                {detail.description}
-              </p>
-            )}
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span
+                  className="text-[10px] font-bold uppercase tracking-wider"
+                  style={{ color: T.textMuted }}
+                >
+                  {detail.description ? "Технічне завдання" : "Опис"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void rewriteSpec()}
+                  disabled={rewritingSpec}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase disabled:opacity-50"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    color: T.accentPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                  title="AI перепише опис як структуроване ТЗ"
+                >
+                  {rewritingSpec ? (
+                    <Loader2 size={10} className="animate-spin" />
+                  ) : detail.description ? (
+                    <RefreshCw size={10} />
+                  ) : (
+                    <Sparkles size={10} />
+                  )}
+                  {detail.description ? "Переписати з AI" : "Згенерувати ТЗ"}
+                </button>
+              </div>
+              {specError && (
+                <div
+                  className="rounded-md px-2 py-1 text-[11px]"
+                  style={{ backgroundColor: "#ef444422", color: "#ef4444" }}
+                >
+                  {specError}
+                </div>
+              )}
+              {detail.description ? (
+                <div
+                  className="prose prose-invert prose-sm max-w-none rounded-lg p-3"
+                  style={{
+                    color: T.textSecondary,
+                    backgroundColor: T.panelElevated,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  <ReactMarkdown>{detail.description}</ReactMarkdown>
+                </div>
+              ) : (
+                <p className="text-xs italic" style={{ color: T.textMuted }}>
+                  Опис відсутній. Натисніть «Згенерувати ТЗ», щоб AI створив структуроване
+                  технічне завдання.
+                </p>
+              )}
+            </div>
 
             {/* Status selector */}
             <Section label="СТАТУС">

@@ -35,3 +35,22 @@ export async function sendNotificationEmail(opts: {
     html: buildEmailHtml(opts),
   });
 }
+
+/**
+ * Send a pre-rendered HTML email (used for rich task-assignment emails where
+ * the template is built by the caller with custom sections).
+ */
+export async function sendCustomHtmlEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+}): Promise<void> {
+  const client = getResend();
+  if (!client) return;
+  await client.emails.send({
+    from,
+    to: opts.to,
+    subject: opts.subject,
+    html: opts.html,
+  });
+}

@@ -371,11 +371,27 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
   } catch {}
 
   try {
-    const project = await prisma.project.findUnique({
-      where: { id: task.projectId },
-      select: { title: true },
-    });
+    const [project, actor] = await Promise.all([
+      prisma.project.findUnique({
+        where: { id: task.projectId },
+        select: { title: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: actorId },
+        select: { name: true },
+      }),
+    ]);
     if (input.assigneeIds && input.assigneeIds.length > 0) {
+      const dueLabel = task.dueDate
+        ? new Date(task.dueDate).toLocaleDateString("uk-UA", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })
+        : null;
+      const subject = dueLabel
+        ? `Нова задача: «${task.title}» — до ${dueLabel}`
+        : `Нова задача: «${task.title}»`;
       await notifyUsers({
         userIds: input.assigneeIds,
         actorId,
@@ -383,7 +399,18 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         title: `Вас призначено на задачу «${task.title}»`,
         body: project?.title ? `Проєкт: ${project.title}` : undefined,
         relatedEntity: "Task",
-        relatedId: task.id,
+        relatedId: `${task.projectId}:${task.id}`,
+        emailOverride: {
+          kind: "task",
+          subject,
+          taskTitle: task.title,
+          projectTitle: project?.title,
+          assignerName: actor?.name,
+          priority: task.priority,
+          dueDate: task.dueDate,
+          specificationMarkdown: task.description,
+          actionLabel: "Відкрити задачу",
+        },
       });
     }
   } catch (err) {
@@ -550,7 +577,7 @@ export async function updateTask(
           type: "TASK_STATUS_CHANGED",
           title: `Статус задачі «${stakeholders.title}» змінено`,
           relatedEntity: "Task",
-          relatedId: taskId,
+          relatedId: `${existing.projectId}:${taskId}`,
         });
       }
     } catch (err) {
@@ -657,14 +684,54 @@ export async function addAssignee(
   } catch {}
 
   try {
-    await notifyUsers({
-      userIds: [userId],
-      actorId,
-      type: "TASK_ASSIGNED",
-      title: `Вас призначено на задачу «${existing.title}»`,
-      relatedEntity: "Task",
-      relatedId: taskId,
-    });
+    const [full, actor] = await Promise.all([
+      prisma.task.findUnique({
+        where: { id: taskId },
+        select: {
+          title: true,
+          description: true,
+          priority: true,
+          dueDate: true,
+          project: { select: { title: true } },
+        },
+      }),
+      prisma.user.findUnique({
+        where: { id: actorId },
+        select: { name: true },
+      }),
+    ]);
+    if (full) {
+      const dueLabel = full.dueDate
+        ? new Date(full.dueDate).toLocaleDateString("uk-UA", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          })
+        : null;
+      const subject = dueLabel
+        ? `Задача «${full.title}» — до ${dueLabel}`
+        : `Вас призначено на задачу «${full.title}»`;
+      await notifyUsers({
+        userIds: [userId],
+        actorId,
+        type: "TASK_ASSIGNED",
+        title: `Вас призначено на задачу «${full.title}»`,
+        body: full.project.title ? `Проєкт: ${full.project.title}` : undefined,
+        relatedEntity: "Task",
+        relatedId: `${existing.projectId}:${taskId}`,
+        emailOverride: {
+          kind: "task",
+          subject,
+          taskTitle: full.title,
+          projectTitle: full.project.title,
+          assignerName: actor?.name,
+          priority: full.priority,
+          dueDate: full.dueDate,
+          specificationMarkdown: full.description,
+          actionLabel: "Відкрити задачу",
+        },
+      });
+    }
   } catch {}
 }
 
@@ -1097,7 +1164,7 @@ export async function notifyTaskCreatedToProject(taskId: string, actorId: string
       type: "TASK_CREATED",
       title: `Нова задача «${task.title}» у проєкті «${task.project.title}»`,
       relatedEntity: "Task",
-      relatedId: task.id,
+      relatedId: `${task.projectId}:${task.id}`,
     });
   } catch {}
 }

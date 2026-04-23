@@ -46,22 +46,25 @@ export function TaskRowExtended({
   const outgoing = task.outgoingDepsCount ?? 0;
   const nextStep = task.firstUndoneChecklistItem;
   const creatorName = task.createdBy?.name;
+  const isUrgent = task.priority === "URGENT";
+  const highlight = overdue || isUrgent;
 
   return (
     <li
       className="group flex items-center gap-3 rounded-lg px-3 py-2 transition hover:brightness-[0.98] cursor-pointer"
       style={{
         backgroundColor: T.panel,
-        border: `1px solid ${overdue ? T.danger + "40" : T.borderSoft}`,
+        border: `1px solid ${highlight ? T.danger + "40" : T.borderSoft}`,
+        borderLeft: highlight ? `3px solid ${T.danger}` : undefined,
         boxShadow: isTimerActive ? `inset 3px 0 0 ${T.accentPrimary}` : undefined,
       }}
       onClick={onOpen}
     >
-      {/* Priority dot */}
+      {/* Priority dot (pulsing for URGENT or overdue) */}
       <span
-        className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
+        className={`inline-block h-2 w-2 flex-shrink-0 rounded-full ${highlight ? "animate-pulse" : ""}`}
         style={{ backgroundColor: PRIORITY_COLOR[task.priority] }}
-        title={`Пріоритет: ${task.priority}`}
+        title={`Пріоритет: ${task.priority}${overdue ? " • прострочено" : ""}`}
       />
 
       <div className="flex flex-1 flex-col gap-0.5 min-w-0">
