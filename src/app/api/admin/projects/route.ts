@@ -7,6 +7,10 @@ import { auditLog } from "@/lib/audit";
 import { ProjectStage } from "@prisma/client";
 import { addProjectMember } from "@/lib/projects/members-service";
 import { seedProjectTaskDefaults } from "@/lib/tasks/defaults";
+import {
+  ensureProjectMirror,
+  syncProjectBudgetEntry,
+} from "@/lib/folders/mirror-service";
 
 const STAGE_ORDER: ProjectStage[] = [
   "DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER",
@@ -113,6 +117,14 @@ export async function POST(request: NextRequest) {
     await seedProjectTaskDefaults(project.id);
   } catch (err) {
     console.error("Failed to seed project task defaults:", err);
+  }
+
+  // Mirror project into FINANCE folder tree + seed plan-budget entry
+  try {
+    await ensureProjectMirror(project.id);
+    await syncProjectBudgetEntry(project.id, session.user.id);
+  } catch (err) {
+    console.error("Failed to sync project mirror/budget:", err);
   }
 
   await auditLog({

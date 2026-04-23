@@ -177,11 +177,15 @@ async function collectSubtreeIds(tx: Tx, rootIds: string[]): Promise<string[]> {
  *  3. Прибрати дублікати: якщо зʼявилось два записи для одного PROJECT (існуюча
  *     + створена раніше некоректним backfill), видалити новішу.
  */
-export async function backfillProjectMirrors(): Promise<{
+export async function backfillProjectMirrors(options?: {
+  systemUserId?: string;
+}): Promise<{
   moved: number;
   linked: number;
   created: number;
   dedup: number;
+  projectMirrors: number;
+  budgetsSynced: number;
 }> {
   const rootId = await ensureFinanceProjectsRoot();
 
@@ -319,9 +323,230 @@ export async function backfillProjectMirrors(): Promise<{
     created++;
   }
 
-  return { moved, linked, created, dedup };
+  // 3. Mirror кожний проєкт як FINANCE-папку + upsert PROJECT_BUDGET запис
+  const projects = await prisma.project.findMany({
+    where: { slug: { not: { startsWith: "temp-" } } },
+    select: { id: true, totalBudget: true },
+  });
+
+  let projectMirrors = 0;
+  let budgetsSynced = 0;
+
+  // Для syncProjectBudgetEntry треба userId. Якщо не передано — беремо
+  // будь-якого SUPER_ADMIN.
+  let fallbackUserId = options?.systemUserId;
+  if (!fallbackUserId) {
+    const admin = await prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN", isActive: true },
+      select: { id: true },
+    });
+    fallbackUserId = admin?.id;
+  }
+
+  for (const p of projects) {
+    const beforeMirror = await prisma.folder.findUnique({
+      where: { mirroredFromProjectId: p.id },
+      select: { id: true },
+    });
+    await ensureProjectMirror(p.id);
+    if (!beforeMirror) projectMirrors++;
+
+    if (fallbackUserId && Number(p.totalBudget) > 0) {
+      await syncProjectBudgetEntry(p.id, fallbackUserId);
+      budgetsSynced++;
+    }
+  }
+
+  return { moved, linked, created, dedup, projectMirrors, budgetsSynced };
 }
 
 export function isMirror(folder: Pick<Folder, "mirroredFromId">): boolean {
   return folder.mirroredFromId !== null;
+}
+
+/**
+ * Повертає id FINANCE-mirror для заданого Project. Якщо mirror ще нема —
+ * створює. Parent mirror-папки = FINANCE-mirror від project.folderId
+ * (якщо є), інакше = коренева системна "Проєкти".
+ */
+export async function ensureProjectMirror(
+  projectId: string,
+  tx: Tx = prisma,
+): Promise<string> {
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, title: true, folderId: true },
+  });
+  if (!project) throw new Error("Проєкт не знайдено");
+
+  const existing = await tx.folder.findUnique({
+    where: { mirroredFromProjectId: project.id },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+
+  const parentMirrorId = await resolveProjectParentMirror(project.folderId, tx);
+
+  // Дедубл: якщо під тим же parent'ом уже є FINANCE-папка з такою ж назвою без
+  // mirrored-ссилок — прив'язати її.
+  const nameMatch = await tx.folder.findFirst({
+    where: {
+      domain: "FINANCE",
+      parentId: parentMirrorId,
+      name: project.title,
+      mirroredFromId: null,
+      mirroredFromProjectId: null,
+    },
+    select: { id: true },
+  });
+  if (nameMatch) {
+    await tx.folder.update({
+      where: { id: nameMatch.id },
+      data: { mirroredFromProjectId: project.id },
+    });
+    return nameMatch.id;
+  }
+
+  const created = await tx.folder.create({
+    data: {
+      domain: "FINANCE",
+      name: project.title,
+      parentId: parentMirrorId,
+      mirroredFromProjectId: project.id,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+async function resolveProjectParentMirror(
+  projectFolderId: string | null,
+  tx: Tx,
+): Promise<string> {
+  if (!projectFolderId) return ensureFinanceProjectsRoot(tx);
+  const folder = await tx.folder.findUnique({
+    where: { id: projectFolderId },
+    select: { domain: true },
+  });
+  // Якщо folderId посилається не на PROJECT (можливі зіпсовані дані) —
+  // кладемо у root "Проєкти" і ігноруємо.
+  if (!folder || folder.domain !== "PROJECT") {
+    return ensureFinanceProjectsRoot(tx);
+  }
+  return ensureMirror(projectFolderId, tx);
+}
+
+export async function updateProjectMirror(
+  projectId: string,
+  tx: Tx = prisma,
+): Promise<void> {
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, title: true, folderId: true },
+  });
+  if (!project) return;
+
+  const mirror = await tx.folder.findUnique({
+    where: { mirroredFromProjectId: project.id },
+    select: { id: true },
+  });
+  if (!mirror) {
+    await ensureProjectMirror(project.id, tx);
+    return;
+  }
+
+  const parentMirrorId = await resolveProjectParentMirror(project.folderId, tx);
+
+  await tx.folder.update({
+    where: { id: mirror.id },
+    data: { name: project.title, parentId: parentMirrorId },
+  });
+}
+
+export async function deleteProjectMirror(
+  projectId: string,
+  tx: Tx = prisma,
+): Promise<void> {
+  const mirror = await tx.folder.findUnique({
+    where: { mirroredFromProjectId: projectId },
+    select: { id: true },
+  });
+  if (!mirror) return;
+
+  const rootId = await ensureFinanceProjectsRoot(tx);
+  const subtreeIds = await collectSubtreeIds(tx, [mirror.id]);
+  await tx.financeEntry.updateMany({
+    where: { folderId: { in: subtreeIds } },
+    data: { folderId: rootId },
+  });
+  await tx.folder.delete({ where: { id: mirror.id } });
+}
+
+/**
+ * Узгодити FinanceEntry з source=PROJECT_BUDGET для проекту. Якщо у проекта
+ * totalBudget > 0 — створити/оновити один запис (kind=PLAN, type=EXPENSE).
+ * Інакше — видалити запис, якщо він є.
+ */
+export async function syncProjectBudgetEntry(
+  projectId: string,
+  userId: string,
+  tx: Tx = prisma,
+): Promise<void> {
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      title: true,
+      totalBudget: true,
+      startDate: true,
+      createdAt: true,
+    },
+  });
+  if (!project) return;
+
+  const budget = Number(project.totalBudget);
+  const existing = await tx.financeEntry.findFirst({
+    where: { projectId: project.id, source: "PROJECT_BUDGET" },
+    select: { id: true },
+  });
+
+  if (budget <= 0) {
+    if (existing) {
+      await tx.financeEntry.delete({ where: { id: existing.id } });
+    }
+    return;
+  }
+
+  const folderId = await ensureProjectMirror(project.id, tx);
+  const occurredAt = project.startDate ?? project.createdAt ?? new Date();
+  const title = `Плановий бюджет проєкту «${project.title}»`;
+
+  if (existing) {
+    await tx.financeEntry.update({
+      where: { id: existing.id },
+      data: {
+        title,
+        amount: budget,
+        occurredAt,
+        folderId,
+        updatedById: userId,
+      },
+    });
+  } else {
+    await tx.financeEntry.create({
+      data: {
+        title,
+        amount: budget,
+        kind: "PLAN",
+        type: "EXPENSE",
+        status: "APPROVED",
+        source: "PROJECT_BUDGET",
+        projectId: project.id,
+        folderId,
+        category: "Плановий бюджет",
+        occurredAt,
+        createdById: userId,
+      },
+    });
+  }
 }

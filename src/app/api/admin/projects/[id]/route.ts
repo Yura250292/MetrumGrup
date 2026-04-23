@@ -5,6 +5,11 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { addProjectMember, deactivateMember } from "@/lib/projects/members-service";
 import { notifyProjectMembers } from "@/lib/notifications/create";
+import {
+  updateProjectMirror,
+  syncProjectBudgetEntry,
+  deleteProjectMirror,
+} from "@/lib/folders/mirror-service";
 
 export async function GET(
   _request: NextRequest,
@@ -59,7 +64,7 @@ export async function PATCH(
   // Read previous managerId to know if we need to sync ProjectMember
   const previous = await prisma.project.findUnique({
     where: { id },
-    select: { managerId: true, status: true, currentStage: true, title: true },
+    select: { managerId: true, status: true, currentStage: true, title: true, folderId: true, totalBudget: true },
   });
   if (!previous) {
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
@@ -85,6 +90,19 @@ export async function PATCH(
     where: { id },
     data: updateData,
   });
+
+  // Sync FINANCE-mirror (назва/parent) + auto PROJECT_BUDGET FinanceEntry
+  try {
+    const titleChanged = title !== undefined && title !== previous.title;
+    if (titleChanged) {
+      await updateProjectMirror(id);
+    }
+    if (totalBudget !== undefined && Number(totalBudget) !== Number(previous.totalBudget)) {
+      await syncProjectBudgetEntry(id, session.user.id);
+    }
+  } catch (err) {
+    console.error("Failed to sync project mirror/budget:", err);
+  }
 
   // Sync ProjectMember when manager changed
   if (managerId !== undefined) {
@@ -175,6 +193,10 @@ export async function DELETE(
     // inventory_transactions.projectId і audit_logs.projectId. Обидва
     // nullable, тому просто null-имо їх до delete.
     await prisma.$transaction(async (tx) => {
+      // FINANCE-mirror папку — прибрати вручну, щоб перенести її FinanceEntry
+      // у кореневу "Проєкти" (FK cascade знищив би їх разом з папкою).
+      await deleteProjectMirror(id, tx);
+
       await tx.inventoryTransaction.updateMany({
         where: { projectId: id },
         data: { projectId: null },
