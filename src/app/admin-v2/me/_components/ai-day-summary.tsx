@@ -45,54 +45,37 @@ export function AiDaySummary() {
   };
 
   return (
-    <div
-      ref={rootRef}
-      className="relative flex flex-wrap items-center gap-2 rounded-xl px-3 py-2"
-      style={{
-        backgroundColor: T.panel,
-        border: `1px solid ${T.borderSoft}`,
-      }}
-    >
-      <Sparkles size={14} style={{ color: T.accentPrimary }} />
-      <span
-        className="text-[11px] font-bold uppercase tracking-wider"
-        style={{ color: T.textMuted }}
+    <div ref={rootRef} className="relative flex items-center gap-1.5">
+      <button
+        type="button"
+        onClick={() => fire("summary")}
+        className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:brightness-95"
+        style={{ backgroundColor: T.accentSecondary, color: "#FFFFFF" }}
       >
-        AI-помічник дня
-      </span>
-
-      <div className="ml-auto flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => fire("summary")}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:brightness-95"
-          style={{ backgroundColor: T.accentPrimary, color: "#FFFFFF" }}
-        >
-          <Wand2 size={12} />
-          Скласти план дня
-        </button>
-        <button
-          type="button"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition"
-          style={{
-            backgroundColor: menuOpen ? T.panelElevated : "transparent",
-            color: T.textSecondary,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-          title="Інші AI-дії"
-        >
-          Ще
-          <ChevronDown size={11} />
-        </button>
-      </div>
+        <Wand2 size={12} />
+        Скласти план дня
+      </button>
+      <button
+        type="button"
+        onClick={() => setMenuOpen((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition"
+        style={{
+          backgroundColor: menuOpen ? T.panelElevated : "transparent",
+          color: T.textSecondary,
+          border: `1px solid ${T.borderSoft}`,
+        }}
+        title="Інші AI-дії"
+      >
+        <Sparkles size={11} style={{ color: T.accentPrimary }} />
+        <ChevronDown size={11} />
+      </button>
 
       {menuOpen && (
         <div
           role="menu"
-          className="absolute right-3 top-full mt-1 z-20 flex flex-col gap-0.5 rounded-xl p-1.5 min-w-[220px]"
+          className="absolute right-0 top-full mt-1 z-20 flex flex-col gap-0.5 rounded-xl p-1.5 min-w-[220px]"
           style={{
             backgroundColor: T.panelElevated,
             border: `1px solid ${T.borderSoft}`,

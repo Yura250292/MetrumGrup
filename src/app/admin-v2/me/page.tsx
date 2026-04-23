@@ -25,18 +25,15 @@ export default async function MyTasksPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <span
-          className="text-[11px] font-bold tracking-wider"
-          style={{ color: T.textMuted }}
-        >
-          РОБОЧИЙ ЦЕНТР
-        </span>
-        <h1 className="text-2xl font-bold" style={{ color: T.textPrimary }}>
+    <div className="flex flex-col gap-3">
+      <header className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <h1 className="text-xl font-bold" style={{ color: T.textPrimary }}>
           Моя робота
         </h1>
-        <p className="text-[13px]" style={{ color: T.textSecondary }}>
+        <p
+          className="text-[12px] w-full sm:w-auto"
+          style={{ color: T.textSecondary }}
+        >
           Що потрібно зробити, що очікує рішення і що блокує команду
         </p>
       </header>

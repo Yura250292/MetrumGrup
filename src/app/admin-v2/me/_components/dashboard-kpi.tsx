@@ -43,14 +43,14 @@ export function FocusBanner({
     );
     return (
       <div
-        className="flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3"
+        className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-2"
         style={{
           backgroundColor: T.accentPrimarySoft,
           border: `1px solid ${T.accentPrimary}`,
         }}
       >
         <span
-          className="inline-flex items-center justify-center h-9 w-9 rounded-full"
+          className="inline-flex items-center justify-center h-7 w-7 rounded-full flex-shrink-0"
           style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
         >
           <Zap size={16} />
@@ -72,7 +72,7 @@ export function FocusBanner({
         <button
           onClick={onStop}
           disabled={stopping}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold disabled:opacity-60"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
           style={{ backgroundColor: "#ef4444", color: "#fff" }}
         >
           <Square size={12} /> Стоп
@@ -84,14 +84,14 @@ export function FocusBanner({
     const overdue = isOverdue(nextTask);
     return (
       <div
-        className="flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3"
+        className="flex flex-wrap items-center gap-3 rounded-xl px-3 py-2"
         style={{
           backgroundColor: T.panel,
           border: `1px solid ${overdue ? "#ef4444" : T.borderSoft}`,
         }}
       >
         <span
-          className="inline-flex items-center justify-center h-9 w-9 rounded-full"
+          className="inline-flex items-center justify-center h-7 w-7 rounded-full flex-shrink-0"
           style={{
             backgroundColor: (overdue ? "#ef4444" : T.accentPrimary) + "22",
             color: overdue ? "#ef4444" : T.accentPrimary,
@@ -115,7 +115,7 @@ export function FocusBanner({
         </div>
         <button
           onClick={() => onStart(nextTask.id)}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold"
           style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
         >
           <Play size={12} /> Старт

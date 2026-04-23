@@ -359,25 +359,25 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* ── Row 1: KPI counters + New task button ── */}
-      <div className="flex flex-wrap items-center gap-3">
+    <div className="flex flex-col gap-3">
+      {/* ── Row 1: KPI counters + status chips + AI + New task ── */}
+      <div className="flex flex-wrap items-center gap-2">
         <KpiStrip counts={counts} focus={focus} onFocusChange={setFocus} />
 
         <StatusChips tasks={tasks} currentUserId={currentUserId} />
 
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="ml-auto flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold"
-          style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-        >
-          <Plus size={14} />
-          Нова задача
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <AiDaySummary />
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold"
+            style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+          >
+            <Plus size={14} />
+            Нова задача
+          </button>
+        </div>
       </div>
-
-      {/* ── Row 1.5: AI day summary ── */}
-      <AiDaySummary />
 
       {/* ── Row 2: Focus banner (timer or urgent task) ── */}
       <FocusBanner
