@@ -4,8 +4,22 @@ import { parsePDF } from "@/lib/pdf-helper";
 
 const MAX_TEXT_BYTES = 50_000; // 50 KB of extracted text total
 const MAX_PDF_BYTES = 4 * 1024 * 1024; // parse PDFs up to 4 MB
+const MAX_DOC_BYTES = 8 * 1024 * 1024; // parse DOC/DOCX up to 8 MB
 const MAX_TEXT_ATTACHMENT_BYTES = 200 * 1024; // text/* up to 200 KB
 const MAX_IMAGES = 5;
+
+const DOCX_MIME_TYPES = new Set([
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/vnd.ms-word",
+  "application/vnd.oasis.opendocument.text",
+]);
+
+function isDocxAttachment(name: string, mimeType: string): boolean {
+  if (DOCX_MIME_TYPES.has(mimeType)) return true;
+  const lower = name.toLowerCase();
+  return lower.endsWith(".docx") || lower.endsWith(".doc") || lower.endsWith(".odt");
+}
 
 const IMAGE_URL_PREFIX = /^https?:\/\//i;
 
@@ -76,6 +90,40 @@ async function safeReadAttachmentText(
         block: null,
         bytesUsed: 0,
         note: `⚠ ${att.name}: помилка читання (${err instanceof Error ? err.message : "?"})`,
+      };
+    }
+  }
+
+  // DOCX / DOC / ODT
+  if (isDocxAttachment(att.name, att.mimeType)) {
+    if (att.size > MAX_DOC_BYTES) {
+      return {
+        block: null,
+        bytesUsed: 0,
+        note: `⚠ ${att.name}: пропущено документ (>8 MB)`,
+      };
+    }
+    try {
+      const buf = await downloadFileFromR2(att.r2Key);
+      const mammoth = await import("mammoth");
+      const { value: rawText } = await mammoth.extractRawText({ buffer: buf });
+      const cleaned = rawText.trim();
+      if (!cleaned) {
+        return {
+          block: null,
+          bytesUsed: 0,
+          note: `⚠ ${att.name}: документ без тексту`,
+        };
+      }
+      const { text, truncated } = truncate(cleaned, remainingBudget);
+      const header = `=== ДОКУМЕНТ: ${att.name} ===`;
+      const block = `${header}\n${text}${truncated ? "\n…[обрізано]" : ""}\n=== /ДОКУМЕНТ ===`;
+      return { block, bytesUsed: Buffer.byteLength(block, "utf-8") };
+    } catch (err) {
+      return {
+        block: null,
+        bytesUsed: 0,
+        note: `⚠ ${att.name}: не вдалось прочитати документ (${err instanceof Error ? err.message : "?"})`,
       };
     }
   }
