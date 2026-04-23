@@ -25,9 +25,30 @@ export const createConversationSchema = z.discriminatedUnion("type", [
 
 export type CreateConversationInput = z.infer<typeof createConversationSchema>;
 
-export const postMessageSchema = z.object({
-  body: z.string().trim().min(1, "Повідомлення не може бути порожнім").max(4000, "Максимум 4000 символів"),
+export const chatAttachmentInputSchema = z.object({
+  name: z.string().min(1).max(255),
+  url: z.string().url(),
+  r2Key: z.string().optional(),
+  size: z.number().int().nonnegative().max(25 * 1024 * 1024, "Файл перевищує 25 МБ"),
+  mimeType: z.string().min(1).max(255),
+  durationMs: z.number().int().nonnegative().optional(),
 });
+
+export type ChatAttachmentInput = z.infer<typeof chatAttachmentInputSchema>;
+
+export const postMessageSchema = z
+  .object({
+    body: z
+      .string()
+      .trim()
+      .max(4000, "Максимум 4000 символів")
+      .default(""),
+    attachments: z.array(chatAttachmentInputSchema).max(10, "Максимум 10 файлів").optional(),
+  })
+  .refine(
+    (v) => (v.body && v.body.length > 0) || (v.attachments && v.attachments.length > 0),
+    { message: "Повідомлення або вкладення обов'язкове" }
+  );
 
 export type PostMessageInput = z.infer<typeof postMessageSchema>;
 

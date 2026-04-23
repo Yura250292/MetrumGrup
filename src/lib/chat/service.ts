@@ -237,7 +237,13 @@ export async function listConversationsForUser(userId: string) {
             where: { deletedAt: null },
             orderBy: { createdAt: "desc" },
             take: 1,
-            select: { id: true, body: true, createdAt: true, authorId: true },
+            select: {
+              id: true,
+              body: true,
+              createdAt: true,
+              authorId: true,
+              _count: { select: { attachments: true } },
+            },
           },
         },
       },
@@ -263,6 +269,8 @@ export async function listConversationsForUser(userId: string) {
           ? conv.participants.find((p) => p.userId !== userId)?.user ?? null
           : null;
 
+      const lastMsg = conv.messages[0] ?? null;
+
       return {
         id: conv.id,
         type: conv.type,
@@ -270,7 +278,15 @@ export async function listConversationsForUser(userId: string) {
         project: conv.project,
         estimate: conv.estimate,
         peer,
-        lastMessage: conv.messages[0] ?? null,
+        lastMessage: lastMsg
+          ? {
+              id: lastMsg.id,
+              body: lastMsg.body,
+              createdAt: lastMsg.createdAt,
+              authorId: lastMsg.authorId,
+              attachmentCount: lastMsg._count.attachments,
+            }
+          : null,
         lastMessageAt: conv.lastMessageAt,
         unreadCount,
       };
@@ -343,6 +359,7 @@ export async function getMessages(
     include: {
       author: { select: { id: true, name: true, avatar: true, role: true } },
       reactions: { include: { user: { select: { id: true, name: true } } } },
+      attachments: { orderBy: { createdAt: "asc" } },
     },
   });
 
@@ -359,20 +376,40 @@ export async function getMessages(
     authorId: m.authorId,
     author: m.author,
     reactions: groupReactions(m.reactions, userId),
+    attachments: m.attachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      url: a.url,
+      size: a.size,
+      mimeType: a.mimeType,
+      durationMs: a.durationMs,
+    })),
   }));
 
   return { messages: enriched, hasMore };
 }
 
+export type ChatAttachmentInput = {
+  name: string;
+  url: string;
+  r2Key?: string;
+  size: number;
+  mimeType: string;
+  durationMs?: number;
+};
+
 export async function postMessage(
   conversationId: string,
   userId: string,
-  body: string
+  body: string,
+  attachments: ChatAttachmentInput[] = []
 ) {
   await assertParticipant(conversationId, userId);
 
   const trimmed = body.trim();
-  if (!trimmed) throw new Error("Порожнє повідомлення");
+  if (!trimmed && attachments.length === 0) {
+    throw new Error("Порожнє повідомлення");
+  }
 
   const [message] = await prisma.$transaction([
     prisma.chatMessage.create({
@@ -380,9 +417,22 @@ export async function postMessage(
         conversationId,
         authorId: userId,
         body: trimmed,
+        attachments: attachments.length
+          ? {
+              create: attachments.map((a) => ({
+                name: a.name,
+                url: a.url,
+                r2Key: a.r2Key,
+                size: a.size,
+                mimeType: a.mimeType,
+                durationMs: a.durationMs,
+              })),
+            }
+          : undefined,
       },
       include: {
         author: { select: { id: true, name: true, avatar: true, role: true } },
+        attachments: true,
       },
     }),
     prisma.conversation.update({
@@ -418,12 +468,17 @@ export async function postMessage(
     .filter((id) => !mentionedIds.has(id));
   if (recipients.length > 0) {
     const authorName = message.author.name ?? "Нове повідомлення";
+    const notifyBody =
+      trimmed ||
+      (attachments.length > 0
+        ? `📎 ${attachments.length} ${attachments.length === 1 ? "файл" : "файли"}`
+        : "");
     notifyUsers({
       userIds: recipients,
       actorId: userId,
       type: "CHAT_MESSAGE",
       title: `Нове повідомлення від ${authorName}`,
-      body: trimmed,
+      body: notifyBody,
       relatedEntity: "CONVERSATION",
       relatedId: conversationId,
     }).catch((err) =>
@@ -439,6 +494,14 @@ export async function postMessage(
     authorId: message.authorId,
     author: message.author,
     reactions: [] as ReactionGroup[],
+    attachments: message.attachments.map((a) => ({
+      id: a.id,
+      name: a.name,
+      url: a.url,
+      size: a.size,
+      mimeType: a.mimeType,
+      durationMs: a.durationMs,
+    })),
   };
 }
 

@@ -13,11 +13,21 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
       style={{ borderColor: T.borderSoft }}
     >
       <CommentComposer
-        onSubmit={async (body) => {
-          await sendMessage.mutateAsync(body);
+        onSubmit={async (body, attachments) => {
+          await sendMessage.mutateAsync({
+            body,
+            attachments: attachments?.map((a) => ({
+              name: a.name,
+              url: a.url,
+              r2Key: a.r2Key,
+              size: a.size,
+              mimeType: a.mimeType,
+            })),
+          });
         }}
         isPending={sendMessage.isPending}
         placeholder="Введіть повідомлення... (@ — згадати, Enter — надіслати)"
+        uploadEndpoint="/api/admin/chat/upload-url"
       />
       {sendMessage.isError && (
         <p className="mt-1 text-xs text-red-500">

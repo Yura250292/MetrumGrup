@@ -86,7 +86,12 @@ function ConversationRow({
         </div>
         <div className="flex items-center justify-between gap-2 mt-0.5">
           <p className="truncate text-xs" style={{ color: T.textSecondary }}>
-            {conversation.lastMessage?.body ?? "Немає повідомлень"}
+            {conversation.lastMessage
+              ? conversation.lastMessage.body ||
+                (conversation.lastMessage.attachmentCount > 0
+                  ? `📎 ${conversation.lastMessage.attachmentCount} ${conversation.lastMessage.attachmentCount === 1 ? "файл" : "файли"}`
+                  : "")
+              : "Немає повідомлень"}
           </p>
           {conversation.unreadCount > 0 && (
             <span

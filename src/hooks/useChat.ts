@@ -16,6 +16,24 @@ export type ReactionGroup = {
   reactedByMe: boolean;
 };
 
+export type ChatAttachment = {
+  id: string;
+  name: string;
+  url: string;
+  size: number;
+  mimeType: string;
+  durationMs: number | null;
+};
+
+export type ChatAttachmentInput = {
+  name: string;
+  url: string;
+  r2Key?: string;
+  size: number;
+  mimeType: string;
+  durationMs?: number;
+};
+
 export type ChatMessage = {
   id: string;
   body: string;
@@ -24,6 +42,7 @@ export type ChatMessage = {
   authorId: string;
   author: ChatPeer;
   reactions: ReactionGroup[];
+  attachments: ChatAttachment[];
 };
 
 export type EstimateRef = {
@@ -40,7 +59,13 @@ export type ChatConversation = {
   project: { id: string; title: string; slug: string } | null;
   estimate: EstimateRef | null;
   peer: ChatPeer | null;
-  lastMessage: { id: string; body: string; createdAt: string; authorId: string } | null;
+  lastMessage: {
+    id: string;
+    body: string;
+    createdAt: string;
+    authorId: string;
+    attachmentCount: number;
+  } | null;
   lastMessageAt: string | null;
   unreadCount: number;
 };
@@ -179,12 +204,12 @@ export function useToggleMessageReaction(conversationId: string) {
 export function useSendMessage(conversationId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: string) =>
+    mutationFn: (input: { body: string; attachments?: ChatAttachmentInput[] }) =>
       jsonFetch<{ message: ChatMessage }>(
         `/api/admin/chat/conversations/${conversationId}/messages`,
         {
           method: "POST",
-          body: JSON.stringify({ body }),
+          body: JSON.stringify(input),
         }
       ).then((d) => d.message),
     onSuccess: (message) => {

@@ -32,10 +32,12 @@ export function CommentComposer({
   onSubmit,
   isPending,
   placeholder = "Введіть коментар... (@ — згадати, Enter — надіслати)",
+  uploadEndpoint = "/api/admin/comments/upload-presigned",
 }: {
   onSubmit: (body: string, attachments?: UploadedAttachment[]) => Promise<void> | void;
   isPending?: boolean;
   placeholder?: string;
+  uploadEndpoint?: string;
 }) {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<PendingFile[]>([]);
@@ -118,7 +120,7 @@ export function CommentComposer({
     if (pending.length === 0) return [];
 
     // Get presigned URLs
-    const presignedRes = await fetch("/api/admin/comments/upload-presigned", {
+    const presignedRes = await fetch(uploadEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

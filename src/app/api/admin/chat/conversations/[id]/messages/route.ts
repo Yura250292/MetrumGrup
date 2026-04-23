@@ -49,7 +49,12 @@ export async function POST(
         { status: 400 }
       );
     }
-    const message = await postMessage(id, session.user.id, parsed.data.body);
+    const message = await postMessage(
+      id,
+      session.user.id,
+      parsed.data.body,
+      parsed.data.attachments ?? []
+    );
     return NextResponse.json({ message }, { status: 201 });
   } catch (err) {
     return handleError(err);
