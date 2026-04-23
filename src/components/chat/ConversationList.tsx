@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Plus, MessageSquare, FolderKanban, Calculator, Search, AlertCircle } from "lucide-react";
+import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle } from "lucide-react";
 import { useConversations, type ChatConversation } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { NewConversationDialog } from "./NewConversationDialog";
@@ -11,6 +11,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 function getConversationTitle(c: ChatConversation): string {
   if (c.type === "DM") return c.peer?.name ?? "Видалений користувач";
   if (c.type === "PROJECT") return c.project?.title ?? c.title ?? "Канал проєкту";
+  if (c.type === "GROUP") return c.title ?? "Група";
   return c.estimate ? `Кошторис ${c.estimate.number}` : c.title ?? "Канал кошторису";
 }
 
@@ -42,6 +43,9 @@ function ConversationRow({
   } else if (conversation.type === "PROJECT") {
     Icon = FolderKanban;
     avatarGradient = "bg-gradient-to-br from-orange-500 to-amber-500";
+  } else if (conversation.type === "GROUP") {
+    Icon = Users;
+    avatarGradient = "bg-gradient-to-br from-fuchsia-500 to-pink-500";
   } else {
     Icon = Calculator;
     avatarGradient = "bg-gradient-to-br from-purple-500 to-violet-500";

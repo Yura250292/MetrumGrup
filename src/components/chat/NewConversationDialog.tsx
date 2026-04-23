@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, MessageSquare, FolderKanban, Calculator } from "lucide-react";
+import { X, MessageSquare, FolderKanban, Calculator, Users, Check } from "lucide-react";
 import { useCreateConversation, useStaffUsers } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -26,11 +26,20 @@ export function NewConversationDialog({
   onOpenChange: (v: boolean) => void;
 }) {
   const router = useRouter();
-  const [tab, setTab] = useState<"DM" | "PROJECT" | "ESTIMATE">("DM");
+  const [tab, setTab] = useState<"DM" | "PROJECT" | "ESTIMATE" | "GROUP">("DM");
   const [projects, setProjects] = useState<AdminProject[] | null>(null);
   const [estimates, setEstimates] = useState<AdminEstimate[] | null>(null);
+  const [groupTitle, setGroupTitle] = useState("");
+  const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
   const { data: users } = useStaffUsers();
   const createConversation = useCreateConversation();
+
+  useEffect(() => {
+    if (!open) {
+      setGroupTitle("");
+      setGroupMemberIds([]);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -64,6 +73,7 @@ export function NewConversationDialog({
       | { type: "DM"; userId: string }
       | { type: "PROJECT"; projectId: string }
       | { type: "ESTIMATE"; estimateId: string }
+      | { type: "GROUP"; title: string; participantIds: string[] }
   ) => {
     try {
       const conversation = await createConversation.mutateAsync(input);
@@ -74,8 +84,18 @@ export function NewConversationDialog({
     }
   };
 
+  const toggleGroupMember = (userId: string) => {
+    setGroupMemberIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  };
+
+  const canCreateGroup =
+    groupTitle.trim().length > 0 && groupMemberIds.length > 0 && !createConversation.isPending;
+
   const tabItems = [
-    { id: "DM" as const, label: "Співробітник", icon: MessageSquare },
+    { id: "DM" as const, label: "Особиста", icon: MessageSquare },
+    { id: "GROUP" as const, label: "Група", icon: Users },
     { id: "PROJECT" as const, label: "Проєкт", icon: FolderKanban },
     { id: "ESTIMATE" as const, label: "Кошторис", icon: Calculator },
   ];
@@ -162,6 +182,99 @@ export function NewConversationDialog({
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+          {tab === "GROUP" && (
+            <div className="flex flex-col">
+              <div className="px-4 py-3 border-b" style={{ borderColor: T.borderSoft }}>
+                <label
+                  className="block text-xs font-semibold mb-1.5"
+                  style={{ color: T.textSecondary }}
+                >
+                  Назва групи
+                </label>
+                <input
+                  type="text"
+                  value={groupTitle}
+                  onChange={(e) => setGroupTitle(e.target.value.slice(0, 120))}
+                  placeholder="Наприклад: Об'єкт на Гетьмана"
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    border: `1px solid ${T.borderSoft}`,
+                    color: T.textPrimary,
+                  }}
+                  autoFocus
+                />
+                <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: T.textMuted }}>
+                  <span>Учасників: {groupMemberIds.length}</span>
+                  <span>{groupTitle.length}/120</span>
+                </div>
+              </div>
+              <div>
+                {!users && (
+                  <p className="p-4 text-sm" style={{ color: T.textMuted }}>
+                    Завантаження...
+                  </p>
+                )}
+                {users?.length === 0 && (
+                  <p className="p-4 text-sm" style={{ color: T.textMuted }}>
+                    Немає інших співробітників
+                  </p>
+                )}
+                {users?.map((u) => {
+                  const selected = groupMemberIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleGroupMember(u.id)}
+                      className="flex w-full items-center gap-3 px-4 py-3 border-b transition tap-highlight-none"
+                      style={{
+                        borderColor: T.borderSoft,
+                        backgroundColor: selected ? T.accentPrimarySoft : "transparent",
+                      }}
+                    >
+                      <UserAvatar src={u.avatar} name={u.name} size={36} gradient="linear-gradient(135deg, #8b5cf6, #ec4899)" nonInteractive />
+                      <div className="text-left min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate" style={{ color: T.textPrimary }}>
+                          {u.name}
+                        </p>
+                        <p className="text-xs" style={{ color: T.textSecondary }}>
+                          {ROLE_LABELS[u.role] ?? u.role}
+                        </p>
+                      </div>
+                      <span
+                        className="flex h-5 w-5 items-center justify-center rounded-md"
+                        style={{
+                          backgroundColor: selected ? T.accentPrimary : "transparent",
+                          border: `1.5px solid ${selected ? T.accentPrimary : T.borderSoft}`,
+                        }}
+                      >
+                        {selected && <Check className="h-3.5 w-3.5 text-white" />}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div
+                className="sticky bottom-0 px-4 py-3 border-t"
+                style={{ borderColor: T.borderSoft, backgroundColor: T.panel }}
+              >
+                <Button
+                  className="w-full"
+                  disabled={!canCreateGroup}
+                  onClick={() =>
+                    handleCreate({
+                      type: "GROUP",
+                      title: groupTitle.trim(),
+                      participantIds: groupMemberIds,
+                    })
+                  }
+                >
+                  {createConversation.isPending ? "Створюємо…" : "Створити групу"}
+                </Button>
+              </div>
             </div>
           )}
           {tab === "PROJECT" && (

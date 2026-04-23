@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireStaffAccess, unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import {
+  createGroupConversation,
   getOrCreateDM,
   getOrCreateEstimateChannel,
   getOrCreateProjectChannel,
@@ -43,8 +44,14 @@ export async function POST(request: NextRequest) {
       conversation = await getOrCreateDM(session.user.id, parsed.data.userId);
     } else if (parsed.data.type === "PROJECT") {
       conversation = await getOrCreateProjectChannel(parsed.data.projectId, session.user.id);
-    } else {
+    } else if (parsed.data.type === "ESTIMATE") {
       conversation = await getOrCreateEstimateChannel(parsed.data.estimateId, session.user.id);
+    } else {
+      conversation = await createGroupConversation(
+        session.user.id,
+        parsed.data.title,
+        parsed.data.participantIds
+      );
     }
 
     return NextResponse.json({ conversation });

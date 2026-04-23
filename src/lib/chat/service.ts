@@ -145,6 +145,38 @@ export async function getOrCreateProjectChannel(projectId: string, currentUserId
   return conversation;
 }
 
+export async function createGroupConversation(
+  ownerId: string,
+  title: string,
+  participantIds: string[]
+) {
+  const cleanTitle = title.trim();
+  if (!cleanTitle) throw new Error("Назва групи не може бути порожньою");
+
+  const uniqueIds = Array.from(new Set([ownerId, ...participantIds]));
+  if (uniqueIds.length < 2) {
+    throw new Error("Додайте принаймні одного учасника");
+  }
+
+  const members = await prisma.user.findMany({
+    where: { id: { in: uniqueIds }, isActive: true, role: { in: STAFF_ROLES } },
+    select: { id: true },
+  });
+  if (members.length !== uniqueIds.length) {
+    throw new Error("Деякі користувачі недоступні для чату");
+  }
+
+  return prisma.conversation.create({
+    data: {
+      type: "GROUP",
+      title: cleanTitle,
+      participants: {
+        create: uniqueIds.map((userId) => ({ userId })),
+      },
+    },
+  });
+}
+
 export async function getOrCreateEstimateChannel(estimateId: string, currentUserId: string) {
   const estimate = await prisma.estimate.findUnique({
     where: { id: estimateId },

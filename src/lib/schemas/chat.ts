@@ -13,6 +13,14 @@ export const createConversationSchema = z.discriminatedUnion("type", [
     type: z.literal("ESTIMATE"),
     estimateId: z.string().min(1),
   }),
+  z.object({
+    type: z.literal("GROUP"),
+    title: z.string().trim().min(1, "Назва обов'язкова").max(120, "Максимум 120 символів"),
+    participantIds: z
+      .array(z.string().min(1))
+      .min(1, "Додайте принаймні одного учасника")
+      .max(50, "Максимум 50 учасників"),
+  }),
 ]);
 
 export type CreateConversationInput = z.infer<typeof createConversationSchema>;

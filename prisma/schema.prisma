@@ -1180,6 +1180,7 @@ enum ConversationType {
   DM
   PROJECT
   ESTIMATE
+  GROUP
 }
 
 enum Role {
