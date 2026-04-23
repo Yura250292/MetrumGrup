@@ -65,7 +65,14 @@ export async function GET() {
       isInternal: true,
       stages: {
         orderBy: { sortOrder: "asc" },
-        select: { id: true, stage: true, status: true },
+        select: {
+          id: true,
+          stage: true,
+          customName: true,
+          status: true,
+          parentStageId: true,
+          sortOrder: true,
+        },
       },
     },
     orderBy: [{ isInternal: "asc" }, { updatedAt: "desc" }],
@@ -79,7 +86,14 @@ export async function GET() {
     status: string;
     currentStage: string;
     isInternal: boolean;
-    stages: { id: string; stage: string | null; status: string }[];
+    stages: {
+      id: string;
+      stage: string | null;
+      customName: string | null;
+      status: string;
+      parentStageId: string | null;
+      sortOrder: number;
+    }[];
   }> = [];
 
   for (const p of rawProjects) {

@@ -4,16 +4,51 @@ import { useEffect, useState } from "react";
 import { Plus, X, Loader2, Sparkles, Eye, Pencil, Check } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { STAGE_LABELS } from "@/lib/constants";
+import { stageDisplayName } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
+
+type StageNode = {
+  id: string;
+  stage: ProjectStage | null;
+  customName: string | null;
+  status: string;
+  parentStageId: string | null;
+  sortOrder: number;
+};
 
 type MyProject = {
   id: string;
   title: string;
   currentStage: string;
   isInternal?: boolean;
-  stages: { id: string; stage: ProjectStage; status: string }[];
+  stages: StageNode[];
 };
+
+/**
+ * Flatten a tree of stages (parent → children) into an array with depth
+ * so the dropdown can render hierarchical indentation.
+ */
+function flattenStageTree(stages: StageNode[]): Array<{ node: StageNode; depth: number }> {
+  const byParent = new Map<string | null, StageNode[]>();
+  for (const s of stages) {
+    const key = s.parentStageId ?? null;
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)!.push(s);
+  }
+  for (const list of byParent.values()) {
+    list.sort((a, b) => a.sortOrder - b.sortOrder);
+  }
+  const out: Array<{ node: StageNode; depth: number }> = [];
+  const walk = (parentId: string | null, depth: number) => {
+    const list = byParent.get(parentId) ?? [];
+    for (const node of list) {
+      out.push({ node, depth });
+      walk(node.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
 
 type TaskPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 
@@ -96,10 +131,12 @@ export function NewTaskModal({
           if (items.length > 0) {
             const first = items[0]!;
             setProjectId(first.id);
-            const currentStageRecord =
-              first.stages.find((s) => s.stage === first.currentStage) ??
-              first.stages[0];
-            if (currentStageRecord) setStageId(currentStageRecord.id);
+            const topLevelCurrent = first.stages.find(
+              (s) => !s.parentStageId && s.stage === first.currentStage,
+            );
+            const firstTopLevel = first.stages.find((s) => !s.parentStageId);
+            const fallback = topLevelCurrent ?? firstTopLevel ?? first.stages[0];
+            if (fallback) setStageId(fallback.id);
           }
         }
         if (usersRes.ok) {
@@ -120,10 +157,12 @@ export function NewTaskModal({
 
   useEffect(() => {
     if (!selectedProject) return;
-    const currentStageRecord =
-      selectedProject.stages.find((s) => s.stage === selectedProject.currentStage) ??
-      selectedProject.stages[0];
-    if (currentStageRecord) setStageId(currentStageRecord.id);
+    const topLevelCurrent = selectedProject.stages.find(
+      (s) => !s.parentStageId && s.stage === selectedProject.currentStage,
+    );
+    const firstTopLevel = selectedProject.stages.find((s) => !s.parentStageId);
+    const fallback = topLevelCurrent ?? firstTopLevel ?? selectedProject.stages[0];
+    if (fallback) setStageId(fallback.id);
   }, [selectedProject]);
 
   const canGenerate = title.trim().length >= 4 && !generatingSpec;
@@ -282,18 +321,26 @@ export function NewTaskModal({
               </Field>
 
               {selectedProject && !selectedProject.isInternal && (
-                <Field label="СТАДІЯ">
+                <Field label="СТАДІЯ / ПІДЕТАП">
                   <select
                     value={stageId}
                     onChange={(e) => setStageId(e.target.value)}
                     className="rounded-lg px-3 py-2 text-sm outline-none"
                     style={inputStyle}
                   >
-                    {selectedProject.stages.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {STAGE_LABELS[s.stage as ProjectStage]}
-                      </option>
-                    ))}
+                    {flattenStageTree(selectedProject.stages).map(({ node, depth }) => {
+                      const label = stageDisplayName({
+                        stage: node.stage,
+                        customName: node.customName,
+                      });
+                      const indent = "    ".repeat(depth);
+                      const prefix = depth > 0 ? "↳ " : "";
+                      return (
+                        <option key={node.id} value={node.id}>
+                          {`${indent}${prefix}${label}`}
+                        </option>
+                      );
+                    })}
                   </select>
                 </Field>
               )}
