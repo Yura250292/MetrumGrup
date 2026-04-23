@@ -104,6 +104,11 @@ export type EmployeeImportRow = {
   phone: string | null;
   email: string | null;
   position: string | null;
+  birthDate: Date | null;
+  residence: string | null;
+  maritalStatus: string | null;
+  hiredAt: Date | null;
+  terminatedAt: Date | null;
   salaryType: "MONTHLY" | "HOURLY";
   salaryAmount: number | null;
   currency: string;
@@ -125,9 +130,24 @@ export async function parseEmployeesExcel(
     fullName: matchColumn(headers, (h) =>
       includesAny(h, ["піб", "фио", "прізвище", "ім'я", "імʼя", "full name", "name"]),
     ),
-    phone: matchColumn(headers, (h) => includesAny(h, ["телефон", "phone", "мобільн"])),
+    phone: matchColumn(headers, (h) => includesAny(h, ["телефон", "phone", "мобільн", "номер"])),
     email: matchColumn(headers, (h) => includesAny(h, ["email", "пошта", "e-mail"])),
     position: matchColumn(headers, (h) => includesAny(h, ["посада", "position"])),
+    birthDate: matchColumn(headers, (h) =>
+      includesAny(h, ["народж", "birth", "д.н.", "дн", "birthday"]),
+    ),
+    residence: matchColumn(headers, (h) =>
+      includesAny(h, ["проживан", "адрес", "address", "місто", "residence"]),
+    ),
+    maritalStatus: matchColumn(headers, (h) =>
+      includesAny(h, ["сімейний", "сім'я", "marital", "статус сім"]),
+    ),
+    hiredAt: matchColumn(headers, (h) =>
+      includesAny(h, ["прийнятт", "початок робот", "hired", "дата прийом", "приймання"]),
+    ),
+    terminatedAt: matchColumn(headers, (h) =>
+      includesAny(h, ["звільнен", "кінець роб", "terminated", "звільнив"]),
+    ),
     salaryType: matchColumn(headers, (h) =>
       includesAny(h, ["тип зп", "тип зарплат", "salary type"]),
     ),
@@ -165,6 +185,11 @@ export async function parseEmployeesExcel(
       phone: cellValue(ws, r, cols.phone) || null,
       email: emailRaw || null,
       position: cellValue(ws, r, cols.position) || null,
+      birthDate: parseDate(cellValue(ws, r, cols.birthDate)),
+      residence: cellValue(ws, r, cols.residence) || null,
+      maritalStatus: cellValue(ws, r, cols.maritalStatus) || null,
+      hiredAt: parseDate(cellValue(ws, r, cols.hiredAt)),
+      terminatedAt: parseDate(cellValue(ws, r, cols.terminatedAt)),
       salaryType,
       salaryAmount: parseNumber(cellValue(ws, r, cols.salaryAmount)),
       currency: cellValue(ws, r, cols.currency) || "UAH",
@@ -185,6 +210,11 @@ export async function generateEmployeesTemplate(): Promise<Buffer> {
     { header: "Посада", key: "position", width: 22 },
     { header: "Телефон", key: "phone", width: 18 },
     { header: "Email", key: "email", width: 28 },
+    { header: "Дата народження", key: "birthDate", width: 18 },
+    { header: "Місце проживання", key: "residence", width: 30 },
+    { header: "Сімейний стан", key: "maritalStatus", width: 18 },
+    { header: "Початок роботи", key: "hiredAt", width: 18 },
+    { header: "Дата звільнення", key: "terminatedAt", width: 18 },
     { header: "Тип ЗП (місячна/погодинна)", key: "salaryType", width: 26 },
     { header: "Сума ЗП", key: "salaryAmount", width: 14 },
     { header: "Валюта", key: "currency", width: 10 },
@@ -197,6 +227,11 @@ export async function generateEmployeesTemplate(): Promise<Buffer> {
     position: "Бригадир",
     phone: "+380501234567",
     email: "ivan@example.com",
+    birthDate: "15.03.1985",
+    residence: "м. Львів, вул. Зелена, 12",
+    maritalStatus: "одружений",
+    hiredAt: "01.06.2022",
+    terminatedAt: "",
     salaryType: "місячна",
     salaryAmount: 30000,
     currency: "UAH",
@@ -208,6 +243,11 @@ export async function generateEmployeesTemplate(): Promise<Buffer> {
     position: "Інженер",
     phone: "",
     email: "",
+    birthDate: "07.11.1998",
+    residence: "м. Львів",
+    maritalStatus: "неодружена",
+    hiredAt: "10.01.2024",
+    terminatedAt: "",
     salaryType: "погодинна",
     salaryAmount: 250,
     currency: "UAH",
@@ -498,6 +538,11 @@ export function applyEmployeeMapping(
       phone: pick(rows, i, cols.phone) || null,
       email: emailRaw || null,
       position: pick(rows, i, cols.position) || null,
+      birthDate: parseDate(pick(rows, i, cols.birthDate)),
+      residence: pick(rows, i, cols.residence) || null,
+      maritalStatus: pick(rows, i, cols.maritalStatus) || null,
+      hiredAt: parseDate(pick(rows, i, cols.hiredAt)),
+      terminatedAt: parseDate(pick(rows, i, cols.terminatedAt)),
       salaryType,
       salaryAmount: parseNumber(pick(rows, i, cols.salaryAmount)),
       currency: pick(rows, i, cols.currency) || "UAH",
@@ -605,6 +650,11 @@ export const EMPLOYEE_FIELDS = [
   { key: "phone", label: "Телефон" },
   { key: "email", label: "Email" },
   { key: "position", label: "Посада" },
+  { key: "birthDate", label: "Дата народження", hint: "Дата у будь-якому форматі (DD.MM.YYYY, ISO, тощо)" },
+  { key: "residence", label: "Місце проживання / адреса" },
+  { key: "maritalStatus", label: "Сімейний стан", hint: "Одружений / неодружена / розлучений / вдівець" },
+  { key: "hiredAt", label: "Початок роботи / дата прийому", hint: "Дата" },
+  { key: "terminatedAt", label: "Дата звільнення / кінець роботи", hint: "Дата; пусто якщо працює" },
   { key: "salaryType", label: "Тип ЗП", hint: "Місячна / погодинна / hourly / monthly" },
   { key: "salaryAmount", label: "Сума ЗП", hint: "Число" },
   { key: "currency", label: "Валюта" },

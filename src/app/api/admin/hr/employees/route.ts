@@ -30,11 +30,23 @@ const emailField = z
     message: "Невірний email",
   });
 
+const dateField = z
+  .string()
+  .optional()
+  .nullable()
+  .transform((v) => (v ? new Date(v) : null))
+  .refine((d) => d === null || !isNaN(d.getTime()), { message: "Невірна дата" });
+
 const createSchema = z.object({
   fullName: z.string().trim().min(1, "ПІБ обовʼязкове"),
   phone: nullableString,
   email: emailField,
   position: nullableString,
+  birthDate: dateField,
+  residence: nullableString,
+  maritalStatus: nullableString,
+  hiredAt: dateField,
+  terminatedAt: dateField,
   salaryType: z.enum(["MONTHLY", "HOURLY"]).default("MONTHLY"),
   salaryAmount: z.number().nonnegative().optional().nullable(),
   currency: z.string().trim().default("UAH"),
