@@ -37,22 +37,32 @@ export default async function AdminV2ProjectDetailPage({
   const sp = await searchParams;
   const activeTab = sp.tab || "overview";
 
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
-      manager: { select: { id: true, name: true, email: true, phone: true } },
-      stages: { orderBy: { sortOrder: "asc" } },
-      payments: { orderBy: { scheduledDate: "asc" } },
-      photoReports: {
-        orderBy: { createdAt: "desc" },
-        take: 12,
-        include: { images: { take: 1 }, createdBy: { select: { name: true } } },
+  const [project, factIncome, factExpense] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id },
+      include: {
+        client: { select: { id: true, name: true, email: true, phone: true } },
+        manager: { select: { id: true, name: true, email: true, phone: true } },
+        stages: { orderBy: { sortOrder: "asc" } },
+        payments: { orderBy: { scheduledDate: "asc" } },
+        photoReports: {
+          orderBy: { createdAt: "desc" },
+          take: 12,
+          include: { images: { take: 1 }, createdBy: { select: { name: true } } },
+        },
+        completionActs: { orderBy: { createdAt: "desc" } },
+        _count: { select: { photoReports: true, files: true } },
       },
-      completionActs: { orderBy: { createdAt: "desc" } },
-      _count: { select: { photoReports: true, files: true } },
-    },
-  });
+    }),
+    prisma.financeEntry.aggregate({
+      where: { projectId: id, type: "INCOME", kind: "FACT", isArchived: false },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.aggregate({
+      where: { projectId: id, type: "EXPENSE", kind: "FACT", isArchived: false },
+      _sum: { amount: true },
+    }),
+  ]);
 
   if (!project) notFound();
 
@@ -60,6 +70,9 @@ export default async function AdminV2ProjectDetailPage({
   const totalBudget = Number(project.totalBudget);
   const totalPaid = Number(project.totalPaid);
   const paidPercent = totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0;
+  const factIncomeTotal = Number(factIncome._sum.amount ?? 0);
+  const factExpenseTotal = Number(factExpense._sum.amount ?? 0);
+  const factBalance = factIncomeTotal - factExpenseTotal;
 
   const tasksEnabled = await isTasksEnabledForProject(project.id);
 
@@ -170,7 +183,7 @@ export default async function AdminV2ProjectDetailPage({
           </div>
         </div>
 
-        {/* KPI strip */}
+        {/* KPI strip: план (Payment) */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <KpiPill label="Бюджет" value={formatCurrency(totalBudget)} />
           <KpiPill
@@ -181,6 +194,25 @@ export default async function AdminV2ProjectDetailPage({
           />
           <KpiPill label="Етапів" value={String(project.stages.length)} />
           <KpiPill label="Файлів" value={String(project._count.files)} />
+        </div>
+
+        {/* KPI strip: факт (FinanceEntry) */}
+        <div className="grid grid-cols-3 gap-3">
+          <KpiPill
+            label="Факт · дохід"
+            value={formatCurrency(factIncomeTotal)}
+            accent={T.success}
+          />
+          <KpiPill
+            label="Факт · витрата"
+            value={formatCurrency(factExpenseTotal)}
+            accent={T.danger}
+          />
+          <KpiPill
+            label="Факт · баланс"
+            value={formatCurrency(factBalance)}
+            accent={factBalance >= 0 ? T.success : T.danger}
+          />
         </div>
       </header>
 
