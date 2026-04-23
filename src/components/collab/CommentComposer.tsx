@@ -1,9 +1,26 @@
 "use client";
 
-import { useState, useRef, KeyboardEvent } from "react";
-import { Send, Paperclip, X, FileIcon, ImageIcon, Loader2 } from "lucide-react";
+import { useState, useRef, KeyboardEvent, useEffect } from "react";
+import { Send, Paperclip, X, FileIcon, Loader2, Sparkles, Check } from "lucide-react";
 import { useStaffUsers, type StaffUser } from "@/hooks/useChat";
 import { MentionPicker } from "./MentionPicker";
+
+export type AiComposeMode =
+  | "grammar"
+  | "formal"
+  | "friendly"
+  | "emoji"
+  | "shorter"
+  | "longer";
+
+const AI_MODES: { key: AiComposeMode; label: string; hint: string }[] = [
+  { key: "grammar", label: "Виправити граматику", hint: "Орфографія, пунктуація, узгодження" },
+  { key: "emoji", label: "Додати емодзі", hint: "2–4 доречні емодзі" },
+  { key: "formal", label: "Офіційний тон", hint: "Для колег і клієнтів" },
+  { key: "friendly", label: "Дружній тон", hint: "Теплий, живий" },
+  { key: "shorter", label: "Коротше", hint: "Прибрати воду" },
+  { key: "longer", label: "Розширити", hint: "Більше деталей і контексту" },
+];
 
 type PendingFile = {
   file: File;
@@ -33,11 +50,17 @@ export function CommentComposer({
   isPending,
   placeholder = "Введіть коментар... (@ — згадати, Enter — надіслати)",
   uploadEndpoint = "/api/admin/comments/upload-presigned",
+  aiComposeEndpoint,
 }: {
   onSubmit: (body: string, attachments?: UploadedAttachment[]) => Promise<void> | void;
   isPending?: boolean;
   placeholder?: string;
   uploadEndpoint?: string;
+  /**
+   * If set, enables a ✨ AI-compose button that sends `{ text, mode }` to this
+   * endpoint and replaces the draft with the returned `{ text }`.
+   */
+  aiComposeEndpoint?: string;
 }) {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<PendingFile[]>([]);
@@ -47,9 +70,53 @@ export function CommentComposer({
     query: string;
     startIndex: number;
   }>({ open: false, query: "", startIndex: -1 });
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiPending, setAiPending] = useState<AiComposeMode | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const aiMenuRef = useRef<HTMLDivElement>(null);
   const { data: users } = useStaffUsers();
+
+  useEffect(() => {
+    if (!aiMenuOpen) return;
+    const onClickOutside = (e: MouseEvent) => {
+      if (aiMenuRef.current && !aiMenuRef.current.contains(e.target as Node)) {
+        setAiMenuOpen(false);
+      }
+    };
+    window.addEventListener("mousedown", onClickOutside);
+    return () => window.removeEventListener("mousedown", onClickOutside);
+  }, [aiMenuOpen]);
+
+  const runAiCompose = async (mode: AiComposeMode) => {
+    if (!aiComposeEndpoint) return;
+    const text = value.trim();
+    if (!text) {
+      setAiError("Спочатку введіть текст");
+      return;
+    }
+    try {
+      setAiPending(mode);
+      setAiError(null);
+      const res = await fetch(aiComposeEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, mode }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Не вдалось обробити текст");
+      }
+      const { text: newText } = (await res.json()) as { text: string };
+      setValue(newText);
+      setAiMenuOpen(false);
+    } catch (e) {
+      setAiError(e instanceof Error ? e.message : "Помилка AI");
+    } finally {
+      setAiPending(null);
+    }
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newValue = e.target.value;
@@ -240,6 +307,66 @@ export function CommentComposer({
         >
           <Paperclip className="h-4 w-4" />
         </button>
+
+        {aiComposeEndpoint && (
+          <div className="relative" ref={aiMenuRef}>
+            <button
+              type="button"
+              onClick={() => setAiMenuOpen((v) => !v)}
+              disabled={busy || aiPending !== null}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg admin-dark:text-gray-400 admin-light:text-gray-500 hover:admin-dark:bg-white/5 hover:admin-light:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              title="AI покращити текст"
+            >
+              {aiPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+            </button>
+            {aiMenuOpen && (
+              <div
+                className="absolute bottom-full mb-2 left-0 z-50 w-64 rounded-xl admin-dark:bg-gray-900 admin-light:bg-white shadow-xl border admin-dark:border-white/10 admin-light:border-gray-200 overflow-hidden"
+              >
+                <div className="px-3 py-2 border-b admin-dark:border-white/10 admin-light:border-gray-200 text-[11px] font-semibold tracking-wider uppercase admin-dark:text-gray-400 admin-light:text-gray-500">
+                  AI — покращити текст
+                </div>
+                {aiError && (
+                  <div className="px-3 py-2 text-xs text-red-500 border-b admin-dark:border-white/10 admin-light:border-gray-200">
+                    {aiError}
+                  </div>
+                )}
+                {AI_MODES.map((m) => {
+                  const running = aiPending === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      type="button"
+                      onClick={() => runAiCompose(m.key)}
+                      disabled={aiPending !== null}
+                      className="flex w-full items-start gap-2 px-3 py-2 text-left transition hover:admin-dark:bg-white/5 hover:admin-light:bg-gray-50 disabled:opacity-50"
+                    >
+                      <span className="mt-0.5 flex h-4 w-4 items-center justify-center">
+                        {running ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Check className="h-3.5 w-3.5 opacity-0" />
+                        )}
+                      </span>
+                      <span className="flex flex-col min-w-0">
+                        <span className="text-[13px] font-medium admin-dark:text-gray-200 admin-light:text-gray-800">
+                          {m.label}
+                        </span>
+                        <span className="text-[11px] admin-dark:text-gray-500 admin-light:text-gray-500">
+                          {m.hint}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <textarea
           ref={textareaRef}

@@ -35,6 +35,7 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
             isPending={sendMessage.isPending}
             placeholder="Введіть повідомлення... (@ — згадати, Enter — надіслати)"
             uploadEndpoint="/api/admin/chat/upload-url"
+            aiComposeEndpoint="/api/admin/chat/ai/compose"
           />
         </div>
         <div className="pb-[2px]">

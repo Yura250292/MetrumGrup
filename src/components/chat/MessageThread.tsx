@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { ArrowLeft, Calculator, FileText, FolderKanban, MessageSquare, Users } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import { ArrowLeft, Calculator, FileText, FolderKanban, Loader2, MessageSquare, Sparkles, Users, X } from "lucide-react";
 import {
   useConversation,
   useMarkRead,
@@ -174,6 +175,40 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastReadCountRef = useRef(0);
 
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [summaryText, setSummaryText] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
+
+  const runSummary = async () => {
+    setSummaryOpen(true);
+    if (summaryText && !summaryError) return; // already loaded
+    try {
+      setSummaryLoading(true);
+      setSummaryError(null);
+      const res = await fetch(
+        `/api/admin/chat/conversations/${conversationId}/summary`,
+        { method: "POST" }
+      );
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "Не вдалось отримати підсумок");
+      }
+      const { summary } = (await res.json()) as { summary: string };
+      setSummaryText(summary);
+    } catch (e) {
+      setSummaryError(e instanceof Error ? e.message : "Помилка AI");
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const refreshSummary = async () => {
+    setSummaryText(null);
+    setSummaryError(null);
+    await runSummary();
+  };
+
   const messages = messagesData?.messages ?? [];
 
   // Auto-scroll to bottom when messages change (only if user is near bottom)
@@ -226,7 +261,7 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="relative flex h-full flex-col">
       {/* Header */}
       <div
         className="flex items-center gap-3 border-b px-4 py-3"
@@ -240,7 +275,7 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <Icon className="h-5 w-5" style={{ color: T.textSecondary }} />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold" style={{ color: T.textPrimary }}>
             {title}
           </p>
@@ -254,6 +289,24 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
             </Link>
           )}
         </div>
+        <button
+          type="button"
+          onClick={runSummary}
+          disabled={summaryLoading}
+          title="AI-підсумок розмови"
+          className="flex-shrink-0 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition active:scale-95 disabled:opacity-50"
+          style={{
+            color: T.accentPrimary,
+            backgroundColor: T.accentPrimarySoft,
+          }}
+        >
+          {summaryLoading ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
+          <span className="hidden sm:inline">Підсумок</span>
+        </button>
       </div>
 
       {/* Messages */}
@@ -285,6 +338,66 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
 
       {/* Composer */}
       <MessageComposer conversationId={conversationId} />
+
+      {/* AI Summary Panel (overlay) */}
+      {summaryOpen && (
+        <div
+          className="absolute inset-0 z-40 flex flex-col"
+          style={{ backgroundColor: T.panel }}
+        >
+          <div
+            className="flex items-center justify-between gap-3 border-b px-4 py-3"
+            style={{ borderColor: T.borderSoft }}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="h-4 w-4 flex-shrink-0" style={{ color: T.accentPrimary }} />
+              <p className="truncate text-sm font-semibold" style={{ color: T.textPrimary }}>
+                AI-підсумок розмови
+              </p>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={refreshSummary}
+                disabled={summaryLoading}
+                className="rounded-lg px-2.5 py-1 text-[12px] transition active:scale-95 disabled:opacity-50"
+                style={{ color: T.accentPrimary }}
+              >
+                Оновити
+              </button>
+              <button
+                type="button"
+                onClick={() => setSummaryOpen(false)}
+                className="rounded-lg p-1 transition active:scale-95"
+                style={{ color: T.textSecondary }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4">
+            {summaryLoading && (
+              <div className="flex items-center gap-2 text-sm" style={{ color: T.textMuted }}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Аналізуємо розмову…
+              </div>
+            )}
+            {summaryError && (
+              <p className="text-sm" style={{ color: T.danger }}>
+                {summaryError}
+              </p>
+            )}
+            {!summaryLoading && !summaryError && summaryText && (
+              <div
+                className="prose prose-sm max-w-none admin-dark:prose-invert"
+                style={{ color: T.textPrimary }}
+              >
+                <ReactMarkdown>{summaryText}</ReactMarkdown>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
