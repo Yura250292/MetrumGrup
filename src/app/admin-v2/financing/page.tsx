@@ -16,7 +16,7 @@ export default async function AdminV2FinancingPage() {
 
   const [projects, users] = await Promise.all([
     prisma.project.findMany({
-      where: { status: { in: ["DRAFT", "ACTIVE", "ON_HOLD"] } },
+      where: { slug: { not: { startsWith: "temp-" } } },
       select: { id: true, title: true },
       orderBy: { title: "asc" },
     }),

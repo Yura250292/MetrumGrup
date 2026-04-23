@@ -17,22 +17,29 @@ export async function GET(
     return forbiddenResponse();
   }
 
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      client: { select: { id: true, name: true, email: true, phone: true } },
-      manager: { select: { id: true, name: true, email: true, phone: true } },
-      stages: { orderBy: { sortOrder: "asc" } },
-      payments: { orderBy: { scheduledDate: "asc" } },
-      estimates: { orderBy: { createdAt: "desc" } },
-    },
-  });
+  const [project, responsibleCandidates] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id },
+      include: {
+        client: { select: { id: true, name: true, email: true, phone: true } },
+        manager: { select: { id: true, name: true, email: true, phone: true } },
+        stages: { orderBy: { sortOrder: "asc" } },
+        payments: { orderBy: { scheduledDate: "asc" } },
+        estimates: { orderBy: { createdAt: "desc" } },
+      },
+    }),
+    prisma.user.findMany({
+      where: { role: { in: ["SUPER_ADMIN", "MANAGER", "ENGINEER"] }, isActive: true },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   if (!project) {
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: project });
+  return NextResponse.json({ data: project, responsibleCandidates });
 }
 
 export async function PATCH(
