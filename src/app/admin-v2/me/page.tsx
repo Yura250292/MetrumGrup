@@ -26,16 +26,19 @@ export default async function MyTasksPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <header>
+      <header className="flex flex-col gap-1">
         <span
           className="text-[11px] font-bold tracking-wider"
           style={{ color: T.textMuted }}
         >
-          ОСОБИСТИЙ ДАШБОРД
+          РОБОЧИЙ ЦЕНТР
         </span>
         <h1 className="text-2xl font-bold" style={{ color: T.textPrimary }}>
-          Мої задачі
+          Моя робота
         </h1>
+        <p className="text-[13px]" style={{ color: T.textSecondary }}>
+          Що потрібно зробити, що очікує рішення і що блокує команду
+        </p>
       </header>
       <MeDashboard currentUserId={session.user.id} />
     </div>

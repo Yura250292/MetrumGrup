@@ -37,18 +37,18 @@ import { SectionsView } from "./sections-view";
 import { AiDaySummary } from "./ai-day-summary";
 
 const SCOPE_DEFS: { id: Scope; label: string }[] = [
-  { id: "assigned", label: "Мої" },
-  { id: "created", label: "Створені" },
-  { id: "watching", label: "Стежу" },
-  { id: "all", label: "Всі" },
+  { id: "assigned", label: "Мені призначено" },
+  { id: "created", label: "Я поставив" },
+  { id: "watching", label: "Я стежу" },
+  { id: "all", label: "Всі задачі" },
 ];
 
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
-  { id: "sections", label: "Секції", icon: LayoutGrid },
+  { id: "sections", label: "Пріоритети", icon: LayoutGrid },
   { id: "table", label: "Таблиця", icon: Table2 },
   { id: "flat", label: "Список", icon: List },
-  { id: "by-project", label: "По проєктах", icon: FolderKanban },
-  { id: "by-people", label: "По людях", icon: Users },
+  { id: "by-project", label: "Проєкти", icon: FolderKanban },
+  { id: "by-people", label: "Люди", icon: Users },
 ];
 
 /* ─── Project filter with search + collapsible ─── */
@@ -291,19 +291,29 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
   const counts = dashboard?.counts;
   const hasActiveFilters = projectIds.length > 0 || scope !== "assigned" || includeCompleted;
 
+  const scopeRefs = new Map<Scope, HTMLButtonElement | null>();
+  const onScopeKey = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    const idx = SCOPE_DEFS.findIndex((s) => s.id === scope);
+    if (idx < 0) return;
+    const next =
+      e.key === "ArrowRight"
+        ? SCOPE_DEFS[(idx + 1) % SCOPE_DEFS.length]!
+        : SCOPE_DEFS[(idx - 1 + SCOPE_DEFS.length) % SCOPE_DEFS.length]!;
+    setScope(next.id);
+    scopeRefs.get(next.id)?.focus();
+  };
+
   return (
     <div className="flex flex-col gap-4">
-      {/* ── Row 1: Title + KPI counters + New task button ── */}
+      {/* ── Row 1: KPI counters + New task button ── */}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-bold mr-auto" style={{ color: T.textPrimary }}>
-          Мої задачі
-        </h1>
-
         <KpiStrip counts={counts} focus={focus} onFocusChange={setFocus} />
 
         <button
           onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold"
+          className="ml-auto flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold"
           style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
         >
           <Plus size={14} />
@@ -328,13 +338,25 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
         stopping={pendingId === "__stop__"}
       />
 
-      {/* ── Row 3: Toolbar — view toggle + scope + filter button ── */}
+      {/* ── Row 3a: Toolbar — ПЕРЕГЛЯД (how to see tasks) ── */}
       <div
         className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2"
         style={{ backgroundColor: T.panel, border: "1px solid " + T.borderSoft }}
+        role="toolbar"
+        aria-label="Перегляд задач"
       >
-        {/* View mode */}
-        <div className="flex gap-0.5 rounded-lg p-0.5" style={{ backgroundColor: T.panelElevated }}>
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider mr-1"
+          style={{ color: T.textMuted }}
+        >
+          Перегляд
+        </span>
+        <div
+          className="flex gap-0.5 rounded-lg p-0.5"
+          style={{ backgroundColor: T.panelElevated }}
+          role="tablist"
+          aria-label="Режим перегляду"
+        >
           {VIEW_DEFS.map((v) => {
             const Icon = v.icon;
             const active = viewMode === v.id;
@@ -343,6 +365,8 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
                 key={v.id}
                 onClick={() => setViewMode(v.id)}
                 title={v.label}
+                role="tab"
+                aria-selected={active}
                 className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition"
                 style={{
                   backgroundColor: active ? T.panel : "transparent",
@@ -356,33 +380,60 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
             );
           })}
         </div>
+      </div>
 
-        {/* Separator */}
-        <div className="h-5 w-px mx-1" style={{ backgroundColor: T.borderSoft }} />
-
-        {/* Scope */}
-        {SCOPE_DEFS.map((s) => {
-          const active = scope === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => setScope(s.id)}
-              className="rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition"
-              style={{
-                backgroundColor: active ? T.accentPrimarySoft : "transparent",
-                color: active ? T.accentPrimary : T.textMuted,
-              }}
-            >
-              {s.label}
-            </button>
-          );
-        })}
+      {/* ── Row 3b: Toolbar — ФІЛЬТРИ (what to include) ── */}
+      <div
+        className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2"
+        style={{ backgroundColor: T.panel, border: "1px solid " + T.borderSoft }}
+        role="toolbar"
+        aria-label="Фільтри задач"
+      >
+        <span
+          className="text-[10px] font-bold uppercase tracking-wider mr-1"
+          style={{ color: T.textMuted }}
+        >
+          Фільтри
+        </span>
+        <div
+          role="tablist"
+          aria-label="Охоплення задач"
+          className="flex flex-wrap gap-0.5"
+        >
+          {SCOPE_DEFS.map((s) => {
+            const active = scope === s.id;
+            return (
+              <button
+                key={s.id}
+                ref={(el) => {
+                  scopeRefs.set(s.id, el);
+                }}
+                onClick={() => setScope(s.id)}
+                onKeyDown={onScopeKey}
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                className="rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition"
+                style={{
+                  backgroundColor: active ? T.accentPrimarySoft : "transparent",
+                  color: active ? T.accentPrimary : T.textMuted,
+                  outline: "none",
+                }}
+              >
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
 
         {/* Separator */}
         <div className="h-5 w-px mx-1" style={{ backgroundColor: T.borderSoft }} />
 
         {/* Completed toggle */}
-        <label className="flex items-center gap-1.5 text-[11px] cursor-pointer" style={{ color: T.textMuted }}>
+        <label
+          className="flex items-center gap-1.5 text-[11px] cursor-pointer"
+          style={{ color: T.textMuted }}
+        >
           <input
             type="checkbox"
             checked={includeCompleted}
@@ -392,17 +443,20 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
           Завершені
         </label>
 
-        {/* Filter toggle (projects) */}
+        {/* Project filter toggle */}
         <button
           onClick={() => setShowFilters((v) => !v)}
           className="ml-auto flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-semibold transition"
           style={{
-            backgroundColor: showFilters || hasActiveFilters ? T.accentPrimarySoft : T.panelElevated,
+            backgroundColor:
+              showFilters || hasActiveFilters ? T.accentPrimarySoft : T.panelElevated,
             color: showFilters || hasActiveFilters ? T.accentPrimary : T.textMuted,
           }}
+          aria-expanded={showFilters}
+          aria-controls="project-filter-panel"
         >
           <Filter size={12} />
-          Фільтр
+          Проєкт
           {projectIds.length > 0 && (
             <span
               className="inline-flex items-center justify-center h-4 min-w-[16px] rounded-full text-[9px] font-bold"
@@ -457,6 +511,7 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
       {/* ── Row 4 (collapsible): Project filter ── */}
       {showFilters && (
         <div
+          id="project-filter-panel"
           className="rounded-xl px-4 py-3"
           style={{ backgroundColor: T.panel, border: "1px solid " + T.borderSoft }}
         >
