@@ -417,7 +417,8 @@ export async function postMessage(
   conversationId: string,
   userId: string,
   body: string,
-  attachments: ChatAttachmentInput[] = []
+  attachments: ChatAttachmentInput[] = [],
+  opts: { skipAiMention?: boolean } = {}
 ) {
   await assertParticipant(conversationId, userId);
 
@@ -502,11 +503,14 @@ export async function postMessage(
   }
 
   // Fire-and-forget: if the message tags @ai, let the bot reply in-thread.
-  handleAiMention({
-    conversationId,
-    authorId: userId,
-    body: trimmed,
-  }).catch((err) => console.error("[chat/postMessage] handleAiMention failed:", err));
+  // Skipped when the caller already runs AI via /ai-invoke.
+  if (!opts.skipAiMention) {
+    handleAiMention({
+      conversationId,
+      authorId: userId,
+      body: trimmed,
+    }).catch((err) => console.error("[chat/postMessage] handleAiMention failed:", err));
+  }
 
   return {
     id: message.id,

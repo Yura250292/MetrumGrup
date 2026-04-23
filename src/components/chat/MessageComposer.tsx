@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Bot, X } from "lucide-react";
-import { useSendMessage, type ChatAttachmentInput } from "@/hooks/useChat";
+import { chatKeys, useSendMessage, type ChatAttachmentInput } from "@/hooks/useChat";
 import { CommentComposer } from "@/components/collab/CommentComposer";
 import { AudioRecorderButton } from "./AudioRecorderButton";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -30,23 +31,79 @@ function tasksToMarkdown(tasks: StructuredTask[]): string {
   return lines.join("\n");
 }
 
+type AiModelChoice = "gpt-4o" | "gpt-4o-mini" | "gemini-2.5-flash";
+
+const AI_MODEL_LABELS: Record<AiModelChoice, string> = {
+  "gpt-4o": "GPT-4o",
+  "gpt-4o-mini": "GPT-4o mini",
+  "gemini-2.5-flash": "Gemini 2.5 Flash",
+};
+
+function loadAiModel(): AiModelChoice {
+  if (typeof window === "undefined") return "gpt-4o";
+  const v = window.localStorage.getItem("metrum:chat:aiModel");
+  if (v === "gpt-4o" || v === "gpt-4o-mini" || v === "gemini-2.5-flash") return v;
+  return "gpt-4o";
+}
+
 export function MessageComposer({ conversationId }: { conversationId: string }) {
   const sendMessage = useSendMessage(conversationId);
+  const qc = useQueryClient();
   const [taskError, setTaskError] = useState<string | null>(null);
   const [taskLoading, setTaskLoading] = useState(false);
   const [assistantMode, setAssistantMode] = useState(false);
+  const [aiModel, setAiModelState] = useState<AiModelChoice>("gpt-4o");
+  const [aiInvokeLoading, setAiInvokeLoading] = useState(false);
+
+  // Load saved model after mount (avoids SSR hydration mismatch).
+  if (typeof window !== "undefined" && aiModel === "gpt-4o") {
+    const saved = loadAiModel();
+    if (saved !== aiModel) setAiModelState(saved);
+  }
+
+  const setAiModel = (v: AiModelChoice) => {
+    setAiModelState(v);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("metrum:chat:aiModel", v);
+    }
+  };
 
   const sendAudioAttachment = async (attachment: ChatAttachmentInput) => {
     await sendMessage.mutateAsync({ body: "", attachments: [attachment] });
   };
 
   const handleSubmit = async (body: string, attachments?: ChatAttachmentInput[]) => {
-    let trimmed = body.trim();
+    const trimmed = body.trim();
 
-    // Assistant mode: prepend "@ai " if not already tagged so handleAiMention
-    // fires on the server side. Disable the mode once the message is sent.
-    if (assistantMode && trimmed && !/(^|\s)@ai\b/i.test(trimmed)) {
-      trimmed = `@ai ${trimmed}`;
+    // Assistant mode: route to /ai-invoke with the selected model. This
+    // endpoint publishes both the user prompt and the AI reply, so the
+    // selected model is honoured instead of the default.
+    if (assistantMode) {
+      if (!trimmed) return;
+      try {
+        setAiInvokeLoading(true);
+        setTaskError(null);
+        const res = await fetch(
+          `/api/admin/chat/conversations/${conversationId}/ai-invoke`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: trimmed, model: aiModel }),
+          },
+        );
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d.error || "Не вдалось запустити AI");
+        }
+        await qc.invalidateQueries({ queryKey: chatKeys.messages(conversationId) });
+        await qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+        setAssistantMode(false);
+      } catch (e) {
+        setTaskError(e instanceof Error ? e.message : "Помилка AI-режиму");
+      } finally {
+        setAiInvokeLoading(false);
+      }
+      return;
     }
 
     // /task handler — replace the draft with a structured task list.
@@ -106,7 +163,7 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
     if (assistantMode) setAssistantMode(false);
   };
 
-  const busy = sendMessage.isPending || taskLoading;
+  const busy = sendMessage.isPending || taskLoading || aiInvokeLoading;
 
   return (
     <div
@@ -129,15 +186,37 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
             <Bot className="h-3.5 w-3.5" />
             Запит до AI — побачать всі учасники чату
           </span>
-          <button
-            type="button"
-            onClick={() => setAssistantMode(false)}
-            disabled={busy}
-            className="rounded-md p-0.5 transition active:scale-95 disabled:opacity-50"
-            title="Вимкнути AI-режим"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-[11px]">
+              <span className="opacity-70">Модель:</span>
+              <select
+                value={aiModel}
+                onChange={(e) => setAiModel(e.target.value as AiModelChoice)}
+                disabled={busy}
+                className="rounded-md px-1.5 py-0.5 text-[11px] outline-none"
+                style={{
+                  backgroundColor: "rgba(255, 255, 255, 0.6)",
+                  color: "#831843",
+                  border: "1px solid rgba(236, 72, 153, 0.35)",
+                }}
+              >
+                {(Object.keys(AI_MODEL_LABELS) as AiModelChoice[]).map((key) => (
+                  <option key={key} value={key}>
+                    {AI_MODEL_LABELS[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={() => setAssistantMode(false)}
+              disabled={busy}
+              className="rounded-md p-0.5 transition active:scale-95 disabled:opacity-50"
+              title="Вимкнути AI-режим"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
       <div className="flex items-end gap-2">
