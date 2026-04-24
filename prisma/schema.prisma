@@ -27,6 +27,7 @@ model User {
   notificationPrefsJson  Json?
   workPrefsJson          Json?
   productivityPrefsJson  Json?
+  dashboardLayoutJson    Json?
   role                   Role                      @default(CLIENT)
   isActive               Boolean                   @default(true)
   createdAt              DateTime                  @default(now())

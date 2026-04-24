@@ -28,10 +28,9 @@ import { TeamPulse } from "./_components/dashboard/team-pulse";
 import { UtilityRail } from "./_components/dashboard/utility-rail";
 import { FinancePulse } from "./_components/dashboard/finance-pulse";
 import { StageAnalytics } from "./_components/dashboard/stage-analytics";
-import { DashboardShell, DashboardWidgetConfigButton, Widget } from "./_components/dashboard/dashboard-shell";
+import { DashboardShell, DashboardWidgetConfigButton } from "./_components/dashboard/dashboard-shell";
+import { DashboardGrid } from "./_components/dashboard/dashboard-grid";
 import { AiSummary } from "./_components/dashboard/ai-summary";
-import { CollapsibleMobile } from "./_components/dashboard/collapsible-mobile";
-import { SectionHeader } from "./_components/dashboard/section-header";
 import { HrDashboard } from "./_components/dashboard/hr-dashboard";
 import {
   PROJECT_NOT_TEST,
@@ -697,46 +696,34 @@ export default async function AdminV2Dashboard({
       {/* Overview tab content */}
       {activeTab === "overview" && (
         <Suspense>
-        <DashboardShell>
-          {/* Period Switcher + Config button */}
-          <div className="flex items-center justify-between gap-2">
-            <Suspense>
-              <PeriodSwitcher active={activePeriod} />
-            </Suspense>
-            <DashboardWidgetConfigButton />
-          </div>
+          <DashboardShell>
+            {/* Period switcher + edit-mode toggle */}
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <Suspense>
+                <PeriodSwitcher active={activePeriod} />
+              </Suspense>
+              <DashboardWidgetConfigButton />
+            </div>
 
-          {/* Block 1 — Потрібно сьогодні */}
-          <div className="flex flex-col gap-3 sm:gap-4">
-            <SectionHeader
-              label="Потрібно сьогодні"
-              hint="Прострочені задачі й платежі, погодження, дедлайни на сьогодні"
-            />
-            <Widget id="ai-summary"><AiSummary /></Widget>
-            <Widget id="attention">
-              <NeedsAttention
-                overdueTasks={overdueTasksDetailed}
-                overduePayments={overduePayments}
-                staleProjects={staleProjects}
-                dueTodayTasks={dueTodayTasksDetailed}
-              />
-            </Widget>
-          </div>
-
-          {/* Block 2 — Ключові показники */}
-          {(showBusinessKpis || showTaskKpis) && (
-            <div className="flex flex-col gap-3 sm:gap-4">
-              <SectionHeader label="Ключові показники" hint={`Знімок за ${periodLabel}`} />
-              {showBusinessKpis && (
-                <Widget id="kpi-business">
-                  <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+            <DashboardGrid
+              slots={{
+                "ai-summary": <AiSummary />,
+                attention: (
+                  <NeedsAttention
+                    overdueTasks={overdueTasksDetailed}
+                    overduePayments={overduePayments}
+                    staleProjects={staleProjects}
+                    dueTodayTasks={dueTodayTasksDetailed}
+                  />
+                ),
+                "kpi-business": showBusinessKpis ? (
+                  <section className="grid h-full grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                     <KpiCard
                       label="ПРОЄКТИ"
                       value={String(projectsCount)}
                       sub={`${activeProjectsCount} активних`}
                       icon={FolderKanban}
                       accent={T.accentPrimary}
-                      gradient="var(--kpi-blue)"
                       href="/admin-v2/projects"
                     />
                     <KpiCard
@@ -745,7 +732,6 @@ export default async function AdminV2Dashboard({
                       sub="облікових записів"
                       icon={Users}
                       accent={T.teal}
-                      gradient="var(--kpi-teal)"
                       href="/admin-v2/clients"
                     />
                     <KpiCard
@@ -754,7 +740,6 @@ export default async function AdminV2Dashboard({
                       sub="загальний бюджет"
                       icon={Wallet}
                       accent={T.violet}
-                      gradient="var(--kpi-violet)"
                       href="/admin-v2/projects"
                     />
                     <KpiCard
@@ -763,21 +748,17 @@ export default async function AdminV2Dashboard({
                       sub="усього по платежах"
                       icon={TrendingUp}
                       accent={T.emerald}
-                      gradient="var(--kpi-emerald)"
                     />
                   </section>
-                </Widget>
-              )}
-              {showTaskKpis && (
-                <Widget id="kpi-tasks">
-                  <section className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                ) : null,
+                "kpi-tasks": showTaskKpis ? (
+                  <section className="grid h-full grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                     <KpiCard
                       label="АКТИВНІ ЗАДАЧІ"
                       value={String(activeTasksCount)}
                       sub={`${completedWeekTasksCount} завершено за тиждень`}
                       icon={ListTodo}
                       accent={T.sky}
-                      gradient="var(--kpi-sky)"
                       href="/admin-v2/me"
                     />
                     <KpiCard
@@ -786,7 +767,6 @@ export default async function AdminV2Dashboard({
                       sub={`${dueTodayTasksCount} на сьогодні`}
                       icon={AlertCircle}
                       accent={overdueTasksCount > 0 ? T.danger : T.textMuted}
-                      gradient={overdueTasksCount > 0 ? "var(--kpi-danger)" : undefined}
                       href="/admin-v2/me"
                     />
                     <KpiCard
@@ -795,7 +775,6 @@ export default async function AdminV2Dashboard({
                       sub={`${weekTimeLogs.length} співробітників`}
                       icon={Clock}
                       accent={T.amber}
-                      gradient="var(--kpi-amber)"
                       delta={weekHoursDelta}
                     />
                     <KpiCard
@@ -804,47 +783,21 @@ export default async function AdminV2Dashboard({
                       sub={`за ${periodLabel}`}
                       icon={Sparkles}
                       accent={T.indigo}
-                      gradient="var(--kpi-indigo)"
                       href="/ai-estimate-v2"
                     />
                   </section>
-                </Widget>
-              )}
-            </div>
-          )}
-
-          {/* Block 3 — Наступні дії */}
-          <div className="flex flex-col gap-3 sm:gap-4">
-            <SectionHeader
-              label="Наступні дії"
-              hint="Зустрічі, задачі на тиждень і дедлайни проєктів"
-            />
-            <Widget id="utility">
-              <UtilityRail
-                overduePayments={overduePayments}
-                upcomingTasks={upcomingTasks}
-                projectDeadlines={projectDeadlines.map((p) => ({
-                  ...p,
-                  expectedEndDate: p.expectedEndDate!,
-                }))}
-              />
-            </Widget>
-          </div>
-
-          {/* Block 4 — Операційний моніторинг */}
-          <div className="flex flex-col gap-3 sm:gap-4">
-            <SectionHeader
-              label="Операційний моніторинг"
-              hint="Фінанси, команда, ризики, остання активність"
-            />
-            {showFinance && (
-              <Widget id="finance">
-                <CollapsibleMobile
-                  title="Фінанси"
-                  icon={<Wallet size={16} />}
-                  accent={T.success}
-                  preview={`Дохід ${formatCurrencyCompact(income)} · Витрати ${formatCurrencyCompact(expense)}`}
-                >
+                ) : null,
+                utility: (
+                  <UtilityRail
+                    overduePayments={overduePayments}
+                    upcomingTasks={upcomingTasks}
+                    projectDeadlines={projectDeadlines.map((p) => ({
+                      ...p,
+                      expectedEndDate: p.expectedEndDate!,
+                    }))}
+                  />
+                ),
+                "finance-pulse": showFinance ? (
                   <FinancePulse
                     income={income}
                     expense={expense}
@@ -857,53 +810,27 @@ export default async function AdminV2Dashboard({
                     incomeByCategory={incomeByCategory}
                     overduePaymentsCount={overduePayments.length}
                   />
-                </CollapsibleMobile>
-              </Widget>
-            )}
-
-            <CollapsibleMobile
-              title="Розподіл та команда"
-              icon={<FolderKanban size={16} />}
-              accent={T.violet}
-              preview={`${activeProjectsCount} активних проєктів · ${teamMembers.length} в команді`}
-            >
-              <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-                {showStages && (
-                  <Widget id="stages">
-                    <StageAnalytics
-                      stageMap={stageMap}
-                      activeProjectsCount={activeProjectsCount}
-                      stageAverages={stageAverages}
-                    />
-                  </Widget>
-                )}
-                {showTeam && (
-                  <Widget id="team">
-                    <TeamPulse
-                      members={teamMembers}
-                      totalMinutes={weekHoursTotal}
-                      periodLabel={periodLabel}
-                    />
-                  </Widget>
-                )}
-              </section>
-            </CollapsibleMobile>
-
-            <CollapsibleMobile
-              title="Активність і ризики"
-              icon={<Clock size={16} />}
-              accent={T.accentPrimary}
-              preview={`${feedEvents.length} подій · ${projectsAtRisk.length} проєктів під ризиком`}
-            >
-              <section className="grid grid-cols-1 xl:grid-cols-2 gap-4 sm:gap-6">
-                <Widget id="projects-risk"><ProjectsAtRisk projects={projectsAtRisk} /></Widget>
-                <Widget id="activity"><ActivityFeed events={feedEvents} /></Widget>
-              </section>
-            </CollapsibleMobile>
-
-            <Widget id="ai-widget"><AiDashboardWidgetWrapper /></Widget>
-          </div>
-        </DashboardShell>
+                ) : null,
+                stages: showStages ? (
+                  <StageAnalytics
+                    stageMap={stageMap}
+                    activeProjectsCount={activeProjectsCount}
+                    stageAverages={stageAverages}
+                  />
+                ) : null,
+                team: showTeam ? (
+                  <TeamPulse
+                    members={teamMembers}
+                    totalMinutes={weekHoursTotal}
+                    periodLabel={periodLabel}
+                  />
+                ) : null,
+                "projects-risk": <ProjectsAtRisk projects={projectsAtRisk} />,
+                activity: <ActivityFeed events={feedEvents} />,
+                "ai-widget": <AiDashboardWidgetWrapper />,
+              }}
+            />
+          </DashboardShell>
         </Suspense>
       )}
 

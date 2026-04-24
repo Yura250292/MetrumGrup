@@ -1,40 +1,79 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
-import { loadWidgetConfig, WidgetConfig, type WidgetId } from "./widget-config";
+import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
+import type { DashboardLayout, WidgetType } from "./layout-schema";
+import { useDashboardLayout } from "./use-dashboard-layout";
+import { WidgetConfigButton } from "./widget-config";
 
-const WidgetVisibilityContext = createContext<Set<WidgetId>>(new Set());
-const WidgetOnChangeContext = createContext<(next: Set<WidgetId>) => void>(() => {});
+type DashboardLayoutContextValue = {
+  layout: DashboardLayout;
+  isEditing: boolean;
+  setEditing: (v: boolean) => void;
+  updateLayout: (next: DashboardLayout) => void;
+  isSaving: boolean;
+  hasWidget: (type: WidgetType) => boolean;
+};
 
-export function useWidgetVisibility() {
-  return useContext(WidgetVisibilityContext);
-}
+const DashboardLayoutContext = createContext<DashboardLayoutContextValue | null>(null);
 
-export function useWidgetOnChange() {
-  return useContext(WidgetOnChangeContext);
+export function useDashboardLayoutContext(): DashboardLayoutContextValue {
+  const ctx = useContext(DashboardLayoutContext);
+  if (!ctx) {
+    throw new Error("useDashboardLayoutContext must be used inside <DashboardShell>");
+  }
+  return ctx;
 }
 
 export function DashboardShell({ children }: { children: ReactNode }) {
-  const [visible, setVisible] = useState<Set<WidgetId>>(() => loadWidgetConfig());
+  const { layout, save } = useDashboardLayout();
+  const [isEditing, setEditing] = useState(false);
+
+  const updateLayout = useCallback(
+    (next: DashboardLayout) => {
+      save.commit(next);
+    },
+    [save],
+  );
+
+  const hasWidget = useCallback(
+    (type: WidgetType) => layout.desktop.widgets.some((w) => w.type === type),
+    [layout.desktop.widgets],
+  );
+
+  const value: DashboardLayoutContextValue = {
+    layout,
+    isEditing,
+    setEditing,
+    updateLayout,
+    isSaving: save.isSaving,
+    hasWidget,
+  };
 
   return (
-    <WidgetVisibilityContext.Provider value={visible}>
-      <WidgetOnChangeContext.Provider value={setVisible}>
-        {children}
-      </WidgetOnChangeContext.Provider>
-    </WidgetVisibilityContext.Provider>
+    <DashboardLayoutContext.Provider value={value}>
+      {children}
+    </DashboardLayoutContext.Provider>
   );
 }
 
-/** Standalone config button — place anywhere inside DashboardShell */
+/**
+ * Edit-mode toggle button — place it in the dashboard header.
+ * Re-exports WidgetConfigButton under the existing name used by the page.
+ */
 export function DashboardWidgetConfigButton() {
-  const visible = useWidgetVisibility();
-  const onChange = useWidgetOnChange();
-  return <WidgetConfig visible={visible} onChange={onChange} />;
+  return <WidgetConfigButton />;
 }
 
-export function Widget({ id, children }: { id: WidgetId; children: ReactNode }) {
-  const visible = useContext(WidgetVisibilityContext);
-  if (!visible.has(id)) return null;
-  return <>{children}</>;
+/**
+ * Conditional widget renderer. Kept for backwards compatibility with
+ * existing page.tsx layout, where individual widgets were wrapped in <Widget id=...>.
+ * After migration to <DashboardGrid />, this is a no-op passthrough —
+ * the grid itself controls visibility via the layout object.
+ *
+ * While the old full-layout JSX still exists alongside the grid (during migration),
+ * this returns null so that server-rendered widgets only show up through the grid's
+ * slot map.
+ */
+export function Widget({ id: _id, children: _children }: { id: string; children: ReactNode }) {
+  return null;
 }

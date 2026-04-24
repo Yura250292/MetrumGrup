@@ -23,24 +23,12 @@ export function KpiCard({
 }) {
   const content = (
     <div
-      className="relative flex flex-col items-center justify-center text-center rounded-xl sm:rounded-2xl p-3 sm:p-5 h-full transition-all duration-200 overflow-hidden group"
+      className="relative flex h-full flex-col justify-between rounded-xl sm:rounded-2xl p-3 sm:p-4 transition-colors duration-150 group"
       style={{
         background: T.panel,
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      {/* Accent gradient overlay top */}
-      <div
-        className="absolute inset-x-0 top-0 h-1 rounded-t-2xl"
-        style={{ background: `linear-gradient(90deg, ${accent}, ${accent}88)` }}
-      />
-
-      {/* Decorative background glow */}
-      <div
-        className="absolute -right-6 -top-6 h-24 w-24 rounded-full opacity-[0.07] blur-2xl"
-        style={{ backgroundColor: accent }}
-      />
-
       {/* Navigate arrow (desktop hover) */}
       {href && (
         <ArrowUpRight
@@ -52,18 +40,15 @@ export function KpiCard({
 
       {/* Icon */}
       <div
-        className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl mb-2 sm:mb-3 relative z-10"
-        style={{
-          background: `linear-gradient(135deg, ${accent}22, ${accent}10)`,
-          border: `1px solid ${accent}25`,
-        }}
+        className="flex h-8 w-8 items-center justify-center rounded-lg"
+        style={{ backgroundColor: accent + "14" }}
       >
-        <Icon size={18} style={{ color: accent }} />
+        <Icon size={15} style={{ color: accent }} />
       </div>
 
       {/* Label */}
       <span
-        className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase mb-1 relative z-10"
+        className="mt-2 text-[9px] sm:text-[10px] font-bold tracking-wider uppercase"
         style={{ color: T.textMuted }}
       >
         {label}
@@ -71,14 +56,14 @@ export function KpiCard({
 
       {/* Value */}
       <div
-        className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight truncate leading-tight relative z-10 max-w-full"
+        className="text-lg sm:text-2xl font-bold tracking-tight truncate leading-tight"
         style={{ color: T.textPrimary }}
       >
         {value}
       </div>
 
       {/* Sub + delta */}
-      <div className="flex items-center justify-center gap-2 mt-1 relative z-10">
+      <div className="flex items-center gap-2">
         <span
           className="text-[10px] sm:text-[11px] truncate"
           style={{ color: T.textSecondary }}
