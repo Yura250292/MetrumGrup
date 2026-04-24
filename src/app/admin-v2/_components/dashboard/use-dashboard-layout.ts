@@ -14,7 +14,7 @@ const DEFAULT_DESKTOP: WidgetInstance[] = [
   { id: "w-my-tasks", type: "my-tasks", size: "2x2", order: 2 },
   { id: "w-meetings", type: "meetings", size: "2x1", order: 3 },
   { id: "w-chats", type: "chats", size: "2x1", order: 4 },
-  { id: "w-finance-quick", type: "finance-quick", size: "2x1", order: 5 },
+  { id: "w-finance-quick", type: "finance-quick", size: "2x2", order: 5 },
   { id: "w-kpi-tasks", type: "kpi-tasks", size: "4x1", order: 6 },
   { id: "w-finance", type: "finance-pulse", size: "2x2", order: 7 },
   { id: "w-team", type: "team", size: "2x1", order: 8 },

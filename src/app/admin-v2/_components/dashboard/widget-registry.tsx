@@ -157,10 +157,10 @@ export const WIDGET_REGISTRY: Record<WidgetType, WidgetDefinition> = {
   "finance-quick": {
     type: "finance-quick",
     label: "Фінансування · швидкий доступ",
-    description: "Баланс, останні платежі та швидкі дії",
+    description: "Кільце балансу, швидкі дії та останні папки з показниками",
     icon: Wallet,
-    defaultSize: "2x1",
-    sizes: COMPACT_SIZES,
+    defaultSize: "2x2",
+    sizes: ["2x1", "2x2", "3x1", "4x2"],
     Render: () => <FinanceQuickWidget />,
   },
   chats: {
