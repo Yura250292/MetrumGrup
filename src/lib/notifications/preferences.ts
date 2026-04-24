@@ -12,7 +12,7 @@ type NotificationPrefs = {
 };
 
 const DEFAULT_PREFS: NotificationPrefs = {
-  channels: { inApp: true, email: true, push: false, telegram: true },
+  channels: { inApp: true, email: true, push: false, telegram: false },
   categories: {},
   mode: "all",
 };

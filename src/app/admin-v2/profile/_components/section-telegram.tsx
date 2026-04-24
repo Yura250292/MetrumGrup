@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Send, Loader2, Check, ExternalLink, Unplug, RefreshCw } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { DEFAULT_NOTIFICATION_PREFS } from "../_lib/constants";
+import type { NotificationPrefs } from "../_lib/types";
 
 type TelegramStatus = {
   linked: boolean;
@@ -21,13 +23,20 @@ async function fetchStatus(): Promise<TelegramStatus> {
   return res.json();
 }
 
-export function SectionTelegram() {
+type Props = {
+  notificationPrefs: NotificationPrefs | null;
+  onSaveNotifications: (prefs: NotificationPrefs) => Promise<void>;
+};
+
+export function SectionTelegram({ notificationPrefs, onSaveNotifications }: Props) {
   const [status, setStatus] = useState<TelegramStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [deepLink, setDeepLink] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [togglePending, setTogglePending] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -83,11 +92,46 @@ export function SectionTelegram() {
       setError(null);
       const res = await fetch("/api/admin/profile/telegram", { method: "DELETE" });
       if (!res.ok) throw new Error("Не вдалося відʼєднати");
+      // Also turn the telegram channel off when unlinking — nothing to deliver
+      // to, and it reflects reality if user later relinks.
+      if (notificationPrefs?.channels?.telegram) {
+        const next: NotificationPrefs = {
+          ...notificationPrefs,
+          channels: { ...notificationPrefs.channels, telegram: false },
+        };
+        try {
+          await onSaveNotifications(next);
+        } catch {
+          /* non-fatal */
+        }
+      }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка");
     } finally {
       setWorking(false);
+    }
+  };
+
+  const telegramEnabled = Boolean(notificationPrefs?.channels?.telegram);
+
+  const toggleTelegramChannel = async () => {
+    const basePrefs = notificationPrefs ?? DEFAULT_NOTIFICATION_PREFS;
+    const next: NotificationPrefs = {
+      ...basePrefs,
+      channels: {
+        ...basePrefs.channels,
+        telegram: !telegramEnabled,
+      },
+    };
+    try {
+      setTogglePending(true);
+      setToggleError(null);
+      await onSaveNotifications(next);
+    } catch (e) {
+      setToggleError(e instanceof Error ? e.message : "Не вдалось зберегти");
+    } finally {
+      setTogglePending(false);
     }
   };
 
@@ -139,32 +183,84 @@ export function SectionTelegram() {
           Завантаження…
         </div>
       ) : linked && tg ? (
-        <div
-          className="rounded-xl p-4 flex items-start gap-3"
-          style={{ backgroundColor: T.successSoft }}
-        >
-          <Check size={18} style={{ color: T.success }} className="flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold" style={{ color: T.success }}>
-              Telegram привʼязано
-            </p>
-            <p className="text-[12px] mt-0.5" style={{ color: T.textSecondary }}>
-              {displayName}
-              {tg.username ? ` · @${tg.username}` : ""}
-            </p>
+        <div className="flex flex-col gap-3">
+          <div
+            className="rounded-xl p-4 flex items-start gap-3"
+            style={{ backgroundColor: T.successSoft }}
+          >
+            <Check size={18} style={{ color: T.success }} className="flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold" style={{ color: T.success }}>
+                Telegram привʼязано
+              </p>
+              <p className="text-[12px] mt-0.5" style={{ color: T.textSecondary }}>
+                {displayName}
+                {tg.username ? ` · @${tg.username}` : ""}
+              </p>
+              <button
+                type="button"
+                onClick={unlink}
+                disabled={working}
+                className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition"
+                style={{
+                  backgroundColor: T.panel,
+                  color: T.danger,
+                  border: "1px solid " + T.borderSoft,
+                }}
+              >
+                <Unplug size={12} />
+                Відʼєднати
+              </button>
+            </div>
+          </div>
+
+          {/* Master toggle: deliveries are OFF by default, user opts in. */}
+          <div
+            className="rounded-xl px-4 py-3 flex items-center gap-3"
+            style={{
+              backgroundColor: T.panelElevated,
+              border: "1px solid " + T.borderSoft,
+            }}
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+                Отримувати сповіщення в Telegram
+              </p>
+              <p className="text-[11px] mt-0.5" style={{ color: T.textMuted }}>
+                {telegramEnabled
+                  ? "Увімкнено. Нові DM, згадки та призначені задачі будуть приходити в бот."
+                  : "Вимкнено. Привʼязка є, але нічого не надсилається. Увімкніть щоб отримувати."}
+              </p>
+              {toggleError && (
+                <p className="text-[11px] mt-1" style={{ color: T.danger }}>
+                  {toggleError}
+                </p>
+              )}
+            </div>
             <button
               type="button"
-              onClick={unlink}
-              disabled={working}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition"
+              role="switch"
+              aria-checked={telegramEnabled}
+              onClick={toggleTelegramChannel}
+              disabled={togglePending}
+              className="flex-shrink-0 relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-60"
               style={{
-                backgroundColor: T.panel,
-                color: T.danger,
-                border: "1px solid " + T.borderSoft,
+                backgroundColor: telegramEnabled ? T.accentPrimary : T.borderSoft,
               }}
             >
-              <Unplug size={12} />
-              Відʼєднати
+              <span
+                className="inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform"
+                style={{
+                  transform: telegramEnabled ? "translateX(22px)" : "translateX(2px)",
+                }}
+              />
+              {togglePending && (
+                <Loader2
+                  size={10}
+                  className="absolute left-1/2 -translate-x-1/2 animate-spin"
+                  style={{ color: "#FFFFFF" }}
+                />
+              )}
             </button>
           </div>
         </div>

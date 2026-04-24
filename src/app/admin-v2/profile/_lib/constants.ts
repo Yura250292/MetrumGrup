@@ -53,7 +53,7 @@ export const NOTIFICATION_CHANNELS: { key: NotificationChannel; label: string }[
 ];
 
 export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
-  channels: { inApp: true, email: true, push: false, telegram: true },
+  channels: { inApp: true, email: true, push: false, telegram: false },
   categories: Object.fromEntries(
     [
       "taskAssignment", "taskStatusChange", "taskComment", "mention",

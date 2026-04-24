@@ -124,7 +124,10 @@ export function ProfilePageClient() {
             />
           </div>
           <div ref={(el) => { sectionRefs.current.telegram = el; }}>
-            <SectionTelegram />
+            <SectionTelegram
+              notificationPrefs={profile.notificationPrefsJson}
+              onSaveNotifications={updateNotifications}
+            />
           </div>
           <div ref={(el) => { sectionRefs.current.quickChat = el; }}>
             <SectionQuickChat />
