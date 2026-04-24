@@ -29,6 +29,11 @@ export type NavItem = {
   superAdminOnly?: boolean;
   hrAllowed?: boolean;
   showUnreadBadge?: boolean;
+  /** Static pill badge — e.g. "NEW", "BETA". `color` picks the soft palette. */
+  pillBadge?: {
+    text: string;
+    color: "accent" | "violet" | "amber" | "success" | "danger" | "teal";
+  };
 };
 
 export type NavGroup = {
@@ -64,7 +69,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Кошторисна база",
     items: [
-      { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator },
+      { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator, pillBadge: { text: "NEW", color: "violet" } },
       { href: "/admin-v2/estimates", label: "Усі кошториси", icon: FileText },
       { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
       { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },

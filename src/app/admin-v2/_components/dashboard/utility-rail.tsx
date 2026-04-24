@@ -1,12 +1,9 @@
 import Link from "next/link";
 import {
-  Plus,
-  AlertCircle,
-  Zap,
   CheckCircle2,
-  Calendar,
   FolderKanban,
   ListTodo,
+  Plus,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
@@ -45,39 +42,39 @@ export function UtilityRail({
     <div className="flex flex-col gap-4 xl:sticky xl:top-4">
       {/* Quick Create */}
       <div
-        className="rounded-2xl p-4"
+        className="premium-card rounded-2xl p-4"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
-        <h3
-          className="text-[11px] font-bold tracking-wider mb-3"
-          style={{ color: T.textMuted }}
+        <div
+          className="text-[10.5px] font-semibold uppercase mb-2.5"
+          style={{ color: T.textMuted, letterSpacing: "0.08em" }}
         >
-          ШВИДКІ ДІЇ
-        </h3>
-        <div className="flex flex-col gap-2">
+          Швидкі дії
+        </div>
+        <div className="grid grid-cols-2 gap-2">
           <Link
             href="/admin-v2/projects/new"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition hover:brightness-[0.97]"
+            className="flex flex-col items-start gap-1 rounded-xl px-3 py-2.5 text-[12.5px] font-semibold transition hover:brightness-[0.97]"
             style={{
-              backgroundColor: T.accentPrimary + "10",
-              color: T.accentPrimary,
-              border: `1px solid ${T.accentPrimary}20`,
+              background: `linear-gradient(135deg, ${T.accentPrimary}, #1e40af)`,
+              color: "#fff",
+              boxShadow: "0 1px 2px rgba(59,91,255,0.30), inset 0 1px 0 rgba(255,255,255,0.15)",
             }}
           >
-            <FolderKanban size={14} />
-            Новий проєкт
+            <Plus size={14} />
+            <span className="leading-tight">Новий проєкт</span>
           </Link>
           <Link
             href="/admin-v2/me"
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-[12px] font-semibold transition hover:brightness-[0.97]"
+            className="flex flex-col items-start gap-1 rounded-xl px-3 py-2.5 text-[12.5px] font-semibold transition hover:bg-[var(--t-panel-soft)]"
             style={{
-              backgroundColor: T.teal + "10",
-              color: T.teal,
-              border: `1px solid ${T.teal}20`,
+              backgroundColor: T.panelSoft,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderSoft}`,
             }}
           >
-            <ListTodo size={14} />
-            Мої задачі
+            <ListTodo size={14} style={{ color: T.teal }} />
+            <span className="leading-tight">Мої задачі</span>
           </Link>
         </div>
       </div>
@@ -85,38 +82,41 @@ export function UtilityRail({
       {/* Project Deadlines */}
       {projectDeadlines.length > 0 && (
         <div
-          className="rounded-2xl p-4"
+          className="premium-card rounded-2xl overflow-hidden"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-              ДЕДЛАЙНИ ПРОЄКТІВ
-            </h3>
+          <div className="section-head" style={{ padding: "12px 16px" }}>
+            <h2>Дедлайни проєктів</h2>
             <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+              className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold"
               style={{ backgroundColor: T.warningSoft, color: T.warning }}
             >
               {projectDeadlines.length}
             </span>
           </div>
-          <ul className="flex flex-col gap-1.5">
-            {projectDeadlines.map((p) => (
+          <ul>
+            {projectDeadlines.map((p, i) => (
               <li key={p.id}>
                 <Link
                   href={`/admin-v2/projects/${p.id}`}
-                  className="flex items-start gap-2 rounded-lg p-2.5 transition hover:brightness-[0.97]"
+                  className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--t-panel-soft)]"
                   style={{
-                    backgroundColor: T.panelElevated,
-                    borderLeft: `3px solid ${T.warning}`,
+                    borderTop: i === 0 ? "none" : `1px solid ${T.borderSoft}`,
                   }}
                 >
-                  <Calendar size={12} style={{ color: T.warning }} className="mt-1 flex-shrink-0" />
+                  <span className="status-dot warn" />
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                    <div
+                      className="truncate text-[12.5px] font-medium"
+                      style={{ color: T.textPrimary }}
+                    >
                       {p.title}
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold flex-shrink-0" style={{ color: T.warning }}>
+                  <span
+                    className="text-[11px] font-medium tabular-nums whitespace-nowrap"
+                    style={{ color: T.warning }}
+                  >
                     {formatDateShort(p.expectedEndDate)}
                   </span>
                 </Link>
@@ -128,16 +128,14 @@ export function UtilityRail({
 
       {/* Overdue Payments */}
       <div
-        className="rounded-2xl p-4"
+        className="premium-card rounded-2xl overflow-hidden"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-            ПРОСТРОЧЕНІ ПЛАТЕЖІ
-          </h3>
+        <div className="section-head" style={{ padding: "12px 16px" }}>
+          <h2>Прострочені платежі</h2>
           {overduePayments.length > 0 && (
             <span
-              className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+              className="ml-auto rounded-full px-2 py-0.5 text-[10px] font-bold"
               style={{ backgroundColor: T.dangerSoft, color: T.danger }}
             >
               {overduePayments.length}
@@ -146,35 +144,46 @@ export function UtilityRail({
         </div>
         {overduePayments.length === 0 ? (
           <div
-            className="flex items-center gap-2 rounded-lg p-3"
+            className="flex items-center gap-2 m-4 rounded-lg p-3"
             style={{ backgroundColor: T.successSoft }}
           >
             <CheckCircle2 size={14} style={{ color: T.success }} />
-            <span className="text-[11px] font-semibold" style={{ color: T.success }}>
+            <span
+              className="text-[11.5px] font-semibold"
+              style={{ color: T.success }}
+            >
               Всі платежі вчасно
             </span>
           </div>
         ) : (
-          <ul className="flex flex-col gap-1.5">
-            {overduePayments.map((payment) => (
+          <ul>
+            {overduePayments.map((payment, i) => (
               <li
                 key={payment.id}
-                className="flex items-start gap-2 rounded-lg p-2.5"
+                className="flex items-center gap-3 px-4 py-2.5"
                 style={{
-                  backgroundColor: T.panelElevated,
-                  borderLeft: `3px solid ${T.danger}`,
+                  borderTop: i === 0 ? "none" : `1px solid ${T.borderSoft}`,
                 }}
               >
-                <AlertCircle size={12} style={{ color: T.danger }} className="mt-1 flex-shrink-0" />
+                <span className="status-dot danger" />
                 <div className="flex-1 min-w-0">
-                  <div className="truncate text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                  <div
+                    className="truncate text-[12.5px] font-medium"
+                    style={{ color: T.textPrimary }}
+                  >
                     {payment.project.title}
                   </div>
-                  <div className="text-[10px]" style={{ color: T.textMuted }}>
+                  <div
+                    className="text-[11px]"
+                    style={{ color: T.textMuted, marginTop: 1 }}
+                  >
                     {formatDateShort(payment.scheduledDate)}
                   </div>
                 </div>
-                <span className="text-[11px] font-bold flex-shrink-0" style={{ color: T.danger }}>
+                <span
+                  className="text-[11.5px] font-semibold flex-shrink-0 tabular-nums whitespace-nowrap"
+                  style={{ color: T.danger }}
+                >
                   {formatCurrency(Number(payment.amount))}
                 </span>
               </li>
@@ -185,43 +194,56 @@ export function UtilityRail({
 
       {/* Upcoming Tasks */}
       <div
-        className="rounded-2xl p-4"
+        className="premium-card rounded-2xl overflow-hidden"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-            НАЙБЛИЖЧІ ЗАДАЧІ
-          </h3>
-          <span className="text-[10px]" style={{ color: T.textMuted }}>
-            7 днів
-          </span>
+        <div className="section-head" style={{ padding: "12px 16px" }}>
+          <h2>Найближчі задачі</h2>
+          <span className="sub ml-auto">7 днів</span>
         </div>
         {upcomingTasks.length === 0 ? (
-          <p className="text-[11px]" style={{ color: T.textMuted }}>
+          <p
+            className="text-[11.5px] px-4 py-4"
+            style={{ color: T.textMuted }}
+          >
             Немає запланованих задач
           </p>
         ) : (
-          <ul className="flex flex-col gap-1.5">
-            {upcomingTasks.map((t) => (
+          <ul>
+            {upcomingTasks.map((t, i) => (
               <li key={t.id}>
                 <Link
                   href={`/admin-v2/projects/${t.project.id}?tab=tasks`}
-                  className="flex items-start gap-2 rounded-lg p-2.5 transition hover:brightness-[0.97]"
+                  className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-[var(--t-panel-soft)]"
                   style={{
-                    backgroundColor: T.panelElevated,
-                    borderLeft: `3px solid ${t.status.color}`,
+                    borderTop: i === 0 ? "none" : `1px solid ${T.borderSoft}`,
                   }}
                 >
-                  <Zap size={12} style={{ color: t.status.color }} className="mt-1 flex-shrink-0" />
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{
+                      backgroundColor: t.status.color,
+                      boxShadow: `0 0 0 3px ${t.status.color}26`,
+                    }}
+                  />
                   <div className="flex-1 min-w-0">
-                    <div className="truncate text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                    <div
+                      className="truncate text-[12.5px] font-medium"
+                      style={{ color: T.textPrimary }}
+                    >
                       {t.title}
                     </div>
-                    <div className="text-[10px] truncate" style={{ color: T.textMuted }}>
+                    <div
+                      className="text-[11px] truncate"
+                      style={{ color: T.textMuted, marginTop: 1 }}
+                    >
                       {t.project.title}
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold flex-shrink-0" style={{ color: T.textMuted }}>
+                  <span
+                    className="text-[11px] font-medium flex-shrink-0 tabular-nums whitespace-nowrap"
+                    style={{ color: T.textMuted }}
+                  >
                     {t.dueDate ? formatDateShort(t.dueDate) : "—"}
                   </span>
                 </Link>

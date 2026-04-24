@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   ChevronDown,
+  CalendarClock,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
@@ -55,11 +56,9 @@ export function HeroBlock({
 
   return (
     <section
-      className="rounded-xl sm:rounded-2xl relative overflow-hidden"
+      className="premium-hero rounded-xl sm:rounded-2xl relative overflow-hidden"
       style={{
-        backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
-        borderLeft: `4px solid ${borderColor}`,
       }}
     >
       {/* === MOBILE: compact + expandable === */}
@@ -140,30 +139,28 @@ export function HeroBlock({
         )}
       </div>
 
-      {/* === DESKTOP: compact layout === */}
-      <div className="hidden sm:block p-4 sm:p-5">
-        <div className="flex items-center gap-4 flex-wrap">
-          {/* Left: greeting */}
-          <div className="flex flex-col gap-0 min-w-0">
-            <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-              {today.toUpperCase()}
-            </span>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight" style={{ color: T.textPrimary }}>
-              {greeting}
+      {/* === DESKTOP: spacious layout matching mockup === */}
+      <div className="hidden sm:block p-6 sm:p-7">
+        <div className="flex items-center gap-6 flex-wrap">
+          {/* Left: greeting + subtitle */}
+          <div className="flex flex-col gap-1 min-w-0 flex-1">
+            <h1
+              className="text-2xl md:text-[26px] font-bold tracking-tight whitespace-nowrap"
+              style={{ color: T.textPrimary, letterSpacing: "-0.02em" }}
+            >
+              {greeting}&nbsp;👋
             </h1>
+            <span className="text-[13px]" style={{ color: T.textMuted }}>
+              {today} · оновлено зараз
+            </span>
           </div>
 
-          {/* Right: chips */}
-          <div className="flex flex-wrap gap-2 ml-auto">
-            <MiniChip icon={FolderKanban} label={`${activeProjectsCount} проєктів`} color={T.accentPrimary} />
+          {/* Right: chips (4 pills max — match mockup) */}
+          <div className="flex flex-wrap gap-2.5 ml-auto">
+            <MiniChip icon={FolderKanban} label={`${activeProjectsCount} активних`} color={T.accentPrimary} />
             <MiniChip icon={AlertCircle} label={`${overdueTasksCount} прострочених`} color={overdueTasksCount > 0 ? T.danger : T.success} alert={overdueTasksCount > 0} />
-            <MiniChip icon={Wallet} label={`${overduePaymentsCount} платежів`} color={overduePaymentsCount > 0 ? T.danger : T.success} alert={overduePaymentsCount > 0} />
-            <MiniChip icon={netProfit >= 0 ? TrendingUp : TrendingDown} label={`${formatCurrencyCompact(netProfit)}`} color={netProfit >= 0 ? T.success : T.danger} alert={netProfit < 0} />
-            {isStable ? (
-              <MiniChip icon={CheckCircle2} label="Стабільно" color={T.success} />
-            ) : (
-              <MiniChip icon={ShieldAlert} label={`${attentionZones} зони уваги`} color={attentionZones >= 2 ? T.danger : T.warning} alert />
-            )}
+            <MiniChip icon={dueTodayCount > 0 ? CalendarClock : CheckCircle2} label={`${dueTodayCount} на сьогодні`} color={dueTodayCount > 0 ? T.warning : T.success} />
+            <MiniChip icon={netProfit >= 0 ? TrendingUp : TrendingDown} label={`${formatCurrencyCompact(netProfit)} прибуток`} color={netProfit >= 0 ? T.success : T.danger} alert={netProfit < 0} />
           </div>
         </div>
       </div>
@@ -199,18 +196,37 @@ function MiniChip({
   color: string;
   alert?: boolean;
 }) {
+  // Split "12 проєктів" → value "12" + unit "проєктів"
+  const m = /^(-?[\d\s.,kKmM₴+]+)(\s+.+)?$/.exec(label);
+  const hasNumber = !!m;
+  const value = hasNumber ? m[1].trim() : "";
+  const unit = hasNumber && m[2] ? m[2].trim() : label;
+
   return (
     <div
-      className="flex items-center gap-2 rounded-lg sm:rounded-xl px-2.5 py-1.5 sm:px-3 sm:py-2"
+      className="premium-card flex flex-col gap-1 rounded-xl px-4 py-2.5 min-w-[130px]"
       style={{
-        backgroundColor: color + "10",
-        border: `1px solid ${color}${alert ? "30" : "18"}`,
+        backgroundColor: "var(--t-panel)",
+        border: `1px solid ${alert ? color + "40" : "var(--t-border)"}`,
       }}
     >
-      <Icon size={13} style={{ color }} />
-      <span className="text-[11px] sm:text-[13px] font-semibold" style={{ color }}>
-        {label}
-      </span>
+      <div className="flex items-center gap-1.5">
+        <Icon size={12} style={{ color }} />
+        <span
+          className="text-[10px] font-semibold tracking-wider uppercase"
+          style={{ color: "var(--t-text-3)" }}
+        >
+          {unit}
+        </span>
+      </div>
+      {hasNumber && (
+        <span
+          className="text-[20px] sm:text-[22px] font-bold tabular-nums tracking-tight leading-none"
+          style={{ color: alert ? color : "var(--t-text-1)", letterSpacing: "-0.02em" }}
+        >
+          {value}
+        </span>
+      )}
     </div>
   );
 }

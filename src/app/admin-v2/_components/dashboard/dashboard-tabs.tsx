@@ -54,9 +54,10 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
   return (
     <div
       ref={scrollRef}
-      className="flex items-center gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-none -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible rounded-xl p-1"
+      className="premium-card flex items-center gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-none -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible rounded-xl p-1"
       style={{
-        backgroundColor: T.panelElevated,
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
         WebkitOverflowScrolling: "touch",
         WebkitMaskImage: "linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent)",
         maskImage: "linear-gradient(to right, transparent, black 12px, black calc(100% - 12px), transparent)",
@@ -72,9 +73,8 @@ export function DashboardTabs({ active }: { active: DashboardTabId }) {
             onClick={() => switchTab(tab.id)}
             className="snap-center flex-shrink-0 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-[12px] sm:text-[13px] font-semibold transition whitespace-nowrap tap-highlight-none active:scale-95 touch-target"
             style={{
-              backgroundColor: isActive ? T.panel : "transparent",
+              backgroundColor: isActive ? "var(--t-accent-soft)" : "transparent",
               color: isActive ? T.accentPrimary : T.textMuted,
-              boxShadow: isActive ? `0 1px 3px ${T.borderSoft}` : "none",
               minWidth: "fit-content",
             }}
           >

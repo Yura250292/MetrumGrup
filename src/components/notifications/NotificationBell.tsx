@@ -174,7 +174,11 @@ export function NotificationBell({
 
       {open && (
         <div
-          className="absolute right-0 z-50 mt-2 w-[min(360px,calc(100vw-24px))] max-w-[360px] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl admin-dark:border-white/10 admin-dark:bg-gray-900"
+          className="
+            fixed left-2 right-2 top-[calc(env(safe-area-inset-top)+56px)] z-50 max-h-[80vh] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl
+            sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:max-h-none sm:w-[min(360px,calc(100vw-24px))] sm:max-w-[360px]
+            admin-dark:border-white/10 admin-dark:bg-gray-900
+          "
           role="dialog"
           aria-label="Сповіщення"
         >

@@ -14,8 +14,9 @@
   filter: brightness(1.1) !important;
 }
 
-/* Sidebar hover bg */
-.admin-dark [class*="hover\:bg-\[\#F1F5F9\]"]:hover {
+/* Sidebar hover bg — both legacy hex and new --t-panel-el target */
+.admin-dark [class*="hover\:bg-\[\#F1F5F9\]"]:hover,
+.admin-dark [class*="hover\:bg-\[\#f1f1ec\]"]:hover {
   background-color: var(--t-panel-el) !important;
 }
 
@@ -24,3 +25,155 @@
 .admin-light {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
+
+/* ============================================================
+ * Premium card chrome — layered shadows + soft hover lift.
+ * Drop the class on any card-like surface to opt in.
+ * ============================================================ */
+.premium-card {
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 0.18s ease, transform 0.18s ease;
+}
+.premium-card:hover {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-1px);
+}
+
+/* Hero block — gradient base + decorative radial bloom */
+.premium-hero {
+  background: linear-gradient(180deg, var(--t-panel) 0%, var(--t-panel-soft) 100%);
+  box-shadow: var(--shadow-1);
+}
+.premium-hero::after {
+  content: "";
+  position: absolute;
+  right: -120px;
+  top: -120px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 91, 255, 0.18) 0%, rgba(124, 92, 255, 0.10) 40%, transparent 75%);
+  pointer-events: none;
+}
+.admin-dark .premium-hero::after {
+  background: radial-gradient(circle, rgba(107, 130, 255, 0.22) 0%, rgba(124, 92, 255, 0.14) 40%, transparent 75%);
+}
+
+/* AI summary — violet glow + cleaner border */
+.premium-ai {
+  background:
+    radial-gradient(600px 200px at 100% 0%, rgba(124, 92, 255, 0.10) 0%, transparent 50%),
+    linear-gradient(180deg, var(--t-panel) 0%, var(--t-panel-soft) 100%);
+  border: 1px solid rgba(124, 92, 255, 0.18) !important;
+  box-shadow: var(--shadow-1);
+}
+
+/* Glass-blur sticky header */
+.glass-header {
+  background: var(--shadow-glass-bg);
+  backdrop-filter: saturate(140%) blur(8px);
+  -webkit-backdrop-filter: saturate(140%) blur(8px);
+}
+
+/* Status dot with halo — used in needs-attention list rows */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.danger { background: #DC2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15); }
+.status-dot.warn   { background: #D97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.15); }
+.status-dot.ok     { background: #059669; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.15); }
+
+/* ============================================================
+ * Shared widget chrome — reused across all dashboard cards.
+ * ============================================================ */
+.section-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--t-border);
+}
+.section-head h2 {
+  margin: 0;
+  font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--t-text-1);
+}
+.section-head .sub {
+  font-size: 11.5px; color: var(--t-text-3);
+}
+.section-head .action {
+  margin-left: auto;
+  font-size: 12px; color: #3B5BFF; font-weight: 500;
+  cursor: pointer; text-decoration: none;
+}
+.admin-dark .section-head .action { color: #6B82FF; }
+.section-head .action:hover { opacity: 0.8; }
+
+/* Horizontal bar-row — used in finance categories + stage analytics */
+.bar-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 0; font-size: 12.5px;
+}
+.bar-row .name {
+  width: 130px; color: var(--t-text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.bar-row .bar {
+  flex: 1; height: 6px;
+  background: var(--t-panel-el); border-radius: 3px; overflow: hidden;
+}
+.bar-row .fill {
+  height: 100%; border-radius: 3px;
+  transition: width 0.4s ease;
+}
+.bar-row .amt {
+  width: 90px; text-align: right;
+  color: var(--t-text-1); font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Risk score pill — gradient by severity. Used in projects-at-risk. */
+.risk-pill {
+  min-width: 36px; height: 36px; padding: 0 6px;
+  border-radius: 10px;
+  display: grid; place-items: center;
+  font-weight: 700; font-size: 13px;
+  border: 1px solid;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.risk-pill.high {
+  background: linear-gradient(135deg, #fee2e2, #fecaca);
+  color: #DC2626; border-color: rgba(220, 38, 38, 0.20);
+}
+.risk-pill.med {
+  background: linear-gradient(135deg, #fef3c7, #fde68a);
+  color: #D97706; border-color: rgba(217, 119, 6, 0.20);
+}
+.risk-pill.low {
+  background: linear-gradient(135deg, #fef9c3, #fef08a);
+  color: #CA8A04; border-color: rgba(202, 138, 4, 0.20);
+}
+.admin-dark .risk-pill.high {
+  background: linear-gradient(135deg, rgba(220,38,38,0.18), rgba(220,38,38,0.10));
+  border-color: rgba(220, 38, 38, 0.35); color: #FCA5A5;
+}
+.admin-dark .risk-pill.med {
+  background: linear-gradient(135deg, rgba(217,119,6,0.18), rgba(217,119,6,0.10));
+  border-color: rgba(217, 119, 6, 0.35); color: #FCD34D;
+}
+.admin-dark .risk-pill.low {
+  background: linear-gradient(135deg, rgba(202,138,4,0.18), rgba(202,138,4,0.10));
+  border-color: rgba(202, 138, 4, 0.35); color: #FDE68A;
+}
+
+/* Inline chip with dot — used in projects-at-risk meta row */
+.meta-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px;
+}
+.meta-chip.danger { color: var(--t-text-2); }
+.meta-chip.danger::before { content: "⚠"; color: #DC2626; }
+.meta-chip.muted { color: var(--t-text-3); }
+.meta-chip.muted::before { content: "⏱"; }

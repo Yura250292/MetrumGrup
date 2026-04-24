@@ -249,7 +249,7 @@ export default function MeetingsListPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[260px_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
         {/* Sidebar — folder tree */}
         <aside
           className="rounded-xl p-3"

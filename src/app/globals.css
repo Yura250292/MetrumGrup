@@ -17,15 +17,15 @@
 
 :root,
 .admin-light {
-  --t-bg:            #F8FAFC;
+  --t-bg:            #f6f6f5;
   --t-panel:         #FFFFFF;
-  --t-panel-el:      #F1F5F9;
-  --t-panel-soft:    #F8FAFC;
-  --t-border:        #E2E8F0;
-  --t-border-strong: #CBD5E1;
+  --t-panel-el:      #efeeec;
+  --t-panel-soft:    #fafaf9;
+  --t-border:        rgba(15,23,42,0.07);
+  --t-border-strong: rgba(15,23,42,0.12);
   --t-text-1:        #0F172A;
-  --t-text-2:        #475569;
-  --t-text-3:        #94A3B8;
+  --t-text-2:        #4a5466;
+  --t-text-3:        #8a93a3;
   --t-accent-soft:   #EEF2FF;
   --t-accent2-soft:  #F5F3FF;
   --t-success-soft:  #F0FDF4;
@@ -54,19 +54,26 @@
   --kpi-sidebar:    transparent;
   --nav-active:     rgba(59, 91, 255, 0.08);
   --nav-active-bar: #3B5BFF;
-  --sidebar-bg:     #F8FAFC;
+  --sidebar-bg:     #FFFFFF;
+
+  /* Layered "premium" shadows */
+  --shadow-1: 0 1px 2px rgba(15, 23, 42, 0.06),
+              0 4px 12px -4px rgba(15, 23, 42, 0.08);
+  --shadow-2: 0 2px 4px rgba(15, 23, 42, 0.08),
+              0 12px 32px -8px rgba(15, 23, 42, 0.18);
+  --shadow-glass-bg: rgba(245, 244, 239, 0.85);
 }
 
 .admin-dark {
-  --t-bg:            #0B0F17;
-  --t-panel:         #121826;
-  --t-panel-el:      #1A2233;
-  --t-panel-soft:    #0F1420;
-  --t-border:        #222B3D;
-  --t-border-strong: #2E3B55;
+  --t-bg:            #0a0b0d;
+  --t-panel:         #161a21;
+  --t-panel-el:      #1f242d;
+  --t-panel-soft:    #0f1216;
+  --t-border:        rgba(255,255,255,0.08);
+  --t-border-strong: rgba(255,255,255,0.14);
   --t-text-1:        #F4F6FB;
-  --t-text-2:        #A8B3CC;
-  --t-text-3:        #6B7691;
+  --t-text-2:        #a8aeb8;
+  --t-text-3:        #6b7280;
   --t-accent-soft:   #1D2A66;
   --t-accent2-soft:  #1E1838;
   --t-success-soft:  #0F2E22;
@@ -94,7 +101,14 @@
   --kpi-sidebar:    transparent;
   --nav-active:     rgba(107, 130, 255, 0.14);
   --nav-active-bar: #6B82FF;
-  --sidebar-bg:     #0F1525;
+  --sidebar-bg:     #0f1115;
+
+  /* Layered "premium" shadows — dark uses larger spread */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4),
+              0 4px 12px -4px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 2px 4px rgba(0, 0, 0, 0.5),
+              0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --shadow-glass-bg: rgba(15, 18, 22, 0.85);
 }
 
 /* Sidebar push — main content follows sidebar width */

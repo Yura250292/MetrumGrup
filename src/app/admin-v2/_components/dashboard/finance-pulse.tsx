@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { TrendingUp, TrendingDown, Activity, ArrowRight, AlertTriangle } from "lucide-react";
+import { TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
-import { FinanceTile } from "./finance-tile";
 
 type CategoryBreakdown = {
   category: string;
@@ -19,7 +18,8 @@ export function FinancePulse({
   netDelta,
   periodLabel,
   expenseByCategory,
-  incomeByCategory,
+  // incomeByCategory deliberately not rendered in new design — kept in props for compat
+  incomeByCategory: _incomeByCategory,
   overduePaymentsCount,
 }: {
   income: number;
@@ -33,193 +33,187 @@ export function FinancePulse({
   incomeByCategory: CategoryBreakdown[];
   overduePaymentsCount: number;
 }) {
-  const maxExpense = expenseByCategory.length > 0 ? expenseByCategory[0].amount : 1;
+  // Preserve original business rule
   const hasCashflowRisk = expense > income || overduePaymentsCount > 2;
+  const maxExpense = expenseByCategory.length > 0 ? expenseByCategory[0].amount : 1;
+
+  // Bar fill palette — distinct & soft
+  const BAR_COLORS = [T.danger, T.amber, T.violet, T.sky, T.teal];
 
   return (
-    <section className="flex flex-col gap-4">
-      {/* Finance tiles: 2 cols mobile, 3 cols desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-4">
-        <FinanceTile
-          label={`ДОХІД (${periodLabel})`}
-          value={income}
-          icon={TrendingUp}
-          color={T.success}
-          delta={incomeDelta}
-        />
-        <FinanceTile
-          label={`ВИТРАТИ (${periodLabel})`}
-          value={expense}
-          icon={TrendingDown}
-          color={T.danger}
-          delta={expenseDelta}
-        />
-        <div className="col-span-2 md:col-span-1">
-          <FinanceTile
-            label="ЧИСТИЙ ПРИБУТОК"
-            value={netProfit}
-            icon={Activity}
-            color={netProfit >= 0 ? T.success : T.danger}
-            emphasize
-            delta={netDelta}
-          />
-        </div>
+    <section
+      className="premium-card rounded-2xl overflow-hidden"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <div className="section-head">
+        <h2>Фінансовий пульс</h2>
+        <span className="sub">{periodLabel}</span>
+        <Link href="/admin-v2/finance" className="action">
+          Деталі →
+        </Link>
       </div>
 
-      {/* Category breakdown + Cashflow risk */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        {/* Expense breakdown */}
-        {expenseByCategory.length > 0 && (
-          <div
-            className="rounded-2xl p-5"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                  СТРУКТУРА ВИТРАТ
-                </span>
-                <h3 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
-                  Top категорії
-                </h3>
-              </div>
-              <Link
-                href="/admin-v2/finance"
-                className="flex items-center gap-1 text-[11px] font-semibold"
-                style={{ color: T.accentPrimary }}
-              >
-                Детальніше <ArrowRight size={12} />
-              </Link>
-            </div>
-            <div className="flex flex-col gap-2">
-              {expenseByCategory.slice(0, 5).map((cat, idx) => {
-                const pct = (cat.amount / maxExpense) * 100;
-                const colors = [T.danger, T.warning, T.amber, T.rose, T.violet];
-                const barColor = colors[idx % colors.length];
-                const label = FINANCE_CATEGORY_LABELS[cat.category] || cat.category;
-                return (
-                  <div key={cat.category} className="flex items-center gap-3">
-                    <span
-                      className="text-[11px] font-semibold w-28 flex-shrink-0 truncate"
-                      style={{ color: T.textSecondary }}
-                    >
-                      {label}
-                    </span>
-                    <div className="flex-1 h-4 rounded-md overflow-hidden" style={{ backgroundColor: barColor + "12" }}>
-                      <div
-                        className="h-full rounded-md flex items-center justify-end pr-2 text-[9px] font-bold"
-                        style={{
-                          width: `${Math.max(pct, 8)}%`,
-                          background: `linear-gradient(90deg, ${barColor}cc, ${barColor})`,
-                          color: "#fff",
-                        }}
-                      >
-                        {formatCurrencyCompact(cat.amount)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+      {/* 3 stat tiles */}
+      <div className="grid grid-cols-3 gap-3 p-4 sm:p-5">
+        <StatTile
+          label="Дохід"
+          value={income}
+          delta={incomeDelta}
+          color={T.success}
+          icon={TrendingUp}
+        />
+        <StatTile
+          label="Витрати"
+          value={expense}
+          delta={expenseDelta}
+          color={T.danger}
+          icon={TrendingDown}
+          deltaInvert
+        />
+        <StatTile
+          label="Чистий прибуток"
+          value={netProfit}
+          delta={netDelta}
+          color={netProfit >= 0 ? T.accentPrimary : T.danger}
+        />
+      </div>
 
-        {/* Cashflow risk or Income breakdown */}
-        <div
-          className="rounded-2xl p-5"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px solid ${hasCashflowRisk ? T.danger + "40" : T.borderSoft}`,
-          }}
-        >
-          {hasCashflowRisk ? (
-            <>
-              <div className="mb-3 flex items-center gap-2">
-                <AlertTriangle size={16} style={{ color: T.danger }} />
-                <h3 className="text-[13px] font-bold" style={{ color: T.danger }}>
-                  Cashflow ризик
-                </h3>
-              </div>
-              <div className="flex flex-col gap-2">
+      {/* Cashflow risk panel (above breakdown) */}
+      {hasCashflowRisk && (
+        <div className="mx-4 sm:mx-5 mb-4">
+          <div
+            className="flex items-start gap-3 rounded-xl p-3.5"
+            style={{
+              backgroundColor: T.dangerSoft,
+              border: `1px solid ${T.danger}40`,
+            }}
+          >
+            <AlertTriangle size={16} style={{ color: T.danger, flexShrink: 0, marginTop: 2 }} />
+            <div className="flex flex-col gap-1 flex-1 min-w-0">
+              <span
+                className="text-[12.5px] font-semibold"
+                style={{ color: T.danger }}
+              >
+                Cashflow ризик
+              </span>
+              <ul className="flex flex-col gap-0.5 text-[12px]" style={{ color: T.textSecondary }}>
                 {expense > income && (
-                  <div
-                    className="flex items-center gap-2 rounded-lg p-3"
-                    style={{ backgroundColor: T.dangerSoft }}
-                  >
-                    <TrendingDown size={14} style={{ color: T.danger }} />
-                    <span className="text-[12px] font-semibold" style={{ color: T.danger }}>
-                      Витрати перевищують доходи на {formatCurrencyCompact(expense - income)}
-                    </span>
-                  </div>
+                  <li>
+                    Витрати перевищують доходи на{" "}
+                    <strong style={{ color: T.textPrimary }}>
+                      {formatCurrencyCompact(expense - income)}
+                    </strong>
+                  </li>
                 )}
                 {overduePaymentsCount > 0 && (
-                  <div
-                    className="flex items-center gap-2 rounded-lg p-3"
-                    style={{ backgroundColor: T.warningSoft }}
-                  >
-                    <AlertTriangle size={14} style={{ color: T.warning }} />
-                    <span className="text-[12px] font-semibold" style={{ color: T.warning }}>
-                      {overduePaymentsCount} прострочених платежів
-                    </span>
-                  </div>
+                  <li>
+                    <strong style={{ color: T.textPrimary }}>{overduePaymentsCount}</strong>{" "}
+                    прострочених платежів
+                  </li>
                 )}
-                <Link
-                  href="/admin-v2/finance"
-                  className="flex items-center gap-1 text-[11px] font-semibold mt-1"
-                  style={{ color: T.accentPrimary }}
-                >
-                  Переглянути фінанси <ArrowRight size={12} />
-                </Link>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="mb-3 flex flex-col gap-0.5">
-                <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                  СТРУКТУРА ДОХОДІВ
-                </span>
-                <h3 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
-                  Top категорії
-                </h3>
-              </div>
-              {incomeByCategory.length > 0 ? (
-                <div className="flex flex-col gap-2">
-                  {incomeByCategory.slice(0, 5).map((cat, idx) => {
-                    const maxIncome = incomeByCategory[0].amount || 1;
-                    const pct = (cat.amount / maxIncome) * 100;
-                    const colors = [T.success, T.emerald, T.teal, T.sky, T.accentPrimary];
-                    const barColor = colors[idx % colors.length];
-                    const label = FINANCE_CATEGORY_LABELS[cat.category] || cat.category;
-                    return (
-                      <div key={cat.category} className="flex items-center gap-3">
-                        <span className="text-[11px] font-semibold w-28 flex-shrink-0 truncate" style={{ color: T.textSecondary }}>
-                          {label}
-                        </span>
-                        <div className="flex-1 h-4 rounded-md overflow-hidden" style={{ backgroundColor: barColor + "12" }}>
-                          <div
-                            className="h-full rounded-md flex items-center justify-end pr-2 text-[9px] font-bold"
-                            style={{
-                              width: `${Math.max(pct, 8)}%`,
-                              background: `linear-gradient(90deg, ${barColor}cc, ${barColor})`,
-                              color: "#fff",
-                            }}
-                          >
-                            {formatCurrencyCompact(cat.amount)}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-[12px]" style={{ color: T.textMuted }}>
-                  Немає доходів за цей період
-                </p>
-              )}
-            </>
-          )}
+              </ul>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Expense breakdown */}
+      {expenseByCategory.length > 0 && (
+        <div className="px-4 sm:px-5 pb-5">
+          <div
+            className="text-[10.5px] font-semibold uppercase mb-2"
+            style={{ color: T.textMuted, letterSpacing: "0.08em" }}
+          >
+            Структура витрат
+          </div>
+          <div>
+            {expenseByCategory.slice(0, 5).map((cat, idx) => {
+              const pct = Math.max(6, (cat.amount / maxExpense) * 100);
+              const barColor = BAR_COLORS[idx % BAR_COLORS.length];
+              const label =
+                FINANCE_CATEGORY_LABELS[cat.category] || cat.category;
+              return (
+                <div key={cat.category} className="bar-row">
+                  <span className="name">{label}</span>
+                  <div className="bar">
+                    <div
+                      className="fill"
+                      style={{ width: `${pct}%`, background: barColor }}
+                    />
+                  </div>
+                  <span className="amt">
+                    {formatCurrencyCompact(cat.amount)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </section>
+  );
+}
+
+function StatTile({
+  label,
+  value,
+  delta,
+  color,
+  icon: Icon,
+  deltaInvert,
+}: {
+  label: string;
+  value: number;
+  delta?: { value: number; label: string };
+  color: string;
+  icon?: React.ComponentType<{ size?: number; style?: React.CSSProperties }>;
+  /** When true, positive delta is rendered as bad (e.g. growing expenses). */
+  deltaInvert?: boolean;
+}) {
+  const isPositive = (delta?.value ?? 0) > 0;
+  const goodDelta = deltaInvert ? !isPositive : isPositive;
+  const deltaColor = goodDelta ? T.success : T.danger;
+  const Arrow = isPositive ? TrendingUp : TrendingDown;
+
+  return (
+    <div
+      className="flex flex-col gap-1.5 rounded-xl p-3.5"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        {Icon && <Icon size={12} style={{ color }} />}
+        <span
+          className="text-[10.5px] font-semibold uppercase"
+          style={{ color: T.textMuted, letterSpacing: "0.08em" }}
+        >
+          {label}
+        </span>
+      </div>
+      <div
+        className="text-[20px] sm:text-[22px] font-bold tabular-nums leading-none"
+        style={{ color, letterSpacing: "-0.01em" }}
+      >
+        {formatCurrencyCompact(value)}
+      </div>
+      {delta && delta.value !== 0 && (
+        <span
+          className="inline-flex items-center gap-1 text-[11px] font-semibold w-fit px-1.5 py-0.5 rounded-full"
+          style={{
+            backgroundColor: deltaColor + "14",
+            color: deltaColor,
+          }}
+          title={delta.label}
+        >
+          <Arrow size={10} />
+          {Math.abs(delta.value).toFixed(delta.value % 1 === 0 ? 0 : 1)}%
+        </span>
+      )}
+    </div>
   );
 }

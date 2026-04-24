@@ -29,7 +29,13 @@ export function PeriodSwitcher({ active }: { active: PeriodId }) {
   };
 
   return (
-    <div className="flex items-center gap-1 rounded-xl p-1" style={{ backgroundColor: T.panelElevated }}>
+    <div
+      className="premium-card flex items-center gap-1 rounded-xl p-1"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
       {PERIODS.map((p) => {
         const isActive = p.id === active;
         return (
@@ -38,9 +44,8 @@ export function PeriodSwitcher({ active }: { active: PeriodId }) {
             onClick={() => switchPeriod(p.id)}
             className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition"
             style={{
-              backgroundColor: isActive ? T.panel : "transparent",
+              backgroundColor: isActive ? "var(--t-panel-el)" : "transparent",
               color: isActive ? T.textPrimary : T.textMuted,
-              boxShadow: isActive ? `0 1px 3px ${T.borderSoft}` : "none",
             }}
           >
             {p.label}

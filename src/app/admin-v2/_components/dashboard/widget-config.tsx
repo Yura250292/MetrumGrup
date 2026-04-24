@@ -15,23 +15,21 @@ export function WidgetConfigButton() {
     <button
       type="button"
       onClick={() => setEditing(!isEditing)}
-      className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition hover:brightness-[0.95]"
+      title={isEditing ? "Готово" : "Налаштувати віджети"}
+      className="flex items-center justify-center gap-1.5 rounded-lg w-9 h-9 transition hover:brightness-[0.95]"
       style={{
-        backgroundColor: isEditing ? T.accentPrimary : T.panelElevated,
+        backgroundColor: isEditing ? T.accentPrimary : T.panel,
         color: isEditing ? "#fff" : T.textMuted,
         border: `1px solid ${isEditing ? T.accentPrimary : T.borderSoft}`,
       }}
     >
       {isSaving ? (
-        <Loader2 size={14} className="animate-spin" />
+        <Loader2 size={15} className="animate-spin" />
       ) : isEditing ? (
-        <Check size={14} />
+        <Check size={15} />
       ) : (
-        <Settings size={14} />
+        <Settings size={15} />
       )}
-      <span className="hidden sm:inline">
-        {isEditing ? "Готово" : "Налаштувати"}
-      </span>
     </button>
   );
 }

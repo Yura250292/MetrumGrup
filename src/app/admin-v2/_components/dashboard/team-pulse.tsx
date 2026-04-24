@@ -30,65 +30,44 @@ export function TeamPulse({
 
   return (
     <div
-      className="rounded-2xl p-6"
+      className="premium-card rounded-2xl overflow-hidden"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex flex-col gap-0.5">
-          <span
-            className="text-[10px] font-bold tracking-wider"
-            style={{ color: T.textMuted }}
-          >
-            КОМАНДА
-          </span>
-          <h2
-            className="text-base font-bold"
-            style={{ color: T.textPrimary }}
-          >
-            Team Pulse
-          </h2>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px]" style={{ color: T.textMuted }}>
-            {formatHours(totalMinutes)} · {members.length} людей · {periodLabel}
-          </span>
-          <Link
-            href="/admin-v2/me?scope=all"
-            className="flex items-center gap-1 text-[11px] font-semibold"
-            style={{ color: T.accentPrimary }}
-          >
-            Команда <ArrowRight size={12} />
-          </Link>
-        </div>
+      <div className="section-head">
+        <h2>Команда</h2>
+        <span className="sub">
+          {formatHours(totalMinutes)} · {members.length} людей · {periodLabel}
+        </span>
+        <Link href="/admin-v2/me?scope=all" className="action">
+          Усі →
+        </Link>
       </div>
 
       {members.length === 0 ? (
-        <p className="text-[12px]" style={{ color: T.textMuted }}>
+        <p className="text-[12.5px] px-5 py-6 text-center" style={{ color: T.textMuted }}>
           Немає даних за цей період
         </p>
       ) : (
-        <ul className="flex flex-col gap-2">
+        <ul>
           {members.map((member, idx) => {
             const ac = avatarColors[idx % avatarColors.length];
             const pct = totalMinutes
               ? (member.minutes / totalMinutes) * 100
               : 0;
-            const isOverloaded = member.minutes > 2400 || member.activeTaskCount > 15; // >40h or >15 tasks
+            const isOverloaded = member.minutes > 2400 || member.activeTaskCount > 15;
             const isIdle = member.minutes === 0;
 
             return (
               <li
                 key={member.id}
-                className="flex items-center gap-3 rounded-xl px-3 py-2"
+                className="flex items-center gap-3 px-5 py-2.5"
                 style={{
-                  backgroundColor: T.panelElevated,
-                  border: `1px solid ${isOverloaded ? T.danger + "40" : T.borderSoft}`,
+                  borderTop: idx === 0 ? "none" : `1px solid ${T.borderSoft}`,
                 }}
               >
-                {/* Avatar */}
                 <span
                   className="inline-flex items-center justify-center h-7 w-7 rounded-full flex-shrink-0 text-[10px] font-bold"
                   style={{ backgroundColor: ac.bg, color: ac.fg }}
@@ -96,58 +75,56 @@ export function TeamPulse({
                   {member.name.slice(0, 2).toUpperCase()}
                 </span>
 
-                {/* Name */}
-                <span
-                  className="flex-1 min-w-0 truncate text-[13px] font-semibold"
-                  style={{ color: T.textPrimary }}
-                >
-                  {member.name}
-                </span>
-
-                {/* Status badges */}
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {member.overdueTaskCount > 0 && (
-                    <span
-                      className="flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold"
-                      style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-                    >
-                      <AlertTriangle size={9} />
-                      {member.overdueTaskCount}
-                    </span>
-                  )}
-                  {member.activeTaskCount > 0 && (
-                    <span
-                      className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
-                      style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-                    >
-                      {member.activeTaskCount} задач
-                    </span>
-                  )}
-                  {isOverloaded && (
-                    <span
-                      className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
-                      style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-                    >
-                      перевантаж.
-                    </span>
-                  )}
-                  {isIdle && (
-                    <span
-                      className="rounded-full px-1.5 py-0.5 text-[9px] font-bold"
-                      style={{ backgroundColor: T.warningSoft, color: T.warning }}
-                    >
-                      без руху
-                    </span>
-                  )}
+                <div className="flex-1 min-w-0">
+                  <div
+                    className="truncate text-[13px] font-medium"
+                    style={{ color: T.textPrimary }}
+                  >
+                    {member.name}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                    {member.overdueTaskCount > 0 && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-semibold"
+                        style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                      >
+                        <AlertTriangle size={9} />
+                        {member.overdueTaskCount}
+                      </span>
+                    )}
+                    {member.activeTaskCount > 0 && (
+                      <span
+                        className="text-[10.5px]"
+                        style={{ color: T.textMuted }}
+                      >
+                        {member.activeTaskCount} активних
+                      </span>
+                    )}
+                    {isOverloaded && (
+                      <span
+                        className="inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-semibold"
+                        style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                      >
+                        перевантаж.
+                      </span>
+                    )}
+                    {isIdle && (
+                      <span
+                        className="inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-semibold"
+                        style={{ backgroundColor: T.warningSoft, color: T.warning }}
+                      >
+                        без руху
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Progress bar */}
                 <div
-                  className="w-16 h-1.5 rounded-full overflow-hidden flex-shrink-0"
-                  style={{ backgroundColor: ac.fg + "18" }}
+                  className="w-20 h-1.5 rounded-full overflow-hidden flex-shrink-0"
+                  style={{ backgroundColor: T.panelElevated }}
                 >
                   <div
-                    className="h-full rounded-full"
+                    className="h-full rounded-full transition-all"
                     style={{
                       width: `${pct}%`,
                       backgroundColor: isOverloaded ? T.danger : ac.fg,
@@ -155,9 +132,8 @@ export function TeamPulse({
                   />
                 </div>
 
-                {/* Hours */}
                 <span
-                  className="font-mono font-bold text-[12px] w-16 text-right flex-shrink-0"
+                  className="font-mono font-semibold text-[12px] w-14 text-right flex-shrink-0 tabular-nums"
                   style={{ color: T.textPrimary }}
                 >
                   {formatHours(member.minutes)}

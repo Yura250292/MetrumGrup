@@ -30,6 +30,16 @@ export const T = {
   emeraldSoft:         "var(--t-emerald-soft)",
   violetSoft:          "var(--t-violet-soft)",
 
+  // Layered "premium" shadows — switch via CSS vars
+  shadow1:         "var(--shadow-1)",
+  shadow2:         "var(--shadow-2)",
+
+  // Sidebar / nav surfaces
+  sidebarBg:       "var(--sidebar-bg)",
+  navActive:       "var(--nav-active)",
+  navActiveBar:    "var(--nav-active-bar)",
+  glassBg:         "var(--shadow-glass-bg)",
+
   // Accent colors — hex values (used in alpha concat: color+"22")
   borderAccent:    "#3B5BFF",
   accentPrimary:   "#3B5BFF",

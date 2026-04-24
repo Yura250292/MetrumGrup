@@ -29,11 +29,7 @@ export function AiSummary() {
     return (
       <button
         onClick={load}
-        className="w-full flex items-center gap-3 rounded-2xl p-4 sm:p-5 transition hover:brightness-[0.97] active:scale-[0.99] tap-highlight-none"
-        style={{
-          background: `linear-gradient(135deg, ${T.accentPrimary}08 0%, ${T.accentSecondary}12 100%)`,
-          border: `1px solid ${T.accentPrimary}20`,
-        }}
+        className="premium-ai w-full flex items-center gap-3 rounded-2xl p-4 sm:p-5 transition active:scale-[0.99] tap-highlight-none"
       >
         <div
           className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
@@ -56,13 +52,7 @@ export function AiSummary() {
   }
 
   return (
-    <div
-      className="rounded-2xl p-4 sm:p-5 relative overflow-hidden"
-      style={{
-        background: `linear-gradient(135deg, ${T.accentPrimary}08 0%, ${T.accentSecondary}12 100%)`,
-        border: `1px solid ${T.accentPrimary}20`,
-      }}
-    >
+    <div className="premium-ai rounded-2xl p-4 sm:p-5 relative overflow-hidden">
       <div className="flex items-start gap-3">
         <div
           className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 mt-0.5"

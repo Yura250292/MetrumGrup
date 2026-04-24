@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { useState, useRef, useEffect } from "react";
-import { ChevronRight, ArrowLeft, User, LogOut } from "lucide-react";
+import { ChevronRight, ArrowLeft, User, LogOut, Search, Plus } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { BREADCRUMB_MAP } from "../_lib/nav";
@@ -12,12 +12,14 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
 import { TeamAvatars } from "@/components/layout/TeamAvatars";
+import { SearchModal } from "./search-modal";
 
 export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,6 +31,18 @@ export function Header() {
     if (userMenuOpen) document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [userMenuOpen]);
+
+  // Global ⌘K / Ctrl+K shortcut
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const segments = pathname.split("/").filter(Boolean);
   const crumbs: { label: string; href: string }[] = [];
@@ -44,9 +58,8 @@ export function Header() {
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-12 md:h-16 items-center justify-between px-4 md:px-8"
+      className="glass-header sticky top-0 z-30 flex h-12 md:h-16 items-center justify-between px-4 md:px-8"
       style={{
-        backgroundColor: T.panel,
         borderBottom: `1px solid ${T.borderSoft}`,
       }}
     >
@@ -91,6 +104,32 @@ export function Header() {
         ))}
       </nav>
 
+      {/* Desktop: search input (centered) */}
+      <button
+        type="button"
+        onClick={() => setSearchOpen(true)}
+        className="hidden md:flex items-center gap-2 mx-auto rounded-lg px-3 py-1.5 text-[13px] transition hover:brightness-[0.97]"
+        style={{
+          width: 320,
+          backgroundColor: T.panelElevated,
+          border: `1px solid ${T.borderSoft}`,
+          color: T.textMuted,
+        }}
+      >
+        <Search size={14} style={{ flexShrink: 0 }} />
+        <span className="flex-1 text-left truncate">Пошук проєктів, клієнтів, задач…</span>
+        <span
+          className="font-mono text-[10.5px] px-1.5 py-px rounded"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+            color: T.textMuted,
+          }}
+        >
+          ⌘K
+        </span>
+      </button>
+
       <div className="flex items-center gap-1.5 md:gap-3">
         <div className="hidden md:flex items-center gap-3">
           <TeamAvatars />
@@ -104,6 +143,19 @@ export function Header() {
           />
           <ThemeToggle />
         </div>
+        {/* CTA: New project (desktop only) */}
+        <Link
+          href="/admin-v2/projects/new"
+          className="hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition active:scale-95"
+          style={{
+            backgroundColor: T.accentPrimary,
+            color: "#fff",
+            boxShadow: `0 1px 2px ${T.accentPrimary}4d, inset 0 1px 0 rgba(255,255,255,0.18)`,
+          }}
+        >
+          <Plus size={14} strokeWidth={2.5} />
+          Новий проєкт
+        </Link>
         <div className="hidden md:block h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
 
         {/* User avatar menu */}
@@ -153,6 +205,7 @@ export function Header() {
           )}
         </div>
       </div>
+      <SearchModal open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
   );
 }

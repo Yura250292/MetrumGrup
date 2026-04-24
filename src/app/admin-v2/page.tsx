@@ -688,21 +688,28 @@ export default async function AdminV2Dashboard({
         dueTodayCount={dueTodayTasksCount}
       />
 
-      {/* Dashboard Tabs */}
-      <Suspense>
-        <DashboardTabs active={activeTab} />
-      </Suspense>
+      {/* Tabs alone for non-overview tabs */}
+      {activeTab !== "overview" && (
+        <Suspense>
+          <DashboardTabs active={activeTab} />
+        </Suspense>
+      )}
 
-      {/* Overview tab content */}
+      {/* Overview tab — tabs + period + config in one row, then grid */}
       {activeTab === "overview" && (
         <Suspense>
           <DashboardShell>
-            {/* Period switcher + edit-mode toggle */}
-            <div className="flex items-center justify-between gap-2 mb-2">
+            {/* Single toolbar row: tabs left, period + config right (stacks on mobile) */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
               <Suspense>
-                <PeriodSwitcher active={activePeriod} />
+                <DashboardTabs active={activeTab} />
               </Suspense>
-              <DashboardWidgetConfigButton />
+              <div className="flex items-center gap-2 sm:ml-auto flex-wrap">
+                <Suspense>
+                  <PeriodSwitcher active={activePeriod} />
+                </Suspense>
+                <DashboardWidgetConfigButton />
+              </div>
             </div>
 
             <DashboardGrid
@@ -717,7 +724,14 @@ export default async function AdminV2Dashboard({
                   />
                 ),
                 "kpi-business": showBusinessKpis ? (
-                  <section className="grid h-full grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="flex flex-col gap-2.5 h-full">
+                    <h3
+                      className="text-[10.5px] font-semibold uppercase px-1"
+                      style={{ color: "var(--t-text-3)", letterSpacing: "0.08em" }}
+                    >
+                      Бізнес-метрики
+                    </h3>
+                  <section className="grid flex-1 grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                     <KpiCard
                       label="ПРОЄКТИ"
                       value={String(projectsCount)}
@@ -750,9 +764,17 @@ export default async function AdminV2Dashboard({
                       accent={T.emerald}
                     />
                   </section>
+                  </div>
                 ) : null,
                 "kpi-tasks": showTaskKpis ? (
-                  <section className="grid h-full grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="flex flex-col gap-2.5 h-full">
+                    <h3
+                      className="text-[10.5px] font-semibold uppercase px-1"
+                      style={{ color: "var(--t-text-3)", letterSpacing: "0.08em" }}
+                    >
+                      Задачі та виконання
+                    </h3>
+                  <section className="grid flex-1 grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
                     <KpiCard
                       label="АКТИВНІ ЗАДАЧІ"
                       value={String(activeTasksCount)}
@@ -786,6 +808,7 @@ export default async function AdminV2Dashboard({
                       href="/ai-estimate-v2"
                     />
                   </section>
+                  </div>
                 ) : null,
                 utility: (
                   <UtilityRail

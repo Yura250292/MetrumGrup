@@ -62,95 +62,90 @@ export function StageAnalytics({
 
   return (
     <div
-      className="rounded-2xl p-6"
+      className="premium-card rounded-2xl overflow-hidden"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-            ПОТОК РОБОТИ
-          </span>
-          <h2 className="text-base font-bold" style={{ color: T.textPrimary }}>
-            Розподіл та аналітика етапів
-          </h2>
-        </div>
-        <span className="text-[11px]" style={{ color: T.textMuted }}>
-          разом {activeProjectsCount}
-        </span>
+      <div className="section-head">
+        <h2>Потік роботи</h2>
+        <span className="sub">разом {activeProjectsCount}</span>
       </div>
 
       {activeProjectsCount === 0 ? (
-        <p className="text-[12px]" style={{ color: T.textMuted }}>
+        <p className="text-[12.5px] px-5 py-6 text-center" style={{ color: T.textMuted }}>
           Немає активних проєктів
         </p>
       ) : (
-        <>
-          {/* Stage distribution bars */}
-          <div className="flex flex-col gap-2 mb-4">
+        <div className="px-5 py-4">
+          <div
+            className="text-[10.5px] font-semibold uppercase mb-2"
+            style={{ color: T.textMuted, letterSpacing: "0.08em" }}
+          >
+            Розподіл по етапах
+          </div>
+          <div>
             {STAGE_ORDER.map((stage) => {
               const count = stageMap.get(stage) ?? 0;
-              const pct = (count / stageMax) * 100;
+              const pct = Math.max(count > 0 ? 6 : 2, (count / stageMax) * 100);
               const barColor = STAGE_COLORS[stage] || T.accentPrimary;
               const avg = avgMap.get(stage);
               return (
-                <div key={stage} className="flex items-center gap-3">
-                  <span className="text-[11px] font-semibold w-28 flex-shrink-0" style={{ color: T.textSecondary }}>
-                    {STAGE_LABELS[stage]}
-                  </span>
-                  <div className="flex-1 h-5 rounded-md overflow-hidden" style={{ backgroundColor: barColor + "12" }}>
+                <div key={stage} className="bar-row">
+                  <span className="name">{STAGE_LABELS[stage]}</span>
+                  <div className="bar">
                     <div
-                      className="h-full rounded-md flex items-center justify-end pr-2 text-[10px] font-bold"
+                      className="fill"
                       style={{
-                        width: `${Math.max(pct, count > 0 ? 6 : 0)}%`,
-                        background: count > 0 ? `linear-gradient(90deg, ${barColor}cc, ${barColor})` : "transparent",
-                        color: "#fff",
+                        width: `${pct}%`,
+                        background: count > 0 ? barColor : "transparent",
                       }}
-                    >
-                      {count > 0 ? count : ""}
-                    </div>
+                    />
                   </div>
-                  {avg && avg.avgDays > 0 && (
-                    <span
-                      className="text-[9px] font-semibold flex-shrink-0 w-14 text-right"
-                      style={{ color: T.textMuted }}
-                    >
-                      ~{avg.avgDays} дн
-                    </span>
-                  )}
+                  <span className="amt" style={{ width: 90 }}>
+                    {count > 0 ? count : "—"}
+                    {avg && avg.avgDays > 0 && (
+                      <span
+                        className="text-[10px] font-normal ml-1"
+                        style={{ color: T.textMuted }}
+                      >
+                        · ~{avg.avgDays}д
+                      </span>
+                    )}
+                  </span>
                 </div>
               );
             })}
           </div>
 
-          {/* Insights row */}
-          <div className="flex flex-wrap gap-2">
-            {bottleneckStage && bottleneckCount > 1 && (
-              <div
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5"
-                style={{ backgroundColor: T.warningSoft }}
-              >
-                <AlertTriangle size={12} style={{ color: T.warning }} />
-                <span className="text-[11px] font-semibold" style={{ color: T.warning }}>
-                  Вузьке місце: {STAGE_LABELS[bottleneckStage]} ({bottleneckCount} проєктів)
-                </span>
-              </div>
-            )}
-            {slowestStage && slowestStage.avgDays > 0 && (
-              <div
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5"
-                style={{ backgroundColor: T.accentPrimarySoft }}
-              >
-                <Clock size={12} style={{ color: T.accentPrimary }} />
-                <span className="text-[11px] font-semibold" style={{ color: T.accentPrimary }}>
-                  Найдовший: {STAGE_LABELS[slowestStage.stage]} (~{slowestStage.avgDays} днів)
-                </span>
-              </div>
-            )}
-          </div>
-        </>
+          {(bottleneckStage || slowestStage) && (
+            <div className="flex flex-wrap gap-2 mt-4 pt-3" style={{ borderTop: `1px solid ${T.borderSoft}` }}>
+              {bottleneckStage && bottleneckCount > 1 && (
+                <div
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+                  style={{ backgroundColor: T.warningSoft }}
+                >
+                  <AlertTriangle size={11} style={{ color: T.warning }} />
+                  <span className="text-[11px] font-semibold" style={{ color: T.warning }}>
+                    Вузьке місце: {STAGE_LABELS[bottleneckStage]} ({bottleneckCount})
+                  </span>
+                </div>
+              )}
+              {slowestStage && slowestStage.avgDays > 0 && (
+                <div
+                  className="flex items-center gap-1.5 rounded-lg px-2.5 py-1"
+                  style={{ backgroundColor: T.accentPrimarySoft }}
+                >
+                  <Clock size={11} style={{ color: T.accentPrimary }} />
+                  <span className="text-[11px] font-semibold" style={{ color: T.accentPrimary }}>
+                    Найдовший: {STAGE_LABELS[slowestStage.stage]} (~{slowestStage.avgDays}д)
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

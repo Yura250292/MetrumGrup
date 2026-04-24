@@ -42,39 +42,30 @@ const eventConfig = {
 export function ActivityFeed({ events }: { events: FeedEvent[] }) {
   return (
     <div
-      className="rounded-2xl p-6"
+      className="premium-card rounded-2xl overflow-hidden"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <div className="flex flex-col gap-0.5">
-          <span
-            className="text-[10px] font-bold tracking-wider"
-            style={{ color: T.textMuted }}
-          >
-            АКТИВНІСТЬ
-          </span>
-          <h2
-            className="text-base font-bold"
-            style={{ color: T.textPrimary }}
-          >
-            Остання активність
-          </h2>
-        </div>
-        <span className="text-[11px]" style={{ color: T.textMuted }}>
-          7 днів
-        </span>
+      <div className="section-head">
+        <h2>Активність</h2>
+        <span className="sub">7 днів</span>
+        <Link href="/admin-v2/feed" className="action">
+          Усе →
+        </Link>
       </div>
 
       {events.length === 0 ? (
-        <p className="text-[12px]" style={{ color: T.textMuted }}>
+        <p
+          className="text-[12.5px] px-5 py-6 text-center"
+          style={{ color: T.textMuted }}
+        >
           Немає активності за останні 7 днів
         </p>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          {events.map((event, i) => {
+        <div>
+          {events.slice(0, 8).map((event, i) => {
             const config = eventConfig[event.type];
             const Icon = config.icon;
 
@@ -82,37 +73,36 @@ export function ActivityFeed({ events }: { events: FeedEvent[] }) {
               <Link
                 key={`${event.type}-${i}`}
                 href={event.href}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:brightness-[0.97]"
+                className="flex items-start gap-3 px-5 py-2.5 transition-colors hover:bg-[var(--t-panel-soft)]"
                 style={{
-                  backgroundColor: T.panelElevated,
-                  border: `1px solid ${T.borderSoft}`,
+                  borderTop: i === 0 ? "none" : `1px solid ${T.borderSoft}`,
                 }}
               >
                 <div
-                  className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-                  style={{
-                    backgroundColor: config.softColor,
-                  }}
+                  className="flex h-[30px] w-[30px] items-center justify-center rounded-full flex-shrink-0 mt-px"
+                  style={{ backgroundColor: config.softColor }}
                 >
                   <Icon size={14} style={{ color: config.color }} />
                 </div>
                 <div className="flex flex-1 flex-col gap-0 min-w-0">
                   <span
-                    className="text-[13px] font-semibold truncate"
-                    style={{ color: T.textPrimary }}
+                    className="text-[12.5px] truncate"
+                    style={{ color: T.textSecondary, lineHeight: 1.45 }}
                   >
-                    {event.title}
+                    <strong style={{ color: T.textPrimary, fontWeight: 600 }}>
+                      {event.title}
+                    </strong>
                   </span>
                   <span
-                    className="text-[11px] truncate"
-                    style={{ color: T.textMuted }}
+                    className="text-[11.5px] truncate"
+                    style={{ color: T.textMuted, marginTop: 1 }}
                   >
                     {event.subtitle}
                   </span>
                 </div>
                 <span
-                  className="text-[10px] flex-shrink-0"
-                  style={{ color: T.textMuted }}
+                  className="text-[11px] flex-shrink-0 whitespace-nowrap"
+                  style={{ color: T.textMuted, marginTop: 2 }}
                 >
                   {formatRelativeTime(event.date)}
                 </span>
