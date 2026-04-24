@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
@@ -131,6 +131,31 @@ export function FinancingView({
     setCreatePreset,
     quadrantEntries,
   } = data;
+
+  // Deep-link: /admin-v2/financing?new=INCOME|EXPENSE[&kind=PLAN|FACT]
+  // Used by dashboard Finance quick-access widget. One-shot per URL change.
+  const newParam = searchParams.get("new");
+  const kindParam = searchParams.get("kind");
+  const consumedNewRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!newParam) {
+      consumedNewRef.current = null;
+      return;
+    }
+    const token = `${newParam}:${kindParam ?? ""}:${folderId ?? ""}`;
+    if (consumedNewRef.current === token) return;
+    const type = newParam === "INCOME" ? "INCOME" : newParam === "EXPENSE" ? "EXPENSE" : null;
+    if (!type) return;
+    const kind = kindParam === "PLAN" ? "PLAN" : "FACT";
+    consumedNewRef.current = token;
+    setCreatePreset({ kind, type, folderId: folderId ?? undefined });
+    // Strip the one-shot params so reloads/back-nav don't keep reopening.
+    const sp = new URLSearchParams(searchParams.toString());
+    sp.delete("new");
+    sp.delete("kind");
+    const qs = sp.toString();
+    router.replace(qs ? `/admin-v2/financing?${qs}` : "/admin-v2/financing", { scroll: false });
+  }, [newParam, kindParam, folderId, router, searchParams, setCreatePreset]);
 
   const planBalance = summary.plan.income.sum - summary.plan.expense.sum;
   const factBalance = summary.balance;
