@@ -46,11 +46,7 @@ export function MeetingsWidget() {
           {items.map((m) => (
             <li key={m.id}>
               <Link
-                href={
-                  m.project
-                    ? `/admin-v2/projects/${m.projectId}/meetings/${m.id}`
-                    : `/admin-v2/meetings/${m.id}`
-                }
+                href={`/admin-v2/meetings/${m.id}`}
                 className="flex min-h-[44px] items-start gap-2.5 rounded-lg px-2 py-2 transition hover:brightness-[0.97] touch-manipulation"
               >
                 <span

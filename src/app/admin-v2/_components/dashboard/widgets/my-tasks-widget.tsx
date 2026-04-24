@@ -55,7 +55,11 @@ export function MyTasksWidget() {
             return (
               <li key={t.id}>
                 <Link
-                  href={`/admin-v2/tasks/${t.id}`}
+                  href={
+                    t.project
+                      ? `/admin-v2/projects/${t.project.id}?tab=tasks&task=${t.id}`
+                      : "/admin-v2/me"
+                  }
                   className="flex min-h-[44px] items-start gap-2.5 rounded-lg px-2 py-1.5 transition hover:brightness-[0.97] touch-manipulation"
                 >
                   <span
