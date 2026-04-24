@@ -30,6 +30,7 @@ export async function listFolders(
           projects: domain === "PROJECT" ? true : undefined,
           estimates: domain === "ESTIMATE" ? true : undefined,
           financeEntries: domain === "FINANCE" ? true : undefined,
+          meetings: domain === "MEETING" ? true : undefined,
         },
       },
     },
@@ -51,7 +52,9 @@ export async function listFolders(
         ? f._count.projects
         : domain === "ESTIMATE"
           ? f._count.estimates
-          : f._count.financeEntries,
+          : domain === "FINANCE"
+            ? f._count.financeEntries
+            : f._count.meetings,
   }));
 
   // For FINANCE domain, compute summaries in one batch query

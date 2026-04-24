@@ -32,8 +32,10 @@ export type MeetingListItem = {
   summary: string | null;
   recordedAt: string;
   createdAt: string;
+  folderId: string | null;
   project: { id: string; title: string; slug: string };
   createdBy: { id: string; name: string };
+  folder?: { id: string; name: string } | null;
 };
 
 export type Meeting = MeetingListItem & {

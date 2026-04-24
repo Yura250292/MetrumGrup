@@ -18,6 +18,13 @@ type Project = {
   slug: string;
 };
 
+type FolderOption = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  depth: number;
+};
+
 type PendingAudio = {
   blob: Blob;
   mimeType: string;
@@ -31,13 +38,17 @@ export default function NewMeetingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialProject = searchParams.get("projectId") || "";
+  const initialFolder = searchParams.get("folderId") || "";
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
 
+  const [folderOptions, setFolderOptions] = useState<FolderOption[]>([]);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [projectId, setProjectId] = useState(initialProject);
+  const [folderId, setFolderId] = useState<string>(initialFolder);
 
   const [pending, setPending] = useState<PendingAudio | null>(null);
   const [stage, setStage] = useState<Stage>("form");
@@ -80,6 +91,19 @@ export default function NewMeetingPage() {
     })();
   }, [initialProject]);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/folders/tree?domain=MEETING");
+        if (!res.ok) return;
+        const data = await res.json();
+        setFolderOptions(flattenFolderTree(data.folders || []));
+      } catch {
+        // folders are optional; ignore failure
+      }
+    })();
+  }, []);
+
   function handleFile(file: File) {
     setError(null);
     setPending({
@@ -105,6 +129,7 @@ export default function NewMeetingPage() {
           title: title.trim(),
           description: description.trim() || null,
           projectId,
+          folderId: folderId || null,
         }),
       });
       if (!createRes.ok) {
@@ -241,6 +266,33 @@ export default function NewMeetingPage() {
           </select>
         </div>
 
+        <div className="mb-3">
+          <label
+            className="mb-1 block text-xs font-medium"
+            style={{ color: T.textSecondary }}
+          >
+            Папка (необов'язково)
+          </label>
+          <select
+            value={folderId}
+            onChange={(e) => setFolderId(e.target.value)}
+            disabled={busy}
+            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+            style={{
+              background: T.panelElevated,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            <option value="">— Без папки —</option>
+            {folderOptions.map((f) => (
+              <option key={f.id} value={f.id}>
+                {`${"— ".repeat(f.depth)}${f.name}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label
             className="mb-1 block text-xs font-medium"
@@ -313,6 +365,20 @@ export default function NewMeetingPage() {
       )}
     </div>
   );
+}
+
+function flattenFolderTree(
+  flat: { id: string; name: string; parentId: string | null }[],
+): FolderOption[] {
+  const out: FolderOption[] = [];
+  function walk(parentId: string | null, depth: number) {
+    for (const f of flat.filter((x) => x.parentId === parentId)) {
+      out.push({ id: f.id, name: f.name, parentId: f.parentId, depth });
+      walk(f.id, depth + 1);
+    }
+  }
+  walk(null, 0);
+  return out;
 }
 
 function extensionFor(mimeType: string): string {

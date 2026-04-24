@@ -1286,6 +1286,7 @@ enum FolderDomain {
   PROJECT
   ESTIMATE
   FINANCE
+  MEETING
 }
 
 model Folder {
@@ -1311,6 +1312,7 @@ model Folder {
   estimates           Estimate[]
   financeEntries      FinanceEntry[]
   financeTemplates    FinanceExpenseTemplate[]
+  meetings            Meeting[]
 
   @@unique([domain, parentId, name])
   @@unique([domain, slug])
@@ -2133,6 +2135,9 @@ model Meeting {
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
+  folderId String?
+  folder   Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   createdById String
   createdBy   User   @relation("MeetingCreator", fields: [createdById], references: [id])
 
@@ -2157,6 +2162,7 @@ model Meeting {
   @@index([projectId])
   @@index([createdById])
   @@index([recordedAt])
+  @@index([folderId])
   @@map("meetings")
 }
 

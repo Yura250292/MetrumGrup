@@ -174,5 +174,10 @@ export async function moveItems(opts: {
         where: { id: { in: opts.itemIds } },
         data,
       });
+    case "MEETING":
+      return prisma.meeting.updateMany({
+        where: { id: { in: opts.itemIds } },
+        data,
+      });
   }
 }

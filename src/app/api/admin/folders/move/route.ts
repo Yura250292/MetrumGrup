@@ -3,7 +3,7 @@ import { requireStaffAccess, unauthorizedResponse } from "@/lib/auth-utils";
 import { moveItems } from "@/lib/folders/actions";
 import type { FolderDomain } from "@prisma/client";
 
-const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE"];
+const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE", "MEETING"];
 
 export async function POST(request: NextRequest) {
   try {

@@ -4,7 +4,7 @@ import { listFolders } from "@/lib/folders/queries";
 import { createFolder, MIRROR_FOLDER_EDIT_ERROR } from "@/lib/folders/actions";
 import type { FolderDomain } from "@prisma/client";
 
-const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE"];
+const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE", "MEETING"];
 
 export async function GET(request: NextRequest) {
   try {

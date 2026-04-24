@@ -12,8 +12,11 @@ import {
   Sparkles,
   Mic,
   FolderOpen,
+  Folder,
+  FolderInput,
   RefreshCw,
 } from "lucide-react";
+import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
   formatDuration,
@@ -53,6 +56,8 @@ export default function MeetingDetailPage() {
     task: MeetingTask;
   } | null>(null);
   const [delegated, setDelegated] = useState<DelegationState>({});
+  const [movingFolder, setMovingFolder] = useState(false);
+  const [moveOpen, setMoveOpen] = useState(false);
   const summaryTriggeredRef = useRef(false);
   const { open: openAiPanel } = useAiPanel();
 
@@ -131,6 +136,27 @@ export default function MeetingDetailPage() {
     await refresh();
   }
 
+  async function moveToFolder(targetFolderId: string | null) {
+    setMovingFolder(true);
+    try {
+      const res = await fetch(`/api/admin/meetings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId: targetFolderId }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося перемістити");
+      }
+      setMoveOpen(false);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка");
+    } finally {
+      setMovingFolder(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
@@ -181,6 +207,23 @@ export default function MeetingDetailPage() {
             >
               <FolderOpen size={14} /> {meeting.project.title}
             </Link>
+            {meeting.folder ? (
+              <button
+                onClick={() => setMoveOpen(true)}
+                className="flex items-center gap-1 hover:underline"
+                title="Змінити папку"
+              >
+                <Folder size={14} /> {meeting.folder.name}
+              </button>
+            ) : (
+              <button
+                onClick={() => setMoveOpen(true)}
+                className="flex items-center gap-1 hover:underline"
+                title="Додати у папку"
+              >
+                <Folder size={14} /> Без папки
+              </button>
+            )}
             <span>{new Date(meeting.recordedAt).toLocaleString("uk-UA")}</span>
             {meeting.audioDurationMs && (
               <span>{formatDuration(meeting.audioDurationMs)}</span>
@@ -212,6 +255,14 @@ export default function MeetingDetailPage() {
           >
             {STATUS_LABELS[meeting.status]}
           </span>
+          <button
+            onClick={() => setMoveOpen(true)}
+            className="rounded-lg p-2"
+            style={{ background: T.panelElevated, color: T.textSecondary }}
+            title="Перемістити в папку"
+          >
+            <FolderInput size={16} />
+          </button>
           <button
             onClick={handleDelete}
             className="rounded-lg p-2"
@@ -352,6 +403,16 @@ export default function MeetingDetailPage() {
           {meeting.transcript}
         </div>
       )}
+
+      <MoveToFolderDialog
+        open={moveOpen}
+        onClose={() => setMoveOpen(false)}
+        onMove={moveToFolder}
+        domain="MEETING"
+        currentFolderId={meeting.folder?.id ?? null}
+        loading={movingFolder}
+        itemCount={1}
+      />
     </div>
   );
 }

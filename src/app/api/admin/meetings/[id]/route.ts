@@ -13,6 +13,7 @@ const updateSchema = z.object({
   description: z.string().max(5000).nullable().optional(),
   summary: z.string().max(20000).nullable().optional(),
   transcript: z.string().nullable().optional(),
+  folderId: z.string().min(1).nullable().optional(),
 });
 
 export async function GET(
@@ -32,6 +33,7 @@ export async function GET(
     include: {
       project: { select: { id: true, title: true, slug: true } },
       createdBy: { select: { id: true, name: true } },
+      folder: { select: { id: true, name: true } },
     },
   });
 
@@ -60,6 +62,19 @@ export async function PATCH(
       { error: "Invalid payload", details: parsed.error.issues },
       { status: 400 }
     );
+  }
+
+  if (parsed.data.folderId) {
+    const folder = await prisma.folder.findUnique({
+      where: { id: parsed.data.folderId },
+      select: { domain: true },
+    });
+    if (!folder || folder.domain !== "MEETING") {
+      return NextResponse.json(
+        { error: "Папку нарад не знайдено" },
+        { status: 400 },
+      );
+    }
   }
 
   const meeting = await prisma.meeting.update({

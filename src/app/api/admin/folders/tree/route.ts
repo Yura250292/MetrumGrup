@@ -3,7 +3,7 @@ import { requireStaffAccess, unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import type { FolderDomain } from "@prisma/client";
 
-const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE"];
+const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE", "MEETING"];
 
 /**
  * GET /api/admin/folders/tree?domain=PROJECT

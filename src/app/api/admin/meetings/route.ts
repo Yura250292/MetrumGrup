@@ -11,6 +11,7 @@ const createSchema = z.object({
   title: z.string().min(1).max(255),
   projectId: z.string().min(1),
   description: z.string().max(5000).optional().nullable(),
+  folderId: z.string().min(1).optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
@@ -23,13 +24,23 @@ export async function GET(request: NextRequest) {
 
   const { searchParams } = new URL(request.url);
   const projectId = searchParams.get("projectId");
+  const folderIdParam = searchParams.get("folderId");
+
+  const where: Record<string, unknown> = {};
+  if (projectId) where.projectId = projectId;
+  if (folderIdParam === "root") {
+    where.folderId = null;
+  } else if (folderIdParam) {
+    where.folderId = folderIdParam;
+  }
 
   const meetings = await prisma.meeting.findMany({
-    where: projectId ? { projectId } : undefined,
+    where: Object.keys(where).length ? where : undefined,
     orderBy: { recordedAt: "desc" },
     include: {
       project: { select: { id: true, title: true, slug: true } },
       createdBy: { select: { id: true, name: true } },
+      folder: { select: { id: true, name: true } },
     },
     take: 200,
   });
@@ -62,16 +73,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
+  if (parsed.data.folderId) {
+    const folder = await prisma.folder.findUnique({
+      where: { id: parsed.data.folderId },
+      select: { domain: true },
+    });
+    if (!folder || folder.domain !== "MEETING") {
+      return NextResponse.json(
+        { error: "Папку нарад не знайдено" },
+        { status: 400 },
+      );
+    }
+  }
+
   const meeting = await prisma.meeting.create({
     data: {
       title: parsed.data.title,
       description: parsed.data.description ?? null,
       projectId: parsed.data.projectId,
+      folderId: parsed.data.folderId ?? null,
       createdById: session.user.id,
       status: "DRAFT",
     },
     include: {
       project: { select: { id: true, title: true, slug: true } },
+      folder: { select: { id: true, name: true } },
     },
   });
 
