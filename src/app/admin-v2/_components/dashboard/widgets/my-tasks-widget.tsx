@@ -47,7 +47,7 @@ export function MyTasksWidget() {
       ) : items.length === 0 ? (
         <EmptyState />
       ) : (
-        <ul className="flex flex-col gap-1.5 overflow-y-auto pr-1">
+        <ul className="flex flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1">
           {items.map((t) => {
             const isDone = t.status?.isDone ?? false;
             const overdue =
@@ -56,7 +56,7 @@ export function MyTasksWidget() {
               <li key={t.id}>
                 <Link
                   href={`/admin-v2/tasks/${t.id}`}
-                  className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 transition hover:brightness-[0.97]"
+                  className="flex min-h-[44px] items-start gap-2.5 rounded-lg px-2 py-1.5 transition hover:brightness-[0.97] touch-manipulation"
                 >
                   <span
                     className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border-[1.5px]"

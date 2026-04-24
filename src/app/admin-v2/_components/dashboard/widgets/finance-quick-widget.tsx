@@ -75,7 +75,7 @@ export function FinanceQuickWidget() {
       title="Фінансування"
       action={{ href: "/admin-v2/financing", label: "Відкрити" }}
     >
-      <div className="flex h-full flex-col gap-3 overflow-y-auto pr-1">
+      <div className="flex h-full flex-col gap-3 overflow-y-auto overscroll-contain pr-1">
         <div className="flex items-center gap-4">
           <BalanceRing income={income} expense={expense} balance={balance} />
           <div className="flex-1 min-w-0 flex flex-col gap-1.5">
@@ -93,14 +93,14 @@ export function FinanceQuickWidget() {
         <div className="flex gap-2">
           <Link
             href="/admin-v2/financing?new=INCOME"
-            className="flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-white transition hover:brightness-110"
+            className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12px] font-semibold text-white transition hover:brightness-110 touch-manipulation"
             style={{ backgroundColor: T.success }}
           >
             <Plus size={12} /> Надходження
           </Link>
           <Link
             href="/admin-v2/financing?new=EXPENSE"
-            className="flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold text-white transition hover:brightness-110"
+            className="flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-lg px-2 py-2 text-[12px] font-semibold text-white transition hover:brightness-110 touch-manipulation"
             style={{ backgroundColor: T.danger }}
           >
             <Plus size={12} /> Витрата

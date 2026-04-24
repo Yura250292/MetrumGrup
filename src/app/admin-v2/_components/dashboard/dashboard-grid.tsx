@@ -29,9 +29,11 @@ export function DashboardGrid({ slots }: { slots: Partial<Record<WidgetType, Rea
   const { layout, isEditing, updateLayout } = useDashboardLayoutContext();
   const [pickerOpen, setPickerOpen] = useState(false);
 
+  // PWA/touch: longer delay + tighter tolerance prevents accidental drags
+  // when the user is trying to scroll the dashboard vertically.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 

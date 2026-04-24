@@ -70,7 +70,7 @@ export function WidgetFrame({
           <button
             type="button"
             onClick={() => onRemove(widget.id)}
-            className="flex h-7 w-7 items-center justify-center rounded-md transition hover:brightness-110"
+            className="flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-md transition hover:brightness-110 touch-manipulation"
             style={{
               backgroundColor: T.panelElevated,
               border: `1px solid ${T.borderSoft}`,
@@ -84,10 +84,11 @@ export function WidgetFrame({
             type="button"
             {...attributes}
             {...listeners}
-            className="flex h-7 w-7 cursor-grab items-center justify-center rounded-md transition active:cursor-grabbing hover:brightness-110"
+            className="flex h-10 w-10 sm:h-8 sm:w-8 cursor-grab items-center justify-center rounded-md transition active:cursor-grabbing hover:brightness-110"
             style={{
               backgroundColor: T.accentPrimary,
               color: "#fff",
+              touchAction: "none",
             }}
             aria-label="Перетягнути"
           >
@@ -127,7 +128,7 @@ function ResizeMenu({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-7 w-7 items-center justify-center rounded-md transition hover:brightness-110"
+        className="flex h-10 w-10 sm:h-8 sm:w-8 items-center justify-center rounded-md transition hover:brightness-110 touch-manipulation"
         style={{
           backgroundColor: T.panelElevated,
           border: `1px solid ${T.borderSoft}`,

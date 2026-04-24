@@ -42,7 +42,7 @@ export function MeetingsWidget() {
       ) : items.length === 0 ? (
         <EmptyState />
       ) : (
-        <ul className="flex flex-col gap-1.5 overflow-y-auto pr-1">
+        <ul className="flex flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1">
           {items.map((m) => (
             <li key={m.id}>
               <Link
@@ -51,7 +51,7 @@ export function MeetingsWidget() {
                     ? `/admin-v2/projects/${m.projectId}/meetings/${m.id}`
                     : `/admin-v2/meetings/${m.id}`
                 }
-                className="flex items-start gap-2.5 rounded-lg px-2 py-2 transition hover:brightness-[0.97]"
+                className="flex min-h-[44px] items-start gap-2.5 rounded-lg px-2 py-2 transition hover:brightness-[0.97] touch-manipulation"
               >
                 <span
                   className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md"

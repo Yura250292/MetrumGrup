@@ -81,6 +81,28 @@ function migrateLegacyConfig(): DashboardLayout | null {
   }
 }
 
+const PENDING_KEY = "dashboard-layout:pending";
+
+function readPending(): DashboardLayout | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PENDING_KEY);
+    return raw ? (JSON.parse(raw) as DashboardLayout) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePending(layout: DashboardLayout | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (layout) localStorage.setItem(PENDING_KEY, JSON.stringify(layout));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* quota; ignore */
+  }
+}
+
 export function useDashboardLayout() {
   const qc = useQueryClient();
 
@@ -96,6 +118,10 @@ export function useDashboardLayout() {
     },
     staleTime: 60_000,
     initialData: () => readLocalCache() ?? DEFAULT_LAYOUT,
+    // React Query will not retry network failures on the client if offline;
+    // let it fail fast so we fall through to local cache.
+    retry: (failureCount) =>
+      typeof navigator !== "undefined" && !navigator.onLine ? false : failureCount < 2,
   });
 
   useEffect(() => {
@@ -113,15 +139,35 @@ export function useDashboardLayout() {
       const prev = qc.getQueryData<DashboardLayout>(QUERY_KEY);
       qc.setQueryData(QUERY_KEY, layout);
       writeLocalCache(layout);
+      writePending(layout); // Persist pending write for offline replay.
       return { prev };
     },
-    onError: (_err, _layout, ctx) => {
-      if (ctx?.prev) qc.setQueryData(QUERY_KEY, ctx.prev);
+    onError: (_err, _layout, _ctx) => {
+      // Do NOT roll back: keep the optimistic local state so the user doesn't
+      // lose edits offline. `writePending` retains it; we'll replay on reconnect.
+    },
+    onSuccess: () => {
+      writePending(null);
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: QUERY_KEY });
     },
   });
+
+  // Replay pending mutation when the network comes back (PWA offline -> online).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const replay = () => {
+      const pending = readPending();
+      if (pending) mutation.mutate(pending);
+    };
+    // Attempt once at mount in case we loaded while offline-pending.
+    if (navigator.onLine && readPending()) replay();
+    window.addEventListener("online", replay);
+    return () => window.removeEventListener("online", replay);
+    // mutation.mutate is stable (useMutation returns memoized fns)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const debouncedSave = useDebouncedCallback((layout: DashboardLayout) => {
     mutation.mutate(layout);
