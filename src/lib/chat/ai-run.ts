@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateAiBotUser } from "@/lib/chat/ai-bot";
@@ -7,7 +8,12 @@ import {
   type AiContextResult,
 } from "@/lib/chat/ai-context";
 
-export type AiModelChoice = "gpt-4o" | "gpt-4o-mini" | "gemini-2.5-flash";
+export type AiModelChoice =
+  | "gpt-4o"
+  | "gpt-4o-mini"
+  | "gemini-2.5-flash"
+  | "claude-opus-4-7"
+  | "claude-sonnet-4-6";
 
 const SYSTEM_PROMPT = `Ти AI-асистент у корпоративному чаті Metrum Group (будівельна компанія).
 Відповідай українською, стисло й по ділу. Використовуй наданий контекст:
@@ -126,6 +132,84 @@ async function callGemini(prompt: string, ctx: AiContextResult): Promise<string>
   return text;
 }
 
+const CLAUDE_MODEL_ID: Record<"claude-opus-4-7" | "claude-sonnet-4-6", string> = {
+  "claude-opus-4-7": "claude-opus-4-7",
+  "claude-sonnet-4-6": "claude-sonnet-4-6",
+};
+
+async function fetchImageAsBase64(
+  url: string,
+): Promise<{ data: string; mediaType: string } | null> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const ab = await res.arrayBuffer();
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    return { data: Buffer.from(ab).toString("base64"), mediaType: contentType };
+  } catch {
+    return null;
+  }
+}
+
+async function callClaude(
+  model: "claude-opus-4-7" | "claude-sonnet-4-6",
+  prompt: string,
+  ctx: AiContextResult,
+): Promise<string> {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "ANTHROPIC_API_KEY не налаштований на сервері. Додайте ключ у Vercel Env Variables.",
+    );
+  }
+
+  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+  const contextBlock = ctx.notes.length
+    ? `${ctx.transcript}\n\n[Службові примітки щодо контексту:\n${ctx.notes.join("\n")}]`
+    : ctx.transcript;
+
+  const userContent: Anthropic.Messages.ContentBlockParam[] = [];
+
+  for (const img of ctx.images) {
+    const fetched = await fetchImageAsBase64(img.url);
+    if (!fetched) continue;
+    // Claude validates media types; fall back to jpeg if header is generic.
+    const mediaType = (
+      ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(fetched.mediaType)
+        ? fetched.mediaType
+        : "image/jpeg"
+    ) as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
+    userContent.push({
+      type: "image",
+      source: { type: "base64", media_type: mediaType, data: fetched.data },
+    });
+  }
+
+  userContent.push({
+    type: "text",
+    text: `Контекст останніх повідомлень та файлів у чаті:\n\n${contextBlock}\n\n---\nПоточний запит до тебе: ${prompt}`,
+  });
+
+  const response = await anthropic.messages.create({
+    model: CLAUDE_MODEL_ID[model],
+    max_tokens: 1200,
+    temperature: 0.35,
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: userContent }],
+  });
+
+  const textBlocks = response.content
+    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+    .map((b) => b.text);
+  return textBlocks.join("\n").trim();
+}
+
 /**
  * Generate an AI reply and persist it as a ChatMessage authored by the AI
  * bot. Safe to call multiple times per conversation. Returns the created
@@ -145,6 +229,8 @@ export async function runAiReply(opts: {
   let reply: string;
   if (choice === "gemini-2.5-flash") {
     reply = await callGemini(opts.prompt, ctx);
+  } else if (choice === "claude-opus-4-7" || choice === "claude-sonnet-4-6") {
+    reply = await callClaude(choice, opts.prompt, ctx);
   } else {
     reply = await callOpenAi(choice, opts.prompt, ctx);
   }

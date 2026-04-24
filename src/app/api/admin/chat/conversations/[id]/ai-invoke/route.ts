@@ -4,7 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { postMessage } from "@/lib/chat/service";
 import { runAiReply, type AiModelChoice } from "@/lib/chat/ai-run";
 
-const VALID_MODELS: AiModelChoice[] = ["gpt-4o", "gpt-4o-mini", "gemini-2.5-flash"];
+const VALID_MODELS: AiModelChoice[] = [
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gemini-2.5-flash",
+  "claude-opus-4-7",
+  "claude-sonnet-4-6",
+];
 
 function isValidModel(v: unknown): v is AiModelChoice {
   return typeof v === "string" && (VALID_MODELS as string[]).includes(v);

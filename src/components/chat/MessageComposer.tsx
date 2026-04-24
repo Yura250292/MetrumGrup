@@ -31,19 +31,37 @@ function tasksToMarkdown(tasks: StructuredTask[]): string {
   return lines.join("\n");
 }
 
-type AiModelChoice = "gpt-4o" | "gpt-4o-mini" | "gemini-2.5-flash";
+type AiModelChoice =
+  | "gpt-4o"
+  | "gpt-4o-mini"
+  | "gemini-2.5-flash"
+  | "claude-opus-4-7"
+  | "claude-sonnet-4-6";
 
 const AI_MODEL_LABELS: Record<AiModelChoice, string> = {
+  "claude-opus-4-7": "Claude Opus 4.7",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6",
   "gpt-4o": "GPT-4o",
   "gpt-4o-mini": "GPT-4o mini",
   "gemini-2.5-flash": "Gemini 2.5 Flash",
 };
 
+const AI_MODEL_KEYS: AiModelChoice[] = [
+  "claude-opus-4-7",
+  "claude-sonnet-4-6",
+  "gpt-4o",
+  "gpt-4o-mini",
+  "gemini-2.5-flash",
+];
+
+function isValidAiModel(v: string): v is AiModelChoice {
+  return (AI_MODEL_KEYS as string[]).includes(v);
+}
+
 function loadAiModel(): AiModelChoice {
   if (typeof window === "undefined") return "gpt-4o";
   const v = window.localStorage.getItem("metrum:chat:aiModel");
-  if (v === "gpt-4o" || v === "gpt-4o-mini" || v === "gemini-2.5-flash") return v;
-  return "gpt-4o";
+  return v && isValidAiModel(v) ? v : "gpt-4o";
 }
 
 export function MessageComposer({ conversationId }: { conversationId: string }) {
@@ -210,7 +228,7 @@ export function MessageComposer({ conversationId }: { conversationId: string }) 
                   border: "1px solid rgba(236, 72, 153, 0.35)",
                 }}
               >
-                {(Object.keys(AI_MODEL_LABELS) as AiModelChoice[]).map((key) => (
+                {AI_MODEL_KEYS.map((key) => (
                   <option key={key} value={key}>
                     {AI_MODEL_LABELS[key]}
                   </option>
