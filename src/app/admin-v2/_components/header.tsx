@@ -11,7 +11,6 @@ import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
-import { TeamAvatars } from "@/components/layout/TeamAvatars";
 import { SearchModal } from "./search-modal";
 
 export function Header() {
@@ -131,10 +130,6 @@ export function Header() {
       </button>
 
       <div className="flex items-center gap-1.5 md:gap-3">
-        <div className="hidden md:flex items-center gap-3">
-          <TeamAvatars />
-          <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
-        </div>
         <div className="flex items-center gap-1 md:gap-1.5">
           <AiChatButton />
           <NotificationBell
