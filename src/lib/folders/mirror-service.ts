@@ -641,6 +641,7 @@ export async function syncProjectBudgetEntry(
       totalBudget: true,
       startDate: true,
       createdAt: true,
+      isTestProject: true,
     },
   });
   if (!project) return;
@@ -651,7 +652,9 @@ export async function syncProjectBudgetEntry(
     select: { id: true },
   });
 
-  if (budget <= 0) {
+  // Тестові проєкти не враховуються у фінансуванні — видаляємо plan-запис,
+  // якщо він був (наприклад, після того як юзер позначив проект тестовим).
+  if (project.isTestProject || budget <= 0) {
     if (existing) {
       await tx.financeEntry.delete({ where: { id: existing.id } });
     }

@@ -64,7 +64,7 @@ export async function PATCH(
   // Read previous managerId to know if we need to sync ProjectMember
   const previous = await prisma.project.findUnique({
     where: { id },
-    select: { managerId: true, status: true, currentStage: true, title: true, folderId: true, totalBudget: true },
+    select: { managerId: true, status: true, currentStage: true, title: true, folderId: true, totalBudget: true, isTestProject: true },
   });
   if (!previous) {
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
@@ -97,7 +97,11 @@ export async function PATCH(
     if (titleChanged) {
       await updateProjectMirror(id);
     }
-    if (totalBudget !== undefined && Number(totalBudget) !== Number(previous.totalBudget)) {
+    const budgetChanged =
+      totalBudget !== undefined && Number(totalBudget) !== Number(previous.totalBudget);
+    const testFlagChanged =
+      isTestProject !== undefined && Boolean(isTestProject) !== Boolean(previous.isTestProject);
+    if (budgetChanged || testFlagChanged) {
       await syncProjectBudgetEntry(id, session.user.id);
     }
   } catch (err) {
