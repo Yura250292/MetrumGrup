@@ -193,7 +193,6 @@ async function callClaude(
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL_ID[model],
     max_tokens: 1200,
-    temperature: 0.35,
     system: [
       {
         type: "text",
