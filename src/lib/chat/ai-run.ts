@@ -54,7 +54,7 @@ async function callOpenAi(
   const completion = await openai.chat.completions.create({
     model,
     temperature: 0.35,
-    max_tokens: 900,
+    max_tokens: 4000,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userContent },
@@ -102,7 +102,7 @@ async function callGemini(prompt: string, ctx: AiContextResult): Promise<string>
     model: "gemini-2.5-flash",
     generationConfig: {
       temperature: 0.35,
-      maxOutputTokens: 900,
+      maxOutputTokens: 4000,
     },
     tools: [{ googleSearchRetrieval: {} }],
   });
@@ -200,7 +200,7 @@ async function callClaude(
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL_ID[model],
-    max_tokens: 1200,
+    max_tokens: 4000,
     system: [
       {
         type: "text",
