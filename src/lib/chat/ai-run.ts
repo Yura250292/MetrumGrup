@@ -137,6 +137,14 @@ const CLAUDE_MODEL_ID: Record<"claude-opus-4-7" | "claude-sonnet-4-6", string> =
   "claude-sonnet-4-6": "claude-sonnet-4-6",
 };
 
+const MODEL_LABELS: Record<AiModelChoice, string> = {
+  "claude-opus-4-7": "Claude Opus 4.7",
+  "claude-sonnet-4-6": "Claude Sonnet 4.6",
+  "gemini-2.5-flash": "Gemini 2.5 Flash",
+  "gpt-4o": "GPT-4o",
+  "gpt-4o-mini": "GPT-4o mini",
+};
+
 async function fetchImageAsBase64(
   url: string,
 ): Promise<{ data: string; mediaType: string } | null> {
@@ -236,6 +244,9 @@ export async function runAiReply(opts: {
 
   reply = (reply ?? "").trim();
   if (!reply) return null;
+
+  // Mark which model produced the reply so the thread is auditable.
+  reply = `${reply}\n\n— _🤖 ${MODEL_LABELS[choice]}_`;
 
   const [created] = await prisma.$transaction([
     prisma.chatMessage.create({
