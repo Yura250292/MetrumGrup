@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { TrendingUp, TrendingDown, Plus, Wallet, Folder } from "lucide-react";
-import { PieChart, Pie, Cell } from "recharts";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
+import { RadialProgress } from "@/components/ui/RadialProgress";
 import { WidgetShell } from "./widget-shell";
 
 type FinanceQuad = { sum: number; count: number };
@@ -122,53 +122,37 @@ function BalanceRing({
   expense: number;
   balance: number;
 }) {
-  const data = [
-    { name: "Надходження", value: Math.max(income, 0) },
-    { name: "Витрати", value: Math.max(expense, 0) },
-  ];
-  const hasData = data[0].value + data[1].value > 0;
+  // Ring shows how much of income is consumed by expenses (0-100%, capped).
+  // Positive balance → mostly green (expense ratio <100%), negative → full red.
+  const total = income + expense;
+  const expenseShare = total > 0 ? (expense / total) * 100 : 0;
+  const fillColor = balance >= 0 ? T.success : T.danger;
 
   return (
-    <div className="relative flex h-[92px] w-[92px] flex-shrink-0 items-center justify-center">
-      {hasData ? (
-        <PieChart width={92} height={92}>
-          <Pie
-            data={data}
-            cx={46}
-            cy={46}
-            innerRadius={32}
-            outerRadius={45}
-            startAngle={90}
-            endAngle={-270}
-            paddingAngle={2}
-            dataKey="value"
-            stroke="none"
-          >
-            <Cell fill={T.success} />
-            <Cell fill={T.danger} />
-          </Pie>
-        </PieChart>
-      ) : (
-        <div
-          className="h-[78px] w-[78px] rounded-full"
-          style={{ border: `8px solid ${T.borderSoft}` }}
-        />
-      )}
-      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+    <RadialProgress
+      value={total > 0 ? Math.max(expenseShare, 5) : 0}
+      size={96}
+      thickness={6}
+      fillColor={fillColor}
+      trackColor={T.borderSoft}
+      rounded
+      ariaLabel={`Баланс ${formatCurrencyCompact(balance)}`}
+    >
+      <div className="flex flex-col items-center justify-center">
         <span
-          className="text-[9px] font-bold tracking-wider"
+          className="text-[8.5px] font-bold tracking-wider"
           style={{ color: T.textMuted }}
         >
           БАЛАНС
         </span>
         <span
-          className="text-[12px] font-bold leading-tight"
-          style={{ color: balance >= 0 ? T.success : T.danger }}
+          className="text-[12px] font-bold leading-tight tabular-nums"
+          style={{ color: fillColor }}
         >
           {formatCurrencyCompact(balance)}
         </span>
       </div>
-    </div>
+    </RadialProgress>
   );
 }
 
@@ -293,27 +277,19 @@ function FolderRing({
   color: string | null;
 }) {
   const total = income + expense;
-  const incomeRatio = total > 0 ? (income / total) * 100 : 0;
-  const ring = `conic-gradient(${T.success} 0% ${incomeRatio}%, ${T.danger} ${incomeRatio}% 100%)`;
-  if (total === 0) {
-    return (
-      <span
-        className="h-6 w-6 flex-shrink-0 rounded-full"
-        style={{
-          border: `2px solid ${color ?? T.borderSoft}`,
-        }}
-      />
-    );
-  }
+  const balance = income - expense;
+  const share = total > 0 ? (expense / total) * 100 : 0;
+  const fill = total === 0 ? (color ?? T.borderSoft) : balance >= 0 ? T.success : T.danger;
+
   return (
-    <span
-      className="relative flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full"
-      style={{ background: ring }}
-    >
-      <span
-        className="h-3 w-3 rounded-full"
-        style={{ backgroundColor: color ?? T.panel }}
-      />
-    </span>
+    <RadialProgress
+      value={total > 0 ? Math.max(share, 6) : 100}
+      size={24}
+      thickness={3}
+      fillColor={fill}
+      trackColor={T.borderSoft}
+      animate={false}
+      rounded
+    />
   );
 }
