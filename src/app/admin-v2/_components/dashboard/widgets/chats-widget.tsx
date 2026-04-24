@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { MessageSquare, ArrowRight } from "lucide-react";
+import { MessageSquare, ArrowRight, Sparkles } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { chatKeys, type ChatConversation } from "@/hooks/useChat";
 import { formatRelativeTime } from "@/lib/utils";
@@ -36,7 +36,8 @@ export function ChatsWidget() {
     <WidgetShell
       icon={<MessageSquare size={14} />}
       title="Чати"
-      badge={totalUnread > 0 ? String(totalUnread) : undefined}
+      subtitle={totalUnread > 0 ? "Нові повідомлення чекають" : "Усе прочитано"}
+      badge={totalUnread > 0 ? { label: String(totalUnread), tone: "accent" } : undefined}
       action={{ href: "/admin-v2/chat", label: "Усі" }}
     >
       {isLoading ? (
@@ -44,54 +45,98 @@ export function ChatsWidget() {
       ) : conversations.length === 0 ? (
         <EmptyState />
       ) : (
-        <ul className="flex flex-col gap-1">
-          {conversations.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/admin-v2/chat/${c.id}`}
-                className="flex min-h-[44px] items-start gap-2.5 rounded-lg px-2 py-2 transition hover:brightness-[0.97] touch-manipulation"
-                style={{ backgroundColor: "transparent" }}
-              >
-                <div
-                  className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
-                  style={{ backgroundColor: T.accentPrimary + "18", color: T.accentPrimary }}
+        <ul className="flex flex-col gap-0.5">
+          {conversations.map((c) => {
+            const unread = c.unreadCount > 0;
+            const name = displayName(c);
+            return (
+              <li key={c.id}>
+                <Link
+                  href={`/admin-v2/chat/${c.id}`}
+                  className="group/row flex min-h-[48px] items-center gap-3 rounded-xl px-2 py-2 transition-colors duration-150 touch-manipulation"
+                  style={{
+                    backgroundColor: "transparent",
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = T.panelElevated;
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                  }}
                 >
-                  {initialOf(displayName(c))}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className="truncate text-[12.5px] font-semibold"
-                      style={{ color: T.textPrimary }}
-                    >
-                      {displayName(c)}
-                    </span>
-                    {c.lastMessageAt && (
-                      <span className="text-[10.5px]" style={{ color: T.textMuted }}>
-                        {formatRelativeTime(new Date(c.lastMessageAt))}
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 flex items-center gap-2">
-                    <span
-                      className="truncate text-[11.5px]"
-                      style={{ color: c.unreadCount > 0 ? T.textPrimary : T.textMuted }}
-                    >
-                      {c.lastMessage?.body?.slice(0, 80) || "Немає повідомлень"}
-                    </span>
-                    {c.unreadCount > 0 && (
+                  <div className="relative flex-shrink-0">
+                    {unread && (
                       <span
-                        className="inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-                        style={{ backgroundColor: T.accentPrimary }}
-                      >
-                        {c.unreadCount}
-                      </span>
+                        aria-hidden
+                        className="absolute inset-0 rounded-full"
+                        style={{
+                          background: `conic-gradient(from 0deg, ${T.accentPrimary}, ${T.accentSecondary}, ${T.accentPrimary})`,
+                          padding: 1.5,
+                          WebkitMask:
+                            "linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0)",
+                          WebkitMaskComposite: "xor",
+                          maskComposite: "exclude",
+                        }}
+                      />
                     )}
+                    <div
+                      className="flex h-9 w-9 items-center justify-center rounded-full text-[12px] font-bold"
+                      style={{
+                        background: unread
+                          ? `linear-gradient(135deg, ${T.accentPrimary}22, ${T.accentSecondary}1A)`
+                          : T.panelElevated,
+                        color: unread ? T.accentPrimary : T.textMuted,
+                        border: unread ? "none" : `1px solid ${T.borderSoft}`,
+                        margin: unread ? 2 : 0,
+                      }}
+                    >
+                      {c.peer?.isAi ? <Sparkles size={14} /> : initialOf(name)}
+                    </div>
                   </div>
-                </div>
-              </Link>
-            </li>
-          ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span
+                        className="truncate text-[13px] leading-tight tracking-[-0.01em]"
+                        style={{
+                          color: T.textPrimary,
+                          fontWeight: unread ? 700 : 500,
+                        }}
+                      >
+                        {name}
+                      </span>
+                      {c.lastMessageAt && (
+                        <span
+                          className="flex-shrink-0 text-[10.5px] tabular-nums"
+                          style={{ color: T.textMuted }}
+                        >
+                          {formatRelativeTime(new Date(c.lastMessageAt))}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-2">
+                      <span
+                        className="truncate text-[11.5px] leading-snug"
+                        style={{
+                          color: unread ? T.textSecondary : T.textMuted,
+                          fontWeight: unread ? 500 : 400,
+                        }}
+                      >
+                        {c.lastMessage?.body?.slice(0, 90) || "Немає повідомлень"}
+                      </span>
+                      {unread && (
+                        <span
+                          className="inline-flex h-[18px] min-w-[18px] flex-shrink-0 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums text-white"
+                          style={{ backgroundColor: T.accentPrimary }}
+                        >
+                          {c.unreadCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </WidgetShell>
@@ -117,8 +162,11 @@ function SkeletonList() {
       {[0, 1, 2, 3].map((i) => (
         <li
           key={i}
-          className="h-10 rounded-lg"
-          style={{ backgroundColor: T.panelElevated, opacity: 0.5 }}
+          className="h-11 animate-pulse rounded-xl"
+          style={{
+            backgroundColor: T.panelElevated,
+            animationDelay: `${i * 80}ms`,
+          }}
         />
       ))}
     </ul>
@@ -127,14 +175,21 @@ function SkeletonList() {
 
 function EmptyState() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-1 py-6 text-center">
-      <MessageSquare size={20} style={{ color: T.textMuted }} />
-      <span className="text-[12px]" style={{ color: T.textMuted }}>
-        Немає активних чатів
+    <div className="flex h-full flex-col items-center justify-center gap-2 py-6 text-center">
+      <span
+        className="flex h-10 w-10 items-center justify-center rounded-full"
+        style={{
+          background: `linear-gradient(135deg, ${T.accentPrimary}14, ${T.accentSecondary}14)`,
+        }}
+      >
+        <MessageSquare size={18} style={{ color: T.accentPrimary }} />
+      </span>
+      <span className="text-[12.5px] font-semibold" style={{ color: T.textPrimary }}>
+        Поки тиша
       </span>
       <Link
         href="/admin-v2/chat"
-        className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold"
+        className="inline-flex items-center gap-1 text-[11px] font-semibold"
         style={{ color: T.accentPrimary }}
       >
         Почати розмову <ArrowRight size={12} />

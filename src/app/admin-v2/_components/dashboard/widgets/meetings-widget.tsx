@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Calendar, Mic, FileText } from "lucide-react";
+import { Calendar, Mic, FileText, Clock } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { formatRelativeTime } from "@/lib/utils";
 import { WidgetShell } from "./widget-shell";
 
 type MeetingItem = {
@@ -18,6 +17,21 @@ type MeetingItem = {
   summary: string | null;
 };
 
+const MONTH_SHORT = [
+  "СІЧ",
+  "ЛЮТ",
+  "БЕР",
+  "КВІ",
+  "ТРА",
+  "ЧЕР",
+  "ЛИП",
+  "СЕР",
+  "ВЕР",
+  "ЖОВ",
+  "ЛИС",
+  "ГРУ",
+];
+
 export function MeetingsWidget() {
   const { data, isLoading } = useQuery({
     queryKey: ["me", "meetings", "widget"],
@@ -30,11 +44,20 @@ export function MeetingsWidget() {
   });
 
   const items = (data?.data?.items ?? []).slice(0, 5);
+  const withSummary = items.filter((m) => m.summary).length;
 
   return (
     <WidgetShell
       icon={<Calendar size={14} />}
       title="Наради"
+      subtitle={
+        items.length === 0
+          ? "Останні 14 днів"
+          : withSummary === items.length
+            ? `Усі ${items.length} оброблені AI`
+            : `${items.length} · ${withSummary} з підсумком`
+      }
+      accent={T.accentSecondary}
       action={{ href: "/admin-v2/meetings", label: "Усі" }}
     >
       {isLoading ? (
@@ -42,48 +65,90 @@ export function MeetingsWidget() {
       ) : items.length === 0 ? (
         <EmptyState />
       ) : (
-        <ul className="flex flex-col gap-1.5 overflow-y-auto overscroll-contain pr-1">
-          {items.map((m) => (
-            <li key={m.id}>
-              <Link
-                href={`/admin-v2/meetings/${m.id}`}
-                className="flex min-h-[44px] items-start gap-2.5 rounded-lg px-2 py-2 transition hover:brightness-[0.97] touch-manipulation"
-              >
-                <span
-                  className="mt-0.5 flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md"
-                  style={{
-                    backgroundColor: T.accentSecondary + "18",
-                    color: T.accentSecondary,
+        <ul className="flex flex-col gap-1 overflow-y-auto overscroll-contain pr-1">
+          {items.map((m) => {
+            const d = new Date(m.recordedAt);
+            const day = d.getDate();
+            const month = MONTH_SHORT[d.getMonth()];
+            const hasSummary = !!m.summary;
+            return (
+              <li key={m.id}>
+                <Link
+                  href={`/admin-v2/meetings/${m.id}`}
+                  className="group/row flex min-h-[56px] items-center gap-3 rounded-xl px-2 py-2 transition-colors duration-150 touch-manipulation"
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.backgroundColor = T.panelElevated;
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
                   }}
                 >
-                  {m.summary ? <FileText size={13} /> : <Mic size={13} />}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span
-                    className="block truncate text-[12.5px] font-semibold"
-                    style={{ color: T.textPrimary }}
+                  {/* Date stamp */}
+                  <div
+                    className="flex h-11 w-11 flex-shrink-0 flex-col items-center justify-center rounded-lg"
+                    style={{
+                      backgroundColor: T.panelElevated,
+                      border: `1px solid ${T.borderSoft}`,
+                    }}
                   >
-                    {m.title}
-                  </span>
-                  <span className="mt-0.5 flex items-center gap-2 text-[10.5px]">
-                    <span style={{ color: T.textMuted }}>
-                      {formatRelativeTime(new Date(m.recordedAt))}
+                    <span
+                      className="text-[8.5px] font-bold leading-none tracking-wider"
+                      style={{ color: T.accentSecondary }}
+                    >
+                      {month}
                     </span>
-                    {m.audioDurationMs && (
-                      <span style={{ color: T.textMuted }}>
-                        · {formatDuration(m.audioDurationMs)}
+                    <span
+                      className="text-[16px] font-bold leading-none tabular-nums"
+                      style={{ color: T.textPrimary }}
+                    >
+                      {day}
+                    </span>
+                  </div>
+
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full"
+                        style={{
+                          backgroundColor: hasSummary
+                            ? T.success + "22"
+                            : T.accentSecondary + "22",
+                          color: hasSummary ? T.success : T.accentSecondary,
+                        }}
+                      >
+                        {hasSummary ? <FileText size={9} /> : <Mic size={9} />}
                       </span>
-                    )}
-                    {m.project && (
-                      <span className="truncate" style={{ color: T.textMuted }}>
-                        · {m.project.title}
+                      <span
+                        className="block truncate text-[13px] font-semibold leading-tight tracking-[-0.01em]"
+                        style={{ color: T.textPrimary }}
+                      >
+                        {m.title}
                       </span>
-                    )}
+                    </span>
+                    <span className="mt-1 flex items-center gap-2 text-[10.5px]">
+                      {m.audioDurationMs && (
+                        <span
+                          className="inline-flex items-center gap-1 font-medium tabular-nums"
+                          style={{ color: T.textMuted }}
+                        >
+                          <Clock size={10} />
+                          {formatDuration(m.audioDurationMs)}
+                        </span>
+                      )}
+                      {m.project && (
+                        <span
+                          className="truncate font-medium"
+                          style={{ color: T.textMuted }}
+                        >
+                          · {m.project.title}
+                        </span>
+                      )}
+                    </span>
                   </span>
-                </span>
-              </Link>
-            </li>
-          ))}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </WidgetShell>
@@ -104,8 +169,11 @@ function SkeletonList() {
       {[0, 1, 2].map((i) => (
         <li
           key={i}
-          className="h-11 rounded-lg"
-          style={{ backgroundColor: T.panelElevated, opacity: 0.5 }}
+          className="h-12 animate-pulse rounded-xl"
+          style={{
+            backgroundColor: T.panelElevated,
+            animationDelay: `${i * 80}ms`,
+          }}
         />
       ))}
     </ul>
@@ -114,10 +182,20 @@ function SkeletonList() {
 
 function EmptyState() {
   return (
-    <div className="flex h-full flex-col items-center justify-center py-6 text-center">
-      <Calendar size={20} style={{ color: T.textMuted }} />
-      <span className="mt-1 text-[12px]" style={{ color: T.textMuted }}>
-        Немає останніх нарад
+    <div className="flex h-full flex-col items-center justify-center gap-2 py-6 text-center">
+      <span
+        className="flex h-10 w-10 items-center justify-center rounded-full"
+        style={{
+          background: `linear-gradient(135deg, ${T.accentSecondary}14, ${T.accentPrimary}14)`,
+        }}
+      >
+        <Calendar size={18} style={{ color: T.accentSecondary }} />
+      </span>
+      <span className="text-[12.5px] font-semibold" style={{ color: T.textPrimary }}>
+        Розклад вільний
+      </span>
+      <span className="text-[11px]" style={{ color: T.textMuted }}>
+        Немає нарад за 14 днів
       </span>
     </div>
   );
