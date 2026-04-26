@@ -177,6 +177,36 @@
   --font-sans: "Montserrat", system-ui, -apple-system, sans-serif;
   --font-heading: "Space Grotesk", "Montserrat", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Menlo", monospace;
+
+  /* === Admin-v2 token aliases for Tailwind v4 utilities ===
+     Maps the `--t-*` CSS vars (defined per-theme on :root / .admin-dark)
+     into Tailwind color names prefixed with `t-` so components can use
+     `bg-t-panel`, `text-t-1`, `border-t-border` instead of inline
+     style={{}}. The `t-` prefix prevents collisions with the landing-page
+     palette (--color-primary, --color-border) defined above and signals
+     "admin-v2 design token". Theme switching still happens via the
+     wrapping `.admin-dark` / `.admin-light` class. */
+  --color-t-bg:           var(--t-bg);
+  --color-t-panel:        var(--t-panel);
+  --color-t-panel-el:     var(--t-panel-el);
+  --color-t-panel-soft:   var(--t-panel-soft);
+  --color-t-border:       var(--t-border);
+  --color-t-border-2:     var(--t-border-strong);
+  --color-t-1:            var(--t-text-1);
+  --color-t-2:            var(--t-text-2);
+  --color-t-3:            var(--t-text-3);
+  --color-t-accent:       var(--t-accent-soft);
+  --color-t-accent2:      var(--t-accent2-soft);
+  --color-t-success:      var(--t-success-soft);
+  --color-t-warning:      var(--t-warning-soft);
+  --color-t-danger:       var(--t-danger-soft);
+  --color-t-teal:         var(--t-teal-soft);
+  --color-t-indigo:       var(--t-indigo-soft);
+  --color-t-amber:        var(--t-amber-soft);
+  --color-t-rose:         var(--t-rose-soft);
+  --color-t-sky:          var(--t-sky-soft);
+  --color-t-emerald:      var(--t-emerald-soft);
+  --color-t-violet:       var(--t-violet-soft);
 }
 
 @layer base {
