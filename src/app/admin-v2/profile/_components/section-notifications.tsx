@@ -15,6 +15,7 @@ import {
   isPushSupported,
   hasActivePushSubscription,
 } from "@/lib/notifications/push-client";
+import { Switch } from "@/components/ui/switch";
 
 type Props = {
   profile: ProfileData;
@@ -255,29 +256,21 @@ export function SectionNotifications({ profile, onSave }: Props) {
                     {cat.label}
                   </span>
                 </td>
-                {NOTIFICATION_CHANNELS.map((ch) => (
-                  <td key={ch.key} className="text-center py-2.5 px-2">
-                    <button
-                      onClick={() => toggleCategory(cat.key, ch.key)}
-                      disabled={saving}
-                      className="inline-flex h-5 w-9 items-center rounded-full transition-colors disabled:opacity-50"
-                      style={{
-                        backgroundColor: prefs.categories[cat.key]?.[ch.key]
-                          ? T.accentPrimary
-                          : T.borderStrong,
-                      }}
-                    >
-                      <span
-                        className="h-4 w-4 rounded-full bg-white shadow-sm transition-transform"
-                        style={{
-                          transform: prefs.categories[cat.key]?.[ch.key]
-                            ? "translateX(18px)"
-                            : "translateX(2px)",
-                        }}
-                      />
-                    </button>
-                  </td>
-                ))}
+                {NOTIFICATION_CHANNELS.map((ch) => {
+                  const checked = !!prefs.categories[cat.key]?.[ch.key];
+                  return (
+                    <td key={ch.key} className="text-center py-2.5 px-2">
+                      <div className="inline-flex">
+                        <Switch
+                          checked={checked}
+                          onCheckedChange={() => toggleCategory(cat.key, ch.key)}
+                          disabled={saving}
+                          aria-label={`${cat.label} — ${ch.label}: ${checked ? "увімкнено" : "вимкнено"}`}
+                        />
+                      </div>
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

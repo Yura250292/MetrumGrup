@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
-import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import type { LucideIcon } from "lucide-react";
+import { ToggleGroup } from "@/components/ui/toggle-group";
 
 export type ViewModeOption<V extends string> = {
   value: V;
@@ -17,39 +17,34 @@ type Props<V extends string> = {
   ariaLabel?: string;
 };
 
-export function ViewModeSwitcher<V extends string>({ value, options, onChange, ariaLabel }: Props<V>) {
-  return (
-    <div
-      role="tablist"
-      aria-label={ariaLabel}
-      className="inline-flex items-center rounded-md p-0.5"
-      style={{
-        backgroundColor: T.panelElevated,
-        border: `1px solid ${T.borderSoft}`,
-      }}
-    >
-      {options.map((opt) => {
-        const active = opt.value === value;
+export function ViewModeSwitcher<V extends string>({
+  value,
+  options,
+  onChange,
+  ariaLabel,
+}: Props<V>) {
+  const groupOptions = useMemo(
+    () =>
+      options.map((opt) => {
         const Icon = opt.icon;
-        return (
-          <button
-            key={opt.value}
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(opt.value)}
-            className="inline-flex items-center gap-1.5 rounded px-2.5 py-1.5 text-[12px] font-medium transition"
-            style={{
-              backgroundColor: active ? T.panel : "transparent",
-              color: active ? T.textPrimary : T.textSecondary,
-              boxShadow: active ? `0 1px 2px rgba(0,0,0,0.05)` : undefined,
-            }}
-          >
-            {Icon && <Icon size={14} />}
-            {opt.label}
-          </button>
-        );
-      })}
-    </div>
+        return {
+          value: opt.value,
+          label: opt.label,
+          ariaLabel: opt.label,
+          icon: Icon ? <Icon size={14} /> : undefined,
+        };
+      }),
+    [options],
+  );
+
+  return (
+    <ToggleGroup<V>
+      ariaLabel={ariaLabel ?? "Режим перегляду"}
+      size="sm"
+      value={value}
+      onValueChange={onChange}
+      options={groupOptions}
+    />
   );
 }
 

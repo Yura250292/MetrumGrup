@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
@@ -26,7 +27,14 @@ import {
 import { TaskKanban, type KanbanCard, type KanbanStatus } from "./task-kanban";
 import { TaskCalendar } from "./task-calendar";
 import { TaskPeopleView } from "./task-people";
-import { TaskGantt } from "./task-gantt";
+// Gantt is heavy (frappe-gantt + vendor CSS) and only mounted when the
+// "gantt" tab is selected — defer the bundle.
+const TaskGantt = dynamic(() => import("./task-gantt").then((m) => m.TaskGantt), {
+  ssr: false,
+  loading: () => (
+    <div className="h-64 w-full animate-pulse rounded-lg bg-t-panel-soft" />
+  ),
+});
 import { useProjectRealtime } from "@/hooks/useProjectRealtime";
 import { CommentThread } from "@/components/collab/CommentThread";
 
