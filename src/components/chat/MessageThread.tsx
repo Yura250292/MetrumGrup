@@ -437,6 +437,10 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
       {/* Messages */}
       <div
         ref={scrollRef}
+        role="log"
+        aria-live="polite"
+        aria-relevant="additions"
+        aria-label="Повідомлення розмови"
         className="flex-1 overflow-y-auto scrollbar-thin px-4 py-4 space-y-3"
       >
         {isLoading && (
