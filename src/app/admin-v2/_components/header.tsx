@@ -9,7 +9,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { BREADCRUMB_MAP } from "../_lib/nav";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
-import { ThemeToggle } from "@/components/ThemeToggle";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
 import { SearchModal } from "./search-modal";
 
