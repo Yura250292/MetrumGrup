@@ -117,12 +117,26 @@ export function useDashboardLayout() {
       return migrated ?? readLocalCache() ?? DEFAULT_LAYOUT;
     },
     staleTime: 60_000,
-    initialData: () => readLocalCache() ?? DEFAULT_LAYOUT,
+    // Must be deterministic across SSR + first client render. Reading
+    // from localStorage here causes hydration mismatch (server has no
+    // localStorage, client does). The cached layout is restored in a
+    // useEffect below after mount, then overwritten by the server
+    // response.
+    initialData: DEFAULT_LAYOUT,
     // React Query will not retry network failures on the client if offline;
     // let it fail fast so we fall through to local cache.
     retry: (failureCount) =>
       typeof navigator !== "undefined" && !navigator.onLine ? false : failureCount < 2,
   });
+
+  // Restore cached layout post-mount (client only). Skipped if React
+  // Query already has a non-default value (server response or mutation).
+  useEffect(() => {
+    if (query.data !== DEFAULT_LAYOUT) return;
+    const cached = readLocalCache();
+    if (cached) qc.setQueryData(QUERY_KEY, cached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (query.data) writeLocalCache(query.data);
