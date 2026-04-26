@@ -12,6 +12,7 @@ import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { MeetingRecordingProvider } from "@/contexts/MeetingRecordingContext";
 import { MeetingMiniRecorder } from "./_components/meeting-mini-recorder";
 import { PageTransition } from "./_components/page-transition";
+import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 
@@ -40,6 +41,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
                 </div>
                 {!isClient && <TimerPill />}
                 <MeetingMiniRecorder />
+                <InstallPrompt />
               </div>
             </SqueezeWrapper>
             <AiPanelPortal />
