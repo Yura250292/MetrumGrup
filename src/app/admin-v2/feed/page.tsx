@@ -249,7 +249,10 @@ function FeedRow({ item, density }: { item: FeedItem; density: Density }) {
   );
 
   return item.link ? (
-    <Link href={item.link} className="block transition hover:brightness-[0.97]">
+    <Link
+      href={item.link}
+      className="block rounded-xl transition hover:brightness-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-t-bg"
+    >
       {content}
     </Link>
   ) : (
