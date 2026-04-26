@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
@@ -31,8 +34,12 @@ export function KpiCard({
     : null;
 
   const content = (
-    <div
-      className="premium-card relative flex h-full flex-col rounded-xl sm:rounded-2xl p-4 sm:p-5 group overflow-hidden"
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={{ y: -4 }}
+      className="premium-card premium-card-elevated relative flex h-full flex-col rounded-xl sm:rounded-2xl p-4 sm:p-5 group overflow-hidden cursor-pointer"
       style={{
         background: T.panel,
         border: `1px solid ${T.borderSoft}`,
@@ -104,7 +111,7 @@ export function KpiCard({
           style={{ color: T.textMuted }}
         />
       )}
-    </div>
+    </motion.div>
   );
 
   if (href) {

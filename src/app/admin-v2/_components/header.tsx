@@ -141,11 +141,11 @@ export function Header() {
         {/* CTA: New project (desktop only) */}
         <Link
           href="/admin-v2/projects/new"
-          className="hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition active:scale-95"
+          className="btn-shimmer hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-shadow duration-200 active:scale-95"
           style={{
             backgroundColor: T.accentPrimary,
             color: "#fff",
-            boxShadow: `0 1px 2px ${T.accentPrimary}4d, inset 0 1px 0 rgba(255,255,255,0.18)`,
+            boxShadow: `0 1px 2px ${T.accentPrimary}4d, 0 8px 24px -8px ${T.accentPrimary}66, inset 0 1px 0 rgba(255,255,255,0.18)`,
           }}
         >
           <Plus size={14} strokeWidth={2.5} />

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
 import { ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -115,22 +116,38 @@ export function Sidebar() {
                       key={item.href}
                       href={item.href}
                       title={collapsed ? item.label : undefined}
-                      className="relative flex items-center gap-2.5 rounded-md px-2.5 py-[6px] transition-colors duration-100 hover:bg-[var(--t-panel-el)]"
+                      className="relative flex items-center gap-2.5 rounded-md px-2.5 py-[6px] transition-colors duration-150 hover:bg-[var(--t-panel-el)]"
                       style={{
-                        background: active ? "var(--nav-active)" : undefined,
                         color: active ? T.accentPrimary : T.textSecondary,
-                        boxShadow: active ? "inset 2px 0 0 var(--nav-active-bar)" : undefined,
                         justifyContent: collapsed ? "center" : "flex-start",
                         fontWeight: active ? 600 : 500,
                       }}
                     >
-                      <Icon size={16} style={{ color: active ? T.accentPrimary : T.textSecondary }} />
+                      {active && (
+                        <motion.span
+                          layoutId="sidebar-active-indicator"
+                          aria-hidden
+                          className="absolute inset-0 rounded-md"
+                          style={{
+                            background: "var(--nav-active)",
+                            boxShadow: "inset 2px 0 0 var(--nav-active-bar)",
+                          }}
+                          transition={{ type: "spring", stiffness: 380, damping: 32 }}
+                        />
+                      )}
+                      <Icon
+                        size={16}
+                        className="relative z-10"
+                        style={{ color: active ? T.accentPrimary : T.textSecondary }}
+                      />
                       {!collapsed && (
-                        <span className="flex-1 text-[13px] truncate">{item.label}</span>
+                        <span className="relative z-10 flex-1 text-[13px] truncate">
+                          {item.label}
+                        </span>
                       )}
                       {!collapsed && pill && (
                         <span
-                          className="inline-flex items-center px-1.5 h-[18px] rounded-md text-[9px] font-bold tracking-wider uppercase flex-shrink-0"
+                          className="relative z-10 inline-flex items-center px-1.5 h-[18px] rounded-md text-[9px] font-bold tracking-wider uppercase flex-shrink-0"
                           style={{
                             backgroundColor: pillColorBg(pill.color),
                             color: pillColorFg(pill.color),
@@ -141,7 +158,7 @@ export function Sidebar() {
                       )}
                       {badge > 0 && (
                         <span
-                          className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold"
+                          className="relative z-10 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold"
                           style={{
                             backgroundColor: T.accentPrimary,
                             color: "#FFFFFF",

@@ -11,6 +11,7 @@ import { SqueezeWrapper } from "@/components/ai-assistant/SqueezeWrapper";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { MeetingRecordingProvider } from "@/contexts/MeetingRecordingContext";
 import { MeetingMiniRecorder } from "./_components/meeting-mini-recorder";
+import { PageTransition } from "./_components/page-transition";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 
@@ -33,7 +34,9 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
                 <MobileShell />
                 <div className="flex flex-col min-h-screen sidebar-push">
                   <Header />
-                  <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">{children}</main>
+                  <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+                    <PageTransition>{children}</PageTransition>
+                  </main>
                 </div>
                 {!isClient && <TimerPill />}
                 <MeetingMiniRecorder />
