@@ -74,20 +74,20 @@ export function TemplateConstructor({
     }
   }
 
-  async function handleApply(t: Template) {
-    setApplying(t.id);
+  async function handleApply(t: Template, kind: "PLAN" | "FACT" = "FACT") {
+    setApplying(`${t.id}:${kind}`);
     setError(null);
     try {
       const res = await fetch(`/api/admin/financing/templates/${t.id}/apply`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ kind }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
-      setJustAppliedId(t.id);
+      setJustAppliedId(`${t.id}:${kind}`);
       setTimeout(() => setJustAppliedId(null), 1500);
       onEntryCreated();
     } catch (err: any) {
@@ -258,11 +258,23 @@ export function TemplateConstructor({
               <TemplateCard
                 key={t.id}
                 template={t}
-                onApply={() => handleApply(t)}
+                onApply={(kind) => handleApply(t, kind)}
                 onEdit={() => openForm(t)}
                 onDelete={() => handleDelete(t)}
-                applying={applying === t.id}
-                justApplied={justAppliedId === t.id}
+                applyingKind={
+                  applying === `${t.id}:PLAN`
+                    ? "PLAN"
+                    : applying === `${t.id}:FACT`
+                      ? "FACT"
+                      : null
+                }
+                justAppliedKind={
+                  justAppliedId === `${t.id}:PLAN`
+                    ? "PLAN"
+                    : justAppliedId === `${t.id}:FACT`
+                      ? "FACT"
+                      : null
+                }
               />
             ))}
           </div>
@@ -316,18 +328,19 @@ function TemplateCard({
   onApply,
   onEdit,
   onDelete,
-  applying,
-  justApplied,
+  applyingKind,
+  justAppliedKind,
 }: {
   template: Template;
-  onApply: () => void;
+  onApply: (kind: "PLAN" | "FACT") => void;
   onEdit: () => void;
   onDelete: () => void;
-  applying: boolean;
-  justApplied: boolean;
+  applyingKind: "PLAN" | "FACT" | null;
+  justAppliedKind: "PLAN" | "FACT" | null;
 }) {
   const isIncome = template.type === "INCOME";
   const tint = isIncome ? T.success : T.danger;
+  const busy = applyingKind !== null;
 
   return (
     <div
@@ -365,21 +378,41 @@ function TemplateCard({
           {isIncome ? "+" : "−"}
           {formatCurrency(template.defaultAmount)}
         </span>
-        <button
-          onClick={onApply}
-          disabled={applying}
-          className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
-          style={{ backgroundColor: tint }}
-        >
-          {applying ? (
-            <Loader2 size={11} className="animate-spin" />
-          ) : justApplied ? (
-            <CheckCircle2 size={11} />
-          ) : (
-            <Plus size={11} />
-          )}
-          {justApplied ? "Додано" : "Додати"}
-        </button>
+        <div className="flex items-stretch rounded-lg overflow-hidden" style={{ border: `1px solid ${tint}` }}>
+          <button
+            onClick={() => onApply("PLAN")}
+            disabled={busy}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] font-bold transition hover:bg-black/5 disabled:opacity-50"
+            style={{ color: tint, backgroundColor: "transparent" }}
+            title="Запланувати — створить запис у статусі План"
+          >
+            {applyingKind === "PLAN" ? (
+              <Loader2 size={10} className="animate-spin" />
+            ) : justAppliedKind === "PLAN" ? (
+              <CheckCircle2 size={10} />
+            ) : (
+              <Plus size={10} />
+            )}
+            {justAppliedKind === "PLAN" ? "План ✓" : "План"}
+          </button>
+          <div className="w-px" style={{ backgroundColor: tint, opacity: 0.4 }} />
+          <button
+            onClick={() => onApply("FACT")}
+            disabled={busy}
+            className="flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
+            style={{ backgroundColor: tint }}
+            title="Зафіксувати факт — створить запис у статусі Факт"
+          >
+            {applyingKind === "FACT" ? (
+              <Loader2 size={10} className="animate-spin" />
+            ) : justAppliedKind === "FACT" ? (
+              <CheckCircle2 size={10} />
+            ) : (
+              <Plus size={10} />
+            )}
+            {justAppliedKind === "FACT" ? "Факт ✓" : "Факт"}
+          </button>
+        </div>
       </div>
     </div>
   );

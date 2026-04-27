@@ -9,9 +9,13 @@ import {
   AlertCircle,
   Calendar as CalendarIcon,
   Send,
+  Banknote,
+  Receipt,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+
+type Mode = "cash" | "taxes";
 
 type PreviewRow = {
   id: string;
@@ -20,10 +24,13 @@ type PreviewRow = {
   salaryType: "MONTHLY" | "HOURLY";
   amount: number | null;
   currency: string;
+  cashPaid: { count: number; total: number };
+  remainingCash: number | null;
   existing: { id: string; amount: number; status: string } | null;
 };
 
 type DraftAmounts = Record<string, string>;
+type DraftNotes = Record<string, string>;
 type DraftSelected = Record<string, boolean>;
 
 const MONTH_LABELS = [
@@ -45,9 +52,11 @@ export function PayrollModal({
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
+  const [mode, setMode] = useState<Mode>("cash");
   const [rows, setRows] = useState<PreviewRow[]>([]);
   const [selected, setSelected] = useState<DraftSelected>({});
   const [amounts, setAmounts] = useState<DraftAmounts>({});
+  const [notes, setNotes] = useState<DraftNotes>({});
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +67,7 @@ export function PayrollModal({
     if (!open) return;
     void loadPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, year, month]);
+  }, [open, year, month, mode]);
 
   async function loadPreview() {
     setLoading(true);
@@ -66,22 +75,34 @@ export function PayrollModal({
     setResult(null);
     try {
       const res = await fetch(
-        `/api/admin/financing/payroll/preview?year=${year}&month=${month}`,
+        `/api/admin/financing/payroll/preview?year=${year}&month=${month}&mode=${mode}`,
         { cache: "no-store" }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const data: PreviewRow[] = json.rows ?? [];
       setRows(data);
-      // pre-fill: select everyone who has a salary AND no existing entry
       const sel: DraftSelected = {};
       const amt: DraftAmounts = {};
+      const nts: DraftNotes = {};
       for (const r of data) {
-        sel[r.id] = !r.existing && r.amount != null && r.amount > 0;
-        amt[r.id] = r.amount != null ? String(r.amount) : "";
+        if (mode === "cash") {
+          // Pre-fill: remaining cash to pay (default-amount minus what's already paid this month)
+          const defaultAmount = r.remainingCash ?? r.amount ?? 0;
+          sel[r.id] = defaultAmount > 0;
+          amt[r.id] = defaultAmount > 0 ? String(defaultAmount) : "";
+        } else {
+          // Taxes: skip rows that already have a taxes entry; pre-fill default 22% (ЄСВ)
+          // as a baseline — user edits per-row.
+          const baseline = r.amount != null ? Math.round(r.amount * 0.22) : 0;
+          sel[r.id] = !r.existing && baseline > 0;
+          amt[r.id] = baseline > 0 ? String(baseline) : "";
+        }
+        nts[r.id] = "";
       }
       setSelected(sel);
       setAmounts(amt);
+      setNotes(nts);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Не вдалося завантажити список");
     } finally {
@@ -93,7 +114,9 @@ export function PayrollModal({
     let total = 0;
     let count = 0;
     for (const r of rows) {
-      if (!selected[r.id] || r.existing) continue;
+      if (!selected[r.id]) continue;
+      // Cash never has `existing` blocking — always allowed; taxes blocked when existing
+      if (mode === "taxes" && r.existing) continue;
       const n = Number(amounts[r.id]);
       if (Number.isFinite(n) && n > 0) {
         total += n;
@@ -101,13 +124,14 @@ export function PayrollModal({
       }
     }
     return { total, count };
-  }, [rows, selected, amounts]);
+  }, [rows, selected, amounts, mode]);
 
   function toggleAll() {
-    const allSelected = rows.every((r) => r.existing || selected[r.id]);
+    const isBlocked = (r: PreviewRow) => mode === "taxes" && !!r.existing;
+    const allSelected = rows.every((r) => isBlocked(r) || selected[r.id]);
     const next: DraftSelected = {};
     for (const r of rows) {
-      next[r.id] = !allSelected && !r.existing;
+      next[r.id] = !allSelected && !isBlocked(r);
     }
     setSelected(next);
   }
@@ -115,8 +139,16 @@ export function PayrollModal({
   async function handleRun() {
     setError(null);
     const items = rows
-      .filter((r) => selected[r.id] && !r.existing)
-      .map((r) => ({ employeeId: r.id, amount: Number(amounts[r.id]) }))
+      .filter((r) => {
+        if (!selected[r.id]) return false;
+        if (mode === "taxes" && r.existing) return false;
+        return true;
+      })
+      .map((r) => ({
+        employeeId: r.id,
+        amount: Number(amounts[r.id]),
+        note: notes[r.id]?.trim() || undefined,
+      }))
       .filter((i) => Number.isFinite(i.amount) && i.amount > 0);
 
     if (items.length === 0) {
@@ -129,7 +161,7 @@ export function PayrollModal({
       const res = await fetch(`/api/admin/financing/payroll/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, month, items, folderId, kind }),
+        body: JSON.stringify({ year, month, items, folderId, kind, mode }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -138,7 +170,6 @@ export function PayrollModal({
       const json = await res.json();
       setResult({ created: json.created?.length ?? 0, skipped: json.skipped?.length ?? 0 });
       onSuccess();
-      // refresh preview so existing badges appear
       void loadPreview();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка нарахування");
@@ -178,6 +209,46 @@ export function PayrollModal({
           <button onClick={onClose}>
             <X size={18} style={{ color: T.textMuted }} />
           </button>
+        </div>
+
+        {/* Mode toggle: Готівка (N×) / Податки (1×) */}
+        <div
+          className="flex items-stretch gap-1 px-5 pt-3 pb-2"
+          style={{ borderColor: T.borderSoft }}
+        >
+          <div
+            className="flex flex-1 gap-1 rounded-xl p-1"
+            style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+          >
+            {(
+              [
+                { key: "cash" as Mode, label: "Готівка", hint: "виплати — N разів", Icon: Banknote },
+                { key: "taxes" as Mode, label: "Податки", hint: "1 раз на місяць", Icon: Receipt },
+              ]
+            ).map(({ key, label, hint, Icon }) => {
+              const active = mode === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setMode(key)}
+                  className="flex-1 flex flex-col items-center justify-center gap-0.5 rounded-lg px-3 py-2 transition"
+                  style={{
+                    backgroundColor: active ? T.accentPrimary : "transparent",
+                    color: active ? "#fff" : T.textSecondary,
+                  }}
+                >
+                  <span className="flex items-center gap-1.5 text-[12.5px] font-bold">
+                    <Icon size={13} />
+                    {label}
+                  </span>
+                  <span className="text-[9.5px]" style={{ color: active ? "rgba(255,255,255,0.85)" : T.textMuted }}>
+                    {hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Period + kind */}
@@ -267,13 +338,15 @@ export function PayrollModal({
             <div className="flex flex-col gap-1.5">
               {rows.map((row) => {
                 const isSelected = !!selected[row.id];
-                const disabled = !!row.existing;
+                // Only "taxes" mode disables rows that already have a record.
+                // "Cash" never blocks — multiple payouts per period are expected.
+                const disabled = mode === "taxes" && !!row.existing;
                 const tint = disabled ? T.textMuted : isSelected ? T.accentPrimary : T.borderStrong;
 
                 return (
                   <div
                     key={row.id}
-                    className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition"
+                    className="flex flex-col gap-2 rounded-xl px-3 py-2.5 transition"
                     style={{
                       backgroundColor: disabled
                         ? T.panelSoft
@@ -284,62 +357,102 @@ export function PayrollModal({
                       opacity: disabled ? 0.55 : 1,
                     }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected && !disabled}
-                      disabled={disabled}
-                      onChange={(e) =>
-                        setSelected((s) => ({ ...s, [row.id]: e.target.checked }))
-                      }
-                      className="w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
-                    />
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected && !disabled}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          setSelected((s) => ({ ...s, [row.id]: e.target.checked }))
+                        }
+                        className="w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
+                      />
 
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-bold truncate" style={{ color: T.textPrimary }}>
-                        {row.fullName}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[13px] font-bold truncate" style={{ color: T.textPrimary }}>
+                          {row.fullName}
+                        </div>
+                        <div className="text-[10.5px] truncate" style={{ color: T.textMuted }}>
+                          {row.position || "—"}
+                          {" · "}
+                          {row.salaryType === "MONTHLY" ? "помісячна" : "погодинна"}
+                          {row.amount != null && (
+                            <>
+                              {" · оклад "}
+                              <span style={{ color: T.textSecondary }}>{formatCurrency(row.amount)}</span>
+                            </>
+                          )}
+                        </div>
+                        {mode === "cash" && row.cashPaid.count > 0 && (
+                          <div
+                            className="text-[10px] mt-0.5 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5"
+                            style={{
+                              backgroundColor: T.successSoft,
+                              color: T.success,
+                            }}
+                          >
+                            Уже виплачено: {formatCurrency(row.cashPaid.total)} ({row.cashPaid.count}×)
+                            {row.remainingCash != null && row.remainingCash > 0 && (
+                              <span style={{ color: T.textMuted, marginLeft: 4 }}>
+                                залишок {formatCurrency(row.remainingCash)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className="text-[10.5px] truncate" style={{ color: T.textMuted }}>
-                        {row.position || "—"}
-                        {" · "}
-                        {row.salaryType === "MONTHLY" ? "помісячна" : "погодинна"}
-                      </div>
+
+                      {disabled ? (
+                        <div
+                          className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10.5px] font-bold"
+                          style={{
+                            backgroundColor: T.panelElevated,
+                            color: T.textSecondary,
+                            border: `1px solid ${T.borderSoft}`,
+                          }}
+                          title={`Податки за період уже нараховано: ${row.existing!.status}`}
+                        >
+                          <CheckCircle2 size={12} />
+                          Податки нараховано
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            inputMode="decimal"
+                            value={amounts[row.id] ?? ""}
+                            onChange={(e) =>
+                              setAmounts((a) => ({ ...a, [row.id]: e.target.value }))
+                            }
+                            placeholder="0"
+                            className="w-28 rounded-lg px-2.5 py-1 text-[12.5px] font-bold text-right outline-none"
+                            style={{
+                              backgroundColor: T.panel,
+                              border: `1px solid ${T.borderStrong}`,
+                              color: T.textPrimary,
+                            }}
+                          />
+                          <span className="text-[10.5px] font-semibold" style={{ color: T.textMuted }}>
+                            {row.currency}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {disabled ? (
-                      <div
-                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[10.5px] font-bold"
+                    {/* Cash: optional note (Аванс / Розрахунок / Премія) */}
+                    {!disabled && mode === "cash" && isSelected && (
+                      <input
+                        type="text"
+                        value={notes[row.id] ?? ""}
+                        onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))}
+                        placeholder="Примітка (Аванс / Розрахунок / Премія / понаднормові…)"
+                        className="w-full rounded-lg px-2.5 py-1 text-[11px] outline-none"
                         style={{
-                          backgroundColor: T.panelElevated,
-                          color: T.textSecondary,
+                          backgroundColor: T.panel,
                           border: `1px solid ${T.borderSoft}`,
+                          color: T.textPrimary,
                         }}
-                        title={`Запис уже існує: ${row.existing!.status}`}
-                      >
-                        <CheckCircle2 size={12} />
-                        Уже нараховано
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1">
-                        <input
-                          type="number"
-                          step="0.01"
-                          inputMode="decimal"
-                          value={amounts[row.id] ?? ""}
-                          onChange={(e) =>
-                            setAmounts((a) => ({ ...a, [row.id]: e.target.value }))
-                          }
-                          placeholder="0"
-                          className="w-28 rounded-lg px-2.5 py-1 text-[12.5px] font-bold text-right outline-none"
-                          style={{
-                            backgroundColor: T.panel,
-                            border: `1px solid ${T.borderStrong}`,
-                            color: T.textPrimary,
-                          }}
-                        />
-                        <span className="text-[10.5px] font-semibold" style={{ color: T.textMuted }}>
-                          {row.currency}
-                        </span>
-                      </div>
+                      />
                     )}
                   </div>
                 );
@@ -403,7 +516,7 @@ export function PayrollModal({
                 style={{ backgroundColor: T.accentPrimary }}
               >
                 {running ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                Нарахувати ({summary.count})
+                {mode === "cash" ? "Виплатити" : "Нарахувати податки"} ({summary.count})
               </button>
             </div>
           </div>

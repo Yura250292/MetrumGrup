@@ -256,6 +256,20 @@ export function useFinancingData({
     if (res.ok) await loadData();
   }
 
+  async function handleFlipToFact(entry: FinanceEntryDTO) {
+    if (entry.kind === "FACT") return;
+    const res = await fetch(`/api/admin/financing/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "FACT" }),
+    });
+    if (res.ok) await loadData();
+    else {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error || "Не вдалося перевести у факт");
+    }
+  }
+
   async function handleDelete(entry: FinanceEntryDTO) {
     if (!confirm(`Видалити запис «${entry.title}» назавжди? Цю дію неможливо скасувати.`)) return;
     const res = await fetch(`/api/admin/financing/${entry.id}?hard=true`, {
@@ -305,6 +319,7 @@ export function useFinancingData({
     handleStatusChange,
     handleArchive,
     handleDelete,
+    handleFlipToFact,
     handleExport,
     editing,
     setEditing,

@@ -124,6 +124,7 @@ export function FinancingView({
     handleStatusChange,
     handleArchive,
     handleDelete,
+    handleFlipToFact,
     handleExport,
     editing,
     setEditing,
@@ -538,6 +539,7 @@ export function FinancingView({
             onArchive={handleArchive}
             onDelete={handleDelete}
             onMoveToFolder={!scope ? (e) => setMoveEntryId(e.id) : undefined}
+            onFlipToFact={handleFlipToFact}
           />
         )}
 

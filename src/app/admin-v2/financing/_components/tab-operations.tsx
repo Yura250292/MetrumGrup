@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   Clock,
   Calculator,
+  CheckCircle2,
 } from "lucide-react";
 import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -63,6 +64,7 @@ export function TabOperations({
   onArchive,
   onDelete,
   onMoveToFolder,
+  onFlipToFact,
 }: {
   entries: FinanceEntryDTO[];
   loading: boolean;
@@ -74,6 +76,7 @@ export function TabOperations({
   onArchive: (e: FinanceEntryDTO) => void;
   onDelete?: (e: FinanceEntryDTO) => void;
   onMoveToFolder?: (e: FinanceEntryDTO) => void;
+  onFlipToFact?: (e: FinanceEntryDTO) => void;
 }) {
   const [activeChips, setActiveChips] = useState<Set<ChipKey>>(new Set(["all"]));
   const [sortField, setSortField] = useState<SortField>("date");
@@ -236,6 +239,9 @@ export function TabOperations({
                   onArchive={() => onArchive(entry)}
                   onDelete={onDelete ? () => onDelete(entry) : undefined}
                   onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(entry) : undefined}
+                  onFlipToFact={
+                    onFlipToFact && entry.kind === "PLAN" ? () => onFlipToFact(entry) : undefined
+                  }
                 />
               );
             })}
@@ -300,6 +306,7 @@ function OperationRow({
   onArchive,
   onDelete,
   onMoveToFolder,
+  onFlipToFact,
 }: {
   entry: FinanceEntryDTO;
   isZebra: boolean;
@@ -309,6 +316,7 @@ function OperationRow({
   onArchive: () => void;
   onDelete?: () => void;
   onMoveToFolder?: () => void;
+  onFlipToFact?: () => void;
 }) {
   const amount = Number(entry.amount);
   const amountColor =
@@ -406,6 +414,16 @@ function OperationRow({
             )}
           </div>
           <div className="flex gap-1.5 flex-shrink-0">
+            {onFlipToFact && (
+              <button
+                onClick={onFlipToFact}
+                className="flex h-9 items-center gap-1 rounded-lg px-2.5 active:scale-95 transition text-[10.5px] font-bold"
+                style={{ backgroundColor: T.success, color: "#fff" }}
+                title="Перевести у Факт — план зафіксовано"
+              >
+                <CheckCircle2 size={13} /> Факт
+              </button>
+            )}
             {onMoveToFolder && (
               <button
                 onClick={onMoveToFolder}
@@ -552,6 +570,16 @@ function OperationRow({
           <QualityDot icon={<FolderOpen size={9} />} ok={!!entry.projectId} title={entry.project?.title || "Без проєкту"} />
         </div>
         <div className="flex items-center justify-end gap-1.5">
+          {onFlipToFact && (
+            <button
+              onClick={onFlipToFact}
+              title="Перевести у Факт — план зафіксовано"
+              className="flex h-9 items-center gap-1 rounded-lg px-2.5 transition hover:brightness-110 active:scale-95 text-[10.5px] font-bold"
+              style={{ backgroundColor: T.success, color: "#fff" }}
+            >
+              <CheckCircle2 size={13} /> Факт
+            </button>
+          )}
           {onMoveToFolder && (
             <button
               onClick={onMoveToFolder}

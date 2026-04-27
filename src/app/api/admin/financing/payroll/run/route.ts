@@ -14,6 +14,7 @@ const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
 const itemSchema = z.object({
   employeeId: z.string().min(1),
   amount: z.number().positive(),
+  note: z.string().optional(),
 });
 
 const bodySchema = z.object({
@@ -24,6 +25,7 @@ const bodySchema = z.object({
   occurredAt: z.string().optional(),
   kind: z.enum(["PLAN", "FACT"]).default("PLAN"),
   status: z.enum(["DRAFT", "PENDING", "APPROVED", "PAID"]).default("DRAFT"),
+  mode: z.enum(["cash", "taxes"]).default("cash"),
 });
 
 /**
@@ -52,10 +54,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { year, month, items, folderId, kind, status } = body;
+  const { year, month, items, folderId, kind, status, mode } = body;
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 1));
-  const occurredAt = body.occurredAt ? new Date(body.occurredAt) : new Date(Date.UTC(year, month - 1, 25));
+  // Default occurredAt: 15-th for cash advance/payouts, last day of month for taxes
+  const defaultDay = mode === "taxes" ? new Date(Date.UTC(year, month, 0)).getUTCDate() : 15;
+  const occurredAt = body.occurredAt
+    ? new Date(body.occurredAt)
+    : new Date(Date.UTC(year, month - 1, defaultDay));
   if (Number.isNaN(occurredAt.getTime())) {
     return NextResponse.json({ error: "Некоректна дата" }, { status: 400 });
   }
@@ -66,20 +72,27 @@ export async function POST(request: NextRequest) {
   });
   const employeeById = new Map(employees.map((e) => [e.id, e]));
 
-  const existing = await prisma.financeEntry.findMany({
-    where: {
-      type: "EXPENSE",
-      category: "salary",
-      isArchived: false,
-      occurredAt: { gte: periodStart, lt: periodEnd },
-      counterparty: { in: employees.map((e) => e.fullName) },
-    },
-    select: { counterparty: true },
-  });
-  const alreadyHas = new Set(existing.map((e) => e.counterparty ?? ""));
+  // Idempotency only for taxes — cash can be created multiple times per period
+  // (advance + final + overtime adjustments).
+  const alreadyHas = new Set<string>();
+  if (mode === "taxes") {
+    const existing = await prisma.financeEntry.findMany({
+      where: {
+        type: "EXPENSE",
+        category: "salary",
+        subcategory: "taxes",
+        isArchived: false,
+        occurredAt: { gte: periodStart, lt: periodEnd },
+        counterparty: { in: employees.map((e) => e.fullName) },
+      },
+      select: { counterparty: true },
+    });
+    for (const e of existing) alreadyHas.add(e.counterparty ?? "");
+  }
 
   const createdIds: string[] = [];
   const skipped: Array<{ employeeId: string; reason: string }> = [];
+  const monthLabel = `${month.toString().padStart(2, "0")}.${year}`;
 
   await prisma.$transaction(async (tx) => {
     for (const item of items) {
@@ -89,9 +102,16 @@ export async function POST(request: NextRequest) {
         continue;
       }
       if (alreadyHas.has(emp.fullName)) {
-        skipped.push({ employeeId: item.employeeId, reason: "ЗП за період вже існує" });
+        skipped.push({ employeeId: item.employeeId, reason: "Податки за період вже нараховано" });
         continue;
       }
+
+      const titlePrefix =
+        mode === "taxes"
+          ? "Податки ЗП"
+          : item.note?.trim()
+            ? `ЗП (${item.note.trim()})`
+            : "ЗП готівка";
 
       const entry = await tx.financeEntry.create({
         data: {
@@ -104,8 +124,9 @@ export async function POST(request: NextRequest) {
           projectId: null,
           folderId: folderId ?? null,
           category: "salary",
-          title: `ЗП ${emp.fullName} (${month.toString().padStart(2, "0")}.${year})`,
-          description: null,
+          subcategory: mode === "taxes" ? "taxes" : "cash",
+          title: `${titlePrefix} ${emp.fullName} (${monthLabel})`,
+          description: item.note?.trim() ? item.note.trim() : null,
           counterparty: emp.fullName,
           createdById: session.user.id,
           status,
@@ -117,6 +138,7 @@ export async function POST(request: NextRequest) {
   });
 
   log.info("payroll:run", {
+    mode,
     period: `${year}-${month}`,
     requested: items.length,
     created: createdIds.length,
@@ -131,6 +153,7 @@ export async function POST(request: NextRequest) {
     entityId: createdIds[0] ?? "payroll-bulk",
     newData: {
       bulkPayroll: true,
+      mode,
       period: { year, month },
       created: createdIds.length,
       skipped: skipped.length,
@@ -139,6 +162,7 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({
     period: { year, month },
+    mode,
     created: createdIds,
     skipped,
   });

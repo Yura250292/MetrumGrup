@@ -9,18 +9,26 @@ export const runtime = "nodejs";
 const READ_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"];
 
 /**
- * GET /api/admin/financing/payroll/preview?year=2026&month=4
+ * GET /api/admin/financing/payroll/preview?year=2026&month=4&mode=cash|taxes
  *
- * Returns active employees + their default monthly salary + whether a salary
- * entry was already created for the requested period (so the UI can grey
- * those rows out and the bulk-run is idempotent).
+ * Returns active employees + their default monthly salary + whether the
+ * relevant payroll entry was already created for this period.
  *
- * Period match is "salary entry in `salary` category, occurredAt within the
- * month, counterparty equal to fullName" — same fingerprint the bulk-run
- * uses to skip duplicates. If your team starts using `employeeId` as a
- * structured FK on FinanceEntry, switch this lookup to that and remove the
- * counterparty heuristic.
+ * Modes:
+ *   - cash   — готівка. Records persisted with `subcategory: 'cash'`. Can be
+ *              created N times per period (advance + final + overtime…),
+ *              so we surface counts and totals instead of an "already-exists"
+ *              flag.
+ *   - taxes  — податки. Persisted with `subcategory: 'taxes'`. Idempotent —
+ *              once per period; existing record is shown so the UI can grey
+ *              the row out.
+ *
+ * Cash records also count toward "previously paid for this period" so the
+ * user can see how much of the salary remains to be paid out.
  */
+const MODE_VALUES = ["cash", "taxes"] as const;
+type Mode = (typeof MODE_VALUES)[number];
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -29,6 +37,8 @@ export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const year = Number(url.searchParams.get("year") ?? new Date().getFullYear());
   const month = Number(url.searchParams.get("month") ?? new Date().getMonth() + 1);
+  const modeRaw = (url.searchParams.get("mode") ?? "cash") as Mode;
+  const mode: Mode = MODE_VALUES.includes(modeRaw) ? modeRaw : "cash";
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return NextResponse.json({ error: "Невірний рік" }, { status: 400 });
@@ -67,25 +77,52 @@ export async function GET(request: NextRequest) {
       counterparty: true,
       amount: true,
       status: true,
+      subcategory: true,
     },
   });
 
-  const existingByName = new Map(existing.map((e) => [e.counterparty ?? "", e]));
+  // Group existing entries per employee so we can return both per-mode info
+  const cashByName = new Map<string, { count: number; total: number }>();
+  const taxByName = new Map<
+    string,
+    { id: string; amount: number; status: string }
+  >();
+  for (const e of existing) {
+    const name = e.counterparty ?? "";
+    if (e.subcategory === "taxes") {
+      taxByName.set(name, {
+        id: e.id,
+        amount: Number(e.amount),
+        status: e.status,
+      });
+    } else {
+      // 'cash', null (legacy salary entries), or anything else — treat as cash payout
+      const prev = cashByName.get(name) ?? { count: 0, total: 0 };
+      prev.count += 1;
+      prev.total += Number(e.amount);
+      cashByName.set(name, prev);
+    }
+  }
 
   return NextResponse.json({
     period: { year, month },
+    mode,
     rows: employees.map((e) => {
-      const already = existingByName.get(e.fullName);
+      const cashPaid = cashByName.get(e.fullName) ?? { count: 0, total: 0 };
+      const taxRecord = taxByName.get(e.fullName);
+      const baseSalary = e.salaryAmount != null ? Number(e.salaryAmount) : null;
+      const remainingCash = baseSalary != null ? Math.max(0, baseSalary - cashPaid.total) : null;
       return {
         id: e.id,
         fullName: e.fullName,
         position: e.position,
         salaryType: e.salaryType,
-        amount: e.salaryAmount != null ? Number(e.salaryAmount) : null,
+        amount: baseSalary,
         currency: e.currency,
-        existing: already
-          ? { id: already.id, amount: Number(already.amount), status: already.status }
-          : null,
+        cashPaid,
+        remainingCash,
+        // For 'taxes' mode the dedup behaves like before
+        existing: mode === "taxes" && taxRecord ? taxRecord : null,
       };
     }),
   });
