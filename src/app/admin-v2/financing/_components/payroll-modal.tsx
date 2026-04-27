@@ -136,6 +136,19 @@ export function PayrollModal({
     setSelected(next);
   }
 
+  function deselectAll() {
+    const next: DraftSelected = {};
+    for (const r of rows) next[r.id] = false;
+    setSelected(next);
+  }
+
+  /// Selected count of "selectable" rows — used to decide whether to render
+  /// the "Зняти виділення" button at all.
+  const selectedCount = useMemo(() => {
+    const isBlocked = (r: PreviewRow) => mode === "taxes" && !!r.existing;
+    return rows.filter((r) => !isBlocked(r) && selected[r.id]).length;
+  }, [rows, selected, mode]);
+
   async function handleRun() {
     setError(null);
     const items = rows
@@ -305,17 +318,33 @@ export function PayrollModal({
             ))}
           </div>
 
-          <button
-            onClick={toggleAll}
-            className="ml-auto rounded-lg px-3 py-1.5 text-[11px] font-semibold"
-            style={{
-              backgroundColor: T.panelSoft,
-              border: `1px solid ${T.borderStrong}`,
-              color: T.textSecondary,
-            }}
-          >
-            Виділити всіх
-          </button>
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={toggleAll}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+              style={{
+                backgroundColor: T.panelSoft,
+                border: `1px solid ${T.borderStrong}`,
+                color: T.textSecondary,
+              }}
+            >
+              Виділити всіх
+            </button>
+            {selectedCount > 0 && (
+              <button
+                onClick={deselectAll}
+                title="Очистити вибір"
+                className="rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                style={{
+                  backgroundColor: T.dangerSoft,
+                  border: `1px solid ${T.danger}40`,
+                  color: T.danger,
+                }}
+              >
+                Зняти виділення ({selectedCount})
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Body */}
