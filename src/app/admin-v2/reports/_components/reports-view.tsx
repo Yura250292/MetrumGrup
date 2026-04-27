@@ -7,20 +7,53 @@ import {
   Briefcase,
   Building2,
   CalendarDays,
+  CheckCircle2,
   FileSpreadsheet,
   FileText,
   Loader2,
+  Play,
   Receipt,
+  TrendingDown,
+  TrendingUp,
   Wallet,
 } from "lucide-react";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { formatCurrencyCompact } from "@/lib/utils";
+import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 
 type Project = { id: string; title: string };
 type Counterparty = { id: string; name: string };
 type Employee = { id: string; fullName: string };
+
+type PreviewEntry = {
+  id: string;
+  occurredAt: string;
+  kind: "PLAN" | "FACT";
+  type: "INCOME" | "EXPENSE";
+  amount: number | string;
+  currency: string;
+  category: string;
+  title: string;
+  counterparty: string | null;
+  project: { id: string; title: string } | null;
+  status: "DRAFT" | "PENDING" | "APPROVED" | "PAID";
+};
+
+type PreviewSummary = {
+  plan: { income: { sum: number; count: number }; expense: { sum: number; count: number } };
+  fact: { income: { sum: number; count: number }; expense: { sum: number; count: number } };
+  balance: number;
+  count: number;
+};
+
+type Preview = {
+  entries: PreviewEntry[];
+  summary: PreviewSummary;
+  appliedAt: Date;
+};
 
 type TemplateKey =
   | "period_overall"
@@ -195,6 +228,16 @@ export function ReportsView({
   const [downloading, setDownloading] = useState<"xlsx" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Preview state — populated by "Сформувати". Invalidated when any filter changes.
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [applying, setApplying] = useState(false);
+
+  // Stamp the inputs that produced the current preview, so we can invalidate
+  // it whenever something changes downstream.
+  const [previewStamp, setPreviewStamp] = useState<string | null>(null);
+  const currentStamp = `${tplKey}|${from}|${to}|${projectId ?? ""}|${counterpartyId ?? ""}`;
+  const isStale = preview !== null && previewStamp !== currentStamp;
+
   const tpl = useMemo(() => TEMPLATES.find((t) => t.key === tplKey)!, [tplKey]);
 
   const projectOptions: ComboboxOption[] = useMemo(
@@ -256,9 +299,40 @@ export function ReportsView({
     return params;
   }
 
+  async function applyPreview() {
+    if (tpl.key === "custom") {
+      window.location.href = "/admin-v2/financing";
+      return;
+    }
+    const params = buildQuery();
+    if (!params) return;
+
+    setApplying(true);
+    setPreview(null);
+    try {
+      // Reuse the standard list endpoint — same filters that the export uses,
+      // returns {data, summary}. No extra server work needed.
+      const res = await fetch(`/api/admin/financing?${params}`, { cache: "no-store" });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? "Помилка завантаження звіту");
+      }
+      const json = await res.json();
+      setPreview({
+        entries: json.data ?? [],
+        summary: json.summary,
+        appliedAt: new Date(),
+      });
+      setPreviewStamp(currentStamp);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Помилка");
+    } finally {
+      setApplying(false);
+    }
+  }
+
   async function download(format: "xlsx" | "pdf") {
     if (tpl.key === "custom") {
-      // Custom = redirect to /financing where the user does it manually.
       window.location.href = "/admin-v2/financing";
       return;
     }
@@ -463,46 +537,340 @@ export function ReportsView({
               Перейти у Фінансування →
             </button>
           ) : (
-            <>
-              <button
-                onClick={() => download("xlsx")}
-                disabled={downloading !== null}
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-semibold disabled:opacity-50"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  color: T.textPrimary,
-                  border: `1px solid ${T.borderStrong}`,
-                }}
-              >
-                {downloading === "xlsx" ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <FileSpreadsheet size={13} style={{ color: "#16A34A" }} />
-                )}
-                Excel
-              </button>
-              <button
-                onClick={() => download("pdf")}
-                disabled={downloading !== null}
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-semibold disabled:opacity-50"
-                style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-              >
-                {downloading === "pdf" ? (
-                  <Loader2 size={13} className="animate-spin" />
-                ) : (
-                  <FileText size={13} />
-                )}
-                Завантажити PDF
-              </button>
-            </>
+            <button
+              onClick={applyPreview}
+              disabled={applying}
+              className="flex items-center gap-1.5 rounded-xl px-5 py-2.5 text-[12.5px] font-bold disabled:opacity-50"
+              style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+            >
+              {applying ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Play size={13} />
+              )}
+              {preview ? "Сформувати знову" : "Сформувати звіт"}
+            </button>
           )}
         </div>
       </div>
+
+      {/* Preview block — appears after Apply succeeds */}
+      {preview && tpl.key !== "custom" && (
+        <PreviewBlock
+          preview={preview}
+          isStale={isStale}
+          downloading={downloading}
+          onDownload={download}
+          tplLabel={tpl.label}
+          from={from}
+          to={to}
+        />
+      )}
 
       <div className="text-[11px]" style={{ color: T.textMuted }}>
         Звіти включають усі не-архівні операції за період. Архівні — окремо у вкладці «Архів».
         Для дуже великих звітів (понад 500 рядків) PDF показує перші 500; повний список — Excel.
       </div>
+    </div>
+  );
+}
+
+const STATUS_LABELS: Record<PreviewEntry["status"], string> = {
+  DRAFT: "Чернетка",
+  PENDING: "На погодж.",
+  APPROVED: "Підтв.",
+  PAID: "Оплачено",
+};
+
+function PreviewBlock({
+  preview,
+  isStale,
+  downloading,
+  onDownload,
+  tplLabel,
+  from,
+  to,
+}: {
+  preview: Preview;
+  isStale: boolean;
+  downloading: "xlsx" | "pdf" | null;
+  onDownload: (f: "xlsx" | "pdf") => void;
+  tplLabel: string;
+  from: string;
+  to: string;
+}) {
+  const { entries, summary } = preview;
+  const planBalance = summary.plan.income.sum - summary.plan.expense.sum;
+  const factBalance = summary.fact.income.sum - summary.fact.expense.sum;
+
+  const previewRows = entries.slice(0, 50);
+
+  return (
+    <div
+      className="flex flex-col gap-4 rounded-2xl p-5"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${isStale ? T.warning + "60" : T.borderStrong}`,
+      }}
+    >
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-2 border-b pb-3" style={{ borderColor: T.borderSoft }}>
+        <CheckCircle2 size={16} style={{ color: T.success }} />
+        <span className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
+          Результат
+        </span>
+        <span className="text-[12px]" style={{ color: T.textMuted }}>
+          · {tplLabel} · {format(new Date(from), "d MMM", { locale: uk })} –{" "}
+          {format(new Date(to), "d MMM yyyy", { locale: uk })} ·{" "}
+          {summary.count} записів
+        </span>
+        {isStale && (
+          <span
+            className="ml-auto rounded-md px-2 py-0.5 text-[10px] font-bold uppercase"
+            style={{ backgroundColor: T.warningSoft, color: T.warning }}
+          >
+            ⚠ Фільтри змінено — натисніть «Сформувати знову»
+          </span>
+        )}
+      </div>
+
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Kpi
+          label="План — доходи"
+          value={summary.plan.income.sum}
+          count={summary.plan.income.count}
+          tone="muted"
+          icon={<TrendingUp size={11} />}
+        />
+        <Kpi
+          label="План — витрати"
+          value={summary.plan.expense.sum}
+          count={summary.plan.expense.count}
+          tone="muted"
+          icon={<TrendingDown size={11} />}
+        />
+        <Kpi
+          label="Факт — доходи"
+          value={summary.fact.income.sum}
+          count={summary.fact.income.count}
+          tone="good"
+          icon={<TrendingUp size={11} />}
+        />
+        <Kpi
+          label="Факт — витрати"
+          value={summary.fact.expense.sum}
+          count={summary.fact.expense.count}
+          tone="bad"
+          icon={<TrendingDown size={11} />}
+        />
+      </div>
+
+      {/* Balances */}
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <BalanceRow label="Плановий баланс" value={planBalance} />
+        <BalanceRow label="Фактичний баланс" value={factBalance} bold />
+      </div>
+
+      {/* Operations preview */}
+      {entries.length === 0 ? (
+        <div
+          className="rounded-xl px-4 py-6 text-center text-sm"
+          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+        >
+          За цими фільтрами немає жодної операції.
+        </div>
+      ) : (
+        <>
+          <div className="flex items-baseline justify-between">
+            <span
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted }}
+            >
+              Перегляд операцій ({previewRows.length} з {entries.length})
+            </span>
+            {entries.length > previewRows.length && (
+              <span className="text-[11px]" style={{ color: T.textMuted }}>
+                Повний список — у Excel або PDF
+              </span>
+            )}
+          </div>
+          <div
+            className="overflow-x-auto rounded-xl"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px solid ${T.borderSoft}`,
+              maxHeight: 420,
+            }}
+          >
+            <table className="w-full text-[12.5px]" style={{ color: T.textPrimary }}>
+              <thead>
+                <tr
+                  className="text-[10px] font-bold uppercase tracking-wider sticky top-0"
+                  style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+                >
+                  <th className="px-3 py-2 text-left">Дата</th>
+                  <th className="px-2 py-2 text-left">Вид</th>
+                  <th className="px-2 py-2 text-left">Тип</th>
+                  <th className="px-2 py-2 text-left">Категорія</th>
+                  <th className="px-2 py-2 text-left">Назва</th>
+                  <th className="px-2 py-2 text-left">Контрагент</th>
+                  <th className="px-2 py-2 text-left">Проєкт</th>
+                  <th className="px-2 py-2 text-right">Сума</th>
+                  <th className="px-2 py-2 text-center">Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {previewRows.map((e) => (
+                  <tr key={e.id} className="border-t" style={{ borderColor: T.borderSoft }}>
+                    <td className="px-3 py-1.5 whitespace-nowrap">
+                      {format(new Date(e.occurredAt), "d MMM yy", { locale: uk })}
+                    </td>
+                    <td
+                      className="px-2 py-1.5 text-[11px]"
+                      style={{ color: e.kind === "PLAN" ? T.warning : T.success }}
+                    >
+                      {e.kind === "PLAN" ? "План" : "Факт"}
+                    </td>
+                    <td
+                      className="px-2 py-1.5 text-[11px]"
+                      style={{ color: e.type === "INCOME" ? T.success : T.warning }}
+                    >
+                      {e.type === "INCOME" ? "Дохід" : "Витр"}
+                    </td>
+                    <td className="px-2 py-1.5 text-[11px]" style={{ color: T.textSecondary }}>
+                      {FINANCE_CATEGORY_LABELS[e.category] ?? e.category}
+                    </td>
+                    <td className="px-2 py-1.5 truncate max-w-[220px]" title={e.title}>
+                      {e.title}
+                    </td>
+                    <td className="px-2 py-1.5 text-[11px] truncate max-w-[160px]" style={{ color: T.textSecondary }}>
+                      {e.counterparty ?? "—"}
+                    </td>
+                    <td className="px-2 py-1.5 text-[11px] truncate max-w-[160px]" style={{ color: T.textSecondary }}>
+                      {e.project?.title ?? "—"}
+                    </td>
+                    <td
+                      className="px-2 py-1.5 text-right tabular-nums font-semibold"
+                      style={{ color: e.type === "INCOME" ? T.success : T.warning }}
+                    >
+                      {e.type === "INCOME" ? "+" : "−"}
+                      {formatCurrencyCompact(Number(e.amount))}
+                    </td>
+                    <td className="px-2 py-1.5 text-center text-[10px]">{STATUS_LABELS[e.status]}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {/* Export buttons — at the bottom, AFTER preview */}
+      <div className="flex flex-wrap items-center justify-end gap-2 border-t pt-3" style={{ borderColor: T.borderSoft }}>
+        <span className="text-[11px] mr-auto" style={{ color: T.textMuted }}>
+          Завантажити цей звіт як файл:
+        </span>
+        <button
+          onClick={() => onDownload("xlsx")}
+          disabled={downloading !== null || isStale}
+          className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-semibold disabled:opacity-50"
+          style={{
+            backgroundColor: T.panelSoft,
+            color: T.textPrimary,
+            border: `1px solid ${T.borderStrong}`,
+          }}
+          title={isStale ? "Спершу натисніть «Сформувати знову»" : ""}
+        >
+          {downloading === "xlsx" ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <FileSpreadsheet size={13} style={{ color: "#16A34A" }} />
+          )}
+          Excel
+        </button>
+        <button
+          onClick={() => onDownload("pdf")}
+          disabled={downloading !== null || isStale}
+          className="flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-[12px] font-semibold disabled:opacity-50"
+          style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+          title={isStale ? "Спершу натисніть «Сформувати знову»" : ""}
+        >
+          {downloading === "pdf" ? (
+            <Loader2 size={13} className="animate-spin" />
+          ) : (
+            <FileText size={13} />
+          )}
+          PDF
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Kpi({
+  label,
+  value,
+  count,
+  tone,
+  icon,
+}: {
+  label: string;
+  value: number;
+  count: number;
+  tone?: "good" | "bad" | "muted";
+  icon?: React.ReactNode;
+}) {
+  const color =
+    tone === "good"
+      ? T.success
+      : tone === "bad"
+      ? T.danger
+      : tone === "muted"
+      ? T.textSecondary
+      : T.textPrimary;
+  return (
+    <div
+      className="rounded-xl px-3 py-2.5"
+      style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+    >
+      <div
+        className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: T.textMuted }}
+      >
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 text-base font-bold tabular-nums" style={{ color }}>
+        {formatCurrencyCompact(value)}
+      </div>
+      <div className="text-[10px]" style={{ color: T.textMuted }}>
+        {count} записів
+      </div>
+    </div>
+  );
+}
+
+function BalanceRow({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
+  return (
+    <div
+      className="flex items-baseline justify-between rounded-xl px-3 py-2"
+      style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+    >
+      <span className="text-[12px]" style={{ color: T.textSecondary }}>
+        {label}
+      </span>
+      <span
+        className="tabular-nums"
+        style={{
+          color: value < 0 ? T.danger : value > 0 ? T.success : T.textMuted,
+          fontWeight: bold ? 700 : 600,
+          fontSize: bold ? 16 : 14,
+        }}
+      >
+        {value >= 0 ? "+" : ""}
+        {formatCurrencyCompact(value)}
+      </span>
     </div>
   );
 }
