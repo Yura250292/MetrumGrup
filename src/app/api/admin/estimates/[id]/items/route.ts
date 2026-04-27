@@ -5,7 +5,10 @@ import {
   requireAuth,
   unauthorizedResponse,
 } from "@/lib/auth-utils";
-import { addEstimateItem } from "@/lib/estimates/items-service";
+import {
+  addEstimateItem,
+  normalizeCostType,
+} from "@/lib/estimates/items-service";
 
 export async function POST(
   request: NextRequest,
@@ -36,7 +39,7 @@ export async function POST(
       return NextResponse.json({ error: "Невірна ціна" }, { status: 400 });
     }
 
-    const item = await addEstimateItem({
+    const opts: Parameters<typeof addEstimateItem>[0] = {
       estimateId: id,
       sectionId,
       description,
@@ -44,7 +47,27 @@ export async function POST(
       quantity,
       unitPrice,
       userId: session.user.id,
-    });
+    };
+
+    if ("costCodeId" in json) {
+      const v = json.costCodeId;
+      if (v !== null && typeof v !== "string") {
+        return NextResponse.json({ error: "Невірний costCodeId" }, { status: 400 });
+      }
+      opts.costCodeId = v;
+    }
+    if ("costType" in json) {
+      if (json.costType !== null && typeof json.costType !== "string") {
+        return NextResponse.json({ error: "Невірний costType" }, { status: 400 });
+      }
+      const ct = normalizeCostType(json.costType);
+      if (json.costType !== null && ct === null) {
+        return NextResponse.json({ error: "Невірний costType" }, { status: 400 });
+      }
+      opts.costType = ct;
+    }
+
+    const item = await addEstimateItem(opts);
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (err) {

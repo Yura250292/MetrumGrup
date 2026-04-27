@@ -1,6 +1,22 @@
 import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
+import { CostType } from "@prisma/client";
 import { recomputeEstimateTotals } from "./recompute";
+
+const COST_TYPES: CostType[] = [
+  "MATERIAL",
+  "LABOR",
+  "SUBCONTRACT",
+  "EQUIPMENT",
+  "OVERHEAD",
+  "OTHER",
+];
+
+export function normalizeCostType(value: unknown): CostType | null {
+  if (value === null) return null;
+  if (typeof value !== "string") return null;
+  return COST_TYPES.includes(value as CostType) ? (value as CostType) : null;
+}
 
 /**
  * Запис критичної зміни кошторису. Викликається з функцій нижче після
@@ -36,6 +52,12 @@ async function logCriticalChange(input: {
   }
 }
 
+export type EstimateItemCostCodeDTO = {
+  id: string;
+  code: string;
+  name: string;
+};
+
 export type EstimateItemDTO = {
   id: string;
   description: string;
@@ -45,6 +67,9 @@ export type EstimateItemDTO = {
   amount: number;
   sortOrder: number;
   sectionId: string | null;
+  costCodeId: string | null;
+  costType: CostType | null;
+  costCode: EstimateItemCostCodeDTO | null;
 };
 
 function toDTO(row: {
@@ -56,6 +81,9 @@ function toDTO(row: {
   amount: Decimal | number | string;
   sortOrder: number;
   sectionId: string | null;
+  costCodeId: string | null;
+  costType: CostType | null;
+  costCode?: { id: string; code: string; name: string } | null;
 }): EstimateItemDTO {
   return {
     id: row.id,
@@ -66,7 +94,42 @@ function toDTO(row: {
     amount: Number(row.amount),
     sortOrder: row.sortOrder,
     sectionId: row.sectionId,
+    costCodeId: row.costCodeId,
+    costType: row.costType,
+    costCode: row.costCode
+      ? { id: row.costCode.id, code: row.costCode.code, name: row.costCode.name }
+      : null,
   };
+}
+
+/**
+ * Returns only the cost fields that the caller actually intends to patch.
+ * If the operator sets a cost-code without an explicit costType, the code's
+ * defaultCostType is filled in so the budget-vs-actual matrix groups items
+ * correctly without a second click.
+ */
+async function resolveCostFields(input: {
+  costCodeId?: string | null;
+  costType?: CostType | null;
+}): Promise<Partial<{ costCodeId: string | null; costType: CostType | null }>> {
+  const hasCostCode = "costCodeId" in input;
+  const hasCostType = "costType" in input;
+  if (!hasCostCode && !hasCostType) return {};
+
+  const out: Partial<{ costCodeId: string | null; costType: CostType | null }> = {};
+  if (hasCostCode) out.costCodeId = input.costCodeId ?? null;
+  if (hasCostType) out.costType = input.costType ?? null;
+
+  if (hasCostCode && out.costCodeId && !hasCostType) {
+    const cc = await prisma.costCode.findUnique({
+      where: { id: out.costCodeId },
+      select: { defaultCostType: true },
+    });
+    if (!cc) throw new Error("Cost code not found");
+    out.costType = cc.defaultCostType ?? null;
+  }
+
+  return out;
 }
 
 export async function addEstimateItem(opts: {
@@ -76,6 +139,8 @@ export async function addEstimateItem(opts: {
   unit: string;
   quantity: number;
   unitPrice: number;
+  costCodeId?: string | null;
+  costType?: CostType | null;
   userId: string;
 }): Promise<EstimateItemDTO> {
   const section = await prisma.estimateSection.findUnique({
@@ -95,6 +160,11 @@ export async function addEstimateItem(opts: {
   const description = opts.description.trim() || "Нова позиція";
   const unit = opts.unit.trim() || "шт";
 
+  const costFields = await resolveCostFields({
+    ...("costCodeId" in opts ? { costCodeId: opts.costCodeId } : {}),
+    ...("costType" in opts ? { costType: opts.costType } : {}),
+  });
+
   const item = await prisma.estimateItem.create({
     data: {
       estimateId: opts.estimateId,
@@ -105,7 +175,9 @@ export async function addEstimateItem(opts: {
       unitPrice: opts.unitPrice,
       amount,
       sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+      ...costFields,
     },
+    include: { costCode: { select: { id: true, code: true, name: true } } },
   });
 
   await recomputeEstimateTotals(opts.estimateId);
@@ -139,6 +211,8 @@ export async function updateEstimateItem(opts: {
     unit?: string;
     quantity?: number;
     unitPrice?: number;
+    costCodeId?: string | null;
+    costType?: CostType | null;
   };
   userId: string;
 }): Promise<EstimateItemDTO> {
@@ -151,6 +225,8 @@ export async function updateEstimateItem(opts: {
       unit: true,
       quantity: true,
       unitPrice: true,
+      costCodeId: true,
+      costType: true,
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
@@ -159,6 +235,8 @@ export async function updateEstimateItem(opts: {
   const oldUnit = existing.unit;
   const oldQuantity = Number(existing.quantity);
   const oldUnitPrice = Number(existing.unitPrice);
+  const oldCostCodeId = existing.costCodeId;
+  const oldCostType = existing.costType;
 
   const newDescription =
     opts.patch.description !== undefined ? opts.patch.description.trim() : oldDescription;
@@ -169,6 +247,11 @@ export async function updateEstimateItem(opts: {
     opts.patch.unitPrice !== undefined ? opts.patch.unitPrice : oldUnitPrice;
   const newAmount = new Decimal(newQuantity).times(newUnitPrice).toFixed(2);
 
+  const costFields = await resolveCostFields({
+    ...("costCodeId" in opts.patch ? { costCodeId: opts.patch.costCodeId } : {}),
+    ...("costType" in opts.patch ? { costType: opts.patch.costType } : {}),
+  });
+
   const updated = await prisma.estimateItem.update({
     where: { id: opts.itemId },
     data: {
@@ -177,7 +260,9 @@ export async function updateEstimateItem(opts: {
       quantity: newQuantity,
       unitPrice: newUnitPrice,
       amount: newAmount,
+      ...costFields,
     },
+    include: { costCode: { select: { id: true, code: true, name: true } } },
   });
 
   await recomputeEstimateTotals(existing.estimateId);
@@ -196,6 +281,26 @@ export async function updateEstimateItem(opts: {
   }
   if (opts.patch.unitPrice !== undefined && newUnitPrice !== oldUnitPrice) {
     changes.push({ field: "unitPrice", oldValue: oldUnitPrice, newValue: newUnitPrice });
+  }
+  if (
+    "costCodeId" in costFields &&
+    (costFields.costCodeId ?? null) !== oldCostCodeId
+  ) {
+    changes.push({
+      field: "costCodeId",
+      oldValue: oldCostCodeId,
+      newValue: costFields.costCodeId ?? null,
+    });
+  }
+  if (
+    "costType" in costFields &&
+    (costFields.costType ?? null) !== oldCostType
+  ) {
+    changes.push({
+      field: "costType",
+      oldValue: oldCostType,
+      newValue: costFields.costType ?? null,
+    });
   }
 
   for (const change of changes) {

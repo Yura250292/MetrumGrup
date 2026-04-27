@@ -3,6 +3,20 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 
+export type EstimateItemCostCode = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+export type EstimateItemCostType =
+  | "MATERIAL"
+  | "LABOR"
+  | "SUBCONTRACT"
+  | "EQUIPMENT"
+  | "OVERHEAD"
+  | "OTHER";
+
 export type EstimateItem = {
   id: string;
   description: string;
@@ -15,6 +29,9 @@ export type EstimateItem = {
   useCustomMargin: boolean;
   customMarginPercent: number | null;
   material: { name: string; sku: string } | null;
+  costCodeId: string | null;
+  costType: EstimateItemCostType | null;
+  costCode: EstimateItemCostCode | null;
 };
 
 export type EstimateSection = {

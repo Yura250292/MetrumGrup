@@ -117,6 +117,10 @@ export async function syncEstimateToFinancing(
         });
         itemsUpdated++;
       } else {
+        // Seed costCodeId/costType from the estimate item so the new planned
+        // entry lands in the right bucket of the budget-vs-actual matrix.
+        // On subsequent syncs we deliberately do NOT overwrite these fields
+        // (see UPDATE branch above) — the human is the source of truth there.
         await tx.financeEntry.create({
           data: {
             occurredAt,
@@ -134,6 +138,8 @@ export async function syncEstimateToFinancing(
             createdById: userId,
             estimateId,
             estimateItemId: item.id,
+            costCodeId: item.costCodeId,
+            costType: item.costType,
           },
         });
         itemsCreated++;

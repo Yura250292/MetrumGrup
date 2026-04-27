@@ -7,8 +7,10 @@ import {
 } from "@/lib/auth-utils";
 import {
   deleteEstimateItem,
+  normalizeCostType,
   updateEstimateItem,
 } from "@/lib/estimates/items-service";
+import type { CostType } from "@prisma/client";
 
 function handleError(err: unknown) {
   const message = err instanceof Error ? err.message : "Unknown error";
@@ -36,6 +38,8 @@ export async function PATCH(
       unit?: string;
       quantity?: number;
       unitPrice?: number;
+      costCodeId?: string | null;
+      costType?: CostType | null;
     } = {};
 
     if (typeof json.description === "string") patch.description = json.description;
@@ -53,6 +57,22 @@ export async function PATCH(
         return NextResponse.json({ error: "Невірна ціна" }, { status: 400 });
       }
       patch.unitPrice = p;
+    }
+    if ("costCodeId" in json) {
+      if (json.costCodeId !== null && typeof json.costCodeId !== "string") {
+        return NextResponse.json({ error: "Невірний costCodeId" }, { status: 400 });
+      }
+      patch.costCodeId = json.costCodeId;
+    }
+    if ("costType" in json) {
+      if (json.costType !== null && typeof json.costType !== "string") {
+        return NextResponse.json({ error: "Невірний costType" }, { status: 400 });
+      }
+      const ct = normalizeCostType(json.costType);
+      if (json.costType !== null && ct === null) {
+        return NextResponse.json({ error: "Невірний costType" }, { status: 400 });
+      }
+      patch.costType = ct;
     }
 
     const item = await updateEstimateItem({ itemId, patch, userId: session.user.id });

@@ -5,7 +5,9 @@ import { Trash2 } from "lucide-react";
 import {
   useDeleteEstimateItem,
   useUpdateEstimateItem,
+  type EstimateItemCostType,
 } from "@/hooks/useEstimateItems";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 
 export type EditableItem = {
   id: string;
@@ -14,15 +16,19 @@ export type EditableItem = {
   quantity: number;
   unitPrice: number;
   amount: number;
+  costCodeId: string | null;
+  costCode: { id: string; code: string; name: string } | null;
 };
 
 export function EditableItemRow({
   item,
   estimateId,
+  costCodeOptions,
   onChanged,
 }: {
   item: EditableItem;
   estimateId: string;
+  costCodeOptions: ComboboxOption[];
   onChanged?: () => void;
 }) {
   const [description, setDescription] = useState(item.description);
@@ -43,9 +49,14 @@ export function EditableItemRow({
 
   const computedAmount = (Number(quantity) || 0) * (Number(unitPrice) || 0);
 
-  const handleSave = async (
-    patch: { description?: string; unit?: string; quantity?: number; unitPrice?: number }
-  ) => {
+  const handleSave = async (patch: {
+    description?: string;
+    unit?: string;
+    quantity?: number;
+    unitPrice?: number;
+    costCodeId?: string | null;
+    costType?: EstimateItemCostType | null;
+  }) => {
     try {
       await updateItem.mutateAsync({ itemId: item.id, patch });
       onChanged?.();
@@ -53,6 +64,20 @@ export function EditableItemRow({
       console.error("Failed to update item:", err);
     }
   };
+
+  // The current cost-code may be filtered out of the options list (inactive,
+  // not yet loaded). Make sure it's still selectable so the row shows it.
+  const optionsWithCurrent =
+    item.costCode &&
+    !costCodeOptions.some((o) => o.value === item.costCode!.id)
+      ? [
+          {
+            value: item.costCode.id,
+            label: `${item.costCode.code} ${item.costCode.name}`,
+          },
+          ...costCodeOptions,
+        ]
+      : costCodeOptions;
 
   const handleDelete = async () => {
     if (!confirm(`Видалити позицію "${item.description}"?`)) return;
@@ -75,6 +100,20 @@ export function EditableItemRow({
             if (description !== item.description) handleSave({ description });
           }}
           className="w-full rounded px-2 py-1 text-sm bg-transparent admin-dark:text-white admin-light:text-gray-900 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white admin-dark:focus:bg-gray-900"
+        />
+      </td>
+      <td className="px-2 py-1.5 w-44">
+        <Combobox
+          value={item.costCodeId}
+          options={optionsWithCurrent}
+          onChange={(value) => {
+            if (value === item.costCodeId) return;
+            handleSave({ costCodeId: value });
+          }}
+          placeholder="Без статті"
+          searchPlaceholder="Пошук статті…"
+          emptyMessage="Нічого не знайдено"
+          listMaxHeight={300}
         />
       </td>
       <td className="px-2 py-1.5 w-16">

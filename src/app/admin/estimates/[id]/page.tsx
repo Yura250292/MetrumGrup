@@ -643,6 +643,8 @@ export default function EstimateDetailPage({
                   quantity: Number(item.quantity),
                   unitPrice: Number(item.unitPrice),
                   amount: Number(item.amount),
+                  costCodeId: (item as any).costCodeId ?? null,
+                  costCode: (item as any).costCode ?? null,
                 }))}
                 onChanged={() => {
                   fetch(`/api/admin/estimates/${id}`)

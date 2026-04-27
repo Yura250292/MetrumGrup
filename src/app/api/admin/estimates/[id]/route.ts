@@ -63,7 +63,10 @@ export async function GET(
         include: {
           items: {
             orderBy: { sortOrder: "asc" },
-            include: { material: { select: { name: true, sku: true } } },
+            include: {
+              material: { select: { name: true, sku: true } },
+              costCode: { select: { id: true, code: true, name: true } },
+            },
           },
         },
       },

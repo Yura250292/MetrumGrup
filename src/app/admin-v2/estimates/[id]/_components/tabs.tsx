@@ -89,6 +89,8 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
                     quantity: it.quantity,
                     unitPrice: it.unitPrice,
                     amount: it.amount,
+                    costCodeId: it.costCodeId,
+                    costCode: it.costCode,
                   }))}
                   onChanged={() => controller.loadEstimate()}
                 />
