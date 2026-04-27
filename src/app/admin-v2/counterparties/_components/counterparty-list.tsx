@@ -96,8 +96,11 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   async function load() {
     setLoading(true);
+    setLoadError(null);
     try {
       const params = new URLSearchParams();
       params.set("take", "200");
@@ -105,10 +108,18 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
       const res = await fetch(`/api/admin/financing/counterparties?${params}`, {
         cache: "no-store",
       });
-      if (res.ok) {
-        const j = await res.json();
-        setItems(j.data ?? []);
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        const msg = j.error ?? `HTTP ${res.status}`;
+        setLoadError(`Не вдалось завантажити контрагентів: ${msg}`);
+        setItems([]);
+        return;
       }
+      const j = await res.json();
+      setItems(j.data ?? []);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : "Network error");
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -533,6 +544,26 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
         </label>
       </div>
 
+      {loadError && (
+        <div
+          className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
+          style={{
+            backgroundColor: T.dangerSoft,
+            color: T.danger,
+            border: `1px solid ${T.danger}40`,
+          }}
+        >
+          ⚠ {loadError}
+          <button
+            onClick={() => void load()}
+            className="ml-auto rounded-md px-2 py-1 text-[11px] font-semibold"
+            style={{ backgroundColor: T.danger, color: "#fff" }}
+          >
+            Спробувати ще
+          </button>
+        </div>
+      )}
+
       {loading && (
         <div
           className="flex items-center justify-center gap-2 py-12 text-sm"
@@ -562,13 +593,17 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => {
+              {filtered.map((c, idx) => {
                 const tc = TYPE_COLORS[c.type];
                 return (
                   <tr
                     key={c.id}
-                    className="border-t transition hover:bg-black/5 cursor-pointer"
-                    style={{ borderColor: T.borderSoft, opacity: c.isActive ? 1 : 0.55 }}
+                    className={`border-t transition hover:bg-black/5 cursor-pointer ${idx < 20 ? "data-table-row-enter" : ""}`}
+                    style={{
+                      borderColor: T.borderSoft,
+                      opacity: c.isActive ? 1 : 0.55,
+                      ...(idx < 20 ? { animationDelay: `${idx * 28}ms` } : {}),
+                    }}
                     onClick={(e) => {
                       // Don't trigger when clicking on inner buttons / links.
                       if ((e.target as HTMLElement).closest("a, button")) return;

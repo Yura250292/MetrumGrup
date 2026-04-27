@@ -16,7 +16,7 @@ const querySchema = z.object({
   q: z.string().trim().optional(),
   type: z.enum(["LEGAL", "INDIVIDUAL", "FOP"]).optional(),
   includeInactive: z.coerce.boolean().default(false),
-  take: z.coerce.number().int().positive().max(100).default(50),
+  take: z.coerce.number().int().positive().max(500).default(50),
 });
 
 const createSchema = z.object({
