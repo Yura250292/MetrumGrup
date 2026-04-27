@@ -34,6 +34,7 @@ import { TabArchive } from "./tab-archive";
 import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
 import { TabBudgetActual } from "./tab-budget-actual";
+import { ExportMenu } from "./export-menu";
 import { TabTimesheets } from "./tab-timesheets";
 import { FolderEstimateCard } from "./folder-estimate-card";
 import { TemplateConstructor } from "./template-constructor";
@@ -217,20 +218,7 @@ export function FinancingView({
                   <QuickAddSplit onPick={(p) => setCreatePreset(p)} />
                 </div>
               )}
-              <button
-                onClick={handleExport}
-                disabled={exporting || loading}
-                title="Експорт в Excel"
-                className="flex items-center justify-center rounded-xl h-10 w-10 sm:w-auto sm:px-3 text-xs font-semibold disabled:opacity-50 transition hover:brightness-105"
-                style={{
-                  backgroundColor: T.panelElevated,
-                  color: T.textPrimary,
-                  border: `1px solid ${T.borderStrong}`,
-                }}
-              >
-                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                <span className="hidden sm:inline ml-1.5">Excel</span>
-              </button>
+              <ExportMenu onExport={handleExport} exporting={exporting} disabled={loading} />
             </div>
           </div>
 
@@ -284,20 +272,7 @@ export function FinancingView({
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <QuickAddSplit onPick={(p) => setCreatePreset(p)} compact />
-              <button
-                onClick={handleExport}
-                disabled={exporting || loading}
-                title="Експорт в Excel"
-                className="flex items-center justify-center rounded-xl h-9 w-9 sm:w-auto sm:px-3 text-xs font-semibold disabled:opacity-50 transition hover:brightness-105"
-                style={{
-                  backgroundColor: T.panelElevated,
-                  color: T.textPrimary,
-                  border: `1px solid ${T.borderStrong}`,
-                }}
-              >
-                {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                <span className="hidden sm:inline ml-1.5">Excel</span>
-              </button>
+              <ExportMenu onExport={handleExport} exporting={exporting} disabled={loading} compact />
             </div>
           </div>
 

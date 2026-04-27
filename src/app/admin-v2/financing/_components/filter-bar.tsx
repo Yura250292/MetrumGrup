@@ -130,6 +130,7 @@ export function FilterBar({
   scope?: { id: string; title: string };
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showRare, setShowRare] = useState(false);
   const folderTree = useFinanceFolderTree(!scope);
   const costCodes = useCostCodes();
   const counterparties = useCounterparties();
@@ -294,151 +295,208 @@ export function FilterBar({
         />
       )}
 
-      {/* Advanced filters (collapsible) */}
+      {/* Advanced filters (collapsible) — grouped to reduce overload */}
       {showAdvanced && (
         <div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-3 border-t"
+          className="flex flex-col gap-3 pt-3 border-t"
           style={{ borderColor: T.borderSoft }}
         >
-          {!scope && (
+          {/* GROUP 1: most-used filters — always shown when advanced is open */}
+          <SectionHeader title="Класифікація" hint="Як саме категоризовано операцію" />
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {!scope && (
+              <FilterSelect
+                icon={<Folder size={13} />}
+                placeholder="Проєкт"
+                title="Прив'язка до конкретного об'єкта"
+                value={filters.projectId}
+                onChange={(v) => setFilters((p) => ({ ...p, projectId: v }))}
+              >
+                <option value="">Всі проєкти</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </FilterSelect>
+            )}
+
             <FilterSelect
-              icon={<Folder size={13} />}
-              placeholder="Проєкт"
-              value={filters.projectId}
-              onChange={(v) => setFilters((p) => ({ ...p, projectId: v }))}
+              icon={<Layers size={13} />}
+              placeholder="Стаття витрат (cost-code)"
+              title="Дерево статей. Сюди йдуть звіти План vs Факт"
+              value={filters.costCodeId}
+              onChange={(v) => setFilters((p) => ({ ...p, costCodeId: v }))}
             >
-              <option value="">Всі проєкти</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.title}
+              <option value="">Всі статті</option>
+              {costCodes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {"— ".repeat(c.depth)}
+                  {c.code} {c.name}
                 </option>
               ))}
             </FilterSelect>
-          )}
 
-          {!scope && (
             <FilterSelect
-              icon={<Folder size={13} />}
-              placeholder="Папка"
-              value={filters.folderId}
-              onChange={(v) => setFilters((p) => ({ ...p, folderId: v }))}
+              icon={<Wrench size={13} />}
+              placeholder="Тип витрат"
+              title="MATERIAL / LABOR / SUBCONTRACT / EQUIPMENT / OVERHEAD / OTHER"
+              value={filters.costType}
+              onChange={(v) => setFilters((p) => ({ ...p, costType: v }))}
             >
-              <option value="">Всі папки</option>
-              {folderTree.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {"— ".repeat(f.depth) + f.name}
+              <option value="">Всі типи</option>
+              {COST_TYPE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </FilterSelect>
-          )}
 
-          <FilterSelect
-            icon={<Tag size={13} />}
-            placeholder="Категорія"
-            value={filters.category}
-            onChange={(v) => setFilters((p) => ({ ...p, category: v }))}
-          >
-            <option value="">Всі категорії</option>
-            {FINANCE_CATEGORIES.map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-          </FilterSelect>
-
-          <FilterInput
-            value={filters.subcategory}
-            onChange={(v) => setFilters((p) => ({ ...p, subcategory: v }))}
-            placeholder="Підкатегорія"
-            icon={<Tag size={13} />}
-          />
-
-          <FilterSelect
-            icon={<Layers size={13} />}
-            placeholder="Стаття витрат"
-            value={filters.costCodeId}
-            onChange={(v) => setFilters((p) => ({ ...p, costCodeId: v }))}
-          >
-            <option value="">Всі статті</option>
-            {costCodes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {"— ".repeat(c.depth)}
-                {c.code} {c.name}
-              </option>
-            ))}
-          </FilterSelect>
-
-          <FilterSelect
-            icon={<Wrench size={13} />}
-            placeholder="Тип витрат"
-            value={filters.costType}
-            onChange={(v) => setFilters((p) => ({ ...p, costType: v }))}
-          >
-            <option value="">Всі типи</option>
-            {COST_TYPE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </FilterSelect>
-
-          <FilterSelect
-            icon={<Building2 size={13} />}
-            placeholder="Контрагент"
-            value={filters.counterpartyId}
-            onChange={(v) => setFilters((p) => ({ ...p, counterpartyId: v }))}
-          >
-            <option value="">Всі контрагенти</option>
-            {counterparties.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </FilterSelect>
-
-          {users.length > 0 && (
             <FilterSelect
-              icon={<UserIcon size={13} />}
-              placeholder="Автор"
-              value={filters.responsibleId}
-              onChange={(v) => setFilters((p) => ({ ...p, responsibleId: v }))}
+              icon={<Building2 size={13} />}
+              placeholder="Контрагент"
+              title="Хто отримує або платить"
+              value={filters.counterpartyId}
+              onChange={(v) => setFilters((p) => ({ ...p, counterpartyId: v }))}
             >
-              <option value="">Всі автори</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
+              <option value="">Всі контрагенти</option>
+              {counterparties.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
                 </option>
               ))}
             </FilterSelect>
-          )}
+          </div>
 
-          <FilterSelect
-            icon={<Paperclip size={13} />}
-            placeholder="Вкладення"
-            value={filters.hasAttachments}
-            onChange={(v) => setFilters((p) => ({ ...p, hasAttachments: v }))}
+          {/* GROUP 2 toggle */}
+          <button
+            type="button"
+            onClick={() => setShowRare((v) => !v)}
+            className="flex items-center gap-1.5 self-start rounded-lg px-2 py-1 text-[11px] font-semibold transition"
+            style={{ color: T.textMuted }}
           >
-            <option value="">Вкладення (всі)</option>
-            <option value="true">З файлами</option>
-            <option value="false">Без файлів</option>
-          </FilterSelect>
+            <ChevronDown
+              size={11}
+              style={{
+                transform: showRare ? "rotate(180deg)" : "none",
+                transition: "transform 200ms",
+              }}
+            />
+            {showRare ? "Сховати рідкі" : "+ Більше фільтрів (категорія, автор, вкладення, дати, папка)"}
+          </button>
 
-          <FilterInput
-            type="date"
-            icon={<CalendarDays size={13} />}
-            value={filters.from}
-            onChange={(v) => setFilters((p) => ({ ...p, from: v }))}
-            placeholder="Від"
-          />
-          <FilterInput
-            type="date"
-            icon={<CalendarDays size={13} />}
-            value={filters.to}
-            onChange={(v) => setFilters((p) => ({ ...p, to: v }))}
-            placeholder="До"
-          />
+          {showRare && (
+            <>
+              <SectionHeader
+                title="Деталі"
+                hint="Старі категорії, підкатегорія, автор, файли, точні дати"
+              />
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                {!scope && (
+                  <FilterSelect
+                    icon={<Folder size={13} />}
+                    placeholder="Папка"
+                    title="Папка фінансування (FINANCE folder tree)"
+                    value={filters.folderId}
+                    onChange={(v) => setFilters((p) => ({ ...p, folderId: v }))}
+                  >
+                    <option value="">Всі папки</option>
+                    {folderTree.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {"— ".repeat(f.depth) + f.name}
+                      </option>
+                    ))}
+                  </FilterSelect>
+                )}
+
+                <FilterSelect
+                  icon={<Tag size={13} />}
+                  placeholder="Категорія"
+                  title="Стара плоска категорія (materials/salary/...) — поступово замінюється статтею витрат"
+                  value={filters.category}
+                  onChange={(v) => setFilters((p) => ({ ...p, category: v }))}
+                >
+                  <option value="">Всі категорії</option>
+                  {FINANCE_CATEGORIES.map((c) => (
+                    <option key={c.key} value={c.key}>
+                      {c.label}
+                    </option>
+                  ))}
+                </FilterSelect>
+
+                <FilterInput
+                  value={filters.subcategory}
+                  onChange={(v) => setFilters((p) => ({ ...p, subcategory: v }))}
+                  placeholder="Підкатегорія (вільний текст)"
+                  icon={<Tag size={13} />}
+                />
+
+                {users.length > 0 && (
+                  <FilterSelect
+                    icon={<UserIcon size={13} />}
+                    placeholder="Автор операції"
+                    title="Хто створив запис"
+                    value={filters.responsibleId}
+                    onChange={(v) => setFilters((p) => ({ ...p, responsibleId: v }))}
+                  >
+                    <option value="">Всі автори</option>
+                    {users.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </FilterSelect>
+                )}
+
+                <FilterSelect
+                  icon={<Paperclip size={13} />}
+                  placeholder="Файли / вкладення"
+                  title="Чи є прикріплений чек/документ"
+                  value={filters.hasAttachments}
+                  onChange={(v) => setFilters((p) => ({ ...p, hasAttachments: v }))}
+                >
+                  <option value="">Вкладення (всі)</option>
+                  <option value="true">З файлами</option>
+                  <option value="false">Без файлів</option>
+                </FilterSelect>
+
+                <FilterInput
+                  type="date"
+                  icon={<CalendarDays size={13} />}
+                  value={filters.from}
+                  onChange={(v) => setFilters((p) => ({ ...p, from: v }))}
+                  placeholder="Точна дата від"
+                />
+                <FilterInput
+                  type="date"
+                  icon={<CalendarDays size={13} />}
+                  value={filters.to}
+                  onChange={(v) => setFilters((p) => ({ ...p, to: v }))}
+                  placeholder="Точна дата до"
+                />
+              </div>
+            </>
+          )}
         </div>
       )}
     </section>
+  );
+}
+
+function SectionHeader({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="flex items-baseline gap-2">
+      <span
+        className="text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: T.textPrimary }}
+      >
+        {title}
+      </span>
+      {hint && (
+        <span className="text-[11px]" style={{ color: T.textMuted }}>
+          · {hint}
+        </span>
+      )}
+    </div>
   );
 }

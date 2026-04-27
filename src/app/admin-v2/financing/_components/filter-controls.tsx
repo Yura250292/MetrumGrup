@@ -12,16 +12,20 @@ export function FilterSelect({
   children,
   icon,
   placeholder,
+  title,
 }: {
   value: string;
   onChange: (v: string) => void;
   children: React.ReactNode;
   icon?: React.ReactNode;
   placeholder?: string;
+  /// Tooltip explaining the filter (shown on hover via title attr).
+  title?: string;
 }) {
   const active = !!value;
   return (
     <label
+      title={title}
       className="relative flex items-center gap-2 rounded-xl px-3 py-2.5 transition cursor-pointer hover:brightness-[0.98]"
       style={{
         backgroundColor: active ? T.accentPrimarySoft : T.panelSoft,

@@ -18,11 +18,22 @@ import {
 import {
   generateFinancingExcel,
   type FinancingExportAppliedFilter,
+  type FinancingExportInput,
 } from "@/lib/export/financing-export";
+import { generateFinancingPdf } from "@/lib/export/financing-pdf";
 
 export const runtime = "nodejs";
 
 const READ_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
+
+const COST_TYPE_LABELS: Record<string, string> = {
+  MATERIAL: "Матеріали",
+  LABOR: "Робота (ЗП)",
+  SUBCONTRACT: "Підряд",
+  EQUIPMENT: "Техніка",
+  OVERHEAD: "Накладні",
+  OTHER: "Інше",
+};
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -79,6 +90,26 @@ export async function GET(request: NextRequest) {
         value: FINANCE_CATEGORY_LABELS[filters.category] ?? filters.category,
       });
     }
+    if (filters.costCodeId) {
+      const cc = await prisma.costCode.findUnique({
+        where: { id: filters.costCodeId },
+        select: { code: true, name: true },
+      });
+      if (cc) appliedFilters.push({ label: "Стаття", value: `${cc.code} ${cc.name}` });
+    }
+    if (filters.costType) {
+      appliedFilters.push({
+        label: "Тип витрат",
+        value: COST_TYPE_LABELS[filters.costType] ?? filters.costType,
+      });
+    }
+    if (filters.counterpartyId) {
+      const cp = await prisma.counterparty.findUnique({
+        where: { id: filters.counterpartyId },
+        select: { name: true },
+      });
+      if (cp) appliedFilters.push({ label: "Контрагент", value: cp.name });
+    }
     if (filters.from)
       appliedFilters.push({ label: "Період від", value: filters.from.toISOString().slice(0, 10) });
     if (filters.to)
@@ -88,7 +119,7 @@ export async function GET(request: NextRequest) {
       appliedFilters.push({ label: "З вкладеннями", value: "Так" });
     if (filters.archived) appliedFilters.push({ label: "Архівні", value: "Так" });
 
-    const buffer = await generateFinancingExcel({
+    const exportInput: FinancingExportInput = {
       entries: entries.map((e) => ({
         occurredAt: e.occurredAt,
         kind: e.kind,
@@ -109,17 +140,35 @@ export async function GET(request: NextRequest) {
       summary,
       appliedFilters,
       generatedAt: new Date(),
-    });
+    };
+
+    const format = (searchParams.get("format") ?? "xlsx").toLowerCase();
+    const reportTitle = searchParams.get("title") ?? undefined;
+    const today = new Date().toISOString().slice(0, 10);
 
     await auditLog({
       userId: session.user.id,
       action: "EXPORT",
       entity: "FinanceEntry",
-      newData: { count: entries.length, filters: appliedFilters },
+      newData: { count: entries.length, filters: appliedFilters, format },
     });
 
-    const fileName = `financing-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    return new NextResponse(buffer as any, {
+    if (format === "pdf") {
+      const pdf = await generateFinancingPdf(exportInput, { reportTitle });
+      const fileName = `financing-${today}.pdf`;
+      return new NextResponse(new Uint8Array(pdf), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${fileName}"`,
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    const buffer = await generateFinancingExcel(exportInput);
+    const fileName = `financing-${today}.xlsx`;
+    return new NextResponse(buffer as unknown as BodyInit, {
       status: 200,
       headers: {
         "Content-Type":

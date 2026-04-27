@@ -127,16 +127,18 @@ export function useFinancingData({
     loadData();
   }, [loadData]);
 
-  async function handleExport() {
+  async function handleExport(format: "xlsx" | "pdf" = "xlsx") {
     setExporting(true);
     try {
-      const res = await fetch(`/api/admin/financing/export?${query}`);
+      const params = new URLSearchParams(query);
+      params.set("format", format);
+      const res = await fetch(`/api/admin/financing/export?${params}`);
       if (!res.ok) throw new Error("Помилка експорту");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `financing-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.download = `financing-${new Date().toISOString().slice(0, 10)}.${format}`;
       document.body.appendChild(a);
       a.click();
       a.remove();
