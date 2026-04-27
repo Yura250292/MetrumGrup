@@ -347,11 +347,11 @@ export default function HrEmployeesPage() {
           </span>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 items-stretch">
           {filtered.map((e, idx) => (
             <div
               key={e.id}
-              className={idx < 24 ? "data-table-row-enter" : undefined}
+              className={`h-full${idx < 24 ? " data-table-row-enter" : ""}`}
               style={idx < 24 ? { animationDelay: `${idx * 30}ms` } : undefined}
             >
               <EmployeeCard employee={e} onClick={() => openProfile(e)} />
@@ -406,7 +406,7 @@ function EmployeeCard({ employee, onClick }: { employee: Employee; onClick: () =
   return (
     <button
       onClick={onClick}
-      className="flex flex-col gap-3 rounded-2xl p-4 text-left transition hover:brightness-[0.98]"
+      className="flex h-full w-full flex-col gap-3 rounded-2xl p-4 text-left transition hover:brightness-[0.98]"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
