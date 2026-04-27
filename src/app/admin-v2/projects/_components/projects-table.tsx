@@ -69,22 +69,25 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
       sortable: true,
       sortValue: (p) => p.stageProgress,
       hideOnMobile: true,
-      render: (p) => (
+      render: (p) => {
+        const color =
+          p.stageProgress >= 80
+            ? T.success
+            : p.stageProgress >= 30
+              ? T.accentPrimary
+              : T.warning;
+        return (
         <div className="flex items-center gap-2 min-w-[140px]">
           <div
             className="h-1.5 flex-1 overflow-hidden rounded-full"
             style={{ backgroundColor: T.panelSoft }}
           >
             <div
-              className="h-full rounded-full"
+              className="h-full rounded-full progress-fill-grow"
               style={{
                 width: `${p.stageProgress}%`,
-                backgroundColor:
-                  p.stageProgress >= 80
-                    ? T.success
-                    : p.stageProgress >= 30
-                      ? T.accentPrimary
-                      : T.warning,
+                backgroundColor: color,
+                boxShadow: `0 0 8px ${color}55`,
               }}
             />
           </div>
@@ -92,7 +95,8 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
             {p.stageProgress}%
           </span>
         </div>
-      ),
+        );
+      },
     },
     {
       key: "budget",

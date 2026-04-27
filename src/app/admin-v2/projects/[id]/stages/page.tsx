@@ -601,10 +601,11 @@ function StageNode({
             style={{ backgroundColor: T.panelSoft }}
           >
             <div
-              className="h-full rounded-full transition-all"
+              className="h-full rounded-full progress-fill-grow"
               style={{
                 width: `${stage.progress}%`,
                 backgroundColor: T.accentPrimary,
+                boxShadow: `0 0 8px ${T.accentPrimary}55`,
               }}
             />
           </div>

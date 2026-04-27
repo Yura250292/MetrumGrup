@@ -15,10 +15,12 @@ type RadialProgressProps = {
   ariaLabel?: string;
   /** Delay (ms) before animation starts — useful to stagger multiple rings. */
   delay?: number;
-  /** Animation duration in ms. */
+  /** Animation duration in ms (raised to 1600ms 2026-04-27 for cinematic feel). */
   duration?: number;
   /** Disable entry animation (for static previews). */
   animate?: boolean;
+  /** Add subtle glow on the fill stroke. Default true. */
+  glow?: boolean;
 };
 
 export function RadialProgress({
@@ -33,11 +35,15 @@ export function RadialProgress({
   children,
   ariaLabel,
   delay = 0,
-  duration = 900,
+  duration = 1600,
   animate = true,
+  glow = true,
 }: RadialProgressProps) {
   const clamped = Math.max(0, Math.min(100, isFinite(value) ? value : 0));
   const [rendered, setRendered] = useState(animate ? 0 : clamped);
+  // Container fades in at the same time the stroke draws — gives the ring
+  // a "materializing" feel rather than just sweeping in fully opaque.
+  const [mounted, setMounted] = useState(!animate);
 
   useEffect(() => {
     const reduced =
@@ -45,9 +51,13 @@ export function RadialProgress({
       window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
     if (!animate || reduced) {
       setRendered(clamped);
+      setMounted(true);
       return;
     }
-    const t = setTimeout(() => setRendered(clamped), delay);
+    const t = setTimeout(() => {
+      setRendered(clamped);
+      setMounted(true);
+    }, delay);
     return () => clearTimeout(t);
   }, [clamped, delay, animate]);
 
@@ -55,6 +65,7 @@ export function RadialProgress({
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (rendered / 100) * circumference;
   const labelId = useId();
+  const glowFilter = glow ? `drop-shadow(0 0 6px ${fillColor === "currentColor" ? "rgba(96,165,250,0.4)" : fillColor + "55"})` : undefined;
 
   return (
     <div
@@ -65,6 +76,10 @@ export function RadialProgress({
         height: size,
         flexShrink: 0,
         lineHeight: 0,
+        opacity: mounted ? 1 : 0.25,
+        transform: mounted ? "scale(1)" : "scale(0.92)",
+        transition:
+          "opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1)",
       }}
       role="img"
       aria-label={ariaLabel ?? `${Math.round(clamped)}%`}
@@ -91,7 +106,8 @@ export function RadialProgress({
           strokeDashoffset={offset}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
           style={{
-            transition: `stroke-dashoffset ${duration}ms cubic-bezier(0.22, 1, 0.36, 1)`,
+            transition: `stroke-dashoffset ${duration}ms cubic-bezier(0.16, 1, 0.3, 1)`,
+            filter: glowFilter,
           }}
         />
       </svg>
@@ -144,7 +160,7 @@ export function DualRadialProgress({
   children,
   ariaLabel,
   delay = 0,
-  duration = 1000,
+  duration = 1800,
   animate = true,
 }: DualRadialProgressProps) {
   const outerClamped = Math.max(0, Math.min(100, isFinite(outer.value) ? outer.value : 0));
@@ -152,6 +168,7 @@ export function DualRadialProgress({
 
   const [outerR, setOuterR] = useState(animate ? 0 : outerClamped);
   const [innerR, setInnerR] = useState(animate ? 0 : innerClamped);
+  const [mounted, setMounted] = useState(!animate);
 
   useEffect(() => {
     const reduced =
@@ -160,11 +177,15 @@ export function DualRadialProgress({
     if (!animate || reduced) {
       setOuterR(outerClamped);
       setInnerR(innerClamped);
+      setMounted(true);
       return;
     }
-    const t1 = setTimeout(() => setOuterR(outerClamped), delay);
-    // Inner ring follows outer with a 120ms lead — creates a pleasant cascade
-    const t2 = setTimeout(() => setInnerR(innerClamped), delay + 120);
+    const t1 = setTimeout(() => {
+      setOuterR(outerClamped);
+      setMounted(true);
+    }, delay);
+    // Inner ring follows outer with a 250ms lead — slower cascade for cinematic reveal
+    const t2 = setTimeout(() => setInnerR(innerClamped), delay + 250);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -178,7 +199,7 @@ export function DualRadialProgress({
   const outerOff = outerC - (outerR / 100) * outerC;
   const innerOff = innerC - (innerR / 100) * innerC;
 
-  const easing = "cubic-bezier(0.22, 1, 0.36, 1)";
+  const easing = "cubic-bezier(0.16, 1, 0.3, 1)";
 
   return (
     <div
@@ -189,6 +210,10 @@ export function DualRadialProgress({
         height: size,
         flexShrink: 0,
         lineHeight: 0,
+        opacity: mounted ? 1 : 0.2,
+        transform: mounted ? "scale(1) rotate(0deg)" : "scale(0.88) rotate(-8deg)",
+        transition:
+          "opacity 0.85s cubic-bezier(0.16, 1, 0.3, 1), transform 0.85s cubic-bezier(0.16, 1, 0.3, 1)",
       }}
       role="img"
       aria-label={ariaLabel}
@@ -214,7 +239,10 @@ export function DualRadialProgress({
           strokeDasharray={outerC}
           strokeDashoffset={outerOff}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: `stroke-dashoffset ${duration}ms ${easing}` }}
+          style={{
+            transition: `stroke-dashoffset ${duration}ms ${easing}`,
+            filter: `drop-shadow(0 0 8px ${outer.color}55)`,
+          }}
         />
         {/* Inner track + fill */}
         <circle
@@ -236,7 +264,10 @@ export function DualRadialProgress({
           strokeDasharray={innerC}
           strokeDashoffset={innerOff}
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
-          style={{ transition: `stroke-dashoffset ${duration}ms ${easing}` }}
+          style={{
+            transition: `stroke-dashoffset ${duration}ms ${easing}`,
+            filter: `drop-shadow(0 0 8px ${inner.color}55)`,
+          }}
         />
       </svg>
       {children !== undefined && (

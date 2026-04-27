@@ -161,7 +161,7 @@ function Bar({ count, max, color, label }: { count: number; max: number; color: 
         className="h-1.5 w-16 rounded-full overflow-hidden"
         style={{ backgroundColor: color + "22" }}
       >
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+        <div className="h-full rounded-full progress-fill-grow" style={{ width: `${pct}%`, backgroundColor: color }} />
       </div>
       <span className="text-[9px]" style={{ color: T.textMuted }}>
         {label}

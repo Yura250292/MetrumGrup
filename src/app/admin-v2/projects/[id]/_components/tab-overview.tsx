@@ -128,10 +128,11 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
             {project.totalBudget > 0 && (
               <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ backgroundColor: T.panelSoft }}>
                 <div
-                  className="h-full rounded-full"
+                  className="h-full rounded-full progress-fill-grow"
                   style={{
                     width: `${Math.min(100, (project.totalPaid / project.totalBudget) * 100)}%`,
                     backgroundColor: T.success,
+                    boxShadow: `0 0 8px ${T.success}55`,
                   }}
                 />
               </div>

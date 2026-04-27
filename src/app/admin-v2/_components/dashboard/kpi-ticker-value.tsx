@@ -24,9 +24,9 @@ export function KpiTickerValue({
       prefix={prefix}
       suffix={suffix}
       decimals={decimals}
-      duration={1.4}
-      stiffness={110}
-      damping={18}
+      duration={2.2}
+      stiffness={70}
+      damping={22}
     />
   );
 }

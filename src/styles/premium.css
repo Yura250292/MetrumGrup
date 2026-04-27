@@ -317,6 +317,41 @@
   transform: translateY(0);
 }
 
+/* ---------- Progress bar fill grow (linear bars in tables/cards) ----------
+ *
+ * Uses transform: scaleX so the animation reliably starts from 0 regardless
+ * of the inline `width` value. Origin is left so it grows like a fill.
+ * Combined with opacity fade-in for a "developing" feel.
+ */
+
+@keyframes premium-progress-grow {
+  0% {
+    transform: scaleX(0);
+    opacity: 0.4;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+}
+
+.progress-fill-grow {
+  animation: premium-progress-grow 1.6s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  transform-origin: left center;
+  transition: width 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill-grow {
+    animation: none !important;
+  }
+}
+
 /* ---------- Table row stagger (used by DataTable) ---------- */
 
 .data-table-row-enter {
