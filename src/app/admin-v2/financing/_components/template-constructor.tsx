@@ -12,10 +12,12 @@ import {
   TrendingDown,
   TrendingUp,
   CheckCircle2,
+  Users,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 import { FINANCE_CATEGORIES, financeCategoriesForType } from "@/lib/constants";
+import { PayrollModal } from "./payroll-modal";
 
 type Template = {
   id: string;
@@ -69,6 +71,7 @@ export function TemplateConstructor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justAppliedId, setJustAppliedId] = useState<string | null>(null);
+  const [showPayroll, setShowPayroll] = useState(false);
 
   useEffect(() => {
     loadTemplates();
@@ -200,23 +203,46 @@ export function TemplateConstructor({
         className="flex items-center justify-between gap-2 px-4 py-3 border-b"
         style={{ borderColor: T.borderSoft, backgroundColor: T.panelElevated }}
       >
-        <div className="flex items-center gap-2">
-          <Zap size={15} style={{ color: T.accentPrimary }} />
-          <span className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
+        <div className="flex items-center gap-2 min-w-0">
+          <Zap size={15} style={{ color: T.accentPrimary }} className="flex-shrink-0" />
+          <span className="text-[13px] font-bold truncate" style={{ color: T.textPrimary }}>
             Швидке додавання — {folderName}
           </span>
-          <span className="text-[10px]" style={{ color: T.textMuted }}>
+          <span className="text-[10px] hidden sm:inline" style={{ color: T.textMuted }}>
             шаблони одним кліком
           </span>
         </div>
-        <button
-          onClick={() => openForm()}
-          className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white"
-          style={{ backgroundColor: T.accentPrimary }}
-        >
-          <Plus size={11} /> Новий шаблон
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => setShowPayroll(true)}
+            title="Нарахування ЗП за період — пакетне створення витрат для активних співробітників"
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold"
+            style={{
+              backgroundColor: T.panel,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderStrong}`,
+            }}
+          >
+            <Users size={11} /> ЗП
+          </button>
+          <button
+            onClick={() => openForm()}
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
+            <Plus size={11} /> Новий шаблон
+          </button>
+        </div>
       </div>
+
+      <PayrollModal
+        open={showPayroll}
+        folderId={folderId}
+        onClose={() => setShowPayroll(false)}
+        onSuccess={() => {
+          onEntryCreated();
+        }}
+      />
 
       <div className="p-4">
         {loading ? (

@@ -14,7 +14,6 @@ import {
   Sparkles,
   FileSpreadsheet,
   Wallet,
-  Users,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
@@ -34,7 +33,6 @@ import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
 import { FolderEstimateCard } from "./folder-estimate-card";
 import { TemplateConstructor } from "./template-constructor";
-import { PayrollModal } from "./payroll-modal";
 import { FilterBar } from "./filter-bar";
 import { ProjectsFoldersSection } from "./projects-folders-section";
 import type { ProjectOption, UserOption } from "./types";
@@ -85,7 +83,6 @@ export function FinancingView({
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showOcrScan, setShowOcrScan] = useState(false);
   const [showEstimateUpload, setShowEstimateUpload] = useState(false);
-  const [showPayroll, setShowPayroll] = useState(false);
 
   const { data: folders = [] } = useFolders("FINANCE", folderId);
   const { data: detailData } = useFolderDetail(folderId);
@@ -208,19 +205,6 @@ export function FinancingView({
                 <Sparkles size={13} />
                 Scan AI
               </button>
-              <button
-                onClick={() => setShowPayroll(true)}
-                title="Нарахування ЗП за період"
-                className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110"
-                style={{
-                  backgroundColor: T.panelElevated,
-                  color: T.textPrimary,
-                  border: `1px solid ${T.borderStrong}`,
-                }}
-              >
-                <Users size={13} />
-                ЗП
-              </button>
               {folderId && (
                 <div className="hidden sm:block">
                   <QuickAddSplit onPick={(p) => setCreatePreset(p)} />
@@ -263,18 +247,6 @@ export function FinancingView({
             >
               <Sparkles size={13} />
               Scan AI
-            </button>
-            <button
-              onClick={() => setShowPayroll(true)}
-              className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition hover:brightness-110"
-              style={{
-                backgroundColor: T.panelElevated,
-                color: T.textPrimary,
-                border: `1px solid ${T.borderStrong}`,
-              }}
-            >
-              <Users size={13} />
-              ЗП
             </button>
             {folderId && (
               <div className="w-full">
@@ -653,14 +625,6 @@ export function FinancingView({
           onCreated={() => loadData()}
         />
       )}
-
-      {/* Payroll modal */}
-      <PayrollModal
-        open={showPayroll}
-        folderId={folderId ?? undefined}
-        onClose={() => setShowPayroll(false)}
-        onSuccess={() => loadData()}
-      />
 
       {/* Entry form modal */}
       {(createPreset || editing) && (
