@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Loader2,
   Plus,
   Zap,
   Edit2,
-  Trash2,
-  X,
-  Save,
-  TrendingDown,
-  TrendingUp,
   CheckCircle2,
   Users,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
-import { FINANCE_CATEGORIES, financeCategoriesForType } from "@/lib/constants";
 import { PayrollModal } from "./payroll-modal";
+import { TemplateFormModal, type TemplateDraft } from "./template-form-modal";
 
 type Template = {
   id: string;
@@ -31,17 +26,7 @@ type Template = {
   sortOrder: number;
 };
 
-type DraftState = {
-  name: string;
-  defaultAmount: string;
-  type: "EXPENSE" | "INCOME";
-  category: string;
-  counterparty: string;
-  description: string;
-  emoji: string;
-};
-
-const emptyDraft: DraftState = {
+const emptyDraft: TemplateDraft = {
   name: "",
   defaultAmount: "",
   type: "EXPENSE",
@@ -50,8 +35,6 @@ const emptyDraft: DraftState = {
   description: "",
   emoji: "",
 };
-
-const EMOJI_SUGGESTIONS = ["💰", "🏢", "🍪", "☕", "🧻", "💻", "⚡", "📄", "🔧", "🚗", "🍕", "📦"];
 
 export function TemplateConstructor({
   folderId,
@@ -67,7 +50,7 @@ export function TemplateConstructor({
   const [applying, setApplying] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Template | null>(null);
-  const [draft, setDraft] = useState<DraftState>(emptyDraft);
+  const [draft, setDraft] = useState<TemplateDraft>(emptyDraft);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justAppliedId, setJustAppliedId] = useState<string | null>(null);
@@ -134,20 +117,20 @@ export function TemplateConstructor({
     setError(null);
   }
 
-  async function handleSave() {
+  async function handleSave(): Promise<boolean> {
     setError(null);
     const amount = Number(draft.defaultAmount);
     if (!draft.name.trim()) {
       setError("Назва обов'язкова");
-      return;
+      return false;
     }
     if (!Number.isFinite(amount) || amount <= 0) {
       setError("Сума має бути > 0");
-      return;
+      return false;
     }
     if (!draft.category) {
       setError("Виберіть категорію");
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -175,12 +158,17 @@ export function TemplateConstructor({
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
-      setShowForm(false);
-      setEditing(null);
-      setDraft(emptyDraft);
       await loadTemplates();
+      // brief delay so the success state on the modal's Save button is visible
+      setTimeout(() => {
+        setShowForm(false);
+        setEditing(null);
+        setDraft(emptyDraft);
+      }, 850);
+      return true;
     } catch (err: any) {
       setError(err?.message ?? "Помилка");
+      return false;
     } finally {
       setSaving(false);
     }
@@ -191,8 +179,6 @@ export function TemplateConstructor({
     const res = await fetch(`/api/admin/financing/templates/${t.id}`, { method: "DELETE" });
     if (res.ok) await loadTemplates();
   }
-
-  const availableCategories = useMemo(() => financeCategoriesForType(draft.type), [draft.type]);
 
   return (
     <div
@@ -296,202 +282,31 @@ export function TemplateConstructor({
         )}
       </div>
 
-      {/* Create/Edit modal */}
-      {showForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-          onClick={() => setShowForm(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl overflow-hidden"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
-          >
-            <div
-              className="flex items-center justify-between px-5 py-4 border-b"
-              style={{ borderColor: T.borderSoft }}
-            >
-              <h3 className="text-base font-bold" style={{ color: T.textPrimary }}>
-                {editing ? "Редагувати шаблон" : "Новий шаблон"}
-              </h3>
-              <button onClick={() => setShowForm(false)}>
-                <X size={18} style={{ color: T.textMuted }} />
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-3 p-5">
-              {/* Type */}
-              <div className="grid grid-cols-2 gap-1 rounded-xl p-1" style={{ backgroundColor: T.panelSoft }}>
-                {(["EXPENSE", "INCOME"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setDraft((d) => ({ ...d, type: t, category: "" }))}
-                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold"
-                    style={{
-                      backgroundColor: draft.type === t
-                        ? (t === "EXPENSE" ? T.danger : T.success)
-                        : "transparent",
-                      color: draft.type === t ? "#fff" : T.textSecondary,
-                    }}
-                  >
-                    {t === "EXPENSE" ? <TrendingDown size={13} /> : <TrendingUp size={13} />}
-                    {t === "EXPENSE" ? "Витрата" : "Дохід"}
-                  </button>
-                ))}
-              </div>
-
-              {/* Name + emoji */}
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={draft.emoji}
-                  onChange={(e) => setDraft((d) => ({ ...d, emoji: e.target.value }))}
-                  placeholder="🎯"
-                  className="w-14 rounded-xl px-2 py-2.5 text-center text-[18px] outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                  }}
-                  maxLength={4}
-                />
-                <input
-                  type="text"
-                  value={draft.name}
-                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                  placeholder="Наприклад: Чай, Оренда, Зарплата менеджера"
-                  className="flex-1 rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                    color: T.textPrimary,
-                  }}
-                />
-              </div>
-
-              {/* Emoji suggestions */}
-              <div className="flex flex-wrap gap-1">
-                {EMOJI_SUGGESTIONS.map((e) => (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => setDraft((d) => ({ ...d, emoji: e }))}
-                    className="w-8 h-8 rounded-lg text-[16px]"
-                    style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
-                  >
-                    {e}
-                  </button>
-                ))}
-              </div>
-
-              {/* Amount */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                  СУМА ЗА ЗАМОВЧУВАННЯМ (₴)
-                </span>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={draft.defaultAmount}
-                  onChange={(e) => setDraft((d) => ({ ...d, defaultAmount: e.target.value }))}
-                  placeholder="1000"
-                  className="w-full rounded-xl px-3 py-2.5 text-[14px] font-bold outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                    color: T.textPrimary,
-                  }}
-                />
-              </div>
-
-              {/* Category */}
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                  КАТЕГОРІЯ
-                </span>
-                <select
-                  value={draft.category}
-                  onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
-                  className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                    color: T.textPrimary,
-                  }}
-                >
-                  <option value="">— Оберіть —</option>
-                  {availableCategories.map((c) => (
-                    <option key={c.key} value={c.key}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Counterparty */}
-              <input
-                type="text"
-                value={draft.counterparty}
-                onChange={(e) => setDraft((d) => ({ ...d, counterparty: e.target.value }))}
-                placeholder="Контрагент (опційно)"
-                className="w-full rounded-xl px-3 py-2.5 text-[13px] outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              />
-
-              {error && (
-                <div
-                  className="rounded-lg px-3 py-2 text-[11px]"
-                  style={{
-                    backgroundColor: T.dangerSoft,
-                    color: T.danger,
-                    border: `1px solid ${T.danger}`,
-                  }}
-                >
-                  {error}
-                </div>
-              )}
-
-              <div className="flex items-center justify-between gap-2 pt-2">
-                {editing && (
-                  <button
-                    onClick={() => {
-                      handleDelete(editing);
-                      setShowForm(false);
-                    }}
-                    className="flex items-center gap-1 rounded-lg px-3 py-2 text-[11px] font-semibold"
-                    style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}` }}
-                  >
-                    <Trash2 size={11} /> Видалити
-                  </button>
-                )}
-                <div className="flex gap-2 ml-auto">
-                  <button
-                    onClick={() => setShowForm(false)}
-                    className="rounded-lg px-3 py-2 text-[12px] font-medium"
-                    style={{ color: T.textSecondary }}
-                  >
-                    Скасувати
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-1 rounded-lg px-4 py-2 text-[12px] font-bold text-white disabled:opacity-50"
-                    style={{ backgroundColor: T.accentPrimary }}
-                  >
-                    {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-                    Зберегти
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <TemplateFormModal
+        open={showForm}
+        editing={!!editing}
+        draft={draft}
+        saving={saving}
+        error={error}
+        onChange={setDraft}
+        onClose={() => {
+          setShowForm(false);
+          setEditing(null);
+          setDraft(emptyDraft);
+          setError(null);
+        }}
+        onSave={handleSave}
+        onDelete={
+          editing
+            ? () => {
+                const target = editing;
+                setShowForm(false);
+                setEditing(null);
+                handleDelete(target);
+              }
+            : undefined
+        }
+      />
     </div>
   );
 }
