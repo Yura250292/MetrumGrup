@@ -7,6 +7,7 @@ import { formatCurrencyCompact } from "@/lib/utils";
 import { useFolders } from "@/hooks/useFolders";
 import type { FolderItem } from "@/hooks/useFolders";
 import { FolderCard } from "./FolderCard";
+import { motion, AnimatePresence } from "framer-motion";
 
 type Props = {
   folder: FolderItem;
@@ -131,11 +132,40 @@ export function ExpandableBlockCard({
         )}
       </button>
 
+      <AnimatePresence initial={false}>
       {open && (
-        <div
-          className="collapse-down-enter flex flex-col gap-3 p-4"
-          style={{ borderTop: `1px solid ${T.borderSoft}` }}
+        <motion.div
+          key="body"
+          initial={{
+            opacity: 0,
+            height: 0,
+            y: -12,
+            filter: "blur(8px)",
+          }}
+          animate={{
+            opacity: 1,
+            height: "auto",
+            y: 0,
+            filter: "blur(0px)",
+          }}
+          exit={{
+            opacity: 0,
+            height: 0,
+            y: -8,
+            filter: "blur(6px)",
+          }}
+          transition={{
+            height: { type: "spring", stiffness: 180, damping: 28, mass: 0.95 },
+            opacity: { duration: 0.45, ease: [0.16, 1, 0.3, 1] },
+            y: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+            filter: { duration: 0.55, ease: [0.16, 1, 0.3, 1] },
+          }}
+          style={{
+            overflow: "hidden",
+            borderTop: `1px solid ${T.borderSoft}`,
+          }}
         >
+        <div className="flex flex-col gap-3 p-4">
           {isLoading ? (
             <div className="text-[12px]" style={{ color: T.textMuted }}>
               Завантаження…
@@ -144,21 +174,67 @@ export function ExpandableBlockCard({
             renderChildren ? (
               renderChildren(children)
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <motion.div
+                layout
+                className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: {},
+                  visible: {
+                    transition: {
+                      staggerChildren: 0.06,
+                      delayChildren: 0.18,
+                    },
+                  },
+                }}
+              >
                 {children.map((child) => (
-                  <FolderCard
+                  <motion.div
                     key={child.id}
-                    folder={child}
-                    href={`${basePath}?folderId=${child.id}`}
-                    showFinanceIndicators
-                    onRename={onRenameChild}
-                    onDelete={onDeleteChild}
-                  />
+                    layout
+                    variants={{
+                      hidden: {
+                        opacity: 0,
+                        y: 24,
+                        scale: 0.88,
+                        filter: "blur(6px)",
+                      },
+                      visible: {
+                        opacity: 1,
+                        y: 0,
+                        scale: 1,
+                        filter: "blur(0px)",
+                        transition: {
+                          type: "spring",
+                          stiffness: 200,
+                          damping: 24,
+                          mass: 0.9,
+                        },
+                      },
+                    }}
+                    whileHover={{
+                      y: -3,
+                      scale: 1.018,
+                      transition: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+                    }}
+                  >
+                    <FolderCard
+                      folder={child}
+                      href={`${basePath}?folderId=${child.id}`}
+                      showFinanceIndicators
+                      onRename={onRenameChild}
+                      onDelete={onDeleteChild}
+                    />
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
             )
           ) : (
-            <div
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
               className="text-[12px] rounded-xl px-3 py-6 text-center"
               style={{
                 color: T.textMuted,
@@ -167,7 +243,7 @@ export function ExpandableBlockCard({
               }}
             >
               У цьому блоку ще немає папок.
-            </div>
+            </motion.div>
           )}
 
           {extraContent}
@@ -195,7 +271,9 @@ export function ExpandableBlockCard({
           </div>
           )}
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

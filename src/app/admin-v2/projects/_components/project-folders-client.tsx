@@ -8,6 +8,7 @@ import { FolderCard } from "@/components/folders/FolderCard";
 import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
 import { CreateFolderDialog } from "@/components/folders/CreateFolderDialog";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
+import { motion } from "framer-motion";
 import {
   useCreateFolder,
   useUpdateFolder,
@@ -76,17 +77,60 @@ export function ProjectFoldersClient({
 
       {/* Folder grid + create button */}
       {(folders.length > 0 || currentFolderId !== null) && (
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
+        <motion.div
+          layout
+          initial="hidden"
+          animate="visible"
+          variants={{
+            hidden: {},
+            visible: {
+              transition: {
+                staggerChildren: 0.06,
+                delayChildren: 0.05,
+              },
+            },
+          }}
+          className="grid grid-cols-2 xl:grid-cols-4 gap-3"
+        >
           {folders.map((f) => (
-            <FolderCard
+            <motion.div
               key={f.id}
-              folder={f}
-              href={`/admin-v2/projects?folderId=${f.id}`}
-              onRename={handleRename}
-              onDelete={handleDelete}
-            />
+              layout
+              variants={{
+                hidden: {
+                  opacity: 0,
+                  y: 24,
+                  scale: 0.88,
+                  filter: "blur(6px)",
+                },
+                visible: {
+                  opacity: 1,
+                  y: 0,
+                  scale: 1,
+                  filter: "blur(0px)",
+                  transition: {
+                    type: "spring",
+                    stiffness: 200,
+                    damping: 24,
+                    mass: 0.9,
+                  },
+                },
+              }}
+              whileHover={{
+                y: -3,
+                scale: 1.018,
+                transition: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+              }}
+            >
+              <FolderCard
+                folder={f}
+                href={`/admin-v2/projects?folderId=${f.id}`}
+                onRename={handleRename}
+                onDelete={handleDelete}
+              />
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       )}
 
       {/* Create folder button */}
