@@ -13,6 +13,7 @@ import {
 import { canParticipateInProject } from "@/lib/projects/access";
 import { handleAiMention } from "@/lib/chat/ai-mention";
 import { AI_BOT_EMAIL } from "@/lib/chat/ai-bot";
+import { canSeeAllChats } from "@/lib/chat/oversight";
 
 function shapeAuthor(
   a: { id: string; name: string; avatar: string | null; role: string; email: string }
@@ -59,7 +60,10 @@ async function assertParticipant(conversationId: string, userId: string) {
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId } },
   });
-  if (!participant) throw new Error("Forbidden");
+  if (!participant) {
+    if (await canSeeAllChats(userId)) return null;
+    throw new Error("Forbidden");
+  }
 
   // For PROJECT/ESTIMATE conversations, also enforce project-level membership.
   // This catches the race where a user is removed from the team between
@@ -82,11 +86,19 @@ async function assertParticipant(conversationId: string, userId: string) {
           : null;
     if (projectId) {
       const allowed = await canParticipateInProject(projectId, userId);
-      if (!allowed) throw new Error("Forbidden");
+      if (!allowed && !(await canSeeAllChats(userId))) throw new Error("Forbidden");
     }
   }
 
   return participant;
+}
+
+async function ensureOversightParticipant(conversationId: string, userId: string) {
+  return prisma.conversationParticipant.upsert({
+    where: { conversationId_userId: { conversationId, userId } },
+    create: { conversationId, userId },
+    update: {},
+  });
 }
 
 export async function getOrCreateDM(currentUserId: string, otherUserId: string) {
@@ -226,61 +238,77 @@ export async function getOrCreateEstimateChannel(estimateId: string, currentUser
 }
 
 export async function listConversationsForUser(userId: string) {
-  const memberships = await prisma.conversationParticipant.findMany({
-    where: { userId },
-    include: {
-      conversation: {
-        include: {
-          project: { select: { id: true, title: true, slug: true } },
-          estimate: {
-            select: {
-              id: true,
-              number: true,
-              title: true,
-              project: { select: { id: true, title: true } },
-            },
-          },
-          participants: {
-            include: {
-              user: {
-                select: { id: true, name: true, avatar: true, role: true },
-              },
-            },
-          },
-          messages: {
-            where: { deletedAt: null },
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            select: {
-              id: true,
-              body: true,
-              createdAt: true,
-              authorId: true,
-              _count: { select: { attachments: true } },
-            },
-          },
+  const hasOversight = await canSeeAllChats(userId);
+
+  const conversationInclude = {
+    project: { select: { id: true, title: true, slug: true } },
+    estimate: {
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        project: { select: { id: true, title: true } },
+      },
+    },
+    participants: {
+      include: {
+        user: {
+          select: { id: true, name: true, avatar: true, role: true },
         },
       },
     },
+    messages: {
+      where: { deletedAt: null },
+      orderBy: { createdAt: "desc" as const },
+      take: 1,
+      select: {
+        id: true,
+        body: true,
+        createdAt: true,
+        authorId: true,
+        _count: { select: { attachments: true } },
+      },
+    },
+  };
+
+  const memberships = await prisma.conversationParticipant.findMany({
+    where: { userId },
+    select: { conversationId: true, lastReadAt: true },
   });
+  const membershipById = new Map<string, { lastReadAt: Date | null }>();
+  for (const m of memberships) {
+    membershipById.set(m.conversationId, { lastReadAt: m.lastReadAt });
+  }
+
+  const conversations = hasOversight
+    ? await prisma.conversation.findMany({ include: conversationInclude })
+    : await prisma.conversation.findMany({
+        where: { id: { in: memberships.map((m) => m.conversationId) } },
+        include: conversationInclude,
+      });
 
   const result = await Promise.all(
-    memberships.map(async (m) => {
-      const conv = m.conversation;
-      const lastReadAt = m.lastReadAt ?? new Date(0);
+    conversations.map(async (conv) => {
+      const membership = membershipById.get(conv.id);
+      const isObserver = !membership;
+      const lastReadAt = membership?.lastReadAt ?? new Date(0);
 
-      const unreadCount = await prisma.chatMessage.count({
-        where: {
-          conversationId: conv.id,
-          deletedAt: null,
-          authorId: { not: userId },
-          createdAt: { gt: lastReadAt },
-        },
-      });
+      const unreadCount = isObserver
+        ? 0
+        : await prisma.chatMessage.count({
+            where: {
+              conversationId: conv.id,
+              deletedAt: null,
+              authorId: { not: userId },
+              createdAt: { gt: lastReadAt },
+            },
+          });
 
       const peer =
         conv.type === "DM"
-          ? conv.participants.find((p) => p.userId !== userId)?.user ?? null
+          ? conv.participants.find((p) => p.userId !== userId)?.user ??
+            conv.participants[0]?.user ??
+            null
           : null;
 
       const lastMsg = conv.messages[0] ?? null;
@@ -303,6 +331,7 @@ export async function listConversationsForUser(userId: string) {
           : null,
         lastMessageAt: conv.lastMessageAt,
         unreadCount,
+        isObserver,
       };
     })
   );
@@ -420,7 +449,12 @@ export async function postMessage(
   attachments: ChatAttachmentInput[] = [],
   opts: { skipAiMention?: boolean } = {}
 ) {
-  await assertParticipant(conversationId, userId);
+  const participant = await assertParticipant(conversationId, userId);
+  if (!participant) {
+    // Oversight user joining a conversation they're not a member of —
+    // upsert participant row so unread tracking and notifications work.
+    await ensureOversightParticipant(conversationId, userId);
+  }
 
   const trimmed = body.trim();
   if (!trimmed && attachments.length === 0) {
@@ -533,7 +567,11 @@ export async function postMessage(
 }
 
 export async function markRead(conversationId: string, userId: string) {
-  await assertParticipant(conversationId, userId);
+  const participant = await assertParticipant(conversationId, userId);
+  if (!participant) {
+    // Observer reading without being a participant — no-op (no unread state to clear)
+    return null;
+  }
   return prisma.conversationParticipant.update({
     where: { conversationId_userId: { conversationId, userId } },
     data: { lastReadAt: new Date() },

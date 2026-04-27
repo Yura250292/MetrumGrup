@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle } from "lucide-react";
+import { useSession } from "next-auth/react";
+import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle, Eye, Settings } from "lucide-react";
 import { useConversations, type ChatConversation } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { NewConversationDialog } from "./NewConversationDialog";
+import { ChatOversightSettingsDialog } from "./ChatOversightSettingsDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 function getConversationTitle(c: ChatConversation): string {
@@ -74,12 +76,27 @@ function ConversationRow({
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <p
-            className="truncate text-sm font-semibold"
-            style={{ color: T.textPrimary }}
-          >
-            {title}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p
+              className="truncate text-sm font-semibold"
+              style={{ color: T.textPrimary }}
+            >
+              {title}
+            </p>
+            {conversation.isObserver && (
+              <span
+                className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{
+                  backgroundColor: T.accentPrimarySoft,
+                  color: T.accentPrimary,
+                }}
+                title="Ви бачите цей чат як спостерігач"
+              >
+                <Eye className="h-2.5 w-2.5" />
+                Спостерігач
+              </span>
+            )}
+          </div>
           <span className="text-[11px] flex-shrink-0" style={{ color: T.textMuted }}>
             {formatTime(conversation.lastMessageAt)}
           </span>
@@ -109,7 +126,10 @@ function ConversationRow({
 
 export function ConversationList({ activeId }: { activeId: string | null }) {
   const { data: conversations, isLoading, isError, refetch, isFetching } = useConversations();
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === "SUPER_ADMIN";
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [oversightOpen, setOversightOpen] = useState(false);
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -132,10 +152,24 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
         <h2 className="text-sm font-bold" style={{ color: T.textPrimary }}>
           Розмови
         </h2>
-        <Button size="sm" onClick={() => setDialogOpen(true)}>
-          <Plus className="h-4 w-4" />
-          Нова
-        </Button>
+        <div className="flex items-center gap-1.5">
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => setOversightOpen(true)}
+              className="rounded-lg p-1.5 transition active:scale-95"
+              style={{ color: T.textSecondary }}
+              title="Доступ до всіх чатів"
+              aria-label="Налаштування доступу до всіх чатів"
+            >
+              <Settings className="h-4 w-4" />
+            </button>
+          )}
+          <Button size="sm" onClick={() => setDialogOpen(true)}>
+            <Plus className="h-4 w-4" />
+            Нова
+          </Button>
+        </div>
       </div>
       <div
         className="border-b px-3 py-2"
@@ -198,6 +232,9 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
         ))}
       </div>
       <NewConversationDialog open={dialogOpen} onOpenChange={setDialogOpen} />
+      {isSuperAdmin && (
+        <ChatOversightSettingsDialog open={oversightOpen} onOpenChange={setOversightOpen} />
+      )}
     </>
   );
 }

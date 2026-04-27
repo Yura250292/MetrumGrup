@@ -70,6 +70,7 @@ export type ChatConversation = {
   } | null;
   lastMessageAt: string | null;
   unreadCount: number;
+  isObserver?: boolean;
 };
 
 export type StaffUser = {
