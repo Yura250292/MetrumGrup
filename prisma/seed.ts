@@ -14,6 +14,12 @@ const STAGE_ORDER: ProjectStage[] = [
 ];
 
 async function main() {
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_SEED !== "true") {
+    throw new Error(
+      "Seed blocked in production. Set ALLOW_PRODUCTION_SEED=true to override (will WIPE all data)."
+    );
+  }
+
   console.log("🌱 Seeding database...");
 
   // Clean existing data

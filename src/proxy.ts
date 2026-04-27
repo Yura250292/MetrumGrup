@@ -5,7 +5,7 @@ const NON_WWW_HOST = "metrum-grup.biz.ua";
 const WWW_HOST = "www.metrum-grup.biz.ua";
 
 /**
- * Middleware:
+ * Proxy (Next 16 — was `middleware.ts`):
  * 1. Non-www → www redirect (must run before vercel.json redirects
  *    which can't handle OPTIONS preflight — they return 307 which
  *    browsers reject on preflight)
