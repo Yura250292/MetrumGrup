@@ -93,9 +93,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const role = auth.user.role;
 
-        // Admins/Managers/Engineers/Financiers on /dashboard → redirect to /admin
-        if (isOnDashboard && ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"].includes(role)) {
-          return Response.redirect(new URL("/admin", nextUrl));
+        // Staff roles on /dashboard → redirect to /admin-v2
+        if (isOnDashboard && ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER", "HR"].includes(role)) {
+          return Response.redirect(new URL("/admin-v2", nextUrl));
         }
 
         // Clients on /admin → redirect to /dashboard
@@ -122,7 +122,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (role === "CLIENT") {
           return Response.redirect(new URL("/dashboard", nextUrl));
         }
-        return Response.redirect(new URL("/admin", nextUrl));
+        return Response.redirect(new URL("/admin-v2", nextUrl));
       }
 
       return true;
