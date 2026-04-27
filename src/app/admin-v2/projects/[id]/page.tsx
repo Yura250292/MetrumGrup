@@ -18,6 +18,7 @@ import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
 import { TestProjectToggle } from "./_components/test-project-toggle";
+import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 
@@ -97,6 +98,7 @@ export default async function AdminV2ProjectDetailPage({
       />
 
       {/* Sticky header */}
+      <ProjectHeroAnimator>
       <header className="flex flex-col gap-4">
         <Link
           href="/admin-v2/projects"
@@ -184,37 +186,46 @@ export default async function AdminV2ProjectDetailPage({
         </div>
 
         {/* KPI strip: план (Payment) */}
+        <ProjectHeroItem>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiPill label="Бюджет" value={formatCurrency(totalBudget)} />
+          <KpiPill label="Бюджет" value={formatCurrency(totalBudget)} glow="blue" />
           <KpiPill
             label="Сплачено"
             value={formatCurrency(totalPaid)}
             sub={`${paidPercent}%`}
             accent={T.success}
+            glow="emerald"
           />
-          <KpiPill label="Етапів" value={String(project.stages.length)} />
-          <KpiPill label="Файлів" value={String(project._count.files)} />
+          <KpiPill label="Етапів" value={String(project.stages.length)} glow="violet" />
+          <KpiPill label="Файлів" value={String(project._count.files)} glow="cyan" />
         </div>
+        </ProjectHeroItem>
 
         {/* KPI strip: факт (FinanceEntry) */}
+        <ProjectHeroItem>
         <div className="grid grid-cols-3 gap-3">
           <KpiPill
             label="Факт · дохід"
             value={formatCurrency(factIncomeTotal)}
             accent={T.success}
+            glow="emerald"
           />
           <KpiPill
             label="Факт · витрата"
             value={formatCurrency(factExpenseTotal)}
             accent={T.danger}
+            glow="rose"
           />
           <KpiPill
             label="Факт · баланс"
             value={formatCurrency(factBalance)}
             accent={factBalance >= 0 ? T.success : T.danger}
+            glow={factBalance >= 0 ? "emerald" : "rose"}
           />
         </div>
+        </ProjectHeroItem>
       </header>
+      </ProjectHeroAnimator>
 
       {/* Tab nav + content (Client) */}
       <ProjectTabs
@@ -312,15 +323,18 @@ function KpiPill({
   value,
   sub,
   accent = T.textPrimary,
+  glow,
 }: {
   label: string;
   value: string;
   sub?: string;
   accent?: string;
+  glow?: "blue" | "emerald" | "rose" | "amber" | "violet" | "cyan";
 }) {
+  const glowClass = glow ? `premium-glow premium-glow-${glow}` : "";
   return (
     <div
-      className="flex flex-col gap-1 rounded-xl px-3 sm:px-4 py-3 min-w-0 overflow-hidden"
+      className={`premium-card ${glowClass} flex flex-col gap-1 rounded-xl px-3 sm:px-4 py-3 min-w-0 overflow-hidden`}
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textMuted }}>

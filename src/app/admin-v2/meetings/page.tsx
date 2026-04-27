@@ -440,13 +440,14 @@ export default function MeetingsListPage() {
             </div>
           ) : (
             <div className="flex flex-col gap-2">
-              {meetings.map((m) => (
+              {meetings.map((m, idx) => (
                 <div
                   key={m.id}
-                  className="group flex items-center gap-4 rounded-xl p-4 transition hover:brightness-[0.98]"
+                  className={`group premium-card flex items-center gap-4 rounded-xl p-4 transition hover:brightness-[0.98] ${idx < 20 ? "data-table-row-enter" : ""}`}
                   style={{
                     background: T.panel,
                     border: `1px solid ${T.borderSoft}`,
+                    ...(idx < 20 ? { animationDelay: `${idx * 28}ms` } : {}),
                   }}
                 >
                   <Link

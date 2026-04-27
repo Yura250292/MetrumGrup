@@ -18,6 +18,8 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DeleteProjectButton } from "./delete-project-button";
 import { MoveProjectButton } from "./project-folders-client";
 import type { ProjectExtra, ProjectRow } from "./projects-types";
+import { motion } from "framer-motion";
+import { gridStagger, flyInUp, useReducedMotionVariants } from "@/lib/motion";
 
 export function ProjectsCards({
   projects,
@@ -28,18 +30,38 @@ export function ProjectsCards({
   canDelete: boolean;
   currentFolderId: string | null;
 }) {
+  const animateUntil = Math.min(projects.length, 24);
+  const containerVariants = useReducedMotionVariants(gridStagger);
+  const itemVariants = useReducedMotionVariants(flyInUp);
+
   return (
-    <section className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5">
-      {projects.map((p) => (
-        <ProjectCard
-          key={p.id}
-          project={p}
-          extra={p.extra}
-          canDelete={canDelete}
-          currentFolderId={currentFolderId}
-        />
-      ))}
-    </section>
+    <motion.section
+      className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5"
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+    >
+      {projects.map((p, i) =>
+        i < animateUntil ? (
+          <motion.div key={p.id} variants={itemVariants}>
+            <ProjectCard
+              project={p}
+              extra={p.extra}
+              canDelete={canDelete}
+              currentFolderId={currentFolderId}
+            />
+          </motion.div>
+        ) : (
+          <ProjectCard
+            key={p.id}
+            project={p}
+            extra={p.extra}
+            canDelete={canDelete}
+            currentFolderId={currentFolderId}
+          />
+        ),
+      )}
+    </motion.section>
   );
 }
 

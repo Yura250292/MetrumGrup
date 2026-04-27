@@ -2,28 +2,29 @@
 
 import { motion } from "framer-motion";
 import type { ReactNode, CSSProperties } from "react";
+import { MOTION_EASING } from "@/lib/motion";
 
-/**
- * Thin client-side wrapper that adds mount fade-in + hover lift to a
- * card-shaped child. Lets the parent (e.g. KpiCard) stay a Server
- * Component so it can keep receiving forwardRef'd lucide icon
- * components across the server→client boundary.
- */
 export function MotionCard({
   className,
   style,
   children,
+  delay = 0,
 }: {
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
+  delay?: number;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      whileHover={{ y: -4 }}
+      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{
+        duration: 0.42,
+        delay,
+        ease: MOTION_EASING.softSpring,
+      }}
+      whileHover={{ y: -3, scale: 1.012 }}
       whileTap={{ scale: 0.98, y: 0 }}
       className={className}
       style={style}

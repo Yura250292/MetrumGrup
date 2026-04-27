@@ -190,14 +190,20 @@ export function DataTable<T extends { id: string }>({
               </tr>
             </thead>
             <tbody>
-              {sorted.map((item) => (
+              {sorted.map((item, idx) => (
                 <tr
                   key={item.id}
                   className={cn(
                     "border-b last:border-0 transition-colors",
                     onRowClick && "cursor-pointer hover:bg-muted/50",
+                    idx < 20 && "data-table-row-enter",
                     rowClassName?.(item),
                   )}
+                  style={
+                    idx < 20
+                      ? { animationDelay: `${idx * 28}ms` }
+                      : undefined
+                  }
                   onClick={() => onRowClick?.(item)}
                 >
                   {selectable && (

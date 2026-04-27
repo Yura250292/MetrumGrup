@@ -2,6 +2,7 @@ import Link from "next/link";
 import { TrendingUp, TrendingDown, ArrowUpRight } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { MotionCard } from "./motion-card";
+import { KpiTickerValue } from "./kpi-ticker-value";
 
 export function KpiCard({
   label,
@@ -12,6 +13,12 @@ export function KpiCard({
   href,
   delta,
   sparkline,
+  numericValue,
+  prefix,
+  suffix,
+  decimals,
+  glowClass,
+  delay,
 }: {
   label: string;
   value: string;
@@ -20,10 +27,14 @@ export function KpiCard({
   accent: string;
   href?: string;
   delta?: { value: number; label: string };
-  /** Optional time-series for sparkline. If absent, a decorative line is drawn from delta sign. */
   sparkline?: number[];
-  /** @deprecated kept for backwards compat */
   gradient?: string;
+  numericValue?: number;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+  glowClass?: string;
+  delay?: number;
 }) {
   const trend = delta?.value ?? 0;
   const showSparkline = !!delta || (sparkline && sparkline.length > 1);
@@ -33,7 +44,8 @@ export function KpiCard({
 
   const content = (
     <MotionCard
-      className="premium-card premium-card-elevated relative flex h-full flex-col rounded-xl sm:rounded-2xl p-4 sm:p-5 group overflow-hidden cursor-pointer"
+      delay={delay}
+      className={`premium-card premium-card-elevated premium-glow ${glowClass ?? ""} relative flex h-full flex-col rounded-xl sm:rounded-2xl p-4 sm:p-5 group overflow-hidden cursor-pointer`}
       style={{
         background: T.panel,
         border: `1px solid ${T.borderSoft}`,
@@ -60,7 +72,17 @@ export function KpiCard({
         className="text-[22px] sm:text-[26px] font-bold tracking-tight leading-none tabular-nums truncate"
         style={{ color: T.textPrimary, letterSpacing: "-0.02em" }}
       >
-        {value}
+        {typeof numericValue === "number" ? (
+          <KpiTickerValue
+            value={numericValue}
+            prefix={prefix}
+            suffix={suffix}
+            decimals={decimals ?? 0}
+            fallback={value}
+          />
+        ) : (
+          value
+        )}
       </div>
 
       {/* Bottom row: delta + sub */}

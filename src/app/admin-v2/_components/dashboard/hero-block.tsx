@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { heroStagger, heroItem, useReducedMotionVariants } from "@/lib/motion";
 
 function getGreeting(firstName: string): string {
   const hour = new Date().getHours();
@@ -54,6 +56,9 @@ export function HeroBlock({
   const greeting = getGreeting(firstName);
   const borderColor = isStable ? T.success : attentionZones >= 2 ? T.danger : T.warning;
 
+  const stagger = useReducedMotionVariants(heroStagger);
+  const item = useReducedMotionVariants(heroItem);
+
   return (
     <section
       className="premium-hero rounded-xl sm:rounded-2xl relative overflow-hidden"
@@ -61,6 +66,12 @@ export function HeroBlock({
         border: `1px solid ${T.borderSoft}`,
       }}
     >
+      {/* Animated gradient bg layer */}
+      <div
+        aria-hidden
+        className="gradient-pan-bg absolute inset-0 pointer-events-none opacity-60"
+        style={{ borderRadius: "inherit" }}
+      ></div>
       {/* === MOBILE: compact + expandable === */}
       <div className="sm:hidden">
         <button
@@ -140,10 +151,15 @@ export function HeroBlock({
       </div>
 
       {/* === DESKTOP: spacious layout matching mockup === */}
-      <div className="hidden sm:block p-6 sm:p-7">
+      <motion.div
+        className="hidden sm:block p-6 sm:p-7 relative"
+        initial="hidden"
+        animate="visible"
+        variants={stagger}
+      >
         <div className="flex items-center gap-6 flex-wrap">
           {/* Left: greeting + subtitle */}
-          <div className="flex flex-col gap-1 min-w-0 flex-1">
+          <motion.div className="flex flex-col gap-1 min-w-0 flex-1" variants={item}>
             <h1
               className="text-2xl md:text-[26px] font-bold tracking-tight whitespace-nowrap"
               style={{ color: T.textPrimary, letterSpacing: "-0.02em" }}
@@ -153,17 +169,17 @@ export function HeroBlock({
             <span className="text-[13px]" style={{ color: T.textMuted }}>
               {today} · оновлено зараз
             </span>
-          </div>
+          </motion.div>
 
           {/* Right: chips (4 pills max — match mockup) */}
-          <div className="flex flex-wrap gap-2.5 ml-auto">
+          <motion.div className="flex flex-wrap gap-2.5 ml-auto" variants={item}>
             <MiniChip icon={FolderKanban} label={`${activeProjectsCount} активних`} color={T.accentPrimary} />
             <MiniChip icon={AlertCircle} label={`${overdueTasksCount} прострочених`} color={overdueTasksCount > 0 ? T.danger : T.success} alert={overdueTasksCount > 0} />
             <MiniChip icon={dueTodayCount > 0 ? CalendarClock : CheckCircle2} label={`${dueTodayCount} на сьогодні`} color={dueTodayCount > 0 ? T.warning : T.success} />
             <MiniChip icon={netProfit >= 0 ? TrendingUp : TrendingDown} label={`${formatCurrencyCompact(netProfit)} прибуток`} color={netProfit >= 0 ? T.success : T.danger} alert={netProfit < 0} />
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

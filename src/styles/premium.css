@@ -1,0 +1,462 @@
+/* Premium UI primitives ported from Edyshyn — animations + glow halos. */
+
+:root {
+  --premium-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --premium-inout: cubic-bezier(0.4, 0, 0.2, 1);
+  --surface-glass: rgba(15, 23, 42, 0.78);
+  --row-hover-gradient: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(96, 165, 250, 0.08) 50%,
+    transparent 100%
+  );
+  --accent-bar-brand: linear-gradient(90deg, #2563eb 0%, #8b5cf6 100%);
+}
+
+/* ---------- Keyframes ---------- */
+
+@keyframes premium-glow-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 1px rgba(96, 165, 250, 0.15),
+      0 0 20px -4px rgba(96, 165, 250, 0.25),
+      0 0 40px -10px rgba(139, 92, 246, 0.18);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(96, 165, 250, 0.3),
+      0 0 30px -2px rgba(96, 165, 250, 0.4),
+      0 0 60px -8px rgba(139, 92, 246, 0.28);
+  }
+}
+
+@keyframes premium-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes premium-shimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes premium-shine {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes premium-fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes premium-gradient-pan {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes premium-rec-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+/* ---------- Cards & Tiles ---------- */
+
+.premium-card,
+.premium-tile {
+  position: relative;
+  border-radius: 16px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.03) 0%,
+    rgba(255, 255, 255, 0.01) 100%
+  );
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 8px 24px -12px rgba(0, 0, 0, 0.3);
+  transition: transform 0.28s var(--premium-spring),
+    box-shadow 0.28s var(--premium-spring),
+    border-color 0.28s var(--premium-spring);
+}
+
+.premium-card:hover,
+.premium-tile:hover {
+  transform: translateY(-2px) scale(1.005);
+  border-color: rgba(96, 165, 250, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 16px 36px -14px rgba(0, 0, 0, 0.45),
+    0 0 30px -10px rgba(96, 165, 250, 0.25);
+}
+
+.premium-tile:hover {
+  transform: translateY(-3px) scale(1.015);
+}
+
+/* ---------- Color-aware glow halos ---------- */
+
+.premium-glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.premium-glow::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.32s var(--premium-spring);
+  z-index: -1;
+}
+
+.premium-glow:hover::after {
+  opacity: 1;
+}
+
+.premium-glow-cyan::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(34, 211, 238, 0.32),
+    rgba(34, 211, 238, 0) 70%
+  );
+}
+.premium-glow-blue::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(59, 130, 246, 0.32),
+    rgba(59, 130, 246, 0) 70%
+  );
+}
+.premium-glow-violet::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(139, 92, 246, 0.32),
+    rgba(139, 92, 246, 0) 70%
+  );
+}
+.premium-glow-emerald::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(16, 185, 129, 0.3),
+    rgba(16, 185, 129, 0) 70%
+  );
+}
+.premium-glow-amber::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(245, 158, 11, 0.32),
+    rgba(245, 158, 11, 0) 70%
+  );
+}
+.premium-glow-rose::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(244, 63, 94, 0.32),
+    rgba(244, 63, 94, 0) 70%
+  );
+}
+.premium-glow-pink::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(236, 72, 153, 0.32),
+    rgba(236, 72, 153, 0) 70%
+  );
+}
+.premium-glow-sky::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(56, 189, 248, 0.3),
+    rgba(56, 189, 248, 0) 70%
+  );
+}
+.premium-glow-orange::after {
+  background: radial-gradient(
+    closest-side,
+    rgba(249, 115, 22, 0.3),
+    rgba(249, 115, 22, 0) 70%
+  );
+}
+
+/* ---------- Buttons ---------- */
+
+.btn-press {
+  transition: transform 0.18s var(--premium-spring);
+}
+.btn-press:active {
+  transform: scale(0.97);
+}
+
+.btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.btn-shine::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.18) 50%,
+    transparent 65%
+  );
+  transform: translateX(-100%);
+  pointer-events: none;
+  transition: transform 0.6s var(--premium-spring);
+}
+.btn-shine:hover::before {
+  transform: translateX(100%);
+}
+
+.tap-instant {
+  transition: transform 0s;
+}
+.tap-instant:active {
+  transform: scale(0.95);
+}
+
+.nav-tap {
+  transition: transform 0.12s var(--premium-spring),
+    background-color 0.18s var(--premium-spring);
+}
+.nav-tap:active {
+  transform: scale(0.94);
+}
+
+/* ---------- Text effects ---------- */
+
+.gradient-shimmer-text {
+  background: linear-gradient(
+    90deg,
+    #1e3a8a 0%,
+    #2563eb 15%,
+    #60a5fa 30%,
+    #c4dafe 50%,
+    #60a5fa 70%,
+    #2563eb 85%,
+    #1e3a8a 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: premium-shimmer 2.5s linear infinite;
+}
+
+.gradient-pan-bg {
+  background: linear-gradient(
+    120deg,
+    rgba(37, 99, 235, 0.18),
+    rgba(139, 92, 246, 0.18),
+    rgba(34, 211, 238, 0.18),
+    rgba(37, 99, 235, 0.18)
+  );
+  background-size: 300% 300%;
+  animation: premium-gradient-pan 12s ease-in-out infinite;
+}
+
+/* ---------- Scroll-reveal (used by RevealOnScroll) ---------- */
+
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.6s var(--premium-spring),
+    transform 0.6s var(--premium-spring);
+  will-change: opacity, transform;
+}
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---------- Table row stagger (used by DataTable) ---------- */
+
+.data-table-row-enter {
+  animation: premium-fade-in-up 0.42s var(--premium-spring) backwards;
+  will-change: opacity, transform;
+}
+
+/* ---------- Chat message bubble entrance ---------- */
+
+@keyframes chat-bubble-pop {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.chat-bubble-enter {
+  animation: chat-bubble-pop 0.28s var(--premium-spring) backwards;
+  will-change: opacity, transform;
+}
+
+/* ---------- Mobile drawer/sheet entrance (iOS-style) ---------- */
+
+@keyframes ios-sheet-up {
+  from {
+    transform: translateY(20%);
+    opacity: 0.92;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.ios-sheet-enter {
+  animation: ios-sheet-up 0.35s var(--premium-spring) backwards;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ios-sheet-enter {
+    animation: none !important;
+  }
+}
+
+/* ---------- Send button shine on hover ---------- */
+
+.btn-send {
+  transition: transform 0.18s var(--premium-spring),
+    box-shadow 0.28s var(--premium-spring);
+}
+
+.btn-send:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 14px -4px rgba(96, 165, 250, 0.45),
+    0 0 0 1px rgba(96, 165, 250, 0.25);
+}
+
+.btn-send:active {
+  transform: scale(0.96);
+}
+
+/* ---------- Misc ---------- */
+
+.liquid-glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+}
+
+.recording-pulse {
+  animation: premium-rec-pulse 1.4s ease-out infinite;
+}
+
+.pulse-glow-soft {
+  animation: premium-glow-pulse 2.8s ease-in-out infinite;
+}
+
+.float-soft {
+  animation: premium-float 3s ease-in-out infinite;
+}
+
+/* ---------- Reduced motion ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .premium-card,
+  .premium-tile,
+  .premium-glow,
+  .btn-press,
+  .btn-shine,
+  .tap-instant,
+  .nav-tap {
+    transition: none !important;
+  }
+  .premium-card:hover,
+  .premium-tile:hover,
+  .btn-shine:hover::before {
+    transform: none !important;
+  }
+  .gradient-shimmer-text,
+  .gradient-pan-bg,
+  .recording-pulse,
+  .pulse-glow-soft,
+  .float-soft {
+    animation: none !important;
+  }
+  .reveal-on-scroll {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .data-table-row-enter,
+  .chat-bubble-enter {
+    animation: none !important;
+  }
+  .btn-send:hover {
+    transform: none !important;
+  }
+}
+
+/* ---------- Standalone PWA polish ---------- */
+
+@media (display-mode: standalone) {
+  body {
+    background:
+      radial-gradient(circle at 20% 0%, rgba(37, 99, 235, 0.06), transparent 40%),
+      radial-gradient(circle at 80% 100%, rgba(139, 92, 246, 0.06), transparent 40%),
+      #0a0e16;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(96, 165, 250, 0.2);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(96, 165, 250, 0.35);
+  }
+  * {
+    -webkit-tap-highlight-color: rgba(59, 130, 246, 0.18);
+  }
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

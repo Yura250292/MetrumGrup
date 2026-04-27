@@ -13,8 +13,10 @@ import { MeetingRecordingProvider } from "@/contexts/MeetingRecordingContext";
 import { MeetingMiniRecorder } from "./_components/meeting-mini-recorder";
 import { PageTransition } from "./_components/page-transition";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
+import { MotionProvider } from "@/components/motion";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
+import "@/styles/premium.css";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
 
   return (
     <ThemeShell>
+      <MotionProvider>
       <AiPanelProvider>
         <UserProfileProvider>
           <MeetingRecordingProvider>
@@ -48,6 +51,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
           </MeetingRecordingProvider>
         </UserProfileProvider>
       </AiPanelProvider>
+      </MotionProvider>
     </ThemeShell>
   );
 }

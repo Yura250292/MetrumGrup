@@ -102,11 +102,14 @@ export default async function AdminV2ReceiptsListPage() {
               </tr>
             </thead>
             <tbody>
-              {scans.map((s) => (
+              {scans.map((s, idx) => (
                 <tr
                   key={s.id}
-                  className="hover:bg-black/[0.02] dark:hover:bg-white/[0.04]"
-                  style={{ borderTop: `1px solid ${T.borderSoft}` }}
+                  className={`hover:bg-black/[0.02] dark:hover:bg-white/[0.04] ${idx < 20 ? "data-table-row-enter" : ""}`}
+                  style={{
+                    borderTop: `1px solid ${T.borderSoft}`,
+                    ...(idx < 20 ? { animationDelay: `${idx * 28}ms` } : {}),
+                  }}
                 >
                   <td className="px-4 py-3" style={{ color: T.textSecondary }}>
                     <Link href={`/admin-v2/receipts/${s.id}`} className="hover:underline">

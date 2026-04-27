@@ -227,8 +227,14 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
             Нічого не знайдено
           </p>
         )}
-        {filtered.map((c) => (
-          <ConversationRow key={c.id} conversation={c} isActive={c.id === activeId} />
+        {filtered.map((c, idx) => (
+          <div
+            key={c.id}
+            className={idx < 24 ? "data-table-row-enter" : undefined}
+            style={idx < 24 ? { animationDelay: `${idx * 24}ms` } : undefined}
+          >
+            <ConversationRow conversation={c} isActive={c.id === activeId} />
+          </div>
         ))}
       </div>
       <NewConversationDialog open={dialogOpen} onOpenChange={setDialogOpen} />

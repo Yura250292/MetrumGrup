@@ -386,7 +386,7 @@ export function CommentComposer({
           type="button"
           onClick={handleSend}
           disabled={(!value.trim() && files.length === 0) || busy}
-          className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="btn-send btn-shine flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           title="Надіслати (Enter)"
         >
           {busy ? (

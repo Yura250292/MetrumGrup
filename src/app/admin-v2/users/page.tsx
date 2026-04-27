@@ -298,15 +298,19 @@ export default function AdminV2UsersPage() {
             {search ? "Нічого не знайдено" : "Користувачів немає"}
           </div>
         ) : (
-          filtered.map((u) => {
+          filtered.map((u, idx) => {
             const Icon = ROLE_ICONS[u.role] || UserIcon;
             const isEditingThisRole = editingRole === u.id;
             const colors = ROLE_COLORS[u.role] || ROLE_COLORS.USER;
             return (
               <div
                 key={u.id}
-                className="flex items-start justify-between gap-4 rounded-2xl p-5"
-                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+                className={`premium-card flex items-start justify-between gap-4 rounded-2xl p-5 ${idx < 20 ? "data-table-row-enter" : ""}`}
+                style={{
+                  backgroundColor: T.panel,
+                  border: `1px solid ${T.borderSoft}`,
+                  ...(idx < 20 ? { animationDelay: `${idx * 28}ms` } : {}),
+                }}
               >
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div

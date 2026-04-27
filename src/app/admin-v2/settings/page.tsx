@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { Settings, Lock } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { FlyIn } from "@/components/motion";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export default async function AdminV2SettingsPage() {
   return (
     <div className="flex flex-col gap-8 max-w-3xl">
       {/* Hero */}
+      <FlyIn from="up">
       <section className="flex flex-col gap-2">
         <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
           СИСТЕМА
@@ -36,10 +38,12 @@ export default async function AdminV2SettingsPage() {
           Базові параметри системи та компанії
         </p>
       </section>
+      </FlyIn>
 
       {/* Card */}
+      <FlyIn from="up" delay={0.1}>
       <section
-        className="flex flex-col gap-5 rounded-2xl p-6"
+        className="premium-card flex flex-col gap-5 rounded-2xl p-6"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
         <div className="flex items-center gap-3">
@@ -94,6 +98,7 @@ export default async function AdminV2SettingsPage() {
           </div>
         </div>
       </section>
+      </FlyIn>
     </div>
   );
 }

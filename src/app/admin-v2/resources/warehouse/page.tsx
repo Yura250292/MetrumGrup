@@ -121,9 +121,11 @@ export default async function AdminV2WarehousePage() {
                   return (
                     <tr
                       key={item.id}
+                      className={i < 20 ? "data-table-row-enter" : undefined}
                       style={{
                         backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",
                         borderTop: `1px solid ${T.borderSoft}`,
+                        ...(i < 20 ? { animationDelay: `${i * 28}ms` } : {}),
                       }}
                     >
                       <td className="px-4 py-3.5">

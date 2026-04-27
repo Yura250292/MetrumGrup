@@ -83,6 +83,37 @@ const nextConfig: NextConfig = {
       // - /admin/migrate              (internal migration tool)
     ];
   },
+  async headers() {
+    return [
+      {
+        // Next.js immutable static assets
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+      {
+        // Public images, icons, fonts
+        source: "/:path*.(ico|svg|png|jpg|jpeg|webp|avif|woff|woff2|ttf|otf)",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+        ],
+      },
+      {
+        // Manifest + service worker — short cache so updates roll out fast
+        source: "/manifest.json",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=3600, stale-while-revalidate=86400" },
+        ],
+      },
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=0, must-revalidate" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

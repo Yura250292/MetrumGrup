@@ -30,7 +30,7 @@ export function MeetingMiniRecorder() {
       }}
     >
       <span
-        className="flex h-8 w-8 items-center justify-center rounded-full"
+        className={`flex h-8 w-8 items-center justify-center rounded-full ${active ? "recording-pulse" : ""}`}
         style={{
           background: active ? T.dangerSoft : T.panelElevated,
           color: active ? T.danger : T.textSecondary,

@@ -205,7 +205,9 @@ function MessageBubble({
   const isAi = Boolean(message.author.isAi);
   const aiGradient = "linear-gradient(135deg, #f97316, #ec4899)";
   return (
-    <div className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""}`}>
+    <div
+      className={`flex gap-2 ${isOwn ? "flex-row-reverse" : ""} chat-bubble-enter`}
+    >
       {isAi ? (
         <div
           className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full"

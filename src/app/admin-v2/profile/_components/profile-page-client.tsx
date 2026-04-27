@@ -3,6 +3,8 @@
 import { useState, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { motion } from "framer-motion";
+import { heroStagger, heroItem, useReducedMotionVariants } from "@/lib/motion";
 import { useProfile } from "../_lib/use-profile";
 import { SECTIONS } from "../_lib/constants";
 import type { ProfileSection } from "../_lib/types";
@@ -65,23 +67,35 @@ export function ProfilePageClient() {
     );
   }
 
+  const stagger = useReducedMotionVariants(heroStagger);
+  const item = useReducedMotionVariants(heroItem);
+
   return (
     <div className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
       {/* Hero */}
-      <div className="mb-6">
-        <span
-          className="text-[11px] font-bold tracking-wider uppercase"
+      <motion.div className="mb-6" initial="hidden" animate="visible" variants={stagger}>
+        <motion.span
+          className="text-[11px] font-bold tracking-wider uppercase block"
           style={{ color: T.accentPrimary }}
+          variants={item}
         >
           Профіль
-        </span>
-        <h1 className="text-2xl md:text-3xl font-bold mt-1" style={{ color: T.textPrimary }}>
+        </motion.span>
+        <motion.h1
+          className="text-2xl md:text-3xl font-bold mt-1"
+          style={{ color: T.textPrimary }}
+          variants={item}
+        >
           Мій профіль
-        </h1>
-        <p className="text-[14px] mt-1" style={{ color: T.textSecondary }}>
+        </motion.h1>
+        <motion.p
+          className="text-[14px] mt-1"
+          style={{ color: T.textSecondary }}
+          variants={item}
+        >
           Керуйте персональними даними, аватаром, сповіщеннями та робочими налаштуваннями
-        </p>
-      </div>
+        </motion.p>
+      </motion.div>
 
       {/* Summary card */}
       <ProfileSummaryCard profile={profile} />

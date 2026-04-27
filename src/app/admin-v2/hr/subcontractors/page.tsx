@@ -438,14 +438,18 @@ export default function HrSubcontractorsPage() {
             </span>
           </div>
         ) : (
-          filtered.map((w) => {
+          filtered.map((w, idx) => {
             const amount = w.rateAmount != null ? Number(w.rateAmount) : null;
             const currentProject = w.crewAssignments?.[0]?.project;
             return (
               <div
                 key={w.id}
-                className="flex items-start justify-between gap-3 rounded-2xl p-4"
-                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+                className={`premium-card flex items-start justify-between gap-3 rounded-2xl p-4 ${idx < 20 ? "data-table-row-enter" : ""}`}
+                style={{
+                  backgroundColor: T.panel,
+                  border: `1px solid ${T.borderSoft}`,
+                  ...(idx < 20 ? { animationDelay: `${idx * 28}ms` } : {}),
+                }}
               >
                 <div className="flex items-start gap-3 min-w-0 flex-1">
                   <div

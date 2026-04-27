@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Plus, Search, Mail, Phone, Users, Loader2, X } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { motion } from "framer-motion";
+import { gridStagger, flyInUp, useReducedMotionVariants } from "@/lib/motion";
 
 type Client = {
   id: string;
@@ -37,6 +39,9 @@ export default function AdminV2ClientsPage() {
   );
 
   const activeCount = clients.filter((c) => c.isActive).length;
+
+  const listStagger = useReducedMotionVariants(gridStagger);
+  const itemVariant = useReducedMotionVariants(flyInUp);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -181,7 +186,12 @@ export default function AdminV2ClientsPage() {
       </div>
 
       {/* List */}
-      <section className="flex flex-col gap-2">
+      <motion.section
+        className="flex flex-col gap-2"
+        initial="hidden"
+        animate="visible"
+        variants={listStagger}
+      >
         {fetching ? (
           <div
             className="flex items-center justify-center gap-2 rounded-2xl py-12 text-sm"
@@ -192,10 +202,11 @@ export default function AdminV2ClientsPage() {
         ) : filtered.length === 0 ? (
           <EmptyState search={search} hasClients={clients.length > 0} />
         ) : (
-          filtered.map((client) => (
-            <div
+          filtered.map((client, i) => (
+            <motion.div
               key={client.id}
-              className="flex items-start gap-4 rounded-2xl p-5"
+              variants={i < 20 ? itemVariant : undefined}
+              className="premium-card flex items-start gap-4 rounded-2xl p-5"
               style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
             >
               <div
@@ -232,10 +243,10 @@ export default function AdminV2ClientsPage() {
                   )}
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))
         )}
-      </section>
+      </motion.section>
     </div>
   );
 }

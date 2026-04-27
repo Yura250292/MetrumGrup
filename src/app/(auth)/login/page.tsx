@@ -5,6 +5,9 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Eye, EyeOff, Phone } from "lucide-react";
+import { motion } from "framer-motion";
+import { heroStagger, heroItem, useReducedMotionVariants } from "@/lib/motion";
+import "@/styles/premium.css";
 
 export default function LoginPage() {
   return (
@@ -23,6 +26,9 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const stagger = useReducedMotionVariants(heroStagger);
+  const item = useReducedMotionVariants(heroItem);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -88,27 +94,37 @@ function LoginForm() {
       </div>
 
       {/* Right panel - form */}
-      <div className="flex flex-1 items-center justify-center px-6 bg-gradient-to-b from-slate-900 to-slate-800">
-        <div className="w-full max-w-md">
+      <div className="flex flex-1 items-center justify-center px-6 bg-gradient-to-b from-slate-900 to-slate-800 relative overflow-hidden">
+        {/* Cinematic gradient bg */}
+        <div
+          aria-hidden
+          className="gradient-pan-bg absolute inset-0 pointer-events-none opacity-50"
+        />
+        <motion.div
+          className="w-full max-w-md relative"
+          initial="hidden"
+          animate="visible"
+          variants={stagger}
+        >
           {/* Mobile logo */}
-          <div className="lg:hidden flex flex-col items-center mb-12">
-            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-3xl p-8 shadow-2xl mb-6">
+          <motion.div className="lg:hidden flex flex-col items-center mb-12" variants={item}>
+            <div className="bg-gradient-to-br from-amber-500 to-yellow-500 rounded-3xl p-8 shadow-2xl mb-6 float-soft">
               <img src="/images/metrum-logo.svg" alt="Metrum Group" className="h-12 w-auto brightness-0 invert" />
             </div>
             <h1 className="text-4xl font-bold text-white mb-2">Metrum Group</h1>
             <p className="text-sm text-slate-400">Система управління проєктами</p>
-          </div>
+          </motion.div>
 
           <div className="w-full max-w-md">
           {/* Desktop header */}
-          <div className="hidden lg:block mb-10">
-            <h2 className="text-5xl font-bold text-slate-100 mb-3">Вітаємо!</h2>
+          <motion.div className="hidden lg:block mb-10" variants={item}>
+            <h2 className="text-5xl font-bold text-slate-100 mb-3 gradient-shimmer-text">Вітаємо!</h2>
             <p className="text-base text-slate-400">
               Увійдіть до свого акаунту
             </p>
-          </div>
+          </motion.div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <motion.form onSubmit={handleSubmit} className="space-y-5" variants={item}>
             {error && (
               <div className="rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
                 {error}
@@ -172,11 +188,11 @@ function LoginForm() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 py-4 text-base font-bold text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 transition-all duration-200 shadow-lg shadow-blue-500/25 mt-4"
+              className="btn-press btn-shine w-full rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 py-4 text-base font-bold text-white hover:from-blue-600 hover:to-cyan-600 disabled:opacity-50 shadow-lg shadow-blue-500/25 mt-4 relative overflow-hidden"
             >
               {loading ? "Вхід..." : "Увійти"}
             </button>
-          </form>
+          </motion.form>
 
           <div className="mt-8 flex items-center gap-4">
             <div className="h-px flex-1 bg-slate-700"></div>
@@ -191,7 +207,7 @@ function LoginForm() {
             </Link>
           </p>
         </div>
-      </div>
+        </motion.div>
       </div>
     </div>
   );

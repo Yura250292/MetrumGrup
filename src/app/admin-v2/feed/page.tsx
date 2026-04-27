@@ -167,7 +167,15 @@ export default function AdminV2FeedPage() {
             description="Коли з'являться події по проєктах — вони з'являться тут."
           />
         ) : (
-          items.map((item) => <FeedRow key={item.id} item={item} density={density} />)
+          items.map((item, idx) => (
+            <div
+              key={item.id}
+              className={idx < 24 ? "data-table-row-enter" : undefined}
+              style={idx < 24 ? { animationDelay: `${idx * 28}ms` } : undefined}
+            >
+              <FeedRow item={item} density={density} />
+            </div>
+          ))
         )}
       </section>
     </div>

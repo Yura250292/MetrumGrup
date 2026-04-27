@@ -348,8 +348,14 @@ export default function HrEmployeesPage() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((e) => (
-            <EmployeeCard key={e.id} employee={e} onClick={() => openProfile(e)} />
+          {filtered.map((e, idx) => (
+            <div
+              key={e.id}
+              className={idx < 24 ? "data-table-row-enter" : undefined}
+              style={idx < 24 ? { animationDelay: `${idx * 28}ms` } : undefined}
+            >
+              <EmployeeCard employee={e} onClick={() => openProfile(e)} />
+            </div>
           ))}
         </div>
       )}

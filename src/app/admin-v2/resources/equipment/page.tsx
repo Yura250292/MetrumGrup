@@ -196,13 +196,17 @@ export default function AdminV2EquipmentPage() {
             </span>
           </div>
         ) : (
-          filtered.map((e) => {
+          filtered.map((e, idx) => {
             const colors = STATUS_COLORS[e.status] || STATUS_COLORS.AVAILABLE;
             return (
               <div
                 key={e.id}
-                className="flex items-center justify-between gap-3 rounded-2xl p-4"
-                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+                className={`premium-card flex items-center justify-between gap-3 rounded-2xl p-4 ${idx < 20 ? "data-table-row-enter" : ""}`}
+                style={{
+                  backgroundColor: T.panel,
+                  border: `1px solid ${T.borderSoft}`,
+                  ...(idx < 20 ? { animationDelay: `${idx * 28}ms` } : {}),
+                }}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div

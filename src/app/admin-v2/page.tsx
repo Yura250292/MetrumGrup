@@ -735,18 +735,24 @@ export default async function AdminV2Dashboard({
                     <KpiCard
                       label="ПРОЄКТИ"
                       value={String(projectsCount)}
+                      numericValue={projectsCount}
                       sub={`${activeProjectsCount} активних`}
                       icon={FolderKanban}
                       accent={T.accentPrimary}
                       href="/admin-v2/projects"
+                      glowClass="premium-glow-blue"
+                      delay={0.0}
                     />
                     <KpiCard
                       label="КЛІЄНТИ"
                       value={String(clientsCount)}
+                      numericValue={clientsCount}
                       sub="облікових записів"
                       icon={Users}
                       accent={T.teal}
                       href="/admin-v2/clients"
+                      glowClass="premium-glow-cyan"
+                      delay={0.06}
                     />
                     <KpiCard
                       label="ПОРТФЕЛЬ"
@@ -755,6 +761,8 @@ export default async function AdminV2Dashboard({
                       icon={Wallet}
                       accent={T.violet}
                       href="/admin-v2/projects"
+                      glowClass="premium-glow-violet"
+                      delay={0.12}
                     />
                     <KpiCard
                       label="СПЛАЧЕНО"
@@ -762,6 +770,8 @@ export default async function AdminV2Dashboard({
                       sub="усього по платежах"
                       icon={TrendingUp}
                       accent={T.emerald}
+                      glowClass="premium-glow-emerald"
+                      delay={0.18}
                     />
                   </section>
                   </div>
@@ -778,18 +788,24 @@ export default async function AdminV2Dashboard({
                     <KpiCard
                       label="АКТИВНІ ЗАДАЧІ"
                       value={String(activeTasksCount)}
+                      numericValue={activeTasksCount}
                       sub={`${completedWeekTasksCount} завершено за тиждень`}
                       icon={ListTodo}
                       accent={T.sky}
                       href="/admin-v2/me"
+                      glowClass="premium-glow-sky"
+                      delay={0.0}
                     />
                     <KpiCard
                       label="ПРОСТРОЧЕНО"
                       value={String(overdueTasksCount)}
+                      numericValue={overdueTasksCount}
                       sub={`${dueTodayTasksCount} на сьогодні`}
                       icon={AlertCircle}
                       accent={overdueTasksCount > 0 ? T.danger : T.textMuted}
                       href="/admin-v2/me"
+                      glowClass={overdueTasksCount > 0 ? "premium-glow-rose" : ""}
+                      delay={0.06}
                     />
                     <KpiCard
                       label="ГОДИН ЗА ТИЖДЕНЬ"
@@ -798,14 +814,19 @@ export default async function AdminV2Dashboard({
                       icon={Clock}
                       accent={T.amber}
                       delta={weekHoursDelta}
+                      glowClass="premium-glow-amber"
+                      delay={0.12}
                     />
                     <KpiCard
                       label="AI КОШТОРИСИ"
                       value={String(aiEstimatesMonth)}
+                      numericValue={aiEstimatesMonth}
                       sub={`за ${periodLabel}`}
                       icon={Sparkles}
                       accent={T.indigo}
                       href="/ai-estimate-v2"
+                      glowClass="premium-glow-violet"
+                      delay={0.18}
                     />
                   </section>
                   </div>
