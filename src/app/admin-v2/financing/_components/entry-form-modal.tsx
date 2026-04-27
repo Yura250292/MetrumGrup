@@ -17,8 +17,23 @@ import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { financeCategoriesForType } from "@/lib/constants";
 import { CommentThread } from "@/components/collab/CommentThread";
-import type { FinanceEntryDTO, FinanceEntryStatus, ProjectOption } from "./types";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import type {
+  CostType,
+  FinanceEntryDTO,
+  FinanceEntryStatus,
+  ProjectOption,
+} from "./types";
 import { FINANCE_STATUS_LABELS, FINANCE_STATUS_COLORS } from "./types";
+
+const COST_TYPE_LABELS: Record<CostType, string> = {
+  MATERIAL: "Матеріали",
+  LABOR: "Робота (ЗП)",
+  SUBCONTRACT: "Підряд",
+  EQUIPMENT: "Техніка",
+  OVERHEAD: "Накладні",
+  OTHER: "Інше",
+};
 
 export type EntryFormValues = {
   kind: "PLAN" | "FACT";
@@ -32,6 +47,9 @@ export type EntryFormValues = {
   title: string;
   description: string;
   counterparty: string;
+  counterpartyId: string;
+  costCodeId: string;
+  costType: CostType | "";
   pendingFiles: File[];
 };
 
@@ -77,6 +95,9 @@ export function EntryFormModal({
         title: initial.title,
         description: initial.description ?? "",
         counterparty: initial.counterparty ?? "",
+        counterpartyId: initial.counterpartyId ?? "",
+        costCodeId: initial.costCodeId ?? "",
+        costType: initial.costType ?? "",
         pendingFiles: [],
       };
     }
@@ -92,9 +113,100 @@ export function EntryFormModal({
       title: "",
       description: "",
       counterparty: "",
+      counterpartyId: "",
+      costCodeId: "",
+      costType: "",
       pendingFiles: [],
     };
   });
+
+  // Counterparty + cost-code data sources for the comboboxes.
+  const [counterpartyOptions, setCounterpartyOptions] = useState<ComboboxOption[]>([]);
+  const [costCodeOptions, setCostCodeOptions] = useState<ComboboxOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const [cpRes, ccRes] = await Promise.all([
+          fetch("/api/admin/financing/counterparties?take=100", { cache: "no-store" }),
+          fetch("/api/admin/financing/cost-codes", { cache: "no-store" }),
+        ]);
+        if (cancelled) return;
+        if (cpRes.ok) {
+          const j = await cpRes.json();
+          setCounterpartyOptions(
+            (j.data ?? []).map((c: { id: string; name: string; type: string }) => ({
+              value: c.id,
+              label: c.name,
+              description: c.type === "FOP" ? "ФОП" : c.type === "INDIVIDUAL" ? "Фіз.особа" : "ТОВ/ЮО",
+            })),
+          );
+        }
+        if (ccRes.ok) {
+          const j = await ccRes.json();
+          setCostCodeOptions(
+            (j.data ?? []).map((c: { id: string; code: string; name: string; depth: number }) => ({
+              value: c.id,
+              label: `${c.code} ${c.name}`,
+              description: c.depth === 0 ? "розділ" : undefined,
+            })),
+          );
+        }
+      } catch {
+        /* ignore — combobox stays empty, free-text counterparty still works */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Make sure currently-selected (legacy) IDs are present in the option list,
+  // even if they're not in the first page of results.
+  useEffect(() => {
+    if (
+      initial?.counterpartyEntity &&
+      !counterpartyOptions.some((o) => o.value === initial.counterpartyEntity!.id)
+    ) {
+      setCounterpartyOptions((prev) => [
+        {
+          value: initial.counterpartyEntity!.id,
+          label: initial.counterpartyEntity!.name,
+        },
+        ...prev,
+      ]);
+    }
+  }, [initial?.counterpartyEntity, counterpartyOptions]);
+
+  useEffect(() => {
+    if (initial?.costCode && !costCodeOptions.some((o) => o.value === initial.costCode!.id)) {
+      setCostCodeOptions((prev) => [
+        {
+          value: initial.costCode!.id,
+          label: `${initial.costCode!.code} ${initial.costCode!.name}`,
+        },
+        ...prev,
+      ]);
+    }
+  }, [initial?.costCode, costCodeOptions]);
+
+  async function createCounterparty(name: string): Promise<ComboboxOption> {
+    const res = await fetch("/api/admin/financing/counterparties", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      throw new Error("Не вдалося створити контрагента");
+    }
+    const { data } = await res.json();
+    const opt: ComboboxOption = { value: data.id, label: data.name };
+    setCounterpartyOptions((prev) =>
+      prev.some((o) => o.value === opt.value) ? prev : [opt, ...prev],
+    );
+    return opt;
+  }
 
   const folderLocked = mode === "create" && !!contextFolderId;
 
@@ -153,6 +265,7 @@ export function EntryFormModal({
           title: "",
           description: "",
           counterparty: "",
+          counterpartyId: "",
           subcategory: "",
           pendingFiles: [],
         }));
@@ -498,17 +611,65 @@ export function EntryFormModal({
             </Field>
 
             <Field label="Контрагент">
-              <input
-                value={values.counterparty}
-                onChange={(e) => setValues((p) => ({ ...p, counterparty: e.target.value }))}
-                placeholder="Опціонально"
+              <Combobox
+                value={values.counterpartyId || null}
+                options={counterpartyOptions}
+                onChange={(id, opt) => {
+                  setValues((p) => ({
+                    ...p,
+                    counterpartyId: id ?? "",
+                    counterparty: opt?.label ?? (id ? p.counterparty : ""),
+                  }));
+                }}
+                onCreate={createCounterparty}
+                placeholder="Оберіть або введіть для створення…"
+                searchPlaceholder="Пошук контрагента…"
+                emptyMessage="Немає контрагентів"
+              />
+              {values.counterpartyId && (
+                <Link
+                  href={`/admin-v2/counterparties/${values.counterpartyId}`}
+                  target="_blank"
+                  className="mt-1 inline-flex items-center gap-1 text-[11px] hover:underline"
+                  style={{ color: T.accentPrimary }}
+                >
+                  Картка контрагента ↗
+                </Link>
+              )}
+            </Field>
+
+            <Field label="Стаття витрат">
+              <Combobox
+                value={values.costCodeId || null}
+                options={costCodeOptions}
+                onChange={(id) => setValues((p) => ({ ...p, costCodeId: id ?? "" }))}
+                placeholder="Виберіть статтю (cost-code)…"
+                searchPlaceholder="Пошук — код або назва…"
+                emptyMessage="Дерево порожнє — заповніть seed-cost-codes"
+                listMaxHeight={320}
+              />
+            </Field>
+
+            <Field label="Тип витрат">
+              <select
+                value={values.costType}
+                onChange={(e) =>
+                  setValues((p) => ({ ...p, costType: e.target.value as CostType | "" }))
+                }
                 className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
                 style={{
                   backgroundColor: T.panelSoft,
                   border: `1px solid ${T.borderStrong}`,
                   color: T.textPrimary,
                 }}
-              />
+              >
+                <option value="">— не вказано —</option>
+                {(Object.keys(COST_TYPE_LABELS) as CostType[]).map((k) => (
+                  <option key={k} value={k}>
+                    {COST_TYPE_LABELS[k]}
+                  </option>
+                ))}
+              </select>
             </Field>
 
             <div className="sm:col-span-2">

@@ -63,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Фінанси",
     items: [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
+      { href: "/admin-v2/counterparties", label: "Контрагенти (досьє)", icon: Building2 },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
@@ -154,6 +155,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/finance/templates": "Шаблони",
   "/admin-v2/profile": "Мій профіль",
   "/admin-v2/financing": "Фінансування",
+  "/admin-v2/counterparties": "Контрагенти",
   "/admin-v2/receipts": "Накладні (скан)",
   "/admin-v2/receipts/scan": "Сканувати накладну",
   "/admin-v2/meetings": "Наради",

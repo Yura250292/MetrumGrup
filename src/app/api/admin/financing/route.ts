@@ -95,6 +95,45 @@ export async function POST(request: NextRequest) {
         ? (body.status as (typeof validStatuses)[number])
         : "DRAFT";
 
+    // New axis fields (Phase 1.A1 + A2). All optional and validated only if
+    // a non-empty string is supplied; existing legacy fields stay untouched.
+    const validCostTypes = ["MATERIAL", "LABOR", "SUBCONTRACT", "EQUIPMENT", "OVERHEAD", "OTHER"] as const;
+    type CostTypeKey = (typeof validCostTypes)[number];
+    const costCodeId =
+      typeof body.costCodeId === "string" && body.costCodeId.trim() ? body.costCodeId.trim() : null;
+    const costType =
+      typeof body.costType === "string" && validCostTypes.includes(body.costType as CostTypeKey)
+        ? (body.costType as CostTypeKey)
+        : null;
+    const counterpartyId =
+      typeof body.counterpartyId === "string" && body.counterpartyId.trim()
+        ? body.counterpartyId.trim()
+        : null;
+
+    // Resolve denormalised counterparty string from FK if provided.
+    let counterpartyName: string | null =
+      typeof body.counterparty === "string" && body.counterparty.trim() ? body.counterparty.trim() : null;
+    if (counterpartyId) {
+      const cp = await prisma.counterparty.findUnique({
+        where: { id: counterpartyId },
+        select: { id: true, name: true },
+      });
+      if (!cp) {
+        return NextResponse.json({ error: "Контрагент не існує" }, { status: 400 });
+      }
+      counterpartyName = cp.name;
+    }
+
+    if (costCodeId) {
+      const cc = await prisma.costCode.findUnique({
+        where: { id: costCodeId },
+        select: { id: true },
+      });
+      if (!cc) {
+        return NextResponse.json({ error: "Статтю витрат не знайдено" }, { status: 400 });
+      }
+    }
+
     const entry = await prisma.financeEntry.create({
       data: {
         type,
@@ -108,8 +147,10 @@ export async function POST(request: NextRequest) {
           typeof body.subcategory === "string" && body.subcategory.trim() ? body.subcategory.trim() : null,
         title,
         description: typeof body.description === "string" ? body.description : null,
-        counterparty:
-          typeof body.counterparty === "string" && body.counterparty.trim() ? body.counterparty.trim() : null,
+        counterparty: counterpartyName,
+        counterpartyId,
+        costCodeId,
+        costType,
         createdById: session.user.id,
         folderId,
         status,

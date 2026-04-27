@@ -299,6 +299,26 @@ export async function approveScan(scanId: string, approverId: string): Promise<A
     const supplierTitle = scan.supplier ? ` (${scan.supplier})` : "";
     const occurredAt = scan.documentDate ?? new Date();
 
+    // Resolve / create Counterparty FK from scan.supplier (free-text → entity).
+    // Idempotent — case-insensitive match before creating.
+    let counterpartyId: string | undefined;
+    if (scan.supplier && scan.supplier.trim()) {
+      const supplierName = scan.supplier.trim().replace(/\s+/g, " ");
+      const existing = await tx.counterparty.findFirst({
+        where: { name: { equals: supplierName, mode: "insensitive" } },
+        select: { id: true },
+      });
+      if (existing) {
+        counterpartyId = existing.id;
+      } else {
+        const created = await tx.counterparty.create({
+          data: { name: supplierName, type: "LEGAL", isActive: true },
+          select: { id: true },
+        });
+        counterpartyId = created.id;
+      }
+    }
+
     const fe = await tx.financeEntry.create({
       data: {
         type: "EXPENSE",
@@ -307,10 +327,12 @@ export async function approveScan(scanId: string, approverId: string): Promise<A
         amount: scan.totalAmount ?? 0,
         currency: scan.currency,
         projectId: scan.projectId,
-        category: "MATERIALS",
+        category: "materials",
+        costType: "MATERIAL",
         title: `Накладна${supplierTitle}`,
         description: scan.ocrText ?? undefined,
         counterparty: scan.supplier ?? undefined,
+        counterpartyId,
         occurredAt,
         createdById: scan.createdById,
         approvedById: approverId,

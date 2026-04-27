@@ -11,6 +11,14 @@ import { FINANCE_STATUS_LABELS, type FinanceEntryStatus } from "./types";
 const KIND_LABELS: Record<string, string> = { PLAN: "План", FACT: "Факт" };
 const TYPE_LABELS: Record<string, string> = { INCOME: "Доходи", EXPENSE: "Витрати" };
 const ATT_LABELS: Record<string, string> = { true: "З файлами", false: "Без файлів" };
+const COST_TYPE_LABELS: Record<string, string> = {
+  MATERIAL: "Матеріали",
+  LABOR: "Робота",
+  SUBCONTRACT: "Підряд",
+  EQUIPMENT: "Техніка",
+  OVERHEAD: "Накладні",
+  OTHER: "Інше",
+};
 
 type Chip = { key: keyof FinancingFilters | "dateRange"; label: string; clear: () => void };
 
@@ -102,6 +110,30 @@ export function ActiveFilterChips({
       key: "subcategory",
       label: `Підкат.: ${filters.subcategory}`,
       clear: () => setFilters((p) => ({ ...p, subcategory: "" })),
+    });
+  }
+
+  if (filters.costCodeId) {
+    chips.push({
+      key: "costCodeId",
+      label: "Стаття обрана",
+      clear: () => setFilters((p) => ({ ...p, costCodeId: "" })),
+    });
+  }
+
+  if (filters.costType) {
+    chips.push({
+      key: "costType",
+      label: COST_TYPE_LABELS[filters.costType] ?? filters.costType,
+      clear: () => setFilters((p) => ({ ...p, costType: "" })),
+    });
+  }
+
+  if (filters.counterpartyId) {
+    chips.push({
+      key: "counterpartyId",
+      label: "Контрагент обраний",
+      clear: () => setFilters((p) => ({ ...p, counterpartyId: "" })),
     });
   }
 

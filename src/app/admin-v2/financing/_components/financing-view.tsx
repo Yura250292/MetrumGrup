@@ -14,6 +14,8 @@ import {
   Sparkles,
   FileSpreadsheet,
   Wallet,
+  Scale,
+  Clock,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
@@ -31,6 +33,8 @@ import { TabCalendar } from "./tab-calendar";
 import { TabArchive } from "./tab-archive";
 import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
+import { TabBudgetActual } from "./tab-budget-actual";
+import { TabTimesheets } from "./tab-timesheets";
 import { FolderEstimateCard } from "./folder-estimate-card";
 import { TemplateConstructor } from "./template-constructor";
 import { FilterBar } from "./filter-bar";
@@ -53,6 +57,8 @@ export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types"
 
 const TABS = [
   { key: "overview", label: "Огляд", shortLabel: "Огляд", icon: LayoutDashboard },
+  { key: "budget", label: "План vs Факт", shortLabel: "План/Факт", icon: Scale },
+  { key: "timesheets", label: "ЗП і табелі", shortLabel: "Табелі", icon: Clock },
   { key: "approvals", label: "На погодженні", shortLabel: "Погодж.", icon: CircleDot },
   { key: "operations", label: "Операції", shortLabel: "Операції", icon: List },
   { key: "scans", label: "Скани чеків", shortLabel: "Скани", icon: Sparkles },
@@ -543,6 +549,14 @@ export function FinancingView({
           />
         )}
 
+        {activeTab === "budget" && (
+          <TabBudgetActual scope={scope} projects={projects} />
+        )}
+
+        {activeTab === "timesheets" && (
+          <TabTimesheets scope={scope} projects={projects} />
+        )}
+
         {activeTab === "approvals" && (
           <TabApprovals
             entries={entries}
@@ -563,7 +577,7 @@ export function FinancingView({
         )}
 
         {activeTab === "calendar" && (
-          <TabCalendar entries={entries} loading={loading} />
+          <TabCalendar entries={entries} loading={loading} scope={scope} />
         )}
 
         {activeTab === "archive" && (

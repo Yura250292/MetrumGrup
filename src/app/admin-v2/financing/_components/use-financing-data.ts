@@ -14,6 +14,9 @@ const DEFAULT_FILTERS: FinancingFilters = {
   projectId: "",
   folderId: "",
   category: "",
+  costCodeId: "",
+  costType: "",
+  counterpartyId: "",
   from: "",
   to: "",
   search: "",
@@ -70,6 +73,11 @@ export function useFinancingData({
     // Category
     if (filters.category) p.set("category", filters.category);
     if (filters.subcategory) p.set("subcategory", filters.subcategory);
+
+    // Cost-code axis (Phase 1.A1) and Counterparty FK (Phase 1.A2)
+    if (filters.costCodeId) p.set("costCodeId", filters.costCodeId);
+    if (filters.costType) p.set("costType", filters.costType);
+    if (filters.counterpartyId) p.set("counterpartyId", filters.counterpartyId);
 
     // Date range
     if (filters.from) p.set("from", new Date(filters.from).toISOString());
@@ -203,6 +211,9 @@ export function useFinancingData({
       title: values.title.trim(),
       description: values.description || null,
       counterparty: values.counterparty || null,
+      counterpartyId: values.counterpartyId || null,
+      costCodeId: values.costCodeId || null,
+      costType: values.costType || null,
       currency: "UAH",
       ...((!isEdit && effectiveFolderId) ? { folderId: effectiveFolderId } : {}),
     };

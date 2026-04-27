@@ -1,5 +1,18 @@
 export type FinanceEntryStatus = "DRAFT" | "PENDING" | "APPROVED" | "PAID";
 export type FinanceEntrySource = "MANUAL" | "ESTIMATE_AUTO";
+export type CostType = "MATERIAL" | "LABOR" | "SUBCONTRACT" | "EQUIPMENT" | "OVERHEAD" | "OTHER";
+
+export type CounterpartyOption = {
+  id: string;
+  name: string;
+  type: "LEGAL" | "INDIVIDUAL" | "FOP";
+};
+
+export type CostCodeOption = {
+  id: string;
+  code: string;
+  name: string;
+};
 
 export type FinanceEntryDTO = {
   id: string;
@@ -15,6 +28,11 @@ export type FinanceEntryDTO = {
   title: string;
   description: string | null;
   counterparty: string | null;
+  counterpartyId: string | null;
+  counterpartyEntity: CounterpartyOption | null;
+  costCodeId: string | null;
+  costType: CostType | null;
+  costCode: CostCodeOption | null;
   isArchived: boolean;
   status: FinanceEntryStatus;
   source: FinanceEntrySource;
@@ -73,6 +91,9 @@ export type FinancingFilters = {
   projectId: string;
   folderId: string;
   category: string;
+  costCodeId: string;
+  costType: string;
+  counterpartyId: string;
   from: string;
   to: string;
   search: string;

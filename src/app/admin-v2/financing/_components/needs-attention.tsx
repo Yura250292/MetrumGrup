@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Clock,
   Receipt,
@@ -8,10 +8,13 @@ import {
   TrendingUp,
   Banknote,
   ArrowRight,
+  AlertTriangle,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 import type { FinanceEntryDTO, FinanceSummaryDTO, FinancingFilters } from "./types";
+
+type CashGap = { from: string; depth: number };
 
 type AttentionItem = {
   id: string;
@@ -34,15 +37,79 @@ export function NeedsAttention({
   summary,
   onSwitchTab,
   setFilters,
+  scope,
 }: {
   entries: FinanceEntryDTO[];
   summary: FinanceSummaryDTO;
   onSwitchTab: (tab: "overview" | "operations" | "calendar" | "archive") => void;
   setFilters: React.Dispatch<React.SetStateAction<FinancingFilters>>;
+  scope?: { id: string; title: string };
 }) {
+  // Async fetch of next-30d cashflow for gap detection.
+  const [gaps, setGaps] = useState<CashGap[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const now = new Date();
+    const to = new Date(now);
+    to.setDate(to.getDate() + 30);
+    const params = new URLSearchParams();
+    params.set("granularity", "WEEK");
+    params.set("from", now.toISOString());
+    params.set("to", to.toISOString());
+    if (scope?.id) params.set("projectId", scope.id);
+    fetch(`/api/admin/financing/cashflow?${params}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && j?.gaps) setGaps(j.gaps);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [scope?.id]);
+
   const items = useMemo(() => {
     const result: AttentionItem[] = [];
     const now = new Date();
+
+    // Cash-gap detection from API (server-side computed, includes opening balance).
+    if (gaps && gaps.length > 0) {
+      const worst = gaps.reduce((acc, g) => (g.depth < acc.depth ? g : acc), gaps[0]);
+      result.push({
+        id: "cash_gap",
+        icon: <AlertTriangle size={14} />,
+        label: "Касовий розрив попереду",
+        description: `${gaps.length} період${gaps.length === 1 ? "" : gaps.length < 5 ? "и" : "ів"} з негативним балансом, мін. ${formatCurrency(worst.depth)}`,
+        count: gaps.length,
+        severity: "danger",
+        onAction: () => onSwitchTab("calendar"),
+      });
+    }
+
+    // APPROVED expense entries with occurredAt < now and status != PAID
+    // — рахунок підтверджений, дата минула, але все ще не оплачений.
+    const overduePayments = entries.filter(
+      (e) =>
+        e.kind === "FACT" &&
+        e.type === "EXPENSE" &&
+        e.status === "APPROVED" &&
+        new Date(e.occurredAt) < now,
+    );
+    if (overduePayments.length > 0) {
+      const totalOverdue = overduePayments.reduce((s, e) => s + Number(e.amount), 0);
+      result.push({
+        id: "overdue_payments",
+        icon: <Clock size={14} />,
+        label: "Заборгованість підрядникам",
+        description: `${overduePayments.length} оплат на ${formatCurrency(totalOverdue)} прострочено`,
+        count: overduePayments.length,
+        severity: "danger",
+        onAction: () => {
+          setFilters((p) => ({ ...p, kind: "FACT", type: "EXPENSE", status: "APPROVED" }));
+          onSwitchTab("operations");
+        },
+      });
+    }
 
     const overduePlans = entries.filter(
       (e) => e.kind === "PLAN" && new Date(e.occurredAt) < now,
@@ -136,7 +203,7 @@ export function NeedsAttention({
     }
 
     return result.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity]);
-  }, [entries, summary, onSwitchTab, setFilters]);
+  }, [entries, summary, onSwitchTab, setFilters, gaps]);
 
   if (items.length === 0) return null;
 

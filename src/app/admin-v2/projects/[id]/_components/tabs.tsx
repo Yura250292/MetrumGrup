@@ -14,6 +14,7 @@ import {
   Banknote,
   Sparkles,
   ListTodo,
+  FileText,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { TabOverview, type ProjectDetailData } from "./tab-overview";
@@ -27,6 +28,7 @@ import { TabFinances } from "./tab-finances";
 import { TabFinancing } from "./tab-financing";
 import { TabAiRender } from "./tab-ai-render";
 import { TabTasks } from "./tab-tasks";
+import { TabKB2 } from "./tab-kb2";
 
 const BASE_TAB_DEFS = [
   { id: "overview", label: "Огляд", icon: LayoutDashboard },
@@ -38,6 +40,7 @@ const BASE_TAB_DEFS = [
   { id: "estimates", label: "Кошториси", icon: Calculator },
   { id: "finances", label: "Платежі", icon: Wallet },
   { id: "financing", label: "Фінансування", icon: Banknote },
+  { id: "kb2", label: "Акти КБ-2в", icon: FileText },
   { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
   { id: "tasks", label: "Задачі", icon: ListTodo },
 ] as const;
@@ -149,6 +152,9 @@ export function ProjectTabs({
         )}
         {current === "financing" && (
           <TabFinancing projectId={projectId} projectTitle={project.title} />
+        )}
+        {current === "kb2" && (
+          <TabKB2 projectId={projectId} retentionPercentDefault={5} />
         )}
         {current === "ai-render" && <TabAiRender projectId={projectId} />}
         {current === "tasks" && tasksEnabled && (

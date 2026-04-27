@@ -11,6 +11,9 @@ export type FinanceListFilters = {
   source?: "MANUAL" | "ESTIMATE_AUTO";
   category?: string;
   subcategory?: string;
+  costCodeId?: string;
+  costType?: "MATERIAL" | "LABOR" | "SUBCONTRACT" | "EQUIPMENT" | "OVERHEAD" | "OTHER";
+  counterpartyId?: string;
   from?: Date;
   to?: Date;
   responsibleId?: string;
@@ -35,6 +38,15 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
   const sourceRaw = searchParams.get("source");
 
   const folderIdRaw = searchParams.get("folderId");
+  const costCodeIdRaw = searchParams.get("costCodeId") ?? undefined;
+  const costTypeRaw = searchParams.get("costType");
+  const counterpartyIdRaw = searchParams.get("counterpartyId") ?? undefined;
+  const validCostTypes = ["MATERIAL", "LABOR", "SUBCONTRACT", "EQUIPMENT", "OVERHEAD", "OTHER"] as const;
+  type CostTypeKey = (typeof validCostTypes)[number];
+  const costType =
+    costTypeRaw && validCostTypes.includes(costTypeRaw as CostTypeKey)
+      ? (costTypeRaw as CostTypeKey)
+      : undefined;
 
   return {
     projectId:
@@ -60,6 +72,9 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
         : undefined,
     source:
       sourceRaw === "MANUAL" || sourceRaw === "ESTIMATE_AUTO" ? sourceRaw : undefined,
+    costCodeId: costCodeIdRaw,
+    costType,
+    counterpartyId: counterpartyIdRaw,
     archived: archivedRaw === "true",
   };
 }
@@ -163,6 +178,9 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
   if (filters.source) where.source = filters.source;
   if (filters.category) where.category = filters.category;
   if (filters.subcategory) where.subcategory = filters.subcategory;
+  if (filters.costCodeId) where.costCodeId = filters.costCodeId;
+  if (filters.costType) where.costType = filters.costType;
+  if (filters.counterpartyId) where.counterpartyId = filters.counterpartyId;
   if (filters.responsibleId) where.createdById = filters.responsibleId;
 
   if (filters.from || filters.to) {
@@ -251,6 +269,9 @@ export const FINANCE_ENTRY_SELECT = {
   title: true,
   description: true,
   counterparty: true,
+  counterpartyId: true,
+  costCodeId: true,
+  costType: true,
   isArchived: true,
   status: true,
   approvedAt: true,
@@ -268,6 +289,8 @@ export const FINANCE_ENTRY_SELECT = {
   createdBy: { select: { id: true, name: true } },
   updatedBy: { select: { id: true, name: true } },
   approvedBy: { select: { id: true, name: true } },
+  counterpartyEntity: { select: { id: true, name: true, type: true } },
+  costCode: { select: { id: true, code: true, name: true } },
   attachments: {
     select: {
       id: true,

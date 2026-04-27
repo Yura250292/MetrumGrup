@@ -78,6 +78,7 @@ export function TabOverview({
         summary={summary}
         onSwitchTab={onSwitchTab}
         setFilters={setFilters}
+        scope={scope}
       />
 
       {/* Cashflow chart */}

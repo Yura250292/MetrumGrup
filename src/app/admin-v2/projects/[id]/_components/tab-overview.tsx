@@ -8,6 +8,7 @@ import { StageTimeline } from "@/components/dashboard/StageTimeline";
 import { ProjectProgressBar } from "@/components/dashboard/ProjectProgressBar";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectStatus, ProjectStage, StageStatus } from "@prisma/client";
+import { FinanceKpiStrip } from "./finance-kpi-strip";
 
 export type ProjectDetailData = {
   id: string;
@@ -58,7 +59,11 @@ export type ProjectDetailData = {
 export function TabOverview({ project }: { project: ProjectDetailData }) {
   const remaining = project.totalBudget - project.totalPaid;
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+    <div className="flex flex-col gap-6">
+      {/* Finance KPI strip — пов'язує матрицю Plan vs Fact + cashflow в один погляд */}
+      <FinanceKpiStrip projectId={project.id} />
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
       {/* Left col */}
       <div className="xl:col-span-2 flex flex-col gap-6">
         {/* Progress + Stage timeline */}
@@ -219,6 +224,7 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
             )}
           </div>
         </Card>
+      </div>
       </div>
     </div>
   );

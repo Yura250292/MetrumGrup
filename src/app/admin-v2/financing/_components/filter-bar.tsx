@@ -13,6 +13,9 @@ import {
   Paperclip,
   User as UserIcon,
   CircleDot,
+  Layers,
+  Building2,
+  Wrench,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { FINANCE_CATEGORIES } from "@/lib/constants";
@@ -35,6 +38,52 @@ const STATUS_SHORT: Record<FinanceEntryStatus, string> = {
 };
 
 type FolderTreeOption = { id: string; name: string; depth: number };
+
+type CostCodeOption = { id: string; code: string; name: string; depth: number };
+type CounterpartyOption = { id: string; name: string };
+
+const COST_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: "MATERIAL", label: "Матеріали" },
+  { value: "LABOR", label: "Робота (ЗП)" },
+  { value: "SUBCONTRACT", label: "Підряд" },
+  { value: "EQUIPMENT", label: "Техніка" },
+  { value: "OVERHEAD", label: "Накладні" },
+  { value: "OTHER", label: "Інше" },
+];
+
+function useCostCodes() {
+  const [items, setItems] = useState<CostCodeOption[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/financing/cost-codes")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then(({ data }) => {
+        if (alive) setItems(data ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return items;
+}
+
+function useCounterparties() {
+  const [items, setItems] = useState<CounterpartyOption[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/financing/counterparties?take=100")
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then(({ data }) => {
+        if (alive) setItems(data ?? []);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return items;
+}
 
 function useFinanceFolderTree(enabled: boolean) {
   const [tree, setTree] = useState<FolderTreeOption[]>([]);
@@ -82,6 +131,8 @@ export function FilterBar({
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const folderTree = useFinanceFolderTree(!scope);
+  const costCodes = useCostCodes();
+  const counterparties = useCounterparties();
 
   const activeCount = [
     !scope && filters.projectId,
@@ -90,6 +141,9 @@ export function FilterBar({
     filters.type,
     filters.status,
     filters.category,
+    filters.costCodeId,
+    filters.costType,
+    filters.counterpartyId,
     filters.from,
     filters.to,
     filters.search.trim(),
@@ -102,6 +156,9 @@ export function FilterBar({
     !scope && filters.projectId,
     !scope && filters.folderId,
     filters.category,
+    filters.costCodeId,
+    filters.costType,
+    filters.counterpartyId,
     filters.subcategory,
     filters.responsibleId,
     filters.hasAttachments,
@@ -295,6 +352,49 @@ export function FilterBar({
             placeholder="Підкатегорія"
             icon={<Tag size={13} />}
           />
+
+          <FilterSelect
+            icon={<Layers size={13} />}
+            placeholder="Стаття витрат"
+            value={filters.costCodeId}
+            onChange={(v) => setFilters((p) => ({ ...p, costCodeId: v }))}
+          >
+            <option value="">Всі статті</option>
+            {costCodes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {"— ".repeat(c.depth)}
+                {c.code} {c.name}
+              </option>
+            ))}
+          </FilterSelect>
+
+          <FilterSelect
+            icon={<Wrench size={13} />}
+            placeholder="Тип витрат"
+            value={filters.costType}
+            onChange={(v) => setFilters((p) => ({ ...p, costType: v }))}
+          >
+            <option value="">Всі типи</option>
+            {COST_TYPE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </FilterSelect>
+
+          <FilterSelect
+            icon={<Building2 size={13} />}
+            placeholder="Контрагент"
+            value={filters.counterpartyId}
+            onChange={(v) => setFilters((p) => ({ ...p, counterpartyId: v }))}
+          >
+            <option value="">Всі контрагенти</option>
+            {counterparties.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </FilterSelect>
 
           {users.length > 0 && (
             <FilterSelect

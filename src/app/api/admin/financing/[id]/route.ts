@@ -65,6 +65,9 @@ export async function PATCH(
         "title",
         "description",
         "counterparty",
+        "counterpartyId",
+        "costCodeId",
+        "costType",
         "occurredAt",
         "currency",
       ] as const;
@@ -133,6 +136,61 @@ export async function PATCH(
         typeof body.counterparty === "string" && body.counterparty.trim()
           ? body.counterparty.trim()
           : null;
+
+    // Counterparty FK (Phase 1.A2). When set, also refreshes the legacy
+    // `counterparty` denormalised cache so listings keep displaying a name.
+    if ("counterpartyId" in body) {
+      const cpid =
+        typeof body.counterpartyId === "string" && body.counterpartyId.trim()
+          ? body.counterpartyId.trim()
+          : null;
+      if (cpid) {
+        const cp = await prisma.counterparty.findUnique({
+          where: { id: cpid },
+          select: { id: true, name: true },
+        });
+        if (!cp) {
+          return NextResponse.json({ error: "Контрагент не існує" }, { status: 400 });
+        }
+        data.counterpartyId = cp.id;
+        data.counterparty = cp.name;
+      } else {
+        data.counterpartyId = null;
+        // Don't wipe legacy `counterparty` text on FK clear — it may be the
+        // only value the operator typed. They can clear the string field too.
+      }
+    }
+
+    // Cost-code axis (Phase 1.A1).
+    if ("costCodeId" in body) {
+      const ccid =
+        typeof body.costCodeId === "string" && body.costCodeId.trim()
+          ? body.costCodeId.trim()
+          : null;
+      if (ccid) {
+        const cc = await prisma.costCode.findUnique({
+          where: { id: ccid },
+          select: { id: true },
+        });
+        if (!cc) {
+          return NextResponse.json({ error: "Статтю витрат не знайдено" }, { status: 400 });
+        }
+      }
+      data.costCodeId = ccid;
+    }
+    if ("costType" in body) {
+      const validCostTypes = ["MATERIAL", "LABOR", "SUBCONTRACT", "EQUIPMENT", "OVERHEAD", "OTHER"] as const;
+      type CostTypeKey = (typeof validCostTypes)[number];
+      const ct = body.costType;
+      if (ct === null || ct === "") {
+        data.costType = null;
+      } else if (typeof ct === "string" && validCostTypes.includes(ct as CostTypeKey)) {
+        data.costType = ct as CostTypeKey;
+      } else {
+        return NextResponse.json({ error: "Некоректний тип витрат" }, { status: 400 });
+      }
+    }
+
     if ("currency" in body && typeof body.currency === "string" && body.currency)
       data.currency = body.currency;
     if (body.isArchived === true || body.isArchived === false) data.isArchived = body.isArchived;

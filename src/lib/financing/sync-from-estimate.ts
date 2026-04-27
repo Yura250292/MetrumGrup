@@ -6,6 +6,8 @@ import { mapItemToFinanceCategory } from "./estimate-mapping";
 export type SyncResult = {
   estimateId: string;
   itemsCreated: number;
+  itemsUpdated: number;
+  itemsArchived: number;
   totalExpense: number;
   totalIncome: number;
   syncedAt: Date;
@@ -31,113 +33,188 @@ export async function syncEstimateToFinancing(
   });
 
   if (!estimate) throw new EstimateNotFoundError(estimateId);
+  // Local non-null alias so TS keeps narrowing inside nested closures.
+  const est = estimate;
 
-  const occurredAt = estimate.project?.startDate ?? new Date();
+  const occurredAt = est.project?.startDate ?? new Date();
   const syncedAt = new Date();
 
   // CLIENT role → per-item INCOME entries (client payments expected per line)
   // INTERNAL role → per-item EXPENSE entries (our cost per line)
   // STANDALONE role → legacy behavior: per-item EXPENSE + single INCOME of finalClientPrice
-  const role = estimate.role;
-  const folderId = estimate.folderId;
+  const role = est.role;
+  const folderId = est.folderId;
 
   const result = await prisma.$transaction(async (tx) => {
-    await tx.financeEntry.deleteMany({
+    // Diff/upsert instead of delete+create — preserves entry IDs, attachments,
+    // comments and any costCodeId/costType set by humans on top of legacy data.
+    // Stale entries (items removed from estimate) are soft-archived rather than
+    // wiped, so the audit trail and estimateItemId references survive.
+    const existing = await tx.financeEntry.findMany({
       where: { estimateId, source: "ESTIMATE_AUTO" },
+      select: {
+        id: true,
+        estimateItemId: true,
+        amount: true,
+        type: true,
+        category: true,
+        title: true,
+        description: true,
+        folderId: true,
+        isArchived: true,
+      },
     });
+
+    // Map item entries by estimateItemId for fast lookup; also keep separate
+    // bucket for STANDALONE aggregate income (estimateItemId IS NULL).
+    const itemEntryByItemId = new Map<string, (typeof existing)[number]>();
+    let aggregateIncomeEntry: (typeof existing)[number] | undefined;
+    for (const e of existing) {
+      if (e.estimateItemId) itemEntryByItemId.set(e.estimateItemId, e);
+      else aggregateIncomeEntry = e;
+    }
 
     let totalExpense = new Prisma.Decimal(0);
     let totalIncome = new Prisma.Decimal(0);
+    let itemsCreated = 0;
+    let itemsUpdated = 0;
+    const seenItemIds = new Set<string>();
+
+    async function upsertItemEntry(
+      item: (typeof est.items)[number],
+      type: "INCOME" | "EXPENSE",
+      category: string,
+      titlePrefix: string,
+    ) {
+      const amount =
+        item.useCustomMargin && Number(item.priceWithMargin) > 0
+          ? item.priceWithMargin
+          : item.amount;
+
+      const title = item.description.slice(0, 200);
+      const description = item.section?.title
+        ? `${titlePrefix} ${est.number} • ${item.section.title}`
+        : `${titlePrefix} ${est.number}`;
+
+      const prev = itemEntryByItemId.get(item.id);
+      if (prev) {
+        seenItemIds.add(item.id);
+        // Only push fields that ESTIMATE_AUTO owns; never overwrite human-set
+        // costCodeId / costType / counterpartyId.
+        await tx.financeEntry.update({
+          where: { id: prev.id },
+          data: {
+            amount,
+            type,
+            category,
+            title,
+            description,
+            occurredAt,
+            folderId,
+            isArchived: false, // un-archive if it was a previously orphaned row that's back
+            updatedById: userId,
+          },
+        });
+        itemsUpdated++;
+      } else {
+        await tx.financeEntry.create({
+          data: {
+            occurredAt,
+            kind: "PLAN",
+            type,
+            source: "ESTIMATE_AUTO",
+            amount,
+            currency: "UAH",
+            projectId: est.projectId,
+            folderId,
+            category,
+            title,
+            description,
+            status: "DRAFT",
+            createdById: userId,
+            estimateId,
+            estimateItemId: item.id,
+          },
+        });
+        itemsCreated++;
+      }
+
+      if (type === "INCOME") totalIncome = totalIncome.plus(amount);
+      else totalExpense = totalExpense.plus(amount);
+    }
 
     if (role === "CLIENT") {
-      // Each item becomes an INCOME PLAN entry
-      for (const item of estimate.items) {
-        const amount =
-          item.useCustomMargin && Number(item.priceWithMargin) > 0
-            ? item.priceWithMargin
-            : item.amount;
-
-        await tx.financeEntry.create({
-          data: {
-            occurredAt,
-            kind: "PLAN",
-            type: "INCOME",
-            source: "ESTIMATE_AUTO",
-            amount,
-            currency: "UAH",
-            projectId: estimate.projectId,
-            folderId,
-            category: "client_advance",
-            title: item.description.slice(0, 200),
-            description: item.section?.title
-              ? `Кошторис клієнта ${estimate.number} • ${item.section.title}`
-              : `Кошторис клієнта ${estimate.number}`,
-            status: "DRAFT",
-            createdById: userId,
-            estimateId,
-            estimateItemId: item.id,
-          },
-        });
-
-        totalIncome = totalIncome.plus(amount);
+      for (const item of est.items) {
+        await upsertItemEntry(item, "INCOME", "client_advance", "Кошторис клієнта");
       }
     } else {
-      // INTERNAL or STANDALONE: per-item EXPENSE
-      for (const item of estimate.items) {
-        const amount =
-          item.useCustomMargin && Number(item.priceWithMargin) > 0
-            ? item.priceWithMargin
-            : item.amount;
-
-        await tx.financeEntry.create({
-          data: {
-            occurredAt,
-            kind: "PLAN",
-            type: "EXPENSE",
-            source: "ESTIMATE_AUTO",
-            amount,
-            currency: "UAH",
-            projectId: estimate.projectId,
-            folderId,
-            category: mapItemToFinanceCategory(item, item.section),
-            title: item.description.slice(0, 200),
-            description: item.section?.title
-              ? `Кошторис ${estimate.number} • ${item.section.title}`
-              : `Кошторис ${estimate.number}`,
-            status: "DRAFT",
-            createdById: userId,
-            estimateId,
-            estimateItemId: item.id,
-          },
-        });
-
-        totalExpense = totalExpense.plus(amount);
+      for (const item of est.items) {
+        await upsertItemEntry(
+          item,
+          "EXPENSE",
+          mapItemToFinanceCategory(item, item.section),
+          "Кошторис",
+        );
       }
 
-      // STANDALONE: also create a single aggregated INCOME from finalClientPrice
+      // STANDALONE: maintain a single aggregate INCOME from finalClientPrice.
       if (role === "STANDALONE") {
-        const clientPrice = estimate.finalClientPrice;
+        const clientPrice = est.finalClientPrice;
         if (Number(clientPrice) > 0) {
-          await tx.financeEntry.create({
-            data: {
-              occurredAt,
-              kind: "PLAN",
-              type: "INCOME",
-              source: "ESTIMATE_AUTO",
-              amount: clientPrice,
-              currency: "UAH",
-              projectId: estimate.projectId,
-              category: "client_advance",
-              title: `План доходу: ${estimate.title}`.slice(0, 200),
-              description: `Кошторис ${estimate.number} • finalClientPrice`,
-              status: "DRAFT",
-              createdById: userId,
-              estimateId,
-            },
-          });
+          if (aggregateIncomeEntry) {
+            await tx.financeEntry.update({
+              where: { id: aggregateIncomeEntry.id },
+              data: {
+                amount: clientPrice,
+                title: `План доходу: ${est.title}`.slice(0, 200),
+                description: `Кошторис ${est.number} • finalClientPrice`,
+                occurredAt,
+                isArchived: false,
+                updatedById: userId,
+              },
+            });
+            itemsUpdated++;
+            aggregateIncomeEntry = undefined; // mark as handled
+          } else {
+            await tx.financeEntry.create({
+              data: {
+                occurredAt,
+                kind: "PLAN",
+                type: "INCOME",
+                source: "ESTIMATE_AUTO",
+                amount: clientPrice,
+                currency: "UAH",
+                projectId: est.projectId,
+                category: "client_advance",
+                title: `План доходу: ${est.title}`.slice(0, 200),
+                description: `Кошторис ${est.number} • finalClientPrice`,
+                status: "DRAFT",
+                createdById: userId,
+                estimateId,
+              },
+            });
+            itemsCreated++;
+          }
           totalIncome = totalIncome.plus(clientPrice);
         }
       }
+    }
+
+    // Archive entries whose estimate-items disappeared, plus a stale STANDALONE
+    // aggregate row when the role moved to CLIENT/INTERNAL.
+    const orphanIds = existing
+      .filter((e) => {
+        if (e.estimateItemId) return !seenItemIds.has(e.estimateItemId);
+        return aggregateIncomeEntry?.id === e.id;
+      })
+      .map((e) => e.id);
+    let itemsArchived = 0;
+    if (orphanIds.length > 0) {
+      const archived = await tx.financeEntry.updateMany({
+        where: { id: { in: orphanIds } },
+        data: { isArchived: true, updatedById: userId },
+      });
+      itemsArchived = archived.count;
     }
 
     await tx.estimate.update({
@@ -146,7 +223,9 @@ export async function syncEstimateToFinancing(
     });
 
     return {
-      itemsCreated: estimate.items.length,
+      itemsCreated,
+      itemsUpdated,
+      itemsArchived,
       totalExpense: totalExpense.toNumber(),
       totalIncome: totalIncome.toNumber(),
     };
@@ -157,10 +236,12 @@ export async function syncEstimateToFinancing(
     action: "UPDATE",
     entity: "Estimate",
     entityId: estimateId,
-    projectId: estimate.projectId,
+    projectId: est.projectId,
     newData: {
       financeSync: {
         itemsCreated: result.itemsCreated,
+        itemsUpdated: result.itemsUpdated,
+        itemsArchived: result.itemsArchived,
         totalExpense: result.totalExpense,
         totalIncome: result.totalIncome,
         syncedAt,
@@ -171,6 +252,8 @@ export async function syncEstimateToFinancing(
   return {
     estimateId,
     itemsCreated: result.itemsCreated,
+    itemsUpdated: result.itemsUpdated,
+    itemsArchived: result.itemsArchived,
     totalExpense: result.totalExpense,
     totalIncome: result.totalIncome,
     syncedAt,
@@ -182,6 +265,8 @@ export type ProjectSyncResult = {
   estimatesProcessed: number;
   estimatesSkipped: number;
   itemsCreated: number;
+  itemsUpdated: number;
+  itemsArchived: number;
   totalExpense: number;
   totalIncome: number;
   details: SyncResult[];
@@ -215,6 +300,8 @@ export async function syncProjectEstimatesToFinancing(
 
   const details: SyncResult[] = [];
   let itemsCreated = 0;
+  let itemsUpdated = 0;
+  let itemsArchived = 0;
   let totalExpense = 0;
   let totalIncome = 0;
 
@@ -222,6 +309,8 @@ export async function syncProjectEstimatesToFinancing(
     const res = await syncEstimateToFinancing(e.id, userId);
     details.push(res);
     itemsCreated += res.itemsCreated;
+    itemsUpdated += res.itemsUpdated;
+    itemsArchived += res.itemsArchived;
     totalExpense += res.totalExpense;
     totalIncome += res.totalIncome;
   }
@@ -231,6 +320,8 @@ export async function syncProjectEstimatesToFinancing(
     estimatesProcessed: approved.length,
     estimatesSkipped: totalEstimates - approved.length,
     itemsCreated,
+    itemsUpdated,
+    itemsArchived,
     totalExpense,
     totalIncome,
     details,
