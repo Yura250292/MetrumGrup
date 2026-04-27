@@ -5,7 +5,9 @@ import Link from "next/link";
 import {
   Building2,
   CheckCircle2,
+  ExternalLink,
   Loader2,
+  Pencil,
   Plus,
   Search,
   Upload,
@@ -87,7 +89,8 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
   const [typeFilter, setTypeFilter] = useState<"" | CounterpartyType>("");
   const [showInactive, setShowInactive] = useState(false);
 
-  const [showForm, setShowForm] = useState(false);
+  type FormMode = { kind: "create" } | { kind: "edit"; id: string };
+  const [formMode, setFormMode] = useState<FormMode | null>(null);
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -133,12 +136,37 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
 
   function resetForm() {
     setForm(EMPTY_FORM);
-    setShowForm(false);
+    setFormMode(null);
+    setError(null);
+  }
+
+  function startCreate() {
+    setForm(EMPTY_FORM);
+    setFormMode({ kind: "create" });
+    setError(null);
+  }
+
+  function startEdit(c: Counterparty) {
+    setForm({
+      name: c.name,
+      type: c.type,
+      edrpou: c.edrpou ?? "",
+      taxId: c.taxId ?? "",
+      iban: c.iban ?? "",
+      vatPayer: c.vatPayer,
+      phone: c.phone ?? "",
+      email: c.email ?? "",
+      address: c.address ?? "",
+      notes: c.notes ?? "",
+      isActive: c.isActive,
+    });
+    setFormMode({ kind: "edit", id: c.id });
     setError(null);
   }
 
   async function handleSubmit(ev: React.FormEvent) {
     ev.preventDefault();
+    if (!formMode) return;
     if (!form.name.trim()) {
       setError("Назва обовʼязкова");
       return;
@@ -146,7 +174,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
     setSaving(true);
     setError(null);
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: form.name.trim(),
         type: form.type,
         edrpou: form.edrpou.trim() || null,
@@ -157,21 +185,32 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
         email: form.email.trim() || null,
         address: form.address.trim() || null,
       };
-      const res = await fetch(`/api/admin/financing/counterparties`, {
-        method: "POST",
+      if (formMode.kind === "edit") {
+        payload.notes = form.notes.trim() || null;
+        payload.isActive = form.isActive;
+      }
+
+      const url =
+        formMode.kind === "create"
+          ? `/api/admin/financing/counterparties`
+          : `/api/admin/financing/counterparties/${formMode.id}`;
+      const method = formMode.kind === "create" ? "POST" : "PATCH";
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const j = await res.json();
       if (!res.ok) {
-        setError(j.error ?? "Помилка створення");
+        setError(j.error ?? "Помилка");
         return;
       }
-      // Show in list immediately, then navigate to dossier so operator can fill
-      // remaining fields (notes, etc) and see the empty timeline.
-      setItems((prev) => [j.data, ...prev.filter((c) => c.id !== j.data.id)]);
+      const saved: Counterparty = j.data;
+      setItems((prev) => {
+        const without = prev.filter((c) => c.id !== saved.id);
+        return formMode.kind === "create" ? [saved, ...without] : prev.map((c) => (c.id === saved.id ? saved : c));
+      });
       resetForm();
-      window.location.href = `/admin-v2/counterparties/${j.data.id}`;
     } finally {
       setSaving(false);
     }
@@ -206,7 +245,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
               <Upload size={13} /> Імпорт з Excel
             </button>
             <button
-              onClick={() => (showForm ? resetForm() : setShowForm(true))}
+              onClick={() => (formMode ? resetForm() : startCreate())}
               className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
               style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
             >
@@ -235,14 +274,14 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
         }}
       />
 
-      {showForm && (
+      {formMode && (
         <div
           className="rounded-2xl p-5"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.accentPrimary}40` }}
         >
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-bold" style={{ color: T.textPrimary }}>
-              Новий контрагент
+              {formMode.kind === "create" ? "Новий контрагент" : `Редагувати: ${form.name || "—"}`}
             </h3>
             <button onClick={resetForm} aria-label="Скасувати">
               <X size={16} style={{ color: T.textMuted }} />
@@ -373,6 +412,39 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
               </Field>
             </div>
 
+            {formMode?.kind === "edit" && (
+              <>
+                <div className="sm:col-span-2">
+                  <Field label="Нотатки">
+                    <textarea
+                      value={form.notes}
+                      onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+                      rows={2}
+                      className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
+                      style={{
+                        backgroundColor: T.panelSoft,
+                        border: `1px solid ${T.borderStrong}`,
+                        color: T.textPrimary,
+                      }}
+                    />
+                  </Field>
+                </div>
+                <label
+                  className="sm:col-span-2 flex items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer"
+                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
+                  />
+                  <span className="text-sm" style={{ color: T.textPrimary }}>
+                    Активний
+                  </span>
+                </label>
+              </>
+            )}
+
             {error && (
               <div
                 className="sm:col-span-2 rounded-xl px-3 py-2 text-[12px]"
@@ -402,7 +474,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                 style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                Додати і відкрити досьє
+                {formMode?.kind === "create" ? "Додати" : "Зберегти зміни"}
               </button>
             </div>
           </form>
@@ -485,7 +557,8 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                 <th className="px-3 py-3 text-left">Тип</th>
                 <th className="px-3 py-3 text-left">Код</th>
                 <th className="px-3 py-3 text-left">Контакти</th>
-                <th className="px-3 py-3 text-right">Статус</th>
+                <th className="px-3 py-3 text-center">Статус</th>
+                <th className="px-3 py-3 text-right">Дії</th>
               </tr>
             </thead>
             <tbody>
@@ -494,17 +567,18 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                 return (
                   <tr
                     key={c.id}
-                    className="border-t transition hover:bg-black/5"
+                    className="border-t transition hover:bg-black/5 cursor-pointer"
                     style={{ borderColor: T.borderSoft, opacity: c.isActive ? 1 : 0.55 }}
+                    onClick={(e) => {
+                      // Don't trigger when clicking on inner buttons / links.
+                      if ((e.target as HTMLElement).closest("a, button")) return;
+                      if (canCreate) startEdit(c);
+                    }}
                   >
                     <td className="px-4 py-2.5">
-                      <Link
-                        href={`/admin-v2/counterparties/${c.id}`}
-                        className="font-medium hover:underline"
-                        style={{ color: T.textPrimary }}
-                      >
+                      <span className="font-medium" style={{ color: T.textPrimary }}>
                         {c.name}
-                      </Link>
+                      </span>
                       {c.vatPayer && (
                         <span
                           className="ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase"
@@ -532,19 +606,39 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                         {!c.phone && !c.email && <span style={{ color: T.textMuted }}>—</span>}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-right">
+                    <td className="px-3 py-2.5 text-center">
                       {c.isActive ? (
-                        <CheckCircle2 size={14} style={{ color: T.success }} />
+                        <CheckCircle2 size={14} style={{ color: T.success }} className="inline" />
                       ) : (
-                        <XCircle size={14} style={{ color: T.textMuted }} />
+                        <XCircle size={14} style={{ color: T.textMuted }} className="inline" />
                       )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                      {canCreate && (
+                        <button
+                          onClick={() => startEdit(c)}
+                          className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
+                          title="Швидке редагування"
+                          aria-label="Редагувати"
+                        >
+                          <Pencil size={13} style={{ color: T.textSecondary }} />
+                        </button>
+                      )}
+                      <Link
+                        href={`/admin-v2/counterparties/${c.id}`}
+                        className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
+                        title="Відкрити досьє з історією"
+                        aria-label="Досьє"
+                      >
+                        <ExternalLink size={13} style={{ color: T.accentPrimary }} />
+                      </Link>
                     </td>
                   </tr>
                 );
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
                     {search.trim() || typeFilter
                       ? "Нічого не знайдено за фільтрами."
                       : "Список порожній. Додайте через кнопку «Новий контрагент» або імпортуйте з Excel."}
