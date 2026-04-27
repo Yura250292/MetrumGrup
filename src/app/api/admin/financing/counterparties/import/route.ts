@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
@@ -12,18 +13,28 @@ import {
 } from "@/lib/import/hr-import";
 import { inferColumnMapping } from "@/lib/import/ai-mapper";
 
-async function parseWithAi(buffer: Buffer): Promise<ImportResult<CounterpartyImportRow>> {
+export const runtime = "nodejs";
+
+const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"];
+
+async function parseWithAi(
+  buffer: Buffer,
+): Promise<ImportResult<CounterpartyImportRow>> {
   const rows = await readSheetAsRows(buffer);
   const mapping = await inferColumnMapping(rows, COUNTERPARTY_FIELDS);
   return applyCounterpartyMapping(rows, mapping.headerRow, mapping.columnMap);
 }
 
+/**
+ * Bulk-import counterparties from Excel. Same parser/AI-mapper as the legacy
+ * HR endpoint — finance roles can use it now too. New dossier fields
+ * (edrpou/iban/vatPayer) are NOT in the template; operator fills them per
+ * row in the dossier UI after import.
+ */
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) {
-    return forbiddenResponse();
-  }
+  if (!WRITE_ROLES.includes(session.user.role)) return forbiddenResponse();
 
   try {
     const formData = await request.formData();

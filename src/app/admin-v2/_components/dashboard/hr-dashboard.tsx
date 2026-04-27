@@ -104,7 +104,7 @@ export async function HrDashboard({ firstName, today }: { firstName: string; tod
             sub="активних"
             icon={Building2}
             accent={T.accentPrimary}
-            href="/admin-v2/hr/counterparties"
+            href="/admin-v2/counterparties"
           />
           <KpiCard
             label="ПІДРЯДНИКИ"

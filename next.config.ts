@@ -18,6 +18,20 @@ const nextConfig: NextConfig = {
       // Dashboard root
       { source: "/admin", destination: "/admin-v2", permanent: false },
 
+      // Counterparties were merged into a single finance-scoped page with full
+      // dossier (kept HR access). The old HR-only path stays as a permanent
+      // redirect so external links/bookmarks survive.
+      {
+        source: "/admin-v2/hr/counterparties",
+        destination: "/admin-v2/counterparties",
+        permanent: false,
+      },
+      {
+        source: "/admin-v2/hr/counterparties/:id",
+        destination: "/admin-v2/counterparties/:id",
+        permanent: false,
+      },
+
       // Projects
       { source: "/admin/projects", destination: "/admin-v2/projects", permanent: false },
       { source: "/admin/projects/new", destination: "/admin-v2/projects/new", permanent: false },

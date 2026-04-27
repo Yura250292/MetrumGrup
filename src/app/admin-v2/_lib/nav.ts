@@ -63,7 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Фінанси",
     items: [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
-      { href: "/admin-v2/counterparties", label: "Контрагенти (досьє)", icon: Building2 },
+      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
@@ -89,7 +89,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "HR",
     items: [
       { href: "/admin-v2/hr/employees", label: "Співробітники", icon: Users, hrAllowed: true },
-      { href: "/admin-v2/hr/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
     ],
   },
@@ -143,7 +142,6 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/resources/warehouse": "Склад",
   "/admin-v2/resources/workers": "Бригади",
   "/admin-v2/hr/employees": "Співробітники",
-  "/admin-v2/hr/counterparties": "Контрагенти",
   "/admin-v2/hr/subcontractors": "Підрядники",
   "/admin-v2/cms/portfolio": "Портфоліо",
   "/admin-v2/cms/news": "Новини",
