@@ -164,7 +164,7 @@ export function FolderCard({
 
           {menuOpen && (
             <div
-              className="absolute right-0 top-full mt-1 w-44 rounded-xl py-1 shadow-xl z-10"
+              className="dropdown-menu-enter dropdown-menu-enter-right absolute right-0 top-full mt-1 w-44 rounded-xl py-1 shadow-xl z-10"
               style={{
                 backgroundColor: T.panel,
                 border: `1px solid ${T.borderSoft}`,

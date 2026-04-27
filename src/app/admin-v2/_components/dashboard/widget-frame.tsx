@@ -140,7 +140,7 @@ function ResizeMenu({
       </button>
       {open && (
         <div
-          className="absolute right-0 top-full mt-1 w-28 rounded-lg p-1 shadow-lg"
+          className="dropdown-menu-enter dropdown-menu-enter-right absolute right-0 top-full mt-1 w-28 rounded-lg p-1 shadow-lg"
           style={{
             backgroundColor: T.panel,
             border: `1px solid ${T.borderSoft}`,

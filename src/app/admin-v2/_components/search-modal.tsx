@@ -103,17 +103,18 @@ export function SearchModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-start justify-center pt-[6vh] sm:pt-[10vh] px-3 sm:px-4 transition-[backdrop-filter,background-color] duration-200 ease-out"
-      onClick={onClose}
+      className="fixed inset-0 z-[100] flex items-start justify-center pt-[6vh] sm:pt-[10vh] px-3 sm:px-4 transition-[backdrop-filter,background-color] duration-[420ms]"
       style={{
-        backgroundColor: visible ? "rgba(15,23,42,0.45)" : "rgba(15,23,42,0)",
-        backdropFilter: visible ? "blur(6px)" : "blur(0px)",
-        WebkitBackdropFilter: visible ? "blur(6px)" : "blur(0px)",
+        backgroundColor: visible ? "rgba(15,23,42,0.55)" : "rgba(15,23,42,0)",
+        backdropFilter: visible ? "blur(8px)" : "blur(0px)",
+        WebkitBackdropFilter: visible ? "blur(8px)" : "blur(0px)",
+        transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
       }}
+      onClick={onClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-[640px] rounded-2xl overflow-hidden flex flex-col transition-all duration-[180ms] ease-out max-h-[85vh] sm:max-h-[70vh]"
+        className="w-full max-w-[640px] rounded-2xl overflow-hidden flex flex-col transition-all duration-[460ms] max-h-[85vh] sm:max-h-[70vh]"
         style={{
           backgroundColor: T.panel,
           border: `1px solid ${T.borderSoft}`,
@@ -121,8 +122,10 @@ export function SearchModal({
           opacity: visible ? 1 : 0,
           transform: visible
             ? "translateY(0) scale(1)"
-            : "translateY(-12px) scale(0.97)",
+            : "translateY(-22px) scale(0.95)",
           transformOrigin: "top center",
+          filter: visible ? "blur(0px)" : "blur(4px)",
+          transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)",
         }}
       >
         {/* Search input */}

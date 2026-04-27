@@ -567,7 +567,7 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
       {showFilters && (
         <div
           id="project-filter-panel"
-          className="rounded-xl px-4 py-3"
+          className="collapse-down-enter rounded-xl px-4 py-3"
           style={{ backgroundColor: T.panel, border: "1px solid " + T.borderSoft }}
         >
           <ProjectFilterInline

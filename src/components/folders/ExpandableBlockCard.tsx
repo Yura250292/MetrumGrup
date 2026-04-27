@@ -82,7 +82,7 @@ export function ExpandableBlockCard({
             size={18}
             style={{
               transform: open ? "rotate(0deg)" : "rotate(-90deg)",
-              transition: "transform 160ms ease",
+              transition: "transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
             }}
           />
         </div>
@@ -133,7 +133,7 @@ export function ExpandableBlockCard({
 
       {open && (
         <div
-          className="flex flex-col gap-3 p-4"
+          className="collapse-down-enter flex flex-col gap-3 p-4"
           style={{ borderTop: `1px solid ${T.borderSoft}` }}
         >
           {isLoading ? (

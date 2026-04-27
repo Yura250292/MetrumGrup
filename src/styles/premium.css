@@ -342,6 +342,72 @@
   will-change: opacity, transform;
 }
 
+/* ---------- Dropdown menu (cinematic slide-down with anchor scale) ----------
+ *
+ * Use on any popover / dropdown / collapsible menu that appears anchored to
+ * a trigger. Combines a soft drop, anchor-scale (origin: top), opacity fade,
+ * and subtle blur clearance — feels deliberate but never intrusive.
+ *
+ * Apply by adding the className to the dropdown panel:
+ *   <div className="dropdown-menu-enter">...</div>
+ *
+ * Pair with `transform-origin: top right` (or similar) on the panel for a
+ * better anchor feel — fallback to top-center which works for most layouts.
+ */
+
+@keyframes premium-dropdown-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px) scale(0.94);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.005);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+.dropdown-menu-enter {
+  animation: premium-dropdown-down 0.42s var(--premium-spring) backwards;
+  transform-origin: top center;
+  will-change: opacity, transform, filter;
+}
+
+.dropdown-menu-enter-right {
+  transform-origin: top right;
+}
+
+.dropdown-menu-enter-left {
+  transform-origin: top left;
+}
+
+/* Collapsible / accordion section content (slides + grows from header) */
+
+@keyframes premium-collapse-down {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px);
+    max-height: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 2000px;
+  }
+}
+
+.collapse-down-enter {
+  animation: premium-collapse-down 0.55s var(--premium-spring) backwards;
+  overflow: hidden;
+  will-change: opacity, transform, max-height;
+}
+
 /* ---------- Slide-down (cinematic drop from above) ---------- */
 
 @keyframes premium-slide-down {
@@ -477,7 +543,9 @@
   .chat-bubble-enter,
   .slide-down-cinematic,
   .slide-down-soft,
-  .ios-sheet-enter {
+  .ios-sheet-enter,
+  .dropdown-menu-enter,
+  .collapse-down-enter {
     animation: none !important;
   }
   .btn-send:hover {

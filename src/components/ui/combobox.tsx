@@ -203,16 +203,17 @@ export function Combobox<O extends ComboboxOption = ComboboxOption>({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.12 }}
-            className="absolute left-0 right-0 z-50 mt-1.5 overflow-hidden rounded-xl shadow-xl"
+            initial={{ opacity: 0, y: -10, scale: 0.95, filter: "blur(3px)" }}
+            animate={{ opacity: 1, y: 0, scale: 1, filter: "blur(0px)" }}
+            exit={{ opacity: 0, y: -6, scale: 0.97, filter: "blur(2px)" }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
             style={{
               backgroundColor: T.panelElevated,
               border: `1px solid ${T.borderStrong}`,
               boxShadow: T.shadow2,
+              transformOrigin: "top center",
             }}
+            className="absolute left-0 right-0 z-50 mt-1.5 overflow-hidden rounded-xl shadow-xl"
           >
             <div
               className="flex items-center gap-2 border-b px-3 py-2"

@@ -177,7 +177,7 @@ export function AiChatPanel({ onClose }: Props) {
               </button>
               {showTutorialMenu && (
                 <div
-                  className="absolute right-0 top-full mt-1.5 w-56 rounded-xl py-1.5 shadow-xl"
+                  className="dropdown-menu-enter dropdown-menu-enter-right absolute right-0 top-full mt-1.5 w-56 rounded-xl py-1.5 shadow-xl"
                   style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, zIndex: 10 }}
                 >
                   <p className="px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider" style={{ color: T.textMuted }}>

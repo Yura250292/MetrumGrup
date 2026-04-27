@@ -58,7 +58,7 @@ export function SavedViewsMenu<S>({
 
       {open && (
         <div
-          className="absolute right-0 top-full mt-1.5 w-64 rounded-md py-1 shadow-lg z-50"
+          className="dropdown-menu-enter dropdown-menu-enter-right absolute right-0 top-full mt-1.5 w-64 rounded-md py-1 shadow-lg z-50"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
           {views.length === 0 && !creating && (

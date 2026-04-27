@@ -75,7 +75,7 @@ export function AiDaySummary() {
       {menuOpen && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-1 z-20 flex flex-col gap-0.5 rounded-xl p-1.5 min-w-[220px]"
+          className="dropdown-menu-enter dropdown-menu-enter-right absolute right-0 top-full mt-1 z-20 flex flex-col gap-0.5 rounded-xl p-1.5 min-w-[220px]"
           style={{
             backgroundColor: T.panelElevated,
             border: `1px solid ${T.borderSoft}`,

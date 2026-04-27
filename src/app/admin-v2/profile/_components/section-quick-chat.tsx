@@ -205,7 +205,7 @@ export function SectionQuickChat() {
           {/* Picker dropdown */}
           {showPicker && availableUsers.length > 0 && (
             <div
-              className="absolute left-0 top-full mt-2 w-72 max-h-64 overflow-y-auto rounded-xl py-1.5 shadow-xl z-10"
+              className="dropdown-menu-enter dropdown-menu-enter-left absolute left-0 top-full mt-2 w-72 max-h-64 overflow-y-auto rounded-xl py-1.5 shadow-xl z-10"
               style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
             >
               {availableUsers.map((user) => (

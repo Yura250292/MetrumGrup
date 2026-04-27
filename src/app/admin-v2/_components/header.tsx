@@ -165,7 +165,7 @@ export function Header() {
 
           {userMenuOpen && (
             <div
-              className="absolute right-0 top-full mt-2 w-[min(12rem,calc(100vw-24px))] rounded-xl py-1 shadow-lg z-50"
+              className="dropdown-menu-enter dropdown-menu-enter-right absolute right-0 top-full mt-2 w-[min(12rem,calc(100vw-24px))] rounded-xl py-1 shadow-lg z-50"
               style={{
                 backgroundColor: T.panel,
                 border: `1px solid ${T.borderSoft}`,
