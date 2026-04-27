@@ -352,7 +352,7 @@ export default function HrEmployeesPage() {
             <div
               key={e.id}
               className={idx < 24 ? "data-table-row-enter" : undefined}
-              style={idx < 24 ? { animationDelay: `${idx * 28}ms` } : undefined}
+              style={idx < 24 ? { animationDelay: `${idx * 50}ms` } : undefined}
             >
               <EmployeeCard employee={e} onClick={() => openProfile(e)} />
             </div>

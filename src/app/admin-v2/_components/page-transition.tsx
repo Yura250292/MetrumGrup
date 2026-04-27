@@ -26,14 +26,14 @@ export function PageTransition({ children }: { children: ReactNode }) {
       }
     : isMobile
       ? {
-          initial: { opacity: 0, x: 24, rotateY: 12, scale: 0.98 },
+          initial: { opacity: 0, x: 32, rotateY: 14, scale: 0.97 },
           animate: { opacity: 1, x: 0, rotateY: 0, scale: 1 },
-          exit: { opacity: 0, x: -16, rotateY: -8, scale: 0.98 },
+          exit: { opacity: 0, x: -22, rotateY: -10, scale: 0.97 },
         }
       : {
-          initial: { opacity: 0, y: 6 },
+          initial: { opacity: 0, y: 12 },
           animate: { opacity: 1, y: 0 },
-          exit: { opacity: 0, y: -4 },
+          exit: { opacity: 0, y: -8 },
         };
 
   return (
@@ -44,7 +44,7 @@ export function PageTransition({ children }: { children: ReactNode }) {
         animate={variants.animate}
         exit={variants.exit}
         transition={{
-          duration: reduce ? 0.12 : isMobile ? 0.32 : 0.22,
+          duration: reduce ? 0.18 : isMobile ? 0.55 : 0.42,
           ease: [0.22, 1, 0.36, 1],
         }}
         style={

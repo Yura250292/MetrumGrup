@@ -383,7 +383,7 @@ export default function AdminV2MaterialsPage() {
                         style={{
                           backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",
                           borderTop: `1px solid ${T.borderSoft}`,
-                          ...(i < 20 ? { animationDelay: `${i * 28}ms` } : {}),
+                          ...(i < 20 ? { animationDelay: `${i * 50}ms` } : {}),
                         }}
                       >
                         <td className="px-4 py-3.5">

@@ -51,7 +51,7 @@ export function MobileDrawer({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
             onClick={onClose}
           />
 
@@ -67,7 +67,7 @@ export function MobileDrawer({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+            transition={{ type: "spring", damping: 32, stiffness: 180, mass: 1.05 }}
           >
             {/* Drag handle + close */}
             <div className="flex items-center justify-between px-5 pt-3 pb-2">

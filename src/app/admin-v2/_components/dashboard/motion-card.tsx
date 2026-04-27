@@ -17,15 +17,23 @@ export function MotionCard({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12, scale: 0.98 }}
+      initial={{ opacity: 0, y: 18, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
-        duration: 0.42,
+        duration: 0.7,
         delay,
         ease: MOTION_EASING.softSpring,
       }}
-      whileHover={{ y: -3, scale: 1.012 }}
-      whileTap={{ scale: 0.98, y: 0 }}
+      whileHover={{
+        y: -3,
+        scale: 1.012,
+        transition: { duration: 0.45, ease: MOTION_EASING.softSpring },
+      }}
+      whileTap={{
+        scale: 0.98,
+        y: 0,
+        transition: { duration: 0.18, ease: MOTION_EASING.softSpring },
+      }}
       className={className}
       style={style}
     >

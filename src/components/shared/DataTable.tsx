@@ -201,7 +201,7 @@ export function DataTable<T extends { id: string }>({
                   )}
                   style={
                     idx < 20
-                      ? { animationDelay: `${idx * 28}ms` }
+                      ? { animationDelay: `${idx * 50}ms` }
                       : undefined
                   }
                   onClick={() => onRowClick?.(item)}
