@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import bcrypt from "bcryptjs";
+
+const VALID_ROLES = Object.values(Role) as string[];
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -53,6 +56,10 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const { name, email, password, phone, role } = body;
+
+  if (role && !VALID_ROLES.includes(role)) {
+    return NextResponse.json({ error: "Невірна роль користувача" }, { status: 400 });
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {

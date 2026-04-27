@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+
+const VALID_ROLES = Object.values(Role) as string[];
 
 // PATCH /api/admin/users/[id] - Update user role (SUPER_ADMIN only)
 export async function PATCH(
@@ -19,9 +22,7 @@ export async function PATCH(
     const body = await request.json();
     const { role, isActive } = body;
 
-    // Validate role
-    const validRoles = ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER", "USER", "CLIENT"];
-    if (role && !validRoles.includes(role)) {
+    if (role && !VALID_ROLES.includes(role)) {
       return NextResponse.json(
         { error: "Невірна роль користувача" },
         { status: 400 }
