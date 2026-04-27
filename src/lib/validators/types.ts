@@ -35,6 +35,8 @@ export type ValidatorItem = {
   itemType?: string | null;
   engineKey?: string | null;
   notes?: string;
+  priceSourceType?: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual' | null;
+  confidence?: number;
 };
 
 export type ValidatorSection = {

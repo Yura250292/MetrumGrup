@@ -52,11 +52,26 @@ export const priceValidator: Validator = ({ estimate }) => {
         });
       }
 
-      if (unitPrice >= 100 && unitPrice % 100 === 0 && unitPrice < 10000) {
+      // Round-price heuristic: only flag when the price came from the LLM
+      // *and* confidence is low. Real catalog/Prozorro prices are often
+      // round (concrete by m³, brick by 1000pcs), so the old blanket rule
+      // produced too many false positives. Skip if price source is grounded.
+      const groundedSource =
+        item.priceSourceType === 'catalog' ||
+        item.priceSourceType === 'prozorro' ||
+        item.priceSourceType === 'manual';
+      const lowConfidence = (item.confidence ?? 0.5) < 0.6;
+      if (
+        !groundedSource &&
+        lowConfidence &&
+        unitPrice >= 100 &&
+        unitPrice % 100 === 0 &&
+        unitPrice < 10000
+      ) {
         issues.push({
           severity: 'info',
           code: 'ROUND_PRICE',
-          message: `"${label}": кругла ціна ${unitPrice} ₴ — ймовірно вигадана LLM`,
+          message: `"${label}": кругла ціна ${unitPrice} ₴ + LLM-джерело + low confidence — перевірте`,
           section: section.title,
           itemIndex: idx,
         });

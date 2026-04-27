@@ -12,6 +12,8 @@ import { generateWorkItemsContext } from "@/lib/work-items-database";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 import { parsePDF } from "@/lib/pdf-helper";
 import { shouldUseR2, downloadFileFromR2 } from "@/lib/r2-client";
+import { cachedSystem, type AnthropicContentBlock } from "@/lib/ai/anthropic-cache";
+import { safeParseJson } from "@/lib/ai/json-parse";
 import fs from "fs/promises";
 import path from "path";
 
@@ -173,8 +175,12 @@ async function generateWithAnthropic(
     timeout: 600000, // 10 minutes timeout
   });
 
-  // Build content with vision support
-  const messageContent: any[] = [{ type: "text", text: userContent }];
+  // Build content with vision support — cache the (long, repeating) user
+  // text on the cache breakpoint so retries / refines don't pay full input
+  // tokens for the materials/work-items/drawing-guide context block.
+  const messageContent: AnthropicContentBlock[] = [
+    { type: "text", text: userContent, cache_control: { type: "ephemeral" } },
+  ];
 
   // Add images for Claude vision (with 5 MB limit check)
   if (imageParts.length > 0) {
@@ -209,7 +215,7 @@ async function generateWithAnthropic(
         type: "image",
         source: {
           type: "base64",
-          media_type: img.inlineData.mimeType,
+          media_type: img.inlineData.mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
           data: img.inlineData.data
         }
       });
@@ -228,24 +234,50 @@ async function generateWithAnthropic(
   console.log('🔄 Using streaming for Anthropic (prevents 10-min timeout)');
 
   let fullText = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cachedInputTokens = 0;
+  let cacheCreationTokens = 0;
+
   const stream = await anthropic.messages.create({
     model: "claude-opus-4-20250514",
     max_tokens: 16000, // Збільшено для більшої кількості позицій
     temperature: 0.1, // Lower for more deterministic outputs (was 0.3)
-    system: systemPrompt,
+    system: cachedSystem(systemPrompt),
     messages: [{ role: "user", content: messageContent }],
     stream: true, // Enable streaming to avoid 10-minute timeout
   });
 
-  // Collect streamed chunks
+  // Collect streamed chunks + capture usage metadata for the ledger
   for await (const messageStreamEvent of stream) {
     if (messageStreamEvent.type === 'content_block_delta' &&
         messageStreamEvent.delta.type === 'text_delta') {
       fullText += messageStreamEvent.delta.text;
+    } else if (messageStreamEvent.type === 'message_start') {
+      const u = messageStreamEvent.message.usage;
+      inputTokens = u.input_tokens ?? 0;
+      cachedInputTokens = u.cache_read_input_tokens ?? 0;
+      cacheCreationTokens = u.cache_creation_input_tokens ?? 0;
+    } else if (messageStreamEvent.type === 'message_delta') {
+      outputTokens = messageStreamEvent.usage?.output_tokens ?? outputTokens;
     }
   }
 
-  // Parse JSON from response
+  console.log('  📊 [Anthropic] tokens:', {
+    input: inputTokens,
+    cachedInput: cachedInputTokens,
+    cacheCreation: cacheCreationTokens,
+    output: outputTokens,
+  });
+
+  // Resilient JSON extraction (handles markdown fences, truncation, trailing
+  // commas) — drops far fewer requests than the old single regex did.
+  const parsed = safeParseJson(fullText);
+  if (parsed.ok) {
+    return JSON.stringify(parsed.value);
+  }
+  // Fall back to raw fenced/braced match so downstream code can still try
+  // to use whatever the model returned.
   const jsonMatch = fullText.match(/```json\n([\s\S]*?)\n```/) || fullText.match(/\{[\s\S]*\}/);
   return jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : fullText;
 }
