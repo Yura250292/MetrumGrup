@@ -17,10 +17,10 @@ export function MotionCard({
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 18, scale: 0.96 }}
+      initial={{ opacity: 0.4, y: 12, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
-        duration: 0.7,
+        duration: 0.5,
         delay,
         ease: MOTION_EASING.softSpring,
       }}

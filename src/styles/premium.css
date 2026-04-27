@@ -70,6 +70,19 @@
   }
 }
 
+/* Softer variant — text stays readable mid-animation (used by table rows
+ * to avoid the "ghost text" look while the row is still fading in). */
+@keyframes premium-fade-in-up-soft {
+  from {
+    opacity: 0.45;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes premium-gradient-pan {
   0%,
   100% {
@@ -293,10 +306,10 @@
 /* ---------- Scroll-reveal (used by RevealOnScroll) ---------- */
 
 .reveal-on-scroll {
-  opacity: 0;
-  transform: translateY(22px);
-  transition: opacity 0.95s var(--premium-spring),
-    transform 0.95s var(--premium-spring);
+  opacity: 0.35;
+  transform: translateY(14px);
+  transition: opacity 0.7s var(--premium-spring),
+    transform 0.7s var(--premium-spring);
   will-change: opacity, transform;
 }
 .reveal-on-scroll.is-visible {
@@ -307,7 +320,7 @@
 /* ---------- Table row stagger (used by DataTable) ---------- */
 
 .data-table-row-enter {
-  animation: premium-fade-in-up 0.7s var(--premium-spring) backwards;
+  animation: premium-fade-in-up-soft 0.5s var(--premium-spring) backwards;
   will-change: opacity, transform;
 }
 
@@ -315,8 +328,8 @@
 
 @keyframes chat-bubble-pop {
   from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.94);
+    opacity: 0.4;
+    transform: translateY(8px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -325,7 +338,7 @@
 }
 
 .chat-bubble-enter {
-  animation: chat-bubble-pop 0.5s var(--premium-spring) backwards;
+  animation: chat-bubble-pop 0.4s var(--premium-spring) backwards;
   will-change: opacity, transform;
 }
 

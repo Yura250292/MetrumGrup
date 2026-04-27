@@ -602,7 +602,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                     style={{
                       borderColor: T.borderSoft,
                       opacity: c.isActive ? 1 : 0.55,
-                      ...(idx < 20 ? { animationDelay: `${idx * 50}ms` } : {}),
+                      ...(idx < 20 ? { animationDelay: `${idx * 30}ms` } : {}),
                     }}
                     onClick={(e) => {
                       // Don't trigger when clicking on inner buttons / links.

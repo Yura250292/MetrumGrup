@@ -205,7 +205,7 @@ export default function AdminV2EquipmentPage() {
                 style={{
                   backgroundColor: T.panel,
                   border: `1px solid ${T.borderSoft}`,
-                  ...(idx < 20 ? { animationDelay: `${idx * 50}ms` } : {}),
+                  ...(idx < 20 ? { animationDelay: `${idx * 30}ms` } : {}),
                 }}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">

@@ -21,7 +21,7 @@ export const MOTION_EASING = {
 };
 
 export const fadeInUp: Variants = {
-  hidden: { opacity: 0, y: 14 },
+  hidden: { opacity: 0.4, y: 10 },
   visible: {
     opacity: 1,
     y: 0,
@@ -35,7 +35,7 @@ export const fadeInUp: Variants = {
 };
 
 export const fadeInScale: Variants = {
-  hidden: { opacity: 0, scale: 0.94 },
+  hidden: { opacity: 0.4, scale: 0.97 },
   visible: {
     opacity: 1,
     scale: 1,
@@ -84,11 +84,11 @@ export const tableRowEnter: Variants = {
 };
 
 export const cardEnter: Variants = {
-  hidden: { opacity: 0, y: 22 },
+  hidden: { opacity: 0.4, y: 14 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.7, ease: MOTION_EASING.cinema },
+    transition: { duration: 0.5, ease: MOTION_EASING.cinema },
   },
 };
 
@@ -96,27 +96,27 @@ export const heroStagger: Variants = {
   hidden: {},
   visible: {
     transition: {
-      staggerChildren: 0.13,
-      delayChildren: 0.1,
+      staggerChildren: 0.07,
+      delayChildren: 0.05,
     },
   },
 };
 
 export const heroItem: Variants = {
-  hidden: { opacity: 0, y: 22 },
+  hidden: { opacity: 0.4, y: 14 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.78, ease: MOTION_EASING.cinema },
+    transition: { duration: 0.55, ease: MOTION_EASING.cinema },
   },
 };
 
 export const sectionReveal: Variants = {
-  hidden: { opacity: 0, y: 30 },
+  hidden: { opacity: 0.3, y: 20 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.85, ease: MOTION_EASING.cinema },
+    transition: { duration: 0.7, ease: MOTION_EASING.cinema },
   },
 };
 
@@ -124,8 +124,8 @@ export const gridStagger: Variants = {
   hidden: {},
   visible: {
     transition: {
-      staggerChildren: 0.09,
-      delayChildren: 0.06,
+      staggerChildren: 0.05,
+      delayChildren: 0.03,
     },
   },
 };
@@ -171,19 +171,21 @@ const flyExit: Transition = {
 };
 
 export const flyInLeft: Variants = {
-  hidden: { opacity: 0, x: -120, scale: 0.92, filter: "blur(8px)" },
+  hidden: { opacity: 0.35, x: -60, scale: 0.96, filter: "blur(3px)" },
   visible: { opacity: 1, x: 0, scale: 1, filter: "blur(0px)", transition: flySpring },
-  exit: { opacity: 0, x: 140, scale: 0.95, filter: "blur(8px)", transition: flyExit },
+  exit: { opacity: 0, x: 60, scale: 0.97, filter: "blur(3px)", transition: flyExit },
 };
 
 export const flyInRight: Variants = {
-  hidden: { opacity: 0, x: 120, scale: 0.92, filter: "blur(8px)" },
+  hidden: { opacity: 0.35, x: 60, scale: 0.96, filter: "blur(3px)" },
   visible: { opacity: 1, x: 0, scale: 1, filter: "blur(0px)", transition: flySpring },
-  exit: { opacity: 0, x: -140, scale: 0.95, filter: "blur(8px)", transition: flyExit },
+  exit: { opacity: 0, x: -60, scale: 0.97, filter: "blur(3px)", transition: flyExit },
 };
 
 export const flyInUp: Variants = {
-  hidden: { opacity: 0, y: 90, scale: 0.92, filter: "blur(8px)" },
+  // Tuned 2026-04-27: lighter rise + minimal blur so card content stays
+  // readable mid-animation (avoids "ghost text" on long stagger lists).
+  hidden: { opacity: 0.35, y: 28, scale: 0.97, filter: "blur(3px)" },
   visible: {
     opacity: 1,
     y: 0,
@@ -193,9 +195,9 @@ export const flyInUp: Variants = {
   },
   exit: {
     opacity: 0,
-    y: -70,
-    scale: 0.96,
-    filter: "blur(6px)",
+    y: -28,
+    scale: 0.97,
+    filter: "blur(3px)",
     transition: flyExit,
   },
 };

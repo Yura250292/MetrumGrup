@@ -171,7 +171,7 @@ export default function AdminV2FeedPage() {
             <div
               key={item.id}
               className={idx < 24 ? "data-table-row-enter" : undefined}
-              style={idx < 24 ? { animationDelay: `${idx * 50}ms` } : undefined}
+              style={idx < 24 ? { animationDelay: `${idx * 30}ms` } : undefined}
             >
               <FeedRow item={item} density={density} />
             </div>

@@ -447,7 +447,7 @@ export default function MeetingsListPage() {
                   style={{
                     background: T.panel,
                     border: `1px solid ${T.borderSoft}`,
-                    ...(idx < 20 ? { animationDelay: `${idx * 50}ms` } : {}),
+                    ...(idx < 20 ? { animationDelay: `${idx * 30}ms` } : {}),
                   }}
                 >
                   <Link
