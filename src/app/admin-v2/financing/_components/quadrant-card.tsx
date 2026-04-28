@@ -11,6 +11,7 @@ import {
   FolderInput,
   MoreVertical,
   ChevronDown,
+  FileSpreadsheet,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatCurrencyCompact, formatDateShort } from "@/lib/utils";
@@ -42,6 +43,7 @@ export function QuadrantCard({
   pairedLabel,
   entries,
   onAdd,
+  onImport,
   onEdit,
   onArchive,
   onDelete,
@@ -57,6 +59,7 @@ export function QuadrantCard({
   pairedLabel?: string;
   entries: FinanceEntryDTO[];
   onAdd: () => void;
+  onImport?: () => void;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
   onDelete?: (e: FinanceEntryDTO) => void;
@@ -157,6 +160,32 @@ export function QuadrantCard({
           <span className="text-[15px] sm:text-base font-bold" style={{ color: accent }}>
             {formatCurrencyCompact(stats.sum)}
           </span>
+          {onImport && (
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                onImport();
+              }}
+              role="button"
+              tabIndex={0}
+              title="Імпорт з Excel"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onImport();
+                }
+              }}
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition hover:brightness-110 cursor-pointer"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: accent,
+                border: `1px solid ${accent}40`,
+              }}
+            >
+              <FileSpreadsheet size={13} />
+            </span>
+          )}
           <span
             onClick={(e) => {
               e.stopPropagation();

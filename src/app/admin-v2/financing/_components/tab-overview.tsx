@@ -20,6 +20,7 @@ export function TabOverview({
   quadrantEntries,
   scope,
   onAdd,
+  onImport,
   onEdit,
   onArchive,
   onDelete,
@@ -34,6 +35,7 @@ export function TabOverview({
   quadrantEntries: Record<string, FinanceEntryDTO[]>;
   scope?: { id: string; title: string };
   onAdd: (preset: QuadrantPreset) => void;
+  onImport?: (preset: QuadrantPreset) => void;
   onEdit: (e: FinanceEntryDTO) => void;
   onArchive: (e: FinanceEntryDTO) => void;
   onDelete?: (e: FinanceEntryDTO) => void;
@@ -102,6 +104,7 @@ export function TabOverview({
             pairedLabel="факт"
             entries={quadrantEntries["PLAN:EXPENSE"]}
             onAdd={() => onAdd({ kind: "PLAN", type: "EXPENSE" })}
+            onImport={onImport ? () => onImport({ kind: "PLAN", type: "EXPENSE" }) : undefined}
             onEdit={onEdit}
             onArchive={onArchive}
             onDelete={onDelete}
@@ -118,6 +121,7 @@ export function TabOverview({
             pairedLabel="факт"
             entries={quadrantEntries["PLAN:INCOME"]}
             onAdd={() => onAdd({ kind: "PLAN", type: "INCOME" })}
+            onImport={onImport ? () => onImport({ kind: "PLAN", type: "INCOME" }) : undefined}
             onEdit={onEdit}
             onArchive={onArchive}
             onDelete={onDelete}
@@ -134,6 +138,7 @@ export function TabOverview({
             pairedLabel="план"
             entries={quadrantEntries["FACT:EXPENSE"]}
             onAdd={() => onAdd({ kind: "FACT", type: "EXPENSE" })}
+            onImport={onImport ? () => onImport({ kind: "FACT", type: "EXPENSE" }) : undefined}
             onEdit={onEdit}
             onArchive={onArchive}
             onDelete={onDelete}
@@ -149,6 +154,7 @@ export function TabOverview({
             pairedLabel="план"
             entries={quadrantEntries["FACT:INCOME"]}
             onAdd={() => onAdd({ kind: "FACT", type: "INCOME" })}
+            onImport={onImport ? () => onImport({ kind: "FACT", type: "INCOME" }) : undefined}
             onEdit={onEdit}
             onArchive={onArchive}
             onDelete={onDelete}

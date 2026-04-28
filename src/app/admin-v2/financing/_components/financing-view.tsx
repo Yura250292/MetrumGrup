@@ -22,6 +22,7 @@ import { formatCurrencyCompact } from "@/lib/utils";
 import { EntryFormModal } from "./entry-form-modal";
 import { OcrScanModal } from "./ocr-scan-modal";
 import { EstimateUploadModal } from "./estimate-upload-modal";
+import { ImportExcelModal } from "./import-excel-modal";
 import { QuadrantCard } from "./quadrant-card";
 import { SummaryStat, formatPercent, rawPercent } from "./summary-stat";
 import { HeroBalance } from "./hero-balance";
@@ -104,6 +105,9 @@ export function FinancingView({
   const [moveEntryId, setMoveEntryId] = useState<string | null>(null);
   const [moveFolderId, setMoveFolderId] = useState<string | null>(null);
   const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
+  const [importPreset, setImportPreset] = useState<
+    { kind: "PLAN" | "FACT"; type: "INCOME" | "EXPENSE" } | null
+  >(null);
 
   const createFolderMutation = useCreateFolder();
   const updateFolderMutation = useUpdateFolder();
@@ -543,6 +547,9 @@ export function FinancingView({
             quadrantEntries={quadrantEntries}
             scope={scope}
             onAdd={(preset) => setCreatePreset(preset)}
+            onImport={(preset) =>
+              setImportPreset({ kind: preset.kind, type: preset.type })
+            }
             onEdit={(e) => setEditing(e)}
             onArchive={handleArchive}
             onDelete={handleDelete}
@@ -671,6 +678,25 @@ export function FinancingView({
           }
           onClose={() => setShowEstimateUpload(false)}
           onCreated={() => loadData()}
+        />
+      )}
+
+      {/* Excel import modal — AI-розпізнавання рядків з xlsx/csv */}
+      {importPreset && (
+        <ImportExcelModal
+          preset={importPreset}
+          projects={projects}
+          scope={scope}
+          folderContext={
+            folderId && detailData?.folder
+              ? { id: folderId, name: detailData.folder.name }
+              : null
+          }
+          onClose={() => setImportPreset(null)}
+          onImported={() => {
+            loadData();
+            setImportPreset(null);
+          }}
         />
       )}
 
