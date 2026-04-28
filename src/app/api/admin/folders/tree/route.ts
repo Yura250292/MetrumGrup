@@ -1,14 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireStaffAccess, unauthorizedResponse } from "@/lib/auth-utils";
-import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getFolderTree } from "@/lib/folders/queries";
 import type { FolderDomain } from "@prisma/client";
 
 const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE", "MEETING"];
 
 /**
  * GET /api/admin/folders/tree?domain=PROJECT
- * Returns ALL folders for a domain in a single query (flat list).
- * Client builds the tree with depth from parentId chain.
+ * Returns folders for a domain (flat list). Firm-scoped for the active user:
+ * Studio context shows only Studio mirrors, Group context shows system folders too.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -20,11 +22,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "domain is required" }, { status: 400 });
     }
 
-    const folders = await prisma.folder.findMany({
-      where: { domain },
-      select: { id: true, name: true, parentId: true, sortOrder: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    });
+    const session = await auth();
+    const { firmId } = await resolveFirmScopeForRequest(session);
+    const folders = await getFolderTree(domain, firmId);
 
     return NextResponse.json({ folders });
   } catch (err) {

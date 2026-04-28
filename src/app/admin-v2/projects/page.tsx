@@ -28,17 +28,17 @@ export default async function AdminV2ProjectsPage({
   const params = await searchParams;
   const folderId = params.folderId ?? null;
 
-  const [folders, breadcrumbs] = await Promise.all([
-    listFolders("PROJECT", folderId),
-    folderId ? getFolderBreadcrumbs(folderId) : Promise.resolve([]),
-  ]);
-
   const { firmId } = await resolveFirmScopeForRequest(session);
 
   // Home-firm guard: тільки на своїй фірмі можна керувати проектами.
   if (!isHomeFirmFor(session, firmId)) {
     redirect("/admin-v2");
   }
+
+  const [folders, breadcrumbs] = await Promise.all([
+    listFolders("PROJECT", folderId, firmId),
+    folderId ? getFolderBreadcrumbs(folderId) : Promise.resolve([]),
+  ]);
   const projects = await listProjectsWithAggregations(session.user.id, {
     folderId,
     firmId,

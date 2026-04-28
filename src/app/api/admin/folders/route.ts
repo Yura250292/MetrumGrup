@@ -3,6 +3,8 @@ import { requireStaffAccess, unauthorizedResponse } from "@/lib/auth-utils";
 import { listFolders } from "@/lib/folders/queries";
 import { createFolder, MIRROR_FOLDER_EDIT_ERROR } from "@/lib/folders/actions";
 import type { FolderDomain } from "@prisma/client";
+import { auth } from "@/lib/auth";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 const VALID_DOMAINS: FolderDomain[] = ["PROJECT", "ESTIMATE", "FINANCE", "MEETING"];
 
@@ -18,7 +20,9 @@ export async function GET(request: NextRequest) {
     }
 
     const parentId = parentIdRaw === "root" || !parentIdRaw ? null : parentIdRaw;
-    const folders = await listFolders(domain, parentId);
+    const session = await auth();
+    const { firmId } = await resolveFirmScopeForRequest(session);
+    const folders = await listFolders(domain, parentId, firmId);
     return NextResponse.json({ folders });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

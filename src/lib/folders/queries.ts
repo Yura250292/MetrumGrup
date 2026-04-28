@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import type { FolderDomain } from "@prisma/client";
+import type { FolderDomain, Prisma } from "@prisma/client";
+import { DEFAULT_FIRM_ID } from "@/lib/firm/scope";
 
 export type FolderListItem = {
   id: string;
@@ -16,12 +17,50 @@ export type FolderListItem = {
   finance?: { income: number; expense: number; balance: number };
 };
 
+/**
+ * Build folder where-clause that hides folders not relevant for the active firm:
+ * - System folders (e.g. "Загальні витрати") — only on default firm (Metrum Group);
+ *   on other firms they're hidden.
+ * - Project mirror folders (mirroredFromProjectId set) — only when mirrored project
+ *   belongs to the active firm.
+ * - Custom user folders (no system flag, no mirror) — visible everywhere (cross-firm).
+ *
+ * firmId=null (cross-firm view) → no filter.
+ */
+function firmAwareFolderWhere(
+  domain: FolderDomain,
+  firmId: string | null,
+): Prisma.FolderWhereInput {
+  if (!firmId || domain !== "FINANCE") return {};
+  const isDefaultFirm = firmId === DEFAULT_FIRM_ID;
+  return {
+    OR: [
+      // Custom user folders — без mirror, без system
+      {
+        AND: [
+          { isSystem: false },
+          { mirroredFromProjectId: null },
+        ],
+      },
+      // Project mirror folders — лише для проектів цієї фірми
+      { mirroredFromProject: { firmId } },
+      // System folders — лише для default firm (Metrum Group)
+      ...(isDefaultFirm ? [{ isSystem: true }] : []),
+    ],
+  };
+}
+
 export async function listFolders(
   domain: FolderDomain,
   parentId: string | null,
+  firmId: string | null = null,
 ): Promise<FolderListItem[]> {
   const folders = await prisma.folder.findMany({
-    where: { domain, parentId },
+    where: {
+      domain,
+      parentId,
+      ...firmAwareFolderWhere(domain, firmId),
+    },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     include: {
       _count: {
@@ -61,6 +100,7 @@ export async function listFolders(
   if (domain === "FINANCE" && result.length > 0) {
     const summaries = await computeFinanceFolderSummaries(
       result.map((f) => f.id),
+      firmId,
     );
     for (const folder of result) {
       folder.finance = summaries.get(folder.id) ?? {
@@ -113,6 +153,7 @@ async function collectDescendantIds(folderIds: string[]): Promise<Map<string, st
 
 export async function computeFinanceFolderSummaries(
   folderIds: string[],
+  firmId: string | null = null,
 ): Promise<Map<string, { income: number; expense: number; balance: number }>> {
   // Collect all descendant folder IDs so each folder total includes sub-folders
   const descendantsMap = await collectDescendantIds(folderIds);
@@ -123,12 +164,13 @@ export async function computeFinanceFolderSummaries(
     for (const id of ids) allIds.add(id);
   }
 
-  // Single groupBy query for all relevant folders
+  // Single groupBy query for all relevant folders, scoped to active firm.
   const grouped = await prisma.financeEntry.groupBy({
     by: ["folderId", "type"],
     where: {
       folderId: { in: [...allIds] },
       isArchived: false,
+      ...(firmId ? { firmId } : {}),
     },
     _sum: { amount: true },
   });
@@ -190,11 +232,12 @@ export async function getFolderBreadcrumbs(
 
 export async function getFolderTree(
   domain: FolderDomain,
+  firmId: string | null = null,
 ): Promise<
   { id: string; name: string; parentId: string | null; depth: number }[]
 > {
   const all = await prisma.folder.findMany({
-    where: { domain },
+    where: { domain, ...firmAwareFolderWhere(domain, firmId) },
     select: { id: true, name: true, parentId: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
