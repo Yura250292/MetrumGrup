@@ -259,17 +259,6 @@ export function FinancingView({
                 <Sparkles size={13} />
                 Scan AI
               </button>
-              <button
-                onClick={() =>
-                  setImportPreset({ kind: "FACT", type: "AUTO" })
-                }
-                title="Імпорт виписки банку (AI визначає дохід/витрату)"
-                className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
-                style={{ backgroundColor: T.success }}
-              >
-                <Wallet size={13} />
-                Виписка
-              </button>
               {folderId && (
                 <div className="hidden sm:block">
                   <QuickAddSplit onPick={(p) => setCreatePreset(p)} />
@@ -299,14 +288,6 @@ export function FinancingView({
             >
               <Sparkles size={13} />
               Scan AI
-            </button>
-            <button
-              onClick={() => setImportPreset({ kind: "FACT", type: "AUTO" })}
-              className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white transition hover:brightness-110"
-              style={{ backgroundColor: T.success }}
-            >
-              <Wallet size={13} />
-              Виписка
             </button>
             {folderId && (
               <div className="w-full">
@@ -345,7 +326,7 @@ export function FinancingView({
           <HeroBalance summary={summary} />
 
           {/* AI actions row */}
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setShowEstimateUpload(true)}
               className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110"
@@ -360,15 +341,7 @@ export function FinancingView({
               style={{ backgroundColor: T.accentPrimary }}
             >
               <Sparkles size={12} />
-              Scan чек
-            </button>
-            <button
-              onClick={() => setImportPreset({ kind: "FACT", type: "AUTO" })}
-              className="flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-[11px] sm:text-xs font-bold text-white transition hover:brightness-110"
-              style={{ backgroundColor: T.success }}
-            >
-              <Wallet size={12} />
-              Виписка
+              Scan чек з AI
             </button>
           </div>
         </section>
