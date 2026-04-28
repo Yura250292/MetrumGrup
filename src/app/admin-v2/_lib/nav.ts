@@ -18,6 +18,7 @@ import {
   Wallet,
   Mic,
   ScanLine,
+  TrendingUp,
   type LucideIcon,
 } from "lucide-react";
 
@@ -63,6 +64,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Фінанси",
     items: [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
+      { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, pillBadge: { text: "NEW", color: "violet" } },
       { href: "/admin-v2/reports", label: "Звіти", icon: FileText },
       { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
@@ -154,6 +156,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/finance/templates": "Шаблони",
   "/admin-v2/profile": "Мій профіль",
   "/admin-v2/financing": "Фінансування",
+  "/admin-v2/strategic-planning": "Стратегічне планування",
   "/admin-v2/reports": "Звіти",
   "/admin-v2/counterparties": "Контрагенти",
   "/admin-v2/receipts": "Накладні (скан)",
