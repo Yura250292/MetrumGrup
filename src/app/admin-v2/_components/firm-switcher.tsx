@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
 import { ChevronDown, Check, Globe2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
@@ -31,7 +30,6 @@ type Props = {
  */
 export function FirmSwitcher({ collapsed = false, children }: Props) {
   const { data: session } = useSession();
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [currentFirmId, setCurrentFirmId] = useState<string | null | undefined>(
     undefined,
@@ -103,9 +101,11 @@ export function FirmSwitcher({ collapsed = false, children }: Props) {
         body: JSON.stringify(body),
       });
       setOpen(false);
-      // Перерендер усіх server-компонентів з новим scope-ом.
-      router.refresh();
-    } finally {
+      // Повне перезавантаження: гарантує що всі сторінки і client cache
+      // (sidebar, header, дашборди) переключаться на новий firm-контекст.
+      // router.refresh() недостатньо — деякі client-компоненти мають свій кеш.
+      window.location.reload();
+    } catch {
       setBusy(false);
     }
   }

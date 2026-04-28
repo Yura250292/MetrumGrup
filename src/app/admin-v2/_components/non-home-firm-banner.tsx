@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Building2, ArrowRightLeft } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 type Props = {
@@ -20,7 +19,6 @@ export function NonHomeFirmBanner({
   homeFirmId,
   homeFirmName,
 }: Props) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
 
   async function switchHome() {
@@ -32,8 +30,9 @@ export function NonHomeFirmBanner({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ firmId: homeFirmId }),
       });
-      router.refresh();
-    } finally {
+      // Повне перезавантаження — гарантує оновлення всіх компонентів і кешу.
+      window.location.reload();
+    } catch {
       setBusy(false);
     }
   }
