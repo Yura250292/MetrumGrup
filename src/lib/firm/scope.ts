@@ -9,6 +9,33 @@ export const KNOWN_FIRMS: Record<string, { id: string; name: string }> = {
   [STUDIO_FIRM_ID]: { id: STUDIO_FIRM_ID, name: "Metrum Studio" },
 };
 
+/**
+ * Брендинг кожної фірми. Використовується у sidebar (іконка-плашка) та як
+ * PWA theme-color (статус-бар на мобільних). Зміна при перемиканні фірми
+ * дає миттєву візуальну орієнтацію.
+ */
+export const FIRM_BRAND: Record<
+  string,
+  { primary: string; gradient: string; pwaThemeColor: string }
+> = {
+  [DEFAULT_FIRM_ID]: {
+    primary: "#3B5BFF",
+    gradient: "linear-gradient(135deg, #1a2b5e 0%, #3B5BFF 100%)",
+    pwaThemeColor: "#0B0F17",
+  },
+  [STUDIO_FIRM_ID]: {
+    primary: "#F5A623",
+    gradient: "linear-gradient(135deg, #8C5A0F 0%, #F5A623 100%)",
+    pwaThemeColor: "#1F1407",
+  },
+};
+
+/** Повертає branding для firmId або дефолтний для Metrum Group. */
+export function getFirmBrand(firmId: string | null | undefined) {
+  if (firmId && FIRM_BRAND[firmId]) return FIRM_BRAND[firmId];
+  return FIRM_BRAND[DEFAULT_FIRM_ID];
+}
+
 export type FirmScope = {
   /** firmId до якого треба обмежити запити; null = жодних обмежень (cross-firm). */
   firmId: string | null;

@@ -11,6 +11,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive, isItemVisibleForRole, type NavItem } from "../_lib/nav";
 import { FirmSwitcher } from "./firm-switcher";
+import { getFirmBrand } from "@/lib/firm/scope";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
@@ -22,12 +23,18 @@ const ROLE_LABELS: Record<string, string> = {
   USER: "Користувач",
 };
 
-export function Sidebar() {
+type SidebarProps = {
+  activeFirmId?: string | null;
+};
+
+export function Sidebar({ activeFirmId }: SidebarProps = {}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const unreadCount = useUnreadChatCount();
   const role = session?.user?.role;
+
+  const brand = getFirmBrand(activeFirmId ?? null);
 
   const width = collapsed ? 64 : 264;
 
@@ -54,11 +61,11 @@ export function Sidebar() {
       >
         <FirmSwitcher collapsed={collapsed}>
           <div className="flex items-center gap-2.5 min-w-0">
-            {/* Gradient brand-mark — premium accent */}
+            {/* Gradient brand-mark — колір залежить від активної фірми (синій=Group, жовтий=Studio) */}
             <div
               className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-white font-bold text-[15px]"
               style={{
-                background: "linear-gradient(135deg, #1a2b5e 0%, #3B5BFF 100%)",
+                background: brand.gradient,
                 boxShadow:
                   "0 1px 2px rgba(15,23,42,0.15), inset 0 1px 0 rgba(255,255,255,0.18)",
                 letterSpacing: "-0.02em",

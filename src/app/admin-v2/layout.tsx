@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation";
+import type { Viewport } from "next";
 import { auth } from "@/lib/auth";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getFirmBrand } from "@/lib/firm/scope";
 import { Sidebar } from "./_components/sidebar";
 import { Header } from "./_components/header";
 import { MobileShell } from "./_components/mobile-shell";
@@ -20,11 +23,22 @@ import "@/styles/premium.css";
 
 export const dynamic = "force-dynamic";
 
+/** Динамічний PWA theme-color: статус-бар на телефоні підлаштовується під активну фірму. */
+export async function generateViewport(): Promise<Viewport> {
+  const session = await auth();
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const brand = getFirmBrand(firmId);
+  return {
+    themeColor: brand.pwaThemeColor,
+  };
+}
+
 export default async function AdminV2Layout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
   const isClient = session.user.role === "CLIENT";
+  const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
 
   return (
     <ThemeShell>
@@ -34,7 +48,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
           <MeetingRecordingProvider>
             <SqueezeWrapper>
               <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
-                <Sidebar />
+                <Sidebar activeFirmId={activeFirmId} />
                 <MobileShell />
                 <div className="flex flex-col min-h-screen sidebar-push">
                   <Header />
