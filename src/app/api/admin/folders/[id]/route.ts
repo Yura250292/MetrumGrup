@@ -9,6 +9,7 @@ import {
   SYSTEM_FOLDER_DELETE_ERROR,
   MIRROR_FOLDER_EDIT_ERROR,
   MIRROR_FOLDER_DELETE_ERROR,
+  FOLDER_CYCLE_ERROR,
 } from "@/lib/folders/actions";
 import { prisma } from "@/lib/prisma";
 
@@ -18,6 +19,7 @@ const BUSINESS_RULE_ERRORS = new Set<string>([
   SYSTEM_FOLDER_DELETE_ERROR,
   MIRROR_FOLDER_EDIT_ERROR,
   MIRROR_FOLDER_DELETE_ERROR,
+  FOLDER_CYCLE_ERROR,
 ]);
 
 export async function GET(
@@ -48,16 +50,20 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireStaffAccess();
+    const session = await requireStaffAccess();
     const { id } = await params;
     const body = await request.json();
 
-    const folder = await updateFolder(id, {
-      name: body.name,
-      color: body.color,
-      parentId: body.parentId,
-      sortOrder: body.sortOrder,
-    });
+    const folder = await updateFolder(
+      id,
+      {
+        name: body.name,
+        color: body.color,
+        parentId: body.parentId,
+        sortOrder: body.sortOrder,
+      },
+      { allowSystemBypass: session.user.role === "SUPER_ADMIN" },
+    );
 
     return NextResponse.json({ folder });
   } catch (err) {
@@ -82,10 +88,12 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireStaffAccess();
+    const session = await requireStaffAccess();
     const { id } = await params;
 
-    await deleteFolder(id);
+    await deleteFolder(id, {
+      allowSystemBypass: session.user.role === "SUPER_ADMIN",
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

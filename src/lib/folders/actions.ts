@@ -92,9 +92,30 @@ export async function renameFolder(id: string, name: string) {
   return updated;
 }
 
+export const FOLDER_CYCLE_ERROR =
+  "Не можна перемістити папку всередину самої себе або своїх вкладень";
+
+async function wouldCreateCycle(folderId: string, newParentId: string): Promise<boolean> {
+  if (folderId === newParentId) return true;
+  let cursor: string | null = newParentId;
+  // Walk parent chain — if we hit folderId, we'd close a cycle.
+  // Bound the traversal to avoid runaway loops on already-corrupted data.
+  for (let i = 0; i < 64 && cursor; i += 1) {
+    if (cursor === folderId) return true;
+    const parent: { parentId: string | null } | null = await prisma.folder.findUnique({
+      where: { id: cursor },
+      select: { parentId: true },
+    });
+    if (!parent) return false;
+    cursor = parent.parentId;
+  }
+  return false;
+}
+
 export async function updateFolder(
   id: string,
   data: { name?: string; color?: string | null; parentId?: string | null; sortOrder?: number },
+  opts: { allowSystemBypass?: boolean } = {},
 ) {
   const existing = await prisma.folder.findUnique({
     where: { id },
@@ -102,12 +123,16 @@ export async function updateFolder(
   });
   if (!existing) throw new Error("Папку не знайдено");
 
-  if (existing.isSystem) {
+  if (existing.isSystem && !opts.allowSystemBypass) {
     if (data.name !== undefined) throw new Error(SYSTEM_FOLDER_RENAME_ERROR);
     if (data.parentId !== undefined) throw new Error(SYSTEM_FOLDER_MOVE_ERROR);
   }
-  if (existing.mirroredFromId) {
+  if (existing.mirroredFromId && !opts.allowSystemBypass) {
     throw new Error(MIRROR_FOLDER_EDIT_ERROR);
+  }
+
+  if (data.parentId && (await wouldCreateCycle(id, data.parentId))) {
+    throw new Error(FOLDER_CYCLE_ERROR);
   }
 
   const update: Record<string, unknown> = {};
@@ -125,13 +150,20 @@ export async function updateFolder(
   return updated;
 }
 
-export async function deleteFolder(id: string) {
+export async function deleteFolder(
+  id: string,
+  opts: { allowSystemBypass?: boolean } = {},
+) {
   const existing = await prisma.folder.findUnique({
     where: { id },
     select: { isSystem: true, domain: true, mirroredFromId: true },
   });
-  if (existing?.isSystem) throw new Error(SYSTEM_FOLDER_DELETE_ERROR);
-  if (existing?.mirroredFromId) throw new Error(MIRROR_FOLDER_DELETE_ERROR);
+  if (existing?.isSystem && !opts.allowSystemBypass) {
+    throw new Error(SYSTEM_FOLDER_DELETE_ERROR);
+  }
+  if (existing?.mirroredFromId && !opts.allowSystemBypass) {
+    throw new Error(MIRROR_FOLDER_DELETE_ERROR);
+  }
 
   if (existing?.domain === "PROJECT") {
     await deleteMirrorByProjectId(id);

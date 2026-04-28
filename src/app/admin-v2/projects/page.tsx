@@ -118,6 +118,7 @@ export default async function AdminV2ProjectsPage({
         folders={JSON.parse(JSON.stringify(folders))}
         breadcrumbs={breadcrumbs}
         currentFolderId={folderId}
+        isSuperAdmin={isSuperAdmin}
       />
 
       {projects.length === 0 && folders.length === 0 ? (

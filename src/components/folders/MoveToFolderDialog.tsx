@@ -21,6 +21,9 @@ type Props = {
   currentFolderId?: string | null;
   loading?: boolean;
   itemCount: number;
+  /** When moving a folder, exclude itself + all descendants to prevent cycles. */
+  excludeSubtreeOf?: string;
+  title?: string;
 };
 
 export function MoveToFolderDialog({
@@ -31,6 +34,8 @@ export function MoveToFolderDialog({
   currentFolderId,
   loading,
   itemCount,
+  excludeSubtreeOf,
+  title,
 }: Props) {
   const [tree, setTree] = useState<FolderTreeItem[]>([]);
   const [selected, setSelected] = useState<string | null>("__root__");
@@ -81,7 +86,7 @@ export function MoveToFolderDialog({
           <div className="flex items-center gap-2">
             <FolderInput size={18} style={{ color: T.accentPrimary }} />
             <h3 className="text-sm font-bold" style={{ color: T.textPrimary }}>
-              Перемістити ({itemCount})
+              {title ?? `Перемістити (${itemCount})`}
             </h3>
           </div>
           <button
@@ -128,8 +133,13 @@ export function MoveToFolderDialog({
               Завантаження...
             </p>
           ) : (
-            tree
-              .filter((f) => f.id !== currentFolderId)
+            (() => {
+              const excluded = excludeSubtreeOf
+                ? collectSubtreeIds(tree, excludeSubtreeOf)
+                : new Set<string>();
+              return tree
+                .filter((f) => f.id !== currentFolderId && !excluded.has(f.id));
+            })()
               .map((f) => (
                 <button
                   key={f.id}
@@ -196,4 +206,19 @@ function buildTree(
   }
   walk(null, 0);
   return result;
+}
+
+function collectSubtreeIds(tree: FolderTreeItem[], rootId: string): Set<string> {
+  const out = new Set<string>([rootId]);
+  let added = true;
+  while (added) {
+    added = false;
+    for (const f of tree) {
+      if (f.parentId && out.has(f.parentId) && !out.has(f.id)) {
+        out.add(f.id);
+        added = true;
+      }
+    }
+  }
+  return out;
 }

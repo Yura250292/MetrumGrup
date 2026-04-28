@@ -22,15 +22,18 @@ type Props = {
   folders: FolderItem[];
   breadcrumbs: BreadcrumbItem[];
   currentFolderId: string | null;
+  isSuperAdmin?: boolean;
 };
 
 export function ProjectFoldersClient({
   folders,
   breadcrumbs,
   currentFolderId,
+  isSuperAdmin,
 }: Props) {
   const router = useRouter();
   const [showCreate, setShowCreate] = useState(false);
+  const [moveFolderId, setMoveFolderId] = useState<string | null>(null);
   const createMutation = useCreateFolder();
   const updateMutation = useUpdateFolder();
   const deleteMutation = useDeleteFolder();
@@ -61,7 +64,24 @@ export function ProjectFoldersClient({
 
   const handleDelete = (id: string) => {
     if (!confirm("Видалити папку? Проєкти всередині повернуться в корінь.")) return;
-    deleteMutation.mutate(id, { onSuccess: () => router.refresh() });
+    deleteMutation.mutate(id, {
+      onSuccess: () => router.refresh(),
+      onError: (err) => alert(err instanceof Error ? err.message : "Помилка видалення"),
+    });
+  };
+
+  const handleMoveFolder = (targetParentId: string | null) => {
+    if (!moveFolderId) return;
+    updateMutation.mutate(
+      { id: moveFolderId, parentId: targetParentId },
+      {
+        onSuccess: () => {
+          setMoveFolderId(null);
+          router.refresh();
+        },
+        onError: (err) => alert(err instanceof Error ? err.message : "Помилка переміщення"),
+      },
+    );
   };
 
   return (
@@ -127,6 +147,8 @@ export function ProjectFoldersClient({
                 href={`/admin-v2/projects?folderId=${f.id}`}
                 onRename={handleRename}
                 onDelete={handleDelete}
+                onMove={(id) => setMoveFolderId(id)}
+                bypassLocks={isSuperAdmin}
               />
             </motion.div>
           ))}
@@ -147,6 +169,22 @@ export function ProjectFoldersClient({
         onClose={() => setShowCreate(false)}
         onSubmit={handleCreate}
         loading={createMutation.isPending}
+      />
+
+      <MoveToFolderDialog
+        open={moveFolderId !== null}
+        onClose={() => setMoveFolderId(null)}
+        domain="PROJECT"
+        currentFolderId={
+          moveFolderId
+            ? folders.find((f) => f.id === moveFolderId)?.parentId ?? null
+            : null
+        }
+        excludeSubtreeOf={moveFolderId ?? undefined}
+        itemCount={1}
+        title="Перемістити папку"
+        loading={updateMutation.isPending}
+        onMove={handleMoveFolder}
       />
     </>
   );

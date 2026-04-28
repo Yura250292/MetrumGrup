@@ -12,7 +12,10 @@ type Props = {
   href: string;
   onRename?: (id: string, name: string) => void;
   onDelete?: (id: string) => void;
+  onMove?: (id: string) => void;
   showFinanceIndicators?: boolean;
+  /** Show rename/delete on system+mirror folders (SUPER_ADMIN bypass). */
+  bypassLocks?: boolean;
 };
 
 export function FolderCard({
@@ -20,7 +23,9 @@ export function FolderCard({
   href,
   onRename,
   onDelete,
+  onMove,
   showFinanceIndicators,
+  bypassLocks,
 }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -52,9 +57,11 @@ export function FolderCard({
 
   const accentColor = folder.color || T.accentPrimary;
   const totalItems = folder.itemCount + folder.childFolderCount;
-  const canRename = !folder.isSystem && !!onRename;
-  const canDelete = !folder.isSystem && !!onDelete;
-  const showMenu = canRename || canDelete;
+  const unlocked = bypassLocks || !folder.isSystem;
+  const canRename = unlocked && !!onRename;
+  const canDelete = unlocked && !!onDelete;
+  const canMove = unlocked && !!onMove;
+  const showMenu = canRename || canDelete || canMove;
 
   return (
     <div className="relative group">
@@ -108,7 +115,7 @@ export function FolderCard({
                 >
                   {folder.name}
                 </span>
-                {folder.isSystem && (
+                {folder.isSystem && !bypassLocks && (
                   <Lock
                     size={10}
                     aria-label="Системна папка"
@@ -181,6 +188,19 @@ export function FolderCard({
                   style={{ color: T.textPrimary }}
                 >
                   <Pencil size={14} /> Перейменувати
+                </button>
+              )}
+              {canMove && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setMenuOpen(false);
+                    onMove?.(folder.id);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors hover:opacity-80"
+                  style={{ color: T.textPrimary }}
+                >
+                  <FolderInput size={14} /> Перемістити
                 </button>
               )}
               {canDelete && (
