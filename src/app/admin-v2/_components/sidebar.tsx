@@ -11,7 +11,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive, isItemVisibleForRole, type NavItem } from "../_lib/nav";
 import { FirmSwitcher } from "./firm-switcher";
-import { getFirmBrand } from "@/lib/firm/scope";
+import { getFirmBrand, getActiveRoleFromSession } from "@/lib/firm/scope";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
@@ -32,7 +32,12 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const unreadCount = useUnreadChatCount();
-  const role = session?.user?.role;
+  // Активна роль = роль користувача з урахуванням контексту поточної фірми.
+  // shymilo93 на Metrum Group → HR; на Metrum Studio → SUPER_ADMIN.
+  // Меню фільтрується за активною роллю (а не базовою).
+  const role =
+    getActiveRoleFromSession(session ?? null, activeFirmId ?? null) ??
+    session?.user?.role;
 
   const brand = getFirmBrand(activeFirmId ?? null);
 
@@ -203,7 +208,7 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
                   {session?.user?.name || "Користувач"}
                 </p>
                 <p className="truncate text-[11px]" style={{ color: T.textMuted }}>
-                  {ROLE_LABELS[session?.user?.role ?? ""] || session?.user?.role}
+                  {ROLE_LABELS[role ?? ""] || role}
                 </p>
               </div>
             </Link>

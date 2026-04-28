@@ -11,6 +11,7 @@ import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive, isItemVisibleForRole } from "../_lib/nav";
+import { getActiveRoleFromSession } from "@/lib/firm/scope";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
@@ -25,15 +26,20 @@ const ROLE_LABELS: Record<string, string> = {
 export function MobileDrawer({
   open,
   onClose,
+  activeFirmId,
 }: {
   open: boolean;
   onClose: () => void;
+  activeFirmId?: string | null;
 }) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const unreadCount = useUnreadChatCount();
   const { theme, toggleTheme } = useTheme();
-  const role = session?.user?.role;
+  // Активна роль (firm-aware), щоб меню shymilo93 на Studio показувало повний адмін-набір.
+  const role =
+    getActiveRoleFromSession(session ?? null, activeFirmId ?? null) ??
+    session?.user?.role;
 
   // Close on route change
   useEffect(() => {
@@ -96,7 +102,7 @@ export function MobileDrawer({
                   {session?.user?.name || "Користувач"}
                 </p>
                 <p className="text-[11px]" style={{ color: T.textMuted }}>
-                  {ROLE_LABELS[session?.user?.role ?? ""] || session?.user?.role}
+                  {ROLE_LABELS[role ?? ""] || role}
                 </p>
               </div>
             </Link>
