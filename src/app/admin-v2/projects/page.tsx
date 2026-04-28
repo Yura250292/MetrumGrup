@@ -11,6 +11,8 @@ import { EmptyState } from "@/components/shared/states";
 import { ProjectFoldersClient } from "./_components/project-folders-client";
 import { ProjectsView } from "./_components/projects-view";
 import type { ProjectExtra, ProjectRow } from "./_components/projects-types";
+import { firmWhereForProject, isHomeFirmFor } from "@/lib/firm/scope";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -31,13 +33,22 @@ export default async function AdminV2ProjectsPage({
     folderId ? getFolderBreadcrumbs(folderId) : Promise.resolve([]),
   ]);
 
-  const projects = await listProjectsWithAggregations(session.user.id, { folderId });
+  const { firmId } = await resolveFirmScopeForRequest(session);
+
+  // Home-firm guard: тільки на своїй фірмі можна керувати проектами.
+  if (!isHomeFirmFor(session, firmId)) {
+    redirect("/admin-v2");
+  }
+  const projects = await listProjectsWithAggregations(session.user.id, {
+    folderId,
+    firmId,
+  });
 
   const extrasMap = new Map<string, ProjectExtra>();
   if (projects.length > 0) {
     const ids = projects.map((p) => p.id);
     const extras = await prisma.project.findMany({
-      where: { id: { in: ids } },
+      where: { id: { in: ids }, ...firmWhereForProject(firmId) },
       select: {
         id: true,
         expectedEndDate: true,

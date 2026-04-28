@@ -11,6 +11,7 @@ import {
   notifyFinanceApprovers,
   notifyFinanceActor,
 } from "@/lib/financing/notify-approval";
+import { assertCanAccessFirm } from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,11 @@ export async function GET(
     select: FINANCE_ENTRY_SELECT,
   });
   if (!entry) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  try {
+    assertCanAccessFirm(session, entry.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
   return NextResponse.json({ data: entry });
 }
 
@@ -46,6 +52,11 @@ export async function PATCH(
   const { id } = await ctx.params;
   const existing = await prisma.financeEntry.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  try {
+    assertCanAccessFirm(session, existing.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
 
   try {
     const body = await request.json();
@@ -304,6 +315,11 @@ export async function DELETE(
     include: { attachments: true },
   });
   if (!existing) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  try {
+    assertCanAccessFirm(session, existing.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
 
   if (hard) {
     if (!HARD_DELETE_ROLES.includes(session.user.role)) return forbiddenResponse();

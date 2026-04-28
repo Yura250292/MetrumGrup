@@ -29,6 +29,8 @@ model User {
   productivityPrefsJson  Json?
   dashboardLayoutJson    Json?
   role                   Role                      @default(CLIENT)
+  firmId                 String?
+  firm                   Firm?                     @relation(fields: [firmId], references: [id])
   isActive               Boolean                   @default(true)
   createdAt              DateTime                  @default(now())
   updatedAt              DateTime                  @updatedAt
@@ -101,7 +103,9 @@ model User {
   receiptScansApproved   ReceiptScan[]             @relation("ReceiptScanApprover")
   telegramBotUser        TelegramBotUser?          @relation("TelegramBotUserLink")
   stagesResponsible      ProjectStageRecord[]      @relation("ProjectStageResponsible")
+  firmAccess             UserFirmAccess[]
 
+  @@index([firmId])
   @@map("users")
 }
 
@@ -128,6 +132,7 @@ model Project {
   clientId               String
   managerId              String?
   folderId               String?
+  firmId                 String?
   auditLogs              AuditLog[]
   completionActs         CompletionAct[]
   crewAssignments        CrewAssignment[]
@@ -155,6 +160,7 @@ model Project {
   emailInbox             EmailToTaskInbox?       @relation("EmailInboxProject")
   financeEntries         FinanceEntry[]
   folder                 Folder?                 @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  firm                   Firm?                   @relation(fields: [firmId], references: [id])
   financeFolderMirror    Folder?                 @relation("FolderFromProject")
   meetings               Meeting[]
   warehouses             Warehouse[]             @relation("ProjectWarehouses")
@@ -168,6 +174,7 @@ model Project {
 
   @@index([folderId])
   @@index([isTestProject])
+  @@index([firmId])
   @@map("projects")
 }
 
@@ -495,7 +502,11 @@ model FinanceEntry {
   // a denormalised cache so search and legacy reads do not break.
   counterpartyId String?
 
+  // Фірма-власник запису. Для projectless записів — єдиний спосіб scope-у.
+  firmId String?
+
   project        Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  firm           Firm?                    @relation(fields: [firmId], references: [id])
   createdBy      User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
   updatedBy      User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
   approvedBy     User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
@@ -524,6 +535,7 @@ model FinanceEntry {
   @@index([costCodeId])
   @@index([costType])
   @@index([counterpartyId])
+  @@index([firmId])
   @@map("finance_entries")
 }
 
@@ -1330,6 +1342,52 @@ enum FolderDomain {
   ESTIMATE
   FINANCE
   MEETING
+}
+
+// Окрема юридична особа / бізнес-одиниця в системі.
+// Stable string ids: "metrum-group" (default), "metrum-studio".
+// Фінанси, проекти, користувачі однієї фірми ізольовані від іншої:
+// агрегації основного дашборду за замовчуванням обмежені firmId="metrum-group".
+model Firm {
+  id           String   @id
+  slug         String   @unique
+  name         String
+  legalName    String?
+  displayColor String?
+  isDefault    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  users          User[]
+  projects       Project[]
+  financeEntries FinanceEntry[]
+  userAccess     UserFirmAccess[]
+
+  @@map("firms")
+}
+
+// Per-firm role overrides. У User є базова `role` для його home firm (User.firmId).
+// Додаткові фірми, до яких користувач має доступ, описуються у цій таблиці.
+// Приклад: shymilo93 — base role=HR, firmId=metrum-group; UserFirmAccess рядок
+// {firmId=metrum-studio, role=SUPER_ADMIN} робить його адміном на Studio.
+//
+// SUPER_ADMIN при базовому role: ця таблиця ігнорується, такий користувач
+// SUPER_ADMIN на всіх фірмах автоматично (узгоджено з користувачем).
+model UserFirmAccess {
+  id        String   @id @default(cuid())
+  userId    String
+  firmId    String
+  role      Role
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firm Firm @relation(fields: [firmId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, firmId])
+  @@index([userId])
+  @@index([firmId])
+  @@map("user_firm_access")
 }
 
 model Folder {

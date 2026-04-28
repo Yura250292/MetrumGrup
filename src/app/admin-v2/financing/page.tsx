@@ -5,6 +5,13 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FinancingView } from "./_components/financing-view";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import {
+  assertCanAccessFirm,
+  firmWhereForProject,
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+} from "@/lib/firm/scope";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 export const dynamic = "force-dynamic";
 
@@ -16,29 +23,43 @@ export default async function AdminV2FinancingPage({
   const session = await auth();
   if (!session?.user) redirect("/login");
 
-  const allowedRoles = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
-  if (!allowedRoles.includes(session.user.role)) {
-    redirect("/admin-v2");
-  }
-
   const sp = await searchParams;
   const projectId = sp.projectId;
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+
+  // Home-firm guard: користувач без прав на активну фірму — на дашборд.
+  if (!isHomeFirmFor(session, firmId)) {
+    redirect("/admin-v2");
+  }
+
+  // Per-firm role check: для shymilo93 на Group роль — HR (без доступу до Фінансування),
+  // а на Studio — SUPER_ADMIN (повний доступ).
+  const allowedRoles = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  if (!activeRole || !allowedRoles.includes(activeRole)) {
+    redirect("/admin-v2");
+  }
+  const FIRM_PROJECT = firmWhereForProject(firmId);
+
   const [projects, users, activeProject, taskStats] = await Promise.all([
     prisma.project.findMany({
-      where: { slug: { not: { startsWith: "temp-" } } },
+      where: { slug: { not: { startsWith: "temp-" } }, ...FIRM_PROJECT },
       select: { id: true, title: true },
       orderBy: { title: "asc" },
     }),
     prisma.user.findMany({
-      where: { role: { in: ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"] } },
+      where: {
+        role: { in: ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"] },
+        ...(firmId ? { firmId } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     projectId
       ? prisma.project.findUnique({
           where: { id: projectId },
-          select: { id: true, title: true, isTestProject: true },
+          select: { id: true, title: true, isTestProject: true, firmId: true },
         })
       : Promise.resolve(null),
     projectId
@@ -61,6 +82,11 @@ export default async function AdminV2FinancingPage({
         })()
       : Promise.resolve(null),
   ]);
+
+  // 403 якщо користувач намагається відкрити фінанси чужої фірми за projectId
+  if (activeProject) {
+    assertCanAccessFirm(session, activeProject.firmId);
+  }
 
   const canCreateProject =
     session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";

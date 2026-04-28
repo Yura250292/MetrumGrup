@@ -31,7 +31,7 @@ export type ProjectWithAggregations = {
 
 export async function listProjectsWithAggregations(
   currentUserId: string,
-  opts?: { folderId?: string | null },
+  opts?: { folderId?: string | null; firmId?: string | null },
 ): Promise<ProjectWithAggregations[]> {
   // HOTFIX: production may not have project_members migration applied yet.
   // If `members` include fails, fall back to a query without it. The team
@@ -58,6 +58,9 @@ export async function listProjectsWithAggregations(
   const where: Record<string, unknown> = { slug: { not: { startsWith: "temp-" } } };
   if (opts?.folderId !== undefined) {
     where.folderId = opts.folderId;
+  }
+  if (opts?.firmId) {
+    where.firmId = opts.firmId;
   }
 
   const fetchProjects = async () => {

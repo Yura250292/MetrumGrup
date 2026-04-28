@@ -18,6 +18,13 @@ export async function getOrCreateScratchProject(userId: string): Promise<string>
   });
   if (existing) return existing.id;
 
+  // Scratch проєкт належить тій самій фірмі, що й користувач — інакше studio
+  // директор не зможе генерувати AI-кошториси.
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { firmId: true },
+  });
+
   const created = await prisma.project.create({
     data: {
       title: "AI scratch (internal)",
@@ -26,6 +33,7 @@ export async function getOrCreateScratchProject(userId: string): Promise<string>
       status: "DRAFT",
       clientId: userId,
       managerId: userId,
+      firmId: user?.firmId ?? "metrum-group",
     },
     select: { id: true },
   });

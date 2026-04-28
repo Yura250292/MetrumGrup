@@ -12,6 +12,14 @@ import {
   FINANCE_ENTRY_SELECT,
 } from "@/lib/financing/queries";
 import { notifyFinanceApprovers } from "@/lib/financing/notify-approval";
+import {
+  assertCanAccessFirm,
+  firmIdForNewEntity,
+  DEFAULT_FIRM_ID,
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+} from "@/lib/firm/scope";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 export const runtime = "nodejs";
 
@@ -21,11 +29,15 @@ const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
 
   try {
     const { searchParams } = new URL(request.url);
-    const filters = parseListParams(searchParams);
+    const { firmId } = await resolveFirmScopeForRequest(session);
+    if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+    // Role перевіряємо у контексті активної фірми (per-firm role).
+    const activeRole = getActiveRoleFromSession(session, firmId);
+    if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
+    const filters = parseListParams(searchParams, firmId);
     const where = await expandFolderFilter(filters);
 
     const [data, summary] = await Promise.all([
@@ -48,7 +60,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!WRITE_ROLES.includes(session.user.role)) return forbiddenResponse();
+
+  // Home-firm guard + per-firm role.
+  const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, activeFirmId)) return forbiddenResponse();
+  const activeRole = getActiveRoleFromSession(session, activeFirmId);
+  if (!activeRole || !WRITE_ROLES.includes(activeRole)) return forbiddenResponse();
 
   try {
     const body = await request.json();
@@ -74,15 +91,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    let projectFirmId: string | null = null;
     if (projectId) {
       const exists = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { id: true },
+        select: { id: true, firmId: true },
       });
       if (!exists) {
         return NextResponse.json({ error: "Проєкт не існує" }, { status: 400 });
       }
+      projectFirmId = exists.firmId ?? null;
+      try {
+        assertCanAccessFirm(session, projectFirmId);
+      } catch {
+        return forbiddenResponse();
+      }
     }
+
+    // Stamp firmId зі сесії; якщо є projectId — узгоджуємо з проектом.
+    const entryFirmId =
+      projectFirmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
     const folderId =
       typeof body.folderId === "string" && body.folderId.trim()
@@ -142,6 +170,7 @@ export async function POST(request: NextRequest) {
         currency: typeof body.currency === "string" && body.currency ? body.currency : "UAH",
         occurredAt,
         projectId,
+        firmId: entryFirmId,
         category,
         subcategory:
           typeof body.subcategory === "string" && body.subcategory.trim() ? body.subcategory.trim() : null,

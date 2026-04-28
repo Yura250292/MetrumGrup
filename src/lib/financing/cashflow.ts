@@ -106,6 +106,8 @@ export type CashflowParams = {
   granularity: CashflowGranularity;
   projectId?: string | null;
   folderId?: string | null;
+  /** Firm scope (Metrum Group / Studio). null = без обмеження. */
+  firmId?: string | null;
 };
 
 export async function computeCashflow(p: CashflowParams): Promise<CashflowResponse> {
@@ -115,6 +117,7 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
     isArchived: false,
     ...(p.projectId ? { projectId: p.projectId } : {}),
     ...(p.folderId ? { folderId: p.folderId } : {}),
+    ...(p.firmId ? { firmId: p.firmId } : {}),
   };
 
   // 1. Opening balance — fact entries before `from`.

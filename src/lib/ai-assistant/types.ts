@@ -59,6 +59,8 @@ export type AiUserContext = {
   userId: string;
   userName: string;
   role: Role;
+  /** firmId з сесії — для firm-scope при створенні нових сутностей. */
+  firmId?: string | null;
 };
 
 export type ToolCallRecord = {

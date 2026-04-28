@@ -6,6 +6,8 @@ import {
   computeCashflow,
   type CashflowGranularity,
 } from "@/lib/financing/cashflow";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { isHomeFirmFor, getActiveRoleFromSession } from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -16,7 +18,6 @@ const VALID_GRANULARITY: CashflowGranularity[] = ["DAY", "WEEK", "MONTH"];
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
 
   const { searchParams } = new URL(request.url);
 
@@ -48,12 +49,17 @@ export async function GET(request: NextRequest) {
   const folderId = searchParams.get("folderId");
 
   try {
+    const { firmId } = await resolveFirmScopeForRequest(session);
+    if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+    const activeRole = getActiveRoleFromSession(session, firmId);
+    if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
     const data = await computeCashflow({
       from,
       to,
       granularity,
       projectId: projectId && projectId !== "" ? projectId : undefined,
       folderId: folderId && folderId !== "" ? folderId : undefined,
+      firmId,
     });
     return NextResponse.json(data);
   } catch (error) {

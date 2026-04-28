@@ -55,6 +55,14 @@ export function Header() {
   const lastCrumb = crumbs[crumbs.length - 1];
   const canGoBack = crumbs.length > 1;
 
+  // Бейдж фірми. Показуємо лише коли користувач закріплений за non-default фірмою
+  // (наприклад керівник студії). Для SUPER_ADMIN — використовуємо ?firm searchParam.
+  const userFirmId = (session?.user as { firmId?: string | null } | undefined)?.firmId ?? null;
+  const FIRM_BADGES: Record<string, string> = {
+    "metrum-studio": "Metrum Studio",
+  };
+  const firmBadgeLabel = userFirmId && FIRM_BADGES[userFirmId];
+
   return (
     <header
       className="glass-header sticky top-0 z-30 flex h-12 md:h-16 items-center justify-between px-4 md:px-8"
@@ -101,6 +109,19 @@ export function Header() {
             )}
           </div>
         ))}
+        {firmBadgeLabel && (
+          <span
+            className="ml-2 rounded-full px-2.5 py-0.5 text-[10px] font-bold tracking-wide uppercase"
+            style={{
+              backgroundColor: T.violet + "22",
+              color: T.violet,
+              border: `1px solid ${T.violet}55`,
+            }}
+            title="Ви працюєте у scope цієї фірми"
+          >
+            {firmBadgeLabel}
+          </span>
+        )}
       </nav>
 
       {/* Desktop: search input (centered) */}

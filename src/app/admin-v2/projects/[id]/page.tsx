@@ -21,6 +21,7 @@ import { TestProjectToggle } from "./_components/test-project-toggle";
 import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
+import { assertCanAccessFirm } from "@/lib/firm/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,12 @@ export default async function AdminV2ProjectDetailPage({
   ]);
 
   if (!project) notFound();
+  // Studio директор не може заходити на проєкти іншої фірми навіть по прямому URL.
+  try {
+    assertCanAccessFirm(session, project.firmId);
+  } catch {
+    notFound();
+  }
 
   // Convert Decimal to number once for client components
   const totalBudget = Number(project.totalBudget);

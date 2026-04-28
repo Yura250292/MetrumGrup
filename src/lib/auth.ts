@@ -25,6 +25,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await prisma.user.findUnique({
           where: { email },
+          include: {
+            firmAccess: { select: { firmId: true, role: true } },
+          },
         });
 
         if (!user || !user.isActive) {
@@ -44,6 +47,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         recordSuccess(email);
 
+        const firmAccessMap: Record<string, typeof user.role> = {};
+        for (const fa of user.firmAccess) {
+          firmAccessMap[fa.firmId] = fa.role;
+        }
+
         return {
           id: user.id,
           email: user.email,
@@ -51,6 +59,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           phone: user.phone,
           image: user.avatar,
+          firmId: user.firmId,
+          firmAccess: firmAccessMap,
         };
       },
     }),
@@ -68,6 +78,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.id = user.id!;
         token.role = user.role;
         token.image = user.image;
+        token.firmId = user.firmId ?? null;
+        token.firmAccess = user.firmAccess ?? {};
       }
       return token;
     },
@@ -76,6 +88,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as import("@prisma/client").Role;
         session.user.image = (token.image as string) ?? null;
+        session.user.firmId = (token.firmId as string | null | undefined) ?? null;
+        session.user.firmAccess =
+          (token.firmAccess as Record<string, import("@prisma/client").Role> | undefined) ??
+          {};
       }
       return session;
     },

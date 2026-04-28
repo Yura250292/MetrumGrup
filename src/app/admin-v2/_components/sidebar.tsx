@@ -10,6 +10,7 @@ import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive, isItemVisibleForRole, type NavItem } from "../_lib/nav";
+import { FirmSwitcher } from "./firm-switcher";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
@@ -51,36 +52,38 @@ export function Sidebar() {
           borderBottom: `1px solid ${T.borderSoft}`,
         }}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
-          {/* Gradient brand-mark — premium accent */}
-          <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-white font-bold text-[15px]"
-            style={{
-              background: "linear-gradient(135deg, #1a2b5e 0%, #3B5BFF 100%)",
-              boxShadow:
-                "0 1px 2px rgba(15,23,42,0.15), inset 0 1px 0 rgba(255,255,255,0.18)",
-              letterSpacing: "-0.02em",
-            }}
-            aria-hidden
-          >
-            M
-          </div>
-          {!collapsed && (
-            <div className="flex flex-col min-w-0 leading-tight gap-0.5">
-              <img
-                src="/images/metrum-logo.svg"
-                alt="Metrum"
-                className="h-4 w-auto admin-dark:brightness-0 admin-dark:invert"
-              />
-              <span
-                className="text-[10.5px] font-medium"
-                style={{ color: T.textMuted }}
-              >
-                admin · v2
-              </span>
+        <FirmSwitcher collapsed={collapsed}>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {/* Gradient brand-mark — premium accent */}
+            <div
+              className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 text-white font-bold text-[15px]"
+              style={{
+                background: "linear-gradient(135deg, #1a2b5e 0%, #3B5BFF 100%)",
+                boxShadow:
+                  "0 1px 2px rgba(15,23,42,0.15), inset 0 1px 0 rgba(255,255,255,0.18)",
+                letterSpacing: "-0.02em",
+              }}
+              aria-hidden
+            >
+              M
             </div>
-          )}
-        </div>
+            {!collapsed && (
+              <div className="flex flex-col min-w-0 leading-tight gap-0.5">
+                <img
+                  src="/images/metrum-logo.svg"
+                  alt="Metrum"
+                  className="h-4 w-auto admin-dark:brightness-0 admin-dark:invert"
+                />
+                <span
+                  className="text-[10.5px] font-medium"
+                  style={{ color: T.textMuted }}
+                >
+                  admin · v2
+                </span>
+              </div>
+            )}
+          </div>
+        </FirmSwitcher>
         <button
           onClick={() => setCollapsed((c) => !c)}
           className="rounded-lg p-1.5 transition hover:brightness-[0.97]"

@@ -49,6 +49,31 @@ async function main() {
   await prisma.setting.deleteMany();
   await prisma.user.deleteMany();
 
+  // ============================================
+  // FIRMS — окремі юр.особи (Metrum Group, Metrum Studio)
+  // ============================================
+  await prisma.firm.upsert({
+    where: { id: "metrum-group" },
+    create: {
+      id: "metrum-group",
+      slug: "metrum-group",
+      name: "Metrum Group",
+      isDefault: true,
+    },
+    update: {},
+  });
+  await prisma.firm.upsert({
+    where: { id: "metrum-studio" },
+    create: {
+      id: "metrum-studio",
+      slug: "metrum-studio",
+      name: "Metrum Studio",
+      isDefault: false,
+    },
+    update: {},
+  });
+  console.log("✅ Firms upserted: metrum-group, metrum-studio");
+
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // ============================================
@@ -61,6 +86,7 @@ async function main() {
       name: "Олександр Петренко",
       phone: "+380501234567",
       role: "SUPER_ADMIN",
+      firmId: "metrum-group",
     },
   });
 
@@ -71,6 +97,7 @@ async function main() {
       name: "Ірина Коваленко",
       phone: "+380671234567",
       role: "MANAGER",
+      firmId: "metrum-group",
     },
   });
 
@@ -81,6 +108,7 @@ async function main() {
       name: "Андрій Шевченко",
       phone: "+380931234567",
       role: "CLIENT",
+      firmId: "metrum-group",
     },
   });
 
@@ -91,8 +119,25 @@ async function main() {
       name: "Марина Бондаренко",
       phone: "+380961234567",
       role: "CLIENT",
+      firmId: "metrum-group",
     },
   });
+
+  // Опційний dev-користувач: керівник Metrum Studio (для локального тестування scope-у)
+  if (process.env.SEED_DEV_USERS === "true") {
+    await prisma.user.create({
+      data: {
+        email: "studio@metrum.dev",
+        password: passwordHash,
+        name: "Керівник студії дизайну",
+        phone: "+380501110011",
+        role: "MANAGER",
+        firmId: "metrum-studio",
+        jobTitle: "Керівник студії дизайну та ремонту інтерʼєрів",
+      },
+    });
+    console.log("✅ Dev studio director created (SEED_DEV_USERS=true)");
+  }
 
   console.log("✅ Users created");
 

@@ -33,10 +33,18 @@ import { DashboardGrid } from "./_components/dashboard/dashboard-grid";
 import { AiSummary } from "./_components/dashboard/ai-summary";
 import { HrDashboard } from "./_components/dashboard/hr-dashboard";
 import {
-  PROJECT_NOT_TEST,
-  FINANCE_ENTRY_NOT_TEST,
-  PAYMENT_NOT_TEST,
+  projectNotTestByFirm,
+  financeEntryNotTestByFirm,
+  paymentNotTestByFirm,
+  taskNotTestByFirm,
 } from "@/lib/projects/filters";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import {
+  isHomeFirmFor,
+  KNOWN_FIRMS,
+  getActiveRoleFromSession,
+} from "@/lib/firm/scope";
+import { NonHomeFirmBanner } from "./_components/non-home-firm-banner";
 
 export const dynamic = "force-dynamic";
 
@@ -111,10 +119,29 @@ function calcDelta(current: number, previous: number): { value: number; label: s
 export default async function AdminV2Dashboard({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; period?: string }>;
+  searchParams: Promise<{ tab?: string; period?: string; firm?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const sp = await searchParams;
+  const activeTab = (sp.tab || "overview") as DashboardTabId;
+
+  // SUPER_ADMIN може перемикати firm через ?firm=... (одноразово) або через
+  // dropdown у хедері (cookie). Інші ролі — firmId примусово з сесії.
+  const firmOverride =
+    session.user.role === "SUPER_ADMIN" && sp.firm ? sp.firm : undefined;
+  const { firmId, userFirmId } = await resolveFirmScopeForRequest(
+    session,
+    firmOverride,
+  );
+  const isHome = isHomeFirmFor(session, firmId);
+  const homeFirmId = userFirmId ?? null;
+  const activeRole = getActiveRoleFromSession(session, firmId) ?? session.user.role;
+  const PROJECT_SCOPE = projectNotTestByFirm(firmId);
+  const FINANCE_SCOPE = financeEntryNotTestByFirm(firmId);
+  const PAYMENT_SCOPE = paymentNotTestByFirm(firmId);
+  const TASK_SCOPE = taskNotTestByFirm(firmId);
 
   const firstName = session.user.name?.split(" ")[0] || "Адміністратор";
   const today = new Date().toLocaleDateString("uk-UA", {
@@ -124,12 +151,11 @@ export default async function AdminV2Dashboard({
     day: "numeric",
   });
 
-  if (session.user.role === "HR") {
+  // HR dashboard рендериться коли активна роль (з урахуванням firm-context) — HR.
+  // Наприклад shymilo93 на Metrum Group → HR; на Metrum Studio → SUPER_ADMIN (нормальний дашборд).
+  if (activeRole === "HR") {
     return <HrDashboard firstName={firstName} today={today} />;
   }
-
-  const sp = await searchParams;
-  const activeTab = (sp.tab || "overview") as DashboardTabId;
   const activePeriod = (sp.period || "month") as PeriodId;
 
   const now = new Date();
@@ -197,23 +223,23 @@ export default async function AdminV2Dashboard({
     // P2: Stage analytics
     completedStageRecords,
   ] = await Promise.all([
-    prisma.project.count({ where: PROJECT_NOT_TEST }),
-    prisma.project.count({ where: { status: "ACTIVE", ...PROJECT_NOT_TEST } }),
-    prisma.user.count({ where: { role: "CLIENT" } }),
-    prisma.estimate.count(),
+    prisma.project.count({ where: PROJECT_SCOPE }),
+    prisma.project.count({ where: { status: "ACTIVE", ...PROJECT_SCOPE } }),
+    prisma.user.count({ where: { role: "CLIENT", ...(firmId ? { firmId } : {}) } }),
+    prisma.estimate.count({ where: firmId ? { project: { firmId } } : {} }),
     prisma.payment.aggregate({
-      where: { status: "PAID", ...PAYMENT_NOT_TEST },
+      where: { status: "PAID", ...PAYMENT_SCOPE },
       _sum: { amount: true },
     }),
     prisma.project.aggregate({
-      where: { status: { in: ["ACTIVE", "DRAFT"] }, ...PROJECT_NOT_TEST },
+      where: { status: { in: ["ACTIVE", "DRAFT"] }, ...PROJECT_SCOPE },
       _sum: { totalBudget: true },
     }),
     prisma.payment.findMany({
       where: {
         status: { in: ["PENDING", "PARTIAL"] },
         scheduledDate: { lt: now },
-        ...PAYMENT_NOT_TEST,
+        ...PAYMENT_SCOPE,
       },
       include: { project: { select: { id: true, title: true } } },
       orderBy: { scheduledDate: "asc" },
@@ -221,13 +247,14 @@ export default async function AdminV2Dashboard({
     }),
     // Tasks counts
     prisma.task.count({
-      where: { isArchived: false, status: { isDone: false } },
+      where: { isArchived: false, status: { isDone: false }, ...TASK_SCOPE },
     }),
     prisma.task.count({
       where: {
         isArchived: false,
         status: { isDone: false },
         dueDate: { lt: now },
+        ...TASK_SCOPE,
       },
     }),
     prisma.task.count({
@@ -235,12 +262,14 @@ export default async function AdminV2Dashboard({
         isArchived: false,
         status: { isDone: false },
         dueDate: { gte: startOfToday, lte: endOfToday },
+        ...TASK_SCOPE,
       },
     }),
     prisma.task.count({
       where: {
         status: { isDone: true },
         completedAt: { gte: startOfWeek },
+        ...TASK_SCOPE,
       },
     }),
     // Finance (current period)
@@ -249,7 +278,7 @@ export default async function AdminV2Dashboard({
         type: "INCOME",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
-        ...FINANCE_ENTRY_NOT_TEST,
+        ...FINANCE_SCOPE,
       },
       _sum: { amount: true },
     }),
@@ -258,7 +287,7 @@ export default async function AdminV2Dashboard({
         type: "EXPENSE",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
-        ...FINANCE_ENTRY_NOT_TEST,
+        ...FINANCE_SCOPE,
       },
       _sum: { amount: true },
     }),
@@ -268,7 +297,7 @@ export default async function AdminV2Dashboard({
         type: "INCOME",
         isArchived: false,
         occurredAt: { gte: prevStart, lte: prevEnd },
-        ...FINANCE_ENTRY_NOT_TEST,
+        ...FINANCE_SCOPE,
       },
       _sum: { amount: true },
     }),
@@ -277,14 +306,14 @@ export default async function AdminV2Dashboard({
         type: "EXPENSE",
         isArchived: false,
         occurredAt: { gte: prevStart, lte: prevEnd },
-        ...FINANCE_ENTRY_NOT_TEST,
+        ...FINANCE_SCOPE,
       },
       _sum: { amount: true },
     }),
     // Stages
     prisma.project.groupBy({
       by: ["currentStage"],
-      where: { status: "ACTIVE", ...PROJECT_NOT_TEST },
+      where: { status: "ACTIVE", ...PROJECT_SCOPE },
       _count: { currentStage: true },
     }),
     // Time logs this week
@@ -293,6 +322,7 @@ export default async function AdminV2Dashboard({
       where: {
         endedAt: { not: null },
         startedAt: { gte: startOfWeek },
+        ...(firmId ? { user: { firmId } } : {}),
       },
       _sum: { minutes: true },
       orderBy: { _sum: { minutes: "desc" } },
@@ -306,6 +336,7 @@ export default async function AdminV2Dashboard({
           gte: now,
           lte: new Date(now.getTime() + 7 * 24 * 3600 * 1000),
         },
+        ...TASK_SCOPE,
       },
       include: {
         project: { select: { id: true, title: true } },
@@ -315,7 +346,10 @@ export default async function AdminV2Dashboard({
       take: 5,
     }),
     prisma.estimate.count({
-      where: { createdAt: { gte: periodStart } },
+      where: {
+        createdAt: { gte: periodStart },
+        ...(firmId ? { project: { firmId } } : {}),
+      },
     }),
     // Overdue tasks detailed
     prisma.task.findMany({
@@ -323,6 +357,7 @@ export default async function AdminV2Dashboard({
         isArchived: false,
         status: { isDone: false },
         dueDate: { lt: now },
+        ...TASK_SCOPE,
       },
       select: {
         id: true,
@@ -338,7 +373,7 @@ export default async function AdminV2Dashboard({
       where: {
         status: "ACTIVE",
         updatedAt: { lt: fourteenDaysAgo },
-        ...PROJECT_NOT_TEST,
+        ...PROJECT_SCOPE,
       },
       select: {
         id: true,
@@ -354,6 +389,7 @@ export default async function AdminV2Dashboard({
         isArchived: false,
         status: { isDone: false },
         dueDate: { gte: startOfToday, lte: endOfToday },
+        ...TASK_SCOPE,
       },
       select: {
         id: true,
@@ -366,7 +402,7 @@ export default async function AdminV2Dashboard({
     }),
     // Active projects for risk scoring
     prisma.project.findMany({
-      where: { status: "ACTIVE", ...PROJECT_NOT_TEST },
+      where: { status: "ACTIVE", ...PROJECT_SCOPE },
       include: {
         client: { select: { name: true } },
         manager: { select: { name: true } },
@@ -379,6 +415,7 @@ export default async function AdminV2Dashboard({
         isArchived: false,
         status: { isDone: false },
         dueDate: { lt: now },
+        ...TASK_SCOPE,
       },
       _count: { id: true },
     }),
@@ -388,7 +425,7 @@ export default async function AdminV2Dashboard({
       where: {
         status: { in: ["PENDING", "PARTIAL"] },
         scheduledDate: { lt: now },
-        ...PAYMENT_NOT_TEST,
+        ...PAYMENT_SCOPE,
       },
       _count: { id: true },
     }),
@@ -397,6 +434,7 @@ export default async function AdminV2Dashboard({
       where: {
         status: { isDone: true },
         completedAt: { gte: startOfWeek },
+        ...TASK_SCOPE,
       },
       select: {
         id: true,
@@ -412,6 +450,7 @@ export default async function AdminV2Dashboard({
       where: {
         isArchived: false,
         createdAt: { gte: startOfWeek },
+        ...TASK_SCOPE,
       },
       select: {
         id: true,
@@ -428,6 +467,7 @@ export default async function AdminV2Dashboard({
       where: {
         paidDate: { gte: startOfWeek },
         status: "PAID",
+        ...PAYMENT_SCOPE,
       },
       select: {
         id: true,
@@ -442,6 +482,7 @@ export default async function AdminV2Dashboard({
     prisma.project.findMany({
       where: {
         updatedAt: { gte: startOfWeek },
+        ...PROJECT_SCOPE,
       },
       select: {
         id: true,
@@ -456,7 +497,11 @@ export default async function AdminV2Dashboard({
     prisma.taskAssignee.groupBy({
       by: ["userId"],
       where: {
-        task: { isArchived: false, status: { isDone: false } },
+        task: {
+          isArchived: false,
+          status: { isDone: false },
+          ...(firmId ? { project: { firmId } } : {}),
+        },
       },
       _count: { userId: true },
     }),
@@ -468,6 +513,7 @@ export default async function AdminV2Dashboard({
           isArchived: false,
           status: { isDone: false },
           dueDate: { lt: now },
+          ...(firmId ? { project: { firmId } } : {}),
         },
       },
       _count: { userId: true },
@@ -480,7 +526,7 @@ export default async function AdminV2Dashboard({
           gte: now,
           lte: new Date(now.getTime() + 30 * 24 * 3600 * 1000),
         },
-        ...PROJECT_NOT_TEST,
+        ...PROJECT_SCOPE,
       },
       select: { id: true, title: true, expectedEndDate: true },
       orderBy: { expectedEndDate: "asc" },
@@ -494,6 +540,7 @@ export default async function AdminV2Dashboard({
           gte: new Date(startOfWeek.getTime() - 7 * 24 * 3600 * 1000),
           lt: startOfWeek,
         },
+        ...(firmId ? { user: { firmId } } : {}),
       },
       _sum: { minutes: true },
     }),
@@ -504,7 +551,7 @@ export default async function AdminV2Dashboard({
         type: "EXPENSE",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
-        ...FINANCE_ENTRY_NOT_TEST,
+        ...FINANCE_SCOPE,
       },
       _sum: { amount: true },
       orderBy: { _sum: { amount: "desc" } },
@@ -517,7 +564,7 @@ export default async function AdminV2Dashboard({
         type: "INCOME",
         isArchived: false,
         occurredAt: { gte: periodStart, lte: periodEnd },
-        ...FINANCE_ENTRY_NOT_TEST,
+        ...FINANCE_SCOPE,
       },
       _sum: { amount: true },
       orderBy: { _sum: { amount: "desc" } },
@@ -529,6 +576,7 @@ export default async function AdminV2Dashboard({
         status: "COMPLETED",
         startDate: { not: null },
         endDate: { not: null },
+        ...(firmId ? { project: { firmId } } : {}),
       },
       select: {
         stage: true,
@@ -655,7 +703,8 @@ export default async function AdminV2Dashboard({
   );
 
   // P2: Role-based visibility
-  const role = (session.user as { role?: Role }).role ?? "USER";
+  // Видимість блоків — за активною роллю (з урахуванням firm-context).
+  const role = activeRole;
   const isAdmin = role === "SUPER_ADMIN" || role === "MANAGER";
   const isFinancier = role === "FINANCIER";
   const isEngineer = role === "ENGINEER";
@@ -674,8 +723,23 @@ export default async function AdminV2Dashboard({
   };
   const finPeriod = periodLabels[activePeriod];
 
+  // Банер для не-SUPER_ADMIN, що перемкнувся на чужу фірму. SUPER_ADMIN не бачить.
+  const showNonHomeBanner =
+    !isHome && session.user.role !== "SUPER_ADMIN" && homeFirmId;
+  const activeFirmName =
+    (firmId && KNOWN_FIRMS[firmId]?.name) ?? "Усі фірми";
+  const homeFirmName =
+    (homeFirmId && KNOWN_FIRMS[homeFirmId]?.name) ?? "вашу фірму";
+
   return (
     <div className="flex flex-col gap-4 sm:gap-6">
+      {showNonHomeBanner && (
+        <NonHomeFirmBanner
+          activeFirmName={activeFirmName}
+          homeFirmId={homeFirmId as string}
+          homeFirmName={homeFirmName}
+        />
+      )}
       {/* Hero — always on top */}
       <HeroBlock
         firstName={firstName}

@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
+import { firmWhereForProject } from "@/lib/firm/scope";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +25,11 @@ export default async function DashboardFinancePage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const FIRM_PROJECT = firmWhereForProject(firmId);
+
   const projects = await prisma.project.findMany({
-    where: { clientId: session.user.id },
+    where: { clientId: session.user.id, ...FIRM_PROJECT },
     select: {
       id: true,
       title: true,
@@ -36,7 +41,9 @@ export default async function DashboardFinancePage() {
   });
 
   const payments = await prisma.payment.findMany({
-    where: { project: { clientId: session.user.id } },
+    where: {
+      project: { clientId: session.user.id, ...FIRM_PROJECT },
+    },
     include: { project: { select: { id: true, title: true } } },
     orderBy: { scheduledDate: "asc" },
   });

@@ -4,6 +4,8 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { isHomeFirmFor, getActiveRoleFromSession } from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -31,16 +33,22 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
 
   const { id } = await ctx.params;
   const cp = await prisma.counterparty.findUnique({ where: { id } });
   if (!cp) return NextResponse.json({ error: "Контрагента не знайдено" }, { status: 404 });
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
+  const firmFilter: { firmId?: string } = firmId ? { firmId } : {};
+
   // Aggregate per kind/type/status to build the KPI strip on the dossier page.
+  // Scoped by firm: studio director sees only Metrum Studio totals for shared counterparties.
   const grouped = await prisma.financeEntry.groupBy({
     by: ["kind", "type", "status"],
-    where: { counterpartyId: id, isArchived: false },
+    where: { counterpartyId: id, isArchived: false, ...firmFilter },
     _sum: { amount: true },
     _count: { _all: true },
   });
@@ -72,7 +80,12 @@ export async function GET(
   // Active commitments / contracts placeholder — none yet (Phase 2).
   // For now, use most-recent project list this counterparty appears on.
   const recentProjects = await prisma.financeEntry.findMany({
-    where: { counterpartyId: id, isArchived: false, projectId: { not: null } },
+    where: {
+      counterpartyId: id,
+      isArchived: false,
+      projectId: { not: null },
+      ...firmFilter,
+    },
     select: {
       projectId: true,
       project: { select: { id: true, title: true, slug: true } },

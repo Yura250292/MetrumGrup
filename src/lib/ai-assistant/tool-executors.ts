@@ -1370,6 +1370,7 @@ async function createNewProject(input: ToolInput, ctx: AiUserContext) {
       totalBudget: (input.totalBudget as number) || 0,
       status: "DRAFT",
       clientId,
+      firmId: ctx.firmId ?? "metrum-group",
     },
     select: { id: true, title: true, slug: true, status: true },
   });

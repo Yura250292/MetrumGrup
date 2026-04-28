@@ -7,12 +7,17 @@ declare module "next-auth" {
       id: string;
       role: Role;
       phone?: string | null;
+      firmId: string | null;
+      /** Per-firm role override map. Key = firmId, value = effective role on that firm. */
+      firmAccess: Record<string, Role>;
     } & DefaultSession["user"];
   }
 
   interface User {
     role: Role;
     phone?: string | null;
+    firmId?: string | null;
+    firmAccess?: Record<string, Role>;
   }
 }
 
@@ -21,5 +26,7 @@ declare module "next-auth/jwt" {
     id: string;
     role: Role;
     image?: string | null;
+    firmId?: string | null;
+    firmAccess?: Record<string, Role>;
   }
 }

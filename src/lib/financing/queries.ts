@@ -20,9 +20,14 @@ export type FinanceListFilters = {
   search?: string;
   hasAttachments?: boolean;
   archived: boolean;
+  /** Обмеження по фірмі (Metrum Group / Metrum Studio). null = без обмеження. */
+  firmId?: string | null;
 };
 
-export function parseListParams(searchParams: URLSearchParams): FinanceListFilters {
+export function parseListParams(
+  searchParams: URLSearchParams,
+  firmId: string | null = null,
+): FinanceListFilters {
   const projectIdRaw = searchParams.get("projectId");
   const typeRaw = searchParams.get("type");
   const kindRaw = searchParams.get("kind");
@@ -76,6 +81,7 @@ export function parseListParams(searchParams: URLSearchParams): FinanceListFilte
     costType,
     counterpartyId: counterpartyIdRaw,
     archived: archivedRaw === "true",
+    firmId,
   };
 }
 
@@ -128,12 +134,20 @@ export async function expandFolderFilter(
 
   const [estimateProjects, entryProjects] = await Promise.all([
     prisma.estimate.findMany({
-      where: { folderId: { in: descendantIds }, projectId: { not: "" } },
+      where: {
+        folderId: { in: descendantIds },
+        projectId: { not: "" },
+        ...(filters.firmId ? { project: { firmId: filters.firmId } } : {}),
+      },
       select: { projectId: true },
       distinct: ["projectId"],
     }),
     prisma.financeEntry.findMany({
-      where: { folderId: { in: descendantIds }, projectId: { not: null } },
+      where: {
+        folderId: { in: descendantIds },
+        projectId: { not: null },
+        ...(filters.firmId ? { firmId: filters.firmId } : {}),
+      },
       select: { projectId: true },
       distinct: ["projectId"],
     }),
@@ -205,6 +219,10 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
     ];
   }
 
+  if (filters.firmId) {
+    where.firmId = filters.firmId;
+  }
+
   return where;
 }
 
@@ -263,6 +281,7 @@ export const FINANCE_ENTRY_SELECT = {
   amount: true,
   currency: true,
   projectId: true,
+  firmId: true,
   folderId: true,
   category: true,
   subcategory: true,

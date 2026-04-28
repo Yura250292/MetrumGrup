@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { computeBudgetMatrix } from "@/lib/financing/budget-matrix";
+import { assertCanAccessFirm } from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -20,9 +21,14 @@ export async function GET(
   const { id } = await ctx.params;
   const project = await prisma.project.findUnique({
     where: { id },
-    select: { id: true, title: true },
+    select: { id: true, title: true, firmId: true },
   });
   if (!project) return NextResponse.json({ error: "Проєкт не знайдено" }, { status: 404 });
+  try {
+    assertCanAccessFirm(session, project.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
 
   try {
     const matrix = await computeBudgetMatrix(id);

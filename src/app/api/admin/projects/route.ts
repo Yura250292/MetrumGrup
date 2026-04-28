@@ -11,6 +11,14 @@ import {
   ensureProjectMirror,
   syncProjectBudgetEntry,
 } from "@/lib/folders/mirror-service";
+import {
+  firmIdForNewEntity,
+  firmWhereForProject,
+  DEFAULT_FIRM_ID,
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+} from "@/lib/firm/scope";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 const STAGE_ORDER: ProjectStage[] = [
   "DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER",
@@ -20,14 +28,21 @@ const STAGE_ORDER: ProjectStage[] = [
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
-    return forbiddenResponse();
-  }
 
   try {
+    const { firmId } = await resolveFirmScopeForRequest(session);
+    if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+    const activeRole = getActiveRoleFromSession(session, firmId);
+    if (activeRole !== "SUPER_ADMIN" && activeRole !== "MANAGER") {
+      return forbiddenResponse();
+    }
     const projects = await prisma.project.findMany({
-      // Hide auto-generated AI-estimate scratch projects from the picker
-      where: { slug: { not: { startsWith: "temp-" } } },
+      // Hide auto-generated AI-estimate scratch projects from the picker.
+      // Scoped by firm: studio managers see only their firm's projects.
+      where: {
+        slug: { not: { startsWith: "temp-" } },
+        ...firmWhereForProject(firmId),
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,
@@ -56,7 +71,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
+
+  // Home-firm guard + per-firm role.
+  const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, activeFirmId)) return forbiddenResponse();
+  const activeRole = getActiveRoleFromSession(session, activeFirmId);
+  if (activeRole !== "SUPER_ADMIN" && activeRole !== "MANAGER") {
     return forbiddenResponse();
   }
 
@@ -74,6 +94,9 @@ export async function POST(request: NextRequest) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
+  // Stamp firmId на основі сесії, не довіряючи клієнту.
+  const projectFirmId = firmIdForNewEntity(session, DEFAULT_FIRM_ID);
+
   const project = await prisma.project.create({
     data: {
       title,
@@ -82,6 +105,7 @@ export async function POST(request: NextRequest) {
       address: address || null,
       clientId,
       managerId: managerId || null,
+      firmId: projectFirmId,
       totalBudget: totalBudget || 0,
       startDate: startDate ? new Date(startDate) : null,
       expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
