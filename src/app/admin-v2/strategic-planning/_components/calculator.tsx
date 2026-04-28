@@ -61,34 +61,40 @@ export function Calculator({ initialData }: { initialData: InitialData }) {
   );
 
   return (
-    <div className="flex flex-col gap-6 pb-20">
+    <div className="flex flex-col gap-4 md:gap-6">
       {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">
           <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl md:h-12 md:w-12"
             style={{
               background: T.accentPrimarySoft,
               color: T.accentPrimary,
             }}
           >
-            <TrendingUp className="h-6 w-6" />
+            <TrendingUp className="h-5 w-5 md:h-6 md:w-6" />
           </div>
-          <div>
+          <div className="min-w-0 flex-1">
             <h1
-              className="text-2xl font-bold tracking-tight"
+              className="text-xl font-bold tracking-tight md:text-2xl"
               style={{ color: T.textPrimary }}
             >
               Стратегічне планування
             </h1>
-            <p className="mt-1 text-sm" style={{ color: T.textSecondary }}>
+            <p
+              className="mt-0.5 hidden text-sm md:block"
+              style={{ color: T.textSecondary }}
+            >
               Калькулятор-прогноз. Обери проекти, штат і постійні витрати —
               отримай помісячний cashflow.
             </p>
             <div className="mt-2 inline-flex items-center gap-1.5">
               <Badge variant="warning">
                 <Info className="mr-1 h-3 w-3" />
-                Чорнетка — нічого не зберігається в БД
+                <span className="hidden sm:inline">
+                  Чорнетка — нічого не зберігається в БД
+                </span>
+                <span className="sm:hidden">Чорнетка</span>
               </Badge>
             </div>
           </div>
@@ -117,6 +123,12 @@ export function Calculator({ initialData }: { initialData: InitialData }) {
               return next;
             })
           }
+          onSelectAll={() =>
+            setSelectedProjectIds(
+              new Set(initialData.projects.map((p) => p.id)),
+            )
+          }
+          onClearAll={() => setSelectedProjectIds(new Set())}
           overrides={projectOverrides}
           onOverrideChange={(id, value) =>
             setProjectOverrides((prev) => {
@@ -158,6 +170,12 @@ export function Calculator({ initialData }: { initialData: InitialData }) {
               return next;
             })
           }
+          onSelectAll={() =>
+            setSelectedTemplateIds(
+              new Set(initialData.templates.map((t) => t.id)),
+            )
+          }
+          onClearAll={() => setSelectedTemplateIds(new Set())}
         />
         <CustomItemsSection
           items={customItems}

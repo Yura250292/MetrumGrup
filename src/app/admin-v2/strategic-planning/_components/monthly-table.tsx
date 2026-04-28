@@ -41,7 +41,7 @@ export function MonthlyTable({ forecast }: { forecast: ForecastResult }) {
 
   return (
     <Card className="overflow-hidden border-0 shadow-sm" style={{ background: T.panel }}>
-      <div className="flex items-center justify-between p-4 pb-2">
+      <div className="flex items-center justify-between gap-2 p-3 pb-2 md:p-4">
         <h2
           className="text-sm font-semibold"
           style={{ color: T.textPrimary }}
@@ -49,10 +49,11 @@ export function MonthlyTable({ forecast }: { forecast: ForecastResult }) {
           Помісячна деталізація
         </h2>
         <span
-          className="text-xs"
+          className="whitespace-nowrap text-[11px] md:text-xs"
           style={{ color: T.textMuted }}
         >
-          {forecast.rows.length} рядків · {colCount} місяців
+          {forecast.rows.length} р. · {colCount} міс.{" "}
+          <span className="md:hidden">↔</span>
         </span>
       </div>
 
@@ -64,7 +65,10 @@ export function MonthlyTable({ forecast }: { forecast: ForecastResult }) {
           Поки нічого не обрано. Постав галочки, щоб побачити прогноз.
         </div>
       ) : (
-        <div className="overflow-x-auto pb-2">
+        <div
+          className="-webkit-overflow-scrolling-touch overflow-x-auto pb-2"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           <table className="w-full min-w-[640px] text-xs">
             <thead>
               <tr

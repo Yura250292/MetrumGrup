@@ -7,7 +7,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { Card, CardContent } from "@/components/ui/card";
 import type { Period } from "@/lib/strategic-planning/types";
 
-const DURATION_PRESETS = [3, 6, 9, 12, 18, 24];
+const DURATION_PRESETS = [3, 6, 12, 18, 24];
 
 export function PeriodPicker({
   period,
@@ -41,21 +41,21 @@ export function PeriodPicker({
 
   return (
     <Card className="border-0 shadow-sm" style={{ background: T.panel }}>
-      <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-end md:gap-6">
+      <CardContent className="grid gap-3 p-3 md:grid-cols-[auto_1fr_auto] md:items-end md:gap-5 md:p-4">
         {/* Start month */}
         <div className="flex flex-col gap-1.5">
           <label
-            className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider"
+            className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider"
             style={{ color: T.textMuted }}
           >
             <Calendar className="h-3.5 w-3.5" />
             Початок
           </label>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => handleStartMonthShift(-1)}
-              className="rounded-lg border px-2.5 py-1.5 text-sm transition-colors hover:bg-muted"
+              className="h-10 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
               style={{ borderColor: T.borderSoft, color: T.textPrimary }}
               aria-label="Попередній місяць"
             >
@@ -65,7 +65,7 @@ export function PeriodPicker({
               type="month"
               value={startInputValue}
               onChange={(e) => handleStartMonthInput(e.target.value)}
-              className="rounded-lg border px-3 py-1.5 text-sm"
+              className="h-10 min-w-0 flex-1 rounded-lg border px-3 text-sm md:flex-none"
               style={{
                 borderColor: T.borderSoft,
                 color: T.textPrimary,
@@ -75,7 +75,7 @@ export function PeriodPicker({
             <button
               type="button"
               onClick={() => handleStartMonthShift(1)}
-              className="rounded-lg border px-2.5 py-1.5 text-sm transition-colors hover:bg-muted"
+              className="h-10 rounded-lg border px-3 text-base transition-colors hover:bg-muted"
               style={{ borderColor: T.borderSoft, color: T.textPrimary }}
               aria-label="Наступний місяць"
             >
@@ -87,12 +87,12 @@ export function PeriodPicker({
         {/* Duration */}
         <div className="flex flex-col gap-1.5">
           <label
-            className="text-xs font-semibold uppercase tracking-wider"
+            className="text-[11px] font-semibold uppercase tracking-wider"
             style={{ color: T.textMuted }}
           >
             Горизонт
           </label>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="-mx-1 flex snap-x snap-mandatory items-center gap-1.5 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible md:pb-0">
             {DURATION_PRESETS.map((m) => {
               const isActive = period.durationMonths === m;
               return (
@@ -102,7 +102,7 @@ export function PeriodPicker({
                   onClick={() =>
                     onPeriodChange({ ...period, durationMonths: m })
                   }
-                  className="rounded-lg border px-3 py-1.5 text-sm font-medium transition-all"
+                  className="h-10 shrink-0 snap-start rounded-lg border px-3 text-sm font-medium transition-all"
                   style={{
                     borderColor: isActive ? T.accentPrimary : T.borderSoft,
                     background: isActive ? T.accentPrimarySoft : "transparent",
@@ -122,7 +122,7 @@ export function PeriodPicker({
                 const v = Math.max(1, Math.min(24, Number(e.target.value) || 1));
                 onPeriodChange({ ...period, durationMonths: v });
               }}
-              className="w-16 rounded-lg border px-2 py-1.5 text-sm"
+              className="h-10 w-16 shrink-0 rounded-lg border px-2 text-sm"
               style={{
                 borderColor: T.borderSoft,
                 color: T.textPrimary,
@@ -136,7 +136,7 @@ export function PeriodPicker({
         {/* Opening balance */}
         <div className="flex flex-col gap-1.5 md:ml-auto">
           <label
-            className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider"
+            className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider"
             style={{ color: T.textMuted }}
           >
             <Wallet className="h-3.5 w-3.5" />
@@ -144,10 +144,11 @@ export function PeriodPicker({
           </label>
           <input
             type="number"
+            inputMode="numeric"
             value={openingBalance || ""}
             onChange={(e) => onOpeningBalanceChange(Number(e.target.value) || 0)}
             placeholder="0"
-            className="w-44 rounded-lg border px-3 py-1.5 text-right text-sm font-medium"
+            className="h-10 w-full rounded-lg border px-3 text-right text-sm font-medium md:w-44"
             style={{
               borderColor: T.borderSoft,
               color: T.textPrimary,
@@ -158,7 +159,7 @@ export function PeriodPicker({
 
         {/* Range hint */}
         <div
-          className="hidden text-xs md:block md:self-center"
+          className="text-xs md:col-span-3 md:self-center md:text-right"
           style={{ color: T.textMuted }}
         >
           {format(start, "LLLL yyyy", { locale: uk })} →{" "}

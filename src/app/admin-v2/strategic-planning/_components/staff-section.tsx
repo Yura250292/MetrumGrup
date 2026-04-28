@@ -119,11 +119,12 @@ export function StaffSection({
             return (
               <label
                 key={e.id}
-                className="flex items-center gap-2 rounded-xl px-2 py-2 transition-colors hover:bg-muted/40"
+                className="flex min-h-[44px] items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40"
               >
                 <Checkbox
                   checked={checked}
                   onCheckedChange={() => onToggle(e.id)}
+                  className="h-5 w-5"
                 />
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span

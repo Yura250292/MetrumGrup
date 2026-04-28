@@ -20,29 +20,31 @@ export function ExportButtons({
         type="button"
         onClick={() => exportToExcel(forecast, period)}
         disabled={disabled}
-        className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-all disabled:opacity-50"
+        className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-all disabled:opacity-50"
         style={{
           borderColor: T.borderSoft,
           color: T.textPrimary,
           background: T.panel,
         }}
+        aria-label="Експорт у Excel"
       >
         <FileSpreadsheet className="h-4 w-4" style={{ color: T.success }} />
-        Excel
+        <span className="hidden sm:inline">Excel</span>
       </button>
       <button
         type="button"
         onClick={() => exportToPdf(forecast, period)}
         disabled={disabled}
-        className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-semibold transition-all disabled:opacity-50"
+        className="inline-flex h-10 items-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-all disabled:opacity-50"
         style={{
           borderColor: T.borderSoft,
           color: T.textPrimary,
           background: T.panel,
         }}
+        aria-label="Експорт у PDF"
       >
         <FileText className="h-4 w-4" style={{ color: T.danger }} />
-        PDF
+        <span className="hidden sm:inline">PDF</span>
       </button>
     </div>
   );

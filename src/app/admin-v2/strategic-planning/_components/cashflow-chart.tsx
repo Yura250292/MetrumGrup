@@ -40,7 +40,7 @@ export function CashflowChart({ forecast }: { forecast: ForecastResult }) {
 
   return (
     <Card className="border-0 shadow-sm" style={{ background: T.panel }}>
-      <div className="flex items-center justify-between p-4 pb-2">
+      <div className="flex flex-col gap-2 p-3 pb-1 sm:flex-row sm:items-center sm:justify-between md:p-4 md:pb-2">
         <h2
           className="text-sm font-semibold"
           style={{ color: T.textPrimary }}
@@ -50,8 +50,16 @@ export function CashflowChart({ forecast }: { forecast: ForecastResult }) {
         <div className="flex gap-1">
           {(
             [
-              { id: "stacked", label: "Дохід / витрати" },
-              { id: "balance", label: "Накопичений баланс" },
+              {
+                id: "stacked",
+                label: "Дохід / витрати",
+                short: "Доходи / витрати",
+              },
+              {
+                id: "balance",
+                label: "Накопичений баланс",
+                short: "Баланс",
+              },
             ] as const
           ).map((v) => {
             const isActive = view === v.id;
@@ -60,21 +68,22 @@ export function CashflowChart({ forecast }: { forecast: ForecastResult }) {
                 key={v.id}
                 type="button"
                 onClick={() => setView(v.id)}
-                className="rounded-lg border px-3 py-1 text-xs font-medium transition-all"
+                className="h-9 flex-1 rounded-lg border px-3 text-xs font-medium transition-all sm:flex-none"
                 style={{
                   borderColor: isActive ? T.accentPrimary : T.borderSoft,
                   background: isActive ? T.accentPrimarySoft : "transparent",
                   color: isActive ? T.accentPrimary : T.textSecondary,
                 }}
               >
-                {v.label}
+                <span className="hidden md:inline">{v.label}</span>
+                <span className="md:hidden">{v.short}</span>
               </button>
             );
           })}
         </div>
       </div>
       <CardContent className="p-2">
-        <div className="h-72 w-full">
+        <div className="h-56 w-full md:h-72">
           <ResponsiveContainer width="100%" height="100%">
             {view === "stacked" ? (
               <ComposedChart data={data} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>

@@ -13,12 +13,18 @@ export function TemplatesSection({
   templates,
   selectedIds,
   onToggle,
+  onSelectAll,
+  onClearAll,
 }: {
   templates: TemplateDTO[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const allSelected =
+    templates.length > 0 && selectedIds.size === templates.length;
 
   const grouped = useMemo(() => {
     const map = new Map<string, TemplateDTO[]>();
@@ -68,6 +74,40 @@ export function TemplatesSection({
 
       {open && (
         <CardContent className="flex flex-col gap-3 p-2 pt-0">
+          {templates.length > 0 && (
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+              <span className="text-[11px]" style={{ color: T.textMuted }}>
+                {selectedIds.size} / {templates.length}
+              </span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  disabled={allSelected}
+                  className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
+                  style={{
+                    borderColor: T.borderSoft,
+                    background: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                  }}
+                >
+                  Обрати всі
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearAll}
+                  disabled={selectedIds.size === 0}
+                  className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
+                  style={{
+                    borderColor: T.borderSoft,
+                    color: T.textSecondary,
+                  }}
+                >
+                  Зняти всі
+                </button>
+              </div>
+            </div>
+          )}
           {templates.length === 0 && (
             <p
               className="px-2 py-3 text-sm"
@@ -90,11 +130,12 @@ export function TemplatesSection({
                 return (
                   <label
                     key={t.id}
-                    className="flex items-center gap-2 rounded-xl px-2 py-2 transition-colors hover:bg-muted/40"
+                    className="flex min-h-[44px] items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40"
                   >
                     <Checkbox
                       checked={checked}
                       onCheckedChange={() => onToggle(t.id)}
+                      className="h-5 w-5"
                     />
                     <span
                       className="flex-1 truncate text-sm font-medium"

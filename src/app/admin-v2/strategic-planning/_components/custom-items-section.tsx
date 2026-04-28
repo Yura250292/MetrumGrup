@@ -157,21 +157,21 @@ export function CustomItemsSection({
             className="flex flex-col gap-2 rounded-xl border p-3"
             style={{ borderColor: T.borderSoft, background: T.panelSoft }}
           >
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="text"
-                placeholder="Назва (наприклад «Новий контракт»)"
-                value={draft.label}
-                onChange={(e) =>
-                  setDraft({ ...draft, label: e.target.value })
-                }
-                className="min-w-[160px] flex-1 rounded-lg border px-3 py-1.5 text-sm"
-                style={{
-                  borderColor: T.borderSoft,
-                  background: T.panel,
-                  color: T.textPrimary,
-                }}
-              />
+            <input
+              type="text"
+              placeholder="Назва (наприклад «Новий контракт»)"
+              value={draft.label}
+              onChange={(e) =>
+                setDraft({ ...draft, label: e.target.value })
+              }
+              className="h-10 w-full rounded-lg border px-3 text-sm"
+              style={{
+                borderColor: T.borderSoft,
+                background: T.panel,
+                color: T.textPrimary,
+              }}
+            />
+            <div className="grid grid-cols-2 gap-2">
               <select
                 value={draft.type}
                 onChange={(e) =>
@@ -180,7 +180,7 @@ export function CustomItemsSection({
                     type: e.target.value as "INCOME" | "EXPENSE",
                   })
                 }
-                className="rounded-lg border px-2 py-1.5 text-sm"
+                className="h-10 rounded-lg border px-2 text-sm"
                 style={{
                   borderColor: T.borderSoft,
                   background: T.panel,
@@ -198,7 +198,7 @@ export function CustomItemsSection({
                     mode: e.target.value as "MONTHLY" | "ONE_TIME",
                   })
                 }
-                className="rounded-lg border px-2 py-1.5 text-sm"
+                className="h-10 rounded-lg border px-2 text-sm"
                 style={{
                   borderColor: T.borderSoft,
                   background: T.panel,
@@ -209,26 +209,28 @@ export function CustomItemsSection({
                 <option value="ONE_TIME">Разово</option>
               </select>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="number"
-                placeholder="Сума ₴"
-                value={draft.amount}
-                onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
-                className="w-32 rounded-lg border px-3 py-1.5 text-sm"
-                style={{
-                  borderColor: T.borderSoft,
-                  background: T.panel,
-                  color: T.textPrimary,
-                }}
-              />
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="Сума ₴"
+              value={draft.amount}
+              onChange={(e) => setDraft({ ...draft, amount: e.target.value })}
+              className="h-10 w-full rounded-lg border px-3 text-sm"
+              style={{
+                borderColor: T.borderSoft,
+                background: T.panel,
+                color: T.textPrimary,
+              }}
+            />
+            <div className="flex flex-wrap items-center gap-2">
               <label
                 className="flex items-center gap-1.5 text-xs"
                 style={{ color: T.textMuted }}
               >
-                Стартує з місяця
+                З місяця
                 <input
                   type="number"
+                  inputMode="numeric"
                   min={1}
                   max={maxMonth}
                   value={draft.startMonthIndex + 1}
@@ -238,7 +240,7 @@ export function CustomItemsSection({
                       startMonthIndex: Math.max(0, Number(e.target.value) - 1),
                     })
                   }
-                  className="w-16 rounded-lg border px-2 py-1 text-sm"
+                  className="h-9 w-16 rounded-lg border px-2 text-sm"
                   style={{
                     borderColor: T.borderSoft,
                     background: T.panel,
@@ -254,6 +256,7 @@ export function CustomItemsSection({
                   Триває
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={1}
                     max={maxMonth}
                     value={draft.durationMonths}
@@ -263,7 +266,7 @@ export function CustomItemsSection({
                         durationMonths: Number(e.target.value) || 1,
                       })
                     }
-                    className="w-16 rounded-lg border px-2 py-1 text-sm"
+                    className="h-9 w-16 rounded-lg border px-2 text-sm"
                     style={{
                       borderColor: T.borderSoft,
                       background: T.panel,
@@ -277,13 +280,13 @@ export function CustomItemsSection({
                 type="button"
                 onClick={handleAdd}
                 disabled={!draft.amount || Number(draft.amount) <= 0}
-                className="ml-auto inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+                className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-lg px-4 text-sm font-semibold disabled:opacity-50"
                 style={{
                   background: T.accentPrimary,
                   color: "#fff",
                 }}
               >
-                <Plus className="h-3.5 w-3.5" />
+                <Plus className="h-4 w-4" />
                 Додати
               </button>
             </div>
