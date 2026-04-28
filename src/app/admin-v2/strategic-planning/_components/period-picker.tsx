@@ -85,14 +85,14 @@ export function PeriodPicker({
         </div>
 
         {/* Duration */}
-        <div className="flex flex-col gap-1.5">
+        <div className="flex min-w-0 flex-col gap-1.5">
           <label
             className="text-[11px] font-semibold uppercase tracking-wider"
             style={{ color: T.textMuted }}
           >
             Горизонт
           </label>
-          <div className="-mx-1 flex snap-x snap-mandatory items-center gap-1.5 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible md:pb-0">
+          <div className="flex snap-x snap-mandatory items-center gap-1.5 overflow-x-auto pb-1 md:flex-wrap md:overflow-visible md:pb-0">
             {DURATION_PRESETS.map((m) => {
               const isActive = period.durationMonths === m;
               return (

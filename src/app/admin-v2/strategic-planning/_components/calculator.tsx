@@ -61,7 +61,7 @@ export function Calculator({ initialData }: { initialData: InitialData }) {
   );
 
   return (
-    <div className="flex flex-col gap-4 md:gap-6">
+    <div className="flex min-w-0 max-w-full flex-col gap-4 overflow-x-hidden md:gap-6">
       {/* Header */}
       <header className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">

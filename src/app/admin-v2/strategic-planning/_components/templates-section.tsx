@@ -75,35 +75,35 @@ export function TemplatesSection({
       {open && (
         <CardContent className="flex flex-col gap-3 p-2 pt-0">
           {templates.length > 0 && (
-            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-2 py-1.5">
               <span className="text-[11px]" style={{ color: T.textMuted }}>
                 {selectedIds.size} / {templates.length}
               </span>
-              <div className="flex gap-1.5">
+              <div className="flex shrink-0 gap-1.5">
                 <button
                   type="button"
                   onClick={onSelectAll}
                   disabled={allSelected}
-                  className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
+                  className="whitespace-nowrap rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
                   style={{
                     borderColor: T.borderSoft,
                     background: T.accentPrimarySoft,
                     color: T.accentPrimary,
                   }}
                 >
-                  Обрати всі
+                  Усі
                 </button>
                 <button
                   type="button"
                   onClick={onClearAll}
                   disabled={selectedIds.size === 0}
-                  className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
+                  className="whitespace-nowrap rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
                   style={{
                     borderColor: T.borderSoft,
                     color: T.textSecondary,
                   }}
                 >
-                  Зняти всі
+                  Зняти
                 </button>
               </div>
             </div>
@@ -130,7 +130,7 @@ export function TemplatesSection({
                 return (
                   <label
                     key={t.id}
-                    className="flex min-h-[44px] items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40"
+                    className="flex min-w-0 min-h-[44px] items-center gap-2.5 rounded-xl px-2 py-1.5 transition-colors hover:bg-muted/40"
                   >
                     <Checkbox
                       checked={checked}
@@ -138,7 +138,7 @@ export function TemplatesSection({
                       className="h-5 w-5"
                     />
                     <span
-                      className="flex-1 truncate text-sm font-medium"
+                      className="min-w-0 flex-1 truncate text-sm font-medium"
                       style={{ color: T.textPrimary }}
                     >
                       {t.emoji ? `${t.emoji} ` : ""}
