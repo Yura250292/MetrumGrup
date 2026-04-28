@@ -16,12 +16,18 @@ export function StaffSection({
   employees,
   selectedIds,
   onToggle,
+  onSelectAll,
+  onClearAll,
 }: {
   employees: EmployeeDTO[];
   selectedIds: Set<string>;
   onToggle: (id: string) => void;
+  onSelectAll: () => void;
+  onClearAll: () => void;
 }) {
   const [open, setOpen] = useState(true);
+  const allSelected =
+    employees.length > 0 && selectedIds.size === employees.length;
 
   return (
     <Card className="border-0 shadow-sm" style={{ background: T.panel }}>
@@ -60,6 +66,40 @@ export function StaffSection({
 
       {open && (
         <CardContent className="flex flex-col gap-1.5 p-2 pt-0">
+          {employees.length > 0 && (
+            <div className="flex items-center justify-between gap-2 px-2 py-1.5">
+              <span className="text-[11px]" style={{ color: T.textMuted }}>
+                {selectedIds.size} / {employees.length}
+              </span>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={onSelectAll}
+                  disabled={allSelected}
+                  className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
+                  style={{
+                    borderColor: T.borderSoft,
+                    background: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                  }}
+                >
+                  Обрати всіх
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearAll}
+                  disabled={selectedIds.size === 0}
+                  className="rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-all disabled:opacity-40"
+                  style={{
+                    borderColor: T.borderSoft,
+                    color: T.textSecondary,
+                  }}
+                >
+                  Зняти всі
+                </button>
+              </div>
+            </div>
+          )}
           {employees.length === 0 && (
             <p
               className="px-2 py-3 text-sm"

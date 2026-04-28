@@ -138,6 +138,12 @@ export function Calculator({ initialData }: { initialData: InitialData }) {
               return next;
             })
           }
+          onSelectAll={() =>
+            setSelectedEmployeeIds(
+              new Set(initialData.employees.map((e) => e.id)),
+            )
+          }
+          onClearAll={() => setSelectedEmployeeIds(new Set())}
         />
       </div>
       <div className="grid gap-4 md:grid-cols-2">
