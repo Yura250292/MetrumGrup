@@ -12,6 +12,8 @@ export type FolderItem = {
   sortOrder: number;
   isSystem: boolean;
   slug: string | null;
+  mirroredFromId: string | null;
+  mirroredFromProjectId: string | null;
   childFolderCount: number;
   itemCount: number;
   finance?: { income: number; expense: number; balance: number };

@@ -11,6 +11,8 @@ export type FolderListItem = {
   sortOrder: number;
   isSystem: boolean;
   slug: string | null;
+  mirroredFromId: string | null;
+  mirroredFromProjectId: string | null;
   createdAt: Date;
   childFolderCount: number;
   itemCount: number;
@@ -84,6 +86,8 @@ export async function listFolders(
     sortOrder: f.sortOrder,
     isSystem: f.isSystem,
     slug: f.slug,
+    mirroredFromId: f.mirroredFromId,
+    mirroredFromProjectId: f.mirroredFromProjectId,
     createdAt: f.createdAt,
     childFolderCount: f._count.children,
     itemCount:

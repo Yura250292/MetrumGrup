@@ -191,6 +191,7 @@ export default async function AdminV2FinancingPage({
         users={users.map((u) => ({ id: u.id, name: u.name ?? "Без імені" }))}
         currentUserId={session.user.id}
         currentUserName={session.user.name ?? session.user.email ?? "Ви"}
+        isSuperAdmin={session.user.role === "SUPER_ADMIN"}
       />
     </div>
   );

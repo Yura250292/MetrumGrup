@@ -75,12 +75,14 @@ export function FinancingView({
   users = [],
   currentUserId,
   currentUserName,
+  isSuperAdmin = false,
 }: {
   scope?: { id: string; title: string };
   projects: ProjectOption[];
   users?: UserOption[];
   currentUserId: string;
   currentUserName: string;
+  isSuperAdmin?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -100,6 +102,7 @@ export function FinancingView({
   const nonSystemFolders = isRootView ? folders.filter((f) => !f.isSystem) : folders;
 
   const [moveEntryId, setMoveEntryId] = useState<string | null>(null);
+  const [moveFolderId, setMoveFolderId] = useState<string | null>(null);
   const [createFolderParentId, setCreateFolderParentId] = useState<string | null>(null);
 
   const createFolderMutation = useCreateFolder();
@@ -107,12 +110,51 @@ export function FinancingView({
   const deleteFolderMutation = useDeleteFolder();
   const moveItemsMutation = useMoveItems();
 
+  // Папки під "Проєкти" — це FINANCE-mirror PROJECT-папок. Будь-яка зміна
+  // (rename/move/delete) має застосовуватись до source PROJECT-папки, щоб
+  // mirror-сінк автоматично пробросив зміни сюди.
+  const resolveSourceId = (id: string): string => {
+    const f = folders.find((x) => x.id === id);
+    return f?.mirroredFromId ?? id;
+  };
+
   const handleRenameFolder = (id: string, name: string) =>
-    updateFolderMutation.mutate({ id, name }, { onSuccess: () => router.refresh() });
+    updateFolderMutation.mutate(
+      { id: resolveSourceId(id), name },
+      {
+        onSuccess: () => router.refresh(),
+        onError: (err) => alert(err instanceof Error ? err.message : "Помилка перейменування"),
+      },
+    );
 
   const handleDeleteFolder = (id: string) => {
     if (!confirm("Видалити папку? Записи повернуться в корінь.")) return;
-    deleteFolderMutation.mutate(id, { onSuccess: () => router.refresh() });
+    deleteFolderMutation.mutate(resolveSourceId(id), {
+      onSuccess: () => router.refresh(),
+      onError: (err) => alert(err instanceof Error ? err.message : "Помилка видалення"),
+    });
+  };
+
+  const moveFolder = moveFolderId
+    ? folders.find((f) => f.id === moveFolderId) ?? null
+    : null;
+  const moveFolderSourceId = moveFolder
+    ? moveFolder.mirroredFromId ?? moveFolder.id
+    : null;
+  const moveFolderDomain = moveFolder?.mirroredFromId ? "PROJECT" : "FINANCE";
+
+  const handleMoveFolderSubmit = (targetParentId: string | null) => {
+    if (!moveFolderSourceId) return;
+    updateFolderMutation.mutate(
+      { id: moveFolderSourceId, parentId: targetParentId },
+      {
+        onSuccess: () => {
+          setMoveFolderId(null);
+          router.refresh();
+        },
+        onError: (err) => alert(err instanceof Error ? err.message : "Помилка переміщення"),
+      },
+    );
   };
 
   const data = useFinancingData({ scope, folderId });
@@ -358,6 +400,8 @@ export function FinancingView({
               basePath="/admin-v2/financing"
               onRename={handleRenameFolder}
               onDelete={handleDeleteFolder}
+              onMove={(id) => setMoveFolderId(id)}
+              bypassLocks={isSuperAdmin}
             />
           )}
 
@@ -585,6 +629,19 @@ export function FinancingView({
             },
           );
         }}
+      />
+
+      {/* Move folder dialog — для mirror-папок маршрутизуємо на source PROJECT */}
+      <MoveToFolderDialog
+        open={moveFolderId !== null}
+        onClose={() => setMoveFolderId(null)}
+        domain={moveFolderDomain}
+        currentFolderId={moveFolder?.parentId ?? null}
+        excludeSubtreeOf={moveFolderSourceId ?? undefined}
+        itemCount={1}
+        title="Перемістити папку"
+        loading={updateFolderMutation.isPending}
+        onMove={handleMoveFolderSubmit}
       />
 
       {/* OCR Scan modal */}

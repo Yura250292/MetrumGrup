@@ -43,11 +43,15 @@ export function ProjectsFoldersSection({
   basePath,
   onRename,
   onDelete,
+  onMove,
+  bypassLocks,
 }: {
   folders: FolderItem[];
   basePath: string;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  onMove?: (id: string) => void;
+  bypassLocks?: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const [search, setSearch] = useState("");
@@ -177,6 +181,8 @@ export function ProjectsFoldersSection({
                   href={`${basePath}?folderId=${f.id}`}
                   onRename={onRename}
                   onDelete={onDelete}
+                  onMove={onMove}
+                  bypassLocks={bypassLocks}
                   starred={starred.has(f.id)}
                   onToggleStar={() => toggle(f.id)}
                 />
@@ -210,6 +216,8 @@ function StarrableFolderCard({
   href,
   onRename,
   onDelete,
+  onMove,
+  bypassLocks,
   starred,
   onToggleStar,
 }: {
@@ -217,6 +225,8 @@ function StarrableFolderCard({
   href: string;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
+  onMove?: (id: string) => void;
+  bypassLocks?: boolean;
   starred: boolean;
   onToggleStar: () => void;
 }) {
@@ -228,6 +238,8 @@ function StarrableFolderCard({
         showFinanceIndicators
         onRename={onRename}
         onDelete={onDelete}
+        onMove={onMove}
+        bypassLocks={bypassLocks}
       />
       <button
         type="button"
