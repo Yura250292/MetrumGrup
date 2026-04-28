@@ -10,13 +10,16 @@ import {
   Trash2,
   AlertTriangle,
   CheckCircle2,
+  Link2,
+  ArrowDownCircle,
+  ArrowUpCircle,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { financeCategoriesForType } from "@/lib/constants";
+import { FINANCE_CATEGORIES, financeCategoriesForType } from "@/lib/constants";
 import type { ProjectOption } from "./types";
 
 type Kind = "PLAN" | "FACT";
-type Type = "INCOME" | "EXPENSE";
+type Type = "INCOME" | "EXPENSE" | "AUTO";
 
 type Row = {
   occurredAt: string | null;
@@ -24,7 +27,11 @@ type Row = {
   amount: number;
   category: string;
   counterparty: string | null;
+  counterpartyId?: string;
+  counterpartyResolved?: string;
   description: string | null;
+  /** AUTO режим — server повертає direction per row. */
+  direction?: "INCOME" | "EXPENSE";
 };
 
 type ParseResponse = {
@@ -34,13 +41,14 @@ type ParseResponse = {
   totalRowsInFile: number;
   sheetName: string;
   fileName: string;
+  matchedCounterparties: number;
 };
 
 const KIND_LABELS: Record<Kind, string> = {
   PLAN: "Планові",
   FACT: "Фактичні",
 };
-const TYPE_LABELS: Record<Type, string> = {
+const TYPE_LABELS: Record<"INCOME" | "EXPENSE", string> = {
   EXPENSE: "витрати",
   INCOME: "доходи",
 };
@@ -58,8 +66,10 @@ export function ImportExcelModal({
   scope?: { id: string; title: string };
   folderContext?: { id: string; name: string } | null;
   onClose: () => void;
-  onImported: (count: number) => void;
+  onImported: (count: number, skipped: number, duplicates: number) => void;
 }) {
+  const isAuto = preset.type === "AUTO";
+
   const [file, setFile] = useState<File | null>(null);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -69,10 +79,10 @@ export function ImportExcelModal({
   const [committing, setCommitting] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
-  const allowedCategories = useMemo(
-    () => financeCategoriesForType(preset.type),
-    [preset.type],
-  );
+  const allowedCategories = useMemo(() => {
+    if (isAuto) return FINANCE_CATEGORIES;
+    return financeCategoriesForType(preset.type as "INCOME" | "EXPENSE");
+  }, [preset.type, isAuto]);
 
   useEffect(() => {
     const onEsc = (e: KeyboardEvent) => {
@@ -113,7 +123,9 @@ export function ImportExcelModal({
       setParseResult(parsed);
       setRows(parsed.rows.map((r) => ({ ...r, keep: true })));
       if (parsed.rows.length === 0) {
-        setError("AI не знайшов жодного валідного рядка. Перевірте файл або спробуйте інший формат.");
+        setError(
+          "AI не знайшов жодного валідного рядка. Перевірте файл або спробуйте інший формат.",
+        );
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка обробки файлу");
@@ -135,7 +147,16 @@ export function ImportExcelModal({
     setCommitError(null);
     const toImport = rows
       .filter((r) => r.keep)
-      .map(({ keep: _keep, ...r }) => r);
+      .map(({ keep: _k, ...r }) => ({
+        occurredAt: r.occurredAt,
+        title: r.title,
+        amount: r.amount,
+        category: r.category,
+        counterparty: r.counterparty,
+        counterpartyId: r.counterpartyId ?? null,
+        description: r.description,
+        type: isAuto ? r.direction : undefined,
+      }));
     if (toImport.length === 0) {
       setCommitError("Оберіть хоча б один рядок");
       return;
@@ -148,19 +169,20 @@ export function ImportExcelModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           kind: preset.kind,
-          type: preset.type,
-          status: "DRAFT",
+          type: preset.type, // може бути "AUTO"
+          status: isAuto ? "APPROVED" : "DRAFT",
           projectId: projectId || null,
           folderId: folderContext?.id ?? null,
           rows: toImport,
           fallbackDate: new Date().toISOString().slice(0, 10),
+          skipDuplicates: true,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
         throw new Error(data?.error ?? `HTTP ${res.status}`);
       }
-      onImported(data.count ?? toImport.length);
+      onImported(data.count ?? 0, data.skipped ?? 0, data.duplicates ?? 0);
       onClose();
     } catch (e) {
       setCommitError(e instanceof Error ? e.message : "Помилка імпорту");
@@ -171,6 +193,14 @@ export function ImportExcelModal({
 
   const totalAmount = rows.reduce((s, r) => (r.keep ? s + (r.amount || 0) : s), 0);
   const keptCount = rows.filter((r) => r.keep).length;
+  const matchedCount = rows.filter((r) => r.keep && r.counterpartyId).length;
+
+  const headerTitle = isAuto
+    ? "Імпорт виписки банку"
+    : `Імпорт з Excel — ${KIND_LABELS[preset.kind]} ${TYPE_LABELS[preset.type as "INCOME" | "EXPENSE"]}`;
+  const headerHint = isAuto
+    ? "AI визначає тип (дохід/витрата) автоматично за знаком суми"
+    : "AI розпізнає колонки, дати, суми та категорії автоматично";
 
   return (
     <div
@@ -191,10 +221,10 @@ export function ImportExcelModal({
             <Sparkles size={18} style={{ color: T.accentPrimary }} />
             <div>
               <h3 className="text-lg font-bold" style={{ color: T.textPrimary }}>
-                Імпорт з Excel — {KIND_LABELS[preset.kind]} {TYPE_LABELS[preset.type]}
+                {headerTitle}
               </h3>
               <p className="text-[11px]" style={{ color: T.textMuted }}>
-                AI розпізнає колонки, дати, суми та категорії автоматично
+                {headerHint}
               </p>
             </div>
           </div>
@@ -204,7 +234,6 @@ export function ImportExcelModal({
         </div>
 
         <div className="flex flex-col gap-5 p-6">
-          {/* Project selector — допоміжний (опціональний) */}
           {!scope && (
             <div className="flex flex-col gap-1.5">
               <span
@@ -233,7 +262,6 @@ export function ImportExcelModal({
             </div>
           )}
 
-          {/* Upload zone */}
           {!file && (
             <label
               className="flex flex-col items-center justify-center gap-2 rounded-xl px-6 py-12 cursor-pointer transition hover:brightness-105"
@@ -250,7 +278,7 @@ export function ImportExcelModal({
                 Клікніть або перетягніть Excel-файл
               </span>
               <span className="text-[11px]" style={{ color: T.textMuted }}>
-                .xlsx, .xls, .csv · макс 10 МБ
+                .xlsx, .xls, .csv · макс 10 МБ · до 1000 рядків
               </span>
               <input
                 type="file"
@@ -302,7 +330,7 @@ export function ImportExcelModal({
               style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
             >
               <Loader2 size={13} className="animate-spin" />
-              AI розпізнає файл…
+              AI розпізнає файл (можливо кілька батчів)…
             </div>
           )}
 
@@ -344,11 +372,26 @@ export function ImportExcelModal({
                 border: `1px solid ${T.warning}40`,
               }}
             >
-              ⚠️ Файл містить {parseResult.totalRowsInFile} рядків. Імпортується перші ~200 — для решти створіть ще один файл.
+              ⚠️ Файл містить {parseResult.totalRowsInFile} рядків. Імпортується
+              перші 1000 — для решти створіть ще один файл.
             </div>
           )}
 
-          {/* Preview table */}
+          {parseResult && parseResult.matchedCounterparties > 0 && (
+            <div
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px]"
+              style={{
+                backgroundColor: T.accentPrimarySoft,
+                color: T.accentPrimary,
+                border: `1px solid ${T.accentPrimary}40`,
+              }}
+            >
+              <Link2 size={12} />
+              Розпізнано {parseResult.matchedCounterparties} контрагент(ів) з
+              існуючої бази
+            </div>
+          )}
+
           {rows.length > 0 && (
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -357,6 +400,14 @@ export function ImportExcelModal({
                   style={{ color: T.textMuted }}
                 >
                   ПЕРЕВІРТЕ ТА ВІДРЕДАГУЙТЕ ({keptCount} з {rows.length})
+                  {matchedCount > 0 && (
+                    <>
+                      {" · "}
+                      <span style={{ color: T.accentPrimary }}>
+                        🔗 {matchedCount} звʼязків
+                      </span>
+                    </>
+                  )}
                 </span>
                 <span className="text-[12px] font-bold" style={{ color: T.accentPrimary }}>
                   {totalAmount.toLocaleString("uk-UA", { maximumFractionDigits: 0 })} ₴
@@ -374,6 +425,7 @@ export function ImportExcelModal({
                   >
                     <tr style={{ color: T.textMuted }}>
                       <th className="px-2 py-2 text-left font-bold">✓</th>
+                      {isAuto && <th className="px-2 py-2 text-left font-bold">+/−</th>}
                       <th className="px-2 py-2 text-left font-bold">Дата</th>
                       <th className="px-2 py-2 text-left font-bold">Назва</th>
                       <th className="px-2 py-2 text-left font-bold">Категорія</th>
@@ -383,97 +435,166 @@ export function ImportExcelModal({
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r, i) => (
-                      <tr
-                        key={i}
-                        className="border-t"
-                        style={{
-                          borderColor: T.borderSoft,
-                          opacity: r.keep ? 1 : 0.4,
-                        }}
-                      >
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="checkbox"
-                            checked={r.keep}
-                            onChange={(e) => updateRow(i, { keep: e.target.checked })}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="date"
-                            value={r.occurredAt ?? ""}
-                            onChange={(e) =>
-                              updateRow(i, { occurredAt: e.target.value || null })
-                            }
-                            className="w-[110px] bg-transparent outline-none"
-                            style={{ color: T.textPrimary }}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="text"
-                            value={r.title}
-                            onChange={(e) => updateRow(i, { title: e.target.value })}
-                            className="w-full bg-transparent outline-none"
-                            style={{ color: T.textPrimary }}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <select
-                            value={r.category}
-                            onChange={(e) => updateRow(i, { category: e.target.value })}
-                            className="bg-transparent outline-none"
-                            style={{ color: T.textPrimary }}
-                          >
-                            {allowedCategories.map((c) => (
-                              <option key={c.key} value={c.key}>
-                                {c.label}
-                              </option>
-                            ))}
-                          </select>
-                        </td>
-                        <td className="px-2 py-1.5 text-right">
-                          <input
-                            type="number"
-                            step="0.01"
-                            value={r.amount}
-                            onChange={(e) =>
-                              updateRow(i, { amount: Number(e.target.value) || 0 })
-                            }
-                            className="w-[110px] bg-transparent outline-none text-right"
-                            style={{ color: T.textPrimary }}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="text"
-                            value={r.counterparty ?? ""}
-                            onChange={(e) =>
-                              updateRow(i, {
-                                counterparty: e.target.value.trim() || null,
-                              })
-                            }
-                            className="w-[140px] bg-transparent outline-none"
-                            style={{ color: T.textMuted }}
-                          />
-                        </td>
-                        <td className="px-2 py-1.5">
-                          <button
-                            onClick={() =>
-                              setRows((prev) => prev.filter((_, j) => j !== i))
-                            }
-                            title="Прибрати рядок"
-                            style={{ color: T.danger }}
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {rows.map((r, i) => {
+                      const dirCategories = isAuto
+                        ? FINANCE_CATEGORIES.filter(
+                            (c) => c.applicableTo === r.direction,
+                          )
+                        : allowedCategories;
+                      return (
+                        <tr
+                          key={i}
+                          className="border-t"
+                          style={{
+                            borderColor: T.borderSoft,
+                            opacity: r.keep ? 1 : 0.4,
+                          }}
+                        >
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="checkbox"
+                              checked={r.keep}
+                              onChange={(e) =>
+                                updateRow(i, { keep: e.target.checked })
+                              }
+                            />
+                          </td>
+                          {isAuto && (
+                            <td className="px-2 py-1.5">
+                              <button
+                                onClick={() => {
+                                  const next: "INCOME" | "EXPENSE" =
+                                    r.direction === "INCOME" ? "EXPENSE" : "INCOME";
+                                  // Підбираємо першу категорію відповідного типу.
+                                  const cat = FINANCE_CATEGORIES.find(
+                                    (c) => c.applicableTo === next,
+                                  )?.key ?? r.category;
+                                  updateRow(i, { direction: next, category: cat });
+                                }}
+                                title={
+                                  r.direction === "INCOME" ? "Дохід" : "Витрата"
+                                }
+                                style={{
+                                  color:
+                                    r.direction === "INCOME" ? T.success : T.danger,
+                                }}
+                              >
+                                {r.direction === "INCOME" ? (
+                                  <ArrowDownCircle size={14} />
+                                ) : (
+                                  <ArrowUpCircle size={14} />
+                                )}
+                              </button>
+                            </td>
+                          )}
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="date"
+                              value={r.occurredAt ?? ""}
+                              onChange={(e) =>
+                                updateRow(i, { occurredAt: e.target.value || null })
+                              }
+                              className="w-[110px] bg-transparent outline-none"
+                              style={{ color: T.textPrimary }}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="text"
+                              value={r.title}
+                              onChange={(e) =>
+                                updateRow(i, { title: e.target.value })
+                              }
+                              className="w-full bg-transparent outline-none"
+                              style={{ color: T.textPrimary }}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={r.category}
+                              onChange={(e) =>
+                                updateRow(i, { category: e.target.value })
+                              }
+                              className="bg-transparent outline-none"
+                              style={{ color: T.textPrimary }}
+                            >
+                              {dirCategories.map((c) => (
+                                <option key={c.key} value={c.key}>
+                                  {c.label}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5 text-right">
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={r.amount}
+                              onChange={(e) =>
+                                updateRow(i, {
+                                  amount: Number(e.target.value) || 0,
+                                })
+                              }
+                              className="w-[110px] bg-transparent outline-none text-right"
+                              style={{ color: T.textPrimary }}
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div className="flex items-center gap-1">
+                              {r.counterpartyId && (
+                                <Link2
+                                  size={11}
+                                  style={{ color: T.accentPrimary, flexShrink: 0 }}
+                                  aria-label="Звʼязано з контрагентом"
+                                />
+                              )}
+                              <input
+                                type="text"
+                                value={r.counterparty ?? ""}
+                                onChange={(e) =>
+                                  updateRow(i, {
+                                    counterparty: e.target.value.trim() || null,
+                                    // якщо змінили вручну — розривати привʼязку до існуючого
+                                    counterpartyId: undefined,
+                                    counterpartyResolved: undefined,
+                                  })
+                                }
+                                className="w-[140px] bg-transparent outline-none"
+                                style={{
+                                  color: r.counterpartyId
+                                    ? T.accentPrimary
+                                    : T.textMuted,
+                                }}
+                                title={
+                                  r.counterpartyResolved
+                                    ? `Звʼязано з: ${r.counterpartyResolved}`
+                                    : undefined
+                                }
+                              />
+                            </div>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <button
+                              onClick={() =>
+                                setRows((prev) => prev.filter((_, j) => j !== i))
+                              }
+                              title="Прибрати рядок"
+                              style={{ color: T.danger }}
+                            >
+                              <Trash2 size={11} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+
+              <p className="text-[10px]" style={{ color: T.textMuted }}>
+                Дублікати (той самий kind+type+дата+сума+назва) автоматично
+                пропускаються при імпорті.
+              </p>
             </div>
           )}
 
