@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { ProjectStage, StageStatus } from "@prisma/client";
 import { STAGE_ORDER } from "@/lib/constants";
+import { syncProjectBudgetEntry } from "@/lib/folders/mirror-service";
 
 const MAX_DEPTH = 2; // 0-indexed: root=0, підетап=1, підпідетап=2 (3 рівні)
 
@@ -226,6 +227,29 @@ export async function PUT(
       stageProgress: Math.max(0, Math.min(100, overallProgress)),
     },
   });
+
+  // Sync totalBudget з суми allocatedBudget етапів (top-level), якщо є хоча б
+  // один з ненульовим бюджетом. Тоді PROJECT_BUDGET FinanceEntry оновиться і
+  // план зʼявиться у фінансуванні цього проекту.
+  const stagesWithBudget = await prisma.projectStageRecord.findMany({
+    where: { projectId, parentStageId: null, isHidden: false },
+    select: { allocatedBudget: true },
+  });
+  const totalAllocated = stagesWithBudget.reduce(
+    (sum, s) => sum + Number(s.allocatedBudget ?? 0),
+    0,
+  );
+  if (totalAllocated > 0) {
+    await prisma.project.update({
+      where: { id: projectId },
+      data: { totalBudget: totalAllocated },
+    });
+    try {
+      await syncProjectBudgetEntry(projectId, session.user.id);
+    } catch (err) {
+      console.error("[stages PATCH] syncProjectBudgetEntry failed:", err);
+    }
+  }
 
   return NextResponse.json({ success: true });
 }

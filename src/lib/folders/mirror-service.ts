@@ -647,6 +647,7 @@ export async function syncProjectBudgetEntry(
       startDate: true,
       createdAt: true,
       isTestProject: true,
+      firmId: true,
     },
   });
   if (!project) return;
@@ -669,6 +670,7 @@ export async function syncProjectBudgetEntry(
   const folderId = await ensureProjectMirror(project.id, tx);
   const occurredAt = project.startDate ?? project.createdAt ?? new Date();
   const title = `Плановий бюджет проєкту «${project.title}»`;
+  const firmId = project.firmId ?? "metrum-group";
 
   if (existing) {
     await tx.financeEntry.update({
@@ -678,6 +680,7 @@ export async function syncProjectBudgetEntry(
         amount: budget,
         occurredAt,
         folderId,
+        firmId,
         updatedById: userId,
       },
     });
@@ -691,6 +694,7 @@ export async function syncProjectBudgetEntry(
         status: "APPROVED",
         source: "PROJECT_BUDGET",
         projectId: project.id,
+        firmId,
         folderId,
         category: "Плановий бюджет",
         occurredAt,
