@@ -2,6 +2,12 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { ReportsView } from "./_components/reports-view";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import {
+  firmWhereForProject,
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+} from "@/lib/firm/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +16,18 @@ const ALLOWED = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
 export default async function ReportsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (!ALLOWED.includes(session.user.role)) redirect("/admin-v2");
+
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) redirect("/admin-v2");
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  if (!activeRole || !ALLOWED.includes(activeRole)) redirect("/admin-v2");
 
   const [projects, counterparties, employees] = await Promise.all([
     prisma.project.findMany({
-      where: { slug: { not: { startsWith: "temp-" } } },
+      where: {
+        slug: { not: { startsWith: "temp-" } },
+        ...firmWhereForProject(firmId),
+      },
       select: { id: true, title: true },
       orderBy: { title: "asc" },
     }),

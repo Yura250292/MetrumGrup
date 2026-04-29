@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getActiveRoleFromSession } from "@/lib/firm/scope";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -13,8 +15,9 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const role = (session.user as { role?: string }).role;
-  if (!role || !["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"].includes(role)) {
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  if (!activeRole || !["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"].includes(activeRole)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -25,6 +28,12 @@ export async function GET() {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
+    // AI summary firm-scoped: показуємо метрики тільки активної фірми.
+    const projectFirm = firmId ? { firmId } : {};
+    const taskFirm = firmId ? { project: { firmId } } : {};
+    const paymentFirm = firmId ? { project: { firmId } } : {};
+    const financeFirm = firmId ? { firmId } : {};
+
     const [
       activeProjects,
       overdueTasksCount,
@@ -34,29 +43,30 @@ export async function GET() {
       monthExpense,
       upcomingDeadlines,
     ] = await Promise.all([
-      prisma.project.count({ where: { status: "ACTIVE" } }),
+      prisma.project.count({ where: { status: "ACTIVE", ...projectFirm } }),
       prisma.task.count({
-        where: { isArchived: false, status: { isDone: false }, dueDate: { lt: now } },
+        where: { isArchived: false, status: { isDone: false }, dueDate: { lt: now }, ...taskFirm },
       }),
       prisma.task.count({
-        where: { status: { isDone: true }, completedAt: { gte: startOfWeek } },
+        where: { status: { isDone: true }, completedAt: { gte: startOfWeek }, ...taskFirm },
       }),
       prisma.payment.findMany({
-        where: { status: { in: ["PENDING", "PARTIAL"] }, scheduledDate: { lt: now } },
+        where: { status: { in: ["PENDING", "PARTIAL"] }, scheduledDate: { lt: now }, ...paymentFirm },
         select: { amount: true, project: { select: { title: true } } },
       }),
       prisma.financeEntry.aggregate({
-        where: { type: "INCOME", isArchived: false, occurredAt: { gte: startOfMonth, lte: endOfMonth } },
+        where: { type: "INCOME", isArchived: false, occurredAt: { gte: startOfMonth, lte: endOfMonth }, ...financeFirm },
         _sum: { amount: true },
       }),
       prisma.financeEntry.aggregate({
-        where: { type: "EXPENSE", isArchived: false, occurredAt: { gte: startOfMonth, lte: endOfMonth } },
+        where: { type: "EXPENSE", isArchived: false, occurredAt: { gte: startOfMonth, lte: endOfMonth }, ...financeFirm },
         _sum: { amount: true },
       }),
       prisma.project.findMany({
         where: {
           status: "ACTIVE",
           expectedEndDate: { gte: now, lte: new Date(now.getTime() + 7 * 24 * 3600 * 1000) },
+          ...projectFirm,
         },
         select: { title: true, expectedEndDate: true },
         take: 3,
@@ -93,7 +103,7 @@ export async function GET() {
       messages: [
         {
           role: "system",
-          content: `Ти — AI-асистент будівельної компанії. Створи короткий підсумок дня для ${userName} (роль: ${role}) українською мовою. 2-3 речення. Будь конкретним, вказуй числа. Тон — діловий, але дружній. Не використовуй емодзі.`,
+          content: `Ти — AI-асистент будівельної компанії. Створи короткий підсумок дня для ${userName} (роль: ${activeRole}) українською мовою. 2-3 речення. Будь конкретним, вказуй числа. Тон — діловий, але дружній. Не використовуй емодзі.`,
         },
         {
           role: "user",

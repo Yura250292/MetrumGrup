@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import { getProjectAccessContext } from "@/lib/projects/access";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { firmWhereForProject } from "@/lib/firm/scope";
 import {
   enableTasksGlobally,
   isTasksEnabledForProject,
@@ -45,10 +47,15 @@ export async function GET() {
     }
   }
 
+  // Firm-scope: список проектів обмежений активною фірмою (з cookie/session).
+  // SUPER_ADMIN на cross-firm view (firmId=null) бачить усі.
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const firmFilter = firmWhereForProject(firmId);
+
   // Load all projects the user has any relationship with
   const rawProjects = await prisma.project.findMany({
     where: isSuperAdmin
-      ? { status: { not: "CANCELLED" } }
+      ? { status: { not: "CANCELLED" }, ...firmFilter }
       : {
           OR: [
             { managerId: uid },
@@ -56,6 +63,7 @@ export async function GET() {
             { isInternal: true },
           ],
           status: { not: "CANCELLED" },
+          ...firmFilter,
         },
     select: {
       id: true,

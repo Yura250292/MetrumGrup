@@ -7,6 +7,12 @@ import {
   STAGE_LABELS,
   ESTIMATE_STATUS_LABELS
 } from "@/lib/constants";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import {
+  firmWhereForProject,
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+} from "@/lib/firm/scope";
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +22,12 @@ export async function POST(request: Request) {
     if (!session?.user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    if (!["SUPER_ADMIN", "MANAGER"].includes(session.user.role)) {
+    const { firmId } = await resolveFirmScopeForRequest(session);
+    if (!isHomeFirmFor(session, firmId)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    const activeRole = getActiveRoleFromSession(session, firmId);
+    if (activeRole !== "SUPER_ADMIN" && activeRole !== "MANAGER") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
@@ -27,9 +38,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
-    // Fetch projects with all necessary data
+    // Firm-scope: ID можуть бути будь-які з форми; AND-имо firm щоб
+    // експортувались лише проекти активної фірми.
     const projects = await prisma.project.findMany({
-      where: { id: { in: projectIds } },
+      where: { id: { in: projectIds }, ...firmWhereForProject(firmId) },
       include: {
         client: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },

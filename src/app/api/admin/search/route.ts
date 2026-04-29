@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { PROJECT_NOT_TEST } from "@/lib/projects/filters";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { firmWhereForProject } from "@/lib/firm/scope";
 
 /**
  * Unified search across projects, clients, tasks. Returns up to 5 of each.
@@ -19,9 +21,13 @@ export async function GET(req: NextRequest) {
 
   const insensitive = { contains: q, mode: "insensitive" as const };
 
+  // Глобальний пошук теж firm-scoped, інакше studio директор знайде Group проекти.
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const firmFilter = firmWhereForProject(firmId);
+
   const [projects, clients, tasks] = await Promise.all([
     prisma.project.findMany({
-      where: { title: insensitive, ...PROJECT_NOT_TEST },
+      where: { title: insensitive, ...PROJECT_NOT_TEST, ...firmFilter },
       select: {
         id: true,
         title: true,
@@ -32,12 +38,20 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.user.findMany({
-      where: { role: "CLIENT", OR: [{ name: insensitive }, { email: insensitive }] },
+      where: {
+        role: "CLIENT",
+        OR: [{ name: insensitive }, { email: insensitive }],
+        ...(firmId ? { firmId } : {}),
+      },
       select: { id: true, name: true, email: true },
       take: 5,
     }),
     prisma.task.findMany({
-      where: { isArchived: false, title: insensitive },
+      where: {
+        isArchived: false,
+        title: insensitive,
+        ...(firmId ? { project: { firmId } } : {}),
+      },
       select: {
         id: true,
         title: true,

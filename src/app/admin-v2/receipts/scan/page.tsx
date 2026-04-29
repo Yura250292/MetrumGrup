@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ScanUploader } from "./_components/scan-uploader";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { firmWhereForProject } from "@/lib/firm/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -10,8 +12,13 @@ export default async function AdminV2ReceiptScanPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+
   const projects = await prisma.project.findMany({
-    where: { status: { in: ["ACTIVE", "DRAFT"] } },
+    where: {
+      status: { in: ["ACTIVE", "DRAFT"] },
+      ...firmWhereForProject(firmId),
+    },
     orderBy: { title: "asc" },
     select: { id: true, title: true, status: true },
   });

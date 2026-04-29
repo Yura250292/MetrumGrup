@@ -15,18 +15,29 @@ import {
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DeleteProjectButton } from "./_components/delete-project-button";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import {
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+  firmWhereForProject,
+} from "@/lib/firm/scope";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminV2ProjectsDashboardPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
-  if (!["SUPER_ADMIN", "MANAGER"].includes(session.user.role)) {
+
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) redirect("/admin-v2");
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  if (activeRole !== "SUPER_ADMIN" && activeRole !== "MANAGER") {
     redirect("/admin-v2");
   }
 
   const [projects, managers] = await Promise.all([
     prisma.project.findMany({
+      where: firmWhereForProject(firmId),
       include: {
         client: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },
@@ -61,7 +72,7 @@ export default async function AdminV2ProjectsDashboardPage() {
       orderBy: { updatedAt: "desc" },
     }),
     prisma.user.findMany({
-      where: { role: "MANAGER" },
+      where: { role: "MANAGER", ...(firmId ? { firmId } : {}) },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
