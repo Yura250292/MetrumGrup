@@ -4,6 +4,7 @@ import { Role } from '@prisma/client'
 // ВАЖЛИВО: Мокуємо auth модуль ДО будь-яких імпортів
 jest.mock('@/lib/auth')
 
+
 // Тепер імпортуємо - Jest автоматично використає __mocks__/lib/auth.ts
 import { auth } from '@/lib/auth'
 import {
@@ -31,6 +32,8 @@ function createMockSession(role: Role = 'SUPER_ADMIN', userId: string = 'test-us
       email: 'test@example.com',
       name: 'Test User',
       role,
+      firmId: 'metrum-group',
+      firmAccess: {},
     },
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   }

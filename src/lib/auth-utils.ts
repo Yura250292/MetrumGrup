@@ -1,6 +1,8 @@
 import { auth } from "@/lib/auth";
 import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getActiveRoleFromSession } from "@/lib/firm/scope";
 
 export async function getSession() {
   return await auth();
@@ -14,9 +16,31 @@ export async function requireAuth() {
   return session;
 }
 
+/**
+ * Повертає роль користувача у контексті активної фірми (з cookie).
+ * Це КЛЮЧОВА відмінність від session.user.role:
+ * - shymilo93 base=HR, але на Studio active=SUPER_ADMIN → guard пропустить
+ * - SUPER_ADMINs завжди SUPER_ADMIN на всіх фірмах (правило з getActiveRoleFromSession)
+ *
+ * Якщо cookies() недоступне (jest, build-time) — fallback на home firm
+ * щоб запит не падав з ERR_NEXT_REQUEST_SCOPE.
+ */
+async function getActiveRoleForRequest(
+  session: Awaited<ReturnType<typeof requireAuth>>,
+): Promise<Role | null> {
+  let firmId: string | null;
+  try {
+    ({ firmId } = await resolveFirmScopeForRequest(session));
+  } catch {
+    firmId = session.user.firmId ?? null;
+  }
+  return getActiveRoleFromSession(session, firmId);
+}
+
 export async function requireRole(allowedRoles: Role[]) {
   const session = await requireAuth();
-  if (!allowedRoles.includes(session.user.role)) {
+  const role = await getActiveRoleForRequest(session);
+  if (!role || !allowedRoles.includes(role)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -63,7 +87,8 @@ export const HR_ACCESSIBLE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "HR"];
 
 export async function requireAdminRole() {
   const session = await requireAuth();
-  if (!ADMIN_ROLES.includes(session.user.role)) {
+  const role = await getActiveRoleForRequest(session);
+  if (!role || !ADMIN_ROLES.includes(role)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -71,7 +96,8 @@ export async function requireAdminRole() {
 
 export async function requireHrOrAdminRole() {
   const session = await requireAuth();
-  if (!HR_ACCESSIBLE_ROLES.includes(session.user.role)) {
+  const role = await getActiveRoleForRequest(session);
+  if (!role || !HR_ACCESSIBLE_ROLES.includes(role)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -79,7 +105,8 @@ export async function requireHrOrAdminRole() {
 
 export async function requireEstimateAccess() {
   const session = await requireAuth();
-  if (!ESTIMATE_ROLES.includes(session.user.role)) {
+  const role = await getActiveRoleForRequest(session);
+  if (!role || !ESTIMATE_ROLES.includes(role)) {
     throw new Error("Forbidden");
   }
   return session;
@@ -87,7 +114,8 @@ export async function requireEstimateAccess() {
 
 export async function requireStaffAccess() {
   const session = await requireAuth();
-  if (!STAFF_ROLES.includes(session.user.role)) {
+  const role = await getActiveRoleForRequest(session);
+  if (!role || !STAFF_ROLES.includes(role)) {
     throw new Error("Forbidden");
   }
   return session;
