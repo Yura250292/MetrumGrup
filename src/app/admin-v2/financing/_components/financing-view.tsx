@@ -77,6 +77,7 @@ export function FinancingView({
   currentUserId,
   currentUserName,
   isSuperAdmin = false,
+  activeFirm,
 }: {
   scope?: { id: string; title: string };
   projects: ProjectOption[];
@@ -84,6 +85,7 @@ export function FinancingView({
   currentUserId: string;
   currentUserName: string;
   isSuperAdmin?: boolean;
+  activeFirm?: { id: string; name: string; brandColor: string };
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -720,6 +722,7 @@ export function FinancingView({
           }
           currentUserId={currentUserId}
           currentUserName={currentUserName}
+          activeFirm={activeFirm}
           onClose={() => {
             setCreatePreset(null);
             setEditing(null);

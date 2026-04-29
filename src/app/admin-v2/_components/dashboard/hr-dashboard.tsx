@@ -4,7 +4,15 @@ import { Users, Building2, HardHat, User as UserIcon, ListTodo, AlertCircle, Mic
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { KpiCard } from "./kpi-card";
 
-export async function HrDashboard({ firstName, today }: { firstName: string; today: string }) {
+export async function HrDashboard({
+  firstName,
+  today,
+  firmId,
+}: {
+  firstName: string;
+  today: string;
+  firmId: string | null;
+}) {
   const now = new Date();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -31,7 +39,9 @@ export async function HrDashboard({ firstName, today }: { firstName: string; tod
   ] = await Promise.all([
     prisma.employee.count(),
     prisma.employee.count({ where: { isActive: true } }),
-    prisma.counterparty.count({ where: { isActive: true } }),
+    prisma.counterparty.count({
+      where: { isActive: true, ...(firmId ? { firmId } : {}) },
+    }),
     prisma.worker.count(),
     prisma.worker.count({ where: { isActive: true } }),
     prisma.user.count({ where: { role: "CLIENT" } }),

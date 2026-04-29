@@ -144,10 +144,17 @@ export async function POST(request: NextRequest) {
     if (counterpartyId) {
       const cp = await prisma.counterparty.findUnique({
         where: { id: counterpartyId },
-        select: { id: true, name: true },
+        select: { id: true, name: true, firmId: true },
       });
       if (!cp) {
         return NextResponse.json({ error: "Контрагент не існує" }, { status: 400 });
+      }
+      // Не дозволяємо прив'язувати контрагента чужої фірми до запису.
+      if (cp.firmId && entryFirmId && cp.firmId !== entryFirmId) {
+        return NextResponse.json(
+          { error: "Контрагент належить іншій фірмі" },
+          { status: 400 },
+        );
       }
       counterpartyName = cp.name;
     }

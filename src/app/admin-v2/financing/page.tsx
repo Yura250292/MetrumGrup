@@ -10,6 +10,9 @@ import {
   firmWhereForProject,
   isHomeFirmFor,
   getActiveRoleFromSession,
+  getFirmBrand,
+  KNOWN_FIRMS,
+  DEFAULT_FIRM_ID,
 } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
@@ -192,6 +195,13 @@ export default async function AdminV2FinancingPage({
         currentUserId={session.user.id}
         currentUserName={session.user.name ?? session.user.email ?? "Ви"}
         isSuperAdmin={session.user.role === "SUPER_ADMIN"}
+        activeFirm={{
+          id: firmId ?? DEFAULT_FIRM_ID,
+          name:
+            KNOWN_FIRMS[firmId ?? DEFAULT_FIRM_ID]?.name ??
+            KNOWN_FIRMS[DEFAULT_FIRM_ID].name,
+          brandColor: getFirmBrand(firmId).primary,
+        }}
       />
     </div>
   );

@@ -154,7 +154,7 @@ export default async function AdminV2Dashboard({
   // HR dashboard рендериться коли активна роль (з урахуванням firm-context) — HR.
   // Наприклад shymilo93 на Metrum Group → HR; на Metrum Studio → SUPER_ADMIN (нормальний дашборд).
   if (activeRole === "HR") {
-    return <HrDashboard firstName={firstName} today={today} />;
+    return <HrDashboard firstName={firstName} today={today} firmId={firmId} />;
   }
   const activePeriod = (sp.period || "month") as PeriodId;
 

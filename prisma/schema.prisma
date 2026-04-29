@@ -1363,6 +1363,7 @@ model Firm {
   financeEntries FinanceEntry[]
   folders        Folder[]
   userAccess     UserFirmAccess[]
+  counterparties Counterparty[]
 
   @@map("firms")
 }
@@ -2387,9 +2388,13 @@ model Counterparty {
   address   String?
   notes     String?
   isActive  Boolean          @default(true)
+  /// Фірма-власник (Group / Studio). Контрагенти ізольовані між фірмами;
+  /// один SUPPLIER може існувати окремо в Group і в Studio (різні рядки).
+  firmId    String?
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
+  firm               Firm?                    @relation(fields: [firmId], references: [id])
   financeEntries     FinanceEntry[]
   financeTemplates   FinanceExpenseTemplate[]
   kb2Forms           KB2Form[]                @relation("KB2FormCounterparty")
@@ -2398,6 +2403,7 @@ model Counterparty {
   @@index([isActive])
   @@index([type])
   @@index([name])
+  @@index([firmId])
   @@map("counterparties")
 }
 

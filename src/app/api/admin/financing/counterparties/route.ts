@@ -4,6 +4,12 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import {
+  isHomeFirmFor,
+  firmIdForNewEntity,
+  DEFAULT_FIRM_ID,
+} from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -40,6 +46,9 @@ export async function GET(request: NextRequest) {
   if (!session?.user) return unauthorizedResponse();
   if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+
   const { searchParams } = new URL(request.url);
   const parsed = querySchema.safeParse(Object.fromEntries(searchParams));
   if (!parsed.success) {
@@ -53,6 +62,7 @@ export async function GET(request: NextRequest) {
 
   const items = await prisma.counterparty.findMany({
     where: {
+      ...(firmId ? { firmId } : {}),
       ...(includeInactive ? {} : { isActive: true }),
       ...(type ? { type } : {}),
       ...(q
@@ -77,6 +87,9 @@ export async function POST(request: NextRequest) {
   if (!session?.user) return unauthorizedResponse();
   if (!WRITE_ROLES.includes(session.user.role)) return forbiddenResponse();
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+
   const body = await request.json();
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) {
@@ -88,10 +101,15 @@ export async function POST(request: NextRequest) {
 
   const data = parsed.data;
   const name = normaliseName(data.name);
+  const entryFirmId = firmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
-  // Idempotent autocreate — case-insensitive lookup before insert.
+  // Idempotent autocreate — case-insensitive lookup, scoped to active firm
+  // (один SUPPLIER може існувати окремо в Group та Studio).
   const existing = await prisma.counterparty.findFirst({
-    where: { name: { equals: name, mode: "insensitive" } },
+    where: {
+      name: { equals: name, mode: "insensitive" },
+      ...(entryFirmId ? { firmId: entryFirmId } : {}),
+    },
     orderBy: { isActive: "desc" },
   });
   if (existing) {
@@ -110,6 +128,7 @@ export async function POST(request: NextRequest) {
       email: data.email ?? null,
       address: data.address ?? null,
       isActive: true,
+      firmId: entryFirmId,
     },
   });
   return NextResponse.json({ data: created }, { status: 201 });

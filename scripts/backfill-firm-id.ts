@@ -27,11 +27,14 @@ async function main() {
     UPDATE projects SET "firmId" = 'metrum-group' WHERE "firmId" IS NULL`;
   const f = await prisma.$executeRaw`
     UPDATE finance_entries SET "firmId" = 'metrum-group' WHERE "firmId" IS NULL`;
+  const c = await prisma.$executeRaw`
+    UPDATE counterparties SET "firmId" = 'metrum-group' WHERE "firmId" IS NULL`;
 
   console.log(`✅ Backfill complete:`);
   console.log(`   - users updated: ${u}`);
   console.log(`   - projects updated: ${p}`);
   console.log(`   - finance_entries updated: ${f}`);
+  console.log(`   - counterparties updated: ${c}`);
 
   // Підсумок після backfill — всі мають бути 0.
   const usersStats = await prisma.$queryRaw<{ null_count: bigint }[]>`
@@ -40,11 +43,14 @@ async function main() {
     SELECT COUNT(*) AS null_count FROM projects WHERE "firmId" IS NULL`;
   const finStats = await prisma.$queryRaw<{ null_count: bigint }[]>`
     SELECT COUNT(*) AS null_count FROM finance_entries WHERE "firmId" IS NULL`;
+  const cpStats = await prisma.$queryRaw<{ null_count: bigint }[]>`
+    SELECT COUNT(*) AS null_count FROM counterparties WHERE "firmId" IS NULL`;
 
   console.log(`\nVerification (мають бути 0):`);
   console.log(`   - users  with firmId NULL: ${usersStats[0].null_count}`);
   console.log(`   - projects with firmId NULL: ${projStats[0].null_count}`);
   console.log(`   - finance with firmId NULL: ${finStats[0].null_count}`);
+  console.log(`   - counterparties with firmId NULL: ${cpStats[0].null_count}`);
 }
 
 main()

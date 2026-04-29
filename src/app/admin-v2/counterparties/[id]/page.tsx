@@ -1,6 +1,8 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { CounterpartyDossier } from "../_components/counterparty-dossier";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +21,9 @@ export default async function CounterpartyDossierPage({
   const { id } = await params;
   const cp = await prisma.counterparty.findUnique({ where: { id } });
   if (!cp) notFound();
+  // Studio юзер не може відкрити досьє Group-контрагента і навпаки.
+  await resolveFirmScopeForRequest(session);
+  assertCanAccessFirm(session, cp.firmId);
 
   return (
     <CounterpartyDossier

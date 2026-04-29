@@ -3,6 +3,12 @@ import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import {
+  isHomeFirmFor,
+  firmIdForNewEntity,
+  DEFAULT_FIRM_ID,
+} from "@/lib/firm/scope";
 import {
   parseCounterpartiesExcel,
   readSheetAsRows,
@@ -36,6 +42,10 @@ export async function POST(request: NextRequest) {
   if (!session?.user) return unauthorizedResponse();
   if (!WRITE_ROLES.includes(session.user.role)) return forbiddenResponse();
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+  const entryFirmId = firmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -67,7 +77,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ preview: parsed, usedAi });
     }
 
-    const result = await prisma.counterparty.createMany({ data: parsed.data });
+    const result = await prisma.counterparty.createMany({
+      data: parsed.data.map((row) => ({ ...row, firmId: entryFirmId })),
+    });
 
     return NextResponse.json({
       created: result.count,

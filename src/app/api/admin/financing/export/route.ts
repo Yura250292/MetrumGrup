@@ -4,6 +4,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { isHomeFirmFor } from "@/lib/firm/scope";
 import {
   FINANCE_CATEGORY_LABELS,
   FINANCE_ENTRY_TYPE_LABELS,
@@ -40,9 +42,12 @@ export async function GET(request: NextRequest) {
   if (!session?.user) return unauthorizedResponse();
   if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
 
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
+
   try {
     const { searchParams } = new URL(request.url);
-    const filters = parseListParams(searchParams);
+    const filters = parseListParams(searchParams, firmId);
     const where = await expandFolderFilter(filters);
 
     const [entries, summary] = await Promise.all([
@@ -104,8 +109,11 @@ export async function GET(request: NextRequest) {
       });
     }
     if (filters.counterpartyId) {
-      const cp = await prisma.counterparty.findUnique({
-        where: { id: filters.counterpartyId },
+      const cp = await prisma.counterparty.findFirst({
+        where: {
+          id: filters.counterpartyId,
+          ...(firmId ? { firmId } : {}),
+        },
         select: { name: true },
       });
       if (cp) appliedFilters.push({ label: "Контрагент", value: cp.name });

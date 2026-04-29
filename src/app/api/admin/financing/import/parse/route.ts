@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
     const uniqueCounterpartyNames = cleaned
       .map((r) => r.counterparty)
       .filter((n): n is string => typeof n === "string" && n.length > 0);
-    const matches = await matchCounterparties(uniqueCounterpartyNames);
+    const matches = await matchCounterparties(uniqueCounterpartyNames, firmId);
     const enriched = cleaned.map((r) => {
       if (r.counterparty) {
         const hit = matches.get(r.counterparty);
@@ -281,11 +281,12 @@ export async function POST(request: NextRequest) {
       };
     });
 
-  // Counterparty fuzzy-match — один запит у БД на унікальні імена.
+  // Counterparty fuzzy-match — один запит у БД на унікальні імена,
+  // обмежений активною фірмою (Group/Studio контрагенти ізольовані).
   const uniqueCounterpartyNames = cleaned
     .map((r) => r.counterparty)
     .filter((n): n is string => typeof n === "string" && n.length > 0);
-  const matches = await matchCounterparties(uniqueCounterpartyNames);
+  const matches = await matchCounterparties(uniqueCounterpartyNames, firmId);
   for (const r of cleaned) {
     if (r.counterparty) {
       const hit = matches.get(r.counterparty);

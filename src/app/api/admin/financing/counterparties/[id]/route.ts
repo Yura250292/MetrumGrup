@@ -5,7 +5,11 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
-import { isHomeFirmFor, getActiveRoleFromSession } from "@/lib/firm/scope";
+import {
+  isHomeFirmFor,
+  getActiveRoleFromSession,
+  assertCanAccessFirm,
+} from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -42,6 +46,8 @@ export async function GET(
   if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
   const activeRole = getActiveRoleFromSession(session, firmId);
   if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
+  // 403 якщо контрагент чужої фірми (Studio юзер не бачить Group-контрагента і навпаки).
+  assertCanAccessFirm(session, cp.firmId);
   const firmFilter: { firmId?: string } = firmId ? { firmId } : {};
 
   // Aggregate per kind/type/status to build the KPI strip on the dossier page.
@@ -122,6 +128,7 @@ export async function PATCH(
   const { id } = await ctx.params;
   const existing = await prisma.counterparty.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  assertCanAccessFirm(session, existing.firmId);
 
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
@@ -165,9 +172,14 @@ export async function DELETE(
   const { id } = await ctx.params;
   const existing = await prisma.counterparty.findUnique({
     where: { id },
-    select: { id: true, _count: { select: { financeEntries: true, financeTemplates: true } } },
+    select: {
+      id: true,
+      firmId: true,
+      _count: { select: { financeEntries: true, financeTemplates: true } },
+    },
   });
   if (!existing) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+  assertCanAccessFirm(session, existing.firmId);
 
   if (existing._count.financeEntries > 0 || existing._count.financeTemplates > 0) {
     // Soft-delete instead — don't break audit trail.

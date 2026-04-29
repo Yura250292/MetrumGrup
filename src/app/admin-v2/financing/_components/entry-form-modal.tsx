@@ -62,6 +62,7 @@ export function EntryFormModal({
   folderContext,
   currentUserId: _currentUserId,
   currentUserName,
+  activeFirm,
   onClose,
   onSave,
   onStatusChange,
@@ -74,6 +75,7 @@ export function EntryFormModal({
   folderContext?: { id: string; name: string } | null;
   currentUserId: string;
   currentUserName: string;
+  activeFirm?: { id: string; name: string; brandColor: string };
   onClose: () => void;
   onSave: (values: EntryFormValues, andCreateAnother: boolean) => Promise<void>;
   onStatusChange?: (entry: FinanceEntryDTO, newStatus: FinanceEntryStatus) => Promise<void>;
@@ -229,6 +231,14 @@ export function EntryFormModal({
     }
   }, [availableCategories, values.category]);
 
+  // Cost-code and cost-type only apply to expenses. When switching to INCOME
+  // clear them so we don't persist stale expense metadata on income records.
+  useEffect(() => {
+    if (values.type === "INCOME" && (values.costCodeId || values.costType)) {
+      setValues((p) => ({ ...p, costCodeId: "", costType: "" }));
+    }
+  }, [values.type, values.costCodeId, values.costType]);
+
   async function handleSubmit(e: React.FormEvent, andCreateAnother: boolean) {
     e.preventDefault();
     setError(null);
@@ -312,10 +322,29 @@ export function EntryFormModal({
           className="sticky top-0 z-10 flex items-center justify-between border-b px-6 py-4"
           style={{ borderColor: T.borderSoft, backgroundColor: T.panel }}
         >
-          <div>
-            <h3 className="text-lg font-bold" style={{ color: T.textPrimary }}>
-              {mode === "edit" ? "Редагувати операцію" : "Нова операція"}
-            </h3>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-lg font-bold" style={{ color: T.textPrimary }}>
+                {mode === "edit" ? "Редагувати операцію" : "Нова операція"}
+              </h3>
+              {activeFirm && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide"
+                  style={{
+                    backgroundColor: `${activeFirm.brandColor}1A`,
+                    color: activeFirm.brandColor,
+                    border: `1px solid ${activeFirm.brandColor}55`,
+                  }}
+                  title="Запис буде створено у цій фірмі"
+                >
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: activeFirm.brandColor }}
+                  />
+                  {activeFirm.name}
+                </span>
+              )}
+            </div>
             <p className="text-[11px]" style={{ color: T.textMuted }}>
               {mode === "edit"
                 ? "Зміни запишуться в історію"
@@ -610,7 +639,7 @@ export function EntryFormModal({
               />
             </Field>
 
-            <Field label="Контрагент">
+            <Field label={values.type === "INCOME" ? "Платник" : "Контрагент"}>
               <Combobox
                 value={values.counterpartyId || null}
                 options={counterpartyOptions}
@@ -622,8 +651,14 @@ export function EntryFormModal({
                   }));
                 }}
                 onCreate={createCounterparty}
-                placeholder="Оберіть або введіть для створення…"
-                searchPlaceholder="Пошук контрагента…"
+                placeholder={
+                  values.type === "INCOME"
+                    ? "Від кого надходження…"
+                    : "Оберіть або введіть для створення…"
+                }
+                searchPlaceholder={
+                  values.type === "INCOME" ? "Пошук платника…" : "Пошук контрагента…"
+                }
                 emptyMessage="Немає контрагентів"
               />
               {values.counterpartyId && (
@@ -633,44 +668,48 @@ export function EntryFormModal({
                   className="mt-1 inline-flex items-center gap-1 text-[11px] hover:underline"
                   style={{ color: T.accentPrimary }}
                 >
-                  Картка контрагента ↗
+                  {values.type === "INCOME" ? "Картка платника ↗" : "Картка контрагента ↗"}
                 </Link>
               )}
             </Field>
 
-            <Field label="Стаття витрат">
-              <Combobox
-                value={values.costCodeId || null}
-                options={costCodeOptions}
-                onChange={(id) => setValues((p) => ({ ...p, costCodeId: id ?? "" }))}
-                placeholder="Виберіть статтю (cost-code)…"
-                searchPlaceholder="Пошук — код або назва…"
-                emptyMessage="Дерево порожнє — заповніть seed-cost-codes"
-                listMaxHeight={320}
-              />
-            </Field>
+            {values.type === "EXPENSE" && (
+              <Field label="Стаття витрат">
+                <Combobox
+                  value={values.costCodeId || null}
+                  options={costCodeOptions}
+                  onChange={(id) => setValues((p) => ({ ...p, costCodeId: id ?? "" }))}
+                  placeholder="Виберіть статтю (cost-code)…"
+                  searchPlaceholder="Пошук — код або назва…"
+                  emptyMessage="Дерево порожнє — заповніть seed-cost-codes"
+                  listMaxHeight={320}
+                />
+              </Field>
+            )}
 
-            <Field label="Тип витрат">
-              <select
-                value={values.costType}
-                onChange={(e) =>
-                  setValues((p) => ({ ...p, costType: e.target.value as CostType | "" }))
-                }
-                className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              >
-                <option value="">— не вказано —</option>
-                {(Object.keys(COST_TYPE_LABELS) as CostType[]).map((k) => (
-                  <option key={k} value={k}>
-                    {COST_TYPE_LABELS[k]}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            {values.type === "EXPENSE" && (
+              <Field label="Тип витрат">
+                <select
+                  value={values.costType}
+                  onChange={(e) =>
+                    setValues((p) => ({ ...p, costType: e.target.value as CostType | "" }))
+                  }
+                  className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderStrong}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  <option value="">— не вказано —</option>
+                  {(Object.keys(COST_TYPE_LABELS) as CostType[]).map((k) => (
+                    <option key={k} value={k}>
+                      {COST_TYPE_LABELS[k]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
 
             <div className="sm:col-span-2">
               <Field label="Коротка назва" required>
@@ -679,7 +718,11 @@ export function EntryFormModal({
                   onChange={(e) => setValues((p) => ({ ...p, title: e.target.value }))}
                   required
                   placeholder={
-                    values.kind === "PLAN"
+                    values.type === "INCOME"
+                      ? values.kind === "PLAN"
+                        ? "Напр. «Аванс від замовника (план)»"
+                        : "Напр. «Оплата за етап фундамент»"
+                      : values.kind === "PLAN"
                       ? "Напр. «Закупка бетону на фундамент (план)»"
                       : "Напр. «Бетон М300 для фундаменту»"
                   }
