@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import type { FolderDomain, Prisma } from "@prisma/client";
-import { DEFAULT_FIRM_ID } from "@/lib/firm/scope";
 
 export type FolderListItem = {
   id: string;
@@ -20,36 +19,19 @@ export type FolderListItem = {
 };
 
 /**
- * Build folder where-clause that hides folders not relevant for the active firm:
- * - System folders (e.g. "Загальні витрати") — only on default firm (Metrum Group);
- *   on other firms they're hidden.
- * - Project mirror folders (mirroredFromProjectId set) — only when mirrored project
- *   belongs to the active firm.
- * - Custom user folders (no system flag, no mirror) — visible everywhere (cross-firm).
+ * Build folder where-clause to scope folders by active firm.
  *
- * firmId=null (cross-firm view) → no filter.
+ * Кожна папка має власний firmId (присвоюється при створенні + bcakfill).
+ * Тут просто AND-имо firmId або null (для legacy перед backfill).
+ *
+ * firmId=null у виклику → cross-firm view (SUPER_ADMIN), без фільтра.
  */
 function firmAwareFolderWhere(
-  domain: FolderDomain,
+  _domain: FolderDomain,
   firmId: string | null,
 ): Prisma.FolderWhereInput {
-  if (!firmId || domain !== "FINANCE") return {};
-  const isDefaultFirm = firmId === DEFAULT_FIRM_ID;
-  return {
-    OR: [
-      // Custom user folders — без mirror, без system
-      {
-        AND: [
-          { isSystem: false },
-          { mirroredFromProjectId: null },
-        ],
-      },
-      // Project mirror folders — лише для проектів цієї фірми
-      { mirroredFromProject: { firmId } },
-      // System folders — лише для default firm (Metrum Group)
-      ...(isDefaultFirm ? [{ isSystem: true }] : []),
-    ],
-  };
+  if (!firmId) return {};
+  return { firmId };
 }
 
 export async function listFolders(

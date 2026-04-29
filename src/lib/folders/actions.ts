@@ -22,12 +22,15 @@ export async function createFolder(opts: {
   name: string;
   parentId?: string | null;
   color?: string | null;
+  /** firmId stamping. Береться з активної firm (cookie) у API роуті. */
+  firmId?: string | null;
 }) {
   // Validate parent belongs to same domain
+  let parentFirmId: string | null = null;
   if (opts.parentId) {
     const parent = await prisma.folder.findUnique({
       where: { id: opts.parentId },
-      select: { domain: true, mirroredFromProjectId: true },
+      select: { domain: true, mirroredFromProjectId: true, firmId: true },
     });
     if (!parent || parent.domain !== opts.domain) {
       throw new Error("Батьківська папка не знайдена");
@@ -37,6 +40,7 @@ export async function createFolder(opts: {
     if (parent.mirroredFromProjectId) {
       throw new Error(MIRROR_FOLDER_EDIT_ERROR);
     }
+    parentFirmId = parent.firmId;
   }
 
   // Get next sortOrder
@@ -51,6 +55,9 @@ export async function createFolder(opts: {
     sortOrder = USER_ROOT_FINANCE_MIN_SORT;
   }
 
+  // firmId: явно з opts > успадковується з parent > metrum-group fallback
+  const firmId = opts.firmId ?? parentFirmId ?? "metrum-group";
+
   const folder = await prisma.folder.create({
     data: {
       domain: opts.domain,
@@ -58,6 +65,7 @@ export async function createFolder(opts: {
       parentId: opts.parentId ?? null,
       color: opts.color ?? null,
       sortOrder,
+      firmId,
     },
   });
 

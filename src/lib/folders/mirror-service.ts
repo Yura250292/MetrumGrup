@@ -38,7 +38,7 @@ export async function ensureMirror(
 ): Promise<string> {
   const project = await tx.folder.findUnique({
     where: { id: projectFolderId },
-    select: { id: true, name: true, color: true, parentId: true, sortOrder: true, domain: true },
+    select: { id: true, name: true, color: true, parentId: true, sortOrder: true, domain: true, firmId: true },
   });
   if (!project) throw new Error("Папку не знайдено");
   if (project.domain !== "PROJECT") {
@@ -83,6 +83,7 @@ export async function ensureMirror(
       parentId: parentMirrorId,
       mirroredFromId: project.id,
       sortOrder: project.sortOrder,
+      firmId: project.firmId ?? "metrum-group",
     },
     select: { id: true },
   });
@@ -516,7 +517,7 @@ export async function ensureProjectMirror(
 ): Promise<string> {
   const project = await tx.project.findUnique({
     where: { id: projectId },
-    select: { id: true, title: true, folderId: true },
+    select: { id: true, title: true, folderId: true, firmId: true },
   });
   if (!project) throw new Error("Проєкт не знайдено");
 
@@ -543,7 +544,10 @@ export async function ensureProjectMirror(
   if (nameMatch) {
     await tx.folder.update({
       where: { id: nameMatch.id },
-      data: { mirroredFromProjectId: project.id },
+      data: {
+        mirroredFromProjectId: project.id,
+        firmId: project.firmId ?? "metrum-group",
+      },
     });
     return nameMatch.id;
   }
@@ -554,6 +558,7 @@ export async function ensureProjectMirror(
       name: project.title,
       parentId: parentMirrorId,
       mirroredFromProjectId: project.id,
+      firmId: project.firmId ?? "metrum-group",
     },
     select: { id: true },
   });

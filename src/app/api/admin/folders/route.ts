@@ -45,11 +45,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Назва обов'язкова" }, { status: 400 });
     }
 
+    // Stamp firmId з cookie/сесії — щоб папка належала активній фірмі.
+    const session = await auth();
+    const { firmId } = await resolveFirmScopeForRequest(session);
+
     const folder = await createFolder({
       domain,
       name: name.trim(),
       parentId: parentId ?? null,
       color: color ?? null,
+      firmId,
     });
 
     return NextResponse.json({ folder }, { status: 201 });
