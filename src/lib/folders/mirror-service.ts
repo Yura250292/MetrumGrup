@@ -514,6 +514,7 @@ export async function backfillFinanceToProjectFolders(): Promise<{
 export async function ensureProjectMirror(
   projectId: string,
   tx: Tx = prisma,
+  opts?: { linkExistingFolderId?: string | null },
 ): Promise<string> {
   const project = await tx.project.findUnique({
     where: { id: projectId },
@@ -528,6 +529,44 @@ export async function ensureProjectMirror(
   if (existing) return existing.id;
 
   const parentMirrorId = await resolveProjectParentMirror(project.folderId, tx);
+
+  // Якщо вказана existing FINANCE-папка для merge — приєднуємо її як mirror.
+  // Папка має бути FINANCE, без іншого mirror, тієї ж фірми.
+  if (opts?.linkExistingFolderId) {
+    const target = await tx.folder.findUnique({
+      where: { id: opts.linkExistingFolderId },
+      select: {
+        id: true,
+        domain: true,
+        mirroredFromProjectId: true,
+        mirroredFromId: true,
+        firmId: true,
+      },
+    });
+    if (!target) throw new Error("Папку для обʼєднання не знайдено");
+    if (target.domain !== "FINANCE") {
+      throw new Error("Обʼєднання можливе лише з FINANCE-папкою");
+    }
+    if (target.mirroredFromProjectId || target.mirroredFromId) {
+      throw new Error("Папка вже привʼязана до іншого проекту/папки");
+    }
+    if (
+      target.firmId &&
+      project.firmId &&
+      target.firmId !== project.firmId
+    ) {
+      throw new Error("Папка належить іншій фірмі");
+    }
+    await tx.folder.update({
+      where: { id: target.id },
+      data: {
+        mirroredFromProjectId: project.id,
+        parentId: parentMirrorId,
+        firmId: project.firmId ?? "metrum-group",
+      },
+    });
+    return target.id;
+  }
 
   // Дедубл: якщо під тим же parent'ом уже є FINANCE-папка з такою ж назвою без
   // mirrored-ссилок — прив'язати її.

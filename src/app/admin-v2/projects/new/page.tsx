@@ -12,11 +12,13 @@ import {
   AlertCircle,
   UserPlus,
   X,
+  Link2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 type ClientOption = { id: string; name: string; email: string };
 type ManagerOption = { id: string; name: string };
+type MergeCandidate = { id: string; name: string; entryCount: number };
 
 export default function AdminV2NewProjectPage() {
   const router = useRouter();
@@ -41,6 +43,37 @@ export default function AdminV2NewProjectPage() {
   const [showClientForm, setShowClientForm] = useState(false);
   const [clientDraft, setClientDraft] = useState({ name: "", email: "", phone: "" });
   const [creatingClient, setCreatingClient] = useState(false);
+
+  // Кандидати на merge з існуючою FINANCE-папкою (debounced search by title).
+  const [mergeCandidates, setMergeCandidates] = useState<MergeCandidate[]>([]);
+  const [mergeFolderId, setMergeFolderId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const title = form.title.trim();
+    if (title.length < 2) {
+      setMergeCandidates([]);
+      setMergeFolderId(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/projects/match-finance-folders?title=${encodeURIComponent(title)}`,
+          { signal: ctrl.signal },
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        setMergeCandidates(json.data ?? []);
+      } catch {
+        // ignored
+      }
+    }, 350);
+    return () => {
+      ctrl.abort();
+      clearTimeout(timer);
+    };
+  }, [form.title]);
 
   async function createClientInline() {
     if (!clientDraft.name.trim() || !clientDraft.email.trim()) {
@@ -119,6 +152,7 @@ export default function AdminV2NewProjectPage() {
         body: JSON.stringify({
           ...form,
           totalBudget: form.totalBudget ? parseFloat(form.totalBudget) : 0,
+          mergeFinanceFolderId: mergeFolderId || undefined,
         }),
       });
       if (!res.ok) {
@@ -192,6 +226,76 @@ export default function AdminV2NewProjectPage() {
             }}
           />
         </Field>
+
+        {mergeCandidates.length > 0 && (
+          <div
+            className="flex flex-col gap-2 rounded-xl px-4 py-3"
+            style={{
+              backgroundColor: T.violetSoft ?? T.panelElevated,
+              border: `1px solid ${T.violet}55`,
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <Link2 size={14} style={{ color: T.violet }} />
+              <span
+                className="text-[12px] font-semibold"
+                style={{ color: T.textPrimary }}
+              >
+                Знайдено існуючу папку фінансування
+              </span>
+            </div>
+            <p className="text-[11px]" style={{ color: T.textSecondary }}>
+              Можеш обʼєднати — операції з тієї папки автоматично потраплять у
+              цей проект (Фінансування проекту = ця папка).
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {mergeCandidates.map((c) => {
+                const selected = mergeFolderId === c.id;
+                return (
+                  <button
+                    type="button"
+                    key={c.id}
+                    onClick={() =>
+                      setMergeFolderId(selected ? null : c.id)
+                    }
+                    className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] transition active:scale-[0.99]"
+                    style={{
+                      backgroundColor: selected
+                        ? T.violet + "33"
+                        : T.panelSoft,
+                      border: `1px solid ${selected ? T.violet : T.borderSoft}`,
+                      color: T.textPrimary,
+                    }}
+                  >
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        readOnly
+                        checked={selected}
+                        className="pointer-events-none"
+                      />
+                      <span className="font-medium">{c.name}</span>
+                    </span>
+                    <span style={{ color: T.textMuted }}>
+                      {c.entryCount} операц
+                      {c.entryCount === 1 ? "ія" : c.entryCount < 5 && c.entryCount > 1 ? "ії" : "ій"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            {mergeFolderId && (
+              <button
+                type="button"
+                onClick={() => setMergeFolderId(null)}
+                className="text-[11px] underline self-start"
+                style={{ color: T.textMuted }}
+              >
+                Скасувати обʼєднання — створити нову папку
+              </button>
+            )}
+          </div>
+        )}
 
         <Field label="Опис">
           <textarea

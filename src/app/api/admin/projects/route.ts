@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { title, description, address, clientId, managerId, totalBudget, startDate, expectedEndDate } = body;
+  const { title, description, address, clientId, managerId, totalBudget, startDate, expectedEndDate, mergeFinanceFolderId } = body;
 
   if (!title || !clientId) {
     return NextResponse.json({ error: "Назва та клієнт обов'язкові" }, { status: 400 });
@@ -146,9 +146,16 @@ export async function POST(request: NextRequest) {
     console.error("Failed to seed project task defaults:", err);
   }
 
-  // Mirror project into FINANCE folder tree + seed plan-budget entry
+  // Mirror project into FINANCE folder tree + seed plan-budget entry.
+  // Якщо вибрано існуючу папку для merge — приєднуємо її замість створення нової
+  // (її FinanceEntry автоматично потрапляють під цей проект через folderId).
   try {
-    await ensureProjectMirror(project.id);
+    await ensureProjectMirror(project.id, undefined, {
+      linkExistingFolderId:
+        typeof mergeFinanceFolderId === "string" && mergeFinanceFolderId
+          ? mergeFinanceFolderId
+          : null,
+    });
     await syncProjectBudgetEntry(project.id, session.user.id);
   } catch (err) {
     console.error("Failed to sync project mirror/budget:", err);
