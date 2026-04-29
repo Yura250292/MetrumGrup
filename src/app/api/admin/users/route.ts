@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Role } from "@prisma/client";
+import { Role, type Prisma } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getActiveRoleFromSession } from "@/lib/firm/scope";
 import bcrypt from "bcryptjs";
 
 const VALID_ROLES = Object.values(Role) as string[];
@@ -12,17 +14,44 @@ export async function GET(request: NextRequest) {
   if (!session?.user) return unauthorizedResponse();
 
   const roleParam = request.nextUrl.searchParams.get("role");
-  const roles = roleParam ? roleParam.split(",") : undefined;
+  const roles = roleParam ? (roleParam.split(",") as Role[]) : undefined;
 
-  const isAdminOrManager = session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const activeRole = getActiveRoleFromSession(session, firmId);
+
+  const isAdminOrManager = activeRole === "SUPER_ADMIN" || activeRole === "MANAGER";
   const isHrReadingClients =
-    session.user.role === "HR" && roles?.length === 1 && roles[0] === "CLIENT";
+    activeRole === "HR" && roles?.length === 1 && roles[0] === "CLIENT";
   if (!isAdminOrManager && !isHrReadingClients) {
     return forbiddenResponse();
   }
 
+  // Firm-aware фільтр:
+  // - SUPER_ADMINи доступні скрізь.
+  // - Юзери з base role у запитаних І firmId = activeFirmId — показуємо.
+  // - Юзери з UserFirmAccess для активної фірми та role у запитаних — теж показуємо.
+  // Без firmId (cross-firm) — фільтр лише по role (legacy поведінка).
+  let where: Prisma.UserWhereInput | undefined;
+  if (roles) {
+    if (firmId) {
+      where = {
+        OR: [
+          { role: "SUPER_ADMIN" as Role },
+          { AND: [{ role: { in: roles } }, { firmId }] },
+          {
+            firmAccess: {
+              some: { firmId, role: { in: roles } },
+            },
+          },
+        ],
+      };
+    } else {
+      where = { role: { in: roles } };
+    }
+  }
+
   const users = await prisma.user.findMany({
-    where: roles ? { role: { in: roles as any[] } } : undefined,
+    where,
     select: {
       id: true,
       name: true,

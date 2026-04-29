@@ -10,6 +10,8 @@ import {
   Save,
   Sparkles,
   AlertCircle,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
@@ -35,11 +37,53 @@ export default function AdminV2NewProjectPage() {
     expectedEndDate: "",
   });
 
+  // Inline-створення клієнта (щоб не вимагати щоб клієнти заздалегідь були у системі).
+  const [showClientForm, setShowClientForm] = useState(false);
+  const [clientDraft, setClientDraft] = useState({ name: "", email: "", phone: "" });
+  const [creatingClient, setCreatingClient] = useState(false);
+
+  async function createClientInline() {
+    if (!clientDraft.name.trim() || !clientDraft.email.trim()) {
+      setError("Введіть імʼя та email клієнта");
+      return;
+    }
+    setCreatingClient(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: clientDraft.name.trim(),
+          email: clientDraft.email.trim(),
+          phone: clientDraft.phone.trim() || undefined,
+          role: "CLIENT",
+        }),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "Не вдалося створити клієнта");
+      }
+      const { data } = await res.json();
+      const newClient = { id: data.id, name: data.name, email: data.email };
+      setClients((prev) => [...prev, newClient]);
+      setForm((prev) => ({ ...prev, clientId: newClient.id }));
+      setShowClientForm(false);
+      setClientDraft({ name: "", email: "", phone: "" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка створення клієнта");
+    } finally {
+      setCreatingClient(false);
+    }
+  }
+
   useEffect(() => {
     async function loadUsers() {
       try {
         setLoadingUsers(true);
         setError(null);
+        // firmAware за замовчуванням (через cookie у API). Manager dropdown
+        // покаже юзерів з активною роллю MANAGER/SUPER_ADMIN на поточній фірмі.
         const [clientsRes, managersRes] = await Promise.all([
           fetch("/api/admin/users?role=CLIENT"),
           fetch("/api/admin/users?role=MANAGER,SUPER_ADMIN"),
@@ -180,31 +224,113 @@ export default function AdminV2NewProjectPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Клієнт" required>
-            <select
-              value={form.clientId}
-              onChange={(e) => updateField("clientId", e.target.value)}
-              required
-              disabled={loadingUsers}
-              className="w-full rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-50"
-              style={{
-                backgroundColor: T.panelSoft,
-                border: `1px solid ${T.borderStrong}`,
-                color: T.textPrimary,
-              }}
-            >
-              <option value="">
-                {loadingUsers
-                  ? "Завантаження…"
-                  : clients.length === 0
-                    ? "Немає клієнтів"
-                    : "Оберіть клієнта"}
-              </option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.email})
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <select
+                  value={form.clientId}
+                  onChange={(e) => updateField("clientId", e.target.value)}
+                  required
+                  disabled={loadingUsers || showClientForm}
+                  className="flex-1 rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-50"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderStrong}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  <option value="">
+                    {loadingUsers
+                      ? "Завантаження…"
+                      : clients.length === 0
+                        ? "Немає клієнтів — додайте"
+                        : "Оберіть клієнта"}
+                  </option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.email})
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowClientForm((v) => !v)}
+                  className="flex items-center gap-1 rounded-xl px-3 py-3 text-xs font-semibold transition active:scale-[0.97]"
+                  style={{
+                    backgroundColor: T.accentPrimary,
+                    color: "white",
+                  }}
+                  title="Додати нового клієнта"
+                >
+                  {showClientForm ? <X size={14} /> : <UserPlus size={14} />}
+                  {showClientForm ? "Скасувати" : "Додати"}
+                </button>
+              </div>
+
+              {showClientForm && (
+                <div
+                  className="flex flex-col gap-2 rounded-xl p-3"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  <input
+                    placeholder="Імʼя клієнта *"
+                    value={clientDraft.name}
+                    onChange={(e) =>
+                      setClientDraft((d) => ({ ...d, name: e.target.value }))
+                    }
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      border: `1px solid ${T.borderStrong}`,
+                      color: T.textPrimary,
+                    }}
+                  />
+                  <input
+                    type="email"
+                    placeholder="Email *"
+                    value={clientDraft.email}
+                    onChange={(e) =>
+                      setClientDraft((d) => ({ ...d, email: e.target.value }))
+                    }
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      border: `1px solid ${T.borderStrong}`,
+                      color: T.textPrimary,
+                    }}
+                  />
+                  <input
+                    placeholder="Телефон (опційно)"
+                    value={clientDraft.phone}
+                    onChange={(e) =>
+                      setClientDraft((d) => ({ ...d, phone: e.target.value }))
+                    }
+                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      border: `1px solid ${T.borderStrong}`,
+                      color: T.textPrimary,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    disabled={creatingClient}
+                    onClick={createClientInline}
+                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.97] disabled:opacity-60"
+                    style={{ backgroundColor: T.emerald ?? "#16A34A", color: "white" }}
+                  >
+                    {creatingClient ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <UserPlus size={13} />
+                    )}
+                    {creatingClient ? "Створення…" : "Створити і вибрати"}
+                  </button>
+                </div>
+              )}
+            </div>
           </Field>
 
           <Field label="Менеджер">
