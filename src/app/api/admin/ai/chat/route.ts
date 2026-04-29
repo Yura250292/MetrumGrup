@@ -37,10 +37,18 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: "Повідомлення не може бути порожнім" }), { status: 400 });
   }
 
+  // Активна firm з cookie — щоб AI tools (createNewProject тощо) стампали
+  // правильний firmId, а не home firm користувача.
+  const { resolveFirmScopeForRequest } = await import("@/lib/firm/server-scope");
+  const { getActiveRoleFromSession } = await import("@/lib/firm/scope");
+  const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
+  const activeRole = getActiveRoleFromSession(session, activeFirmId) ?? session.user.role;
+
   const userCtx: AiUserContext = {
     userId: session.user.id,
     userName: session.user.name ?? "Користувач",
-    role: session.user.role,
+    role: activeRole,
+    firmId: activeFirmId,
   };
 
   // Create or load conversation

@@ -94,8 +94,11 @@ export async function POST(request: NextRequest) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
-  // Stamp firmId на основі сесії, не довіряючи клієнту.
-  const projectFirmId = firmIdForNewEntity(session, DEFAULT_FIRM_ID);
+  // Stamp firmId на основі АКТИВНОЇ фірми (cookie/session), а не home firm.
+  // Юрій (SUPER_ADMIN, home=Group) створює проект на Studio → проект у Studio.
+  // shymilo93 (home=Group) на Studio → теж Studio (per-firm role дозволяє).
+  const projectFirmId =
+    activeFirmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
   const project = await prisma.project.create({
     data: {

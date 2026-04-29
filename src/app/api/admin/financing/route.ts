@@ -108,9 +108,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Stamp firmId зі сесії; якщо є projectId — узгоджуємо з проектом.
+    // Stamp firmId з АКТИВНОЇ фірми (cookie/session). Якщо запис привʼязано
+    // до проекту — узгоджуємо з firmId проекту (захист від cross-firm leak).
     const entryFirmId =
-      projectFirmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
+      projectFirmId ??
+      activeFirmId ??
+      firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
     const folderId =
       typeof body.folderId === "string" && body.folderId.trim()
