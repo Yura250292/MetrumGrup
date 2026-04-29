@@ -225,13 +225,13 @@ export default function AdminV2NewProjectPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Клієнт" required>
             <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <select
                   value={form.clientId}
                   onChange={(e) => updateField("clientId", e.target.value)}
                   required
                   disabled={loadingUsers || showClientForm}
-                  className="flex-1 rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-50"
+                  className="min-w-0 flex-1 rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-50"
                   style={{
                     backgroundColor: T.panelSoft,
                     border: `1px solid ${T.borderStrong}`,
@@ -254,15 +254,17 @@ export default function AdminV2NewProjectPage() {
                 <button
                   type="button"
                   onClick={() => setShowClientForm((v) => !v)}
-                  className="flex items-center gap-1 rounded-xl px-3 py-3 text-xs font-semibold transition active:scale-[0.97]"
+                  className="flex shrink-0 items-center justify-center rounded-xl p-3 transition active:scale-[0.97]"
                   style={{
                     backgroundColor: T.accentPrimary,
                     color: "white",
                   }}
-                  title="Додати нового клієнта"
+                  title={showClientForm ? "Скасувати додавання" : "Додати нового клієнта"}
+                  aria-label={
+                    showClientForm ? "Скасувати додавання" : "Додати нового клієнта"
+                  }
                 >
-                  {showClientForm ? <X size={14} /> : <UserPlus size={14} />}
-                  {showClientForm ? "Скасувати" : "Додати"}
+                  {showClientForm ? <X size={16} /> : <UserPlus size={16} />}
                 </button>
               </div>
 
