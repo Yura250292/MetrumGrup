@@ -42,6 +42,7 @@ type ParseResponse = {
   sheetName: string;
   fileName: string;
   matchedCounterparties: number;
+  mode?: "deterministic" | "ai";
 };
 
 const KIND_LABELS: Record<Kind, string> = {
@@ -377,18 +378,47 @@ export function ImportExcelModal({
             </div>
           )}
 
-          {parseResult && parseResult.matchedCounterparties > 0 && (
-            <div
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-[11px]"
-              style={{
-                backgroundColor: T.accentPrimarySoft,
-                color: T.accentPrimary,
-                border: `1px solid ${T.accentPrimary}40`,
-              }}
-            >
-              <Link2 size={12} />
-              Розпізнано {parseResult.matchedCounterparties} контрагент(ів) з
-              існуючої бази
+          {parseResult && (
+            <div className="flex flex-wrap gap-2">
+              {parseResult.mode === "deterministic" && (
+                <span
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold"
+                  style={{
+                    backgroundColor: T.successSoft,
+                    color: T.success,
+                    border: `1px solid ${T.success}40`,
+                  }}
+                  title="Файл розпізнано без AI — за заголовками колонок"
+                >
+                  ⚡ Без AI · 0 ₴
+                </span>
+              )}
+              {parseResult.mode === "ai" && (
+                <span
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold"
+                  style={{
+                    backgroundColor: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                    border: `1px solid ${T.accentPrimary}40`,
+                  }}
+                  title="Файл оброблено через Claude AI"
+                >
+                  <Sparkles size={10} /> Розпізнано через AI
+                </span>
+              )}
+              {parseResult.matchedCounterparties > 0 && (
+                <span
+                  className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold"
+                  style={{
+                    backgroundColor: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                    border: `1px solid ${T.accentPrimary}40`,
+                  }}
+                >
+                  <Link2 size={10} />
+                  {parseResult.matchedCounterparties} контрагент(ів) звʼязано
+                </span>
+              )}
             </div>
           )}
 

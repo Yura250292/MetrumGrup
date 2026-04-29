@@ -10,6 +10,7 @@ import {
   getActiveRoleFromSession,
 } from "@/lib/firm/scope";
 import { matchCounterparties } from "@/lib/financing/counterparty-match";
+import { tryDeterministicParse } from "@/lib/financing/import/deterministic-parse";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -113,7 +114,46 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Шапка лишається фіксованою для кожного batch — допомагає AI зрозуміти контекст.
+  // 1. Пробуємо детермінований парсер по словнику синонімів. Якщо вдається —
+  //    взагалі не дзвонимо AI: безкоштовно і 100% точно.
+  const det = tryDeterministicParse(matrix, importType);
+  if (det) {
+    const totalRowsInFile = matrix.length - 1;
+    const cleaned = det.rows.slice(0, MAX_TOTAL_ROWS);
+    const truncated = det.rows.length > MAX_TOTAL_ROWS;
+
+    const uniqueCounterpartyNames = cleaned
+      .map((r) => r.counterparty)
+      .filter((n): n is string => typeof n === "string" && n.length > 0);
+    const matches = await matchCounterparties(uniqueCounterpartyNames);
+    const enriched = cleaned.map((r) => {
+      if (r.counterparty) {
+        const hit = matches.get(r.counterparty);
+        if (hit) {
+          return {
+            ...r,
+            counterpartyId: hit.id,
+            counterpartyResolved: hit.name,
+          };
+        }
+      }
+      return r;
+    });
+
+    return NextResponse.json({
+      rows: enriched,
+      notes: det.notes,
+      truncated,
+      totalRowsInFile,
+      sheetName,
+      fileName: file.name,
+      matchedCounterparties: matches.size,
+      mode: "deterministic" as const,
+      detectedHeaders: det.matchedHeaders,
+    });
+  }
+
+  // 2. Fallback на AI: шапка не розпізнана детерміновано, передаємо файл Claude.
   const header = matrix[0];
   const dataRows = matrix.slice(1);
   const totalRowsInFile = dataRows.length;
@@ -264,6 +304,7 @@ export async function POST(request: NextRequest) {
     sheetName,
     fileName: file.name,
     matchedCounterparties: matches.size,
+    mode: "ai" as const,
   });
 }
 
