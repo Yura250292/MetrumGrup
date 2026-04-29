@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getActiveRoleFromSession } from "@/lib/firm/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -13,27 +15,39 @@ export async function GET() {
   }
 
   const uid = session.user.id;
-  const isSuper = session.user.role === "SUPER_ADMIN";
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  const isSuper = activeRole === "SUPER_ADMIN";
 
   const since = new Date();
   since.setDate(since.getDate() - 14);
+
+  // Firm-scope: meeting завжди має projectId (required), тож скоупимо через project.firmId.
+  const firmFilter: { project?: { firmId: string } } = firmId
+    ? { project: { firmId } }
+    : {};
 
   const meetings = await prisma.meeting.findMany({
     where: {
       recordedAt: { gte: since },
       ...(isSuper
-        ? {}
+        ? firmFilter
         : {
-            OR: [
-              { createdById: uid },
+            AND: [
+              firmFilter,
               {
-                project: {
-                  OR: [
-                    { managerId: uid },
-                    { members: { some: { userId: uid, isActive: true } } },
-                    { isInternal: true },
-                  ],
-                },
+                OR: [
+                  { createdById: uid },
+                  {
+                    project: {
+                      OR: [
+                        { managerId: uid },
+                        { members: { some: { userId: uid, isActive: true } } },
+                        { isInternal: true },
+                      ],
+                    },
+                  },
+                ],
               },
             ],
           }),

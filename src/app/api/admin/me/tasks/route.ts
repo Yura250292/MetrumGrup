@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 /**
  * Personal tasks for the current user across all projects they have access to.
@@ -23,6 +24,8 @@ export async function GET(request: NextRequest) {
     const projectIdsRaw = url.searchParams.get("projectIds");
 
     const uid = session.user.id;
+    // Firm-scope: показуємо лише задачі проектів активної фірми.
+    const { firmId } = await resolveFirmScopeForRequest(session);
     const baseWhere: Record<string, unknown> = {
       isArchived: false,
       ...(includeCompleted
@@ -35,6 +38,7 @@ export async function GET(request: NextRequest) {
       ...(projectIdsRaw
         ? { projectId: { in: projectIdsRaw.split(",").filter(Boolean) } }
         : {}),
+      ...(firmId ? { project: { firmId } } : {}),
     };
 
     let where;

@@ -3,6 +3,8 @@ import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { getActiveRoleFromSession } from "@/lib/firm/scope";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +24,13 @@ type FolderCard = {
 export async function GET() {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
+
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const activeRole = getActiveRoleFromSession(session, firmId);
+  if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
 
   const folders = await prisma.folder.findMany({
-    where: { domain: "FINANCE" },
+    where: { domain: "FINANCE", ...(firmId ? { firmId } : {}) },
     orderBy: { updatedAt: "desc" },
     take: 12,
     select: {
@@ -46,6 +51,7 @@ export async function GET() {
     where: {
       folderId: { in: ids },
       kind: "FACT",
+      ...(firmId ? { firmId } : {}),
     },
     _sum: { amount: true },
     _count: { _all: true },
