@@ -18,6 +18,7 @@ import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
 import { SyncFinanceButton } from "./_components/sync-finance-button";
+import { LinkFinanceFolderButton } from "./_components/link-finance-folder-button";
 import { TestProjectToggle } from "./_components/test-project-toggle";
 import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
@@ -177,6 +178,7 @@ export default async function AdminV2ProjectDetailPage({
             >
               <Edit3 size={16} /> Етапи
             </Link>
+            <LinkFinanceFolderButton projectId={project.id} />
             <SyncFinanceButton projectId={project.id} />
             {tasksEnabled && (
               <Link
