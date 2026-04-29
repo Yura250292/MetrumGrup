@@ -221,6 +221,7 @@ model ProjectStageRecord {
   responsibleUserId String?
   responsibleUser   User?                @relation("ProjectStageResponsible", fields: [responsibleUserId], references: [id])
   tasks             Task[]
+  financeEntries    FinanceEntry[]       @relation("StageFinanceEntries")
 
   @@index([projectId, stage])
   @@index([projectId, parentStageId])
@@ -505,8 +506,13 @@ model FinanceEntry {
   // Фірма-власник запису. Для projectless записів — єдиний спосіб scope-у.
   firmId String?
 
+  // Прив'язка до конкретного етапу проекту (опційно). Заповнюється AI-синхронізацією
+  // або вручну. Дозволяє рахувати allocatedBudget по етапу як SUM плану цього stageRecordId.
+  stageRecordId String?
+
   project        Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   firm           Firm?                    @relation(fields: [firmId], references: [id])
+  stageRecord    ProjectStageRecord?      @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
   createdBy      User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
   updatedBy      User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
   approvedBy     User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
@@ -536,6 +542,7 @@ model FinanceEntry {
   @@index([costType])
   @@index([counterpartyId])
   @@index([firmId])
+  @@index([stageRecordId])
   @@map("finance_entries")
 }
 
