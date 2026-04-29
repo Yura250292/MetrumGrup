@@ -29,6 +29,14 @@ type Suggestion = {
   reasoning?: string;
 };
 
+type ProposedStage = {
+  tempId: string;
+  name: string;
+  parentTempId: string | null;
+  notes?: string | null;
+  entryIds: string[];
+};
+
 type Props = {
   projectId: string;
   open: boolean;
@@ -49,6 +57,10 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
   const [entries, setEntries] = useState<EntryPayload[]>([]);
   const [mapping, setMapping] = useState<Record<string, string | null>>({});
   const [reasonings, setReasonings] = useState<Record<string, string>>({});
+  // Запропоновані AI нові етапи: tempId → state. Користувач може редагувати назву
+  // або відхилити (виключити з створення; пов'язані entries стануть unassigned).
+  const [newStages, setNewStages] = useState<ProposedStage[]>([]);
+  const [acceptedNew, setAcceptedNew] = useState<Set<string>>(new Set());
 
   async function loadSuggestions() {
     setLoading(true);
@@ -63,6 +75,9 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
       const json = await res.json();
       setStages(json.data.stages ?? []);
       setEntries(json.data.entries ?? []);
+      const newStagesPayload: ProposedStage[] = json.data.proposedNewStages ?? [];
+      setNewStages(newStagesPayload);
+      setAcceptedNew(new Set(newStagesPayload.map((s) => s.tempId)));
       const m: Record<string, string | null> = {};
       const r: Record<string, string> = {};
       for (const s of (json.data.suggestions ?? []) as Suggestion[]) {
@@ -83,14 +98,21 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
     setApplying(true);
     setError(null);
     try {
-      const mappings = Object.entries(mapping).map(([entryId, stageRecordId]) => ({
-        entryId,
-        stageRecordId,
-      }));
+      // Залишаємо лише прийняті нові етапи. Якщо запис мапиться у відхилений
+      // tempId — переводимо у null.
+      const acceptedNewStages = newStages.filter((s) => acceptedNew.has(s.tempId));
+      const acceptedTempIds = new Set(acceptedNewStages.map((s) => s.tempId));
+      const mappings = Object.entries(mapping).map(([entryId, stageRecordId]) => {
+        let sid = stageRecordId;
+        if (sid && sid.startsWith("new-") && !acceptedTempIds.has(sid)) {
+          sid = null;
+        }
+        return { entryId, stageRecordId: sid };
+      });
       const res = await fetch(`/api/admin/projects/${projectId}/sync-finance`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mappings }),
+        body: JSON.stringify({ mappings, newStages: acceptedNewStages }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -204,6 +226,70 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
             </div>
           )}
 
+          {!loading && newStages.length > 0 && (
+            <div className="flex flex-col gap-2 mt-3 mb-4">
+              <span
+                className="text-[11px] font-bold uppercase tracking-wider"
+                style={{ color: T.violet }}
+              >
+                AI запропонував нові етапи
+              </span>
+              {newStages.map((ns) => {
+                const accepted = acceptedNew.has(ns.tempId);
+                const isChild = !!ns.parentTempId;
+                return (
+                  <div
+                    key={ns.tempId}
+                    className="flex items-center gap-2 rounded-xl px-3 py-2"
+                    style={{
+                      backgroundColor: accepted ? T.violet + "15" : T.panelElevated,
+                      border: `1px solid ${accepted ? T.violet + "55" : T.borderSoft}`,
+                      marginLeft: isChild ? 24 : 0,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={accepted}
+                      onChange={(ev) => {
+                        const next = new Set(acceptedNew);
+                        if (ev.target.checked) next.add(ns.tempId);
+                        else next.delete(ns.tempId);
+                        setAcceptedNew(next);
+                      }}
+                    />
+                    <input
+                      value={ns.name}
+                      onChange={(ev) => {
+                        setNewStages((prev) =>
+                          prev.map((s) =>
+                            s.tempId === ns.tempId ? { ...s, name: ev.target.value } : s,
+                          ),
+                        );
+                      }}
+                      className="flex-1 rounded-lg px-2.5 py-1.5 text-[12px] outline-none"
+                      style={{
+                        backgroundColor: T.panelSoft,
+                        border: `1px solid ${T.borderStrong}`,
+                        color: T.textPrimary,
+                      }}
+                    />
+                    <span
+                      className="text-[10px]"
+                      style={{ color: T.textMuted }}
+                    >
+                      {isChild ? "підетап · " : ""}
+                      {ns.entryIds.length} запис(ів)
+                    </span>
+                  </div>
+                );
+              })}
+              <p className="text-[10.5px]" style={{ color: T.textMuted }}>
+                Зніми галочку щоб не створювати запропонований етап. Записи що
+                були до нього прив'язані стануть без етапу.
+              </p>
+            </div>
+          )}
+
           {!loading && entries.length > 0 && (
             <div className="flex flex-col gap-2 mt-3">
               {entries.map((e) => {
@@ -260,7 +346,7 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
                             [e.id]: ev.target.value || null,
                           }))
                         }
-                        className="rounded-lg px-2.5 py-1.5 text-[12px] outline-none min-w-[180px]"
+                        className="rounded-lg px-2.5 py-1.5 text-[12px] outline-none min-w-[200px] max-w-[260px]"
                         style={{
                           backgroundColor: T.panelSoft,
                           border: `1px solid ${T.borderStrong}`,
@@ -268,11 +354,28 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
                         }}
                       >
                         <option value="">— Без етапу</option>
-                        {stages.map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.parentId ? "  └ " : ""}{s.name}
-                          </option>
-                        ))}
+                        {stages.length > 0 && (
+                          <optgroup label="Існуючі етапи">
+                            {stages.map((s) => (
+                              <option key={s.id} value={s.id}>
+                                {s.parentId ? "  └ " : ""}{s.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {newStages.length > 0 && (
+                          <optgroup label="Нові (AI пропонує)">
+                            {newStages.map((ns) => (
+                              <option
+                                key={ns.tempId}
+                                value={ns.tempId}
+                                disabled={!acceptedNew.has(ns.tempId)}
+                              >
+                                {ns.parentTempId ? "  └ " : ""}+ {ns.name}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                     </div>
                   </div>
