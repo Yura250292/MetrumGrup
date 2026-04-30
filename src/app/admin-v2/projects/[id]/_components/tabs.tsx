@@ -24,7 +24,6 @@ import { TabFiles } from "./tab-files";
 import { TabPhotos } from "./tab-photos";
 import { TabActivity } from "./tab-activity";
 import { TabEstimates } from "./tab-estimates";
-import { TabFinances } from "./tab-finances";
 import { TabFinancing } from "./tab-financing";
 import { TabAiRender } from "./tab-ai-render";
 import { TabTasks } from "./tab-tasks";
@@ -38,8 +37,7 @@ const BASE_TAB_DEFS = [
   { id: "photos", label: "Фото", icon: Camera },
   { id: "activity", label: "Активність", icon: Activity },
   { id: "estimates", label: "Кошториси", icon: Calculator },
-  { id: "finances", label: "Платежі", icon: Wallet },
-  { id: "financing", label: "Фінансування", icon: Banknote },
+  { id: "finances", label: "Платежі / Фінанси", icon: Wallet },
   { id: "kb2", label: "Акти КБ-2в", icon: FileText },
   { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
   { id: "tasks", label: "Задачі", icon: ListTodo },
@@ -143,14 +141,9 @@ export function ProjectTabs({
         {current === "activity" && <TabActivity projectId={projectId} />}
         {current === "estimates" && <TabEstimates projectId={projectId} />}
         {current === "finances" && (
-          <TabFinances
-            projectId={projectId}
-            totalBudget={project.totalBudget}
-            totalPaid={project.totalPaid}
-            payments={project.payments}
-          />
-        )}
-        {current === "financing" && (
+          // Об'єднано: тут — quadrants (план/факт × дохід/витрата) + tabs
+          // Огляд / План-Факт / Табелі / Погодж. / Операції / Скани / Календар / Архів.
+          // Все scope-ovано до цього проекту, синхронізовано з розділом Фінансування.
           <TabFinancing projectId={projectId} projectTitle={project.title} />
         )}
         {current === "kb2" && (
