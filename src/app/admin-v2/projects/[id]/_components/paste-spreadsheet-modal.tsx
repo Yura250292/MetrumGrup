@@ -1,7 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { X, ClipboardPaste, Loader2, Check, AlertCircle } from "lucide-react";
+import {
+  X,
+  ClipboardPaste,
+  Loader2,
+  Check,
+  AlertCircle,
+  Sparkles,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
@@ -35,6 +42,7 @@ export function PasteSpreadsheetModal({
     { line: number; raw: string; reason: string }[]
   >([]);
   const [importing, setImporting] = useState(false);
+  const [aiParsing, setAiParsing] = useState(false);
   const [result, setResult] = useState<{
     sections: number;
     items: number;
@@ -56,18 +64,40 @@ export function PasteSpreadsheetModal({
       setPreview(null);
       return;
     }
-    // Викликаємо backend dry-parse: відправляємо text і отримуємо
-    // parsed nodes без створення (через GET? простіше окремий поле на POST
-    // з ?dry=1, але для простоти тут виконуємо парсинг локально через
-    // інлайн-копію того самого алгоритму).
-    // Замість дублювання — fetch на POST з Accept: dry, але ми не маємо
-    // dry-режиму. Робимо POST до /import-spreadsheet → отримуємо помилки
-    // якщо порожньо. Inline-парсинг тут потребує дублювання.
-    //
-    // Pragmatic compromise: невеликий локальний парсер.
     const parsed = parseLocally(text);
     setPreview(parsed.nodes);
     setParseErrors(parsed.errors);
+  }
+
+  async function aiParse() {
+    setResult(null);
+    setParseErrors([]);
+    if (!text.trim()) return;
+    setAiParsing(true);
+    try {
+      const res = await fetch(
+        `/api/admin/projects/${projectId}/import-spreadsheet/ai-parse`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "AI не змогло розпізнати");
+      }
+      const json = (await res.json()) as { data: { nodes: PreviewNode[] } };
+      if (!json.data.nodes.length) {
+        throw new Error("AI не знайшло жодного рядка для імпорту");
+      }
+      setPreview(json.data.nodes);
+    } catch (err) {
+      console.error("[paste-spreadsheet-modal] AI parse failed", err);
+      alert(err instanceof Error ? err.message : "AI помилка");
+    } finally {
+      setAiParsing(false);
+    }
   }
 
   async function doImport() {
@@ -189,9 +219,11 @@ export function PasteSpreadsheetModal({
                   className="mt-2 text-[11px]"
                   style={{ color: T.textMuted }}
                 >
-                  <b>Формат рядка-підетапу (через табуляцію):</b>{" "}
-                  Назва → Од.виміру → Обсяг → Вартість за од. → (опційно) Ціна
-                  для замовника.
+                  <b>«Розпізнати»</b> — швидкий regex-парсер для чистого
+                  TSV-формату (Назва → Од. → Обсяг → Вартість → Замовнику).{" "}
+                  <b>«AI-розпізнавання»</b> — для криво форматованих таблиць,
+                  довільного порядку колонок, перемішаних header-рядків
+                  (повільніше, ~5-10 сек).
                 </div>
               </>
             )}
@@ -433,18 +465,38 @@ export function PasteSpreadsheetModal({
             {!result && (
               <div className="flex items-center gap-2">
                 {!preview ? (
-                  <button
-                    type="button"
-                    onClick={parsePreview}
-                    disabled={!text.trim()}
-                    className="rounded px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50"
-                    style={{
-                      backgroundColor: T.accentPrimary,
-                      color: "white",
-                    }}
-                  >
-                    Розпізнати
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={aiParse}
+                      disabled={!text.trim() || aiParsing}
+                      title="AI розбере навіть криво форматовані таблиці"
+                      className="flex items-center gap-1.5 rounded px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50"
+                      style={{
+                        backgroundColor: T.accentSecondary,
+                        color: "white",
+                      }}
+                    >
+                      {aiParsing ? (
+                        <Loader2 size={12} className="animate-spin" />
+                      ) : (
+                        <Sparkles size={12} />
+                      )}
+                      AI-розпізнавання
+                    </button>
+                    <button
+                      type="button"
+                      onClick={parsePreview}
+                      disabled={!text.trim()}
+                      className="rounded px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50"
+                      style={{
+                        backgroundColor: T.accentPrimary,
+                        color: "white",
+                      }}
+                    >
+                      Розпізнати
+                    </button>
+                  </>
                 ) : (
                   <button
                     type="button"
