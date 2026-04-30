@@ -9,9 +9,7 @@ import {
   MapPin,
   User,
   Briefcase,
-  MessageSquare,
   Camera,
-  Edit3,
   BarChart3,
 } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
@@ -101,12 +99,6 @@ export default async function AdminV2ProjectDetailPage({
           : undefined
       }
     >
-      {/* Cover image upload */}
-      <ProjectCoverUpload
-        projectId={project.id}
-        currentUrl={project.coverImageUrl ?? null}
-      />
-
       {/* Sticky header */}
       <ProjectHeroAnimator>
       <header className="flex flex-col gap-4">
@@ -118,54 +110,20 @@ export default async function AdminV2ProjectDetailPage({
           <ArrowLeft size={14} /> До списку проєктів
         </Link>
 
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-col gap-2 min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-                ПРОЄКТ #{project.id.slice(0, 8).toUpperCase()}
-              </span>
-              <StatusBadge status={project.status} />
-              {project.isTestProject && <TestBadge />}
-            </div>
-            <h1
-              className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-tight break-words"
-              style={{ color: T.textPrimary }}
-            >
-              {project.title}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]" style={{ color: T.textMuted }}>
-              <span className="flex items-center gap-1 min-w-0">
-                <User size={12} className="flex-shrink-0" />
-                <span className="truncate">{project.client.name}</span>
-              </span>
-              {project.manager?.name && (
-                <>
-                  <span>·</span>
-                  <span className="flex items-center gap-1 min-w-0">
-                    <Briefcase size={12} className="flex-shrink-0" />
-                    <span className="truncate">{project.manager.name}</span>
-                  </span>
-                </>
-              )}
-              {project.address && (
-                <>
-                  <span className="hidden sm:inline">·</span>
-                  <span className="hidden sm:flex items-center gap-1 min-w-0">
-                    <MapPin size={12} className="flex-shrink-0" />
-                    <span className="truncate">{project.address}</span>
-                  </span>
-                </>
-              )}
-              <span>·</span>
-              <span className="truncate">Етап: {STAGE_LABELS[project.currentStage]}</span>
-            </div>
+        {/* Cover + actions row: cover ліворуч (фікс ширина на десктопі),
+            кнопки праворуч у grid. На мобайлі — стек: cover зверху, далі кнопки. */}
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          <div className="w-full sm:w-64 md:w-72 flex-shrink-0">
+            <ProjectCoverUpload
+              projectId={project.id}
+              currentUrl={project.coverImageUrl ?? null}
+            />
           </div>
-
-          <div className="flex w-full sm:w-auto gap-2 flex-shrink-0 flex-wrap">
+          <div className="grid grid-cols-2 auto-rows-min gap-2 flex-1 content-start">
             <TestProjectToggle projectId={project.id} initial={project.isTestProject} />
             <Link
               href={`/admin-v2/projects/${project.id}/photos/new`}
-              className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
+              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
               style={{
                 backgroundColor: T.panelElevated,
                 color: T.textPrimary,
@@ -174,23 +132,12 @@ export default async function AdminV2ProjectDetailPage({
             >
               <Camera size={16} /> Додати фото
             </Link>
-            <Link
-              href={`/admin-v2/projects/${project.id}/stages`}
-              className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
-              style={{
-                backgroundColor: T.panelElevated,
-                color: T.textPrimary,
-                border: `1px solid ${T.borderStrong}`,
-              }}
-            >
-              <Edit3 size={16} /> Етапи
-            </Link>
             <LinkFinanceFolderButton projectId={project.id} />
             <SyncFinanceButton projectId={project.id} />
             {tasksEnabled && (
               <Link
                 href={`/admin-v2/projects/${project.id}/reports`}
-                className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
+                className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97] col-span-2"
                 style={{
                   backgroundColor: T.panelElevated,
                   color: T.textPrimary,
@@ -200,6 +147,49 @@ export default async function AdminV2ProjectDetailPage({
                 <BarChart3 size={16} /> Звіти
               </Link>
             )}
+          </div>
+        </div>
+
+        {/* Title block — назва й мета під cover/actions, на всю ширину */}
+        <div className="flex flex-col gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+              ПРОЄКТ #{project.id.slice(0, 8).toUpperCase()}
+            </span>
+            <StatusBadge status={project.status} />
+            {project.isTestProject && <TestBadge />}
+          </div>
+          <h1
+            className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-tight break-words"
+            style={{ color: T.textPrimary }}
+          >
+            {project.title}
+          </h1>
+          <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]" style={{ color: T.textMuted }}>
+            <span className="flex items-center gap-1 min-w-0">
+              <User size={12} className="flex-shrink-0" />
+              <span className="truncate">{project.client.name}</span>
+            </span>
+            {project.manager?.name && (
+              <>
+                <span>·</span>
+                <span className="flex items-center gap-1 min-w-0">
+                  <Briefcase size={12} className="flex-shrink-0" />
+                  <span className="truncate">{project.manager.name}</span>
+                </span>
+              </>
+            )}
+            {project.address && (
+              <>
+                <span className="hidden sm:inline">·</span>
+                <span className="hidden sm:flex items-center gap-1 min-w-0">
+                  <MapPin size={12} className="flex-shrink-0" />
+                  <span className="truncate">{project.address}</span>
+                </span>
+              </>
+            )}
+            <span>·</span>
+            <span className="truncate">Етап: {STAGE_LABELS[project.currentStage]}</span>
           </div>
         </div>
 
