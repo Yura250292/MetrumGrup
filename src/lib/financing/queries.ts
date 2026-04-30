@@ -241,9 +241,47 @@ export type FinanceSummary = {
 const EMPTY_STATS: FinanceQuadrantStats = { sum: 0, count: 0 };
 
 export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Promise<FinanceSummary> {
+  // PROJECT_BUDGET — це high-level "rollup"-запис рівний Project.totalBudget.
+  // ESTIMATE_AUTO — per-item розклад тих самих грошей з кошторису.
+  // Виключаємо PROJECT_BUDGET у двох випадках, щоб уникнути дублів у summary:
+  //   1) Проєкт має ESTIMATE_AUTO — деталізація з кошторису вже покриває цю
+  //      суму, тож rollup-запис є дублем.
+  //   2) PROJECT_BUDGET має projectId = null (orphan після видалення/пере-
+  //      створення проєкту) — він не належить жодному реальному проєкту і
+  //      лише штучно надуває summary.
+  // Якщо ні (1), ні (2) — PROJECT_BUDGET лишається як єдине джерело плану.
+  const estimateBackedProjects = await prisma.financeEntry.findMany({
+    where: {
+      ...where,
+      source: "ESTIMATE_AUTO",
+      kind: "PLAN",
+      type: "EXPENSE",
+      projectId: { not: null },
+    },
+    select: { projectId: true },
+    distinct: ["projectId"],
+  });
+  const estimateProjectIds = estimateBackedProjects
+    .map((e) => e.projectId)
+    .filter((id): id is string => !!id);
+
+  const projectBudgetExclusions: Prisma.FinanceEntryWhereInput[] = [
+    { source: "PROJECT_BUDGET", projectId: null },
+  ];
+  if (estimateProjectIds.length > 0) {
+    projectBudgetExclusions.push({
+      source: "PROJECT_BUDGET",
+      projectId: { in: estimateProjectIds },
+    });
+  }
+
+  const effectiveWhere: Prisma.FinanceEntryWhereInput = {
+    AND: [where, { NOT: { OR: projectBudgetExclusions } }],
+  };
+
   const grouped = await prisma.financeEntry.groupBy({
     by: ["kind", "type"],
-    where,
+    where: effectiveWhere,
     _sum: { amount: true },
     _count: { _all: true },
   });
