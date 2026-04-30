@@ -54,10 +54,12 @@ export async function ensureMirror(
   });
   if (existingMirror) return existingMirror.id;
 
-  // Parent: root "Проєкти" або mirror батьківської PROJECT-папки
-  const parentMirrorId = project.parentId
+  // Parent: mirror батьківської PROJECT-папки АБО root рівень FINANCE.
+  // Раніше для папок без parent використовувався проміжний контейнер "Проєкти"
+  // — прибрали його, бо він дублював sidebar "Проекти" у фінансуванні.
+  const parentMirrorId: string | null = project.parentId
     ? await ensureMirror(project.parentId, tx)
-    : await ensureFinanceProjectsRoot(tx);
+    : null;
 
   // Дедублікат за назвою: якщо під тим же parent уже існує FINANCE-папка з такою ж
   // назвою без mirroredFromId — прив'язати її замість створення нової.
@@ -610,17 +612,17 @@ export async function ensureProjectMirror(
 async function resolveProjectParentMirror(
   projectFolderId: string | null,
   tx: Tx,
-): Promise<string> {
-  if (!projectFolderId) return ensureFinanceProjectsRoot(tx);
+): Promise<string | null> {
+  // Проект НЕ у PROJECT-папці → mirror лежить прямо на root рівні FINANCE.
+  // Раніше використовувався контейнер "Проєкти" (slug=mirrored-projects), але
+  // користувачі хочуть пласку структуру (дублювання з sidebar "Проекти").
+  if (!projectFolderId) return null;
   const folder = await tx.folder.findUnique({
     where: { id: projectFolderId },
     select: { domain: true },
   });
-  // Якщо folderId посилається не на PROJECT (можливі зіпсовані дані) —
-  // кладемо у root "Проєкти" і ігноруємо.
-  if (!folder || folder.domain !== "PROJECT") {
-    return ensureFinanceProjectsRoot(tx);
-  }
+  // Якщо folderId зіпсований — теж кладемо на root.
+  if (!folder || folder.domain !== "PROJECT") return null;
   return ensureMirror(projectFolderId, tx);
 }
 
