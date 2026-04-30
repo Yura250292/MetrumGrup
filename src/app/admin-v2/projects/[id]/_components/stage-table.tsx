@@ -23,8 +23,11 @@ export type StageRow = {
   responsibleName: string | null;
   allocatedBudget: number | null;
   unit: string | null;
+  factUnit: string | null;
   planVolume: number | null;
   factVolume: number | null;
+  planUnitPrice: number | null;
+  factUnitPrice: number | null;
   planExpense: number;
   factExpense: number;
   planIncome: number;
@@ -152,34 +155,39 @@ export function StageTable({
     <div className="overflow-x-auto">
       <table
         className="w-full border-collapse text-[12px]"
-        style={{ minWidth: 1280 }}
+        style={{ minWidth: 1700 }}
       >
         <thead>
           <tr style={{ backgroundColor: T.panelSoft }}>
-            <Th sticky width={280}>
+            <Th sticky width={260} rowSpan={2}>
               Назва
             </Th>
-            <Th width={140}>Відповідальний</Th>
-            <Th width={110}>Статус</Th>
-            <Th width={70}>Од.</Th>
-            <ThGroup colSpan={5} bg={T.accentPrimarySoft}>
+            <Th width={140} rowSpan={2}>
+              Відповідальний
+            </Th>
+            <Th width={110} rowSpan={2}>
+              Статус
+            </Th>
+            <ThGroup colSpan={6} bg={T.accentPrimarySoft}>
               План
             </ThGroup>
-            <ThGroup colSpan={4} bg={T.successSoft}>
+            <ThGroup colSpan={6} bg={T.successSoft}>
               Факт
             </ThGroup>
+            <Th width={160} rowSpan={2}>
+              Коментар
+            </Th>
           </tr>
           <tr style={{ backgroundColor: T.panelSoft }}>
-            <Th sticky />
-            <Th />
-            <Th />
-            <Th />
             <ThSub>Обсяг</ThSub>
-            <ThSub>Бюджет</ThSub>
+            <ThSub>Од.</ThSub>
+            <ThSub>Вартість</ThSub>
             <ThSub>Витрати</ThSub>
             <ThSub>Надходження</ThSub>
             <ThSub>Результат</ThSub>
             <ThSub>Обсяг</ThSub>
+            <ThSub>Од.</ThSub>
+            <ThSub>Вартість</ThSub>
             <ThSub>Витрати</ThSub>
             <ThSub>Надходження</ThSub>
             <ThSub>Результат</ThSub>
@@ -345,23 +353,49 @@ export function StageTable({
                     </button>
                   )}
                 </Td>
-                <Td>
+                {/* План: 6 колонок */}
+                <Td align="right">{volumeOrDash(node.planVolume)}</Td>
+                <Td align="center">
                   <span style={{ color: node.unit ? T.textPrimary : T.textMuted }}>
                     {node.unit ?? "—"}
                   </span>
                 </Td>
-                <Td align="right">{volumeOrDash(node.planVolume)}</Td>
-                <Td align="right">{moneyOrDash(node.allocatedBudget)}</Td>
+                <Td align="right">{moneyOrDash(node.planUnitPrice)}</Td>
                 <Td align="right">{moneyOrDash(node.planExpense)}</Td>
                 <Td align="right">{moneyOrDash(node.planIncome)}</Td>
                 <Td align="right" accent={planResult >= 0 ? T.success : T.danger}>
                   {moneyOrDash(planResult)}
                 </Td>
+                {/* Факт: 6 колонок */}
                 <Td align="right">{volumeOrDash(node.factVolume)}</Td>
+                <Td align="center">
+                  <span
+                    style={{
+                      color: node.factUnit || node.unit ? T.textPrimary : T.textMuted,
+                    }}
+                  >
+                    {node.factUnit ?? node.unit ?? "—"}
+                  </span>
+                </Td>
+                <Td align="right">{moneyOrDash(node.factUnitPrice)}</Td>
                 <Td align="right">{moneyOrDash(node.factExpense)}</Td>
                 <Td align="right">{moneyOrDash(node.factIncome)}</Td>
                 <Td align="right" accent={factResult >= 0 ? T.success : T.danger}>
                   {moneyOrDash(factResult)}
+                </Td>
+                {/* Коментар (notes — truncated) */}
+                <Td>
+                  {node.notes ? (
+                    <span
+                      className="line-clamp-2"
+                      style={{ color: T.textSecondary, fontSize: 11 }}
+                      title={node.notes}
+                    >
+                      {node.notes}
+                    </span>
+                  ) : (
+                    <span style={{ color: T.textMuted }}>—</span>
+                  )}
                 </Td>
               </tr>
             );
@@ -394,13 +428,16 @@ function Th({
   children,
   width,
   sticky,
+  rowSpan,
 }: {
   children?: React.ReactNode;
   width?: number;
   sticky?: boolean;
+  rowSpan?: number;
 }) {
   return (
     <th
+      rowSpan={rowSpan}
       className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider"
       style={{
         color: T.textMuted,
@@ -410,6 +447,7 @@ function Th({
         backgroundColor: sticky ? T.panelSoft : undefined,
         zIndex: sticky ? 2 : undefined,
         borderBottom: `1px solid ${T.borderSoft}`,
+        verticalAlign: "middle",
       }}
     >
       {children}
@@ -463,7 +501,7 @@ function Td({
   style,
 }: {
   children: React.ReactNode;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   accent?: string;
   sticky?: boolean;
   style?: React.CSSProperties;

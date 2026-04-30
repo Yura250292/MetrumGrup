@@ -57,50 +57,49 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
       {/* Finance KPI strip — пов'язує матрицю Plan vs Fact + cashflow в один погляд */}
       <FinanceKpiStrip projectId={project.id} />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-      {/* Left col */}
-      <div className="xl:col-span-2 flex flex-col gap-6">
-        {/* Progress + Stage timeline */}
-        <Card title="Прогрес проєкту">
-          <div className="mb-4">
-            <ProjectProgressBar
-              currentStage={project.currentStage}
-              currentStageRecordId={project.currentStageRecordId}
-              stages={project.stages}
-            />
-          </div>
-          <div className="text-[12px]" style={{ color: T.textMuted }}>
-            Поточний етап:{" "}
-            <span className="font-semibold" style={{ color: T.textPrimary }}>
-              {(() => {
-                const curr =
-                  project.stages.find((s) => s.id === project.currentStageRecordId) ??
-                  project.stages.find((s) => s.stage === project.currentStage);
-                return curr ? stageDisplayName(curr) : "—";
-              })()}
-            </span>{" "}
-            · {project.stageProgress}% завершено
-          </div>
+      {/* Прогрес — горизонтальний stepper зверху */}
+      <Card title="Прогрес проєкту">
+        <div className="mb-4">
+          <ProjectProgressBar
+            currentStage={project.currentStage}
+            currentStageRecordId={project.currentStageRecordId}
+            stages={project.stages}
+          />
+        </div>
+        <div className="text-[12px]" style={{ color: T.textMuted }}>
+          Поточний етап:{" "}
+          <span className="font-semibold" style={{ color: T.textPrimary }}>
+            {(() => {
+              const curr =
+                project.stages.find((s) => s.id === project.currentStageRecordId) ??
+                project.stages.find((s) => s.stage === project.currentStage);
+              return curr ? stageDisplayName(curr) : "—";
+            })()}
+          </span>{" "}
+          · {project.stageProgress}% завершено
+        </div>
+      </Card>
+
+      {/* Етапи виконання — на всю ширину */}
+      <StagesSection
+        projectId={project.id}
+        initialStages={project.stages}
+        candidates={project.responsibleCandidates}
+      />
+
+      {project.description && (
+        <Card title="Опис проєкту">
+          <p
+            className="text-[13px] leading-relaxed whitespace-pre-wrap"
+            style={{ color: T.textSecondary }}
+          >
+            {project.description}
+          </p>
         </Card>
+      )}
 
-        <StagesSection
-          projectId={project.id}
-          initialStages={project.stages}
-          candidates={project.responsibleCandidates}
-        />
-
-        {project.description && (
-          <Card title="Опис проєкту">
-            <p className="text-[13px] leading-relaxed whitespace-pre-wrap" style={{ color: T.textSecondary }}>
-              {project.description}
-            </p>
-          </Card>
-        )}
-      </div>
-
-      {/* Right col */}
-      <div className="flex flex-col gap-6">
-        {/* Financial summary */}
+      {/* Фінанси / Дати / Контакти — рядок нижче, по 1/3 на десктопі */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Фінанси">
           <div className="flex flex-col gap-3">
             <Stat label="Бюджет" value={formatCurrency(project.totalBudget)} />
@@ -231,7 +230,6 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
             )}
           </div>
         </Card>
-      </div>
       </div>
     </div>
   );

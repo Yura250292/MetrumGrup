@@ -274,6 +274,9 @@ export function StageDetailDrawer({
                 </span>
               </div>
             </Row>
+          </Section>
+
+          <Section title="План">
             <Row label="Од. виміру" icon={<Ruler size={12} />}>
               <select
                 value={stage.unit ?? ""}
@@ -293,47 +296,75 @@ export function StageDetailDrawer({
                 ))}
               </select>
             </Row>
-            <Row label="План. обсяг">
-              <input
-                type="number"
-                min={0}
-                step="0.001"
-                defaultValue={stage.planVolume ?? ""}
-                onBlur={(e) => {
-                  const raw = e.target.value;
-                  const v = raw === "" ? null : Number(raw);
-                  if (v !== stage.planVolume) patchStage({ planVolume: v }, "planVolume");
-                }}
+            <Row label="Обсяг">
+              <NumInput
+                value={stage.planVolume}
                 disabled={savingField === "planVolume"}
-                placeholder="—"
-                className="w-28 rounded border px-2 py-1 text-right text-[12px]"
-                style={{
-                  backgroundColor: T.panel,
-                  borderColor: T.borderSoft,
-                  color: T.textPrimary,
-                }}
+                step="0.001"
+                onCommit={(v) => patchStage({ planVolume: v }, "planVolume")}
               />
             </Row>
-            <Row label="Факт. обсяг">
-              <input
-                type="number"
-                min={0}
-                step="0.001"
-                defaultValue={stage.factVolume ?? ""}
-                onBlur={(e) => {
-                  const raw = e.target.value;
-                  const v = raw === "" ? null : Number(raw);
-                  if (v !== stage.factVolume) patchStage({ factVolume: v }, "factVolume");
-                }}
-                disabled={savingField === "factVolume"}
-                placeholder="—"
-                className="w-28 rounded border px-2 py-1 text-right text-[12px]"
+            <Row label="Вартість за од.">
+              <NumInput
+                value={stage.planUnitPrice}
+                disabled={savingField === "planUnitPrice"}
+                suffix="₴"
+                onCommit={(v) => patchStage({ planUnitPrice: v }, "planUnitPrice")}
+              />
+            </Row>
+            <Row label="Витрати разом">
+              <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                {formatCurrency(
+                  (stage.planVolume ?? 0) * (stage.planUnitPrice ?? 0),
+                )}
+              </span>
+            </Row>
+          </Section>
+
+          <Section title="Факт">
+            <Row label="Од. виміру" icon={<Ruler size={12} />}>
+              <select
+                value={stage.factUnit ?? ""}
+                onChange={(e) =>
+                  patchStage({ factUnit: e.target.value || null }, "factUnit")
+                }
+                disabled={savingField === "factUnit"}
+                className="rounded border px-2 py-1 text-[12px]"
                 style={{
                   backgroundColor: T.panel,
                   borderColor: T.borderSoft,
-                  color: T.textPrimary,
+                  color: stage.factUnit ? T.textPrimary : T.textMuted,
                 }}
+              >
+                {UNIT_OPTIONS.map((u) => (
+                  <option key={u} value={u}>
+                    {u || "як план"}
+                  </option>
+                ))}
+              </select>
+            </Row>
+            <Row label="Обсяг">
+              <NumInput
+                value={stage.factVolume}
+                disabled={savingField === "factVolume"}
+                step="0.001"
+                onCommit={(v) => patchStage({ factVolume: v }, "factVolume")}
               />
+            </Row>
+            <Row label="Вартість за од.">
+              <NumInput
+                value={stage.factUnitPrice}
+                disabled={savingField === "factUnitPrice"}
+                suffix="₴"
+                onCommit={(v) => patchStage({ factUnitPrice: v }, "factUnitPrice")}
+              />
+            </Row>
+            <Row label="Витрати разом">
+              <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
+                {formatCurrency(
+                  (stage.factVolume ?? 0) * (stage.factUnitPrice ?? 0),
+                )}
+              </span>
             </Row>
           </Section>
 
@@ -573,5 +604,50 @@ function DateInput({
         color: T.textPrimary,
       }}
     />
+  );
+}
+
+function NumInput({
+  value,
+  onCommit,
+  disabled,
+  suffix,
+  step = "1",
+}: {
+  value: number | null | undefined;
+  onCommit: (v: number | null) => void;
+  disabled?: boolean;
+  suffix?: string;
+  step?: string;
+}) {
+  const initial = value ?? "";
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        step={step}
+        defaultValue={initial}
+        disabled={disabled}
+        onBlur={(e) => {
+          const raw = e.target.value;
+          const parsed = raw === "" ? null : Number(raw);
+          if (parsed !== (value ?? null)) onCommit(parsed);
+        }}
+        placeholder="—"
+        className="w-28 rounded border px-2 py-1 text-right text-[12px]"
+        style={{
+          backgroundColor: T.panel,
+          borderColor: T.borderSoft,
+          color: T.textPrimary,
+        }}
+      />
+      {suffix && (
+        <span className="text-[11px]" style={{ color: T.textMuted }}>
+          {suffix}
+        </span>
+      )}
+    </div>
   );
 }

@@ -222,11 +222,17 @@ model ProjectStageRecord {
   endDate           DateTime?
   sortOrder         Int                  @default(0)
   allocatedBudget   Decimal?             @db.Decimal(12, 2)
-  // Об'єм / одиниці виміру для табличної картки «Етапи виконання»
-  // (План vs Факт по обсягах робіт). Усі опційні — старі етапи показують «—».
+  // Об'єм / одиниці виміру / ціна за одиницю для табличної картки
+  // «Етапи виконання» (План vs Факт). `unit` — план-одиниця, `factUnit` —
+  // факт (зазвичай те саме, але дозволяємо відмінність для довезень
+  // у іншій тарі). planVolume × planUnitPrice = планові витрати —
+  // upsert-аться у FinanceEntry (source=STAGE_AUTO) при PATCH.
   unit              String?
+  factUnit          String?
   planVolume        Decimal?             @db.Decimal(12, 3)
   factVolume        Decimal?             @db.Decimal(12, 3)
+  planUnitPrice     Decimal?             @db.Decimal(12, 2)
+  factUnitPrice     Decimal?             @db.Decimal(12, 2)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   projectId         String
@@ -1359,6 +1365,7 @@ enum FinanceEntrySource {
   MANUAL
   ESTIMATE_AUTO
   PROJECT_BUDGET
+  STAGE_AUTO
 }
 
 enum FolderDomain {

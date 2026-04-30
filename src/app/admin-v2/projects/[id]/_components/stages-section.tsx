@@ -111,6 +111,7 @@ export function StagesSection({
               ? null
               : Number(s.allocatedBudget),
           unit: (s.unit as string | null) ?? null,
+          factUnit: (s.factUnit as string | null) ?? null,
           planVolume:
             s.planVolume === null || s.planVolume === undefined
               ? null
@@ -119,6 +120,14 @@ export function StagesSection({
             s.factVolume === null || s.factVolume === undefined
               ? null
               : Number(s.factVolume),
+          planUnitPrice:
+            s.planUnitPrice === null || s.planUnitPrice === undefined
+              ? null
+              : Number(s.planUnitPrice),
+          factUnitPrice:
+            s.factUnitPrice === null || s.factUnitPrice === undefined
+              ? null
+              : Number(s.factUnitPrice),
           planExpense: Number(s.planExpense ?? 0),
           factExpense: Number(s.factExpense ?? 0),
           planIncome: Number(s.planIncome ?? 0),

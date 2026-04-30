@@ -304,6 +304,7 @@ export default async function AdminV2ProjectDetailPage({
                   ? null
                   : Number(s.allocatedBudget),
               unit: s.unit ?? null,
+              factUnit: s.factUnit ?? null,
               planVolume:
                 s.planVolume === null || s.planVolume === undefined
                   ? null
@@ -312,6 +313,14 @@ export default async function AdminV2ProjectDetailPage({
                 s.factVolume === null || s.factVolume === undefined
                   ? null
                   : Number(s.factVolume),
+              planUnitPrice:
+                s.planUnitPrice === null || s.planUnitPrice === undefined
+                  ? null
+                  : Number(s.planUnitPrice),
+              factUnitPrice:
+                s.factUnitPrice === null || s.factUnitPrice === undefined
+                  ? null
+                  : Number(s.factUnitPrice),
               planExpense: agg?.planExpense ?? 0,
               factExpense: agg?.factExpense ?? 0,
               planIncome: agg?.planIncome ?? 0,

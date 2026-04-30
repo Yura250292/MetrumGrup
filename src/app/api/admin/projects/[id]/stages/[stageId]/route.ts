@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
+import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import type { StageStatus } from "@prisma/client";
 
@@ -84,11 +85,19 @@ export async function PATCH(
         ? body.customName.trim()
         : null;
   }
-  if (body.unit !== undefined) {
-    data.unit =
-      typeof body.unit === "string" && body.unit.trim() ? body.unit.trim() : null;
+  let needsAutoSync = false;
+  for (const field of ["unit", "factUnit"] as const) {
+    if (body[field] !== undefined) {
+      const v = body[field];
+      data[field] = typeof v === "string" && v.trim() ? v.trim() : null;
+    }
   }
-  for (const field of ["planVolume", "factVolume"] as const) {
+  for (const field of [
+    "planVolume",
+    "factVolume",
+    "planUnitPrice",
+    "factUnitPrice",
+  ] as const) {
     if (body[field] !== undefined) {
       const raw = body[field];
       if (raw === null || raw === "") {
@@ -103,6 +112,7 @@ export async function PATCH(
         }
         data[field] = n;
       }
+      needsAutoSync = true;
     }
   }
 
@@ -125,6 +135,14 @@ export async function PATCH(
       syncBudget: needsBudgetSync,
       userId: session.user.id,
     });
+  }
+
+  if (needsAutoSync) {
+    try {
+      await syncStageAutoFinanceEntries(stageId, session.user.id);
+    } catch (err) {
+      console.error("[stages PATCH] syncStageAutoFinanceEntries failed:", err);
+    }
   }
 
   await auditLog({
