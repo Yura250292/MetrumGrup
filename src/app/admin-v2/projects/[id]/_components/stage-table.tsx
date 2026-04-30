@@ -1,7 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Check, Clock, Circle, EyeOff } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Check,
+  Clock,
+  Circle,
+  EyeOff,
+  GripVertical,
+} from "lucide-react";
 import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -105,6 +113,58 @@ function flattenVisible(roots: TreeNode[], expanded: Set<string>): TreeNode[] {
   return out;
 }
 
+// ---------- Column definitions ----------
+
+type ColumnId =
+  | "volume"
+  | "unit"
+  | "unitPrice"
+  | "clientPrice"
+  | "expense"
+  | "income"
+  | "result";
+
+const COLUMN_LABELS: Record<ColumnId, string> = {
+  volume: "Обсяг",
+  unit: "Од.",
+  unitPrice: "Вартість",
+  clientPrice: "Замовник",
+  expense: "Витрати",
+  income: "Надход.",
+  result: "Результат",
+};
+
+const DEFAULT_COL_ORDER: ColumnId[] = [
+  "volume",
+  "unit",
+  "unitPrice",
+  "clientPrice",
+  "expense",
+  "income",
+  "result",
+];
+
+const STORAGE_KEYS = {
+  plan: "metrum.stage-table.plan-cols",
+  fact: "metrum.stage-table.fact-cols",
+} as const;
+
+function loadOrder(key: string): ColumnId[] {
+  if (typeof window === "undefined") return DEFAULT_COL_ORDER;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return DEFAULT_COL_ORDER;
+    const parsed = JSON.parse(raw) as ColumnId[];
+    const valid = parsed.filter((c) => DEFAULT_COL_ORDER.includes(c));
+    if (valid.length !== DEFAULT_COL_ORDER.length) return DEFAULT_COL_ORDER;
+    return valid;
+  } catch {
+    return DEFAULT_COL_ORDER;
+  }
+}
+
+// ---------- Component ----------
+
 export function StageTable({
   stages,
   selectedStageId,
@@ -129,6 +189,43 @@ export function StageTable({
     walk(tree);
     return ids;
   });
+
+  // Persist column orders в localStorage. Init як DEFAULT, потім підвантажуємо
+  // на mount — щоб уникнути SSR-CSR mismatch у hydration.
+  const [planOrder, setPlanOrder] = useState<ColumnId[]>(DEFAULT_COL_ORDER);
+  const [factOrder, setFactOrder] = useState<ColumnId[]>(DEFAULT_COL_ORDER);
+  useEffect(() => {
+    setPlanOrder(loadOrder(STORAGE_KEYS.plan));
+    setFactOrder(loadOrder(STORAGE_KEYS.fact));
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.plan, JSON.stringify(planOrder));
+    } catch {}
+  }, [planOrder]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.fact, JSON.stringify(factOrder));
+    } catch {}
+  }, [factOrder]);
+
+  // Drag state
+  const [drag, setDrag] = useState<{ group: "plan" | "fact"; id: ColumnId } | null>(null);
+  const [dragOver, setDragOver] = useState<{ group: "plan" | "fact"; id: ColumnId } | null>(
+    null,
+  );
+  const moveColumn = (group: "plan" | "fact", src: ColumnId, dst: ColumnId) => {
+    const setter = group === "plan" ? setPlanOrder : setFactOrder;
+    setter((prev) => {
+      const fromIdx = prev.indexOf(src);
+      const toIdx = prev.indexOf(dst);
+      if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev;
+      const next = [...prev];
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, src);
+      return next;
+    });
+  };
 
   const visible = useMemo(() => flattenVisible(tree, expanded), [tree, expanded]);
 
@@ -155,12 +252,16 @@ export function StageTable({
   return (
     <div className="overflow-x-auto">
       <table
-        className="w-full border-collapse text-[12px]"
-        style={{ minWidth: 1900 }}
+        className="w-full text-[12px]"
+        style={{
+          minWidth: 1900,
+          borderCollapse: "collapse",
+          border: `1px solid ${T.borderSoft}`,
+        }}
       >
         <thead>
           <tr style={{ backgroundColor: T.panelSoft }}>
-            <Th sticky width={260} rowSpan={2}>
+            <Th sticky width={260} rowSpan={2} stickyDivider>
               Назва
             </Th>
             <Th width={140} rowSpan={2}>
@@ -169,10 +270,10 @@ export function StageTable({
             <Th width={110} rowSpan={2}>
               Статус
             </Th>
-            <ThGroup colSpan={7} bg={T.accentPrimarySoft}>
+            <ThGroup colSpan={planOrder.length} bg={T.accentPrimarySoft}>
               План
             </ThGroup>
-            <ThGroup colSpan={7} bg={T.successSoft}>
+            <ThGroup colSpan={factOrder.length} bg={T.successSoft}>
               Факт
             </ThGroup>
             <Th width={170} rowSpan={2}>
@@ -180,20 +281,30 @@ export function StageTable({
             </Th>
           </tr>
           <tr style={{ backgroundColor: T.panelSoft }}>
-            <ThSub>Обсяг</ThSub>
-            <ThSub>Од.</ThSub>
-            <ThSub>Вартість</ThSub>
-            <ThSub>Замовник</ThSub>
-            <ThSub>Витрати</ThSub>
-            <ThSub>Надход.</ThSub>
-            <ThSub>Результат</ThSub>
-            <ThSub>Обсяг</ThSub>
-            <ThSub>Од.</ThSub>
-            <ThSub>Вартість</ThSub>
-            <ThSub>Замовник</ThSub>
-            <ThSub>Витрати</ThSub>
-            <ThSub>Надход.</ThSub>
-            <ThSub>Результат</ThSub>
+            {planOrder.map((id) => (
+              <DraggableHeader
+                key={`p-${id}`}
+                id={id}
+                group="plan"
+                drag={drag}
+                dragOver={dragOver}
+                setDrag={setDrag}
+                setDragOver={setDragOver}
+                moveColumn={moveColumn}
+              />
+            ))}
+            {factOrder.map((id) => (
+              <DraggableHeader
+                key={`f-${id}`}
+                id={id}
+                group="fact"
+                drag={drag}
+                dragOver={dragOver}
+                setDrag={setDrag}
+                setDragOver={setDragOver}
+                moveColumn={moveColumn}
+              />
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -203,8 +314,8 @@ export function StageTable({
             const isSelected = node.id === selectedStageId;
             const StatusIcon = STATUS_STYLE[node.status].icon;
 
-            // Computed: показуємо volume × unitPrice якщо обидва задані;
-            // інакше беремо API-агрегацію (включає MANUAL «довезення»).
+            // Computed totals (volume × price). Якщо є MANUAL «довезення» —
+            // API-агрегація може бути більшою; беремо max як display value.
             const planExpenseCalc = mul(node.planVolume, node.planUnitPrice);
             const planIncomeCalc = mul(node.planVolume, node.planClientUnitPrice);
             const factExpenseCalc = mul(node.factVolume, node.factUnitPrice);
@@ -222,6 +333,27 @@ export function StageTable({
             const planResult = planIncomeShow - planExpenseShow;
             const factResult = factIncomeShow - factExpenseShow;
 
+            const renderPlanCell = (id: ColumnId) =>
+              renderCell({
+                id,
+                kind: "plan",
+                node,
+                onInlineUpdate,
+                expense: planExpenseShow,
+                income: planIncomeShow,
+                result: planResult,
+              });
+            const renderFactCell = (id: ColumnId) =>
+              renderCell({
+                id,
+                kind: "fact",
+                node,
+                onInlineUpdate,
+                expense: factExpenseShow,
+                income: factIncomeShow,
+                result: factResult,
+              });
+
             return (
               <tr
                 key={node.id}
@@ -229,7 +361,6 @@ export function StageTable({
                 className="cursor-pointer transition"
                 style={{
                   backgroundColor: isSelected ? T.accentPrimarySoft : "transparent",
-                  borderBottom: `1px solid ${T.borderSoft}`,
                   opacity: node.isHidden ? 0.55 : 1,
                 }}
                 onMouseEnter={(e) => {
@@ -241,6 +372,7 @@ export function StageTable({
               >
                 <Td
                   sticky
+                  stickyDivider
                   style={{
                     paddingLeft: 12 + node.depth * 18,
                     backgroundColor: isSelected ? T.accentPrimarySoft : T.panel,
@@ -317,101 +449,19 @@ export function StageTable({
                   />
                 </Td>
 
-                {/* План: 7 колонок */}
-                <Td align="right">
-                  <NumCell
-                    value={node.planVolume}
-                    onCommit={(v) => onInlineUpdate(node.id, { planVolume: v })}
-                    format="volume"
-                  />
-                </Td>
-                <Td align="center">
-                  <SelectCell
-                    value={node.unit ?? ""}
-                    options={UNIT_OPTIONS.map((u) => ({ value: u, label: u || "—" }))}
-                    display={
-                      <span style={{ color: node.unit ? T.textPrimary : T.textMuted }}>
-                        {node.unit ?? "—"}
-                      </span>
-                    }
-                    onCommit={(v) => onInlineUpdate(node.id, { unit: v || null })}
-                  />
-                </Td>
-                <Td align="right">
-                  <NumCell
-                    value={node.planUnitPrice}
-                    onCommit={(v) => onInlineUpdate(node.id, { planUnitPrice: v })}
-                    format="money"
-                  />
-                </Td>
-                <Td align="right">
-                  <NumCell
-                    value={node.planClientUnitPrice}
-                    onCommit={(v) => onInlineUpdate(node.id, { planClientUnitPrice: v })}
-                    format="money"
-                  />
-                </Td>
-                <Td align="right">
-                  <ReadOnlyMoney value={planExpenseShow} />
-                </Td>
-                <Td align="right">
-                  <ReadOnlyMoney value={planIncomeShow} />
-                </Td>
-                <Td align="right" accent={planResult >= 0 ? T.success : T.danger}>
-                  <ReadOnlyMoney value={planResult} signed />
-                </Td>
+                {/* План — динамічний порядок */}
+                {planOrder.map((id) => (
+                  <BodyCell key={`p-${id}`} id={id}>
+                    {renderPlanCell(id)}
+                  </BodyCell>
+                ))}
 
-                {/* Факт: 7 колонок */}
-                <Td align="right">
-                  <NumCell
-                    value={node.factVolume}
-                    onCommit={(v) => onInlineUpdate(node.id, { factVolume: v })}
-                    format="volume"
-                  />
-                </Td>
-                <Td align="center">
-                  <SelectCell
-                    value={node.factUnit ?? ""}
-                    options={UNIT_OPTIONS.map((u) => ({
-                      value: u,
-                      label: u || (node.unit ? `як план (${node.unit})` : "—"),
-                    }))}
-                    display={
-                      <span
-                        style={{
-                          color:
-                            node.factUnit || node.unit ? T.textPrimary : T.textMuted,
-                        }}
-                      >
-                        {node.factUnit ?? node.unit ?? "—"}
-                      </span>
-                    }
-                    onCommit={(v) => onInlineUpdate(node.id, { factUnit: v || null })}
-                  />
-                </Td>
-                <Td align="right">
-                  <NumCell
-                    value={node.factUnitPrice}
-                    onCommit={(v) => onInlineUpdate(node.id, { factUnitPrice: v })}
-                    format="money"
-                  />
-                </Td>
-                <Td align="right">
-                  <NumCell
-                    value={node.factClientUnitPrice}
-                    onCommit={(v) => onInlineUpdate(node.id, { factClientUnitPrice: v })}
-                    format="money"
-                  />
-                </Td>
-                <Td align="right">
-                  <ReadOnlyMoney value={factExpenseShow} />
-                </Td>
-                <Td align="right">
-                  <ReadOnlyMoney value={factIncomeShow} />
-                </Td>
-                <Td align="right" accent={factResult >= 0 ? T.success : T.danger}>
-                  <ReadOnlyMoney value={factResult} signed />
-                </Td>
+                {/* Факт — динамічний порядок */}
+                {factOrder.map((id) => (
+                  <BodyCell key={`f-${id}`} id={id}>
+                    {renderFactCell(id)}
+                  </BodyCell>
+                ))}
 
                 {/* Коментар */}
                 <Td>
@@ -428,6 +478,180 @@ export function StageTable({
     </div>
   );
 }
+
+// ---------- Cell renderers ----------
+
+type RenderCtx = {
+  id: ColumnId;
+  kind: "plan" | "fact";
+  node: TreeNode;
+  onInlineUpdate: (id: string, data: StageInlineUpdate) => Promise<void>;
+  expense: number;
+  income: number;
+  result: number;
+};
+
+function renderCell(ctx: RenderCtx): React.ReactNode {
+  const { id, kind, node, onInlineUpdate } = ctx;
+  const commit = (data: StageInlineUpdate) => onInlineUpdate(node.id, data);
+
+  if (id === "volume") {
+    return (
+      <NumCell
+        value={kind === "plan" ? node.planVolume : node.factVolume}
+        onCommit={(v) => commit(kind === "plan" ? { planVolume: v } : { factVolume: v })}
+        format="volume"
+      />
+    );
+  }
+  if (id === "unit") {
+    const v = kind === "plan" ? node.unit : node.factUnit;
+    return (
+      <SelectCell
+        value={v ?? ""}
+        options={UNIT_OPTIONS.map((u) => ({
+          value: u,
+          label:
+            u ||
+            (kind === "fact" && node.unit ? `як план (${node.unit})` : "—"),
+        }))}
+        display={
+          <span
+            style={{
+              color:
+                v || (kind === "fact" && node.unit) ? T.textPrimary : T.textMuted,
+            }}
+          >
+            {v ?? (kind === "fact" ? node.unit ?? "—" : "—")}
+          </span>
+        }
+        onCommit={(val) =>
+          commit(kind === "plan" ? { unit: val || null } : { factUnit: val || null })
+        }
+      />
+    );
+  }
+  if (id === "unitPrice") {
+    return (
+      <NumCell
+        value={kind === "plan" ? node.planUnitPrice : node.factUnitPrice}
+        onCommit={(val) =>
+          commit(kind === "plan" ? { planUnitPrice: val } : { factUnitPrice: val })
+        }
+        format="money"
+      />
+    );
+  }
+  if (id === "clientPrice") {
+    return (
+      <NumCell
+        value={kind === "plan" ? node.planClientUnitPrice : node.factClientUnitPrice}
+        onCommit={(val) =>
+          commit(
+            kind === "plan"
+              ? { planClientUnitPrice: val }
+              : { factClientUnitPrice: val },
+          )
+        }
+        format="money"
+      />
+    );
+  }
+  if (id === "expense") return <ReadOnlyMoney value={ctx.expense} />;
+  if (id === "income") return <ReadOnlyMoney value={ctx.income} />;
+  if (id === "result") {
+    return (
+      <span style={{ color: ctx.result >= 0 ? T.success : T.danger }}>
+        <ReadOnlyMoney value={ctx.result} signed />
+      </span>
+    );
+  }
+  return null;
+}
+
+function alignFor(id: ColumnId): "left" | "right" | "center" {
+  if (id === "unit") return "center";
+  return "right";
+}
+
+function BodyCell({ id, children }: { id: ColumnId; children: React.ReactNode }) {
+  return <Td align={alignFor(id)}>{children}</Td>;
+}
+
+// ---------- Header DnD ----------
+
+function DraggableHeader({
+  id,
+  group,
+  drag,
+  dragOver,
+  setDrag,
+  setDragOver,
+  moveColumn,
+}: {
+  id: ColumnId;
+  group: "plan" | "fact";
+  drag: { group: "plan" | "fact"; id: ColumnId } | null;
+  dragOver: { group: "plan" | "fact"; id: ColumnId } | null;
+  setDrag: (v: { group: "plan" | "fact"; id: ColumnId } | null) => void;
+  setDragOver: (v: { group: "plan" | "fact"; id: ColumnId } | null) => void;
+  moveColumn: (group: "plan" | "fact", src: ColumnId, dst: ColumnId) => void;
+}) {
+  const isDragging = drag?.group === group && drag.id === id;
+  const isOver = dragOver?.group === group && dragOver.id === id && !isDragging;
+  return (
+    <th
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        setDrag({ group, id });
+      }}
+      onDragOver={(e) => {
+        if (drag?.group === group) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+          if (!dragOver || dragOver.id !== id || dragOver.group !== group) {
+            setDragOver({ group, id });
+          }
+        }
+      }}
+      onDragLeave={() => {
+        if (dragOver?.group === group && dragOver.id === id) {
+          setDragOver(null);
+        }
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (drag?.group === group && drag.id !== id) {
+          moveColumn(group, drag.id, id);
+        }
+        setDrag(null);
+        setDragOver(null);
+      }}
+      onDragEnd={() => {
+        setDrag(null);
+        setDragOver(null);
+      }}
+      className="px-3 py-1.5 text-right text-[10px] font-medium select-none"
+      style={{
+        color: T.textMuted,
+        cursor: "grab",
+        opacity: isDragging ? 0.4 : 1,
+        boxShadow: isOver ? `inset 2px 0 0 ${T.accentPrimary}` : undefined,
+        border: `1px solid ${T.borderSoft}`,
+        backgroundColor: isOver ? T.accentPrimarySoft : T.panelSoft,
+      }}
+      title="Перетягни щоб поміняти порядок"
+    >
+      <span className="inline-flex items-center justify-end gap-1">
+        <GripVertical size={9} style={{ color: T.textMuted, opacity: 0.6 }} />
+        {COLUMN_LABELS[id]}
+      </span>
+    </th>
+  );
+}
+
+// ---------- Helpers ----------
 
 function mul(a: number | null | undefined, b: number | null | undefined): number {
   if (a === null || a === undefined || b === null || b === undefined) return 0;
@@ -500,7 +724,10 @@ function NumCell({
       }}
       className="w-full text-right transition hover:underline"
       style={{
-        color: value === null || value === undefined || value === 0 ? T.textMuted : T.textPrimary,
+        color:
+          value === null || value === undefined || value === 0
+            ? T.textMuted
+            : T.textPrimary,
       }}
     >
       {display}
@@ -614,16 +841,20 @@ function TextCell({
   );
 }
 
+// ---------- Static cells ----------
+
 function Th({
   children,
   width,
   sticky,
   rowSpan,
+  stickyDivider,
 }: {
   children?: React.ReactNode;
   width?: number;
   sticky?: boolean;
   rowSpan?: number;
+  stickyDivider?: boolean;
 }) {
   return (
     <th
@@ -634,9 +865,12 @@ function Th({
         width,
         position: sticky ? "sticky" : undefined,
         left: sticky ? 0 : undefined,
-        backgroundColor: sticky ? T.panelSoft : undefined,
+        backgroundColor: sticky ? T.panelSoft : T.panelSoft,
         zIndex: sticky ? 2 : undefined,
-        borderBottom: `1px solid ${T.borderSoft}`,
+        border: `1px solid ${T.borderSoft}`,
+        borderRight: stickyDivider
+          ? `2px solid ${T.borderSoft}`
+          : `1px solid ${T.borderSoft}`,
         verticalAlign: "middle",
       }}
     >
@@ -661,21 +895,7 @@ function ThGroup({
       style={{
         color: T.textPrimary,
         backgroundColor: bg,
-        borderBottom: `1px solid ${T.borderSoft}`,
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
-function ThSub({ children }: { children: React.ReactNode }) {
-  return (
-    <th
-      className="px-3 py-1.5 text-right text-[10px] font-medium"
-      style={{
-        color: T.textMuted,
-        borderBottom: `1px solid ${T.borderSoft}`,
+        border: `1px solid ${T.borderSoft}`,
       }}
     >
       {children}
@@ -688,12 +908,14 @@ function Td({
   align = "left",
   accent,
   sticky,
+  stickyDivider,
   style,
 }: {
   children: React.ReactNode;
   align?: "left" | "right" | "center";
   accent?: string;
   sticky?: boolean;
+  stickyDivider?: boolean;
   style?: React.CSSProperties;
 }) {
   return (
@@ -705,6 +927,10 @@ function Td({
         position: sticky ? "sticky" : undefined,
         left: sticky ? 0 : undefined,
         zIndex: sticky ? 1 : undefined,
+        border: `1px solid ${T.borderSoft}`,
+        borderRight: stickyDivider
+          ? `2px solid ${T.borderSoft}`
+          : `1px solid ${T.borderSoft}`,
         ...style,
       }}
     >
