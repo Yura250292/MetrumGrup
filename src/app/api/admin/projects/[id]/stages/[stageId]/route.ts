@@ -97,6 +97,8 @@ export async function PATCH(
     "factVolume",
     "planUnitPrice",
     "factUnitPrice",
+    "planClientUnitPrice",
+    "factClientUnitPrice",
   ] as const) {
     if (body[field] !== undefined) {
       const raw = body[field];

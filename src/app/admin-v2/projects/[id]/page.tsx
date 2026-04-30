@@ -321,6 +321,14 @@ export default async function AdminV2ProjectDetailPage({
                 s.factUnitPrice === null || s.factUnitPrice === undefined
                   ? null
                   : Number(s.factUnitPrice),
+              planClientUnitPrice:
+                s.planClientUnitPrice === null || s.planClientUnitPrice === undefined
+                  ? null
+                  : Number(s.planClientUnitPrice),
+              factClientUnitPrice:
+                s.factClientUnitPrice === null || s.factClientUnitPrice === undefined
+                  ? null
+                  : Number(s.factClientUnitPrice),
               planExpense: agg?.planExpense ?? 0,
               factExpense: agg?.factExpense ?? 0,
               planIncome: agg?.planIncome ?? 0,

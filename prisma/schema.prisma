@@ -231,8 +231,12 @@ model ProjectStageRecord {
   factUnit          String?
   planVolume        Decimal?             @db.Decimal(12, 3)
   factVolume        Decimal?             @db.Decimal(12, 3)
+  // Cost (собівартість/закупка) → формує EXPENSE auto-records.
   planUnitPrice     Decimal?             @db.Decimal(12, 2)
   factUnitPrice     Decimal?             @db.Decimal(12, 2)
+  // Ціна для замовника → формує INCOME auto-records. Маржа = (client − unit) × volume.
+  planClientUnitPrice Decimal?           @db.Decimal(12, 2)
+  factClientUnitPrice Decimal?           @db.Decimal(12, 2)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   projectId         String

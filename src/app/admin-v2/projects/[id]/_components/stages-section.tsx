@@ -4,9 +4,8 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Edit3, Eye, EyeOff } from "lucide-react";
-import type { StageStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { StageTable, type StageRow } from "./stage-table";
+import { StageTable, type StageRow, type StageInlineUpdate } from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
 
 export type ResponsibleCandidate = { id: string; name: string };
@@ -35,28 +34,31 @@ export function StagesSection({
   }, [initialStages]);
 
   const inlineUpdate = useCallback(
-    async (
-      stageId: string,
-      data: { status?: StageStatus; responsibleUserId?: string | null },
-    ) => {
-      // Optimistic update
+    async (stageId: string, data: StageInlineUpdate) => {
+      // Optimistic update — одразу прокатуємо зміни, ще до server-respond.
       setStages((prev) =>
-        prev.map((s) =>
-          s.id === stageId
-            ? {
-                ...s,
-                ...(data.status !== undefined ? { status: data.status } : {}),
-                ...(data.responsibleUserId !== undefined
-                  ? {
-                      responsibleUserId: data.responsibleUserId,
-                      responsibleName:
-                        candidates.find((c) => c.id === data.responsibleUserId)?.name ??
-                        null,
-                    }
-                  : {}),
-              }
-            : s,
-        ),
+        prev.map((s) => {
+          if (s.id !== stageId) return s;
+          const next: StageRow = { ...s };
+          if (data.status !== undefined) next.status = data.status;
+          if (data.responsibleUserId !== undefined) {
+            next.responsibleUserId = data.responsibleUserId;
+            next.responsibleName =
+              candidates.find((c) => c.id === data.responsibleUserId)?.name ?? null;
+          }
+          if (data.unit !== undefined) next.unit = data.unit;
+          if (data.factUnit !== undefined) next.factUnit = data.factUnit;
+          if (data.planVolume !== undefined) next.planVolume = data.planVolume;
+          if (data.factVolume !== undefined) next.factVolume = data.factVolume;
+          if (data.planUnitPrice !== undefined) next.planUnitPrice = data.planUnitPrice;
+          if (data.factUnitPrice !== undefined) next.factUnitPrice = data.factUnitPrice;
+          if (data.planClientUnitPrice !== undefined)
+            next.planClientUnitPrice = data.planClientUnitPrice;
+          if (data.factClientUnitPrice !== undefined)
+            next.factClientUnitPrice = data.factClientUnitPrice;
+          if (data.notes !== undefined) next.notes = data.notes;
+          return next;
+        }),
       );
       try {
         const res = await fetch(
@@ -128,6 +130,14 @@ export function StagesSection({
             s.factUnitPrice === null || s.factUnitPrice === undefined
               ? null
               : Number(s.factUnitPrice),
+          planClientUnitPrice:
+            s.planClientUnitPrice === null || s.planClientUnitPrice === undefined
+              ? null
+              : Number(s.planClientUnitPrice),
+          factClientUnitPrice:
+            s.factClientUnitPrice === null || s.factClientUnitPrice === undefined
+              ? null
+              : Number(s.factClientUnitPrice),
           planExpense: Number(s.planExpense ?? 0),
           factExpense: Number(s.factExpense ?? 0),
           planIncome: Number(s.planIncome ?? 0),

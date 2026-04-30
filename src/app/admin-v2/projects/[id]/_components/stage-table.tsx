@@ -7,6 +7,8 @@ import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectStage, StageStatus } from "@prisma/client";
 
+const UNIT_OPTIONS = ["", "шт", "м", "м²", "м³", "кг", "т", "л", "пог.м", "год"];
+
 export type StageRow = {
   id: string;
   parentStageId: string | null;
@@ -28,20 +30,33 @@ export type StageRow = {
   factVolume: number | null;
   planUnitPrice: number | null;
   factUnitPrice: number | null;
+  planClientUnitPrice: number | null;
+  factClientUnitPrice: number | null;
   planExpense: number;
   factExpense: number;
   planIncome: number;
   factIncome: number;
 };
 
+export type StageInlineUpdate = Partial<{
+  status: StageStatus;
+  responsibleUserId: string | null;
+  unit: string | null;
+  factUnit: string | null;
+  planVolume: number | null;
+  factVolume: number | null;
+  planUnitPrice: number | null;
+  factUnitPrice: number | null;
+  planClientUnitPrice: number | null;
+  factClientUnitPrice: number | null;
+  notes: string | null;
+}>;
+
 type StageTableProps = {
   stages: StageRow[];
   selectedStageId: string | null;
   onStageClick: (stageId: string) => void;
-  onInlineUpdate: (
-    stageId: string,
-    data: { status?: StageStatus; responsibleUserId?: string | null },
-  ) => Promise<void>;
+  onInlineUpdate: (stageId: string, data: StageInlineUpdate) => Promise<void>;
   candidates: { id: string; name: string }[];
   showHidden?: boolean;
 };
@@ -60,22 +75,16 @@ function buildTree(rows: StageRow[]): TreeNode[] {
   const roots: TreeNode[] = [];
   for (const node of byId.values()) {
     if (node.parentStageId && byId.has(node.parentStageId)) {
-      const parent = byId.get(node.parentStageId)!;
-      node.depth = parent.depth + 1;
-      parent.children.push(node);
+      byId.get(node.parentStageId)!.children.push(node);
     } else {
       roots.push(node);
     }
   }
   const sortRec = (arr: TreeNode[]) => {
     arr.sort((a, b) => a.sortOrder - b.sortOrder);
-    arr.forEach((n) => {
-      n.depth = arr === roots ? 0 : n.depth;
-      sortRec(n.children);
-    });
+    arr.forEach((n) => sortRec(n.children));
   };
   sortRec(roots);
-  // Recompute depth top-down (sortRec не знає parent.depth для дітей коли був скинутий).
   const fixDepth = (node: TreeNode, depth: number) => {
     node.depth = depth;
     node.children.forEach((c) => fixDepth(c, depth + 1));
@@ -89,9 +98,7 @@ function flattenVisible(roots: TreeNode[], expanded: Set<string>): TreeNode[] {
   const walk = (nodes: TreeNode[]) => {
     for (const n of nodes) {
       out.push(n);
-      if (n.children.length > 0 && expanded.has(n.id)) {
-        walk(n.children);
-      }
+      if (n.children.length > 0 && expanded.has(n.id)) walk(n.children);
     }
   };
   walk(roots);
@@ -106,18 +113,12 @@ export function StageTable({
   candidates,
   showHidden = false,
 }: StageTableProps) {
-  const [editing, setEditing] = useState<{
-    stageId: string;
-    field: "status" | "responsible";
-  } | null>(null);
-  const [savingId, setSavingId] = useState<string | null>(null);
   const tree = useMemo(() => {
     const filtered = showHidden ? stages : stages.filter((s) => !s.isHidden);
     return buildTree(filtered);
   }, [stages, showHidden]);
 
   const [expanded, setExpanded] = useState<Set<string>>(() => {
-    // По дефолту — всі parents розгорнуті.
     const ids = new Set<string>();
     const walk = (nodes: TreeNode[]) => {
       for (const n of nodes) {
@@ -155,7 +156,7 @@ export function StageTable({
     <div className="overflow-x-auto">
       <table
         className="w-full border-collapse text-[12px]"
-        style={{ minWidth: 1700 }}
+        style={{ minWidth: 1900 }}
       >
         <thead>
           <tr style={{ backgroundColor: T.panelSoft }}>
@@ -168,13 +169,13 @@ export function StageTable({
             <Th width={110} rowSpan={2}>
               Статус
             </Th>
-            <ThGroup colSpan={6} bg={T.accentPrimarySoft}>
+            <ThGroup colSpan={7} bg={T.accentPrimarySoft}>
               План
             </ThGroup>
-            <ThGroup colSpan={6} bg={T.successSoft}>
+            <ThGroup colSpan={7} bg={T.successSoft}>
               Факт
             </ThGroup>
-            <Th width={160} rowSpan={2}>
+            <Th width={170} rowSpan={2}>
               Коментар
             </Th>
           </tr>
@@ -182,14 +183,16 @@ export function StageTable({
             <ThSub>Обсяг</ThSub>
             <ThSub>Од.</ThSub>
             <ThSub>Вартість</ThSub>
+            <ThSub>Замовник</ThSub>
             <ThSub>Витрати</ThSub>
-            <ThSub>Надходження</ThSub>
+            <ThSub>Надход.</ThSub>
             <ThSub>Результат</ThSub>
             <ThSub>Обсяг</ThSub>
             <ThSub>Од.</ThSub>
             <ThSub>Вартість</ThSub>
+            <ThSub>Замовник</ThSub>
             <ThSub>Витрати</ThSub>
-            <ThSub>Надходження</ThSub>
+            <ThSub>Надход.</ThSub>
             <ThSub>Результат</ThSub>
           </tr>
         </thead>
@@ -198,9 +201,27 @@ export function StageTable({
             const hasChildren = node.children.length > 0;
             const isExpanded = expanded.has(node.id);
             const isSelected = node.id === selectedStageId;
-            const planResult = (node.planIncome ?? 0) - (node.planExpense ?? 0);
-            const factResult = (node.factIncome ?? 0) - (node.factExpense ?? 0);
             const StatusIcon = STATUS_STYLE[node.status].icon;
+
+            // Computed: показуємо volume × unitPrice якщо обидва задані;
+            // інакше беремо API-агрегацію (включає MANUAL «довезення»).
+            const planExpenseCalc = mul(node.planVolume, node.planUnitPrice);
+            const planIncomeCalc = mul(node.planVolume, node.planClientUnitPrice);
+            const factExpenseCalc = mul(node.factVolume, node.factUnitPrice);
+            const factIncomeCalc = mul(node.factVolume, node.factClientUnitPrice);
+
+            const planExpenseShow =
+              planExpenseCalc > 0 ? Math.max(planExpenseCalc, node.planExpense) : node.planExpense;
+            const planIncomeShow =
+              planIncomeCalc > 0 ? Math.max(planIncomeCalc, node.planIncome) : node.planIncome;
+            const factExpenseShow =
+              factExpenseCalc > 0 ? Math.max(factExpenseCalc, node.factExpense) : node.factExpense;
+            const factIncomeShow =
+              factIncomeCalc > 0 ? Math.max(factIncomeCalc, node.factIncome) : node.factIncome;
+
+            const planResult = planIncomeShow - planExpenseShow;
+            const factResult = factIncomeShow - factExpenseShow;
+
             return (
               <tr
                 key={node.id}
@@ -236,11 +257,7 @@ export function StageTable({
                         className="flex h-4 w-4 items-center justify-center rounded hover:bg-black/5"
                         style={{ color: T.textMuted }}
                       >
-                        {isExpanded ? (
-                          <ChevronDown size={12} />
-                        ) : (
-                          <ChevronRight size={12} />
-                        )}
+                        {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                       </button>
                     ) : (
                       <span className="inline-block h-4 w-4" />
@@ -255,147 +272,153 @@ export function StageTable({
                     >
                       {stageDisplayName(node)}
                     </span>
-                    {node.isHidden && (
-                      <EyeOff size={11} style={{ color: T.textMuted }} />
-                    )}
+                    {node.isHidden && <EyeOff size={11} style={{ color: T.textMuted }} />}
                   </div>
                 </Td>
+
+                {/* Відповідальний */}
                 <Td>
-                  {editing?.stageId === node.id && editing.field === "responsible" ? (
-                    <select
-                      autoFocus
-                      defaultValue={node.responsibleUserId ?? ""}
-                      disabled={savingId === node.id}
-                      onClick={(e) => e.stopPropagation()}
-                      onBlur={() => setEditing(null)}
-                      onChange={async (e) => {
-                        const value = e.target.value || null;
-                        if (value !== node.responsibleUserId) {
-                          setSavingId(node.id);
-                          await onInlineUpdate(node.id, { responsibleUserId: value });
-                          setSavingId(null);
-                        }
-                        setEditing(null);
-                      }}
-                      className="w-full rounded border px-1.5 py-0.5 text-[11px] outline-none"
-                      style={{
-                        backgroundColor: T.panel,
-                        borderColor: T.borderAccent,
-                        color: T.textPrimary,
-                      }}
-                    >
-                      <option value="">—</option>
-                      {candidates.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditing({ stageId: node.id, field: "responsible" });
-                      }}
-                      className="text-left transition hover:underline"
-                      style={{ color: node.responsibleName ? T.textPrimary : T.textMuted }}
-                    >
-                      {node.responsibleName ?? "—"}
-                    </button>
-                  )}
+                  <SelectCell
+                    value={node.responsibleUserId ?? ""}
+                    options={[
+                      { value: "", label: "—" },
+                      ...candidates.map((c) => ({ value: c.id, label: c.name })),
+                    ]}
+                    display={node.responsibleName ?? "—"}
+                    onCommit={(v) =>
+                      onInlineUpdate(node.id, { responsibleUserId: v || null })
+                    }
+                  />
                 </Td>
+
+                {/* Статус */}
                 <Td>
-                  {editing?.stageId === node.id && editing.field === "status" ? (
-                    <select
-                      autoFocus
-                      defaultValue={node.status}
-                      disabled={savingId === node.id}
-                      onClick={(e) => e.stopPropagation()}
-                      onBlur={() => setEditing(null)}
-                      onChange={async (e) => {
-                        const value = e.target.value as StageStatus;
-                        if (value !== node.status) {
-                          setSavingId(node.id);
-                          await onInlineUpdate(node.id, { status: value });
-                          setSavingId(null);
-                        }
-                        setEditing(null);
-                      }}
-                      className="rounded border px-1.5 py-0.5 text-[11px] outline-none"
-                      style={{
-                        backgroundColor: T.panel,
-                        borderColor: T.borderAccent,
-                        color: T.textPrimary,
-                      }}
-                    >
-                      {(Object.keys(STAGE_STATUS_LABELS) as StageStatus[]).map((s) => (
-                        <option key={s} value={s}>
-                          {STAGE_STATUS_LABELS[s]}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditing({ stageId: node.id, field: "status" });
-                      }}
-                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition hover:brightness-95"
-                      style={{
-                        backgroundColor: STATUS_STYLE[node.status].bg,
-                        color: STATUS_STYLE[node.status].fg,
-                      }}
-                    >
-                      <StatusIcon size={10} />
-                      {STAGE_STATUS_LABELS[node.status]}
-                    </button>
-                  )}
+                  <SelectCell
+                    value={node.status}
+                    options={(Object.keys(STAGE_STATUS_LABELS) as StageStatus[]).map((s) => ({
+                      value: s,
+                      label: STAGE_STATUS_LABELS[s],
+                    }))}
+                    display={
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                        style={{
+                          backgroundColor: STATUS_STYLE[node.status].bg,
+                          color: STATUS_STYLE[node.status].fg,
+                        }}
+                      >
+                        <StatusIcon size={10} />
+                        {STAGE_STATUS_LABELS[node.status]}
+                      </span>
+                    }
+                    onCommit={(v) =>
+                      onInlineUpdate(node.id, { status: v as StageStatus })
+                    }
+                  />
                 </Td>
-                {/* План: 6 колонок */}
-                <Td align="right">{volumeOrDash(node.planVolume)}</Td>
+
+                {/* План: 7 колонок */}
+                <Td align="right">
+                  <NumCell
+                    value={node.planVolume}
+                    onCommit={(v) => onInlineUpdate(node.id, { planVolume: v })}
+                    format="volume"
+                  />
+                </Td>
                 <Td align="center">
-                  <span style={{ color: node.unit ? T.textPrimary : T.textMuted }}>
-                    {node.unit ?? "—"}
-                  </span>
+                  <SelectCell
+                    value={node.unit ?? ""}
+                    options={UNIT_OPTIONS.map((u) => ({ value: u, label: u || "—" }))}
+                    display={
+                      <span style={{ color: node.unit ? T.textPrimary : T.textMuted }}>
+                        {node.unit ?? "—"}
+                      </span>
+                    }
+                    onCommit={(v) => onInlineUpdate(node.id, { unit: v || null })}
+                  />
                 </Td>
-                <Td align="right">{moneyOrDash(node.planUnitPrice)}</Td>
-                <Td align="right">{moneyOrDash(node.planExpense)}</Td>
-                <Td align="right">{moneyOrDash(node.planIncome)}</Td>
+                <Td align="right">
+                  <NumCell
+                    value={node.planUnitPrice}
+                    onCommit={(v) => onInlineUpdate(node.id, { planUnitPrice: v })}
+                    format="money"
+                  />
+                </Td>
+                <Td align="right">
+                  <NumCell
+                    value={node.planClientUnitPrice}
+                    onCommit={(v) => onInlineUpdate(node.id, { planClientUnitPrice: v })}
+                    format="money"
+                  />
+                </Td>
+                <Td align="right">
+                  <ReadOnlyMoney value={planExpenseShow} />
+                </Td>
+                <Td align="right">
+                  <ReadOnlyMoney value={planIncomeShow} />
+                </Td>
                 <Td align="right" accent={planResult >= 0 ? T.success : T.danger}>
-                  {moneyOrDash(planResult)}
+                  <ReadOnlyMoney value={planResult} signed />
                 </Td>
-                {/* Факт: 6 колонок */}
-                <Td align="right">{volumeOrDash(node.factVolume)}</Td>
+
+                {/* Факт: 7 колонок */}
+                <Td align="right">
+                  <NumCell
+                    value={node.factVolume}
+                    onCommit={(v) => onInlineUpdate(node.id, { factVolume: v })}
+                    format="volume"
+                  />
+                </Td>
                 <Td align="center">
-                  <span
-                    style={{
-                      color: node.factUnit || node.unit ? T.textPrimary : T.textMuted,
-                    }}
-                  >
-                    {node.factUnit ?? node.unit ?? "—"}
-                  </span>
+                  <SelectCell
+                    value={node.factUnit ?? ""}
+                    options={UNIT_OPTIONS.map((u) => ({
+                      value: u,
+                      label: u || (node.unit ? `як план (${node.unit})` : "—"),
+                    }))}
+                    display={
+                      <span
+                        style={{
+                          color:
+                            node.factUnit || node.unit ? T.textPrimary : T.textMuted,
+                        }}
+                      >
+                        {node.factUnit ?? node.unit ?? "—"}
+                      </span>
+                    }
+                    onCommit={(v) => onInlineUpdate(node.id, { factUnit: v || null })}
+                  />
                 </Td>
-                <Td align="right">{moneyOrDash(node.factUnitPrice)}</Td>
-                <Td align="right">{moneyOrDash(node.factExpense)}</Td>
-                <Td align="right">{moneyOrDash(node.factIncome)}</Td>
+                <Td align="right">
+                  <NumCell
+                    value={node.factUnitPrice}
+                    onCommit={(v) => onInlineUpdate(node.id, { factUnitPrice: v })}
+                    format="money"
+                  />
+                </Td>
+                <Td align="right">
+                  <NumCell
+                    value={node.factClientUnitPrice}
+                    onCommit={(v) => onInlineUpdate(node.id, { factClientUnitPrice: v })}
+                    format="money"
+                  />
+                </Td>
+                <Td align="right">
+                  <ReadOnlyMoney value={factExpenseShow} />
+                </Td>
+                <Td align="right">
+                  <ReadOnlyMoney value={factIncomeShow} />
+                </Td>
                 <Td align="right" accent={factResult >= 0 ? T.success : T.danger}>
-                  {moneyOrDash(factResult)}
+                  <ReadOnlyMoney value={factResult} signed />
                 </Td>
-                {/* Коментар (notes — truncated) */}
+
+                {/* Коментар */}
                 <Td>
-                  {node.notes ? (
-                    <span
-                      className="line-clamp-2"
-                      style={{ color: T.textSecondary, fontSize: 11 }}
-                      title={node.notes}
-                    >
-                      {node.notes}
-                    </span>
-                  ) : (
-                    <span style={{ color: T.textMuted }}>—</span>
-                  )}
+                  <TextCell
+                    value={node.notes ?? ""}
+                    onCommit={(v) => onInlineUpdate(node.id, { notes: v || null })}
+                  />
                 </Td>
               </tr>
             );
@@ -406,22 +429,189 @@ export function StageTable({
   );
 }
 
-function moneyOrDash(value: number | null | undefined) {
-  if (value === null || value === undefined || value === 0) {
-    return <span style={{ color: T.textMuted }}>—</span>;
-  }
-  return formatCurrency(value);
+function mul(a: number | null | undefined, b: number | null | undefined): number {
+  if (a === null || a === undefined || b === null || b === undefined) return 0;
+  return Number(a) * Number(b);
 }
 
-function volumeOrDash(value: number | null | undefined) {
-  if (value === null || value === undefined || value === 0) {
+function ReadOnlyMoney({ value, signed = false }: { value: number; signed?: boolean }) {
+  if (!Number.isFinite(value) || value === 0) {
     return <span style={{ color: T.textMuted }}>—</span>;
   }
-  // Без зайвих десяткових нулів — 12.5 або 100, не 100.000.
-  return new Intl.NumberFormat("uk-UA", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3,
-  }).format(value);
+  const formatted = formatCurrency(Math.abs(value));
+  const prefix = signed && value < 0 ? "−" : "";
+  return <span>{prefix + formatted}</span>;
+}
+
+function NumCell({
+  value,
+  onCommit,
+  format,
+}: {
+  value: number | null | undefined;
+  onCommit: (v: number | null) => void | Promise<void>;
+  format: "money" | "volume";
+}) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <input
+        autoFocus
+        type="number"
+        inputMode="decimal"
+        defaultValue={value ?? ""}
+        step={format === "volume" ? "0.001" : "0.01"}
+        min={0}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={(e) => {
+          const raw = e.target.value;
+          const parsed = raw === "" ? null : Number(raw);
+          if (parsed !== (value ?? null)) void onCommit(parsed);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-full rounded border px-1.5 py-0.5 text-right text-[12px] outline-none"
+        style={{
+          backgroundColor: T.panel,
+          borderColor: T.borderAccent,
+          color: T.textPrimary,
+        }}
+      />
+    );
+  }
+  const display =
+    value === null || value === undefined || value === 0
+      ? "—"
+      : format === "money"
+        ? formatCurrency(value)
+        : new Intl.NumberFormat("uk-UA", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 3,
+          }).format(value);
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      className="w-full text-right transition hover:underline"
+      style={{
+        color: value === null || value === undefined || value === 0 ? T.textMuted : T.textPrimary,
+      }}
+    >
+      {display}
+    </button>
+  );
+}
+
+function SelectCell({
+  value,
+  options,
+  display,
+  onCommit,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  display: React.ReactNode;
+  onCommit: (v: string) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <select
+        autoFocus
+        defaultValue={value}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={() => setEditing(false)}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v !== value) void onCommit(v);
+          setEditing(false);
+        }}
+        className="w-full rounded border px-1.5 py-0.5 text-[11px] outline-none"
+        style={{
+          backgroundColor: T.panel,
+          borderColor: T.borderAccent,
+          color: T.textPrimary,
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      className="w-full text-left transition hover:underline"
+    >
+      {display}
+    </button>
+  );
+}
+
+function TextCell({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        defaultValue={value}
+        rows={2}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={(e) => {
+          const v = e.target.value;
+          if (v !== value) void onCommit(v);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-full rounded border px-1.5 py-1 text-[11px] outline-none"
+        style={{
+          backgroundColor: T.panel,
+          borderColor: T.borderAccent,
+          color: T.textPrimary,
+        }}
+      />
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      className="block w-full text-left transition hover:underline"
+      title={value || "Додати коментар"}
+    >
+      {value ? (
+        <span className="line-clamp-2" style={{ color: T.textSecondary, fontSize: 11 }}>
+          {value}
+        </span>
+      ) : (
+        <span style={{ color: T.textMuted }}>—</span>
+      )}
+    </button>
+  );
 }
 
 function Th({

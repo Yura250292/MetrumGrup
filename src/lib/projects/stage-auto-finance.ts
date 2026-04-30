@@ -3,15 +3,16 @@ import { stageDisplayName } from "@/lib/constants";
 
 /**
  * Синхронізує авто-FinanceEntry для одного етапу:
- *   - PLAN EXPENSE = planVolume × planUnitPrice
- *   - FACT EXPENSE = factVolume × factUnitPrice
+ *   PLAN EXPENSE  = planVolume × planUnitPrice         (собівартість)
+ *   FACT EXPENSE  = factVolume × factUnitPrice
+ *   PLAN INCOME   = planVolume × planClientUnitPrice   (надходження від замовника)
+ *   FACT INCOME   = factVolume × factClientUnitPrice
  *
- * Запис ідентифікується унікальним ключем (stageRecordId, kind, source=STAGE_AUTO).
- * Існує — оновлюємо `amount`. Не існує і добуток > 0 — створюємо.
- * Добуток падає в 0/null — видаляємо запис, щоб не залишати «привидів» у фінансуванні.
+ * Запис ідентифікується унікальним ключем (stageRecordId, kind, type, source=STAGE_AUTO).
+ * Існує — оновлюємо `amount`. Не існує і добуток > 0 — створюємо. Добуток ≤ 0 → видаляємо.
  *
- * Manual записи (наприклад «довезення» з quick-add) мають source=MANUAL і
- * НЕ зачіпаються — це окремий потік для discrete покупок поверх плану.
+ * MANUAL записи (наприклад «довезення» з quick-add у drawer) мають source=MANUAL і
+ * НЕ зачіпаються — це окремий потік discrete покупок поверх плану.
  */
 export async function syncStageAutoFinanceEntries(
   stageId: string,
@@ -26,8 +27,10 @@ export async function syncStageAutoFinanceEntries(
       customName: true,
       planVolume: true,
       planUnitPrice: true,
+      planClientUnitPrice: true,
       factVolume: true,
       factUnitPrice: true,
+      factClientUnitPrice: true,
       project: { select: { firmId: true } },
     },
   });
@@ -44,9 +47,10 @@ export async function syncStageAutoFinanceEntries(
       projectId: stage.projectId,
       firmId: stage.project.firmId,
       kind: "PLAN",
+      type: "EXPENSE",
       label,
-      volume: stage.planVolume === null ? null : Number(stage.planVolume),
-      unitPrice: stage.planUnitPrice === null ? null : Number(stage.planUnitPrice),
+      volume: numOrNull(stage.planVolume),
+      unitPrice: numOrNull(stage.planUnitPrice),
       actorUserId,
     }),
     upsertOne({
@@ -54,12 +58,41 @@ export async function syncStageAutoFinanceEntries(
       projectId: stage.projectId,
       firmId: stage.project.firmId,
       kind: "FACT",
+      type: "EXPENSE",
       label,
-      volume: stage.factVolume === null ? null : Number(stage.factVolume),
-      unitPrice: stage.factUnitPrice === null ? null : Number(stage.factUnitPrice),
+      volume: numOrNull(stage.factVolume),
+      unitPrice: numOrNull(stage.factUnitPrice),
+      actorUserId,
+    }),
+    upsertOne({
+      stageId,
+      projectId: stage.projectId,
+      firmId: stage.project.firmId,
+      kind: "PLAN",
+      type: "INCOME",
+      label,
+      volume: numOrNull(stage.planVolume),
+      unitPrice: numOrNull(stage.planClientUnitPrice),
+      actorUserId,
+    }),
+    upsertOne({
+      stageId,
+      projectId: stage.projectId,
+      firmId: stage.project.firmId,
+      kind: "FACT",
+      type: "INCOME",
+      label,
+      volume: numOrNull(stage.factVolume),
+      unitPrice: numOrNull(stage.factClientUnitPrice),
       actorUserId,
     }),
   ]);
+}
+
+function numOrNull(v: unknown): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
 }
 
 async function upsertOne(args: {
@@ -67,6 +100,7 @@ async function upsertOne(args: {
   projectId: string;
   firmId: string | null;
   kind: "PLAN" | "FACT";
+  type: "EXPENSE" | "INCOME";
   label: string;
   volume: number | null;
   unitPrice: number | null;
@@ -81,7 +115,7 @@ async function upsertOne(args: {
     where: {
       stageRecordId: args.stageId,
       kind: args.kind,
-      type: "EXPENSE",
+      type: args.type,
       source: "STAGE_AUTO",
     },
     select: { id: true },
@@ -94,7 +128,9 @@ async function upsertOne(args: {
     return;
   }
 
-  const title = `${args.label} · ${args.kind === "PLAN" ? "план" : "факт"}`;
+  const kindLabel = args.kind === "PLAN" ? "план" : "факт";
+  const typeLabel = args.type === "EXPENSE" ? "витрати" : "надходження";
+  const title = `${args.label} · ${kindLabel} ${typeLabel}`;
   const description = `Автозапис з етапу: ${args.volume} × ${args.unitPrice} ₴`;
 
   if (existing) {
@@ -112,7 +148,7 @@ async function upsertOne(args: {
 
   await prisma.financeEntry.create({
     data: {
-      type: "EXPENSE",
+      type: args.type,
       kind: args.kind,
       source: "STAGE_AUTO",
       amount,
@@ -121,7 +157,7 @@ async function upsertOne(args: {
       projectId: args.projectId,
       firmId: args.firmId,
       stageRecordId: args.stageId,
-      category: "materials",
+      category: args.type === "EXPENSE" ? "materials" : "services",
       title,
       description,
       createdById: args.actorUserId,

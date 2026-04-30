@@ -312,10 +312,30 @@ export function StageDetailDrawer({
                 onCommit={(v) => patchStage({ planUnitPrice: v }, "planUnitPrice")}
               />
             </Row>
+            <Row label="Вартість для замовника">
+              <NumInput
+                value={stage.planClientUnitPrice}
+                disabled={savingField === "planClientUnitPrice"}
+                suffix="₴"
+                onCommit={(v) =>
+                  patchStage({ planClientUnitPrice: v }, "planClientUnitPrice")
+                }
+              />
+            </Row>
             <Row label="Витрати разом">
               <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
                 {formatCurrency(
                   (stage.planVolume ?? 0) * (stage.planUnitPrice ?? 0),
+                )}
+              </span>
+            </Row>
+            <Row label="Надходження">
+              <span
+                className="text-[12px] font-semibold"
+                style={{ color: T.success }}
+              >
+                {formatCurrency(
+                  (stage.planVolume ?? 0) * (stage.planClientUnitPrice ?? 0),
                 )}
               </span>
             </Row>
@@ -359,10 +379,30 @@ export function StageDetailDrawer({
                 onCommit={(v) => patchStage({ factUnitPrice: v }, "factUnitPrice")}
               />
             </Row>
+            <Row label="Вартість для замовника">
+              <NumInput
+                value={stage.factClientUnitPrice}
+                disabled={savingField === "factClientUnitPrice"}
+                suffix="₴"
+                onCommit={(v) =>
+                  patchStage({ factClientUnitPrice: v }, "factClientUnitPrice")
+                }
+              />
+            </Row>
             <Row label="Витрати разом">
               <span className="text-[12px] font-semibold" style={{ color: T.textPrimary }}>
                 {formatCurrency(
                   (stage.factVolume ?? 0) * (stage.factUnitPrice ?? 0),
+                )}
+              </span>
+            </Row>
+            <Row label="Надходження">
+              <span
+                className="text-[12px] font-semibold"
+                style={{ color: T.success }}
+              >
+                {formatCurrency(
+                  (stage.factVolume ?? 0) * (stage.factClientUnitPrice ?? 0),
                 )}
               </span>
             </Row>
