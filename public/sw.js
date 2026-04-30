@@ -1,15 +1,16 @@
 /**
- * Metrum Group service worker — v5.3.0
+ * Metrum Group service worker — v5.4.0
  *
  * Caching strategies (mirrors the EdyshynApp PWA setup, tuned for animation perf):
  *  - HTML pages: NetworkFirst with 5s timeout, fallback to cache, 50 entries / 1 day
  *  - JS/CSS: StaleWhileRevalidate, 100 entries / 7 days
  *  - Images: CacheFirst, 200 entries / 30 days
  *  - API: NetworkFirst, 60 entries / 1 hour
+ *  - Long-running API (AI/sync): bypass SW entirely (no timeout, no cache)
  *  - Other: NetworkFirst with offline fallback
  */
 
-const VERSION = 'v5.3.0';
+const VERSION = 'v5.4.0';
 const STATIC_CACHE = `metrum-static-${VERSION}`;
 const HTML_CACHE = `metrum-html-${VERSION}`;
 const ASSET_CACHE = `metrum-assets-${VERSION}`;
@@ -33,6 +34,25 @@ const LIMITS = {
 };
 
 const NETWORK_TIMEOUT_MS = 5000;
+
+// Endpoints that can take much longer than NETWORK_TIMEOUT_MS (LLM calls, heavy
+// sync). The SW must not race them against a timeout — browser handles them
+// natively, no caching, no Response.error() on slow networks.
+const LONG_RUNNING_API_PATTERNS = [
+  /\/api\/admin\/projects\/[^/]+\/sync-finance(s)?(\/|$|\?)/,
+  /\/api\/admin\/projects\/[^/]+\/ai-render(\/|$|\?)/,
+  /\/api\/admin\/estimates\/[^/]+\/sync-to-financing(\/|$|\?)/,
+  /\/api\/admin\/ai(\/|$|\?)/,
+  /\/api\/admin\/chat\/ai(\/|$|\?)/,
+  /\/api\/admin\/chat\/conversations\/[^/]+\/ai-invoke(\/|$|\?)/,
+];
+
+function isLongRunningApi(pathname) {
+  for (const re of LONG_RUNNING_API_PATTERNS) {
+    if (re.test(pathname)) return true;
+  }
+  return false;
+}
 
 // ---------- Install ----------
 
@@ -190,8 +210,11 @@ self.addEventListener('fetch', (event) => {
   // Same-origin only (skip cross-origin to avoid breaking auth/3rd-party)
   if (url.origin !== self.location.origin) return;
 
-  // API: NetworkFirst short cache
+  // API: NetworkFirst short cache. Long-running endpoints (AI, sync) bypass
+  // the SW completely — they exceed our 4s timeout and would otherwise return
+  // Response.error() before the server replies.
   if (url.pathname.startsWith('/api/')) {
+    if (isLongRunningApi(url.pathname)) return;
     event.respondWith(networkFirst(request, API_CACHE, 4000));
     return;
   }
