@@ -19,7 +19,10 @@ export async function ensureFinanceProjectsRoot(tx: Tx = prisma): Promise<string
       domain: "FINANCE",
       name: FINANCE_PROJECTS_ROOT_NAME,
       slug: FINANCE_PROJECTS_ROOT_SLUG,
-      isSystem: true,
+      // Раніше було isSystem=true (показувало 🔒). Прибрали — родитель "Проєкти"
+      // це лише організаційний контейнер mirror-папок, не корпоративна структура.
+      // Колодка лишається тільки на "Загальні витрати" та її піддереві.
+      isSystem: false,
       parentId: null,
       sortOrder: FINANCE_PROJECTS_ROOT_SORT,
     },
