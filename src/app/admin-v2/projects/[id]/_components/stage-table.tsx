@@ -9,6 +9,9 @@ import {
   Circle,
   EyeOff,
   GripVertical,
+  Plus,
+  Trash2,
+  Pencil,
 } from "lucide-react";
 import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
@@ -49,6 +52,7 @@ export type StageRow = {
 export type StageInlineUpdate = Partial<{
   status: StageStatus;
   responsibleUserId: string | null;
+  customName: string | null;
   unit: string | null;
   factUnit: string | null;
   planVolume: number | null;
@@ -65,6 +69,8 @@ type StageTableProps = {
   selectedStageId: string | null;
   onStageClick: (stageId: string) => void;
   onInlineUpdate: (stageId: string, data: StageInlineUpdate) => Promise<void>;
+  onAddChild: (parentStageId: string | null) => Promise<void>;
+  onDelete: (stageId: string) => Promise<void>;
   candidates: { id: string; name: string }[];
   showHidden?: boolean;
 };
@@ -170,6 +176,8 @@ export function StageTable({
   selectedStageId,
   onStageClick,
   onInlineUpdate,
+  onAddChild,
+  onDelete,
   candidates,
   showHidden = false,
 }: StageTableProps) {
@@ -378,34 +386,16 @@ export function StageTable({
                     backgroundColor: isSelected ? T.accentPrimarySoft : T.panel,
                   }}
                 >
-                  <div className="flex items-center gap-1.5">
-                    {hasChildren ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleExpand(node.id);
-                        }}
-                        className="flex h-4 w-4 items-center justify-center rounded hover:bg-black/5"
-                        style={{ color: T.textMuted }}
-                      >
-                        {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                      </button>
-                    ) : (
-                      <span className="inline-block h-4 w-4" />
-                    )}
-                    <span
-                      className="truncate font-medium"
-                      style={{
-                        color: node.status === "PENDING" ? T.textSecondary : T.textPrimary,
-                        fontWeight: node.depth === 0 ? 600 : 500,
-                      }}
-                      title={stageDisplayName(node)}
-                    >
-                      {stageDisplayName(node)}
-                    </span>
-                    {node.isHidden && <EyeOff size={11} style={{ color: T.textMuted }} />}
-                  </div>
+                  <NameCell
+                    node={node}
+                    hasChildren={hasChildren}
+                    isExpanded={isExpanded}
+                    canAddChild={node.depth < 2}
+                    onToggleExpand={() => toggleExpand(node.id)}
+                    onRename={(v) => onInlineUpdate(node.id, { customName: v })}
+                    onAddChild={() => onAddChild(node.id)}
+                    onDelete={() => onDelete(node.id)}
+                  />
                 </Td>
 
                 {/* Відповідальний */}
@@ -648,6 +638,163 @@ function DraggableHeader({
         {COLUMN_LABELS[id]}
       </span>
     </th>
+  );
+}
+
+// ---------- Name cell with inline rename + actions ----------
+
+function NameCell({
+  node,
+  hasChildren,
+  isExpanded,
+  canAddChild,
+  onToggleExpand,
+  onRename,
+  onAddChild,
+  onDelete,
+}: {
+  node: TreeNode;
+  hasChildren: boolean;
+  isExpanded: boolean;
+  canAddChild: boolean;
+  onToggleExpand: () => void;
+  onRename: (newName: string) => Promise<void> | void;
+  onAddChild: () => Promise<void> | void;
+  onDelete: () => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const display = stageDisplayName(node);
+
+  return (
+    <div className="group/name flex items-center gap-1.5">
+      {hasChildren ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand();
+          }}
+          className="flex h-4 w-4 items-center justify-center rounded hover:bg-black/5"
+          style={{ color: T.textMuted }}
+        >
+          {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        </button>
+      ) : (
+        <span className="inline-block h-4 w-4" />
+      )}
+      {editing ? (
+        <input
+          autoFocus
+          defaultValue={node.customName ?? display}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v && v !== (node.customName ?? display)) {
+              void onRename(v);
+            }
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="flex-1 rounded border px-1.5 py-0.5 text-[12px] outline-none"
+          style={{
+            backgroundColor: T.panel,
+            borderColor: T.borderAccent,
+            color: T.textPrimary,
+            fontWeight: node.depth === 0 ? 600 : 500,
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditing(true);
+          }}
+          className="min-w-0 flex-1 truncate text-left transition hover:underline"
+          style={{
+            color: node.status === "PENDING" ? T.textSecondary : T.textPrimary,
+            fontWeight: node.depth === 0 ? 600 : 500,
+          }}
+          title={display}
+        >
+          {display}
+        </button>
+      )}
+      {node.isHidden && <EyeOff size={11} style={{ color: T.textMuted }} />}
+      {/* Actions — show on row hover */}
+      <span className="ml-1 flex items-center gap-0.5 opacity-0 transition group-hover/name:opacity-100">
+        {canAddChild && (
+          <ActionIcon
+            title="Додати підетап"
+            onClick={(e) => {
+              e.stopPropagation();
+              void onAddChild();
+            }}
+          >
+            <Plus size={12} />
+          </ActionIcon>
+        )}
+        <ActionIcon
+          title="Перейменувати"
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditing(true);
+          }}
+        >
+          <Pencil size={11} />
+        </ActionIcon>
+        <ActionIcon
+          title="Видалити"
+          danger
+          onClick={(e) => {
+            e.stopPropagation();
+            if (
+              confirm(
+                `Видалити «${display}»${
+                  node.children.length
+                    ? ` разом з ${node.children.length} підетапом(и)?`
+                    : "?"
+                }`,
+              )
+            ) {
+              void onDelete();
+            }
+          }}
+        >
+          <Trash2 size={11} />
+        </ActionIcon>
+      </span>
+    </div>
+  );
+}
+
+function ActionIcon({
+  children,
+  onClick,
+  title,
+  danger,
+}: {
+  children: React.ReactNode;
+  onClick: (e: React.MouseEvent) => void;
+  title: string;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className="flex h-5 w-5 items-center justify-center rounded transition hover:brightness-95"
+      style={{
+        color: danger ? T.danger : T.textMuted,
+        backgroundColor: T.panelSoft,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

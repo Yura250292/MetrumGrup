@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Edit3, Eye, EyeOff } from "lucide-react";
+import { Edit3, Eye, EyeOff, Plus } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { StageTable, type StageRow, type StageInlineUpdate } from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
@@ -152,6 +152,59 @@ export function StagesSection({
     }
   }, [projectId, router]);
 
+  const addChild = useCallback(
+    async (parentStageId: string | null) => {
+      const defaultName = parentStageId ? "Новий підетап" : "Новий етап";
+      const name = window.prompt(
+        parentStageId ? "Назва підетапу:" : "Назва етапу:",
+        defaultName,
+      );
+      if (!name || !name.trim()) return;
+      try {
+        const res = await fetch(`/api/admin/projects/${projectId}/stages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            customName: name.trim(),
+            parentStageId: parentStageId ?? null,
+          }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? "Помилка створення");
+        }
+        await refetch();
+      } catch (err) {
+        console.error("[stages-section] add child failed", err);
+        alert(err instanceof Error ? err.message : "Помилка створення");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId],
+  );
+
+  const deleteStage = useCallback(
+    async (stageId: string) => {
+      try {
+        const res = await fetch(
+          `/api/admin/projects/${projectId}/stages/${stageId}`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? "Помилка видалення");
+        }
+        if (selectedStageId === stageId) setSelectedStageId(null);
+        await refetch();
+      } catch (err) {
+        console.error("[stages-section] delete failed", err);
+        alert(err instanceof Error ? err.message : "Помилка видалення");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, selectedStageId],
+  );
+
   const selected = stages.find((s) => s.id === selectedStageId) ?? null;
 
   return (
@@ -188,9 +241,25 @@ export function StagesSection({
         selectedStageId={selectedStageId}
         onStageClick={setSelectedStageId}
         onInlineUpdate={inlineUpdate}
+        onAddChild={addChild}
+        onDelete={deleteStage}
         candidates={candidates}
         showHidden={showHidden}
       />
+
+      <button
+        type="button"
+        onClick={() => addChild(null)}
+        className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[12px] font-medium transition hover:brightness-95"
+        style={{
+          borderColor: T.borderSoft,
+          color: T.accentPrimary,
+          backgroundColor: T.panelSoft,
+        }}
+      >
+        <Plus size={14} />
+        Додати етап
+      </button>
 
       {selected && (
         <StageDetailDrawer

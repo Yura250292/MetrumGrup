@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { ProjectStage, StageStatus } from "@prisma/client";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
+import { assertCanAccessFirm } from "@/lib/firm/scope";
 
 const MAX_DEPTH = 2; // 0-indexed: root=0, підетап=1, підпідетап=2 (3 рівні)
 
@@ -200,4 +201,111 @@ export async function PUT(
   });
 
   return NextResponse.json({ success: true });
+}
+
+/**
+ * Створити один stage (з опційним parentStageId). Використовується inline-tree-edit
+ * у таблиці на overview-табі. На відміну від PUT, який приймає весь tree, цей
+ * endpoint швидко додає одну ноду без необхідності serialize всього дерева.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id: projectId } = await params;
+  const session = await auth();
+  if (!session?.user) return unauthorizedResponse();
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
+    return forbiddenResponse();
+  }
+
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { id: true, firmId: true },
+  });
+  if (!project) {
+    return NextResponse.json({ error: "Проєкт не знайдено" }, { status: 404 });
+  }
+  try {
+    assertCanAccessFirm(session, project.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
+
+  const body = await request.json();
+  const customName =
+    typeof body.customName === "string" && body.customName.trim()
+      ? body.customName.trim()
+      : null;
+  const stage =
+    body.stage && typeof body.stage === "string"
+      ? (body.stage as ProjectStage)
+      : null;
+
+  if (!customName && !stage) {
+    return NextResponse.json(
+      { error: "Назва обов'язкова" },
+      { status: 400 },
+    );
+  }
+
+  let parentStageId: string | null = null;
+  let depth = 0;
+  if (typeof body.parentStageId === "string" && body.parentStageId.trim()) {
+    const parent = await prisma.projectStageRecord.findUnique({
+      where: { id: body.parentStageId.trim() },
+      select: { id: true, projectId: true, parentStageId: true },
+    });
+    if (!parent || parent.projectId !== projectId) {
+      return NextResponse.json({ error: "Батьківський етап не знайдено" }, { status: 400 });
+    }
+    parentStageId = parent.id;
+    // Computе depth з підняттям до кореня — дозволимо до MAX_DEPTH (2 = 3 рівні).
+    let cursor: string | null = parent.parentStageId;
+    depth = 1;
+    while (cursor) {
+      const up: { parentStageId: string | null } | null =
+        await prisma.projectStageRecord.findUnique({
+          where: { id: cursor },
+          select: { parentStageId: true },
+        });
+      if (!up) break;
+      cursor = up.parentStageId;
+      depth += 1;
+      if (depth > MAX_DEPTH) break;
+    }
+    if (depth > MAX_DEPTH) {
+      return NextResponse.json(
+        { error: `Перевищено максимальну глибину вкладення (${MAX_DEPTH + 1} рівнів)` },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Беремо max sortOrder серед siblings + 1, щоб новий етап відображався в кінці.
+  const lastSibling = await prisma.projectStageRecord.findFirst({
+    where: { projectId, parentStageId },
+    orderBy: { sortOrder: "desc" },
+    select: { sortOrder: true },
+  });
+  const sortOrder = (lastSibling?.sortOrder ?? -1) + 1;
+
+  const created = await prisma.projectStageRecord.create({
+    data: {
+      projectId,
+      parentStageId,
+      stage,
+      customName,
+      sortOrder,
+      status: "PENDING",
+      progress: 0,
+    },
+  });
+
+  await recalcCurrentStage(projectId, {
+    syncBudget: false,
+    userId: session.user.id,
+  });
+
+  return NextResponse.json({ data: created }, { status: 201 });
 }

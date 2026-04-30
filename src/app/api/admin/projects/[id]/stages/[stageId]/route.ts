@@ -158,3 +158,49 @@ export async function PATCH(
 
   return NextResponse.json({ data: updated });
 }
+
+/**
+ * Видалити один етап (cascade на дочірні через onDelete: Cascade на FK).
+ * FinanceEntry-записи лишаються (FK SetNull) — щоб не втратити фінансову історію.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; stageId: string }> },
+) {
+  const { id: projectId, stageId } = await params;
+  const session = await auth();
+  if (!session?.user) return unauthorizedResponse();
+  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
+    return forbiddenResponse();
+  }
+
+  const stage = await prisma.projectStageRecord.findUnique({
+    where: { id: stageId },
+    select: { id: true, projectId: true, project: { select: { firmId: true } } },
+  });
+  if (!stage || stage.projectId !== projectId) {
+    return NextResponse.json({ error: "Етап не знайдено" }, { status: 404 });
+  }
+  try {
+    assertCanAccessFirm(session, stage.project.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
+
+  await prisma.projectStageRecord.delete({ where: { id: stageId } });
+
+  await recalcCurrentStage(projectId, {
+    syncBudget: true,
+    userId: session.user.id,
+  });
+
+  await auditLog({
+    userId: session.user.id,
+    action: "DELETE",
+    entity: "ProjectStageRecord",
+    entityId: stageId,
+    projectId,
+  });
+
+  return NextResponse.json({ success: true });
+}
