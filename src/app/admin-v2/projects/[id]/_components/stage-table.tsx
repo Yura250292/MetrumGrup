@@ -258,7 +258,12 @@ export function StageTable({
   }
 
   return (
-    <div className="overflow-x-auto">
+    // overflowY: 'hidden' критичний — браузер інакше робить overflow-y: auto
+    // (CSS spec quirk при overflow-x: auto), що перехоплює vertical-scroll
+    // сторінки коли курсор над таблицею. Таблиця висока як content, vertical
+    // scroll іде через сторінку — sticky-header при цьому стає липкою лише
+    // поки контейнер у viewport.
+    <div style={{ overflowX: "auto", overflowY: "hidden" }}>
       <table
         className="w-full text-[12px]"
         style={{

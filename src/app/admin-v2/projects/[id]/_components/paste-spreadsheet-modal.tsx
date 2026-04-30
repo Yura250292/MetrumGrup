@@ -43,9 +43,12 @@ export function PasteSpreadsheetModal({
   >([]);
   const [importing, setImporting] = useState(false);
   const [aiParsing, setAiParsing] = useState(false);
+  const [mode, setMode] = useState<"append" | "replace">("append");
   const [result, setResult] = useState<{
     sections: number;
     items: number;
+    removed: number;
+    mode: "append" | "replace";
   } | null>(null);
 
   const sectionCount = useMemo(
@@ -102,6 +105,12 @@ export function PasteSpreadsheetModal({
 
   async function doImport() {
     if (!preview) return;
+    if (mode === "replace") {
+      const ok = window.confirm(
+        "Усі існуючі етапи й підетапи проєкту будуть видалені, замість них зʼявляться ці. Прив'язані фінансові записи лишаться у фінансуванні, але втратять зв'язок зі стейджами. Продовжити?",
+      );
+      if (!ok) return;
+    }
     setImporting(true);
     setResult(null);
     try {
@@ -112,7 +121,8 @@ export function PasteSpreadsheetModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             text,
-            nodes: preview, // дозволяємо передати відредагований preview
+            nodes: preview,
+            mode,
           }),
         },
       );
@@ -121,7 +131,12 @@ export function PasteSpreadsheetModal({
         throw new Error(body.error ?? "Помилка імпорту");
       }
       const json = (await res.json()) as {
-        data: { sections: number; items: number };
+        data: {
+          sections: number;
+          items: number;
+          removed: number;
+          mode: "append" | "replace";
+        };
       };
       setResult(json.data);
       await onImported();
@@ -249,6 +264,55 @@ export function PasteSpreadsheetModal({
                   >
                     Назад до тексту
                   </button>
+                </div>
+                <div
+                  className="mb-3 flex flex-col gap-2 rounded-lg border p-3 text-[12px]"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    borderColor: T.borderSoft,
+                  }}
+                >
+                  <div
+                    className="text-[10px] font-bold uppercase tracking-wider"
+                    style={{ color: T.textMuted }}
+                  >
+                    Як імпортувати?
+                  </div>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="import-mode"
+                      checked={mode === "append"}
+                      onChange={() => setMode("append")}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div style={{ color: T.textPrimary, fontWeight: 600 }}>
+                        Додати знизу
+                      </div>
+                      <div className="text-[11px]" style={{ color: T.textSecondary }}>
+                        Існуючі етапи лишаються, нові додаються в кінець.
+                      </div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="import-mode"
+                      checked={mode === "replace"}
+                      onChange={() => setMode("replace")}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1">
+                      <div style={{ color: T.danger, fontWeight: 600 }}>
+                        Замінити повністю
+                      </div>
+                      <div className="text-[11px]" style={{ color: T.textSecondary }}>
+                        Усі поточні етапи будуть видалені, на їх місце прийдуть ці.
+                        Фінансові записи лишаться у фінансуванні, але без прив'язки до етапу.
+                      </div>
+                    </div>
+                  </label>
                 </div>
                 {parseErrors.length > 0 && (
                   <div
@@ -438,9 +502,14 @@ export function PasteSpreadsheetModal({
                   Імпорт завершено
                 </div>
                 <div style={{ color: T.textSecondary }}>
+                  {result.mode === "replace" && result.removed > 0 && (
+                    <>
+                      Видалено <b>{result.removed}</b> старих етапів.{" "}
+                    </>
+                  )}
                   Створено <b>{result.sections}</b> розділ(ів) і{" "}
-                  <b>{result.items}</b> підетап(ів). STAGE_AUTO записи у
-                  фінансуванні створено автоматично з обсягу × вартості.
+                  <b>{result.items}</b> підетап(ів). Натисни «Зберегти у
+                  фінансування» в шапці таблиці, щоб провести у /financing.
                 </div>
               </div>
             )}

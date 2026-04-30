@@ -51,6 +51,9 @@ export async function POST(
   if (!text.trim()) {
     return NextResponse.json({ error: "Порожній текст" }, { status: 400 });
   }
+  // mode: "append" — додати до існуючого дерева (default).
+  //       "replace" — повністю замінити дерево стейджів проєкту.
+  const mode: "append" | "replace" = body.mode === "replace" ? "replace" : "append";
 
   // Дозволяємо клієнту або надіслати raw text, або вже розпарсені nodes
   // (зручно якщо UI робить preview і дозволяє редагувати перед import).
@@ -70,8 +73,36 @@ export async function POST(
   }
 
   const created: { tempId: string; id: string }[] = [];
+  let removedCount = 0;
 
   await prisma.$transaction(async (tx) => {
+    // REPLACE-режим: спочатку видаляємо всі існуючі стейджі проєкту.
+    // FinanceEntry-записи з stageRecordId — onDelete: SetNull, тобто
+    // лишаються в фінансуванні без прив'язки. STAGE_AUTO records, які
+    // без stage стають "сиротами", архівуються щоб не дублювати summary.
+    if (mode === "replace") {
+      const all = await tx.projectStageRecord.findMany({
+        where: { projectId },
+        select: { id: true },
+      });
+      removedCount = all.length;
+      if (all.length > 0) {
+        const ids = all.map((s) => s.id);
+        // Спочатку архівуємо STAGE_AUTO, які прив'язані до видалюваних стейджів —
+        // це уникає дублікатів якщо пізніше зробити sync-stages-finance.
+        await tx.financeEntry.updateMany({
+          where: {
+            stageRecordId: { in: ids },
+            source: "STAGE_AUTO",
+            isArchived: false,
+          },
+          data: { isArchived: true, updatedById: session.user.id },
+        });
+        // Видалення стейджів — каскадно прибере дітей і залежності.
+        await tx.projectStageRecord.deleteMany({ where: { id: { in: ids } } });
+      }
+    }
+
     // sortOrder для root-стейджів — продовжуємо існуючий.
     const lastRoot = await tx.projectStageRecord.findFirst({
       where: { projectId, parentStageId: null },
@@ -145,6 +176,8 @@ export async function POST(
 
   return NextResponse.json({
     data: {
+      mode,
+      removed: removedCount,
       created: created.length,
       sections: parseResult.nodes.filter((n) => n.isSection).length,
       items: parseResult.nodes.filter((n) => !n.isSection).length,
