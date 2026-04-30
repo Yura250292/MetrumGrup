@@ -53,12 +53,14 @@ export async function GET(
 
   const q = request.nextUrl.searchParams.get("q")?.trim() ?? "";
 
+  // Повертаємо ВСІ FINANCE-папки фірми (не системні), з прапорцем availability:
+  //  - 'free' — можна обрати для привʼязки (немає mirror).
+  //  - 'mirrored' — вже належить іншому проекту або PROJECT-папці; показуємо
+  //    у списку як disabled щоб користувач бачив повний контекст.
   const candidates = await prisma.folder.findMany({
     where: {
       domain: "FINANCE",
       isSystem: false,
-      mirroredFromProjectId: null,
-      mirroredFromId: null,
       ...(project.firmId ? { firmId: project.firmId } : {}),
       ...(q.length >= 2
         ? { name: { contains: q, mode: "insensitive" } }
@@ -67,19 +69,29 @@ export async function GET(
     select: {
       id: true,
       name: true,
+      mirroredFromProjectId: true,
+      mirroredFromId: true,
       _count: { select: { financeEntries: true, children: true } },
+      mirroredFromProject: { select: { title: true } },
+      mirroredFrom: { select: { name: true } },
     },
-    orderBy: { name: "asc" },
-    take: 30,
+    orderBy: [{ mirroredFromProjectId: "asc" }, { mirroredFromId: "asc" }, { name: "asc" }],
+    take: 60,
   });
 
   return NextResponse.json({
-    data: candidates.map((c) => ({
-      id: c.id,
-      name: c.name,
-      entryCount: c._count.financeEntries,
-      subfolderCount: c._count.children,
-    })),
+    data: candidates.map((c) => {
+      const isMirrored = !!c.mirroredFromProjectId || !!c.mirroredFromId;
+      const linkedTo = c.mirroredFromProject?.title ?? c.mirroredFrom?.name ?? null;
+      return {
+        id: c.id,
+        name: c.name,
+        availability: isMirrored ? "mirrored" : "free",
+        linkedTo,
+        entryCount: c._count.financeEntries,
+        subfolderCount: c._count.children,
+      };
+    }),
   });
 }
 

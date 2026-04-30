@@ -8,6 +8,8 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 type Candidate = {
   id: string;
   name: string;
+  availability: "free" | "mirrored";
+  linkedTo: string | null;
   entryCount: number;
   subfolderCount: number;
 };
@@ -148,9 +150,11 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
                 переїдуть у цей проект (mirror-папка проекту вбере усе всередину).
               </p>
               <p className="text-[10.5px]" style={{ color: T.textMuted }}>
-                Тут лише <b>вільні</b> папки. Папки інших проектів (вже з mirror)
-                і системні (🔒 «Проєкти», «Загальні витрати») — не показуються,
-                бо вони не призначені для прямої привʼязки.
+                Зверху — <b>вільні</b> папки які можна обрати. Внизу під «уже
+                привʼязані» — для контексту: ці папки належать іншим проектам,
+                їх не можна перепривʼязати без видалення прив'язки на тому проекті.
+                Системні папки (🔒 «Загальні витрати») не показуються — вони не
+                належать конкретному проекту.
               </p>
 
               <div
@@ -194,47 +198,103 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
               ) : candidates.length === 0 ? (
                 <div className="py-6 text-center text-[12px] flex flex-col gap-2" style={{ color: T.textMuted }}>
                   <span>
-                    Немає вільних папок для привʼязки {q.length >= 2 ? "за цим запитом" : ""}.
-                  </span>
-                  <span className="text-[11px]">
-                    Тут не показуються папки які вже привʼязані до інших проектів,
-                    а також системні (з 🔒 — наприклад «Загальні витрати», «Проєкти»).
+                    Немає папок для відображення {q.length >= 2 ? "за цим запитом" : ""}.
                   </span>
                 </div>
               ) : (
-                <div className="flex flex-col gap-1.5">
-                  {candidates.map((c) => {
-                    const sel = picked === c.id;
-                    return (
-                      <button
-                        type="button"
-                        key={c.id}
-                        onClick={() => setPicked(sel ? null : c.id)}
-                        className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] transition active:scale-[0.99]"
-                        style={{
-                          backgroundColor: sel
-                            ? T.accentPrimary + "22"
-                            : T.panelSoft,
-                          border: `1px solid ${sel ? T.accentPrimary : T.borderSoft}`,
-                          color: T.textPrimary,
-                        }}
-                      >
-                        <span className="flex items-center gap-2 min-w-0">
-                          <input
-                            type="checkbox"
-                            readOnly
-                            checked={sel}
-                            className="pointer-events-none"
-                          />
-                          <span className="font-medium truncate">{c.name}</span>
-                        </span>
-                        <span style={{ color: T.textMuted }}>
-                          {c.entryCount} опер., {c.subfolderCount} підпапок
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                (() => {
+                  const free = candidates.filter((c) => c.availability === "free");
+                  const mirrored = candidates.filter((c) => c.availability === "mirrored");
+                  return (
+                    <div className="flex flex-col gap-3">
+                      {free.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-wider"
+                            style={{ color: T.emerald ?? "#16A34A" }}
+                          >
+                            Вільні (можна привʼязати) · {free.length}
+                          </span>
+                          {free.map((c) => {
+                            const sel = picked === c.id;
+                            return (
+                              <button
+                                type="button"
+                                key={c.id}
+                                onClick={() => setPicked(sel ? null : c.id)}
+                                className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] transition active:scale-[0.99]"
+                                style={{
+                                  backgroundColor: sel
+                                    ? T.accentPrimary + "22"
+                                    : T.panelSoft,
+                                  border: `1px solid ${sel ? T.accentPrimary : T.borderSoft}`,
+                                  color: T.textPrimary,
+                                }}
+                              >
+                                <span className="flex items-center gap-2 min-w-0">
+                                  <input
+                                    type="checkbox"
+                                    readOnly
+                                    checked={sel}
+                                    className="pointer-events-none"
+                                  />
+                                  <span className="font-medium truncate">{c.name}</span>
+                                </span>
+                                <span style={{ color: T.textMuted }}>
+                                  {c.entryCount} опер., {c.subfolderCount} підпапок
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {mirrored.length > 0 && (
+                        <div className="flex flex-col gap-1.5">
+                          <span
+                            className="text-[10px] font-bold uppercase tracking-wider"
+                            style={{ color: T.textMuted }}
+                          >
+                            Уже привʼязані до інших проектів · {mirrored.length}
+                          </span>
+                          {mirrored.map((c) => (
+                            <div
+                              key={c.id}
+                              className="flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-[12px] opacity-60"
+                              style={{
+                                backgroundColor: T.panelSoft,
+                                border: `1px solid ${T.borderSoft}`,
+                                color: T.textPrimary,
+                                cursor: "not-allowed",
+                              }}
+                              title={
+                                c.linkedTo
+                                  ? `Належить: ${c.linkedTo}`
+                                  : "Mirror-папка"
+                              }
+                            >
+                              <span className="flex items-center gap-2 min-w-0">
+                                <span aria-hidden>🔗</span>
+                                <span className="font-medium truncate">{c.name}</span>
+                                {c.linkedTo && (
+                                  <span
+                                    className="text-[10.5px] truncate"
+                                    style={{ color: T.textMuted }}
+                                  >
+                                    → {c.linkedTo}
+                                  </span>
+                                )}
+                              </span>
+                              <span style={{ color: T.textMuted }}>
+                                {c.entryCount} опер.
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
               )}
             </div>
 
