@@ -248,10 +248,18 @@ model ProjectStageRecord {
   responsibleUser   User?                @relation("ProjectStageResponsible", fields: [responsibleUserId], references: [id])
   tasks             Task[]
   financeEntries    FinanceEntry[]       @relation("StageFinanceEntries")
+  // Прив'язка до кошторису — для re-sync (estimate items/sections → stage tree).
+  // SetNull на видалення секції/item, щоб ручні факт-зміни не пропали.
+  sourceEstimateSectionId String?
+  sourceEstimateSection   EstimateSection? @relation("EstimateSectionToStage", fields: [sourceEstimateSectionId], references: [id], onDelete: SetNull)
+  sourceEstimateItemId    String?
+  sourceEstimateItem      EstimateItem?    @relation("EstimateItemToStage", fields: [sourceEstimateItemId], references: [id], onDelete: SetNull)
 
   @@index([projectId, stage])
   @@index([projectId, parentStageId])
   @@index([responsibleUserId])
+  @@index([sourceEstimateSectionId])
+  @@index([sourceEstimateItemId])
   @@map("project_stage_records")
 }
 
@@ -375,13 +383,14 @@ model EstimateRefineHistory {
 }
 
 model EstimateSection {
-  id          String         @id @default(cuid())
+  id          String               @id @default(cuid())
   title       String
-  sortOrder   Int            @default(0)
-  totalAmount Decimal        @default(0) @map("total_amount") @db.Decimal(12, 2)
+  sortOrder   Int                  @default(0)
+  totalAmount Decimal              @default(0) @map("total_amount") @db.Decimal(12, 2)
   estimateId  String
   items       EstimateItem[]
-  estimate    Estimate       @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  estimate    Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  stageRecords ProjectStageRecord[] @relation("EstimateSectionToStage")
 
   @@map("estimate_sections")
 }
@@ -427,6 +436,7 @@ model EstimateItem {
   costCode            CostCode?        @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
   financeEntries      FinanceEntry[]
   kb2Items            KB2FormItem[]    @relation("EstimateItemKB2")
+  stageRecords        ProjectStageRecord[] @relation("EstimateItemToStage")
 
   @@index([engineKey])
   @@index([confidence])

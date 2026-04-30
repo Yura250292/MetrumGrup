@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Edit3, Eye, EyeOff, Plus } from "lucide-react";
+import { Edit3, Eye, EyeOff, Plus, FileDown } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { StageTable, type StageRow, type StageInlineUpdate } from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
+import { ImportEstimateModal } from "./import-estimate-modal";
 
 export type ResponsibleCandidate = { id: string; name: string };
 
@@ -25,6 +26,7 @@ export function StagesSection({
   const [stages, setStages] = useState<StageRow[]>(initialStages);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   // Якщо SSR-стартові пропси оновилися (router.refresh() після PATCH в drawer-і),
@@ -226,6 +228,14 @@ export function StagesSection({
             {showHidden ? <EyeOff size={12} /> : <Eye size={12} />}
             {showHidden ? "Сховати приховані" : "Показати всі"}
           </button>
+          <button
+            type="button"
+            onClick={() => setImportOpen(true)}
+            className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
+            style={{ color: T.accentPrimary }}
+          >
+            <FileDown size={12} /> Імпорт з кошторису
+          </button>
           <Link
             href={`/admin-v2/projects/${projectId}/stages`}
             className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
@@ -268,6 +278,14 @@ export function StagesSection({
           candidates={candidates}
           onClose={() => setSelectedStageId(null)}
           onChanged={refetch}
+        />
+      )}
+
+      {importOpen && (
+        <ImportEstimateModal
+          projectId={projectId}
+          onClose={() => setImportOpen(false)}
+          onImported={refetch}
         />
       )}
     </div>
