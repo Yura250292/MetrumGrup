@@ -299,7 +299,8 @@ export default async function AdminV2ProjectDetailPage({
               endDate: s.endDate,
               notes: s.notes,
               responsibleUserId: s.responsibleUserId,
-              responsibleName: s.responsibleUser?.name ?? null,
+              responsibleName:
+                s.responsibleUser?.name ?? s.responsibleName ?? null,
               allocatedBudget:
                 s.allocatedBudget === null || s.allocatedBudget === undefined
                   ? null

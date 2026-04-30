@@ -52,6 +52,7 @@ export type StageRow = {
 export type StageInlineUpdate = Partial<{
   status: StageStatus;
   responsibleUserId: string | null;
+  responsibleName: string | null;
   customName: string | null;
   unit: string | null;
   factUnit: string | null;
@@ -403,17 +404,15 @@ export function StageTable({
                   />
                 </Td>
 
-                {/* Відповідальний */}
+                {/* Відповідальний — combobox: вибір зі списку юзерів АБО
+                    вільний текст (підрядник без логіну). Backend сам зробить
+                    fuzzy-match імені на існуючого юзера. */}
                 <Td>
-                  <SelectCell
-                    value={node.responsibleUserId ?? ""}
-                    options={[
-                      { value: "", label: "—" },
-                      ...candidates.map((c) => ({ value: c.id, label: c.name })),
-                    ]}
-                    display={node.responsibleName ?? "—"}
-                    onCommit={(v) =>
-                      onInlineUpdate(node.id, { responsibleUserId: v || null })
+                  <ResponsibleCell
+                    displayName={node.responsibleName}
+                    candidates={candidates}
+                    onCommit={(name) =>
+                      onInlineUpdate(node.id, { responsibleName: name })
                     }
                   />
                 </Td>
@@ -883,6 +882,68 @@ function NumCell({
       }}
     >
       {display}
+    </button>
+  );
+}
+
+function ResponsibleCell({
+  displayName,
+  candidates,
+  onCommit,
+}: {
+  displayName: string | null;
+  candidates: { id: string; name: string }[];
+  onCommit: (name: string | null) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  // Унікальний id для datalist щоб не конфліктував між instances.
+  const [listId] = useState(
+    () => `users-${Math.random().toString(36).slice(2, 8)}`,
+  );
+  if (editing) {
+    return (
+      <>
+        <input
+          autoFocus
+          defaultValue={displayName ?? ""}
+          list={listId}
+          placeholder="Імʼя або підрядник"
+          onClick={(e) => e.stopPropagation()}
+          onBlur={(e) => {
+            const v = e.target.value.trim();
+            if (v !== (displayName ?? "")) void onCommit(v || null);
+            setEditing(false);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          className="w-full rounded border px-1.5 py-0.5 text-[11px] outline-none"
+          style={{
+            backgroundColor: T.panel,
+            borderColor: T.borderAccent,
+            color: T.textPrimary,
+          }}
+        />
+        <datalist id={listId}>
+          {candidates.map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+        </datalist>
+      </>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      className="w-full text-left transition hover:underline"
+      style={{ color: displayName ? T.textPrimary : T.textMuted }}
+    >
+      {displayName ?? "—"}
     </button>
   );
 }

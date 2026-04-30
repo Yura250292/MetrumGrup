@@ -56,6 +56,31 @@ export async function PATCH(
   }
   if (body.responsibleUserId !== undefined) {
     data.responsibleUserId = body.responsibleUserId || null;
+    if (data.responsibleUserId) data.responsibleName = null;
+  }
+  if (body.responsibleName !== undefined) {
+    const v =
+      typeof body.responsibleName === "string" && body.responsibleName.trim()
+        ? body.responsibleName.trim()
+        : null;
+    if (!v) {
+      data.responsibleName = null;
+      // Не чіпаємо responsibleUserId якщо його не передали окремо.
+    } else {
+      // Спробуємо знайти існуючого юзера з таким імʼям (case-insensitive) —
+      // тоді FK має пріоритет і ми не дублюємо.
+      const matched = await prisma.user.findFirst({
+        where: { name: { equals: v, mode: "insensitive" }, isActive: true },
+        select: { id: true },
+      });
+      if (matched) {
+        data.responsibleUserId = matched.id;
+        data.responsibleName = null;
+      } else {
+        data.responsibleUserId = null;
+        data.responsibleName = v;
+      }
+    }
   }
   if (body.notes !== undefined) {
     data.notes = typeof body.notes === "string" && body.notes.trim() ? body.notes.trim() : null;

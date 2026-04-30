@@ -20,6 +20,7 @@ type IncomingStage = {
   startDate?: string | null;
   endDate?: string | null;
   responsibleUserId?: string | null;
+  responsibleName?: string | null;
   allocatedBudget?: number | null;
   unit?: string | null;
   planVolume?: number | null;
@@ -156,6 +157,12 @@ export async function PUT(
         startDate: s.startDate ? new Date(s.startDate) : null,
         endDate: s.endDate ? new Date(s.endDate) : null,
         responsibleUserId: s.responsibleUserId || null,
+        responsibleName:
+          s.responsibleUserId
+            ? null // FK має пріоритет — ім'я підтягнеться з User.
+            : typeof s.responsibleName === "string" && s.responsibleName.trim()
+              ? s.responsibleName.trim()
+              : null,
         allocatedBudget:
           s.allocatedBudget !== null && s.allocatedBudget !== undefined
             ? s.allocatedBudget

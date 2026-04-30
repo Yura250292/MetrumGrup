@@ -64,6 +64,19 @@ export function StagesSection({
             next.responsibleName =
               candidates.find((c) => c.id === data.responsibleUserId)?.name ?? null;
           }
+          if (data.responsibleName !== undefined) {
+            // Optimistic — backend сам зробить fuzzy-match і оновить FK,
+            // refetch принесе фінальні значення.
+            next.responsibleName = data.responsibleName;
+            const matched = data.responsibleName
+              ? candidates.find(
+                  (c) =>
+                    c.name.toLowerCase() ===
+                    (data.responsibleName ?? "").toLowerCase(),
+                )
+              : null;
+            next.responsibleUserId = matched?.id ?? null;
+          }
           if (data.unit !== undefined) next.unit = data.unit;
           if (data.factUnit !== undefined) next.factUnit = data.factUnit;
           if (data.planVolume !== undefined) next.planVolume = data.planVolume;
@@ -125,6 +138,7 @@ export function StagesSection({
           responsibleUserId: (s.responsibleUserId as string | null) ?? null,
           responsibleName:
             (s as { responsibleUser?: { name?: string } }).responsibleUser?.name ??
+            (s.responsibleName as string | null) ??
             null,
           allocatedBudget:
             s.allocatedBudget === null || s.allocatedBudget === undefined

@@ -190,26 +190,30 @@ export function StageDetailDrawer({
               </select>
             </Row>
             <Row label="Відповідальний" icon={<User2 size={12} />}>
-              <select
-                value={stage.responsibleUserId ?? ""}
-                onChange={(e) =>
-                  patchStage({ responsibleUserId: e.target.value || null }, "responsible")
-                }
+              <input
+                type="text"
+                list="drawer-responsible-list"
+                defaultValue={stage.responsibleName ?? ""}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v !== (stage.responsibleName ?? "")) {
+                    patchStage({ responsibleName: v || null }, "responsible");
+                  }
+                }}
                 disabled={savingField === "responsible"}
+                placeholder="Імʼя або підрядник"
                 className="w-full rounded border px-2 py-1 text-[12px]"
                 style={{
                   backgroundColor: T.panel,
                   borderColor: T.borderSoft,
-                  color: stage.responsibleUserId ? T.textPrimary : T.textMuted,
+                  color: stage.responsibleName ? T.textPrimary : T.textMuted,
                 }}
-              >
-                <option value="">— Не призначено —</option>
+              />
+              <datalist id="drawer-responsible-list">
                 {candidates.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
+                  <option key={c.id} value={c.name} />
                 ))}
-              </select>
+              </datalist>
             </Row>
             <Row label="Початок" icon={<Calendar size={12} />}>
               <DateInput

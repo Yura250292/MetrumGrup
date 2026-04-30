@@ -246,6 +246,9 @@ model ProjectStageRecord {
   children          ProjectStageRecord[] @relation("StageTree")
   responsibleUserId String?
   responsibleUser   User?                @relation("ProjectStageResponsible", fields: [responsibleUserId], references: [id])
+  // Free-text fallback — коли відповідальний не зареєстрований у системі
+  // (підрядник, прізвище зі слів). Заповнюється лише якщо responsibleUserId=null.
+  responsibleName   String?
   tasks             Task[]
   financeEntries    FinanceEntry[]       @relation("StageFinanceEntries")
   // Прив'язка до кошторису — для re-sync (estimate items/sections → stage tree).
