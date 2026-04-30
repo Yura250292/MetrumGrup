@@ -147,6 +147,11 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
                 Обери існуючу FINANCE-папку — її підпапки і фінансові записи
                 переїдуть у цей проект (mirror-папка проекту вбере усе всередину).
               </p>
+              <p className="text-[10.5px]" style={{ color: T.textMuted }}>
+                Тут лише <b>вільні</b> папки. Папки інших проектів (вже з mirror)
+                і системні (🔒 «Проєкти», «Загальні витрати») — не показуються,
+                бо вони не призначені для прямої привʼязки.
+              </p>
 
               <div
                 className="flex items-center gap-2 rounded-xl px-3 py-2"
@@ -187,8 +192,14 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
                   </span>
                 </div>
               ) : candidates.length === 0 ? (
-                <div className="py-8 text-center text-[12px]" style={{ color: T.textMuted }}>
-                  Немає вільних папок для привʼязки.
+                <div className="py-6 text-center text-[12px] flex flex-col gap-2" style={{ color: T.textMuted }}>
+                  <span>
+                    Немає вільних папок для привʼязки {q.length >= 2 ? "за цим запитом" : ""}.
+                  </span>
+                  <span className="text-[11px]">
+                    Тут не показуються папки які вже привʼязані до інших проектів,
+                    а також системні (з 🔒 — наприклад «Загальні витрати», «Проєкти»).
+                  </span>
                 </div>
               ) : (
                 <div className="flex flex-col gap-1.5">
