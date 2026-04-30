@@ -87,7 +87,7 @@ export function ProjectCoverUpload({
   return (
     <div className="flex flex-col gap-2">
       <div
-        className="relative aspect-[16/7] rounded-2xl overflow-hidden cursor-pointer group"
+        className="relative h-28 sm:h-36 md:h-44 rounded-2xl overflow-hidden cursor-pointer group"
         style={{
           backgroundColor: "rgba(255,255,255,0.03)",
           border: "1px dashed rgba(255,255,255,0.12)",
