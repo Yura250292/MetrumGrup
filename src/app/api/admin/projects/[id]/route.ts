@@ -10,6 +10,7 @@ import {
   syncProjectBudgetEntry,
   deleteProjectMirror,
 } from "@/lib/folders/mirror-service";
+import { computeStageFinanceAggregates } from "@/lib/projects/stages-helpers";
 
 export async function GET(
   _request: NextRequest,
@@ -28,7 +29,12 @@ export async function GET(
       include: {
         client: { select: { id: true, name: true, email: true, phone: true } },
         manager: { select: { id: true, name: true, email: true, phone: true } },
-        stages: { orderBy: { sortOrder: "asc" } },
+        stages: {
+          orderBy: { sortOrder: "asc" },
+          include: {
+            responsibleUser: { select: { id: true, name: true } },
+          },
+        },
         payments: { orderBy: { scheduledDate: "asc" } },
         estimates: { orderBy: { createdAt: "desc" } },
       },
@@ -44,57 +50,18 @@ export async function GET(
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
   }
 
-  // Per-stage aggregations of EXPENSE finance entries (PLAN та FACT) включно з
-  // підетапами. Користувачу показуємо в управлінні етапами як read-only колонки
-  // біля allocatedBudget — щоб одразу бачити що уже заплановано/витрачено.
   const stageRows = project.stages;
   if (stageRows.length > 0) {
-    const grouped = await prisma.financeEntry.groupBy({
-      by: ["stageRecordId", "kind"],
-      where: {
-        projectId: id,
-        type: "EXPENSE",
-        isArchived: false,
-        stageRecordId: { not: null },
-      },
-      _sum: { amount: true },
-    });
-    const selfPlan = new Map<string, number>();
-    const selfFact = new Map<string, number>();
-    for (const row of grouped) {
-      if (!row.stageRecordId) continue;
-      const sum = Number(row._sum.amount ?? 0);
-      if (row.kind === "PLAN") selfPlan.set(row.stageRecordId, sum);
-      else if (row.kind === "FACT") selfFact.set(row.stageRecordId, sum);
-    }
-    const childrenOf = new Map<string, string[]>();
-    for (const s of stageRows) {
-      if (s.parentStageId) {
-        const arr = childrenOf.get(s.parentStageId) ?? [];
-        arr.push(s.id);
-        childrenOf.set(s.parentStageId, arr);
-      }
-    }
-    const descendants = (rootId: string): string[] => {
-      const out: string[] = [];
-      const stack = [rootId];
-      while (stack.length > 0) {
-        const sid = stack.pop()!;
-        out.push(sid);
-        const kids = childrenOf.get(sid);
-        if (kids) stack.push(...kids);
-      }
-      return out;
-    };
-    const augmented = stageRows.map((s) => {
-      let plan = 0;
-      let fact = 0;
-      for (const sid of descendants(s.id)) {
-        plan += selfPlan.get(sid) ?? 0;
-        fact += selfFact.get(sid) ?? 0;
-      }
-      return { ...s, planExpense: plan, factExpense: fact };
-    });
+    const aggregates = await computeStageFinanceAggregates(id, stageRows);
+    const augmented = stageRows.map((s) => ({
+      ...s,
+      ...(aggregates.get(s.id) ?? {
+        planExpense: 0,
+        factExpense: 0,
+        planIncome: 0,
+        factIncome: 0,
+      }),
+    }));
     return NextResponse.json({
       data: { ...project, stages: augmented },
       responsibleCandidates,
@@ -116,12 +83,39 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { title, description, address, status, currentStage, stageProgress, managerId, totalBudget, totalPaid, startDate, expectedEndDate, actualEndDate, coverImageUrl, isTestProject } = body;
+  const {
+    title,
+    description,
+    address,
+    status,
+    currentStage,
+    stageProgress,
+    managerId,
+    clientId,
+    clientCounterpartyId,
+    clientName,
+    totalBudget,
+    totalPaid,
+    startDate,
+    expectedEndDate,
+    actualEndDate,
+    coverImageUrl,
+    isTestProject,
+  } = body;
 
   // Read previous managerId to know if we need to sync ProjectMember
   const previous = await prisma.project.findUnique({
     where: { id },
-    select: { managerId: true, status: true, currentStage: true, title: true, folderId: true, totalBudget: true, isTestProject: true },
+    select: {
+      managerId: true,
+      status: true,
+      currentStage: true,
+      title: true,
+      folderId: true,
+      totalBudget: true,
+      isTestProject: true,
+      firmId: true,
+    },
   });
   if (!previous) {
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
@@ -142,6 +136,37 @@ export async function PATCH(
   if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
   if (coverImageUrl !== undefined) updateData.coverImageUrl = coverImageUrl || null;
   if (isTestProject !== undefined) updateData.isTestProject = Boolean(isTestProject);
+
+  // Client editing: підтримуємо три варіанти — User-FK, Counterparty-FK,
+  // free-text. Якщо вказано counterparty — підтягуємо snapshot його імені
+  // у clientName (швидкий рендер списків без додаткового join).
+  if (clientId !== undefined) updateData.clientId = clientId || null;
+  if (clientCounterpartyId !== undefined) {
+    if (clientCounterpartyId) {
+      const cp = await prisma.counterparty.findUnique({
+        where: { id: String(clientCounterpartyId) },
+        select: { id: true, name: true, firmId: true },
+      });
+      if (!cp) {
+        return NextResponse.json({ error: "Контрагент не існує" }, { status: 400 });
+      }
+      if (cp.firmId && previous.firmId && cp.firmId !== previous.firmId) {
+        return NextResponse.json(
+          { error: "Контрагент належить іншій фірмі" },
+          { status: 400 },
+        );
+      }
+      updateData.clientCounterpartyId = cp.id;
+      // Снепшот імені, тільки якщо явно не передали clientName.
+      if (clientName === undefined) updateData.clientName = cp.name;
+    } else {
+      updateData.clientCounterpartyId = null;
+    }
+  }
+  if (clientName !== undefined) {
+    const trimmed = typeof clientName === "string" ? clientName.trim() : "";
+    updateData.clientName = trimmed || null;
+  }
 
   const project = await prisma.project.update({
     where: { id },

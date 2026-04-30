@@ -3,8 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { ProjectStage, StageStatus } from "@prisma/client";
-import { STAGE_ORDER } from "@/lib/constants";
-import { syncProjectBudgetEntry } from "@/lib/folders/mirror-service";
+import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 
 const MAX_DEPTH = 2; // 0-indexed: root=0, підетап=1, підпідетап=2 (3 рівні)
 
@@ -21,6 +20,9 @@ type IncomingStage = {
   endDate?: string | null;
   responsibleUserId?: string | null;
   allocatedBudget?: number | null;
+  unit?: string | null;
+  planVolume?: number | null;
+  factVolume?: number | null;
   children?: IncomingStage[];
 };
 
@@ -157,6 +159,11 @@ export async function PUT(
           s.allocatedBudget !== null && s.allocatedBudget !== undefined
             ? s.allocatedBudget
             : null,
+        unit: s.unit?.trim() || null,
+        planVolume:
+          s.planVolume !== null && s.planVolume !== undefined ? s.planVolume : null,
+        factVolume:
+          s.factVolume !== null && s.factVolume !== undefined ? s.factVolume : null,
         sortOrder: f.sortOrder,
       };
 
@@ -187,69 +194,10 @@ export async function PUT(
     }
   });
 
-  // Recompute currentStage + currentStageRecordId + overallProgress — лише по top-level.
-  const topLevel = await prisma.projectStageRecord.findMany({
-    where: { projectId, isHidden: false, parentStageId: null },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, stage: true, status: true, progress: true },
+  await recalcCurrentStage(projectId, {
+    syncBudget: true,
+    userId: session.user.id,
   });
-
-  let currentRecord = topLevel.find((r) => r.status === "IN_PROGRESS");
-  if (!currentRecord) {
-    const completed = topLevel.filter((r) => r.status === "COMPLETED");
-    currentRecord = completed[completed.length - 1] ?? topLevel[0];
-  }
-
-  let currentStage: ProjectStage = "DESIGN";
-  if (currentRecord?.stage) {
-    currentStage = currentRecord.stage;
-  } else {
-    for (const enumStage of STAGE_ORDER) {
-      if (topLevel.some((r) => r.stage === enumStage)) {
-        currentStage = enumStage;
-        break;
-      }
-    }
-  }
-
-  const totalVisible = topLevel.length || 1;
-  const completedCount = topLevel.filter((r) => r.status === "COMPLETED").length;
-  const inProgress = topLevel.find((r) => r.status === "IN_PROGRESS");
-  const overallProgress = Math.round(
-    ((completedCount + (inProgress ? inProgress.progress / 100 : 0)) / totalVisible) * 100,
-  );
-
-  await prisma.project.update({
-    where: { id: projectId },
-    data: {
-      currentStage,
-      currentStageRecordId: currentRecord?.id ?? null,
-      stageProgress: Math.max(0, Math.min(100, overallProgress)),
-    },
-  });
-
-  // Sync totalBudget з суми allocatedBudget етапів (top-level), якщо є хоча б
-  // один з ненульовим бюджетом. Тоді PROJECT_BUDGET FinanceEntry оновиться і
-  // план зʼявиться у фінансуванні цього проекту.
-  const stagesWithBudget = await prisma.projectStageRecord.findMany({
-    where: { projectId, parentStageId: null, isHidden: false },
-    select: { allocatedBudget: true },
-  });
-  const totalAllocated = stagesWithBudget.reduce(
-    (sum, s) => sum + Number(s.allocatedBudget ?? 0),
-    0,
-  );
-  if (totalAllocated > 0) {
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { totalBudget: totalAllocated },
-    });
-    try {
-      await syncProjectBudgetEntry(projectId, session.user.id);
-    } catch (err) {
-      console.error("[stages PATCH] syncProjectBudgetEntry failed:", err);
-    }
-  }
 
   return NextResponse.json({ success: true });
 }

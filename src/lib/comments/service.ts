@@ -41,6 +41,13 @@ async function resolveCommentProjectId(
     });
     return t?.projectId ?? null;
   }
+  if (entityType === "STAGE_RECORD") {
+    const s = await prisma.projectStageRecord.findUnique({
+      where: { id: entityId },
+      select: { projectId: true },
+    });
+    return s?.projectId ?? null;
+  }
   return null;
 }
 
@@ -225,6 +232,12 @@ export async function postComment(
       select: { id: true },
     });
     if (!exists) throw new Error("Задачу не знайдено");
+  } else if (entityType === "STAGE_RECORD") {
+    const exists = await prisma.projectStageRecord.findUnique({
+      where: { id: entityId },
+      select: { id: true },
+    });
+    if (!exists) throw new Error("Етап не знайдено");
   }
 
   // Centralized access check: posting requires active project membership
@@ -280,6 +293,8 @@ export async function postComment(
     taskRelatedId = `${projectId}:${entityId}`;
   } else if (entityType === "PROJECT") {
     mentionTitle = "Вас позначили в обговоренні проєкту";
+  } else if (entityType === "STAGE_RECORD") {
+    mentionTitle = "Вас позначили в обговоренні етапу";
   } else {
     mentionTitle = "Вас позначили в обговоренні кошторису";
   }
@@ -327,8 +342,15 @@ export async function postComment(
         const title =
           entityType === "PROJECT"
             ? `Новий коментар у проєкті «${project?.title ?? ""}»`
-            : `Новий коментар до кошторису у проєкті «${project?.title ?? ""}»`;
-        const relEntity = entityType === "PROJECT" ? "Project" : "Estimate";
+            : entityType === "STAGE_RECORD"
+              ? `Новий коментар до етапу у проєкті «${project?.title ?? ""}»`
+              : `Новий коментар до кошторису у проєкті «${project?.title ?? ""}»`;
+        const relEntity =
+          entityType === "PROJECT"
+            ? "Project"
+            : entityType === "STAGE_RECORD"
+              ? "ProjectStageRecord"
+              : "Estimate";
         const relId = entityType === "PROJECT" ? projectId : entityId;
         await notifyProjectMembers({
           projectId,

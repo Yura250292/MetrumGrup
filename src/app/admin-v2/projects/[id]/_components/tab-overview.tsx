@@ -1,14 +1,15 @@
 "use client";
 
-import Link from "next/link";
-import { Calendar, MapPin, Mail, Phone, Edit3 } from "lucide-react";
+import { Calendar, MapPin, Mail, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { stageDisplayName } from "@/lib/constants";
-import { StageTimeline } from "@/components/dashboard/StageTimeline";
 import { ProjectProgressBar } from "@/components/dashboard/ProjectProgressBar";
+import { ProjectClientEditButton } from "@/components/projects/ProjectClientEditButton";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectStatus, ProjectStage, StageStatus } from "@prisma/client";
 import { FinanceKpiStrip } from "./finance-kpi-strip";
+import { StagesSection, type ResponsibleCandidate } from "./stages-section";
+import type { StageRow } from "./stage-table";
 
 export type ProjectDetailData = {
   id: string;
@@ -23,20 +24,13 @@ export type ProjectDetailData = {
   startDate: Date | null;
   expectedEndDate: Date | null;
   address: string | null;
-  client: { id: string; name: string; email: string; phone: string | null };
+  /** Display-name (free-text або snapshot контрагента). Заповнюється завжди. */
+  clientName: string | null;
+  clientCounterparty: { id: string; name: string } | null;
+  client: { id: string; name: string; email: string | null; phone: string | null } | null;
   manager: { id: string; name: string; email: string; phone: string | null } | null;
-  stages: {
-    id: string;
-    stage: ProjectStage | null;
-    customName: string | null;
-    isHidden: boolean;
-    sortOrder: number;
-    status: StageStatus;
-    progress: number;
-    startDate: Date | null;
-    endDate: Date | null;
-    notes: string | null;
-  }[];
+  stages: StageRow[];
+  responsibleCandidates: ResponsibleCandidate[];
   payments: {
     id: string;
     amount: number;
@@ -89,20 +83,11 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
           </div>
         </Card>
 
-        <Card
-          title="Етапи виконання"
-          action={
-            <Link
-              href={`/admin-v2/projects/${project.id}/stages`}
-              className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
-              style={{ color: T.accentPrimary }}
-            >
-              <Edit3 size={12} /> Редагувати
-            </Link>
-          }
-        >
-          <StageTimeline stages={project.stages} />
-        </Card>
+        <StagesSection
+          projectId={project.id}
+          initialStages={project.stages}
+          candidates={project.responsibleCandidates}
+        />
 
         {project.description && (
           <Card title="Опис проєкту">
@@ -179,15 +164,36 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
               <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
                 КЛІЄНТ
               </span>
-              <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
-                {project.client.name}
-              </span>
-              {project.client.email && (
+              <div className="flex items-center gap-1">
+                <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+                  {project.clientName ??
+                    project.clientCounterparty?.name ??
+                    project.client?.name ??
+                    "—"}
+                </span>
+                <ProjectClientEditButton
+                  projectId={project.id}
+                  initial={
+                    project.clientCounterparty
+                      ? {
+                          mode: "counterparty",
+                          id: project.clientCounterparty.id,
+                          name: project.clientCounterparty.name,
+                        }
+                      : project.clientName
+                        ? { mode: "freetext", name: project.clientName }
+                        : project.client
+                          ? { mode: "freetext", name: project.client.name }
+                          : null
+                  }
+                />
+              </div>
+              {project.client?.email && (
                 <span className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textSecondary }}>
                   <Mail size={11} /> {project.client.email}
                 </span>
               )}
-              {project.client.phone && (
+              {project.client?.phone && (
                 <span className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textSecondary }}>
                   <Phone size={11} /> {project.client.phone}
                 </span>

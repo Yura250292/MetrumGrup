@@ -44,6 +44,7 @@ export async function POST(request: Request) {
       where: { id: { in: projectIds }, ...firmWhereForProject(firmId) },
       include: {
         client: { select: { id: true, name: true } },
+        clientCounterparty: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },
         crewAssignments: {
           where: { endDate: null },
@@ -121,7 +122,11 @@ export async function POST(request: Request) {
 
       worksheet.addRow({
         title: project.title,
-        client: project.client.name,
+        client:
+          project.clientName ??
+          project.clientCounterparty?.name ??
+          project.client?.name ??
+          "—",
         status: PROJECT_STATUS_LABELS[project.status],
         stage: STAGE_LABELS[project.currentStage],
         manager: project.manager?.name || '-',

@@ -40,6 +40,7 @@ export async function GET(
         project: {
           include: {
             client: { select: { name: true, email: true, phone: true } },
+            clientCounterparty: { select: { name: true } },
           },
         },
         items: { orderBy: { sortOrder: "asc" } },
@@ -87,13 +88,19 @@ export async function GET(
       },
     });
 
-    // Відправка клієнту (якщо запитано)
+    // Відправка клієнту (якщо запитано). Можлива тільки коли є привʼязка
+    // до User-CLIENT з email — для free-text або counterparty без логіну
+    // надсилання email пропускаємо.
     if (sendToClient) {
-      // TODO: Реалізувати відправку email з прикріпленим файлом
-      // Поки що просто логуємо намір
+      if (!estimate.project.clientId || !estimate.project.client?.email) {
+        return NextResponse.json(
+          { error: "Цей проєкт не має клієнта з email — відправка неможлива" },
+          { status: 400 },
+        );
+      }
+
       console.log(`📧 Потрібно відправити ${filename} клієнту ${estimate.project.client.email}`);
 
-      // Створюємо нотифікацію для клієнта
       await prisma.notification.create({
         data: {
           userId: estimate.project.clientId,
@@ -105,7 +112,6 @@ export async function GET(
         },
       });
 
-      // Повертаємо JSON з інформацією про відправку
       return NextResponse.json({
         success: true,
         message: `Кошторис експортовано та надіслано клієнту ${estimate.project.client.name}`,

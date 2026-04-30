@@ -11,12 +11,18 @@ type EstimateWithDetails = Prisma.EstimateGetPayload<{
     project: {
       include: {
         client: { select: { name: true; email: true; phone: true } };
+        clientCounterparty: { select: { name: true } };
       };
     };
     items: true;
     createdBy: { select: { name: true } };
   };
 }>;
+
+/** Display-name з пріоритетом: clientName → counterparty → client.name. */
+function clientDisplayName(p: EstimateWithDetails["project"]): string {
+  return p.clientName ?? p.clientCounterparty?.name ?? p.client?.name ?? "—";
+}
 
 /**
  * Генерує PDF кошторису для клієнта з підтримкою кирилиці
@@ -65,11 +71,11 @@ export async function generateEstimatePDF(estimate: EstimateWithDetails): Promis
         margin: [0, 0, 0, 3],
       },
       {
-        text: `Клієнт: ${estimate.project.client.name}`,
+        text: `Клієнт: ${clientDisplayName(estimate.project)}`,
         fontSize: 9,
         margin: [0, 0, 0, 3],
       },
-      ...(estimate.project.client.phone
+      ...(estimate.project.client?.phone
         ? [
             {
               text: `Телефон: ${estimate.project.client.phone}`,
@@ -284,8 +290,8 @@ export async function generateEstimateExcel(estimate: EstimateWithDetails): Prom
   projectInfoRow.getCell(1).font = { bold: true, name: "Arial" };
 
   worksheet.addRow(["Назва:", estimate.project.title]);
-  worksheet.addRow(["Клієнт:", estimate.project.client.name]);
-  if (estimate.project.client.phone) {
+  worksheet.addRow(["Клієнт:", clientDisplayName(estimate.project)]);
+  if (estimate.project.client?.phone) {
     worksheet.addRow(["Телефон:", estimate.project.client.phone]);
   }
 

@@ -42,7 +42,7 @@ import { resolveMemberPermissions, type EffectivePermissions } from "./permissio
 
 type AccessProject = {
   id: string;
-  clientId: string;
+  clientId: string | null;
   managerId: string | null;
   isInternal: boolean;
 };

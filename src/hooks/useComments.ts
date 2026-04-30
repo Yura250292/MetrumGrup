@@ -2,7 +2,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-export type CommentEntityType = "ESTIMATE" | "PROJECT" | "TASK" | "FINANCE_ENTRY";
+export type CommentEntityType =
+  | "ESTIMATE"
+  | "PROJECT"
+  | "TASK"
+  | "FINANCE_ENTRY"
+  | "STAGE_RECORD";
 
 export type ReactionGroup = {
   emoji: string;

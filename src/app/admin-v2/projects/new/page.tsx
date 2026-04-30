@@ -10,20 +10,20 @@ import {
   Save,
   Sparkles,
   AlertCircle,
-  UserPlus,
-  X,
   Link2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import {
+  ProjectClientPicker,
+  type ProjectClientValue,
+} from "@/components/projects/ProjectClientPicker";
 
-type ClientOption = { id: string; name: string; email: string };
 type ManagerOption = { id: string; name: string };
 type MergeCandidate = { id: string; name: string; entryCount: number };
 
 export default function AdminV2NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [clients, setClients] = useState<ClientOption[]>([]);
   const [managers, setManagers] = useState<ManagerOption[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,17 +32,14 @@ export default function AdminV2NewProjectPage() {
     title: "",
     description: "",
     address: "",
-    clientId: "",
     managerId: "",
     totalBudget: "",
     startDate: "",
     expectedEndDate: "",
   });
 
-  // Inline-створення клієнта (щоб не вимагати щоб клієнти заздалегідь були у системі).
-  const [showClientForm, setShowClientForm] = useState(false);
-  const [clientDraft, setClientDraft] = useState({ name: "", email: "", phone: "" });
-  const [creatingClient, setCreatingClient] = useState(false);
+  // Клієнт — або контрагент з книги, або просто текстове ім'я. Без email/phone.
+  const [client, setClient] = useState<ProjectClientValue>(null);
 
   // Кандидати на merge з існуючою FINANCE-папкою (debounced search by title).
   const [mergeCandidates, setMergeCandidates] = useState<MergeCandidate[]>([]);
@@ -75,58 +72,21 @@ export default function AdminV2NewProjectPage() {
     };
   }, [form.title]);
 
-  async function createClientInline() {
-    if (!clientDraft.name.trim() || !clientDraft.email.trim()) {
-      setError("Введіть імʼя та email клієнта");
-      return;
-    }
-    setCreatingClient(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: clientDraft.name.trim(),
-          email: clientDraft.email.trim(),
-          phone: clientDraft.phone.trim() || undefined,
-          role: "CLIENT",
-        }),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "Не вдалося створити клієнта");
-      }
-      const { data } = await res.json();
-      const newClient = { id: data.id, name: data.name, email: data.email };
-      setClients((prev) => [...prev, newClient]);
-      setForm((prev) => ({ ...prev, clientId: newClient.id }));
-      setShowClientForm(false);
-      setClientDraft({ name: "", email: "", phone: "" });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Помилка створення клієнта");
-    } finally {
-      setCreatingClient(false);
-    }
-  }
-
   useEffect(() => {
     async function loadUsers() {
       try {
         setLoadingUsers(true);
         setError(null);
-        // firmAware за замовчуванням (через cookie у API). Manager dropdown
-        // покаже юзерів з активною роллю MANAGER/SUPER_ADMIN на поточній фірмі.
-        const [clientsRes, managersRes] = await Promise.all([
-          fetch("/api/admin/users?role=CLIENT"),
-          fetch("/api/admin/users?role=MANAGER,SUPER_ADMIN"),
-        ]);
-        if (!clientsRes.ok || !managersRes.ok) {
-          throw new Error("Не вдалося завантажити список користувачів");
+        // Manager dropdown — користувачі з роллю MANAGER/SUPER_ADMIN на
+        // поточній фірмі (firmAware через cookie). Клієнтів окремо не
+        // тягнемо — їх picker сам читає з /financing/counterparties.
+        const managersRes = await fetch(
+          "/api/admin/users?role=MANAGER,SUPER_ADMIN",
+        );
+        if (!managersRes.ok) {
+          throw new Error("Не вдалося завантажити список менеджерів");
         }
-        const clientsData = await clientsRes.json();
         const managersData = await managersRes.json();
-        setClients(clientsData.data || []);
         setManagers(managersData.data || []);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Помилка завантаження");
@@ -143,14 +103,24 @@ export default function AdminV2NewProjectPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!client) {
+      setError("Вкажіть клієнта (контрагент або імʼя)");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
+      const clientFields =
+        client.mode === "counterparty"
+          ? { clientCounterpartyId: client.id, clientName: client.name }
+          : { clientName: client.name };
+
       const res = await fetch("/api/admin/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          ...clientFields,
           totalBudget: form.totalBudget ? parseFloat(form.totalBudget) : 0,
           mergeFinanceFolderId: mergeFolderId || undefined,
         }),
@@ -328,115 +298,15 @@ export default function AdminV2NewProjectPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Клієнт" required>
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <select
-                  value={form.clientId}
-                  onChange={(e) => updateField("clientId", e.target.value)}
-                  required
-                  disabled={loadingUsers || showClientForm}
-                  className="min-w-0 flex-1 rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-50"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                    color: T.textPrimary,
-                  }}
-                >
-                  <option value="">
-                    {loadingUsers
-                      ? "Завантаження…"
-                      : clients.length === 0
-                        ? "Немає клієнтів — додайте"
-                        : "Оберіть клієнта"}
-                  </option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name} ({c.email})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={() => setShowClientForm((v) => !v)}
-                  className="flex shrink-0 items-center justify-center rounded-xl p-3 transition active:scale-[0.97]"
-                  style={{
-                    backgroundColor: T.accentPrimary,
-                    color: "white",
-                  }}
-                  title={showClientForm ? "Скасувати додавання" : "Додати нового клієнта"}
-                  aria-label={
-                    showClientForm ? "Скасувати додавання" : "Додати нового клієнта"
-                  }
-                >
-                  {showClientForm ? <X size={16} /> : <UserPlus size={16} />}
-                </button>
-              </div>
-
-              {showClientForm && (
-                <div
-                  className="flex flex-col gap-2 rounded-xl p-3"
-                  style={{
-                    backgroundColor: T.panelElevated,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                >
-                  <input
-                    placeholder="Імʼя клієнта *"
-                    value={clientDraft.name}
-                    onChange={(e) =>
-                      setClientDraft((d) => ({ ...d, name: e.target.value }))
-                    }
-                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                    style={{
-                      backgroundColor: T.panelSoft,
-                      border: `1px solid ${T.borderStrong}`,
-                      color: T.textPrimary,
-                    }}
-                  />
-                  <input
-                    type="email"
-                    placeholder="Email *"
-                    value={clientDraft.email}
-                    onChange={(e) =>
-                      setClientDraft((d) => ({ ...d, email: e.target.value }))
-                    }
-                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                    style={{
-                      backgroundColor: T.panelSoft,
-                      border: `1px solid ${T.borderStrong}`,
-                      color: T.textPrimary,
-                    }}
-                  />
-                  <input
-                    placeholder="Телефон (опційно)"
-                    value={clientDraft.phone}
-                    onChange={(e) =>
-                      setClientDraft((d) => ({ ...d, phone: e.target.value }))
-                    }
-                    className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                    style={{
-                      backgroundColor: T.panelSoft,
-                      border: `1px solid ${T.borderStrong}`,
-                      color: T.textPrimary,
-                    }}
-                  />
-                  <button
-                    type="button"
-                    disabled={creatingClient}
-                    onClick={createClientInline}
-                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.97] disabled:opacity-60"
-                    style={{ backgroundColor: T.emerald ?? "#16A34A", color: "white" }}
-                  >
-                    {creatingClient ? (
-                      <Loader2 size={13} className="animate-spin" />
-                    ) : (
-                      <UserPlus size={13} />
-                    )}
-                    {creatingClient ? "Створення…" : "Створити і вибрати"}
-                  </button>
-                </div>
-              )}
-            </div>
+            <ProjectClientPicker
+              value={client}
+              onChange={setClient}
+              required
+            />
+            <p className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
+              Оберіть зі списку контрагентів або введіть імʼя текстом
+              (напр. «Шиба Ігор»). Email/телефон не потрібні.
+            </p>
           </Field>
 
           <Field label="Менеджер">

@@ -129,7 +129,16 @@ model Project {
   actualEndDate          DateTime?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
-  clientId               String
+  /// Legacy User-CLIENT FK. Більшість нових проектів обходяться без логіну
+  /// клієнта — використовуй clientName або clientCounterpartyId.
+  clientId               String?
+  /// Display-only імʼя клієнта (free-text "Шиба Ігор" АБО snapshot назви
+  /// контрагента). Заповнюється завжди — використовується як єдине джерело
+  /// для рендеру списків/деталей, без потреби join-ити User/Counterparty.
+  clientName             String?
+  /// Опційний FK на Counterparty (книга контрагентів). Якщо проставлений,
+  /// `clientName` тримає snapshot назви на момент привʼязки.
+  clientCounterpartyId   String?
   managerId              String?
   folderId               String?
   firmId                 String?
@@ -143,7 +152,8 @@ model Project {
   photoReports           PhotoReport[]
   files                  ProjectFile[]
   stages                 ProjectStageRecord[]
-  client                 User                    @relation("ClientProjects", fields: [clientId], references: [id])
+  client                 User?                   @relation("ClientProjects", fields: [clientId], references: [id])
+  clientCounterparty     Counterparty?           @relation("ProjectClientCounterparty", fields: [clientCounterpartyId], references: [id])
   manager                User?                   @relation("ManagerProjects", fields: [managerId], references: [id])
   conversation           Conversation?
   members                ProjectMember[]
@@ -175,6 +185,7 @@ model Project {
   @@index([folderId])
   @@index([isTestProject])
   @@index([firmId])
+  @@index([clientCounterpartyId])
   @@map("projects")
 }
 
@@ -211,6 +222,11 @@ model ProjectStageRecord {
   endDate           DateTime?
   sortOrder         Int                  @default(0)
   allocatedBudget   Decimal?             @db.Decimal(12, 2)
+  // Об'єм / одиниці виміру для табличної картки «Етапи виконання»
+  // (План vs Факт по обсягах робіт). Усі опційні — старі етапи показують «—».
+  unit              String?
+  planVolume        Decimal?             @db.Decimal(12, 3)
+  factVolume        Decimal?             @db.Decimal(12, 3)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   projectId         String
@@ -1255,6 +1271,7 @@ enum CommentEntityType {
   PROJECT
   TASK
   FINANCE_ENTRY
+  STAGE_RECORD
 }
 
 enum ConversationType {
@@ -2406,6 +2423,8 @@ model Counterparty {
   financeTemplates   FinanceExpenseTemplate[]
   kb2Forms           KB2Form[]                @relation("KB2FormCounterparty")
   kb3Forms           KB3Form[]                @relation("KB3FormCounterparty")
+  /// Проекти, де цей контрагент виступає клієнтом (Project.clientCounterpartyId).
+  clientProjects     Project[]                @relation("ProjectClientCounterparty")
 
   @@index([isActive])
   @@index([type])

@@ -40,6 +40,7 @@ export default async function AdminV2ProjectsDashboardPage() {
       where: firmWhereForProject(firmId),
       include: {
         client: { select: { id: true, name: true } },
+        clientCounterparty: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true } },
         crewAssignments: {
           where: { endDate: null },
@@ -189,7 +190,7 @@ export default async function AdminV2ProjectsDashboardPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3.5 text-[12px]" style={{ color: T.textSecondary }}>
-                        {p.client.name}
+                        {p.clientName ?? p.clientCounterparty?.name ?? p.client?.name ?? "—"}
                       </td>
                       <td className="px-4 py-3.5 text-[12px]" style={{ color: T.textSecondary }}>
                         {p.manager?.name || "—"}

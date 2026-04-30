@@ -127,7 +127,17 @@ export function ProjectTabs({
       <div>
         {current === "overview" && <TabOverview project={project} />}
         {current === "team" && (
-          <TabTeam manager={project.manager} client={project.client} projectId={projectId} />
+          <TabTeam
+            manager={project.manager}
+            client={project.client}
+            clientName={
+              project.clientName ??
+              project.clientCounterparty?.name ??
+              project.client?.name ??
+              "—"
+            }
+            projectId={projectId}
+          />
         )}
         {current === "chat" && <TabChat projectId={projectId} />}
         {current === "files" && <TabFiles projectId={projectId} />}

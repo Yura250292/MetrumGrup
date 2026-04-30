@@ -23,6 +23,7 @@ import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
+import { computeStageFinanceAggregates } from "@/lib/projects/stages-helpers";
 
 export const dynamic = "force-dynamic";
 
@@ -40,13 +41,17 @@ export default async function AdminV2ProjectDetailPage({
   const sp = await searchParams;
   const activeTab = sp.tab || "overview";
 
-  const [project, factIncome, factExpense] = await Promise.all([
+  const [project, factIncome, factExpense, responsibleCandidates] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
         client: { select: { id: true, name: true, email: true, phone: true } },
+        clientCounterparty: { select: { id: true, name: true } },
         manager: { select: { id: true, name: true, email: true, phone: true } },
-        stages: { orderBy: { sortOrder: "asc" } },
+        stages: {
+          orderBy: { sortOrder: "asc" },
+          include: { responsibleUser: { select: { id: true, name: true } } },
+        },
         payments: { orderBy: { scheduledDate: "asc" } },
         photoReports: {
           orderBy: { createdAt: "desc" },
@@ -64,6 +69,14 @@ export default async function AdminV2ProjectDetailPage({
     prisma.financeEntry.aggregate({
       where: { projectId: id, type: "EXPENSE", kind: "FACT", isArchived: false },
       _sum: { amount: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        role: { in: ["SUPER_ADMIN", "MANAGER", "ENGINEER"] },
+        isActive: true,
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -84,6 +97,11 @@ export default async function AdminV2ProjectDetailPage({
   const factBalance = factIncomeTotal - factExpenseTotal;
 
   const tasksEnabled = await isTasksEnabledForProject(project.id);
+
+  const stageAggregates = await computeStageFinanceAggregates(
+    project.id,
+    project.stages,
+  );
 
   return (
     <div
@@ -168,7 +186,12 @@ export default async function AdminV2ProjectDetailPage({
           <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]" style={{ color: T.textMuted }}>
             <span className="flex items-center gap-1 min-w-0">
               <User size={12} className="flex-shrink-0" />
-              <span className="truncate">{project.client.name}</span>
+              <span className="truncate">
+                {project.clientName ??
+                  project.clientCounterparty?.name ??
+                  project.client?.name ??
+                  "—"}
+              </span>
             </span>
             {project.manager?.name && (
               <>
@@ -256,20 +279,46 @@ export default async function AdminV2ProjectDetailPage({
           startDate: project.startDate,
           expectedEndDate: project.expectedEndDate,
           address: project.address,
+          clientName: project.clientName,
+          clientCounterparty: project.clientCounterparty,
           client: project.client,
           manager: project.manager,
-          stages: project.stages.map((s) => ({
-            id: s.id,
-            stage: s.stage,
-            customName: s.customName,
-            isHidden: s.isHidden,
-            sortOrder: s.sortOrder,
-            status: s.status,
-            progress: s.progress,
-            startDate: s.startDate,
-            endDate: s.endDate,
-            notes: s.notes,
-          })),
+          stages: project.stages.map((s) => {
+            const agg = stageAggregates.get(s.id);
+            return {
+              id: s.id,
+              parentStageId: s.parentStageId,
+              stage: s.stage,
+              customName: s.customName,
+              isHidden: s.isHidden,
+              sortOrder: s.sortOrder,
+              status: s.status,
+              progress: s.progress,
+              startDate: s.startDate,
+              endDate: s.endDate,
+              notes: s.notes,
+              responsibleUserId: s.responsibleUserId,
+              responsibleName: s.responsibleUser?.name ?? null,
+              allocatedBudget:
+                s.allocatedBudget === null || s.allocatedBudget === undefined
+                  ? null
+                  : Number(s.allocatedBudget),
+              unit: s.unit ?? null,
+              planVolume:
+                s.planVolume === null || s.planVolume === undefined
+                  ? null
+                  : Number(s.planVolume),
+              factVolume:
+                s.factVolume === null || s.factVolume === undefined
+                  ? null
+                  : Number(s.factVolume),
+              planExpense: agg?.planExpense ?? 0,
+              factExpense: agg?.factExpense ?? 0,
+              planIncome: agg?.planIncome ?? 0,
+              factIncome: agg?.factIncome ?? 0,
+            };
+          }),
+          responsibleCandidates,
           payments: project.payments.map((p) => ({
             id: p.id,
             amount: Number(p.amount),

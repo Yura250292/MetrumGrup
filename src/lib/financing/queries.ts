@@ -14,6 +14,8 @@ export type FinanceListFilters = {
   costCodeId?: string;
   costType?: "MATERIAL" | "LABOR" | "SUBCONTRACT" | "EQUIPMENT" | "OVERHEAD" | "OTHER";
   counterpartyId?: string;
+  /** Прив'язка до конкретного етапу проєкту (для history у Stage drawer). */
+  stageRecordId?: string;
   from?: Date;
   to?: Date;
   responsibleId?: string;
@@ -46,6 +48,7 @@ export function parseListParams(
   const costCodeIdRaw = searchParams.get("costCodeId") ?? undefined;
   const costTypeRaw = searchParams.get("costType");
   const counterpartyIdRaw = searchParams.get("counterpartyId") ?? undefined;
+  const stageRecordIdRaw = searchParams.get("stageRecordId") ?? undefined;
   const validCostTypes = ["MATERIAL", "LABOR", "SUBCONTRACT", "EQUIPMENT", "OVERHEAD", "OTHER"] as const;
   type CostTypeKey = (typeof validCostTypes)[number];
   const costType =
@@ -80,6 +83,7 @@ export function parseListParams(
     costCodeId: costCodeIdRaw,
     costType,
     counterpartyId: counterpartyIdRaw,
+    stageRecordId: stageRecordIdRaw,
     archived: archivedRaw === "true",
     firmId,
   };
@@ -195,6 +199,7 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
   if (filters.costCodeId) where.costCodeId = filters.costCodeId;
   if (filters.costType) where.costType = filters.costType;
   if (filters.counterpartyId) where.counterpartyId = filters.counterpartyId;
+  if (filters.stageRecordId) where.stageRecordId = filters.stageRecordId;
   if (filters.responsibleId) where.createdById = filters.responsibleId;
 
   if (filters.from || filters.to) {
@@ -329,6 +334,7 @@ export const FINANCE_ENTRY_SELECT = {
   counterpartyId: true,
   costCodeId: true,
   costType: true,
+  stageRecordId: true,
   isArchived: true,
   status: true,
   approvedAt: true,

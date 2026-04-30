@@ -81,10 +81,47 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { title, description, address, clientId, managerId, totalBudget, startDate, expectedEndDate, mergeFinanceFolderId } = body;
+  const {
+    title,
+    description,
+    address,
+    clientId,
+    clientCounterpartyId,
+    clientName: clientNameRaw,
+    managerId,
+    totalBudget,
+    startDate,
+    expectedEndDate,
+    mergeFinanceFolderId,
+  } = body;
 
-  if (!title || !clientId) {
-    return NextResponse.json({ error: "Назва та клієнт обов'язкові" }, { status: 400 });
+  // Клієнт може бути заданий одним із трьох способів: legacy User-CLIENT,
+  // Counterparty FK або просто текстове імʼя. Хоча б один із них обовʼязковий.
+  const clientNameTrim =
+    typeof clientNameRaw === "string" ? clientNameRaw.trim() : "";
+  let resolvedCounterpartyName: string | null = null;
+  if (clientCounterpartyId) {
+    const cp = await prisma.counterparty.findUnique({
+      where: { id: String(clientCounterpartyId) },
+      select: { id: true, name: true, firmId: true },
+    });
+    if (!cp) {
+      return NextResponse.json({ error: "Контрагент не існує" }, { status: 400 });
+    }
+    if (cp.firmId && activeFirmId && cp.firmId !== activeFirmId) {
+      return NextResponse.json(
+        { error: "Контрагент належить іншій фірмі" },
+        { status: 400 },
+      );
+    }
+    resolvedCounterpartyName = cp.name;
+  }
+
+  if (!title || (!clientId && !clientCounterpartyId && !clientNameTrim)) {
+    return NextResponse.json(
+      { error: "Назва та клієнт (імʼя, контрагент або користувач) обовʼязкові" },
+      { status: 400 },
+    );
   }
 
   // Generate unique slug
@@ -100,13 +137,21 @@ export async function POST(request: NextRequest) {
   const projectFirmId =
     activeFirmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
+  // clientName зберігаємо завжди (snapshot для швидкого рендеру).
+  // Пріоритет: явне ім'я з форми → snapshot контрагента → null (якщо лише
+  // legacy User-CLIENT — UI підхопить через project.client.name).
+  const clientNameToStore =
+    clientNameTrim || resolvedCounterpartyName || null;
+
   const project = await prisma.project.create({
     data: {
       title,
       slug,
       description: description || null,
       address: address || null,
-      clientId,
+      clientId: clientId || null,
+      clientCounterpartyId: clientCounterpartyId || null,
+      clientName: clientNameToStore,
       managerId: managerId || null,
       firmId: projectFirmId,
       totalBudget: totalBudget || 0,

@@ -48,7 +48,14 @@ export default async function EstimatesPage() {
       finalAmount: true,
       createdAt: true,
       analysisSummary: true,
-      project: { select: { title: true, client: { select: { name: true } } } },
+      project: {
+        select: {
+          title: true,
+          clientName: true,
+          clientCounterparty: { select: { name: true } },
+          client: { select: { name: true } },
+        },
+      },
       createdBy: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -110,7 +117,10 @@ export default async function EstimatesPage() {
                         {est.project.title}
                       </p>
                       <p className="text-xs admin-dark:text-gray-400 admin-light:text-gray-600">
-                        {est.project.client.name}
+                        {est.project.clientName ??
+                          est.project.clientCounterparty?.name ??
+                          est.project.client?.name ??
+                          "—"}
                       </p>
                       <p className="text-xs admin-dark:text-gray-500 admin-light:text-gray-500">
                         {formatDateShort(est.createdAt)}
@@ -133,7 +143,12 @@ export default async function EstimatesPage() {
                         estimateId={est.id}
                         estimateNumber={est.number}
                         status={est.status}
-                        clientName={est.project.client.name}
+                        clientName={
+                          est.project.clientName ??
+                          est.project.clientCounterparty?.name ??
+                          est.project.client?.name ??
+                          "—"
+                        }
                       />
                     </div>
                   </div>

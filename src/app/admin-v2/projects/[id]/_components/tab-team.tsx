@@ -5,14 +5,18 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 import { ProjectTeamSection } from "@/components/projects/ProjectTeamSection";
 
-type Person = { id: string; name: string; email: string; phone: string | null };
+type Person = { id: string; name: string; email: string | null; phone: string | null };
 
 export function TabTeam({
   client,
+  clientName,
   projectId,
 }: {
   manager: Person | null;
-  client: Person;
+  /** Legacy User-CLIENT (може бути null для нових проектів). */
+  client: Person | null;
+  /** Display-name з пріоритетом: clientName → counterparty → client.name. */
+  clientName: string;
   projectId: string;
 }) {
   return (
@@ -28,7 +32,7 @@ export function TabTeam({
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
         <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-          КЛІЄНТ ПРОЄКТУ (зовнішній viewer)
+          КЛІЄНТ ПРОЄКТУ
         </span>
         <div className="flex items-start gap-3">
           <div
@@ -39,15 +43,15 @@ export function TabTeam({
           </div>
           <div className="flex flex-col gap-1 min-w-0 flex-1">
             <span className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
-              {client.name}
+              {clientName}
             </span>
             <div className="flex flex-col gap-1 text-[12px]" style={{ color: T.textSecondary }}>
-              {client.email && (
+              {client?.email && (
                 <span className="flex items-center gap-1.5">
                   <Mail size={12} /> {client.email}
                 </span>
               )}
-              {client.phone && (
+              {client?.phone && (
                 <span className="flex items-center gap-1.5">
                   <Phone size={12} /> {client.phone}
                 </span>

@@ -196,6 +196,34 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Валідація stageRecordId — якщо передано, етап має належати тому ж проєкту,
+    // що й запис (захищає від cross-project linking).
+    const stageRecordIdRaw =
+      typeof body.stageRecordId === "string" && body.stageRecordId.trim()
+        ? body.stageRecordId.trim()
+        : null;
+    let stageRecordId: string | null = null;
+    if (stageRecordIdRaw) {
+      const stage = await prisma.projectStageRecord.findUnique({
+        where: { id: stageRecordIdRaw },
+        select: { id: true, projectId: true },
+      });
+      if (!stage) {
+        return NextResponse.json({ error: "Етап не знайдено" }, { status: 400 });
+      }
+      if (resolvedProjectId && stage.projectId !== resolvedProjectId) {
+        return NextResponse.json(
+          { error: "Етап належить іншому проєкту" },
+          { status: 400 },
+        );
+      }
+      stageRecordId = stage.id;
+      // Якщо projectId не передавався — авто-stamp з етапу.
+      if (!resolvedProjectId) {
+        resolvedProjectId = stage.projectId;
+      }
+    }
+
     const entry = await prisma.financeEntry.create({
       data: {
         type,
@@ -214,6 +242,7 @@ export async function POST(request: NextRequest) {
         counterpartyId,
         costCodeId,
         costType,
+        stageRecordId,
         createdById: session.user.id,
         folderId,
         status,

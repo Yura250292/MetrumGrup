@@ -38,6 +38,7 @@ export async function listProjectsWithAggregations(
   // building logic below already has a chat-participants fallback path.
   const baseInclude = {
     client: { select: { name: true } },
+    clientCounterparty: { select: { name: true } },
     manager: { select: { id: true, name: true, avatar: true, role: true } },
     conversation: {
       include: {
@@ -170,7 +171,13 @@ export async function listProjectsWithAggregations(
         startDate: project.startDate,
         updatedAt: project.updatedAt,
         isTestProject: project.isTestProject,
-        client: { name: project.client.name },
+        client: {
+          name:
+            project.clientName ??
+            project.clientCounterparty?.name ??
+            project.client?.name ??
+            "—",
+        },
         manager: project.manager,
         team: Array.from(teamMap.values()),
         commentCount: commentCountMap.get(project.id) ?? 0,
