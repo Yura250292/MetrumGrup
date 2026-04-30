@@ -3,7 +3,17 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Edit3, Eye, EyeOff, Plus, FileDown, ClipboardPaste } from "lucide-react";
+import {
+  Edit3,
+  Eye,
+  EyeOff,
+  Plus,
+  FileDown,
+  ClipboardPaste,
+  Save,
+  Loader2,
+  CheckCircle2,
+} from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { StageTable, type StageRow, type StageInlineUpdate } from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
@@ -16,12 +26,14 @@ type StagesSectionProps = {
   projectId: string;
   initialStages: StageRow[];
   candidates: ResponsibleCandidate[];
+  isTestProject: boolean;
 };
 
 export function StagesSection({
   projectId,
   initialStages,
   candidates,
+  isTestProject,
 }: StagesSectionProps) {
   const router = useRouter();
   const [stages, setStages] = useState<StageRow[]>(initialStages);
@@ -29,6 +41,8 @@ export function StagesSection({
   const [showHidden, setShowHidden] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [savingFinance, setSavingFinance] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [, startTransition] = useTransition();
 
   // Якщо SSR-стартові пропси оновилися (router.refresh() після PATCH в drawer-і),
@@ -209,6 +223,29 @@ export function StagesSection({
     [projectId, selectedStageId],
   );
 
+  const saveToFinance = useCallback(async () => {
+    if (isTestProject) return;
+    setSavingFinance(true);
+    try {
+      const res = await fetch(
+        `/api/admin/projects/${projectId}/sync-stages-finance`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Помилка збереження");
+      }
+      setSavedAt(new Date());
+      await refetch();
+    } catch (err) {
+      console.error("[stages-section] save to finance failed", err);
+      alert(err instanceof Error ? err.message : "Помилка збереження");
+    } finally {
+      setSavingFinance(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, isTestProject]);
+
   const selected = stages.find((s) => s.id === selectedStageId) ?? null;
 
   return (
@@ -216,10 +253,29 @@ export function StagesSection({
       className="rounded-2xl p-5"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
-          Етапи виконання
-        </h2>
+      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <h2 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
+            Етапи виконання
+          </h2>
+          {isTestProject && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+              style={{ backgroundColor: T.warningSoft, color: T.warning }}
+            >
+              Тестовий проєкт
+            </span>
+          )}
+          {savedAt && !isTestProject && (
+            <span
+              className="flex items-center gap-1 text-[11px]"
+              style={{ color: T.success }}
+            >
+              <CheckCircle2 size={11} />
+              Збережено {savedAt.toLocaleTimeString("uk-UA").slice(0, 5)}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -253,6 +309,28 @@ export function StagesSection({
           >
             <Edit3 size={12} /> Редагувати
           </Link>
+          <button
+            type="button"
+            onClick={saveToFinance}
+            disabled={savingFinance || isTestProject}
+            title={
+              isTestProject
+                ? "Тестовий проєкт — синхронізація з фінансуванням вимкнена"
+                : "Зберегти всі обсяги і ціни як STAGE_AUTO записи у фінансуванні"
+            }
+            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
+            style={{
+              backgroundColor: T.success,
+              color: "white",
+            }}
+          >
+            {savingFinance ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <Save size={12} />
+            )}
+            Зберегти у фінансування
+          </button>
         </div>
       </div>
 

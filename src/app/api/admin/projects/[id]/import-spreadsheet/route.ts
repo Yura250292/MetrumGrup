@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { parseSpreadsheetTsv, type ParsedNode } from "@/lib/projects/parse-spreadsheet";
-import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 
 export const runtime = "nodejs";
@@ -71,7 +70,6 @@ export async function POST(
   }
 
   const created: { tempId: string; id: string }[] = [];
-  const writeSet = new Set<string>();
 
   await prisma.$transaction(async (tx) => {
     // sortOrder для root-стейджів — продовжуємо існуючий.
@@ -136,18 +134,12 @@ export async function POST(
       tempToReal.set(node.tempId, real.id);
       created.push({ tempId: node.tempId, id: real.id });
       childCounters.set(parentRealId, nextSibling + 1);
-      // Sync STAGE_AUTO лише для items з числами.
-      if (node.planVolume !== null) writeSet.add(real.id);
     }
   });
 
-  for (const stageId of writeSet) {
-    try {
-      await syncStageAutoFinanceEntries(stageId, session.user.id);
-    } catch (err) {
-      console.error("[import-spreadsheet] STAGE_AUTO sync failed:", err);
-    }
-  }
+  // STAGE_AUTO у фінансування синхронізується окремою кнопкою «Зберегти у
+  // фінансування» в інтерфейсі — щоб користувач міг переглянути імпорт
+  // перед тим як числа потечуть у /financing.
 
   await recalcCurrentStage(projectId, { syncBudget: true, userId: session.user.id });
 

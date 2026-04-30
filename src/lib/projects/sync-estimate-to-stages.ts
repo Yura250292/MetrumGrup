@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
-import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 
 export type EstimateToStagesResult = {
@@ -209,15 +208,9 @@ export async function syncEstimateToStages(
     { timeout: 30_000 },
   );
 
-  // STAGE_AUTO sync — поза транзакцією, бо upsert FinanceEntry має свої
-  // findFirst-операції; running у трансакції довжелезної серії — overkill.
-  for (const stageId of result.writeSet) {
-    try {
-      await syncStageAutoFinanceEntries(stageId, userId);
-    } catch (err) {
-      console.error("[syncEstimateToStages] STAGE_AUTO sync failed:", err);
-    }
-  }
+  // STAGE_AUTO sync у фінансування НЕ викликаємо — це робить окремий
+  // endpoint /sync-stages-finance, що тригериться кнопкою користувача.
+  // Імпорт лише наповнює дерево стейджів, фінансування зачекає на «Save».
 
   await recalcCurrentStage(projectId, { syncBudget: true, userId });
 

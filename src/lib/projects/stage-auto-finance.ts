@@ -31,10 +31,12 @@ export async function syncStageAutoFinanceEntries(
       factVolume: true,
       factUnitPrice: true,
       factClientUnitPrice: true,
-      project: { select: { firmId: true } },
+      project: { select: { firmId: true, isTestProject: true } },
     },
   });
   if (!stage) return;
+  // Тестові проєкти не повинні засмічувати реальне фінансування.
+  if (stage.project.isTestProject) return;
 
   const label = stageDisplayName({
     stage: stage.stage,

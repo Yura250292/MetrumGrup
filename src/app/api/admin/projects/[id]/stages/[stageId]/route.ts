@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
-import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import type { StageStatus } from "@prisma/client";
 
@@ -85,7 +84,9 @@ export async function PATCH(
         ? body.customName.trim()
         : null;
   }
-  let needsAutoSync = false;
+  // Поля редагуються миттєво у самому стейджі, але STAGE_AUTO у фінансування
+  // НЕ синхронізуємо тут — це робить окремий endpoint /sync-stages-finance,
+  // що викликається явно кнопкою «Зберегти у фінансування».
   for (const field of ["unit", "factUnit"] as const) {
     if (body[field] !== undefined) {
       const v = body[field];
@@ -114,7 +115,6 @@ export async function PATCH(
         }
         data[field] = n;
       }
-      needsAutoSync = true;
     }
   }
 
@@ -139,13 +139,10 @@ export async function PATCH(
     });
   }
 
-  if (needsAutoSync) {
-    try {
-      await syncStageAutoFinanceEntries(stageId, session.user.id);
-    } catch (err) {
-      console.error("[stages PATCH] syncStageAutoFinanceEntries failed:", err);
-    }
-  }
+  // STAGE_AUTO sync у фінансування винесено в окремий endpoint
+  // /sync-stages-finance, що викликається кнопкою «Зберегти у фінансування».
+  // Це дає користувачу контроль і дозволяє чорновики (volume/price) поза
+  // фінансуванням до моменту коли він підтвердить готовність.
 
   await auditLog({
     userId: session.user.id,

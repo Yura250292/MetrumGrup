@@ -283,6 +283,7 @@ export default async function AdminV2ProjectDetailPage({
           clientCounterparty: project.clientCounterparty,
           client: project.client,
           manager: project.manager,
+          isTestProject: project.isTestProject,
           stages: project.stages.map((s) => {
             const agg = stageAggregates.get(s.id);
             return {

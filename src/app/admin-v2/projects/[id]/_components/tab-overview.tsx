@@ -31,6 +31,7 @@ export type ProjectDetailData = {
   manager: { id: string; name: string; email: string; phone: string | null } | null;
   stages: StageRow[];
   responsibleCandidates: ResponsibleCandidate[];
+  isTestProject: boolean;
   payments: {
     id: string;
     amount: number;
@@ -85,6 +86,7 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
         projectId={project.id}
         initialStages={project.stages}
         candidates={project.responsibleCandidates}
+        isTestProject={project.isTestProject}
       />
 
       {project.description && (
