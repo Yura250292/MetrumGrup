@@ -40,6 +40,9 @@ type StageData = {
   endDate: string;
   responsibleUserId: string | null;
   allocatedBudget: number | null;
+  // Read-only агрегації з FinanceEntry (включно з підетапами): тільки EXPENSE.
+  planExpense: number;
+  factExpense: number;
   children: StageData[];
 };
 
@@ -57,6 +60,8 @@ type FlatStageDTO = {
   responsibleUserId: string | null;
   allocatedBudget: string | number | null;
   sortOrder: number;
+  planExpense?: number;
+  factExpense?: number;
 };
 
 type Candidate = { id: string; name: string };
@@ -104,6 +109,8 @@ function buildTree(flat: FlatStageDTO[]): StageData[] {
         f.allocatedBudget === null || f.allocatedBudget === undefined
           ? null
           : Number(f.allocatedBudget),
+      planExpense: Number(f.planExpense ?? 0),
+      factExpense: Number(f.factExpense ?? 0),
       children: [],
     });
   }
@@ -133,6 +140,8 @@ function defaultStages(): StageData[] {
     endDate: "",
     responsibleUserId: null,
     allocatedBudget: null,
+    planExpense: 0,
+    factExpense: 0,
     children: [],
   }));
 }
@@ -236,6 +245,8 @@ export default function AdminV2ProjectStagesPage({
           endDate: "",
           responsibleUserId: null,
           allocatedBudget: null,
+          planExpense: 0,
+          factExpense: 0,
           children: [],
         },
       ]),
@@ -257,6 +268,8 @@ export default function AdminV2ProjectStagesPage({
         endDate: "",
         responsibleUserId: null,
         allocatedBudget: null,
+        planExpense: 0,
+        factExpense: 0,
         children: [],
       },
     ]);
@@ -705,6 +718,8 @@ function StageNode({
         </div>
       )}
 
+      <ExpenseTwoCol plan={stage.planExpense} fact={stage.factExpense} />
+
       <Field label="Примітки">
         <textarea
           value={stage.notes}
@@ -815,5 +830,57 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+function ExpenseTwoCol({ plan, fact }: { plan: number; fact: number }) {
+  // Колір "Факт": >план — червоний (перевитрата), ≤план і >0 — зелений,
+  // план=0 — нейтральний.
+  const overrun = plan > 0 && fact > plan;
+  const onTrack = plan > 0 && fact > 0 && fact <= plan;
+  const factColor = overrun ? T.danger : onTrack ? T.success : T.textMuted;
+  const factBg = overrun ? T.dangerSoft : onTrack ? T.successSoft : T.panelSoft;
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      <div
+        className="flex flex-col gap-1 rounded-xl px-3 py-2.5"
+        style={{
+          backgroundColor: T.panelSoft,
+          border: `1px solid ${T.borderStrong}`,
+        }}
+      >
+        <span
+          className="text-[10px] font-bold tracking-wider"
+          style={{ color: T.textMuted }}
+        >
+          ПЛАН (ВИТРАТИ)
+        </span>
+        <span className="text-sm font-bold" style={{ color: T.accentPrimary }}>
+          {plan > 0 ? formatMoney(plan) : "—"}
+        </span>
+      </div>
+      <div
+        className="flex flex-col gap-1 rounded-xl px-3 py-2.5"
+        style={{
+          backgroundColor: factBg,
+          border: `1px solid ${overrun ? T.danger : onTrack ? T.success : T.borderStrong}`,
+        }}
+      >
+        <span
+          className="text-[10px] font-bold tracking-wider"
+          style={{ color: T.textMuted }}
+        >
+          ФАКТ (ВИТРАТИ)
+          {plan > 0 && fact > 0 && (
+            <span className="ml-1 font-normal normal-case tracking-normal">
+              · {Math.round((fact / plan) * 100)}% плану
+            </span>
+          )}
+        </span>
+        <span className="text-sm font-bold" style={{ color: factColor }}>
+          {fact > 0 ? formatMoney(fact) : "—"}
+        </span>
+      </div>
+    </div>
   );
 }

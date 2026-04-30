@@ -17,7 +17,7 @@ type EntryPayload = {
   description: string | null;
   category: string;
   subcategory: string | null;
-  type: "INCOME" | "EXPENSE";
+  type: "EXPENSE"; // AI-сінк дивиться лише витрати
   kind: "PLAN" | "FACT";
   amount: number;
   counterparty: string | null;
@@ -45,9 +45,39 @@ type Props = {
 };
 
 /**
- * AI-синхронізація FinanceEntry проекту з його етапами. Показує запропонований
- * mapping від AI з можливістю редагування, потім apply через POST.
+ * AI-синхронізація ВИТРАТ проекту з етапами. Доходи свідомо ігноруються —
+ * етап позначає скільки заплановано/витрачено на роботу, а не приходи від
+ * клієнта. AI створює нові етапи/підетапи (до 3 рівнів) з назв робіт.
  */
+function depthOfNewStage(
+  tempId: string,
+  byId: Map<string, ProposedStage>,
+  cache: Map<string, number>,
+  visited = new Set<string>(),
+): number {
+  if (cache.has(tempId)) return cache.get(tempId)!;
+  if (visited.has(tempId)) return 0; // cycle safety
+  visited.add(tempId);
+  const ns = byId.get(tempId);
+  if (!ns || !ns.parentTempId || !byId.has(ns.parentTempId)) {
+    cache.set(tempId, 0);
+    return 0;
+  }
+  const d = 1 + depthOfNewStage(ns.parentTempId, byId, cache, visited);
+  cache.set(tempId, d);
+  return d;
+}
+
+function sortNewStagesParentFirst(stages: ProposedStage[]): ProposedStage[] {
+  const byId = new Map(stages.map((s) => [s.tempId, s]));
+  const cache = new Map<string, number>();
+  return [...stages].sort((a, b) => {
+    const da = depthOfNewStage(a.tempId, byId, cache);
+    const db = depthOfNewStage(b.tempId, byId, cache);
+    return da - db;
+  });
+}
+
 export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props) {
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
@@ -155,7 +185,7 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
               className="text-[15px] font-bold"
               style={{ color: T.textPrimary }}
             >
-              AI-синхронізація фінансування з етапами
+              AI-синхронізація витрат з етапами
             </h2>
           </div>
           <button
@@ -174,9 +204,9 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
             <div className="flex flex-col items-center gap-3 py-8 text-center">
               <Sparkles size={32} style={{ color: T.violet }} />
               <p className="text-[13px]" style={{ color: T.textSecondary }}>
-                AI проаналізує усі фінансові записи проекту і запропонує до якого
-                етапу віднести кожен. Ти зможеш переглянути і скоригувати перед
-                застосуванням.
+                AI проаналізує усі ВИТРАТИ (PLAN та FACT) проекту і запропонує до
+                якого етапу віднести кожну, створюючи нові етапи з назв робіт за
+                потреби (до 3 рівнів вкладеності). Доходи синхронізація не чіпає.
               </p>
               <button
                 type="button"
@@ -234,58 +264,64 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
               >
                 AI запропонував нові етапи
               </span>
-              {newStages.map((ns) => {
-                const accepted = acceptedNew.has(ns.tempId);
-                const isChild = !!ns.parentTempId;
-                return (
-                  <div
-                    key={ns.tempId}
-                    className="flex items-center gap-2 rounded-xl px-3 py-2"
-                    style={{
-                      backgroundColor: accepted ? T.violet + "15" : T.panelElevated,
-                      border: `1px solid ${accepted ? T.violet + "55" : T.borderSoft}`,
-                      marginLeft: isChild ? 24 : 0,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={accepted}
-                      onChange={(ev) => {
-                        const next = new Set(acceptedNew);
-                        if (ev.target.checked) next.add(ns.tempId);
-                        else next.delete(ns.tempId);
-                        setAcceptedNew(next);
-                      }}
-                    />
-                    <input
-                      value={ns.name}
-                      onChange={(ev) => {
-                        setNewStages((prev) =>
-                          prev.map((s) =>
-                            s.tempId === ns.tempId ? { ...s, name: ev.target.value } : s,
-                          ),
-                        );
-                      }}
-                      className="flex-1 rounded-lg px-2.5 py-1.5 text-[12px] outline-none"
+              {(() => {
+                const byId = new Map(newStages.map((s) => [s.tempId, s]));
+                const cache = new Map<string, number>();
+                return sortNewStagesParentFirst(newStages).map((ns) => {
+                  const accepted = acceptedNew.has(ns.tempId);
+                  const depth = depthOfNewStage(ns.tempId, byId, cache);
+                  const depthLabel =
+                    depth === 0 ? "етап" : depth === 1 ? "підетап" : "під-підетап";
+                  return (
+                    <div
+                      key={ns.tempId}
+                      className="flex items-center gap-2 rounded-xl px-3 py-2"
                       style={{
-                        backgroundColor: T.panelSoft,
-                        border: `1px solid ${T.borderStrong}`,
-                        color: T.textPrimary,
+                        backgroundColor: accepted ? T.violet + "15" : T.panelElevated,
+                        border: `1px solid ${accepted ? T.violet + "55" : T.borderSoft}`,
+                        marginLeft: depth * 24,
                       }}
-                    />
-                    <span
-                      className="text-[10px]"
-                      style={{ color: T.textMuted }}
                     >
-                      {isChild ? "підетап · " : ""}
-                      {ns.entryIds.length} запис(ів)
-                    </span>
-                  </div>
-                );
-              })}
+                      <input
+                        type="checkbox"
+                        checked={accepted}
+                        onChange={(ev) => {
+                          const next = new Set(acceptedNew);
+                          if (ev.target.checked) next.add(ns.tempId);
+                          else next.delete(ns.tempId);
+                          setAcceptedNew(next);
+                        }}
+                      />
+                      <input
+                        value={ns.name}
+                        onChange={(ev) => {
+                          setNewStages((prev) =>
+                            prev.map((s) =>
+                              s.tempId === ns.tempId ? { ...s, name: ev.target.value } : s,
+                            ),
+                          );
+                        }}
+                        className="flex-1 rounded-lg px-2.5 py-1.5 text-[12px] outline-none"
+                        style={{
+                          backgroundColor: T.panelSoft,
+                          border: `1px solid ${T.borderStrong}`,
+                          color: T.textPrimary,
+                        }}
+                      />
+                      <span
+                        className="text-[10px] whitespace-nowrap"
+                        style={{ color: T.textMuted }}
+                      >
+                        {depthLabel} · {ns.entryIds.length} зап.
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
               <p className="text-[10.5px]" style={{ color: T.textMuted }}>
                 Зніми галочку щоб не створювати запропонований етап. Записи що
-                були до нього прив'язані стануть без етапу.
+                були до нього прив&apos;язані стануть без етапу. Якщо знімаєш батьківський
+                етап — підетапи теж не створяться.
               </p>
             </div>
           )}
@@ -310,10 +346,10 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
                           <span
                             className="text-[10px] font-bold uppercase tracking-wide"
                             style={{
-                              color: e.type === "INCOME" ? T.emerald : T.danger,
+                              color: e.kind === "PLAN" ? T.accentPrimary : T.warning,
                             }}
                           >
-                            {e.kind} · {e.type === "INCOME" ? "Дохід" : "Витрата"}
+                            {e.kind === "PLAN" ? "ПЛАН" : "ФАКТ"} · Витрата
                           </span>
                           <span
                             className="text-[13px] font-semibold truncate"
@@ -365,15 +401,22 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
                         )}
                         {newStages.length > 0 && (
                           <optgroup label="Нові (AI пропонує)">
-                            {newStages.map((ns) => (
-                              <option
-                                key={ns.tempId}
-                                value={ns.tempId}
-                                disabled={!acceptedNew.has(ns.tempId)}
-                              >
-                                {ns.parentTempId ? "  └ " : ""}+ {ns.name}
-                              </option>
-                            ))}
+                            {(() => {
+                              const byId = new Map(newStages.map((s) => [s.tempId, s]));
+                              const cache = new Map<string, number>();
+                              return sortNewStagesParentFirst(newStages).map((ns) => {
+                                const d = depthOfNewStage(ns.tempId, byId, cache);
+                                return (
+                                  <option
+                                    key={ns.tempId}
+                                    value={ns.tempId}
+                                    disabled={!acceptedNew.has(ns.tempId)}
+                                  >
+                                    {"  ".repeat(d)}{d > 0 ? "└ " : ""}+ {ns.name}
+                                  </option>
+                                );
+                              });
+                            })()}
                           </optgroup>
                         )}
                       </select>
@@ -393,7 +436,7 @@ export function SyncFinanceModal({ projectId, open, onClose, onApplied }: Props)
           >
             <span className="text-[11px]" style={{ color: T.textMuted }}>
               {entries.length} записів. Етапи отримають allocatedBudget = сума
-              PLAN-EXPENSE прив'язаних записів.
+              PLAN-EXPENSE прив&apos;язаних записів.
             </span>
             <div className="flex items-center gap-2">
               <button

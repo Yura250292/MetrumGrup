@@ -44,6 +44,63 @@ export async function GET(
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
   }
 
+  // Per-stage aggregations of EXPENSE finance entries (PLAN та FACT) включно з
+  // підетапами. Користувачу показуємо в управлінні етапами як read-only колонки
+  // біля allocatedBudget — щоб одразу бачити що уже заплановано/витрачено.
+  const stageRows = project.stages;
+  if (stageRows.length > 0) {
+    const grouped = await prisma.financeEntry.groupBy({
+      by: ["stageRecordId", "kind"],
+      where: {
+        projectId: id,
+        type: "EXPENSE",
+        isArchived: false,
+        stageRecordId: { not: null },
+      },
+      _sum: { amount: true },
+    });
+    const selfPlan = new Map<string, number>();
+    const selfFact = new Map<string, number>();
+    for (const row of grouped) {
+      if (!row.stageRecordId) continue;
+      const sum = Number(row._sum.amount ?? 0);
+      if (row.kind === "PLAN") selfPlan.set(row.stageRecordId, sum);
+      else if (row.kind === "FACT") selfFact.set(row.stageRecordId, sum);
+    }
+    const childrenOf = new Map<string, string[]>();
+    for (const s of stageRows) {
+      if (s.parentStageId) {
+        const arr = childrenOf.get(s.parentStageId) ?? [];
+        arr.push(s.id);
+        childrenOf.set(s.parentStageId, arr);
+      }
+    }
+    const descendants = (rootId: string): string[] => {
+      const out: string[] = [];
+      const stack = [rootId];
+      while (stack.length > 0) {
+        const sid = stack.pop()!;
+        out.push(sid);
+        const kids = childrenOf.get(sid);
+        if (kids) stack.push(...kids);
+      }
+      return out;
+    };
+    const augmented = stageRows.map((s) => {
+      let plan = 0;
+      let fact = 0;
+      for (const sid of descendants(s.id)) {
+        plan += selfPlan.get(sid) ?? 0;
+        fact += selfFact.get(sid) ?? 0;
+      }
+      return { ...s, planExpense: plan, factExpense: fact };
+    });
+    return NextResponse.json({
+      data: { ...project, stages: augmented },
+      responsibleCandidates,
+    });
+  }
+
   return NextResponse.json({ data: project, responsibleCandidates });
 }
 
