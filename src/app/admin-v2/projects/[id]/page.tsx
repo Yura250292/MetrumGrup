@@ -19,6 +19,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
 import { SyncFinanceButton } from "./_components/sync-finance-button";
 import { LinkFinanceFolderButton } from "./_components/link-finance-folder-button";
+import { FinanceDiagnosticsCard } from "./_components/finance-diagnostics-card";
 import { TestProjectToggle } from "./_components/test-project-toggle";
 import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
@@ -237,6 +238,9 @@ export default async function AdminV2ProjectDetailPage({
         </ProjectHeroItem>
       </header>
       </ProjectHeroAnimator>
+
+      {/* Finance diagnostics — показується лише коли є невідповідності */}
+      <FinanceDiagnosticsCard projectId={project.id} />
 
       {/* Tab nav + content (Client) */}
       <ProjectTabs

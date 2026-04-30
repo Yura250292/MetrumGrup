@@ -120,6 +120,30 @@ export async function POST(request: NextRequest) {
         ? body.folderId.trim()
         : null;
 
+    // Якщо запис створюється у mirror-папці (або у її піддереві) і projectId
+    // не передано — auto-stamp projectId з mirror. Уникаємо ситуації коли
+    // запис з'являється у Фінансуванні, але "не видно" на сторінці проекту.
+    let resolvedProjectId = projectId;
+    if (folderId && !resolvedProjectId) {
+      let cursor: string | null = folderId;
+      while (cursor) {
+        const f: {
+          id: string;
+          parentId: string | null;
+          mirroredFromProjectId: string | null;
+        } | null = await prisma.folder.findUnique({
+          where: { id: cursor },
+          select: { id: true, parentId: true, mirroredFromProjectId: true },
+        });
+        if (!f) break;
+        if (f.mirroredFromProjectId) {
+          resolvedProjectId = f.mirroredFromProjectId;
+          break;
+        }
+        cursor = f.parentId;
+      }
+    }
+
     const validStatuses = ["DRAFT", "PENDING", "APPROVED", "PAID"] as const;
     const status =
       typeof body.status === "string" && validStatuses.includes(body.status as (typeof validStatuses)[number])
@@ -179,7 +203,7 @@ export async function POST(request: NextRequest) {
         amount: amountNum,
         currency: typeof body.currency === "string" && body.currency ? body.currency : "UAH",
         occurredAt,
-        projectId,
+        projectId: resolvedProjectId,
         firmId: entryFirmId,
         category,
         subcategory:
