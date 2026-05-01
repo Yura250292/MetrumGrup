@@ -1,17 +1,18 @@
 import { prisma } from "@/lib/prisma";
 import { stageDisplayName } from "@/lib/constants";
-import { recomputeProjectPlanSource, markProjectProjected } from "@/lib/projects/plan-source";
+import { recomputeProjectPlanSource, markProjectPublished } from "@/lib/projects/plan-source";
 import { categorizeStage } from "@/lib/projects/stage-finance-categorization";
 
 /**
- * Синхронізує авто-FinanceEntry для одного етапу:
- *   PLAN EXPENSE  = planVolume × planUnitPrice         (собівартість)
- *   FACT EXPENSE  = factVolume × factUnitPrice
- *   PLAN INCOME   = planVolume × planClientUnitPrice   (надходження від замовника)
- *   FACT INCOME   = factVolume × factClientUnitPrice
+ * Синхронізує авто-FinanceEntry для одного етапу. Phase 3: читає published*
+ * поля, не draft. Drafts редагуються вільно у stage tree, а фінансовий журнал
+ * оновлюється лише при явному publish (publish-stages-finance або
+ * conditional auto-publish при первинному імпорті AI-кошторису).
  *
- * Запис ідентифікується унікальним ключем (stageRecordId, kind, type, source=STAGE_AUTO).
- * Існує — оновлюємо `amount`. Не існує і добуток > 0 — створюємо. Добуток ≤ 0 → видаляємо.
+ *   PLAN EXPENSE  = publishedPlanVolume × publishedPlanUnitPrice
+ *   FACT EXPENSE  = publishedFactVolume × publishedFactUnitPrice
+ *   PLAN INCOME   = publishedPlanVolume × publishedPlanClientUnitPrice
+ *   FACT INCOME   = publishedFactVolume × publishedFactClientUnitPrice
  *
  * MANUAL записи (наприклад «довезення» з quick-add у drawer) мають source=MANUAL і
  * НЕ зачіпаються — це окремий потік discrete покупок поверх плану.
@@ -29,12 +30,12 @@ export async function syncStageAutoFinanceEntries(
       customName: true,
       startDate: true,
       createdAt: true,
-      planVolume: true,
-      planUnitPrice: true,
-      planClientUnitPrice: true,
-      factVolume: true,
-      factUnitPrice: true,
-      factClientUnitPrice: true,
+      publishedPlanVolume: true,
+      publishedPlanUnitPrice: true,
+      publishedPlanClientUnitPrice: true,
+      publishedFactVolume: true,
+      publishedFactUnitPrice: true,
+      publishedFactClientUnitPrice: true,
       project: {
         select: {
           firmId: true,
@@ -80,36 +81,36 @@ export async function syncStageAutoFinanceEntries(
       ...baseArgs,
       kind: "PLAN",
       type: "EXPENSE",
-      volume: numOrNull(stage.planVolume),
-      unitPrice: numOrNull(stage.planUnitPrice),
+      volume: numOrNull(stage.publishedPlanVolume),
+      unitPrice: numOrNull(stage.publishedPlanUnitPrice),
     }),
     upsertOne({
       ...baseArgs,
       kind: "FACT",
       type: "EXPENSE",
-      volume: numOrNull(stage.factVolume),
-      unitPrice: numOrNull(stage.factUnitPrice),
+      volume: numOrNull(stage.publishedFactVolume),
+      unitPrice: numOrNull(stage.publishedFactUnitPrice),
     }),
     upsertOne({
       ...baseArgs,
       kind: "PLAN",
       type: "INCOME",
-      volume: numOrNull(stage.planVolume),
-      unitPrice: numOrNull(stage.planClientUnitPrice),
+      volume: numOrNull(stage.publishedPlanVolume),
+      unitPrice: numOrNull(stage.publishedPlanClientUnitPrice),
     }),
     upsertOne({
       ...baseArgs,
       kind: "FACT",
       type: "INCOME",
-      volume: numOrNull(stage.factVolume),
-      unitPrice: numOrNull(stage.factClientUnitPrice),
+      volume: numOrNull(stage.publishedFactVolume),
+      unitPrice: numOrNull(stage.publishedFactClientUnitPrice),
     }),
   ]);
 
   // Phase 2: тримаємо canonical-source прапор у синхронному стані.
   await recomputeProjectPlanSource(stage.projectId);
-  // Phase 6.3: bump projection metadata для audit-дашборда.
-  await markProjectProjected(stage.projectId, actorUserId);
+  // Phase 3: bump publication metadata для audit-дашборда.
+  await markProjectPublished(stage.projectId, actorUserId);
 }
 
 function numOrNull(v: unknown): number | null {

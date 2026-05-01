@@ -6,20 +6,23 @@ type Tx = Prisma.TransactionClient | typeof prisma;
 /**
  * Перераховує і зберігає `Project.planSource` на основі поточного стану БД.
  *
+ * Phase 3: правила базуються на ОПУБЛІКОВАНОМУ шарі, а не draft.
+ * Draft-зміни не мають перекидати проєкт у "STAGE" — інакше до publish-у
+ * у summary почнуть фігурувати незатверджені цифри.
+ *
  * Правила (за пріоритетом):
- *   STAGE    — у проєкту є хоч один ProjectStageRecord з `planVolume > 0`
- *              (canonical layer — дерево етапів несе план навіть до того,
- *              як зʼявляться derived STAGE_AUTO FinanceEntry).
+ *   STAGE    — у проєкту є хоч один ProjectStageRecord з
+ *              `publishedPlanVolume > 0` (canonical опублікований шар).
  *   ESTIMATE — інакше, якщо є legacy ESTIMATE_AUTO PLAN/EXPENSE записи.
- *   NONE     — інакше.
+ *   NONE     — інакше (drafts є але ще не опубліковані / нема нічого).
  *
  * Викликається після:
- *   - syncEstimateToStages (фінальний перерахунок);
- *   - syncStageAutoFinanceEntries (стейдж змінився → канонічний план міг
- *     перейти з NONE на STAGE або навпаки);
- *   - bulk sync-stages-finance.
+ *   - syncEstimateToStages (фінальний перерахунок; conditional auto-publish
+ *     для першого імпорту);
+ *   - syncStageAutoFinanceEntries (після publish);
+ *   - bulk publish-stages-finance.
  *
- * Ідемпотентна, не кидає помилок навіть якщо проєкт зник між викликами.
+ * Ідемпотентна, не кидає помилок якщо проєкт зник між викликами.
  */
 export async function recomputeProjectPlanSource(
   projectId: string,
@@ -28,7 +31,7 @@ export async function recomputeProjectPlanSource(
   const stagesWithPlan = await tx.projectStageRecord.count({
     where: {
       projectId,
-      planVolume: { gt: 0 },
+      publishedPlanVolume: { gt: 0 },
     },
   });
   if (stagesWithPlan > 0) {
@@ -67,15 +70,15 @@ async function persist(
 }
 
 /**
- * Phase 3 prep / Phase 6.3 audit:
- * фіксує що для проєкту щойно відбулася materialize-подія (sync derived layer).
- * Викликати у всіх «publish»-точках: estimate→stages, stage-auto-finance,
- * sync-stages-finance bulk, syncProjectBudgetEntry, legacy estimate-sync.
+ * Phase 3: фіксує що для проєкту щойно відбувся publish (атомарне копіювання
+ * draft → published з подальшим перерахунком STAGE_AUTO FinanceEntry).
+ * Викликати з: publish-stages-finance, syncStageAutoFinanceEntries,
+ * conditional auto-publish у syncEstimateToStages, legacy estimate-sync.
  *
- * Bump-ить projectionVersion і фіксує час та автора.
+ * Bump-ить publicationVersion і фіксує час та автора.
  * Тестові проєкти і неіснуючі projectId — no-op.
  */
-export async function markProjectProjected(
+export async function markProjectPublished(
   projectId: string,
   userId: string | null,
   tx: Tx = prisma,
@@ -88,9 +91,9 @@ export async function markProjectProjected(
   await tx.project.update({
     where: { id: projectId },
     data: {
-      lastProjectedAt: new Date(),
-      lastProjectedById: userId,
-      projectionVersion: { increment: 1 },
+      lastPublishedAt: new Date(),
+      lastPublishedById: userId,
+      publicationVersion: { increment: 1 },
     },
   });
 }

@@ -12,15 +12,15 @@ import { canRunFinanceDiagnostics } from "@/lib/financing/rbac";
 export const runtime = "nodejs";
 
 /**
- * Phase 6.3 audit dashboard:
- *   - recent — N останніх projection-евентів (за lastProjectedAt desc).
- *   - dirty  — проєкти, у яких хоч один stage updatedAt > lastProjectedAt
- *              (canonical layer змінився, але derived проєкція ще не оновлена).
- *   - neverProjected — projects з planSource != NONE, але lastProjectedAt IS NULL.
+ * Phase 3 audit dashboard:
+ *   - recent — N останніх publish-евентів (за lastPublishedAt desc).
+ *   - dirty  — проєкти, у яких хоч один stage має draft-поле ≠ published*
+ *              (є непублікована зміна).
+ *   - neverProjected — projects з planSource != NONE, але lastPublishedAt IS NULL.
  *
- * Test-проєкти виключені (вони все одно не materializeʼаться).
+ * Test-проєкти виключені.
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
@@ -35,67 +35,83 @@ export async function GET(request: NextRequest) {
     ...firmScope,
   };
 
-  const [recent, allWithProjection, neverProjected] = await Promise.all([
+  // Phase 3: dirty-критерій — наявність хоч одного стейджу проєкту з draft ≠ published.
+  // IS DISTINCT FROM коректно обробляє NULL (NULL IS DISTINCT FROM 5 = true,
+  // NULL IS DISTINCT FROM NULL = false), на відміну від =/!=.
+  const dirtyProjectIdsRaw = await prisma.$queryRaw<{ projectId: string }[]>`
+    SELECT DISTINCT "projectId"
+    FROM "project_stage_records"
+    WHERE
+         "planVolume"          IS DISTINCT FROM "publishedPlanVolume"
+      OR "factVolume"          IS DISTINCT FROM "publishedFactVolume"
+      OR "planUnitPrice"       IS DISTINCT FROM "publishedPlanUnitPrice"
+      OR "factUnitPrice"       IS DISTINCT FROM "publishedFactUnitPrice"
+      OR "planClientUnitPrice" IS DISTINCT FROM "publishedPlanClientUnitPrice"
+      OR "factClientUnitPrice" IS DISTINCT FROM "publishedFactClientUnitPrice"
+  `;
+  const dirtyProjectIds = dirtyProjectIdsRaw.map((r) => r.projectId);
+
+  const [recent, dirtyProjects, neverProjected] = await Promise.all([
     prisma.project.findMany({
-      where: { ...baseWhere, lastProjectedAt: { not: null } },
+      where: { ...baseWhere, lastPublishedAt: { not: null } },
       select: {
         id: true,
         title: true,
         planSource: true,
-        lastProjectedAt: true,
-        projectionVersion: true,
-        lastProjectedById: true,
+        lastPublishedAt: true,
+        publicationVersion: true,
+        lastPublishedById: true,
       },
-      orderBy: { lastProjectedAt: "desc" },
+      orderBy: { lastPublishedAt: "desc" },
       take: 25,
     }),
-    // Для dirty-перевірки беремо проєкти зі стейджами; max(stage.updatedAt)
-    // порівнюємо з project.lastProjectedAt у JS (Prisma не має $expr).
-    prisma.project.findMany({
-      where: {
-        ...baseWhere,
-        planSource: { in: ["ESTIMATE", "STAGE"] },
-      },
-      select: {
-        id: true,
-        title: true,
-        lastProjectedAt: true,
-        projectionVersion: true,
-        stages: {
-          select: { updatedAt: true },
-          orderBy: { updatedAt: "desc" },
-          take: 1,
-        },
-      },
-    }),
+    dirtyProjectIds.length > 0
+      ? prisma.project.findMany({
+          where: { ...baseWhere, id: { in: dirtyProjectIds } },
+          select: {
+            id: true,
+            title: true,
+            lastPublishedAt: true,
+            publicationVersion: true,
+            // Беремо max stage.updatedAt для сортування dirty-списку — точна
+            // фільтрація dirty-стейджів тут не потрібна, її робить SQL вище.
+            stages: {
+              select: { updatedAt: true },
+              orderBy: { updatedAt: "desc" },
+              take: 1,
+            },
+          },
+        })
+      : Promise.resolve([] as Array<{
+          id: string;
+          title: string;
+          lastPublishedAt: Date | null;
+          publicationVersion: number;
+          stages: { updatedAt: Date }[];
+        }>),
     prisma.project.count({
       where: {
         ...baseWhere,
         planSource: { in: ["ESTIMATE", "STAGE"] },
-        lastProjectedAt: null,
+        lastPublishedAt: null,
       },
     }),
   ]);
 
-  const dirty = allWithProjection
-    .filter((p) => {
-      const lastStageEdit = p.stages[0]?.updatedAt;
-      if (!lastStageEdit || !p.lastProjectedAt) return false;
-      return lastStageEdit > p.lastProjectedAt;
-    })
+  const dirty = dirtyProjects
     .map((p) => ({
       id: p.id,
       title: p.title,
-      lastProjectedAt: p.lastProjectedAt,
-      projectionVersion: p.projectionVersion,
-      lastStageEditAt: p.stages[0]!.updatedAt,
+      lastPublishedAt: p.lastPublishedAt,
+      publicationVersion: p.publicationVersion,
+      lastStageEditAt: p.stages[0]?.updatedAt ?? p.lastPublishedAt ?? new Date(0),
     }))
     .sort((a, b) => b.lastStageEditAt.getTime() - a.lastStageEditAt.getTime())
     .slice(0, 25);
 
   // Resolve "last projected by" names in one batch.
   const userIds = Array.from(
-    new Set(recent.map((p) => p.lastProjectedById).filter((id): id is string => !!id)),
+    new Set(recent.map((p) => p.lastPublishedById).filter((id): id is string => !!id)),
   );
   const users = userIds.length
     ? await prisma.user.findMany({
@@ -111,10 +127,10 @@ export async function GET(request: NextRequest) {
       id: p.id,
       title: p.title,
       planSource: p.planSource,
-      lastProjectedAt: p.lastProjectedAt,
-      projectionVersion: p.projectionVersion,
-      lastProjectedBy: p.lastProjectedById
-        ? (userNameById.get(p.lastProjectedById) ?? null)
+      lastPublishedAt: p.lastPublishedAt,
+      publicationVersion: p.publicationVersion,
+      lastPublishedBy: p.lastPublishedById
+        ? (userNameById.get(p.lastPublishedById) ?? null)
         : null,
     })),
     dirty,

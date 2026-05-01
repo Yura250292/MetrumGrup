@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
 import { mapItemToFinanceCategory } from "./estimate-mapping";
-import { recomputeProjectPlanSource, markProjectProjected } from "@/lib/projects/plan-source";
+import { recomputeProjectPlanSource, markProjectPublished } from "@/lib/projects/plan-source";
 
 export type SyncResult = {
   estimateId: string;
@@ -243,8 +243,8 @@ export async function syncEstimateToFinancing(
   // Phase 2: legacy ESTIMATE_AUTO write-path теж тримає canonical-source
   // прапор у синхронному стані (для проєктів без stage tree planSource=ESTIMATE).
   await recomputeProjectPlanSource(est.projectId);
-  // Phase 6.3: bump projection metadata.
-  await markProjectProjected(est.projectId, userId);
+  // Phase 3: bump publication metadata.
+  await markProjectPublished(est.projectId, userId);
 
   await auditLog({
     userId,

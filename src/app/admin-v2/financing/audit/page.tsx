@@ -18,16 +18,16 @@ type RecentItem = {
   id: string;
   title: string;
   planSource: "NONE" | "ESTIMATE" | "STAGE";
-  lastProjectedAt: string;
-  projectionVersion: number;
-  lastProjectedBy: string | null;
+  lastPublishedAt: string;
+  publicationVersion: number;
+  lastPublishedBy: string | null;
 };
 
 type DirtyItem = {
   id: string;
   title: string;
-  lastProjectedAt: string;
-  projectionVersion: number;
+  lastPublishedAt: string;
+  publicationVersion: number;
   lastStageEditAt: string;
 };
 
@@ -156,19 +156,19 @@ export default function FinanceAuditPage() {
             <div className="mb-6 grid grid-cols-1 gap-3 md:grid-cols-3">
               <SummaryCard
                 icon={<AlertTriangle className="h-5 w-5" style={{ color: T.warning }} />}
-                label="Dirty (stage > projection)"
+                label="Dirty (draft ≠ published)"
                 value={data.totalDirty}
                 accent={data.totalDirty > 0 ? T.warning : T.textMuted}
               />
               <SummaryCard
                 icon={<GitBranch className="h-5 w-5" style={{ color: T.danger }} />}
-                label="Never projected (planSource ≠ NONE)"
+                label="Never published (planSource ≠ NONE)"
                 value={data.neverProjected}
                 accent={data.neverProjected > 0 ? T.danger : T.textMuted}
               />
               <SummaryCard
                 icon={<CheckCircle2 className="h-5 w-5" style={{ color: T.success }} />}
-                label="Останніх projection-евентів"
+                label="Останніх publish-евентів"
                 value={data.recent.length}
                 accent={T.indigo}
               />
@@ -176,8 +176,8 @@ export default function FinanceAuditPage() {
 
             <Section
               title="Dirty projects"
-              subtitle="Stage tree змінено після останнього publish — варто запустити «Зберегти у фінансування»"
-              empty="Усі проєкції актуальні."
+              subtitle="У stage tree є непубліковані зміни (draft ≠ published) — натисни «Опублікувати у фінансування» на сторінці проєкту"
+              empty="Усі проєкти опубліковано."
               items={data.dirty}
               renderItem={(d) => (
                 <div className="flex items-center justify-between gap-4 py-3">
@@ -190,7 +190,7 @@ export default function FinanceAuditPage() {
                       {d.title}
                     </Link>
                     <div className="mt-0.5 text-xs" style={{ color: T.textSecondary }}>
-                      Stage редаговано {fmtRelative(d.lastStageEditAt)} • last projection {fmtRelative(d.lastProjectedAt)} (v{d.projectionVersion})
+                      Stage редаговано {fmtRelative(d.lastStageEditAt)} • last publication {fmtRelative(d.lastPublishedAt)} (v{d.publicationVersion})
                     </div>
                   </div>
                   <span
@@ -204,9 +204,9 @@ export default function FinanceAuditPage() {
             />
 
             <Section
-              title="Останні projection-евенти"
-              subtitle="25 проєктів за lastProjectedAt desc"
-              empty="Жодних projection-евентів ще не зафіксовано."
+              title="Останні publish-евенти"
+              subtitle="25 проєктів за lastPublishedAt desc"
+              empty="Жодних publish-евентів ще не зафіксовано."
               items={data.recent}
               renderItem={(r) => (
                 <div className="flex items-center justify-between gap-4 py-3">
@@ -220,9 +220,9 @@ export default function FinanceAuditPage() {
                     </Link>
                     <div className="mt-0.5 flex items-center gap-2 text-xs" style={{ color: T.textSecondary }}>
                       <Clock className="h-3 w-3" />
-                      {fmtRelative(r.lastProjectedAt)}
-                      {r.lastProjectedBy && <span>· {r.lastProjectedBy}</span>}
-                      <span>· v{r.projectionVersion}</span>
+                      {fmtRelative(r.lastPublishedAt)}
+                      {r.lastPublishedBy && <span>· {r.lastPublishedBy}</span>}
+                      <span>· v{r.publicationVersion}</span>
                     </div>
                   </div>
                   <span

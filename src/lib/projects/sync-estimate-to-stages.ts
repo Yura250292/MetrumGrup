@@ -1,7 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
-import { recomputeProjectPlanSource, markProjectProjected } from "@/lib/projects/plan-source";
+import { recomputeProjectPlanSource } from "@/lib/projects/plan-source";
+import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
+import { copyDraftToPublishedForStages } from "@/lib/projects/publish-stages";
 
 export type EstimateToStagesResult = {
   estimateId: string;
@@ -209,17 +211,30 @@ export async function syncEstimateToStages(
     { timeout: 30_000 },
   );
 
-  // STAGE_AUTO sync у фінансування НЕ викликаємо — це робить окремий
-  // endpoint /sync-stages-finance, що тригериться кнопкою користувача.
-  // Імпорт лише наповнює дерево стейджів, фінансування зачекає на «Save».
-
   await recalcCurrentStage(projectId, { syncBudget: true, userId });
 
   // Phase 2: після того як stage tree наповнено з кошторису, він стає
   // canonical layer для плану — оновлюємо прапор Project.planSource.
   await recomputeProjectPlanSource(projectId);
-  // Phase 6.3: bump projection metadata.
-  await markProjectProjected(projectId, userId);
+
+  // Phase 3: conditional auto-publish.
+  // Якщо проєкт ніколи не публікувався (publicationVersion=0) — це первинний
+  // імпорт кошторису, нема чого ламати. Копіюємо draft→published і одразу
+  // синхронізуємо STAGE_AUTO FinanceEntry, щоб користувач отримав звіти
+  // без зайвого кліку.
+  // Якщо publicationVersion>0 — проєкт уже мав публікацію. Re-sync кошторису
+  // лишає зміни у drafts, користувач вирішить коли публікувати.
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { publicationVersion: true },
+  });
+  const writtenStageIds = Array.from(result.writeSet);
+  if (project && project.publicationVersion === 0 && writtenStageIds.length > 0) {
+    await copyDraftToPublishedForStages(writtenStageIds);
+    for (const stageId of writtenStageIds) {
+      await syncStageAutoFinanceEntries(stageId, userId);
+    }
+  }
 
   await auditLog({
     userId,

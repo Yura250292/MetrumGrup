@@ -127,13 +127,14 @@ model Project {
   /// Канонічне джерело плану (Phase 2). Auto-перераховується через
   /// recomputeProjectPlanSource() після estimate sync і stage sync.
   planSource             ProjectPlanSource       @default(NONE)
-  /// Projection metadata (Phase 3 prep / Phase 6.3 audit dashboard).
-  /// Bump-аться через markProjectProjected() на кожному materialize-шляху
-  /// (estimate→stages, stage-auto, project-budget, legacy estimate-sync).
-  /// `dirty` рахується як stages.updatedAt > lastProjectedAt.
-  lastProjectedAt        DateTime?
-  lastProjectedById      String?
-  projectionVersion      Int                     @default(0)
+  /// Publication metadata (Phase 3: draft/published model).
+  /// Bump-аться через markProjectPublished() при publish-stages-finance, при
+  /// estimate→stages з auto-publish (publicationVersion=0), і у legacy paths.
+  /// `dirty` тепер рахується як stage.* ≠ stage.published* (див. dirty-stages
+  /// endpoint), а не stages.updatedAt > lastPublishedAt.
+  lastPublishedAt        DateTime?
+  lastPublishedById      String?
+  publicationVersion     Int                     @default(0)
   startDate              DateTime?
   expectedEndDate        DateTime?
   actualEndDate          DateTime?
@@ -221,52 +222,61 @@ model ProjectMember {
 }
 
 model ProjectStageRecord {
-  id                String               @id @default(cuid())
-  stage             ProjectStage?
-  customName        String?
-  isHidden          Boolean              @default(false)
-  status            StageStatus          @default(PENDING)
-  progress          Int                  @default(0)
-  notes             String?
-  startDate         DateTime?
-  endDate           DateTime?
-  sortOrder         Int                  @default(0)
-  allocatedBudget   Decimal?             @db.Decimal(12, 2)
+  id                           String               @id @default(cuid())
+  stage                        ProjectStage?
+  customName                   String?
+  isHidden                     Boolean              @default(false)
+  status                       StageStatus          @default(PENDING)
+  progress                     Int                  @default(0)
+  notes                        String?
+  startDate                    DateTime?
+  endDate                      DateTime?
+  sortOrder                    Int                  @default(0)
+  allocatedBudget              Decimal?             @db.Decimal(12, 2)
   // Об'єм / одиниці виміру / ціна за одиницю для табличної картки
   // «Етапи виконання» (План vs Факт). `unit` — план-одиниця, `factUnit` —
   // факт (зазвичай те саме, але дозволяємо відмінність для довезень
   // у іншій тарі). planVolume × planUnitPrice = планові витрати —
   // upsert-аться у FinanceEntry (source=STAGE_AUTO) при PATCH.
-  unit              String?
-  factUnit          String?
-  planVolume        Decimal?             @db.Decimal(12, 3)
-  factVolume        Decimal?             @db.Decimal(12, 3)
+  unit                         String?
+  factUnit                     String?
+  planVolume                   Decimal?             @db.Decimal(12, 3)
+  factVolume                   Decimal?             @db.Decimal(12, 3)
   // Cost (собівартість/закупка) → формує EXPENSE auto-records.
-  planUnitPrice     Decimal?             @db.Decimal(12, 2)
-  factUnitPrice     Decimal?             @db.Decimal(12, 2)
+  planUnitPrice                Decimal?             @db.Decimal(12, 2)
+  factUnitPrice                Decimal?             @db.Decimal(12, 2)
   // Ціна для замовника → формує INCOME auto-records. Маржа = (client − unit) × volume.
-  planClientUnitPrice Decimal?           @db.Decimal(12, 2)
-  factClientUnitPrice Decimal?           @db.Decimal(12, 2)
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  projectId         String
-  project           Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentStageId     String?
-  parent            ProjectStageRecord?  @relation("StageTree", fields: [parentStageId], references: [id], onDelete: Cascade)
-  children          ProjectStageRecord[] @relation("StageTree")
-  responsibleUserId String?
-  responsibleUser   User?                @relation("ProjectStageResponsible", fields: [responsibleUserId], references: [id])
+  planClientUnitPrice          Decimal?             @db.Decimal(12, 2)
+  factClientUnitPrice          Decimal?             @db.Decimal(12, 2)
+  // Phase 3: published-копія, яку зчитує syncStageAutoFinanceEntries і будь-які
+  // фінансові звіти. Поки draft (не-published) поля редагуються вільно,
+  // фінанси бачать лише останній publish. Backfill = поточні значення.
+  publishedPlanVolume          Decimal?             @db.Decimal(12, 3)
+  publishedFactVolume          Decimal?             @db.Decimal(12, 3)
+  publishedPlanUnitPrice       Decimal?             @db.Decimal(12, 2)
+  publishedFactUnitPrice       Decimal?             @db.Decimal(12, 2)
+  publishedPlanClientUnitPrice Decimal?             @db.Decimal(12, 2)
+  publishedFactClientUnitPrice Decimal?             @db.Decimal(12, 2)
+  createdAt                    DateTime             @default(now())
+  updatedAt                    DateTime             @updatedAt
+  projectId                    String
+  project                      Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentStageId                String?
+  parent                       ProjectStageRecord?  @relation("StageTree", fields: [parentStageId], references: [id], onDelete: Cascade)
+  children                     ProjectStageRecord[] @relation("StageTree")
+  responsibleUserId            String?
+  responsibleUser              User?                @relation("ProjectStageResponsible", fields: [responsibleUserId], references: [id])
   // Free-text fallback — коли відповідальний не зареєстрований у системі
   // (підрядник, прізвище зі слів). Заповнюється лише якщо responsibleUserId=null.
-  responsibleName   String?
-  tasks             Task[]
-  financeEntries    FinanceEntry[]       @relation("StageFinanceEntries")
+  responsibleName              String?
+  tasks                        Task[]
+  financeEntries               FinanceEntry[]       @relation("StageFinanceEntries")
   // Прив'язка до кошторису — для re-sync (estimate items/sections → stage tree).
   // SetNull на видалення секції/item, щоб ручні факт-зміни не пропали.
-  sourceEstimateSectionId String?
-  sourceEstimateSection   EstimateSection? @relation("EstimateSectionToStage", fields: [sourceEstimateSectionId], references: [id], onDelete: SetNull)
-  sourceEstimateItemId    String?
-  sourceEstimateItem      EstimateItem?    @relation("EstimateItemToStage", fields: [sourceEstimateItemId], references: [id], onDelete: SetNull)
+  sourceEstimateSectionId      String?
+  sourceEstimateSection        EstimateSection?     @relation("EstimateSectionToStage", fields: [sourceEstimateSectionId], references: [id], onDelete: SetNull)
+  sourceEstimateItemId         String?
+  sourceEstimateItem           EstimateItem?        @relation("EstimateItemToStage", fields: [sourceEstimateItemId], references: [id], onDelete: SetNull)
 
   @@index([projectId, stage])
   @@index([projectId, parentStageId])
@@ -396,29 +406,29 @@ model EstimateRefineHistory {
 }
 
 model EstimateSection {
-  id          String               @id @default(cuid())
-  title       String
-  sortOrder   Int                  @default(0)
-  totalAmount Decimal              @default(0) @map("total_amount") @db.Decimal(12, 2)
-  estimateId  String
-  items       EstimateItem[]
-  estimate    Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  id           String               @id @default(cuid())
+  title        String
+  sortOrder    Int                  @default(0)
+  totalAmount  Decimal              @default(0) @map("total_amount") @db.Decimal(12, 2)
+  estimateId   String
+  items        EstimateItem[]
+  estimate     Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
   stageRecords ProjectStageRecord[] @relation("EstimateSectionToStage")
 
   @@map("estimate_sections")
 }
 
 model EstimateItem {
-  id                  String           @id @default(cuid())
+  id                  String               @id @default(cuid())
   description         String
   unit                String
-  quantity            Decimal          @db.Decimal(10, 3)
-  unitPrice           Decimal          @db.Decimal(10, 2)
-  laborRate           Decimal          @default(0) @db.Decimal(10, 2)
-  laborHours          Decimal          @default(0) @db.Decimal(10, 2)
-  amount              Decimal          @db.Decimal(12, 2)
-  isManualOverride    Boolean          @default(false)
-  sortOrder           Int              @default(0)
+  quantity            Decimal              @db.Decimal(10, 3)
+  unitPrice           Decimal              @db.Decimal(10, 2)
+  laborRate           Decimal              @default(0) @db.Decimal(10, 2)
+  laborHours          Decimal              @default(0) @db.Decimal(10, 2)
+  amount              Decimal              @db.Decimal(12, 2)
+  isManualOverride    Boolean              @default(false)
+  sortOrder           Int                  @default(0)
   // Quantity engine metadata (Phase 3.2).
   // itemType: 'material' | 'labor' | 'equipment' | 'composite' | null (legacy).
   itemType            String?
@@ -432,23 +442,23 @@ model EstimateItem {
   // priceSourceType: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual' | null.
   priceSourceType     String?
   // confidence: 0..1, weighted by source priority.
-  confidence          Decimal?         @db.Decimal(4, 3)
+  confidence          Decimal?             @db.Decimal(4, 3)
   estimateId          String
   sectionId           String?
   materialId          String?
-  customMarginPercent Decimal?         @db.Decimal(5, 2)
-  marginAmount        Decimal          @default(0) @db.Decimal(12, 2)
-  priceWithMargin     Decimal          @default(0) @db.Decimal(12, 2)
-  useCustomMargin     Boolean          @default(false)
+  customMarginPercent Decimal?             @db.Decimal(5, 2)
+  marginAmount        Decimal              @default(0) @db.Decimal(12, 2)
+  priceWithMargin     Decimal              @default(0) @db.Decimal(12, 2)
+  useCustomMargin     Boolean              @default(false)
   // Cost-code axis (Phase 1.A1). Nullable; backfill from itemType + section title.
   costCodeId          String?
   costType            CostType?
-  estimate            Estimate         @relation(fields: [estimateId], references: [id], onDelete: Cascade)
-  material            Material?        @relation(fields: [materialId], references: [id])
-  section             EstimateSection? @relation(fields: [sectionId], references: [id])
-  costCode            CostCode?        @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  estimate            Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  material            Material?            @relation(fields: [materialId], references: [id])
+  section             EstimateSection?     @relation(fields: [sectionId], references: [id])
+  costCode            CostCode?            @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
   financeEntries      FinanceEntry[]
-  kb2Items            KB2FormItem[]    @relation("EstimateItemKB2")
+  kb2Items            KB2FormItem[]        @relation("EstimateItemKB2")
   stageRecords        ProjectStageRecord[] @relation("EstimateItemToStage")
 
   @@index([engineKey])
@@ -564,23 +574,23 @@ model FinanceEntry {
   // або вручну. Дозволяє рахувати allocatedBudget по етапу як SUM плану цього stageRecordId.
   stageRecordId String?
 
-  project        Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  firm           Firm?                    @relation(fields: [firmId], references: [id])
-  stageRecord    ProjectStageRecord?      @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
-  createdBy      User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
-  updatedBy      User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
-  approvedBy     User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
-  folder         Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  estimate       Estimate?                @relation("EstimateFinanceEntries", fields: [estimateId], references: [id], onDelete: SetNull)
-  estimateItem        EstimateItem?       @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
-  costCode            CostCode?           @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
-  counterpartyEntity  Counterparty?       @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
-  attachments    FinanceEntryAttachment[]
-  receiptScan    ReceiptScan?             @relation("FinanceEntryReceiptScan")
-  priceSnapshots MaterialPriceSnapshot[]
-  timesheets     Timesheet[]              @relation("FinanceEntryTimesheet")
-  kb2Form        KB2Form?                 @relation("FinanceEntryKB2")
-  retentionRecord RetentionRecord?        @relation("FinanceEntryRetention")
+  project            Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  firm               Firm?                    @relation(fields: [firmId], references: [id])
+  stageRecord        ProjectStageRecord?      @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
+  createdBy          User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
+  updatedBy          User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
+  approvedBy         User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
+  folder             Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  estimate           Estimate?                @relation("EstimateFinanceEntries", fields: [estimateId], references: [id], onDelete: SetNull)
+  estimateItem       EstimateItem?            @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
+  costCode           CostCode?                @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  counterpartyEntity Counterparty?            @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  attachments        FinanceEntryAttachment[]
+  receiptScan        ReceiptScan?             @relation("FinanceEntryReceiptScan")
+  priceSnapshots     MaterialPriceSnapshot[]
+  timesheets         Timesheet[]              @relation("FinanceEntryTimesheet")
+  kb2Form            KB2Form?                 @relation("FinanceEntryKB2")
+  retentionRecord    RetentionRecord?         @relation("FinanceEntryRetention")
 
   @@index([projectId, occurredAt])
   @@index([type, occurredAt])
@@ -1469,21 +1479,21 @@ model UserFirmAccess {
 }
 
 model Folder {
-  id                     String       @id @default(cuid())
-  domain                 FolderDomain
-  name                   String
-  color                  String?
-  parentId               String?
-  sortOrder              Int          @default(0)
-  isSystem               Boolean      @default(false)
-  slug                   String?
-  mirroredFromId         String?      @unique
-  mirroredFromProjectId  String?      @unique
+  id                    String       @id @default(cuid())
+  domain                FolderDomain
+  name                  String
+  color                 String?
+  parentId              String?
+  sortOrder             Int          @default(0)
+  isSystem              Boolean      @default(false)
+  slug                  String?
+  mirroredFromId        String?      @unique
+  mirroredFromProjectId String?      @unique
   /// Фірма-власник папки (Metrum Group / Studio). Використовується щоб
   /// дерева папок не leak-али між фірмами.
-  firmId                 String?
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  firmId                String?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
 
   parent              Folder?                  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
   children            Folder[]                 @relation("FolderTree")
@@ -2320,7 +2330,7 @@ model Meeting {
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   folderId String?
-  folder   Folder?  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  folder   Folder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
   createdById String
   createdBy   User   @relation("MeetingCreator", fields: [createdById], references: [id])
@@ -2366,30 +2376,30 @@ enum EmployeeSalaryType {
 }
 
 model Employee {
-  id            String             @id @default(cuid())
-  fullName      String
-  phone         String?
-  email         String?
-  position      String?
-  birthDate     DateTime?
-  residence     String?
-  maritalStatus String?
-  hiredAt       DateTime?
-  terminatedAt  DateTime?
-  salaryType    EmployeeSalaryType @default(MONTHLY)
-  salaryAmount  Decimal?           @db.Decimal(12, 2)
+  id               String             @id @default(cuid())
+  fullName         String
+  phone            String?
+  email            String?
+  position         String?
+  birthDate        DateTime?
+  residence        String?
+  maritalStatus    String?
+  hiredAt          DateTime?
+  terminatedAt     DateTime?
+  salaryType       EmployeeSalaryType @default(MONTHLY)
+  salaryAmount     Decimal?           @db.Decimal(12, 2)
   /// Burdened multiplier for project labor cost (oklad × this = full burden).
   /// Used when payroll allocates labor to cost-codes; payouts still use salaryAmount.
-  burdenMultiplier Decimal?         @db.Decimal(5, 3)
-  currency      String             @default("UAH")
-  extraData     String?
-  notes         String?
-  isActive      Boolean            @default(true)
-  userId        String?            @unique
-  user          User?              @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
-  timesheets    Timesheet[]        @relation("EmployeeTimesheets")
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  burdenMultiplier Decimal?           @db.Decimal(5, 3)
+  currency         String             @default("UAH")
+  extraData        String?
+  notes            String?
+  isActive         Boolean            @default(true)
+  userId           String?            @unique
+  user             User?              @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
+  timesheets       Timesheet[]        @relation("EmployeeTimesheets")
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@index([isActive])
   @@index([fullName])
@@ -2401,37 +2411,37 @@ model Employee {
 /// Used by payroll/run (mode=timesheet) to allocate labor cost to projects
 /// and cost-codes; the resulting FinanceEntry is linked back via financeEntryId.
 model Timesheet {
-  id           String    @id @default(cuid())
+  id             String    @id @default(cuid())
   /// Internal staff (Employee model). Mutually exclusive with workerId.
-  employeeId   String?
+  employeeId     String?
   /// Subcontractor / crew member (Worker model). Mutually exclusive with employeeId.
-  workerId     String?
-  projectId    String
-  costCodeId   String?
-  costType     CostType?
-  date         DateTime  @db.Date
-  hours        Decimal   @db.Decimal(5, 2)
-  hourlyRate   Decimal   @db.Decimal(10, 2)
+  workerId       String?
+  projectId      String
+  costCodeId     String?
+  costType       CostType?
+  date           DateTime  @db.Date
+  hours          Decimal   @db.Decimal(5, 2)
+  hourlyRate     Decimal   @db.Decimal(10, 2)
   /// Denormalised hours × hourlyRate; kept for fast aggregation. Refresh on update.
-  amount       Decimal   @db.Decimal(12, 2)
-  notes        String?
-  approvedAt   DateTime?
-  approvedById String?
+  amount         Decimal   @db.Decimal(12, 2)
+  notes          String?
+  approvedAt     DateTime?
+  approvedById   String?
   /// Set when payroll/run rolls this row into a FinanceEntry. SetNull when entry is deleted.
-  financeEntryId String? @unique
+  financeEntryId String?   @unique
 
   createdById String
   updatedById String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  employee    Employee?     @relation("EmployeeTimesheets", fields: [employeeId], references: [id], onDelete: Cascade)
-  worker      Worker?       @relation("WorkerTimesheets", fields: [workerId], references: [id], onDelete: Cascade)
-  project     Project       @relation("ProjectTimesheets", fields: [projectId], references: [id], onDelete: Cascade)
-  costCode    CostCode?     @relation("CostCodeTimesheets", fields: [costCodeId], references: [id], onDelete: SetNull)
-  approvedBy  User?         @relation("TimesheetApprover", fields: [approvedById], references: [id], onDelete: SetNull)
-  createdBy   User          @relation("TimesheetCreator", fields: [createdById], references: [id])
-  updatedBy   User?         @relation("TimesheetUpdater", fields: [updatedById], references: [id])
+  employee     Employee?     @relation("EmployeeTimesheets", fields: [employeeId], references: [id], onDelete: Cascade)
+  worker       Worker?       @relation("WorkerTimesheets", fields: [workerId], references: [id], onDelete: Cascade)
+  project      Project       @relation("ProjectTimesheets", fields: [projectId], references: [id], onDelete: Cascade)
+  costCode     CostCode?     @relation("CostCodeTimesheets", fields: [costCodeId], references: [id], onDelete: SetNull)
+  approvedBy   User?         @relation("TimesheetApprover", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdBy    User          @relation("TimesheetCreator", fields: [createdById], references: [id])
+  updatedBy    User?         @relation("TimesheetUpdater", fields: [updatedById], references: [id])
   financeEntry FinanceEntry? @relation("FinanceEntryTimesheet", fields: [financeEntryId], references: [id], onDelete: SetNull)
 
   @@index([projectId, date])
@@ -2470,13 +2480,13 @@ model Counterparty {
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
 
-  firm               Firm?                    @relation(fields: [firmId], references: [id])
-  financeEntries     FinanceEntry[]
-  financeTemplates   FinanceExpenseTemplate[]
-  kb2Forms           KB2Form[]                @relation("KB2FormCounterparty")
-  kb3Forms           KB3Form[]                @relation("KB3FormCounterparty")
+  firm             Firm?                    @relation(fields: [firmId], references: [id])
+  financeEntries   FinanceEntry[]
+  financeTemplates FinanceExpenseTemplate[]
+  kb2Forms         KB2Form[]                @relation("KB2FormCounterparty")
+  kb3Forms         KB3Form[]                @relation("KB3FormCounterparty")
   /// Проекти, де цей контрагент виступає клієнтом (Project.clientCounterpartyId).
-  clientProjects     Project[]                @relation("ProjectClientCounterparty")
+  clientProjects   Project[]                @relation("ProjectClientCounterparty")
 
   @@index([isActive])
   @@index([type])
@@ -2510,47 +2520,47 @@ enum RetentionStatus {
 /// Items copied at form creation so retroactive estimate edits don't mutate
 /// historical acts.
 model KB2Form {
-  id              String     @id @default(cuid())
-  projectId       String
-  estimateId      String?
+  id               String    @id @default(cuid())
+  projectId        String
+  estimateId       String?
   /// Customer (we bill them) or contractor (they bill us). For most KB-2в it's the project's client.
-  counterpartyId  String?
-  number          String     @unique
-  periodFrom      DateTime
-  periodTo        DateTime
+  counterpartyId   String?
+  number           String    @unique
+  periodFrom       DateTime
+  periodTo         DateTime
   /// Σ items.amount before retention.
-  totalAmount     Decimal    @db.Decimal(14, 2) @default(0)
+  totalAmount      Decimal   @default(0) @db.Decimal(14, 2)
   /// 0–100. Default project.retentionPercent, overridable per form.
-  retentionPercent Decimal   @db.Decimal(5, 2) @default(0)
-  retentionAmount  Decimal   @db.Decimal(14, 2) @default(0)
+  retentionPercent Decimal   @default(0) @db.Decimal(5, 2)
+  retentionAmount  Decimal   @default(0) @db.Decimal(14, 2)
   /// = totalAmount − retentionAmount.
-  netPayable       Decimal   @db.Decimal(14, 2) @default(0)
-  status          KB2Status  @default(DRAFT)
-  notes           String?
-  pdfR2Key        String?
-  issuedAt        DateTime?
-  signedAt        DateTime?
-  cancelledAt     DateTime?
-  approvedById    String?
+  netPayable       Decimal   @default(0) @db.Decimal(14, 2)
+  status           KB2Status @default(DRAFT)
+  notes            String?
+  pdfR2Key         String?
+  issuedAt         DateTime?
+  signedAt         DateTime?
+  cancelledAt      DateTime?
+  approvedById     String?
   /// FinanceEntry created on SIGNED transition (INCOME PLAN/FACT for net payable).
-  financeEntryId  String?    @unique
+  financeEntryId   String?   @unique
 
   /// Roll-up into a parent KB-3 (period summary). Nullable so KB-2 can stand alone.
-  kb3FormId       String?
+  kb3FormId String?
 
-  createdById     String
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  project         Project        @relation("ProjectKB2Forms", fields: [projectId], references: [id], onDelete: Cascade)
-  estimate        Estimate?      @relation("EstimateKB2Forms", fields: [estimateId], references: [id], onDelete: SetNull)
-  counterparty    Counterparty?  @relation("KB2FormCounterparty", fields: [counterpartyId], references: [id], onDelete: SetNull)
-  financeEntry    FinanceEntry?  @relation("FinanceEntryKB2", fields: [financeEntryId], references: [id], onDelete: SetNull)
-  kb3Form         KB3Form?       @relation("KB3KB2Forms", fields: [kb3FormId], references: [id], onDelete: SetNull)
-  createdBy       User           @relation("KB2FormCreator", fields: [createdById], references: [id])
-  approvedBy      User?          @relation("KB2FormApprover", fields: [approvedById], references: [id])
-  items           KB2FormItem[]
-  retentions      RetentionRecord[]
+  project      Project           @relation("ProjectKB2Forms", fields: [projectId], references: [id], onDelete: Cascade)
+  estimate     Estimate?         @relation("EstimateKB2Forms", fields: [estimateId], references: [id], onDelete: SetNull)
+  counterparty Counterparty?     @relation("KB2FormCounterparty", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  financeEntry FinanceEntry?     @relation("FinanceEntryKB2", fields: [financeEntryId], references: [id], onDelete: SetNull)
+  kb3Form      KB3Form?          @relation("KB3KB2Forms", fields: [kb3FormId], references: [id], onDelete: SetNull)
+  createdBy    User              @relation("KB2FormCreator", fields: [createdById], references: [id])
+  approvedBy   User?             @relation("KB2FormApprover", fields: [approvedById], references: [id])
+  items        KB2FormItem[]
+  retentions   RetentionRecord[]
 
   @@index([projectId, periodTo])
   @@index([counterpartyId])
@@ -2560,28 +2570,28 @@ model KB2Form {
 }
 
 model KB2FormItem {
-  id              String   @id @default(cuid())
-  formId          String
+  id                String    @id @default(cuid())
+  formId            String
   /// Optional traceability back to the source line. SetNull on estimate edit.
-  estimateItemId  String?
+  estimateItemId    String?
   /// Frozen description from estimate at time of form creation.
-  description     String
-  unit            String
+  description       String
+  unit              String
   /// Total qty per estimate (full scope).
-  totalQty        Decimal  @db.Decimal(12, 3)
-  unitPrice       Decimal  @db.Decimal(12, 2)
+  totalQty          Decimal   @db.Decimal(12, 3)
+  unitPrice         Decimal   @db.Decimal(12, 2)
   /// What we're invoicing for in this period (cumulative or delta — operator-defined).
-  completedQty    Decimal  @db.Decimal(12, 3)
-  amount          Decimal  @db.Decimal(14, 2)
+  completedQty      Decimal   @db.Decimal(12, 3)
+  amount            Decimal   @db.Decimal(14, 2)
   /// % completion as of the form (0–100). Calculated client-side; stored for the PDF.
-  completionPercent Decimal? @db.Decimal(5, 2)
-  costCodeId      String?
-  costType        CostType?
-  sortOrder       Int      @default(0)
+  completionPercent Decimal?  @db.Decimal(5, 2)
+  costCodeId        String?
+  costType          CostType?
+  sortOrder         Int       @default(0)
 
-  form            KB2Form        @relation(fields: [formId], references: [id], onDelete: Cascade)
-  estimateItem    EstimateItem?  @relation("EstimateItemKB2", fields: [estimateItemId], references: [id], onDelete: SetNull)
-  costCode        CostCode?      @relation("CostCodeKB2", fields: [costCodeId], references: [id], onDelete: SetNull)
+  form         KB2Form       @relation(fields: [formId], references: [id], onDelete: Cascade)
+  estimateItem EstimateItem? @relation("EstimateItemKB2", fields: [estimateItemId], references: [id], onDelete: SetNull)
+  costCode     CostCode?     @relation("CostCodeKB2", fields: [costCodeId], references: [id], onDelete: SetNull)
 
   @@index([formId, sortOrder])
   @@index([estimateItemId])
@@ -2590,29 +2600,29 @@ model KB2FormItem {
 
 /// КБ-3 — Довідка про вартість виконаних будівельних робіт. Aggregator over KB-2в.
 model KB3Form {
-  id              String     @id @default(cuid())
-  projectId       String
-  counterpartyId  String?
-  number          String     @unique
-  periodFrom      DateTime
-  periodTo        DateTime
-  totalAmount     Decimal    @db.Decimal(14, 2) @default(0)
-  status          KB3Status  @default(DRAFT)
-  notes           String?
-  pdfR2Key        String?
-  issuedAt        DateTime?
-  signedAt        DateTime?
-  approvedById    String?
+  id             String    @id @default(cuid())
+  projectId      String
+  counterpartyId String?
+  number         String    @unique
+  periodFrom     DateTime
+  periodTo       DateTime
+  totalAmount    Decimal   @default(0) @db.Decimal(14, 2)
+  status         KB3Status @default(DRAFT)
+  notes          String?
+  pdfR2Key       String?
+  issuedAt       DateTime?
+  signedAt       DateTime?
+  approvedById   String?
 
-  createdById     String
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  project         Project        @relation("ProjectKB3Forms", fields: [projectId], references: [id], onDelete: Cascade)
-  counterparty    Counterparty?  @relation("KB3FormCounterparty", fields: [counterpartyId], references: [id], onDelete: SetNull)
-  createdBy       User           @relation("KB3FormCreator", fields: [createdById], references: [id])
-  approvedBy      User?          @relation("KB3FormApprover", fields: [approvedById], references: [id])
-  kb2Forms        KB2Form[]      @relation("KB3KB2Forms")
+  project      Project       @relation("ProjectKB3Forms", fields: [projectId], references: [id], onDelete: Cascade)
+  counterparty Counterparty? @relation("KB3FormCounterparty", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  createdBy    User          @relation("KB3FormCreator", fields: [createdById], references: [id])
+  approvedBy   User?         @relation("KB3FormApprover", fields: [approvedById], references: [id])
+  kb2Forms     KB2Form[]     @relation("KB3KB2Forms")
 
   @@index([projectId, periodTo])
   @@index([status])
@@ -2623,21 +2633,21 @@ model KB3Form {
 /// retentionPercent > 0. Released when releaseDate hits or operator marks paid;
 /// release creates a FinanceEntry FACT EXPENSE that closes the obligation.
 model RetentionRecord {
-  id                     String           @id @default(cuid())
+  id                     String          @id @default(cuid())
   kb2FormId              String
-  amount                 Decimal          @db.Decimal(14, 2)
+  amount                 Decimal         @db.Decimal(14, 2)
   /// Default = project end date + 12 months; customisable per form.
   releaseDate            DateTime
   releasedAt             DateTime?
-  releasedFinanceEntryId String?          @unique
-  status                 RetentionStatus  @default(HELD)
+  releasedFinanceEntryId String?         @unique
+  status                 RetentionStatus @default(HELD)
   notes                  String?
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  form                   KB2Form        @relation(fields: [kb2FormId], references: [id], onDelete: Cascade)
-  releasedFinanceEntry   FinanceEntry?  @relation("FinanceEntryRetention", fields: [releasedFinanceEntryId], references: [id], onDelete: SetNull)
+  form                 KB2Form       @relation(fields: [kb2FormId], references: [id], onDelete: Cascade)
+  releasedFinanceEntry FinanceEntry? @relation("FinanceEntryRetention", fields: [releasedFinanceEntryId], references: [id], onDelete: SetNull)
 
   @@index([kb2FormId])
   @@index([status, releaseDate])

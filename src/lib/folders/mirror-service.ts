@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, Folder } from "@prisma/client";
-import { markProjectProjected } from "@/lib/projects/plan-source";
+import { markProjectPublished } from "@/lib/projects/plan-source";
 
 export const FINANCE_PROJECTS_ROOT_SLUG = "mirrored-projects";
 const FINANCE_PROJECTS_ROOT_NAME = "Проєкти";
@@ -749,7 +749,7 @@ export async function syncProjectBudgetEntry(
     });
   }
 
-  // Phase 6.3: bump projection metadata. PROJECT_BUDGET — теж materialize-подія
+  // Phase 3: bump publication metadata. PROJECT_BUDGET — теж materialize-подія
   // (rollup-проєкція з Project.totalBudget у фінансовий журнал).
-  await markProjectProjected(projectId, userId, tx);
+  await markProjectPublished(projectId, userId, tx);
 }

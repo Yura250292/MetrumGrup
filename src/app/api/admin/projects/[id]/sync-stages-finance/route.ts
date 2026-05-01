@@ -4,22 +4,23 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
+import { copyDraftToPublishedForStages } from "@/lib/projects/publish-stages";
 import { canPublishFinance } from "@/lib/financing/rbac";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 /**
- * Bulk-збереження стейджів проєкту у фінансування.
+ * Phase 3 publish endpoint (історична назва sync-stages-finance збережена для
+ * backward-compat з існуючою кнопкою «Зберегти у фінансування»).
  *
- * Викликається кнопкою «Зберегти у фінансування» з overview-табу. Для кожного
- * стейджу з planVolume/planUnitPrice/planClientUnitPrice/factVolume/...
- * створюється або оновлюється STAGE_AUTO FinanceEntry (PLAN/FACT × INCOME/EXPENSE).
- * Якщо обсяг чи ціна обнулені — відповідний автозапис видаляється.
+ * Атомарно копіює draft-поля стейджів у published* і потім синхронізує
+ * STAGE_AUTO FinanceEntry. До цього моменту drafts вільно редагуються у stage
+ * tree, фінансовий журнал лишається на попередньо опублікованому стані —
+ * звіти не показують незатверджені цифри.
  *
- * Тестові проєкти (`isTestProject=true`) НЕ синхронізуються — щоб не
- * засмічувати реальне фінансування демо-цифрами. Endpoint повертає 400 з
- * чітким повідомленням, UI відображає disabled-кнопку з підказкою.
+ * Тестові проєкти (`isTestProject=true`) НЕ публікуються — щоб не
+ * засмічувати реальне фінансування демо-цифрами.
  */
 export async function POST(
   _request: NextRequest,
@@ -58,30 +59,36 @@ export async function POST(
   }
 
   // Беремо всі стейджі (включно з прихованими, бо вони могли мати раніше
-  // створені STAGE_AUTO записи, які треба прибрати при обнулених обсягах).
+  // опубліковані STAGE_AUTO записи, які треба прибрати при обнулених обсягах).
   const stages = await prisma.projectStageRecord.findMany({
     where: { projectId },
     select: { id: true },
   });
+  const stageIds = stages.map((s) => s.id);
+
+  // Phase 3: атомарне копіювання draft → published для всіх стейджів проєкту.
+  // Робиться однією транзакцією до того як починається STAGE_AUTO sync, щоб
+  // не було проміжного стану коли частина стейджів опубліковано, інша ні.
+  await copyDraftToPublishedForStages(stageIds);
 
   let synced = 0;
   let failed = 0;
-  for (const s of stages) {
+  for (const stageId of stageIds) {
     try {
-      await syncStageAutoFinanceEntries(s.id, session.user.id);
+      await syncStageAutoFinanceEntries(stageId, session.user.id);
       synced++;
     } catch (err) {
       failed++;
-      console.error(`[sync-stages-finance] stage ${s.id} failed:`, err);
+      console.error(`[publish-stages-finance] stage ${stageId} failed:`, err);
     }
   }
 
   return NextResponse.json({
     data: {
-      total: stages.length,
-      synced,
+      total: stageIds.length,
+      published: synced,
       failed,
     },
-    message: `Синхронізовано ${synced} етапів${failed ? `, помилок: ${failed}` : ""}`,
+    message: `Опубліковано ${synced} етапів${failed ? `, помилок: ${failed}` : ""}`,
   });
 }

@@ -11,7 +11,6 @@ import {
   FileDown,
   ClipboardPaste,
   Save,
-  Loader2,
   CheckCircle2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -19,6 +18,7 @@ import { StageTable, type StageRow, type StageInlineUpdate } from "./stage-table
 import { StageDetailDrawer } from "./stage-detail-drawer";
 import { ImportEstimateModal } from "./import-estimate-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
+import { PublishFinanceDialog } from "./publish-finance-dialog";
 
 export type ResponsibleCandidate = { id: string; name: string };
 
@@ -41,7 +41,8 @@ export function StagesSection({
   const [showHidden, setShowHidden] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
-  const [savingFinance, setSavingFinance] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const [dirtyStageIds, setDirtyStageIds] = useState<Set<string>>(() => new Set());
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [, startTransition] = useTransition();
 
@@ -237,28 +238,39 @@ export function StagesSection({
     [projectId, selectedStageId],
   );
 
-  const saveToFinance = useCallback(async () => {
-    if (isTestProject) return;
-    setSavingFinance(true);
+  // Phase 3: завантажуємо dirty-список для рендеру dot-маркерів і лічильника
+  // у кнопці «Опублікувати». Refetch після PATCH стейджу і після publish.
+  const refetchDirty = useCallback(async () => {
+    if (isTestProject) {
+      setDirtyStageIds(new Set());
+      return;
+    }
     try {
       const res = await fetch(
-        `/api/admin/projects/${projectId}/sync-stages-finance`,
-        { method: "POST" },
+        `/api/admin/projects/${projectId}/dirty-stages`,
+        { cache: "no-store" },
       );
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? "Помилка збереження");
-      }
-      setSavedAt(new Date());
-      await refetch();
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        data?: { dirty?: Array<{ stageId: string }> };
+      };
+      const ids = new Set((json.data?.dirty ?? []).map((d) => d.stageId));
+      setDirtyStageIds(ids);
     } catch (err) {
-      console.error("[stages-section] save to finance failed", err);
-      alert(err instanceof Error ? err.message : "Помилка збереження");
-    } finally {
-      setSavingFinance(false);
+      console.error("[stages-section] dirty fetch failed", err);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, isTestProject]);
+
+  useEffect(() => {
+    void refetchDirty();
+  }, [refetchDirty, stages]);
+
+  const onPublished = useCallback(() => {
+    setSavedAt(new Date());
+    void refetch();
+    void refetchDirty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refetch, refetchDirty]);
 
   const selected = stages.find((s) => s.id === selectedStageId) ?? null;
 
@@ -325,12 +337,14 @@ export function StagesSection({
           </Link>
           <button
             type="button"
-            onClick={saveToFinance}
-            disabled={savingFinance || isTestProject}
+            onClick={() => setPublishOpen(true)}
+            disabled={isTestProject || dirtyStageIds.size === 0}
             title={
               isTestProject
-                ? "Тестовий проєкт — синхронізація з фінансуванням вимкнена"
-                : "Зберегти всі обсяги і ціни як STAGE_AUTO записи у фінансуванні"
+                ? "Тестовий проєкт — публікація у фінансування вимкнена"
+                : dirtyStageIds.size === 0
+                  ? "Немає непублікованих змін"
+                  : "Опублікувати draft-зміни у фінансовому журналі"
             }
             className="flex items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
             style={{
@@ -338,12 +352,12 @@ export function StagesSection({
               color: "white",
             }}
           >
-            {savingFinance ? (
-              <Loader2 size={12} className="animate-spin" />
-            ) : (
-              <Save size={12} />
-            )}
-            Зберегти у фінансування
+            <Save size={12} />
+            {dirtyStageIds.size > 0
+              ? `Опублікувати ${dirtyStageIds.size} змін${
+                  dirtyStageIds.size === 1 ? "у" : ""
+                }`
+              : "Опублікувати у фінансування"}
           </button>
         </div>
       </div>
@@ -357,6 +371,7 @@ export function StagesSection({
         onDelete={deleteStage}
         candidates={candidates}
         showHidden={showHidden}
+        dirtyStageIds={dirtyStageIds}
       />
 
       <button
@@ -398,6 +413,14 @@ export function StagesSection({
           onImported={refetch}
         />
       )}
+
+      <PublishFinanceDialog
+        projectId={projectId}
+        open={publishOpen}
+        stages={stages}
+        onClose={() => setPublishOpen(false)}
+        onPublished={onPublished}
+      />
     </div>
   );
 }

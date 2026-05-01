@@ -7,4 +7,15 @@ export const prisma = {
     findMany: jest.fn(),
     groupBy: jest.fn(),
   },
+  project: {
+    findUnique: jest.fn(),
+    findMany: jest.fn(),
+    update: jest.fn(),
+  },
+  projectStageRecord: {
+    findMany: jest.fn(),
+  },
+  $executeRaw: jest.fn(),
+  $queryRaw: jest.fn(),
+  $transaction: jest.fn(),
 };

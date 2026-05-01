@@ -74,6 +74,8 @@ type StageTableProps = {
   onDelete: (stageId: string) => Promise<void>;
   candidates: { id: string; name: string }[];
   showHidden?: boolean;
+  /** Phase 3: id-и стейджів з непублікованими змінами (draft ≠ published). */
+  dirtyStageIds?: Set<string>;
 };
 
 const STATUS_STYLE: Record<StageStatus, { bg: string; fg: string; icon: typeof Check }> = {
@@ -181,6 +183,7 @@ export function StageTable({
   onDelete,
   candidates,
   showHidden = false,
+  dirtyStageIds,
 }: StageTableProps) {
   const tree = useMemo(() => {
     const filtered = showHidden ? stages : stages.filter((s) => !s.isHidden);
@@ -397,6 +400,7 @@ export function StageTable({
                     hasChildren={hasChildren}
                     isExpanded={isExpanded}
                     canAddChild={node.depth < 2}
+                    isDirty={dirtyStageIds?.has(node.id) ?? false}
                     onToggleExpand={() => toggleExpand(node.id)}
                     onRename={(v) => onInlineUpdate(node.id, { customName: v })}
                     onAddChild={() => onAddChild(node.id)}
@@ -652,6 +656,7 @@ function NameCell({
   hasChildren,
   isExpanded,
   canAddChild,
+  isDirty,
   onToggleExpand,
   onRename,
   onAddChild,
@@ -661,6 +666,7 @@ function NameCell({
   hasChildren: boolean;
   isExpanded: boolean;
   canAddChild: boolean;
+  isDirty: boolean;
   onToggleExpand: () => void;
   onRename: (newName: string) => Promise<void> | void;
   onAddChild: () => Promise<void> | void;
@@ -671,6 +677,13 @@ function NameCell({
 
   return (
     <div className="group/name flex items-center gap-1.5">
+      {isDirty && (
+        <span
+          title="Непубліковані зміни — натисни «Опублікувати у фінансування»"
+          className="inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full"
+          style={{ backgroundColor: T.warning }}
+        />
+      )}
       {hasChildren ? (
         <button
           type="button"
