@@ -65,6 +65,8 @@ export type StageInlineUpdate = Partial<{
   notes: string | null;
 }>;
 
+export type ViewMode = "all" | "plan" | "fact" | "compare";
+
 type StageTableProps = {
   stages: StageRow[];
   selectedStageId: string | null;
@@ -76,6 +78,8 @@ type StageTableProps = {
   showHidden?: boolean;
   /** Phase 3: id-и стейджів з непублікованими змінами (draft ≠ published). */
   dirtyStageIds?: Set<string>;
+  /** Режим відображення колонок: усі / тільки план / тільки факт / порівняння. */
+  viewMode?: ViewMode;
 };
 
 const STATUS_STYLE: Record<StageStatus, { bg: string; fg: string; icon: typeof Check }> = {
@@ -153,6 +157,19 @@ const DEFAULT_COL_ORDER: ColumnId[] = [
   "result",
 ];
 
+// Compare-режим показує лише ключові метрики, кожну парами План↔Факт + дельта.
+// Без unit/unitPrice/clientPrice — для зведеного порівняння це шум.
+const COMPARE_METRICS: ColumnId[] = ["volume", "expense", "income", "result"];
+
+// Для дельти витрат: додатний знак (факт > план) — це погано (червоний).
+// Для решти метрик: додатний знак — добре (зелений).
+function deltaColor(metric: ColumnId, delta: number): string {
+  if (delta === 0) return T.textMuted;
+  const goodWhenPositive = metric !== "expense";
+  const isGood = goodWhenPositive ? delta > 0 : delta < 0;
+  return isGood ? T.success : T.danger;
+}
+
 const STORAGE_KEYS = {
   plan: "metrum.stage-table.plan-cols",
   fact: "metrum.stage-table.fact-cols",
@@ -184,7 +201,11 @@ export function StageTable({
   candidates,
   showHidden = false,
   dirtyStageIds,
+  viewMode = "all",
 }: StageTableProps) {
+  const showPlan = viewMode === "all" || viewMode === "plan";
+  const showFact = viewMode === "all" || viewMode === "fact";
+  const isCompare = viewMode === "compare";
   const tree = useMemo(() => {
     const filtered = showHidden ? stages : stages.filter((s) => !s.isHidden);
     return buildTree(filtered);
@@ -271,7 +292,7 @@ export function StageTable({
       <table
         className="w-full text-[12px]"
         style={{
-          minWidth: 1900,
+          minWidth: isCompare ? 1500 : 1900,
           borderCollapse: "collapse",
           border: `1px solid ${T.borderSoft}`,
         }}
@@ -287,41 +308,65 @@ export function StageTable({
             <Th width={110} rowSpan={2}>
               Статус
             </Th>
-            <ThGroup colSpan={planOrder.length} bg={T.accentPrimarySoft}>
-              План
-            </ThGroup>
-            <ThGroup colSpan={factOrder.length} bg={T.successSoft}>
-              Факт
-            </ThGroup>
+            {isCompare ? (
+              COMPARE_METRICS.map((metric) => (
+                <ThGroup key={`cmp-${metric}`} colSpan={3} bg={T.panelSoft}>
+                  {COLUMN_LABELS[metric]}
+                </ThGroup>
+              ))
+            ) : (
+              <>
+                {showPlan && (
+                  <ThGroup colSpan={planOrder.length} bg={T.accentPrimarySoft}>
+                    План
+                  </ThGroup>
+                )}
+                {showFact && (
+                  <ThGroup colSpan={factOrder.length} bg={T.successSoft}>
+                    Факт
+                  </ThGroup>
+                )}
+              </>
+            )}
             <Th width={170} rowSpan={2}>
               Коментар
             </Th>
           </tr>
           <tr style={{ backgroundColor: T.panelSoft }}>
-            {planOrder.map((id) => (
-              <DraggableHeader
-                key={`p-${id}`}
-                id={id}
-                group="plan"
-                drag={drag}
-                dragOver={dragOver}
-                setDrag={setDrag}
-                setDragOver={setDragOver}
-                moveColumn={moveColumn}
-              />
-            ))}
-            {factOrder.map((id) => (
-              <DraggableHeader
-                key={`f-${id}`}
-                id={id}
-                group="fact"
-                drag={drag}
-                dragOver={dragOver}
-                setDrag={setDrag}
-                setDragOver={setDragOver}
-                moveColumn={moveColumn}
-              />
-            ))}
+            {isCompare ? (
+              COMPARE_METRICS.map((metric) => (
+                <CompareSubHeaders key={`cmp-sub-${metric}`} />
+              ))
+            ) : (
+              <>
+                {showPlan &&
+                  planOrder.map((id) => (
+                    <DraggableHeader
+                      key={`p-${id}`}
+                      id={id}
+                      group="plan"
+                      drag={drag}
+                      dragOver={dragOver}
+                      setDrag={setDrag}
+                      setDragOver={setDragOver}
+                      moveColumn={moveColumn}
+                    />
+                  ))}
+                {showFact &&
+                  factOrder.map((id) => (
+                    <DraggableHeader
+                      key={`f-${id}`}
+                      id={id}
+                      group="fact"
+                      drag={drag}
+                      dragOver={dragOver}
+                      setDrag={setDrag}
+                      setDragOver={setDragOver}
+                      moveColumn={moveColumn}
+                    />
+                  ))}
+              </>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -447,19 +492,55 @@ export function StageTable({
                   />
                 </Td>
 
-                {/* План — динамічний порядок */}
-                {planOrder.map((id) => (
-                  <BodyCell key={`p-${id}`} id={id}>
-                    {renderPlanCell(id)}
-                  </BodyCell>
-                ))}
-
-                {/* Факт — динамічний порядок */}
-                {factOrder.map((id) => (
-                  <BodyCell key={`f-${id}`} id={id}>
-                    {renderFactCell(id)}
-                  </BodyCell>
-                ))}
+                {isCompare ? (
+                  // Compare-режим: для кожної з 4 метрик — пара План|Факт + Δ.
+                  COMPARE_METRICS.map((metric) => {
+                    const planVal = compareValue(metric, "plan", node, {
+                      planExpense: planExpenseShow,
+                      planIncome: planIncomeShow,
+                      planResult,
+                      factExpense: factExpenseShow,
+                      factIncome: factIncomeShow,
+                      factResult,
+                    });
+                    const factVal = compareValue(metric, "fact", node, {
+                      planExpense: planExpenseShow,
+                      planIncome: planIncomeShow,
+                      planResult,
+                      factExpense: factExpenseShow,
+                      factIncome: factIncomeShow,
+                      factResult,
+                    });
+                    const delta =
+                      planVal === null || factVal === null
+                        ? null
+                        : factVal - planVal;
+                    return (
+                      <BodyCellGroup
+                        key={`cmp-${metric}`}
+                        plan={renderPlanCell(metric)}
+                        fact={renderFactCell(metric)}
+                        delta={delta}
+                        metric={metric}
+                      />
+                    );
+                  })
+                ) : (
+                  <>
+                    {showPlan &&
+                      planOrder.map((id) => (
+                        <BodyCell key={`p-${id}`} id={id}>
+                          {renderPlanCell(id)}
+                        </BodyCell>
+                      ))}
+                    {showFact &&
+                      factOrder.map((id) => (
+                        <BodyCell key={`f-${id}`} id={id}>
+                          {renderFactCell(id)}
+                        </BodyCell>
+                      ))}
+                  </>
+                )}
 
                 {/* Коментар */}
                 <Td>
@@ -572,8 +653,148 @@ function alignFor(id: ColumnId): "left" | "right" | "center" {
   return "right";
 }
 
+const READONLY_COLUMNS = new Set<ColumnId>(["expense", "income", "result"]);
+
 function BodyCell({ id, children }: { id: ColumnId; children: React.ReactNode }) {
-  return <Td align={alignFor(id)}>{children}</Td>;
+  // Readonly-колонки (Витрати / Надход. / Результат) — клік повністю
+  // блокується, щоб не відкривався drawer і не було feel-of-edit, якого тут
+  // немає. Drawer відкривається лише через клік по назві етапу або по
+  // нейтральних частинах рядка (паддинг, відповідальний-cell padding тощо).
+  const readOnly = READONLY_COLUMNS.has(id);
+  return (
+    <Td
+      align={alignFor(id)}
+      onClick={readOnly ? (e) => e.stopPropagation() : undefined}
+    >
+      {children}
+    </Td>
+  );
+}
+
+// ---------- Compare-режим: підзаголовки і трійка клітинок ----------
+
+function CompareSubHeaders() {
+  return (
+    <>
+      <th
+        className="px-2 py-1.5 text-right text-[10px] font-medium select-none"
+        style={{
+          color: T.textMuted,
+          border: `1px solid ${T.borderSoft}`,
+          backgroundColor: T.accentPrimarySoft,
+          width: 90,
+        }}
+      >
+        План
+      </th>
+      <th
+        className="px-2 py-1.5 text-right text-[10px] font-medium select-none"
+        style={{
+          color: T.textMuted,
+          border: `1px solid ${T.borderSoft}`,
+          backgroundColor: T.successSoft,
+          width: 90,
+        }}
+      >
+        Факт
+      </th>
+      <th
+        className="px-2 py-1.5 text-right text-[10px] font-medium select-none"
+        style={{
+          color: T.textMuted,
+          border: `1px solid ${T.borderSoft}`,
+          backgroundColor: T.panelSoft,
+          width: 80,
+        }}
+      >
+        Δ
+      </th>
+    </>
+  );
+}
+
+function BodyCellGroup({
+  plan,
+  fact,
+  delta,
+  metric,
+}: {
+  plan: React.ReactNode;
+  fact: React.ReactNode;
+  delta: number | null;
+  metric: ColumnId;
+}) {
+  const align = alignFor(metric);
+  return (
+    <>
+      <Td align={align}>{plan}</Td>
+      <Td align={align}>{fact}</Td>
+      <Td align={align}>
+        <DeltaCell value={delta} metric={metric} />
+      </Td>
+    </>
+  );
+}
+
+function DeltaCell({
+  value,
+  metric,
+}: {
+  value: number | null;
+  metric: ColumnId;
+}) {
+  if (value === null || !Number.isFinite(value) || value === 0) {
+    return <span style={{ color: T.textMuted }}>—</span>;
+  }
+  const color = deltaColor(metric, value);
+  const sign = value > 0 ? "+" : "−";
+  const abs = Math.abs(value);
+  const formatted =
+    metric === "volume"
+      ? new Intl.NumberFormat("uk-UA", {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 3,
+        }).format(abs)
+      : formatCurrency(abs);
+  return (
+    <span
+      onClick={(e) => e.stopPropagation()}
+      style={{ color, fontWeight: 600 }}
+    >
+      {sign}
+      {formatted}
+    </span>
+  );
+}
+
+type CompareTotals = {
+  planExpense: number;
+  planIncome: number;
+  planResult: number;
+  factExpense: number;
+  factIncome: number;
+  factResult: number;
+};
+
+function compareValue(
+  metric: ColumnId,
+  kind: "plan" | "fact",
+  node: TreeNode,
+  totals: CompareTotals,
+): number | null {
+  if (metric === "volume") {
+    return kind === "plan" ? node.planVolume ?? null : node.factVolume ?? null;
+  }
+  if (metric === "expense") {
+    return kind === "plan" ? totals.planExpense : totals.factExpense;
+  }
+  if (metric === "income") {
+    return kind === "plan" ? totals.planIncome : totals.factIncome;
+  }
+  if (metric === "result") {
+    return kind === "plan" ? totals.planResult : totals.factResult;
+  }
+  return null;
 }
 
 // ---------- Header DnD ----------
@@ -724,21 +945,23 @@ function NameCell({
           }}
         />
       ) : (
-        <button
-          type="button"
-          onClick={(e) => {
+        // Клік по назві ⇒ drawer (через propagation до <tr onClick>).
+        // Inline-rename доступний через олівчик праворуч або подвійний клік.
+        <span
+          onDoubleClick={(e) => {
             e.stopPropagation();
             setEditing(true);
           }}
-          className="min-w-0 flex-1 truncate text-left transition hover:underline"
+          className="min-w-0 flex-1 truncate text-left transition"
           style={{
             color: node.status === "PENDING" ? T.textSecondary : T.textPrimary,
             fontWeight: node.depth === 0 ? 600 : 500,
+            cursor: "pointer",
           }}
-          title={display}
+          title={`${display} — клік щоб відкрити деталі, подвійний клік щоб перейменувати`}
         >
           {display}
-        </button>
+        </span>
       )}
       {node.isHidden && <EyeOff size={11} style={{ color: T.textMuted }} />}
       {/* Actions — show on row hover */}
@@ -824,11 +1047,16 @@ function mul(a: number | null | undefined, b: number | null | undefined): number
 
 function ReadOnlyMoney({ value, signed = false }: { value: number; signed?: boolean }) {
   if (!Number.isFinite(value) || value === 0) {
-    return <span style={{ color: T.textMuted }}>—</span>;
+    return (
+      <span onClick={(e) => e.stopPropagation()} style={{ color: T.textMuted }}>
+        —
+      </span>
+    );
   }
   const formatted = formatCurrency(Math.abs(value));
   const prefix = signed && value < 0 ? "−" : "";
-  return <span>{prefix + formatted}</span>;
+  // stopPropagation — щоб клік по readonly-сумі не відкривав drawer.
+  return <span onClick={(e) => e.stopPropagation()}>{prefix + formatted}</span>;
 }
 
 function NumCell({
@@ -1136,6 +1364,7 @@ function Td({
   sticky,
   stickyDivider,
   style,
+  onClick,
 }: {
   children: React.ReactNode;
   align?: "left" | "right" | "center";
@@ -1143,9 +1372,11 @@ function Td({
   sticky?: boolean;
   stickyDivider?: boolean;
   style?: React.CSSProperties;
+  onClick?: (e: React.MouseEvent<HTMLTableCellElement>) => void;
 }) {
   return (
     <td
+      onClick={onClick}
       className="px-3 py-2 align-middle"
       style={{
         textAlign: align,

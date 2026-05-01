@@ -2,8 +2,6 @@
 
 import { Calendar, MapPin, Mail, Phone } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { stageDisplayName } from "@/lib/constants";
-import { ProjectProgressBar } from "@/components/dashboard/ProjectProgressBar";
 import { ProjectClientEditButton } from "@/components/projects/ProjectClientEditButton";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectStatus, ProjectStage, StageStatus } from "@prisma/client";
@@ -57,29 +55,6 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
     <div className="flex flex-col gap-6">
       {/* Finance KPI strip — пов'язує матрицю Plan vs Fact + cashflow в один погляд */}
       <FinanceKpiStrip projectId={project.id} />
-
-      {/* Прогрес — горизонтальний stepper зверху */}
-      <Card title="Прогрес проєкту">
-        <div className="mb-4">
-          <ProjectProgressBar
-            currentStage={project.currentStage}
-            currentStageRecordId={project.currentStageRecordId}
-            stages={project.stages}
-          />
-        </div>
-        <div className="text-[12px]" style={{ color: T.textMuted }}>
-          Поточний етап:{" "}
-          <span className="font-semibold" style={{ color: T.textPrimary }}>
-            {(() => {
-              const curr =
-                project.stages.find((s) => s.id === project.currentStageRecordId) ??
-                project.stages.find((s) => s.stage === project.currentStage);
-              return curr ? stageDisplayName(curr) : "—";
-            })()}
-          </span>{" "}
-          · {project.stageProgress}% завершено
-        </div>
-      </Card>
 
       {/* Етапи виконання — на всю ширину */}
       <StagesSection

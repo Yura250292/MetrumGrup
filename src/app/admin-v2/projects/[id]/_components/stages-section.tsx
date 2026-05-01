@@ -14,7 +14,12 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { StageTable, type StageRow, type StageInlineUpdate } from "./stage-table";
+import {
+  StageTable,
+  type StageRow,
+  type StageInlineUpdate,
+  type ViewMode,
+} from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
 import { ImportEstimateModal } from "./import-estimate-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
@@ -45,6 +50,23 @@ export function StagesSection({
   const [dirtyStageIds, setDirtyStageIds] = useState<Set<string>>(() => new Set());
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [, startTransition] = useTransition();
+
+  // Режим перегляду таблиці. Init як "all" щоб уникнути SSR/CSR mismatch;
+  // підвантажуємо persisted значення з localStorage у useEffect (як column-orders).
+  const [viewMode, setViewMode] = useState<ViewMode>("all");
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("metrum.stage-table.view-mode");
+      if (raw === "all" || raw === "plan" || raw === "fact" || raw === "compare") {
+        setViewMode(raw);
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("metrum.stage-table.view-mode", viewMode);
+    } catch {}
+  }, [viewMode]);
 
   // Якщо SSR-стартові пропси оновилися (router.refresh() після PATCH в drawer-і),
   // підхоплюємо нові значення в локальний state.
@@ -301,7 +323,8 @@ export function StagesSection({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <ViewModeSwitch value={viewMode} onChange={setViewMode} />
           <button
             type="button"
             onClick={() => setShowHidden((v) => !v)}
@@ -371,6 +394,7 @@ export function StagesSection({
         candidates={candidates}
         showHidden={showHidden}
         dirtyStageIds={dirtyStageIds}
+        viewMode={viewMode}
       />
 
       <button
@@ -420,6 +444,56 @@ export function StagesSection({
         onClose={() => setPublishOpen(false)}
         onPublished={onPublished}
       />
+    </div>
+  );
+}
+
+const VIEW_MODE_OPTIONS: { value: ViewMode; label: string; title: string }[] = [
+  { value: "all", label: "Усі", title: "Показати всі колонки (План + Факт)" },
+  { value: "plan", label: "Тільки План", title: "Сховати колонки Факт" },
+  { value: "fact", label: "Тільки Факт", title: "Сховати колонки План" },
+  {
+    value: "compare",
+    label: "Порівняти",
+    title: "План ↔ Факт парами зі знаком відхилення",
+  },
+];
+
+function ViewModeSwitch({
+  value,
+  onChange,
+}: {
+  value: ViewMode;
+  onChange: (v: ViewMode) => void;
+}) {
+  return (
+    <div
+      className="inline-flex items-center rounded-lg p-0.5"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      {VIEW_MODE_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            title={opt.title}
+            onClick={() => onChange(opt.value)}
+            className="rounded px-2.5 py-1 text-[11px] font-medium transition"
+            style={{
+              backgroundColor: active ? T.panel : "transparent",
+              color: active ? T.accentPrimary : T.textMuted,
+              boxShadow: active ? `0 1px 2px ${T.borderSoft}` : undefined,
+              fontWeight: active ? 600 : 500,
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
