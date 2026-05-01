@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
+import { recomputeProjectPlanSource, markProjectProjected } from "@/lib/projects/plan-source";
 
 export type EstimateToStagesResult = {
   estimateId: string;
@@ -213,6 +214,12 @@ export async function syncEstimateToStages(
   // Імпорт лише наповнює дерево стейджів, фінансування зачекає на «Save».
 
   await recalcCurrentStage(projectId, { syncBudget: true, userId });
+
+  // Phase 2: після того як stage tree наповнено з кошторису, він стає
+  // canonical layer для плану — оновлюємо прапор Project.planSource.
+  await recomputeProjectPlanSource(projectId);
+  // Phase 6.3: bump projection metadata.
+  await markProjectProjected(projectId, userId);
 
   await auditLog({
     userId,

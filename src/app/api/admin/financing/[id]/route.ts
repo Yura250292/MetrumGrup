@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
@@ -12,12 +11,14 @@ import {
   notifyFinanceActor,
 } from "@/lib/financing/notify-approval";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
+import { validateProjectForFinanceWrite } from "@/lib/financing/project-invariants";
+import {
+  canReadFinance,
+  canWriteFinance,
+  canHardDeleteFinance,
+} from "@/lib/financing/rbac";
 
 export const runtime = "nodejs";
-
-const READ_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
-const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
-const HARD_DELETE_ROLES: Role[] = ["SUPER_ADMIN"];
 
 export async function GET(
   _request: NextRequest,
@@ -25,7 +26,7 @@ export async function GET(
 ) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!READ_ROLES.includes(session.user.role)) return forbiddenResponse();
+  if (!canReadFinance(session.user.role)) return forbiddenResponse();
 
   const { id } = await ctx.params;
   const entry = await prisma.financeEntry.findUnique({
@@ -47,7 +48,7 @@ export async function PATCH(
 ) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!WRITE_ROLES.includes(session.user.role)) return forbiddenResponse();
+  if (!canWriteFinance(session.user.role)) return forbiddenResponse();
 
   const { id } = await ctx.params;
   const existing = await prisma.financeEntry.findUnique({ where: { id } });
@@ -60,12 +61,17 @@ export async function PATCH(
 
   try {
     const body = await request.json();
-    const isAutoFromEstimate = existing.source === "ESTIMATE_AUTO";
+    // Phase 4.4: усі derived записи (STAGE_AUTO / ESTIMATE_AUTO / PROJECT_BUDGET)
+    // read-only на рівні бізнес-полів. Дозволені тільки status / isArchived /
+    // remindAt / attachments — щоб юзер міг затвердити або заархівувати, але
+    // не міняти суми/категорії/проєкт. Похідні поля редагуються через канонічне
+    // джерело: stage, кошторис або Project.totalBudget.
+    const isDerived = existing.isDerived;
     const data: Parameters<typeof prisma.financeEntry.update>[0]["data"] = {
       updatedById: session.user.id,
     };
 
-    if (isAutoFromEstimate) {
+    if (isDerived) {
       const forbiddenKeys = [
         "type",
         "kind",
@@ -84,10 +90,15 @@ export async function PATCH(
       ] as const;
       for (const key of forbiddenKeys) {
         if (key in body) {
+          const sourceLabel =
+            existing.source === "STAGE_AUTO"
+              ? "етапу"
+              : existing.source === "PROJECT_BUDGET"
+                ? "бюджету проєкту"
+                : "кошторису";
           return NextResponse.json(
             {
-              error:
-                "Запис синхронізовано з кошторису. Змінюйте ці поля через кошторис — тут дозволені лише статус, архівація та вкладення.",
+              error: `Авто-запис ${sourceLabel}: дозволені тільки статус, архівація та вкладення. Змінюйте джерело, не похідний запис.`,
             },
             { status: 409 },
           );
@@ -117,9 +128,21 @@ export async function PATCH(
       if (pid) {
         const exists = await prisma.project.findUnique({
           where: { id: pid },
-          select: { id: true },
+          select: { firmId: true, isTestProject: true },
         });
-        if (!exists) return NextResponse.json({ error: "Проєкт не існує" }, { status: 400 });
+        const check = validateProjectForFinanceWrite(exists, {
+          existingEntryFirmId: existing.firmId,
+          testProjectError:
+            "Не можна перепривʼязати фінансовий запис на тестовий проєкт",
+        });
+        if (!check.ok) {
+          return NextResponse.json({ error: check.error }, { status: check.status });
+        }
+        try {
+          assertCanAccessFirm(session, check.firmId);
+        } catch {
+          return forbiddenResponse();
+        }
       }
       data.projectId = pid;
     }
@@ -311,7 +334,7 @@ export async function DELETE(
 ) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (!WRITE_ROLES.includes(session.user.role)) return forbiddenResponse();
+  if (!canWriteFinance(session.user.role)) return forbiddenResponse();
 
   const { id } = await ctx.params;
   const { searchParams } = new URL(request.url);
@@ -329,7 +352,7 @@ export async function DELETE(
   }
 
   if (hard) {
-    if (!HARD_DELETE_ROLES.includes(session.user.role)) return forbiddenResponse();
+    if (!canHardDeleteFinance(session.user.role)) return forbiddenResponse();
 
     await Promise.allSettled(
       existing.attachments.map((a) => deleteFileFromR2(a.r2Key).catch(() => undefined))

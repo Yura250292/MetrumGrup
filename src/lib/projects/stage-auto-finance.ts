@@ -1,5 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { stageDisplayName } from "@/lib/constants";
+import { recomputeProjectPlanSource, markProjectProjected } from "@/lib/projects/plan-source";
+import { categorizeStage } from "@/lib/projects/stage-finance-categorization";
 
 /**
  * Синхронізує авто-FinanceEntry для одного етапу:
@@ -25,13 +27,22 @@ export async function syncStageAutoFinanceEntries(
       projectId: true,
       stage: true,
       customName: true,
+      startDate: true,
+      createdAt: true,
       planVolume: true,
       planUnitPrice: true,
       planClientUnitPrice: true,
       factVolume: true,
       factUnitPrice: true,
       factClientUnitPrice: true,
-      project: { select: { firmId: true, isTestProject: true } },
+      project: {
+        select: {
+          firmId: true,
+          isTestProject: true,
+          startDate: true,
+          createdAt: true,
+        },
+      },
     },
   });
   if (!stage) return;
@@ -43,52 +54,62 @@ export async function syncStageAutoFinanceEntries(
     customName: stage.customName,
   });
 
+  // occurredAt для derived plan/fact entries — це дата, коли подія
+  // запланована/відбулася на рівні бізнесу, а не момент натискання кнопки
+  // sync. Для звітності беремо найбільш специфічну з доступних дат:
+  // stage.startDate → project.startDate → stage.createdAt → now() (fallback).
+  // Phase 4 з improvement plan — без цього часові графіки спотворюються.
+  const occurredAt =
+    stage.startDate ??
+    stage.project.startDate ??
+    stage.createdAt ??
+    new Date();
+
+  const baseArgs = {
+    stageId,
+    stageEnum: stage.stage,
+    projectId: stage.projectId,
+    firmId: stage.project.firmId,
+    label,
+    actorUserId,
+    occurredAt,
+  };
+
   await Promise.all([
     upsertOne({
-      stageId,
-      projectId: stage.projectId,
-      firmId: stage.project.firmId,
+      ...baseArgs,
       kind: "PLAN",
       type: "EXPENSE",
-      label,
       volume: numOrNull(stage.planVolume),
       unitPrice: numOrNull(stage.planUnitPrice),
-      actorUserId,
     }),
     upsertOne({
-      stageId,
-      projectId: stage.projectId,
-      firmId: stage.project.firmId,
+      ...baseArgs,
       kind: "FACT",
       type: "EXPENSE",
-      label,
       volume: numOrNull(stage.factVolume),
       unitPrice: numOrNull(stage.factUnitPrice),
-      actorUserId,
     }),
     upsertOne({
-      stageId,
-      projectId: stage.projectId,
-      firmId: stage.project.firmId,
+      ...baseArgs,
       kind: "PLAN",
       type: "INCOME",
-      label,
       volume: numOrNull(stage.planVolume),
       unitPrice: numOrNull(stage.planClientUnitPrice),
-      actorUserId,
     }),
     upsertOne({
-      stageId,
-      projectId: stage.projectId,
-      firmId: stage.project.firmId,
+      ...baseArgs,
       kind: "FACT",
       type: "INCOME",
-      label,
       volume: numOrNull(stage.factVolume),
       unitPrice: numOrNull(stage.factClientUnitPrice),
-      actorUserId,
     }),
   ]);
+
+  // Phase 2: тримаємо canonical-source прапор у синхронному стані.
+  await recomputeProjectPlanSource(stage.projectId);
+  // Phase 6.3: bump projection metadata для audit-дашборда.
+  await markProjectProjected(stage.projectId, actorUserId);
 }
 
 function numOrNull(v: unknown): number | null {
@@ -99,6 +120,7 @@ function numOrNull(v: unknown): number | null {
 
 async function upsertOne(args: {
   stageId: string;
+  stageEnum: import("@prisma/client").ProjectStage | null;
   projectId: string;
   firmId: string | null;
   kind: "PLAN" | "FACT";
@@ -107,6 +129,7 @@ async function upsertOne(args: {
   volume: number | null;
   unitPrice: number | null;
   actorUserId: string;
+  occurredAt: Date;
 }): Promise<void> {
   const amount =
     args.volume !== null && args.unitPrice !== null && args.volume > 0 && args.unitPrice > 0
@@ -148,18 +171,25 @@ async function upsertOne(args: {
     return;
   }
 
+  const { category, costType } = categorizeStage({
+    stage: args.stageEnum,
+    type: args.type,
+  });
+
   await prisma.financeEntry.create({
     data: {
       type: args.type,
       kind: args.kind,
       source: "STAGE_AUTO",
+      isDerived: true,
       amount,
       currency: "UAH",
-      occurredAt: new Date(),
+      occurredAt: args.occurredAt,
       projectId: args.projectId,
       firmId: args.firmId,
       stageRecordId: args.stageId,
-      category: args.type === "EXPENSE" ? "materials" : "services",
+      category,
+      costType,
       title,
       description,
       createdById: args.actorUserId,

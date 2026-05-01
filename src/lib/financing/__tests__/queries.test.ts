@@ -13,18 +13,18 @@ function setStub(target: any, key: string): Stub {
   return fn;
 }
 
-let findManyMock: Stub;
+let projectFindManyMock: Stub;
 let groupByMock: Stub;
 
 describe("computeSummary — PROJECT_BUDGET exclusion", () => {
   beforeEach(() => {
-    findManyMock = setStub((prisma as any).financeEntry, "findMany");
+    projectFindManyMock = setStub((prisma as any).project, "findMany");
     groupByMock = setStub((prisma as any).financeEntry, "groupBy");
     groupByMock.mockResolvedValue([] as never);
   });
 
   it("orphan PROJECT_BUDGET (projectId=null) виключається з агрегації", async () => {
-    findManyMock.mockResolvedValue([] as never);
+    projectFindManyMock.mockResolvedValue([] as never);
 
     await computeSummary({ isArchived: false });
 
@@ -37,11 +37,8 @@ describe("computeSummary — PROJECT_BUDGET exclusion", () => {
     });
   });
 
-  it("PROJECT_BUDGET виключається для проєктів, у яких є ESTIMATE_AUTO", async () => {
-    findManyMock.mockResolvedValue([
-      { projectId: "p1" },
-      { projectId: "p2" },
-    ] as never);
+  it("PROJECT_BUDGET виключається для проєктів із Project.planSource IN (ESTIMATE, STAGE)", async () => {
+    projectFindManyMock.mockResolvedValue([{ id: "p1" }, { id: "p2" }] as never);
 
     await computeSummary({ isArchived: false });
 
@@ -57,8 +54,18 @@ describe("computeSummary — PROJECT_BUDGET exclusion", () => {
     });
   });
 
-  it("без ESTIMATE_AUTO у scope все одно виключаємо orphan, але не by-project", async () => {
-    findManyMock.mockResolvedValue([] as never);
+  it("project.findMany шукає за planSource IN [ESTIMATE, STAGE]", async () => {
+    projectFindManyMock.mockResolvedValue([] as never);
+
+    await computeSummary({ isArchived: false });
+
+    expect(projectFindManyMock).toHaveBeenCalledTimes(1);
+    const arg = projectFindManyMock.mock.calls[0][0] as { where: any };
+    expect(arg.where.planSource).toEqual({ in: ["ESTIMATE", "STAGE"] });
+  });
+
+  it("без проєктів із детальним планом — виключаємо лише orphan", async () => {
+    projectFindManyMock.mockResolvedValue([] as never);
 
     await computeSummary({ isArchived: false, firmId: "metrum-studio" });
 
@@ -69,7 +76,7 @@ describe("computeSummary — PROJECT_BUDGET exclusion", () => {
   });
 
   it("сума по quadrants правильно мапиться на plan/fact", async () => {
-    findManyMock.mockResolvedValue([] as never);
+    projectFindManyMock.mockResolvedValue([] as never);
     groupByMock.mockResolvedValue([
       { kind: "PLAN", type: "EXPENSE", _sum: { amount: 600000 }, _count: { _all: 1 } },
       { kind: "FACT", type: "INCOME", _sum: { amount: 34800 }, _count: { _all: 1 } },

@@ -124,6 +124,16 @@ model Project {
   stageProgress          Int                     @default(0)
   totalBudget            Decimal                 @default(0) @db.Decimal(12, 2)
   totalPaid              Decimal                 @default(0) @db.Decimal(12, 2)
+  /// Канонічне джерело плану (Phase 2). Auto-перераховується через
+  /// recomputeProjectPlanSource() після estimate sync і stage sync.
+  planSource             ProjectPlanSource       @default(NONE)
+  /// Projection metadata (Phase 3 prep / Phase 6.3 audit dashboard).
+  /// Bump-аться через markProjectProjected() на кожному materialize-шляху
+  /// (estimate→stages, stage-auto, project-budget, legacy estimate-sync).
+  /// `dirty` рахується як stages.updatedAt > lastProjectedAt.
+  lastProjectedAt        DateTime?
+  lastProjectedById      String?
+  projectionVersion      Int                     @default(0)
   startDate              DateTime?
   expectedEndDate        DateTime?
   actualEndDate          DateTime?
@@ -530,6 +540,11 @@ model FinanceEntry {
   folderId String?
 
   source         FinanceEntrySource @default(MANUAL)
+  /// TRUE для авто-згенерованих записів (source != MANUAL): STAGE_AUTO,
+  /// ESTIMATE_AUTO, PROJECT_BUDGET. Phase 4.3 з improvement plan —
+  /// явний тег для derived-шару, дозволяє UI/RBAC/експортам відрізняти
+  /// машинні записи від ручних без знання enum source.
+  isDerived      Boolean            @default(false)
   estimateId     String?
   estimateItemId String?
 
@@ -1340,6 +1355,19 @@ enum ProjectStage {
   ENGINEERING
   FINISHING
   HANDOVER
+}
+
+/// Канонічне джерело планових цифр проєкту.
+/// NONE     — детального плану немає, лише totalBudget rollup (PROJECT_BUDGET).
+/// ESTIMATE — legacy: ESTIMATE_AUTO записи від кошторису (без stage tree).
+/// STAGE    — поточний flow: дерево ProjectStageRecord — canonical layer,
+///            STAGE_AUTO derived FinanceEntry.
+/// Phase 2 з improvement plan: знімає неоднозначність між шарами плану,
+/// дозволяє summary/dashboard читати один прапор замість dynamic detection.
+enum ProjectPlanSource {
+  NONE
+  ESTIMATE
+  STAGE
 }
 
 enum StageStatus {

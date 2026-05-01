@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { syncEstimateToStages } from "@/lib/projects/sync-estimate-to-stages";
+import { canPublishFinance } from "@/lib/financing/rbac";
 
 /**
  * Sync одного кошторису. Делегує у новий потік estimate→stage→STAGE_AUTO
@@ -17,10 +18,7 @@ export async function POST(
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
-  const role = session.user.role;
-  if (role !== "FINANCIER" && role !== "SUPER_ADMIN" && role !== "MANAGER") {
-    return forbiddenResponse();
-  }
+  if (!canPublishFinance(session.user.role)) return forbiddenResponse();
 
   const { id } = await params;
 

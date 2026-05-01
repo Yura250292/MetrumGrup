@@ -9,6 +9,7 @@ import {
   assertCanAccessFirm,
 } from "@/lib/firm/scope";
 import { syncProjectBudgetEntry } from "@/lib/folders/mirror-service";
+import { canRunFinanceDiagnostics } from "@/lib/financing/rbac";
 
 export const runtime = "nodejs";
 
@@ -80,9 +81,7 @@ export async function GET(
   const { firmId } = await resolveFirmScopeForRequest(session);
   if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
   const activeRole = getActiveRoleFromSession(session, firmId);
-  if (activeRole !== "SUPER_ADMIN" && activeRole !== "MANAGER" && activeRole !== "FINANCIER") {
-    return forbiddenResponse();
-  }
+  if (!canRunFinanceDiagnostics(activeRole)) return forbiddenResponse();
   try {
     assertCanAccessFirm(session, c.project.firmId);
   } catch {
@@ -204,9 +203,7 @@ export async function POST(
   const { firmId } = await resolveFirmScopeForRequest(session);
   if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
   const activeRole = getActiveRoleFromSession(session, firmId);
-  if (activeRole !== "SUPER_ADMIN" && activeRole !== "MANAGER" && activeRole !== "FINANCIER") {
-    return forbiddenResponse();
-  }
+  if (!canRunFinanceDiagnostics(activeRole)) return forbiddenResponse();
   try {
     assertCanAccessFirm(session, c.project.firmId);
   } catch {

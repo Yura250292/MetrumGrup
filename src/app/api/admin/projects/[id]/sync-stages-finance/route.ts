@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
+import { canPublishFinance } from "@/lib/financing/rbac";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,9 +28,10 @@ export async function POST(
   const { id: projectId } = await params;
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (session.user.role !== "SUPER_ADMIN" && session.user.role !== "MANAGER") {
-    return forbiddenResponse();
-  }
+  // Phase 5: вирівняно з sync-to-financing — FINANCIER теж може publishʼити
+  // STAGE_AUTO у фінансування (раніше було лише SUPER_ADMIN/MANAGER, що
+  // суперечило сусідньому endpoint-у).
+  if (!canPublishFinance(session.user.role)) return forbiddenResponse();
 
   const project = await prisma.project.findUnique({
     where: { id: projectId },

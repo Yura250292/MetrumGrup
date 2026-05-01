@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
@@ -12,6 +11,8 @@ import {
   FINANCE_ENTRY_SELECT,
 } from "@/lib/financing/queries";
 import { notifyFinanceApprovers } from "@/lib/financing/notify-approval";
+import { validateProjectForFinanceWrite } from "@/lib/financing/project-invariants";
+import { canReadFinance, canWriteFinance } from "@/lib/financing/rbac";
 import {
   assertCanAccessFirm,
   firmIdForNewEntity,
@@ -23,9 +24,6 @@ import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 
 export const runtime = "nodejs";
 
-const READ_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
-const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
-
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -36,7 +34,7 @@ export async function GET(request: NextRequest) {
     if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
     // Role перевіряємо у контексті активної фірми (per-firm role).
     const activeRole = getActiveRoleFromSession(session, firmId);
-    if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
+    if (!canReadFinance(activeRole)) return forbiddenResponse();
     const filters = parseListParams(searchParams, firmId);
     const where = await expandFolderFilter(filters);
 
@@ -65,7 +63,7 @@ export async function POST(request: NextRequest) {
   const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
   if (!isHomeFirmFor(session, activeFirmId)) return forbiddenResponse();
   const activeRole = getActiveRoleFromSession(session, activeFirmId);
-  if (!activeRole || !WRITE_ROLES.includes(activeRole)) return forbiddenResponse();
+  if (!canWriteFinance(activeRole)) return forbiddenResponse();
 
   try {
     const body = await request.json();
@@ -95,12 +93,13 @@ export async function POST(request: NextRequest) {
     if (projectId) {
       const exists = await prisma.project.findUnique({
         where: { id: projectId },
-        select: { id: true, firmId: true },
+        select: { firmId: true, isTestProject: true },
       });
-      if (!exists) {
-        return NextResponse.json({ error: "Проєкт не існує" }, { status: 400 });
+      const check = validateProjectForFinanceWrite(exists);
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: check.status });
       }
-      projectFirmId = exists.firmId ?? null;
+      projectFirmId = check.firmId;
       try {
         assertCanAccessFirm(session, projectFirmId);
       } catch {
@@ -109,7 +108,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Stamp firmId з АКТИВНОЇ фірми (cookie/session). Якщо запис привʼязано
-    // до проекту — узгоджуємо з firmId проекту (захист від cross-firm leak).
+    // до проекту — беремо firmId проекту (захист від cross-firm leak).
     const entryFirmId =
       projectFirmId ??
       activeFirmId ??
@@ -221,6 +220,25 @@ export async function POST(request: NextRequest) {
       // Якщо projectId не передавався — авто-stamp з етапу.
       if (!resolvedProjectId) {
         resolvedProjectId = stage.projectId;
+      }
+    }
+
+    // Фінальна валідація для resolvedProjectId, який міг зʼявитися лише
+    // через auto-stamp (folder mirror або stageRecordId). У такому випадку
+    // початковий блок [if (projectId) {...}] не спрацював.
+    if (resolvedProjectId && resolvedProjectId !== projectId) {
+      const autoProject = await prisma.project.findUnique({
+        where: { id: resolvedProjectId },
+        select: { firmId: true, isTestProject: true },
+      });
+      const check = validateProjectForFinanceWrite(autoProject);
+      if (!check.ok) {
+        return NextResponse.json({ error: check.error }, { status: check.status });
+      }
+      try {
+        assertCanAccessFirm(session, check.firmId);
+      } catch {
+        return forbiddenResponse();
       }
     }
 

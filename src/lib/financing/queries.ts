@@ -246,37 +246,34 @@ export type FinanceSummary = {
 const EMPTY_STATS: FinanceQuadrantStats = { sum: 0, count: 0 };
 
 export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Promise<FinanceSummary> {
-  // PROJECT_BUDGET — це high-level "rollup"-запис рівний Project.totalBudget.
-  // ESTIMATE_AUTO — per-item розклад тих самих грошей з кошторису.
+  // PROJECT_BUDGET — high-level "rollup"-запис рівний Project.totalBudget.
+  // ESTIMATE_AUTO / STAGE_AUTO — деталізований план: per-item розклад з
+  // кошторису або per-stage розклад з дерева етапів.
+  //
   // Виключаємо PROJECT_BUDGET у двох випадках, щоб уникнути дублів у summary:
-  //   1) Проєкт має ESTIMATE_AUTO — деталізація з кошторису вже покриває цю
-  //      суму, тож rollup-запис є дублем.
+  //   1) Проєкт має детальний план (Project.planSource IN [ESTIMATE, STAGE]) —
+  //      деталізація вже покриває цю суму, тож rollup-запис є дублем.
   //   2) PROJECT_BUDGET має projectId = null (orphan після видалення/пере-
   //      створення проєкту) — він не належить жодному реальному проєкту і
   //      лише штучно надуває summary.
   // Якщо ні (1), ні (2) — PROJECT_BUDGET лишається як єдине джерело плану.
-  const estimateBackedProjects = await prisma.financeEntry.findMany({
-    where: {
-      ...where,
-      source: "ESTIMATE_AUTO",
-      kind: "PLAN",
-      type: "EXPENSE",
-      projectId: { not: null },
-    },
-    select: { projectId: true },
-    distinct: ["projectId"],
+  //
+  // Phase 2: читаємо Project.planSource замість dynamic detection через
+  // FinanceEntry — один прапор, який тримають свіжим recomputeProjectPlanSource()
+  // на всіх write-paths (estimate→stages, stage-auto, legacy estimate-sync).
+  const projectsWithDetailedPlan = await prisma.project.findMany({
+    where: { planSource: { in: ["ESTIMATE", "STAGE"] } },
+    select: { id: true },
   });
-  const estimateProjectIds = estimateBackedProjects
-    .map((e) => e.projectId)
-    .filter((id): id is string => !!id);
+  const detailedPlanProjectIds = projectsWithDetailedPlan.map((p) => p.id);
 
   const projectBudgetExclusions: Prisma.FinanceEntryWhereInput[] = [
     { source: "PROJECT_BUDGET", projectId: null },
   ];
-  if (estimateProjectIds.length > 0) {
+  if (detailedPlanProjectIds.length > 0) {
     projectBudgetExclusions.push({
       source: "PROJECT_BUDGET",
-      projectId: { in: estimateProjectIds },
+      projectId: { in: detailedPlanProjectIds },
     });
   }
 
@@ -344,6 +341,7 @@ export const FINANCE_ENTRY_SELECT = {
   createdAt: true,
   updatedAt: true,
   source: true,
+  isDerived: true,
   estimateId: true,
   estimateItemId: true,
   project: { select: { id: true, title: true, slug: true } },
