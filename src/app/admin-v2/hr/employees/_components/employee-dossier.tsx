@@ -4,14 +4,127 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   ArrowLeft,
+  Briefcase,
+  Clock,
+  ExternalLink,
+  ListChecks,
   Loader2,
   Pencil,
+  Target,
   Trash2,
   Users,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+
+type ProjectRole =
+  | "PROJECT_ADMIN"
+  | "PROJECT_MANAGER"
+  | "ENGINEER"
+  | "FOREMAN"
+  | "FINANCE"
+  | "PROCUREMENT"
+  | "VIEWER";
+
+type ProjectStatus = "DRAFT" | "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+
+type ProjectStage =
+  | "DESIGN"
+  | "FOUNDATION"
+  | "WALLS"
+  | "ROOF"
+  | "ENGINEERING"
+  | "FINISHING"
+  | "HANDOVER";
+
+type TaskPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
+type StageStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED";
+
+type Engagement = {
+  projects: Array<{
+    roleInProject: ProjectRole;
+    joinedAt: string;
+    project: {
+      id: string;
+      title: string;
+      slug: string;
+      status: ProjectStatus;
+      startDate: string | null;
+      expectedEndDate: string | null;
+      currentStage: ProjectStage;
+    };
+  }>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    priority: TaskPriority;
+    startDate: string | null;
+    dueDate: string | null;
+    project: { id: string; title: string; slug: string };
+    status: { name: string; color: string | null; isDone: boolean };
+    stage: { stage: ProjectStage | null; customName: string | null } | null;
+  }>;
+  stages: Array<{
+    id: string;
+    stage: ProjectStage | null;
+    customName: string | null;
+    status: StageStatus;
+    progress: number;
+    startDate: string | null;
+    endDate: string | null;
+    project: { id: string; title: string; slug: string };
+  }>;
+  hoursByProject: Array<{
+    projectId: string;
+    title: string;
+    slug: string;
+    status: ProjectStatus;
+    hours: number;
+  }>;
+};
+
+const PROJECT_ROLE_LABEL: Record<ProjectRole, string> = {
+  PROJECT_ADMIN: "Адмін проєкту",
+  PROJECT_MANAGER: "Менеджер",
+  ENGINEER: "Інженер",
+  FOREMAN: "Виконроб",
+  FINANCE: "Фінансист",
+  PROCUREMENT: "Постачання",
+  VIEWER: "Спостерігач",
+};
+
+const PROJECT_STATUS_LABEL: Record<ProjectStatus, string> = {
+  DRAFT: "Чернетка",
+  ACTIVE: "Активний",
+  ON_HOLD: "На паузі",
+  COMPLETED: "Завершений",
+  CANCELLED: "Скасований",
+};
+
+const STAGE_LABEL: Record<ProjectStage, string> = {
+  DESIGN: "Проєктування",
+  FOUNDATION: "Фундамент",
+  WALLS: "Стіни",
+  ROOF: "Дах",
+  ENGINEERING: "Інженерія",
+  FINISHING: "Опорядження",
+  HANDOVER: "Здача",
+};
+
+const STAGE_STATUS_LABEL: Record<StageStatus, string> = {
+  PENDING: "Очікує",
+  IN_PROGRESS: "В роботі",
+  COMPLETED: "Готово",
+};
+
+const PRIORITY_TONE: Record<TaskPriority, { bg: string; fg: string; label: string }> = {
+  LOW: { bg: T.panelSoft, fg: T.textMuted, label: "Низький" },
+  NORMAL: { bg: T.skySoft, fg: T.sky, label: "Звичайний" },
+  HIGH: { bg: T.amberSoft, fg: T.amber, label: "Високий" },
+  URGENT: { bg: T.dangerSoft, fg: T.danger, label: "Терміново" },
+};
 
 type SalaryType = "MONTHLY" | "HOURLY";
 
@@ -98,6 +211,7 @@ export function EmployeeDossier({
 }) {
   const router = useRouter();
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [engagement, setEngagement] = useState<Engagement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<FieldKey | null>(null);
@@ -118,6 +232,7 @@ export function EmployeeDossier({
       }
       const j = await res.json();
       setEmployee(j.data);
+      setEngagement(j.engagement ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка");
     } finally {
@@ -605,12 +720,420 @@ export function EmployeeDossier({
         </table>
       </div>
 
+      {engagement && <EngagementPanel data={engagement} />}
+
       <div className="flex flex-wrap gap-3 text-[11px]" style={{ color: T.textMuted }}>
         <span>Створено: {formatDate(employee.createdAt)}</span>
         <span>·</span>
         <span>Оновлено: {formatDate(employee.updatedAt)}</span>
       </div>
     </div>
+  );
+}
+
+function EngagementPanel({ data }: { data: Engagement }) {
+  const { projects, tasks, stages, hoursByProject } = data;
+  const isEmpty =
+    projects.length === 0 &&
+    tasks.length === 0 &&
+    stages.length === 0 &&
+    hoursByProject.length === 0;
+
+  if (isEmpty) {
+    return (
+      <div
+        className="rounded-2xl px-4 py-6 text-center text-[13px]"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, color: T.textMuted }}
+      >
+        За останні 30 днів не задіяний у жодному проєкті, задачі чи етапі.
+      </div>
+    );
+  }
+
+  const hoursTotal = hoursByProject.reduce((s, h) => s + h.hours, 0);
+  const overdueTasks = tasks.filter(
+    (t) => t.dueDate && new Date(t.dueDate).getTime() < Date.now(),
+  ).length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <StatCard
+          label="Активні проєкти"
+          value={projects.length}
+          icon={<Briefcase size={12} />}
+        />
+        <StatCard
+          label="Етапів на відповідальності"
+          value={stages.length}
+          icon={<Target size={12} />}
+        />
+        <StatCard
+          label="Поточні задачі"
+          value={tasks.length}
+          icon={<ListChecks size={12} />}
+          subline={
+            overdueTasks > 0 ? (
+              <span style={{ color: T.danger }}>
+                {overdueTasks} прострочено
+              </span>
+            ) : undefined
+          }
+        />
+        <StatCard
+          label="Годин за 30 днів"
+          value={hoursTotal.toFixed(1)}
+          icon={<Clock size={12} />}
+          subline={
+            hoursByProject.length > 1 ? (
+              <span style={{ color: T.textMuted }}>
+                на {hoursByProject.length} проєктах
+              </span>
+            ) : undefined
+          }
+        />
+      </div>
+
+      {projects.length > 0 && (
+        <Section title="Активні проєкти">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+              >
+                <th className="px-4 py-2.5 text-left">Проєкт</th>
+                <th className="px-3 py-2.5 text-left">Роль</th>
+                <th className="px-3 py-2.5 text-left">Етап</th>
+                <th className="px-3 py-2.5 text-left">Старт</th>
+                <th className="px-3 py-2.5 text-left">Дедлайн</th>
+                <th className="px-3 py-2.5 text-center">Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map((m, idx) => {
+                const overdue =
+                  m.project.expectedEndDate &&
+                  new Date(m.project.expectedEndDate).getTime() < Date.now();
+                return (
+                  <tr
+                    key={m.project.id + idx}
+                    className="border-t"
+                    style={{ borderColor: T.borderSoft }}
+                  >
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/admin-v2/projects/${m.project.slug}`}
+                        className="inline-flex items-center gap-1 font-medium hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {m.project.title}
+                        <ExternalLink size={11} />
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      {PROJECT_ROLE_LABEL[m.roleInProject]}
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      {STAGE_LABEL[m.project.currentStage]}
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
+                      {formatDate(m.project.startDate)}
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-[12px] whitespace-nowrap"
+                      style={{ color: overdue ? T.danger : T.textSecondary }}
+                    >
+                      {formatDate(m.project.expectedEndDate)}
+                      {overdue && (
+                        <AlertTriangle size={11} className="inline ml-1 -mt-0.5" />
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <ProjectStatusBadge status={m.project.status} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {stages.length > 0 && (
+        <Section title="Відповідальний за етапи">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+              >
+                <th className="px-4 py-2.5 text-left">Проєкт</th>
+                <th className="px-3 py-2.5 text-left">Етап</th>
+                <th className="px-3 py-2.5 text-left">Старт</th>
+                <th className="px-3 py-2.5 text-left">Завершення</th>
+                <th className="px-3 py-2.5 text-left">Прогрес</th>
+                <th className="px-3 py-2.5 text-center">Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stages.map((s) => {
+                const overdue =
+                  s.endDate && new Date(s.endDate).getTime() < Date.now() && s.status !== "COMPLETED";
+                return (
+                  <tr key={s.id} className="border-t" style={{ borderColor: T.borderSoft }}>
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/admin-v2/projects/${s.project.slug}`}
+                        className="hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {s.project.title}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      {s.customName ?? (s.stage ? STAGE_LABEL[s.stage] : "—")}
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
+                      {formatDate(s.startDate)}
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-[12px] whitespace-nowrap"
+                      style={{ color: overdue ? T.danger : T.textSecondary }}
+                    >
+                      {formatDate(s.endDate)}
+                      {overdue && <AlertTriangle size={11} className="inline ml-1 -mt-0.5" />}
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-1.5 w-20 overflow-hidden rounded-full"
+                          style={{ backgroundColor: T.panelSoft }}
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.max(0, Math.min(100, s.progress))}%`,
+                              backgroundColor: T.accentPrimary,
+                            }}
+                          />
+                        </div>
+                        <span className="tabular-nums">{s.progress}%</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <StageStatusBadge status={s.status} />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {tasks.length > 0 && (
+        <Section title="Поточні задачі">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+              >
+                <th className="px-4 py-2.5 text-left">Задача</th>
+                <th className="px-3 py-2.5 text-left">Проєкт</th>
+                <th className="px-3 py-2.5 text-left">Етап</th>
+                <th className="px-3 py-2.5 text-left">Пріоритет</th>
+                <th className="px-3 py-2.5 text-left">Старт</th>
+                <th className="px-3 py-2.5 text-left">Дедлайн</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.map((t) => {
+                const overdue = t.dueDate && new Date(t.dueDate).getTime() < Date.now();
+                return (
+                  <tr key={t.id} className="border-t" style={{ borderColor: T.borderSoft }}>
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium" style={{ color: T.textPrimary }}>
+                        {t.title}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]">
+                      <Link
+                        href={`/admin-v2/projects/${t.project.slug}`}
+                        className="hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {t.project.title}
+                      </Link>
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      {t.stage?.customName ??
+                        (t.stage?.stage ? STAGE_LABEL[t.stage.stage] : "—")}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <PriorityBadge priority={t.priority} />
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
+                      {formatDate(t.startDate)}
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-[12px] whitespace-nowrap"
+                      style={{ color: overdue ? T.danger : T.textSecondary }}
+                    >
+                      {formatDate(t.dueDate)}
+                      {overdue && <AlertTriangle size={11} className="inline ml-1 -mt-0.5" />}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Section>
+      )}
+
+      {hoursByProject.length > 0 && (
+        <Section title="Години роботи (30 днів)">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+              >
+                <th className="px-4 py-2.5 text-left">Проєкт</th>
+                <th className="px-3 py-2.5 text-right">Годин</th>
+                <th className="px-3 py-2.5 text-center">Статус</th>
+              </tr>
+            </thead>
+            <tbody>
+              {hoursByProject
+                .slice()
+                .sort((a, b) => b.hours - a.hours)
+                .map((h) => (
+                  <tr key={h.projectId} className="border-t" style={{ borderColor: T.borderSoft }}>
+                    <td className="px-4 py-2.5">
+                      <Link
+                        href={`/admin-v2/projects/${h.slug}`}
+                        className="hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {h.title}
+                      </Link>
+                    </td>
+                    <td
+                      className="px-3 py-2.5 text-right tabular-nums font-semibold"
+                      style={{ color: T.textPrimary }}
+                    >
+                      {h.hours.toFixed(1)} год
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <ProjectStatusBadge status={h.status} />
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </Section>
+      )}
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      className="overflow-hidden rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+    >
+      <div
+        className="px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+        style={{ color: T.textSecondary, backgroundColor: T.panelSoft, borderBottom: `1px solid ${T.borderSoft}` }}
+      >
+        {title}
+      </div>
+      <div className="overflow-x-auto">{children}</div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  icon,
+  subline,
+}: {
+  label: string;
+  value: number | string;
+  icon?: React.ReactNode;
+  subline?: React.ReactNode;
+}) {
+  return (
+    <div
+      className="rounded-2xl px-4 py-3"
+      style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+    >
+      <div
+        className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: T.textMuted }}
+      >
+        {icon}
+        <span>{label}</span>
+      </div>
+      <div className="mt-1 text-base font-bold tabular-nums sm:text-lg" style={{ color: T.textPrimary }}>
+        {value}
+      </div>
+      {subline && <div className="mt-0.5 text-[11px]">{subline}</div>}
+    </div>
+  );
+}
+
+function ProjectStatusBadge({ status }: { status: ProjectStatus }) {
+  const tone =
+    status === "ACTIVE"
+      ? { bg: T.successSoft, fg: T.success }
+      : status === "ON_HOLD"
+      ? { bg: T.warningSoft, fg: T.warning }
+      : status === "COMPLETED"
+      ? { bg: T.skySoft, fg: T.sky }
+      : status === "CANCELLED"
+      ? { bg: T.dangerSoft, fg: T.danger }
+      : { bg: T.panelSoft, fg: T.textMuted };
+  return (
+    <span
+      className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
+      style={{ backgroundColor: tone.bg, color: tone.fg }}
+    >
+      {PROJECT_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+function StageStatusBadge({ status }: { status: StageStatus }) {
+  const tone =
+    status === "IN_PROGRESS"
+      ? { bg: T.accentPrimarySoft, fg: T.accentPrimary }
+      : status === "COMPLETED"
+      ? { bg: T.successSoft, fg: T.success }
+      : { bg: T.panelSoft, fg: T.textMuted };
+  return (
+    <span
+      className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
+      style={{ backgroundColor: tone.bg, color: tone.fg }}
+    >
+      {STAGE_STATUS_LABEL[status]}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority: TaskPriority }) {
+  const tone = PRIORITY_TONE[priority];
+  return (
+    <span
+      className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
+      style={{ backgroundColor: tone.bg, color: tone.fg }}
+    >
+      {tone.label}
+    </span>
   );
 }
 
