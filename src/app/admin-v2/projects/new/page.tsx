@@ -337,7 +337,7 @@ export default function AdminV2NewProjectPage() {
           </Field>
         </div>
 
-        <Field label="Бюджет, ₴">
+        <Field label="Орієнтовний бюджет, ₴">
           <input
             type="number"
             value={form.totalBudget}
@@ -352,6 +352,13 @@ export default function AdminV2NewProjectPage() {
               color: T.textPrimary,
             }}
           />
+          <p
+            className="mt-1 text-[11px]"
+            style={{ color: T.textMuted }}
+          >
+            Груба оцінка для картки проекту. У фінансування потрапляє лише
+            те, що опубліковано з дерева етапів.
+          </p>
         </Field>
 
         <div className="grid gap-4 sm:grid-cols-2">

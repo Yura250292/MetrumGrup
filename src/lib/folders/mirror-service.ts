@@ -1,6 +1,5 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma, Folder } from "@prisma/client";
-import { markProjectPublished } from "@/lib/projects/plan-source";
 
 export const FINANCE_PROJECTS_ROOT_SLUG = "mirrored-projects";
 const FINANCE_PROJECTS_ROOT_NAME = "Проєкти";
@@ -674,82 +673,29 @@ export async function deleteProjectMirror(
 }
 
 /**
- * Узгодити FinanceEntry з source=PROJECT_BUDGET для проекту. Якщо у проекта
- * totalBudget > 0 — створити/оновити один запис (kind=PLAN, type=EXPENSE).
- * Інакше — видалити запис, якщо він є.
+ * Phase 3.1: Project.totalBudget більше НЕ синхронізується у FinanceEntry.
+ *
+ * Раніше при створенні/редагуванні проекту з полем "Бюджет, ₴" автоматично
+ * створювався PROJECT_BUDGET FinanceEntry (kind=PLAN, type=EXPENSE), і він
+ * відображався у зведенні фінансування. Проблема: цей бюджет — груба оцінка
+ * на старті, він змінюється під час робіт. Реальний план формується
+ * STAGE_AUTO записами (через publish stages → finance) на основі
+ * деталізованого дерева етапів.
+ *
+ * Тому Project.totalBudget лишається як project-level metadata (рядок у
+ * картці проекту), але НЕ створює FinanceEntry. Ця функція тепер лише
+ * чистить leftover PROJECT_BUDGET записи, якщо хтось їх десь створив —
+ * defensive cleanup для backward compat.
+ *
+ * Усі точки виклику можна не змінювати — функція просто стала no-op-ом для
+ * 99.9% випадків (нема що видаляти після cleanup-міграції).
  */
 export async function syncProjectBudgetEntry(
   projectId: string,
-  userId: string,
+  _userId: string,
   tx: Tx = prisma,
 ): Promise<void> {
-  const project = await tx.project.findUnique({
-    where: { id: projectId },
-    select: {
-      id: true,
-      title: true,
-      totalBudget: true,
-      startDate: true,
-      createdAt: true,
-      isTestProject: true,
-      firmId: true,
-    },
+  await tx.financeEntry.deleteMany({
+    where: { projectId, source: "PROJECT_BUDGET" },
   });
-  if (!project) return;
-
-  const budget = Number(project.totalBudget);
-  const existing = await tx.financeEntry.findFirst({
-    where: { projectId: project.id, source: "PROJECT_BUDGET" },
-    select: { id: true },
-  });
-
-  // Тестові проєкти не враховуються у фінансуванні — видаляємо plan-запис,
-  // якщо він був (наприклад, після того як юзер позначив проект тестовим).
-  if (project.isTestProject || budget <= 0) {
-    if (existing) {
-      await tx.financeEntry.delete({ where: { id: existing.id } });
-    }
-    return;
-  }
-
-  const folderId = await ensureProjectMirror(project.id, tx);
-  const occurredAt = project.startDate ?? project.createdAt ?? new Date();
-  const title = `Плановий бюджет проєкту «${project.title}»`;
-  const firmId = project.firmId ?? "metrum-group";
-
-  if (existing) {
-    await tx.financeEntry.update({
-      where: { id: existing.id },
-      data: {
-        title,
-        amount: budget,
-        occurredAt,
-        folderId,
-        firmId,
-        updatedById: userId,
-      },
-    });
-  } else {
-    await tx.financeEntry.create({
-      data: {
-        title,
-        amount: budget,
-        kind: "PLAN",
-        type: "EXPENSE",
-        status: "APPROVED",
-        source: "PROJECT_BUDGET",
-        isDerived: true,
-        projectId: project.id,
-        firmId,
-        folderId,
-        category: "Плановий бюджет",
-        occurredAt,
-        createdById: userId,
-      },
-    });
-  }
-
-  // Phase 3: bump publication metadata. PROJECT_BUDGET — теж materialize-подія
-  // (rollup-проєкція з Project.totalBudget у фінансовий журнал).
-  await markProjectPublished(projectId, userId, tx);
 }
