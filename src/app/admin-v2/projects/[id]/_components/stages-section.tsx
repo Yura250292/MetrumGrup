@@ -19,6 +19,7 @@ import {
   type StageRow,
   type StageInlineUpdate,
   type ViewMode,
+  type DropPosition,
 } from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
 import { ImportEstimateModal } from "./import-estimate-modal";
@@ -238,6 +239,82 @@ export function StagesSection({
     [projectId],
   );
 
+  // Drag-and-drop переміщення етапу. Обчислюємо новий parentStageId та
+  // sortOrder з поточного стану (siblings без переміщуваного), і шлемо в
+  // /move endpoint, який валідує depth/cycle і робить atomic renumber.
+  const moveStage = useCallback(
+    async (draggedId: string, targetId: string, position: DropPosition) => {
+      const target = stages.find((s) => s.id === targetId);
+      if (!target) return;
+
+      const newParentId =
+        position === "child" ? targetId : target.parentStageId;
+
+      const siblings = stages
+        .filter((s) => s.parentStageId === newParentId && s.id !== draggedId)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+
+      let sortOrder: number;
+      if (position === "child") {
+        // У кінець списку дітей таргета.
+        sortOrder = siblings.length;
+      } else {
+        const idx = siblings.findIndex((s) => s.id === targetId);
+        if (idx < 0) return;
+        sortOrder = position === "after" ? idx + 1 : idx;
+      }
+
+      // Optimistic: переставити локально, щоб UI не моргав.
+      setStages((prev) => {
+        const moved = prev.find((s) => s.id === draggedId);
+        if (!moved) return prev;
+        // Фільтруємо siblings цільового parent-а без dragged.
+        const sibList = prev
+          .filter((s) => s.parentStageId === newParentId && s.id !== draggedId)
+          .sort((a, b) => a.sortOrder - b.sortOrder);
+        const insertIdx = Math.max(0, Math.min(sortOrder, sibList.length));
+        // Renumber: всі siblings з індексом >= insertIdx отримують +1.
+        const sibIdsBumped = new Set(
+          sibList.slice(insertIdx).map((s) => s.id),
+        );
+        return prev.map((s) => {
+          if (s.id === draggedId) {
+            return { ...s, parentStageId: newParentId, sortOrder: insertIdx };
+          }
+          if (sibIdsBumped.has(s.id)) {
+            return { ...s, sortOrder: s.sortOrder + 1 };
+          }
+          return s;
+        });
+      });
+
+      try {
+        const res = await fetch(
+          `/api/admin/projects/${projectId}/stages/${draggedId}/move`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              parentStageId: newParentId,
+              sortOrder,
+            }),
+          },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? "Помилка переміщення");
+        }
+        await refetch();
+      } catch (err) {
+        console.error("[stages-section] move failed", err);
+        alert(err instanceof Error ? err.message : "Помилка переміщення");
+        await refetch();
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, stages],
+  );
+
   const deleteStage = useCallback(
     async (stageId: string) => {
       try {
@@ -395,6 +472,7 @@ export function StagesSection({
         showHidden={showHidden}
         dirtyStageIds={dirtyStageIds}
         viewMode={viewMode}
+        onMoveStage={moveStage}
       />
 
       <button

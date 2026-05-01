@@ -67,6 +67,9 @@ export type StageInlineUpdate = Partial<{
 
 export type ViewMode = "all" | "plan" | "fact" | "compare";
 
+/** Позиція дропа відносно target-рядка під час d&d рядків. */
+export type DropPosition = "before" | "child" | "after";
+
 type StageTableProps = {
   stages: StageRow[];
   selectedStageId: string | null;
@@ -80,6 +83,15 @@ type StageTableProps = {
   dirtyStageIds?: Set<string>;
   /** Режим відображення колонок: усі / тільки план / тільки факт / порівняння. */
   viewMode?: ViewMode;
+  /**
+   * Перенесення етапу: dragged → target з позицією. UI-шар обчислює нові
+   * parentStageId/sortOrder і дзвонить /move endpoint.
+   */
+  onMoveStage?: (
+    draggedId: string,
+    targetId: string,
+    position: DropPosition,
+  ) => Promise<void>;
 };
 
 const STATUS_STYLE: Record<StageStatus, { bg: string; fg: string; icon: typeof Check }> = {
@@ -202,10 +214,36 @@ export function StageTable({
   showHidden = false,
   dirtyStageIds,
   viewMode = "all",
+  onMoveStage,
 }: StageTableProps) {
   const showPlan = viewMode === "all" || viewMode === "plan";
   const showFact = viewMode === "all" || viewMode === "fact";
   const isCompare = viewMode === "compare";
+
+  // Row d&d state
+  const [rowDrag, setRowDrag] = useState<string | null>(null);
+  const [rowDragOver, setRowDragOver] = useState<{
+    id: string;
+    position: DropPosition;
+  } | null>(null);
+
+  // Збираємо id-и нащадків переміщуваного — щоб блокувати дроп на них
+  // (інакше відбудеться cycle і API поверне помилку).
+  const rowDescendants = useMemo(() => {
+    if (!rowDrag) return new Set<string>();
+    const ids = new Set<string>([rowDrag]);
+    let added = true;
+    while (added) {
+      added = false;
+      for (const s of stages) {
+        if (s.parentStageId && ids.has(s.parentStageId) && !ids.has(s.id)) {
+          ids.add(s.id);
+          added = true;
+        }
+      }
+    }
+    return ids;
+  }, [rowDrag, stages]);
   const tree = useMemo(() => {
     const filtered = showHidden ? stages : stages.filter((s) => !s.isHidden);
     return buildTree(filtered);
@@ -416,20 +454,94 @@ export function StageTable({
                 result: factResult,
               });
 
+            const isDragSource = rowDrag === node.id;
+            const isInvalidDropTarget = rowDescendants.has(node.id);
+            const dropHere =
+              rowDragOver?.id === node.id ? rowDragOver.position : null;
+            const rowBg = isDragSource
+              ? T.warningSoft
+              : dropHere === "child"
+                ? T.accentPrimarySoft
+                : isSelected
+                  ? T.accentPrimarySoft
+                  : "transparent";
+
             return (
               <tr
                 key={node.id}
                 onClick={() => onStageClick(node.id)}
                 className="cursor-pointer transition"
                 style={{
-                  backgroundColor: isSelected ? T.accentPrimarySoft : "transparent",
-                  opacity: node.isHidden ? 0.55 : 1,
+                  backgroundColor: rowBg,
+                  opacity: isDragSource ? 0.5 : node.isHidden ? 0.55 : 1,
+                  borderTop:
+                    dropHere === "before"
+                      ? `2px solid ${T.accentPrimary}`
+                      : undefined,
+                  borderBottom:
+                    dropHere === "after"
+                      ? `2px solid ${T.accentPrimary}`
+                      : undefined,
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.backgroundColor = T.panelSoft;
+                  if (rowDrag) return;
+                  if (!isSelected)
+                    e.currentTarget.style.backgroundColor = T.panelSoft;
                 }}
                 onMouseLeave={(e) => {
-                  if (!isSelected) e.currentTarget.style.backgroundColor = "transparent";
+                  if (rowDrag) return;
+                  if (!isSelected)
+                    e.currentTarget.style.backgroundColor = "transparent";
+                }}
+                onDragOver={(e) => {
+                  if (!rowDrag || !onMoveStage) return;
+                  if (isInvalidDropTarget) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const y = e.clientY - rect.top;
+                  const h = rect.height || 1;
+                  const pos: DropPosition =
+                    y < h * 0.25
+                      ? "before"
+                      : y > h * 0.75
+                        ? "after"
+                        : "child";
+                  if (
+                    !rowDragOver ||
+                    rowDragOver.id !== node.id ||
+                    rowDragOver.position !== pos
+                  ) {
+                    setRowDragOver({ id: node.id, position: pos });
+                  }
+                }}
+                onDragLeave={(e) => {
+                  // Тільки якщо реально вийшли — не реагувати на child enter.
+                  const next = e.relatedTarget as Node | null;
+                  if (next && e.currentTarget.contains(next)) return;
+                  if (rowDragOver?.id === node.id) setRowDragOver(null);
+                }}
+                onDrop={async (e) => {
+                  if (!rowDrag || !onMoveStage) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const dragged = rowDrag;
+                  const target = node.id;
+                  const position = rowDragOver?.position ?? "child";
+                  setRowDrag(null);
+                  setRowDragOver(null);
+                  if (dragged === target) return;
+                  if (rowDescendants.has(target)) return;
+                  try {
+                    await onMoveStage(dragged, target, position);
+                  } catch (err) {
+                    console.error("[stage-table] move failed", err);
+                  }
+                }}
+                onDragEnd={() => {
+                  // Безпечне прибирання state навіть якщо drop не відбувся.
+                  setRowDrag(null);
+                  setRowDragOver(null);
                 }}
               >
                 <Td
@@ -450,6 +562,18 @@ export function StageTable({
                     onRename={(v) => onInlineUpdate(node.id, { customName: v })}
                     onAddChild={() => onAddChild(node.id)}
                     onDelete={() => onDelete(node.id)}
+                    canDrag={Boolean(onMoveStage)}
+                    onDragHandleStart={(e) => {
+                      e.dataTransfer.effectAllowed = "move";
+                      try {
+                        e.dataTransfer.setData("text/plain", node.id);
+                      } catch {}
+                      setRowDrag(node.id);
+                    }}
+                    onDragHandleEnd={() => {
+                      setRowDrag(null);
+                      setRowDragOver(null);
+                    }}
                   />
                 </Td>
 
@@ -882,6 +1006,9 @@ function NameCell({
   onRename,
   onAddChild,
   onDelete,
+  canDrag = false,
+  onDragHandleStart,
+  onDragHandleEnd,
 }: {
   node: TreeNode;
   hasChildren: boolean;
@@ -892,12 +1019,31 @@ function NameCell({
   onRename: (newName: string) => Promise<void> | void;
   onAddChild: () => Promise<void> | void;
   onDelete: () => Promise<void> | void;
+  canDrag?: boolean;
+  onDragHandleStart?: (e: React.DragEvent) => void;
+  onDragHandleEnd?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const display = stageDisplayName(node);
 
   return (
     <div className="group/name flex items-center gap-1.5">
+      {canDrag && (
+        <span
+          draggable
+          onDragStart={(e) => {
+            e.stopPropagation();
+            onDragHandleStart?.(e);
+          }}
+          onDragEnd={() => onDragHandleEnd?.()}
+          onClick={(e) => e.stopPropagation()}
+          className="flex h-4 w-3 flex-shrink-0 cursor-grab items-center justify-center opacity-0 transition group-hover/name:opacity-60 active:cursor-grabbing active:opacity-100"
+          title="Перетягнути етап (на інший = всередину; на верх/низ рядка = поряд)"
+          style={{ color: T.textMuted }}
+        >
+          <GripVertical size={11} />
+        </span>
+      )}
       {isDirty && (
         <span
           title="Непубліковані зміни — натисни «Опублікувати у фінансування»"
