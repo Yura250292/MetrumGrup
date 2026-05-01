@@ -16,6 +16,7 @@ import {
   Wallet,
   Scale,
   Clock,
+  Table as TableIcon,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
@@ -35,6 +36,7 @@ import { TabArchive } from "./tab-archive";
 import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
 import { TabBudgetActual } from "./tab-budget-actual";
+import { TabPivot } from "./tab-pivot";
 import { ExportMenu } from "./export-menu";
 import { TabTimesheets } from "./tab-timesheets";
 import { FolderEstimateCard } from "./folder-estimate-card";
@@ -66,6 +68,7 @@ const TABS = [
   { key: "scans", label: "Скани чеків", shortLabel: "Скани", icon: Sparkles },
   { key: "calendar", label: "Платіжний календар", shortLabel: "Календар", icon: CalendarDays },
   { key: "archive", label: "Архів", shortLabel: "Архів", icon: Archive },
+  { key: "pivot", label: "Зведена таблиця", shortLabel: "Зведена", icon: TableIcon },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -615,6 +618,10 @@ export function FinancingView({
             users={users}
             onEdit={(e) => setEditing(e)}
           />
+        )}
+
+        {activeTab === "pivot" && (
+          <TabPivot scope={scope} filters={filters} />
         )}
       </div>
 
