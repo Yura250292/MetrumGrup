@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { requireStaffAccess, unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
-import { getConversation } from "@/lib/chat/service";
+import { requireRole, requireStaffAccess, unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { deleteConversation, getConversation } from "@/lib/chat/service";
 
 export async function GET(
   _request: Request,
@@ -19,6 +19,27 @@ export async function GET(
     if (message === "Unauthorized") return unauthorizedResponse();
     if (message === "Forbidden") return forbiddenResponse();
     console.error("[chat/conversation] error:", err);
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireRole(["SUPER_ADMIN"]);
+    const { id } = await ctx.params;
+    await deleteConversation(id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    if (message === "Unauthorized") return unauthorizedResponse();
+    if (message === "Forbidden") return forbiddenResponse();
+    if (message === "Розмову не знайдено") {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+    console.error("[chat/conversation] delete error:", err);
     return NextResponse.json({ error: message }, { status: 400 });
   }
 }

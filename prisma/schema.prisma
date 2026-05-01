@@ -1208,11 +1208,13 @@ model ConversationParticipant {
   userId         String
   joinedAt       DateTime     @default(now())
   lastReadAt     DateTime?
+  archivedAt     DateTime?
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   user           User         @relation(fields: [userId], references: [id])
 
   @@unique([conversationId, userId])
   @@index([userId])
+  @@index([userId, archivedAt])
   @@map("conversation_participants")
 }
 

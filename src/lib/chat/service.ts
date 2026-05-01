@@ -273,11 +273,17 @@ export async function listConversationsForUser(userId: string) {
 
   const memberships = await prisma.conversationParticipant.findMany({
     where: { userId },
-    select: { conversationId: true, lastReadAt: true },
+    select: { conversationId: true, lastReadAt: true, archivedAt: true },
   });
-  const membershipById = new Map<string, { lastReadAt: Date | null }>();
+  const membershipById = new Map<
+    string,
+    { lastReadAt: Date | null; archivedAt: Date | null }
+  >();
   for (const m of memberships) {
-    membershipById.set(m.conversationId, { lastReadAt: m.lastReadAt });
+    membershipById.set(m.conversationId, {
+      lastReadAt: m.lastReadAt,
+      archivedAt: m.archivedAt,
+    });
   }
 
   const conversations = hasOversight
@@ -332,6 +338,7 @@ export async function listConversationsForUser(userId: string) {
         lastMessageAt: conv.lastMessageAt,
         unreadCount,
         isObserver,
+        isArchived: Boolean(membership?.archivedAt),
       };
     })
   );
@@ -347,7 +354,7 @@ export async function listConversationsForUser(userId: string) {
 
 export async function getConversation(conversationId: string, userId: string) {
   await assertParticipant(conversationId, userId);
-  return prisma.conversation.findUnique({
+  const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: {
       project: { select: { id: true, title: true, slug: true } },
@@ -366,6 +373,9 @@ export async function getConversation(conversationId: string, userId: string) {
       },
     },
   });
+  if (!conv) return null;
+  const me = conv.participants.find((p) => p.userId === userId);
+  return { ...conv, isArchived: Boolean(me?.archivedAt) };
 }
 
 export async function getMessages(
@@ -493,6 +503,11 @@ export async function postMessage(
       where: { conversationId_userId: { conversationId, userId } },
       data: { lastReadAt: new Date() },
     }),
+    // New message resurfaces the chat for everyone who archived it.
+    prisma.conversationParticipant.updateMany({
+      where: { conversationId, archivedAt: { not: null } },
+      data: { archivedAt: null },
+    }),
   ]);
 
   // Fire-and-forget mention notifications (do not block message return)
@@ -576,6 +591,117 @@ export async function markRead(conversationId: string, userId: string) {
     where: { conversationId_userId: { conversationId, userId } },
     data: { lastReadAt: new Date() },
   });
+}
+
+export async function deleteConversation(conversationId: string) {
+  const exists = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { id: true },
+  });
+  if (!exists) {
+    throw new Error("Розмову не знайдено");
+  }
+  await prisma.conversation.delete({ where: { id: conversationId } });
+  return { id: conversationId };
+}
+
+export async function setConversationArchived(
+  conversationId: string,
+  userId: string,
+  archived: boolean,
+) {
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId } },
+  });
+  if (!participant) {
+    // Oversight users may not have a participant row yet — create one so the
+    // archive flag is persisted; this matches ensureOversightParticipant logic.
+    if (!(await canSeeAllChats(userId))) throw new Error("Forbidden");
+    await prisma.conversationParticipant.create({
+      data: {
+        conversationId,
+        userId,
+        archivedAt: archived ? new Date() : null,
+      },
+    });
+    return { archived };
+  }
+  await prisma.conversationParticipant.update({
+    where: { conversationId_userId: { conversationId, userId } },
+    data: { archivedAt: archived ? new Date() : null },
+  });
+  return { archived };
+}
+
+async function assertCanManageParticipants(
+  conversationId: string,
+  actorId: string,
+) {
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { type: true },
+  });
+  if (!conv) throw new Error("Розмову не знайдено");
+  if (conv.type !== "GROUP") {
+    throw new Error("Учасників можна змінювати тільки у груповому чаті");
+  }
+  // Either an existing participant of the group, or oversight (SUPER_ADMIN).
+  const participant = await prisma.conversationParticipant.findUnique({
+    where: { conversationId_userId: { conversationId, userId: actorId } },
+    select: { id: true },
+  });
+  if (!participant && !(await canSeeAllChats(actorId))) {
+    throw new Error("Forbidden");
+  }
+}
+
+export async function addGroupParticipants(
+  conversationId: string,
+  actorId: string,
+  newUserIds: string[],
+) {
+  await assertCanManageParticipants(conversationId, actorId);
+  const uniqueIds = Array.from(new Set(newUserIds.filter(Boolean)));
+  if (uniqueIds.length === 0) {
+    throw new Error("Не вибрано жодного користувача");
+  }
+  const eligible = await prisma.user.findMany({
+    where: { id: { in: uniqueIds }, isActive: true, role: { in: STAFF_ROLES } },
+    select: { id: true },
+  });
+  if (eligible.length === 0) {
+    throw new Error("Користувачі недоступні для чату");
+  }
+  await prisma.$transaction(
+    eligible.map((u) =>
+      prisma.conversationParticipant.upsert({
+        where: { conversationId_userId: { conversationId, userId: u.id } },
+        create: { conversationId, userId: u.id },
+        update: { archivedAt: null },
+      }),
+    ),
+  );
+  return { added: eligible.length };
+}
+
+export async function removeGroupParticipant(
+  conversationId: string,
+  actorId: string,
+  removeUserId: string,
+) {
+  await assertCanManageParticipants(conversationId, actorId);
+  const remaining = await prisma.conversationParticipant.count({
+    where: { conversationId },
+  });
+  if (remaining <= 1) {
+    throw new Error(
+      "Неможливо видалити останнього учасника. Видаліть розмову замість цього.",
+    );
+  }
+  await prisma.conversationParticipant.deleteMany({
+    where: { conversationId, userId: removeUserId },
+  });
+  return { removed: removeUserId };
 }
 
 export async function listStaffUsers(currentUserId: string) {

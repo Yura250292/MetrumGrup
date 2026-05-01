@@ -71,6 +71,7 @@ export type ChatConversation = {
   lastMessageAt: string | null;
   unreadCount: number;
   isObserver?: boolean;
+  isArchived?: boolean;
 };
 
 export type StaffUser = {
@@ -171,6 +172,77 @@ export function useCreateConversation() {
         body: JSON.stringify(input),
       }).then((d) => d.conversation),
     onSuccess: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+    },
+  });
+}
+
+export function useArchiveConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+      archived,
+    }: {
+      conversationId: string;
+      archived: boolean;
+    }) =>
+      jsonFetch<{ archived: boolean }>(
+        `/api/admin/chat/conversations/${conversationId}/archive`,
+        {
+          method: "POST",
+          body: JSON.stringify({ archived }),
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+    },
+  });
+}
+
+export function useAddParticipants(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userIds: string[]) =>
+      jsonFetch<{ added: number }>(
+        `/api/admin/chat/conversations/${conversationId}/participants`,
+        {
+          method: "POST",
+          body: JSON.stringify({ userIds }),
+        },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) });
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+    },
+  });
+}
+
+export function useRemoveParticipant(conversationId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) =>
+      jsonFetch<{ removed: string }>(
+        `/api/admin/chat/conversations/${conversationId}/participants/${userId}`,
+        { method: "DELETE" },
+      ),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: chatKeys.conversation(conversationId) });
+      qc.invalidateQueries({ queryKey: chatKeys.conversations() });
+    },
+  });
+}
+
+export function useDeleteConversation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (conversationId: string) =>
+      jsonFetch<{ ok: true }>(`/api/admin/chat/conversations/${conversationId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: (_data, conversationId) => {
+      qc.removeQueries({ queryKey: chatKeys.conversation(conversationId) });
+      qc.removeQueries({ queryKey: chatKeys.messages(conversationId) });
       qc.invalidateQueries({ queryKey: chatKeys.conversations() });
     },
   });

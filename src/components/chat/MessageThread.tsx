@@ -12,6 +12,7 @@ import {
   useToggleMessageReaction,
   type ChatMessage,
 } from "@/hooks/useChat";
+import { ConversationActionsMenu } from "./ConversationActionsMenu";
 import { MessageComposer } from "./MessageComposer";
 import { ReactionBar } from "@/components/collab/ReactionBar";
 import { RenderCommentBody } from "@/components/collab/RenderCommentBody";
@@ -434,6 +435,15 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
           <Mail className="h-3.5 w-3.5" />
           <span className="hidden sm:inline">Лист</span>
         </button>
+        {conversation && (
+          <ConversationActionsMenu
+            conversation={{
+              id: conversationId,
+              type: conversation.type,
+              isArchived: Boolean(conversation.isArchived),
+            }}
+          />
+        )}
       </div>
 
       {/* Messages */}

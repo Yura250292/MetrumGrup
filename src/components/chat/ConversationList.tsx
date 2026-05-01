@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle, Eye, Settings } from "lucide-react";
+import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle, Eye, Settings, Archive } from "lucide-react";
 import { useConversations, type ChatConversation } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { NewConversationDialog } from "./NewConversationDialog";
@@ -131,17 +131,26 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [oversightOpen, setOversightOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [showArchived, setShowArchived] = useState(false);
+
+  const archivedCount = useMemo(
+    () => (conversations ?? []).filter((c) => c.isArchived).length,
+    [conversations],
+  );
 
   const filtered = useMemo(() => {
     if (!conversations) return [];
     const q = query.trim().toLowerCase();
-    if (!q) return conversations;
-    return conversations.filter((c) => {
+    const base = conversations.filter((c) =>
+      showArchived ? c.isArchived : !c.isArchived,
+    );
+    if (!q) return base;
+    return base.filter((c) => {
       const title = getConversationTitle(c).toLowerCase();
       const last = c.lastMessage?.body?.toLowerCase() ?? "";
       return title.includes(q) || last.includes(q);
     });
-  }, [conversations, query]);
+  }, [conversations, query, showArchived]);
 
   return (
     <>
@@ -150,9 +159,31 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
         style={{ borderColor: T.borderSoft }}
       >
         <h2 className="text-sm font-bold" style={{ color: T.textPrimary }}>
-          Розмови
+          {showArchived ? "Архів" : "Розмови"}
         </h2>
         <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setShowArchived((v) => !v)}
+            className="relative rounded-lg p-1.5 transition active:scale-95"
+            style={{
+              color: showArchived ? T.accentPrimary : T.textSecondary,
+              backgroundColor: showArchived ? T.accentPrimarySoft : "transparent",
+            }}
+            title={showArchived ? "Показати активні розмови" : "Показати архів"}
+            aria-label={showArchived ? "Показати активні розмови" : "Показати архів"}
+            aria-pressed={showArchived}
+          >
+            <Archive className="h-4 w-4" />
+            {!showArchived && archivedCount > 0 && (
+              <span
+                className="absolute -top-0.5 -right-0.5 inline-flex min-w-[16px] h-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold"
+                style={{ backgroundColor: T.textMuted, color: "#FFFFFF" }}
+              >
+                {archivedCount}
+              </span>
+            )}
+          </button>
           {isSuperAdmin && (
             <button
               type="button"
@@ -224,7 +255,13 @@ export function ConversationList({ activeId }: { activeId: string | null }) {
         )}
         {!isLoading && !isError && conversations && conversations.length > 0 && filtered.length === 0 && (
           <p className="p-6 text-center text-sm" style={{ color: T.textMuted }}>
-            Нічого не знайдено
+            {showArchived
+              ? query
+                ? "Нічого не знайдено в архіві"
+                : "Архів порожній"
+              : query
+                ? "Нічого не знайдено"
+                : "Усі розмови в архіві"}
           </p>
         )}
         {filtered.map((c, idx) => (
