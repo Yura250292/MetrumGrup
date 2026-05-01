@@ -7,6 +7,7 @@ import {
   MessageCircle,
   MessageSquare,
   Users,
+  ListTree,
 } from "lucide-react";
 import type { FeedKind } from "@/hooks/useFeed";
 
@@ -37,6 +38,10 @@ const ICON_CONFIG: Record<
   member_change: {
     Icon: Users,
     gradient: "from-indigo-500 to-blue-500",
+  },
+  stage_change: {
+    Icon: ListTree,
+    gradient: "from-amber-500 to-orange-500",
   },
 };
 

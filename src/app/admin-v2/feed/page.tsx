@@ -12,6 +12,7 @@ import {
   LayoutList,
   Rows3,
   ArrowUpRight,
+  ListTree,
 } from "lucide-react";
 import { useFeed, type FeedKind, type FeedItem } from "@/hooks/useFeed";
 import { formatCurrency } from "@/lib/utils";
@@ -54,6 +55,7 @@ const KIND_META: Record<
   comment: { icon: MessageSquare, label: "Коментар", bg: T.panelElevated, fg: T.textSecondary },
   chat_message: { icon: MessageSquare, label: "Чат", bg: T.panelElevated, fg: T.textSecondary },
   member_change: { icon: Users, label: "Команда", bg: T.accentPrimarySoft, fg: T.accentPrimary },
+  stage_change: { icon: ListTree, label: "Етап", bg: T.warningSoft, fg: T.warning },
 };
 
 type Density = "comfortable" | "compact";

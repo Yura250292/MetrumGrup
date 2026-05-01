@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Loader2,
   Users,
+  ListTree,
 } from "lucide-react";
 import { useFeed, type FeedKind } from "@/hooks/useFeed";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -51,6 +52,12 @@ const KIND_META: Record<
     label: "Команда",
     bg: T.accentPrimarySoft,
     fg: T.accentPrimary,
+  },
+  stage_change: {
+    icon: ListTree,
+    label: "Етап",
+    bg: T.warningSoft,
+    fg: T.warning,
   },
 };
 

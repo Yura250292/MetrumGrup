@@ -8,7 +8,8 @@ export type FeedKind =
   | "estimate_approved"
   | "comment"
   | "chat_message"
-  | "member_change";
+  | "member_change"
+  | "stage_change";
 
 export type FeedActor = {
   id: string;

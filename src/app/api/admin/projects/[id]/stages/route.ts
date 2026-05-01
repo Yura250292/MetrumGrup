@@ -5,6 +5,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { ProjectStage, StageStatus } from "@prisma/client";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
+import { auditLog } from "@/lib/audit";
 
 const MAX_DEPTH = 2; // 0-indexed: root=0, підетап=1, підпідетап=2 (3 рівні)
 
@@ -207,6 +208,20 @@ export async function PUT(
     userId: session.user.id,
   });
 
+  // Один summary-запис для масової reorganize-операції — без розпису по
+  // кожному стейджу, бо PUT приймає весь tree і granular diff марний.
+  await auditLog({
+    userId: session.user.id,
+    action: "UPDATE",
+    entity: "ProjectStageRecord",
+    projectId,
+    newData: {
+      bulk: true,
+      stagesCount: flat.length,
+      removedRoots: removedRootIds.length,
+    },
+  });
+
   return NextResponse.json({ success: true });
 }
 
@@ -312,6 +327,20 @@ export async function POST(
   await recalcCurrentStage(projectId, {
     syncBudget: false,
     userId: session.user.id,
+  });
+
+  await auditLog({
+    userId: session.user.id,
+    action: "CREATE",
+    entity: "ProjectStageRecord",
+    entityId: created.id,
+    projectId,
+    newData: {
+      customName: created.customName,
+      stage: created.stage,
+      parentStageId: created.parentStageId,
+      sortOrder: created.sortOrder,
+    },
   });
 
   return NextResponse.json({ data: created }, { status: 201 });

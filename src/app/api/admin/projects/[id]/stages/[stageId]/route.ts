@@ -198,7 +198,14 @@ export async function DELETE(
 
   const stage = await prisma.projectStageRecord.findUnique({
     where: { id: stageId },
-    select: { id: true, projectId: true, project: { select: { firmId: true } } },
+    select: {
+      id: true,
+      projectId: true,
+      customName: true,
+      stage: true,
+      parentStageId: true,
+      project: { select: { firmId: true } },
+    },
   });
   if (!stage || stage.projectId !== projectId) {
     return NextResponse.json({ error: "Етап не знайдено" }, { status: 404 });
@@ -222,6 +229,11 @@ export async function DELETE(
     entity: "ProjectStageRecord",
     entityId: stageId,
     projectId,
+    oldData: {
+      customName: stage.customName,
+      stage: stage.stage,
+      parentStageId: stage.parentStageId,
+    },
   });
 
   return NextResponse.json({ success: true });

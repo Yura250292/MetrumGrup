@@ -13,6 +13,7 @@ const KIND_VERBS: Record<FeedItem["kind"], string> = {
   comment: "залишено",
   chat_message: "нове повідомлення",
   member_change: "оновлено команду",
+  stage_change: "змінено етап",
 };
 
 export function FeedItemCard({ item, compact = false }: { item: FeedItem; compact?: boolean }) {

@@ -6,7 +6,8 @@ export type FeedKind =
   | "estimate_approved"
   | "comment"
   | "chat_message"
-  | "member_change";
+  | "member_change"
+  | "stage_change";
 
 export type FeedActor = {
   id: string;
@@ -53,6 +54,7 @@ export async function listFeed(opts: { limit?: number } = {}): Promise<{
     comments,
     chatMessages,
     memberEvents,
+    stageEvents,
   ] = await Promise.all([
       prisma.completionAct.findMany({
         take: fetchLimit,
@@ -122,7 +124,47 @@ export async function listFeed(opts: { limit?: number } = {}): Promise<{
           project: { select: { id: true, title: true, slug: true } },
         },
       }),
+      prisma.auditLog.findMany({
+        where: {
+          entity: "ProjectStageRecord",
+          projectId: { not: null },
+        },
+        take: fetchLimit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          project: { select: { id: true, title: true, slug: true } },
+        },
+      }),
     ]);
+
+  // Підтягуємо актуальні назви живих стейджів (для CREATE/UPDATE/move) одним
+  // батчем — щоб не робити N+1 у форматуванні нижче. Видалені дістаємо з
+  // oldData у DELETE-події.
+  const stageEntityIds = stageEvents
+    .map((ev) => ev.entityId)
+    .filter((id): id is string => Boolean(id));
+  const stageNameMap = new Map<string, string>();
+  if (stageEntityIds.length > 0) {
+    const liveStages = await prisma.projectStageRecord.findMany({
+      where: { id: { in: stageEntityIds } },
+      select: { id: true, customName: true, stage: true },
+    });
+    const STAGE_LABELS: Record<string, string> = {
+      FOUNDATION: "Фундамент",
+      WALLS: "Стіни",
+      ROOF: "Дах",
+      ENGINEERING: "Інженерія",
+      FINISHING: "Оздоблення",
+      HANDOVER: "Здача",
+    };
+    for (const s of liveStages) {
+      const label =
+        s.customName ||
+        (s.stage ? STAGE_LABELS[s.stage as string] ?? String(s.stage) : null);
+      if (label) stageNameMap.set(s.id, label);
+    }
+  }
 
   // Resolve project lookups for ESTIMATE comments in one batch
   const estimateCommentIds = comments
@@ -279,6 +321,117 @@ export async function listFeed(opts: { limit?: number } = {}): Promise<{
         ? { id: ev.user.id, name: ev.user.name, avatar: ev.user.avatar }
         : null,
       link: `/admin-v2/projects/${ev.projectId}?tab=team`,
+    });
+  }
+
+  for (const ev of stageEvents) {
+    if (!ev.project) continue;
+    const action = ev.action;
+    const newData =
+      (ev.newData as Record<string, unknown> | null) ?? null;
+    const oldData =
+      (ev.oldData as Record<string, unknown> | null) ?? null;
+
+    // Bulk-операції (PUT, import-spreadsheet) — окрема презентація.
+    const isBulk = newData?.bulk === true;
+
+    const liveLabel = ev.entityId ? stageNameMap.get(ev.entityId) : null;
+    const newDataLabel =
+      typeof newData?.customName === "string"
+        ? newData.customName
+        : typeof newData?.stage === "string"
+          ? String(newData.stage)
+          : null;
+    const oldDataLabel =
+      typeof oldData?.customName === "string"
+        ? oldData.customName
+        : typeof oldData?.stage === "string"
+          ? String(oldData.stage)
+          : null;
+    const stageName = liveLabel ?? newDataLabel ?? oldDataLabel ?? "етап";
+
+    let title = "Зміна етапу";
+    let subtitle: string | null = null;
+
+    if (isBulk) {
+      const created = Number(newData?.created ?? 0);
+      const removed = Number(newData?.removed ?? 0);
+      const stagesCount = Number(newData?.stagesCount ?? 0);
+      const source = String(newData?.source ?? "");
+      if (action === "CREATE" && source === "spreadsheet") {
+        title = `Імпорт з кошторису: ${created} ${created === 1 ? "позицію" : "позицій"}`;
+        if (removed > 0) subtitle = `Замінено: попередніх ${removed}`;
+      } else if (action === "UPDATE") {
+        title = `Структуру етапів оновлено${
+          stagesCount > 0 ? ` (${stagesCount} ${stagesCount === 1 ? "етап" : "етапів"})` : ""
+        }`;
+      }
+    } else if (action === "CREATE") {
+      title = `Додано етап: «${stageName}»`;
+    } else if (action === "DELETE") {
+      title = `Видалено етап: «${stageName}»`;
+    } else if (action === "UPDATE") {
+      // Перейменування / зміна позиції / правка полів — формуємо
+      // людинописний підзаголовок з ключових змін.
+      const parts: string[] = [];
+      if (typeof newData?.customName === "string" && newData.customName) {
+        parts.push(`перейменовано на «${newData.customName}»`);
+      }
+      if (typeof newData?.status === "string") {
+        const statusLabels: Record<string, string> = {
+          PENDING: "Очікує",
+          IN_PROGRESS: "В роботі",
+          COMPLETED: "Завершено",
+        };
+        parts.push(
+          `статус: ${statusLabels[newData.status as string] ?? newData.status}`,
+        );
+      }
+      if (typeof newData?.progress === "number") {
+        parts.push(`прогрес: ${newData.progress}%`);
+      }
+      if (
+        newData &&
+        ("parentStageId" in newData || "sortOrder" in newData) &&
+        !("status" in newData) &&
+        !("progress" in newData) &&
+        !("customName" in newData)
+      ) {
+        parts.push("перенесено у дереві");
+      }
+      if (
+        newData &&
+        ("planVolume" in newData ||
+          "factVolume" in newData ||
+          "planUnitPrice" in newData ||
+          "factUnitPrice" in newData ||
+          "planClientUnitPrice" in newData ||
+          "factClientUnitPrice" in newData ||
+          "unit" in newData ||
+          "factUnit" in newData)
+      ) {
+        parts.push("оновлено План/Факт");
+      }
+      if (typeof newData?.responsibleName === "string" || typeof newData?.responsibleUserId === "string") {
+        parts.push("змінено відповідального");
+      }
+      if (typeof newData?.notes === "string") {
+        parts.push("оновлено коментар");
+      }
+      title = `Етап «${stageName}»: ${parts.join(", ") || "оновлено"}`;
+    }
+
+    items.push({
+      id: `stage_change:${ev.id}`,
+      kind: "stage_change",
+      title,
+      subtitle,
+      createdAt: ev.createdAt,
+      project: ev.project,
+      actor: ev.user
+        ? { id: ev.user.id, name: ev.user.name, avatar: ev.user.avatar }
+        : null,
+      link: `/admin-v2/projects/${ev.projectId}`,
     });
   }
 

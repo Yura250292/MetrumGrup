@@ -5,6 +5,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { parseSpreadsheetTsv, type ParsedNode } from "@/lib/projects/parse-spreadsheet";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
+import { auditLog } from "@/lib/audit";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -173,6 +174,22 @@ export async function POST(
   // перед тим як числа потечуть у /financing.
 
   await recalcCurrentStage(projectId, { syncBudget: true, userId: session.user.id });
+
+  await auditLog({
+    userId: session.user.id,
+    action: "CREATE",
+    entity: "ProjectStageRecord",
+    projectId,
+    newData: {
+      bulk: true,
+      source: "spreadsheet",
+      mode,
+      removed: removedCount,
+      created: created.length,
+      sections: parseResult.nodes.filter((n) => n.isSection).length,
+      items: parseResult.nodes.filter((n) => !n.isSection).length,
+    },
+  });
 
   return NextResponse.json({
     data: {
