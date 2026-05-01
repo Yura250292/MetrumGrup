@@ -269,7 +269,6 @@ export function StagesSection({
     setSavedAt(new Date());
     void refetch();
     void refetchDirty();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refetch, refetchDirty]);
 
   const selected = stages.find((s) => s.id === selectedStageId) ?? null;
