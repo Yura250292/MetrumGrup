@@ -59,6 +59,7 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
       {/* Етапи виконання — на всю ширину */}
       <StagesSection
         projectId={project.id}
+        projectTitle={project.title}
         initialStages={project.stages}
         candidates={project.responsibleCandidates}
         isTestProject={project.isTestProject}

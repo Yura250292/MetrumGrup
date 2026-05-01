@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Check, Calendar, User2, Loader2, History, Ruler } from "lucide-react";
+import Link from "next/link";
+import { X, Check, Calendar, User2, Loader2, History, Ruler, ChevronRight } from "lucide-react";
 import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -15,7 +16,10 @@ const UNIT_OPTIONS = ["", "шт", "м", "м²", "м³", "кг", "т", "л", "п�
 
 type StageDetailDrawerProps = {
   projectId: string;
+  projectTitle: string;
   stage: StageRow;
+  /** Назва батьківського етапу — для повного breadcrumb коли відкритий підетап. */
+  parentStageName?: string | null;
   candidates: ResponsibleCandidate[];
   onClose: () => void;
   onChanged: () => Promise<void> | void;
@@ -42,7 +46,9 @@ const STATUS_COLORS: Record<StageStatus, { bg: string; fg: string }> = {
 
 export function StageDetailDrawer({
   projectId,
+  projectTitle,
   stage,
+  parentStageName,
   candidates,
   onClose,
   onChanged,
@@ -148,17 +154,54 @@ export function StageDetailDrawer({
           style={{ borderColor: T.borderSoft }}
         >
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: T.textMuted }}>
-              Етап
-            </div>
-            <h3 className="mt-1 truncate text-[16px] font-bold" style={{ color: T.textPrimary }}>
+            {/* Breadcrumb: Проєкти › {project} › [{Підетап батько} ›] Етап */}
+            <nav
+              className="flex flex-wrap items-center gap-1 text-[11px]"
+              style={{ color: T.textMuted }}
+              aria-label="Шлях"
+            >
+              <Link
+                href="/admin-v2/projects"
+                className="transition hover:underline"
+                style={{ color: T.textMuted }}
+              >
+                Проєкти
+              </Link>
+              <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
+              <Link
+                href={`/admin-v2/projects/${projectId}`}
+                className="max-w-[160px] truncate transition hover:underline"
+                style={{ color: T.textSecondary, fontWeight: 500 }}
+                title={projectTitle}
+              >
+                {projectTitle}
+              </Link>
+              {parentStageName && (
+                <>
+                  <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
+                  <span
+                    className="max-w-[140px] truncate"
+                    style={{ color: T.textSecondary }}
+                    title={parentStageName}
+                  >
+                    {parentStageName}
+                  </span>
+                </>
+              )}
+              <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
+              <span style={{ color: T.textMuted }}>Етап</span>
+            </nav>
+            <h3
+              className="mt-1.5 truncate text-[16px] font-bold"
+              style={{ color: T.textPrimary }}
+            >
               {stageDisplayName(stage)}
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full transition hover:brightness-95"
+            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition hover:brightness-95"
             style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
             aria-label="Закрити"
           >

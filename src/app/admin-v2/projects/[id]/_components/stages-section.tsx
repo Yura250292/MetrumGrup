@@ -14,6 +14,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { stageDisplayName } from "@/lib/constants";
 import {
   StageTable,
   type StageRow,
@@ -30,6 +31,7 @@ export type ResponsibleCandidate = { id: string; name: string };
 
 type StagesSectionProps = {
   projectId: string;
+  projectTitle: string;
   initialStages: StageRow[];
   candidates: ResponsibleCandidate[];
   isTestProject: boolean;
@@ -37,6 +39,7 @@ type StagesSectionProps = {
 
 export function StagesSection({
   projectId,
+  projectTitle,
   initialStages,
   candidates,
   isTestProject,
@@ -492,7 +495,16 @@ export function StagesSection({
       {selected && (
         <StageDetailDrawer
           projectId={projectId}
+          projectTitle={projectTitle}
           stage={selected}
+          parentStageName={
+            selected.parentStageId
+              ? (() => {
+                  const p = stages.find((s) => s.id === selected.parentStageId);
+                  return p ? stageDisplayName(p) : null;
+                })()
+              : null
+          }
           candidates={candidates}
           onClose={() => setSelectedStageId(null)}
           onChanged={refetch}
