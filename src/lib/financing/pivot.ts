@@ -19,12 +19,16 @@ export type PivotEntryInput = {
   subcategory: string | null;
   occurredAt: Date;
   amount: Prisma.Decimal | number | string;
+  projectId: string | null;
+  projectTitle: string | null;
 };
 
 export type PivotRow = {
   type: "INCOME" | "EXPENSE";
   category: string;
   subcategory: string | null;
+  projectId: string | null;
+  projectTitle: string | null;
   perMonth: Record<string, number>;
   total: number;
 };
@@ -82,13 +86,15 @@ export function aggregatePivot(
     const mk = monthKey(e.occurredAt);
     if (!months.includes(mk)) continue;
 
-    const rowKey = `${e.type}::${e.category}::${e.subcategory ?? ""}`;
+    const rowKey = `${e.type}::${e.projectId ?? ""}::${e.category}::${e.subcategory ?? ""}`;
     let row = rowMap.get(rowKey);
     if (!row) {
       row = {
         type: e.type,
         category: e.category,
         subcategory: e.subcategory,
+        projectId: e.projectId,
+        projectTitle: e.projectTitle,
         perMonth: Object.fromEntries(months.map((m) => [m, 0])),
         total: 0,
       };
@@ -110,6 +116,9 @@ export function aggregatePivot(
 
   const rows = Array.from(rowMap.values()).sort((a, b) => {
     if (a.type !== b.type) return a.type === "INCOME" ? -1 : 1;
+    const aProj = a.projectTitle ?? "￿";
+    const bProj = b.projectTitle ?? "￿";
+    if (aProj !== bProj) return aProj.localeCompare(bProj);
     if (a.category !== b.category) return a.category.localeCompare(b.category);
     return (a.subcategory ?? "").localeCompare(b.subcategory ?? "");
   });
@@ -154,7 +163,7 @@ export async function computePivot(p: PivotQueryParams): Promise<PivotResponse> 
 
   const where = await expandFolderFilter(filters);
 
-  const rows = await prisma.financeEntry.findMany({
+  const dbRows = await prisma.financeEntry.findMany({
     where,
     select: {
       type: true,
@@ -162,9 +171,21 @@ export async function computePivot(p: PivotQueryParams): Promise<PivotResponse> 
       subcategory: true,
       occurredAt: true,
       amount: true,
+      projectId: true,
+      project: { select: { title: true } },
     },
     take: 50000,
   });
 
-  return aggregatePivot(rows, { from: p.from, to: p.to });
+  const inputs: PivotEntryInput[] = dbRows.map((r) => ({
+    type: r.type,
+    category: r.category,
+    subcategory: r.subcategory,
+    occurredAt: r.occurredAt,
+    amount: r.amount,
+    projectId: r.projectId,
+    projectTitle: r.project?.title ?? null,
+  }));
+
+  return aggregatePivot(inputs, { from: p.from, to: p.to });
 }
