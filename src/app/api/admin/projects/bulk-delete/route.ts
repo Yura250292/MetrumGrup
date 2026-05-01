@@ -7,8 +7,9 @@
  * накопичив багато тестових проектів від AI-генерації, треба швидко
  * почистити. Тільки SUPER_ADMIN.
  *
- * Так само як одиничний DELETE, попередньо null-имо FK на projectId у
- * inventory_transactions і audit_logs (вони без onDelete: Cascade).
+ * Логіка співпадає з одиничним DELETE — повне видалення фінансових записів
+ * проєкту перед project.delete (інакше FinanceEntry.projectId стає NULL і
+ * записи фігурують у зведенні як "projectless").
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -57,6 +58,14 @@ export async function POST(request: NextRequest) {
   for (const id of ids) {
     try {
       await prisma.$transaction(async (tx) => {
+        // Повне видалення фінансових записів проєкту (див. коментар у
+        // single DELETE handler).
+        await tx.financeEntry.deleteMany({ where: { projectId: id } });
+        await tx.folder.deleteMany({ where: { mirroredFromProjectId: id } });
+        await tx.equipment.updateMany({
+          where: { currentProjectId: id },
+          data: { currentProjectId: null },
+        });
         await tx.inventoryTransaction.updateMany({
           where: { projectId: id },
           data: { projectId: null },

@@ -8,7 +8,6 @@ import { notifyProjectMembers } from "@/lib/notifications/create";
 import {
   updateProjectMirror,
   syncProjectBudgetEntry,
-  deleteProjectMirror,
 } from "@/lib/folders/mirror-service";
 import { computeStageFinanceAggregates } from "@/lib/projects/stages-helpers";
 
@@ -275,22 +274,40 @@ export async function DELETE(
       return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
     }
 
-    // Дві FK на Project не мають onDelete: Cascade у схемі —
-    // inventory_transactions.projectId і audit_logs.projectId. Обидва
-    // nullable, тому просто null-имо їх до delete.
+    // Phase 3+: видалення проєкту = повне очищення всіх його даних.
+    // Раніше FinanceEntry.projectId мав SetNull — записи лишалися як
+    // "projectless" і фігурували у зведенні фінансування навіть після
+    // видалення проєкту. Тепер видаляємо явно перед project.delete.
+    //
+    // FK без onDelete-політики:
+    //   - Equipment.currentProjectId — null-имо (обладнання — асет, виживає)
+    //   - InventoryTransaction.projectId — null-имо (історія транзакцій
+    //     виживає, але без прив'язки)
+    //   - AuditLog.projectId — null-имо (audit log зберігаємо)
     await prisma.$transaction(async (tx) => {
-      // FINANCE-mirror папку — прибрати вручну, щоб перенести її FinanceEntry
-      // у кореневу "Проєкти" (FK cascade знищив би їх разом з папкою).
-      await deleteProjectMirror(id, tx);
+      // 1. Усі фінансові записи проєкту — STAGE_AUTO, ESTIMATE_AUTO,
+      //    PROJECT_BUDGET, MANUAL. Видаляються повністю; FinanceEntryAttachment
+      //    каскадно (FK Cascade); Timesheet/KB2/ReceiptScan/Retention мають
+      //    SetNull на financeEntryId — їх заберемо нижче через project Cascade.
+      await tx.financeEntry.deleteMany({ where: { projectId: id } });
 
+      // 2. Mirror-папка проєкту у "Проєкти". Тепер просто видаляємо — записи
+      //    у ній уже видалили попереднім кроком.
+      await tx.folder.deleteMany({ where: { mirroredFromProjectId: id } });
+
+      // 3. FK без onDelete-політики — null-имо вручну, інакше delete зафейлить.
+      await tx.equipment.updateMany({
+        where: { currentProjectId: id },
+        data: { currentProjectId: null },
+      });
       await tx.inventoryTransaction.updateMany({
         where: { projectId: id },
         data: { projectId: null },
       });
-      // audit_logs модель — використовуємо raw SQL бо назва Prisma-моделі
-      // може відрізнятися від snake_case таблиці.
       await tx.$executeRaw`UPDATE "audit_logs" SET "projectId" = NULL WHERE "projectId" = ${id}`;
 
+      // 4. project.delete каскадно зносить решту: stages, estimates, payments,
+      //    members, tasks, conversations, files, KB2/3, etc.
       await tx.project.delete({ where: { id } });
     });
 
