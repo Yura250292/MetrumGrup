@@ -49,12 +49,15 @@ export async function GET(
   // 403 якщо контрагент чужої фірми (Studio юзер не бачить Group-контрагента і навпаки).
   assertCanAccessFirm(session, cp.firmId);
   const firmFilter: { firmId?: string } = firmId ? { firmId } : {};
+  const hideSalary = activeRole === "HR";
+  const salaryFilter = hideSalary ? { NOT: { category: "salary" } } : {};
 
   // Aggregate per kind/type/status to build the KPI strip on the dossier page.
   // Scoped by firm: studio director sees only Metrum Studio totals for shared counterparties.
+  // HR не повинен бачити суми ЗП, тож виключаємо category="salary" з агрегацій.
   const grouped = await prisma.financeEntry.groupBy({
     by: ["kind", "type", "status"],
-    where: { counterpartyId: id, isArchived: false, ...firmFilter },
+    where: { counterpartyId: id, isArchived: false, ...firmFilter, ...salaryFilter },
     _sum: { amount: true },
     _count: { _all: true },
   });
@@ -91,6 +94,7 @@ export async function GET(
       isArchived: false,
       projectId: { not: null },
       ...firmFilter,
+      ...salaryFilter,
     },
     select: {
       projectId: true,

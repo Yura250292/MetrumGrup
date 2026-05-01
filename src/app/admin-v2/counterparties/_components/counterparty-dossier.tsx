@@ -6,12 +6,9 @@ import {
   ArrowLeft,
   Building2,
   CheckCircle2,
-  CreditCard,
   ExternalLink,
   Loader2,
-  Mail,
-  Phone,
-  Save,
+  Pencil,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -22,10 +19,12 @@ import { uk } from "date-fns/locale";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 
+type CounterpartyType = "LEGAL" | "INDIVIDUAL" | "FOP";
+
 type Counterparty = {
   id: string;
   name: string;
-  type: "LEGAL" | "INDIVIDUAL" | "FOP";
+  type: CounterpartyType;
   edrpou: string | null;
   iban: string | null;
   vatPayer: boolean;
@@ -68,7 +67,7 @@ type FinanceEntry = {
   costCode: { id: string; code: string; name: string } | null;
 };
 
-const TYPE_LABELS: Record<Counterparty["type"], string> = {
+const TYPE_LABELS: Record<CounterpartyType, string> = {
   LEGAL: "ТОВ / ЮО",
   INDIVIDUAL: "Фіз. особа",
   FOP: "ФОП",
@@ -80,6 +79,23 @@ const STATUS_LABELS: Record<FinanceEntry["status"], string> = {
   APPROVED: "Підтв.",
   PAID: "Оплачено",
 };
+
+function taxLabel(type: CounterpartyType): string {
+  return type === "LEGAL" ? "ЄДРПОУ" : "РНОКПП";
+}
+
+type FieldKey =
+  | "name"
+  | "type"
+  | "edrpou"
+  | "taxId"
+  | "iban"
+  | "vatPayer"
+  | "phone"
+  | "email"
+  | "address"
+  | "notes"
+  | "isActive";
 
 export function CounterpartyDossier({
   id,
@@ -93,12 +109,14 @@ export function CounterpartyDossier({
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<Partial<Counterparty> | null>(null);
+  const [editingField, setEditingField] = useState<FieldKey | null>(null);
+  const [savingField, setSavingField] = useState<FieldKey | null>(null);
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"].includes(currentUserRole);
   const canDelete = currentUserRole === "SUPER_ADMIN";
+  const canToggleActive = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
+  const hideSalary = currentUserRole === "HR";
 
   async function loadAll() {
     setLoading(true);
@@ -133,14 +151,19 @@ export function CounterpartyDossier({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function saveDossier() {
-    if (!editing) return;
-    setSaving(true);
+  async function patchField(field: FieldKey, value: unknown) {
+    if (!cp) return;
+    const current = cp[field];
+    if (current === value) {
+      setEditingField(null);
+      return;
+    }
+    setSavingField(field);
     try {
       const res = await fetch(`/api/admin/financing/counterparties/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editing),
+        body: JSON.stringify({ [field]: value }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -149,9 +172,9 @@ export function CounterpartyDossier({
       }
       const j = await res.json();
       setCp(j.data);
-      setEditing(null);
     } finally {
-      setSaving(false);
+      setSavingField(null);
+      setEditingField(null);
     }
   }
 
@@ -161,12 +184,17 @@ export function CounterpartyDossier({
     if (res.ok) await loadAll();
   }
 
+  const visibleEntries = useMemo(
+    () => (hideSalary ? entries.filter((e) => e.category !== "salary") : entries),
+    [entries, hideSalary],
+  );
+
   const sortedEntries = useMemo(
     () =>
-      [...entries].sort(
+      [...visibleEntries].sort(
         (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
       ),
-    [entries],
+    [visibleEntries],
   );
 
   if (loading) {
@@ -205,235 +233,323 @@ export function CounterpartyDossier({
         </Link>
       </div>
 
-      {/* Header card */}
+      {/* Slim header */}
       <div
-        className="rounded-2xl p-5"
+        className="flex flex-wrap items-center gap-3 rounded-2xl p-4"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
       >
-        <div className="flex flex-wrap items-start gap-4">
-          <div
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl"
-            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-          >
-            <Building2 size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold" style={{ color: T.textPrimary }}>
-                {cp.name}
-              </h1>
-              {!cp.isActive && (
-                <span
-                  className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase"
-                  style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-                >
-                  Деактивовано
-                </span>
-              )}
-              <span
-                className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
-                style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
-              >
-                {TYPE_LABELS[cp.type]}
-              </span>
-              {cp.vatPayer && (
-                <span
-                  className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
-                  style={{ backgroundColor: T.violetSoft, color: T.violet }}
-                >
-                  Платник ПДВ
-                </span>
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]" style={{ color: T.textSecondary }}>
-              {cp.edrpou && <span>ЄДРПОУ/РНОКПП: <strong>{cp.edrpou}</strong></span>}
-              {cp.taxId && <span>ІПН: <strong>{cp.taxId}</strong></span>}
-              {cp.iban && (
-                <span className="flex items-center gap-1.5">
-                  <CreditCard size={12} />
-                  <code className="text-[11.5px]" style={{ color: T.textPrimary }}>{cp.iban}</code>
-                </span>
-              )}
-              {cp.phone && (
-                <a
-                  href={`tel:${cp.phone}`}
-                  className="flex items-center gap-1.5 hover:underline"
-                >
-                  <Phone size={12} /> {cp.phone}
-                </a>
-              )}
-              {cp.email && (
-                <a
-                  href={`mailto:${cp.email}`}
-                  className="flex items-center gap-1.5 hover:underline"
-                >
-                  <Mail size={12} /> {cp.email}
-                </a>
-              )}
-            </div>
-            {cp.address && (
-              <div className="mt-1 text-[12px]" style={{ color: T.textMuted }}>
-                {cp.address}
-              </div>
-            )}
-            {cp.notes && (
-              <div
-                className="mt-3 rounded-lg px-3 py-2 text-[12.5px]"
-                style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
-              >
-                {cp.notes}
-              </div>
-            )}
-          </div>
-          <div className="flex shrink-0 gap-2">
-            {canEdit && !editing && (
-              <button
-                onClick={() => setEditing({ ...cp })}
-                className="rounded-xl px-3 py-2 text-[12px] font-semibold"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderSoft}`,
-                  color: T.textSecondary,
-                }}
-              >
-                Редагувати
-              </button>
-            )}
-            {canDelete && cp.isActive && (
-              <button
-                onClick={softDelete}
-                className="rounded-xl px-3 py-2 text-[12px] font-semibold"
-                style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-                title="Деактивувати"
-              >
-                <Trash2 size={13} />
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Editor */}
-      {editing && (
         <div
-          className="rounded-2xl p-5"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.accentPrimary}40` }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+          style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Назва">
-              <input
-                value={editing.name ?? ""}
-                onChange={(e) => setEditing((s) => ({ ...s!, name: e.target.value }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              />
-            </Field>
-            <Field label="Тип">
-              <select
-                value={editing.type ?? "LEGAL"}
-                onChange={(e) => setEditing((s) => ({ ...s!, type: e.target.value as Counterparty["type"] }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              >
-                <option value="LEGAL">ТОВ / ЮО</option>
-                <option value="FOP">ФОП</option>
-                <option value="INDIVIDUAL">Фіз. особа</option>
-              </select>
-            </Field>
-            <Field label="ЄДРПОУ / РНОКПП">
-              <input
-                value={editing.edrpou ?? ""}
-                onChange={(e) => setEditing((s) => ({ ...s!, edrpou: e.target.value || null }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              />
-            </Field>
-            <Field label="ІПН">
-              <input
-                value={editing.taxId ?? ""}
-                onChange={(e) => setEditing((s) => ({ ...s!, taxId: e.target.value || null }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              />
-            </Field>
-            <Field label="IBAN">
-              <input
-                value={editing.iban ?? ""}
-                onChange={(e) => setEditing((s) => ({ ...s!, iban: e.target.value || null }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                placeholder="UA..."
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              />
-            </Field>
-            <Field label="Платник ПДВ?">
-              <label className="flex items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}>
-                <input
-                  type="checkbox"
-                  checked={editing.vatPayer ?? false}
-                  onChange={(e) => setEditing((s) => ({ ...s!, vatPayer: e.target.checked }))}
-                />
-                <span className="text-sm" style={{ color: T.textPrimary }}>Так</span>
-              </label>
-            </Field>
-            <Field label="Телефон">
-              <input
-                value={editing.phone ?? ""}
-                onChange={(e) => setEditing((s) => ({ ...s!, phone: e.target.value || null }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                value={editing.email ?? ""}
-                onChange={(e) => setEditing((s) => ({ ...s!, email: e.target.value || null }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Адреса">
-                <input
-                  value={editing.address ?? ""}
-                  onChange={(e) => setEditing((s) => ({ ...s!, address: e.target.value || null }))}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-                />
-              </Field>
-            </div>
-            <div className="sm:col-span-2">
-              <Field label="Нотатки">
-                <textarea
-                  rows={3}
-                  value={editing.notes ?? ""}
-                  onChange={(e) => setEditing((s) => ({ ...s!, notes: e.target.value || null }))}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
-                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
-                />
-              </Field>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              onClick={() => setEditing(null)}
-              className="rounded-xl px-4 py-2 text-[12px] font-semibold"
+          <Building2 size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-lg font-bold" style={{ color: T.textPrimary }}>
+              {cp.name}
+            </h1>
+            <span
+              className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
               style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
             >
-              Скасувати
-            </button>
-            <button
-              onClick={saveDossier}
-              disabled={saving}
-              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-semibold disabled:opacity-50"
-              style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-            >
-              {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
-              Зберегти
-            </button>
+              {TYPE_LABELS[cp.type]}
+            </span>
+            {cp.vatPayer && (
+              <span
+                className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
+                style={{ backgroundColor: T.violetSoft, color: T.violet }}
+              >
+                Платник ПДВ
+              </span>
+            )}
+            {!cp.isActive && (
+              <span
+                className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase"
+                style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+              >
+                Деактивовано
+              </span>
+            )}
           </div>
         </div>
-      )}
+        {canDelete && cp.isActive && (
+          <button
+            onClick={softDelete}
+            className="rounded-xl px-3 py-2 text-[12px] font-semibold"
+            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+            title="Деактивувати"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* Property table */}
+      <div
+        className="overflow-hidden rounded-2xl"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+      >
+        <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
+          <tbody>
+            <PropertyRow
+              label="Назва"
+              field="name"
+              value={cp.name}
+              renderValue={(v) => <span className="font-medium">{v as string}</span>}
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={cp.name}
+                  onCommit={(v) => stop(v.trim())}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "name"}
+              saving={savingField === "name"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("name")}
+              onCommit={(v) => patchField("name", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="Тип"
+              field="type"
+              value={cp.type}
+              renderValue={() => (
+                <span
+                  className="rounded-md px-2 py-0.5 text-[11px] font-semibold uppercase"
+                  style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
+                >
+                  {TYPE_LABELS[cp.type]}
+                </span>
+              )}
+              renderEditor={(stop) => (
+                <select
+                  autoFocus
+                  defaultValue={cp.type}
+                  onChange={(e) => stop(e.target.value as CounterpartyType)}
+                  onBlur={(e) => stop(e.target.value as CounterpartyType)}
+                  className="rounded-lg px-2 py-1 text-sm outline-none"
+                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}`, color: T.textPrimary }}
+                >
+                  <option value="LEGAL">ТОВ / ЮО</option>
+                  <option value="FOP">ФОП</option>
+                  <option value="INDIVIDUAL">Фіз. особа</option>
+                </select>
+              )}
+              editing={editingField === "type"}
+              saving={savingField === "type"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("type")}
+              onCommit={(v) => patchField("type", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label={taxLabel(cp.type)}
+              field="edrpou"
+              value={cp.edrpou}
+              renderValue={(v) => <span style={{ color: T.textSecondary }}>{(v as string) || "—"}</span>}
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={cp.edrpou ?? ""}
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "edrpou"}
+              saving={savingField === "edrpou"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("edrpou")}
+              onCommit={(v) => patchField("edrpou", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="ІПН"
+              field="taxId"
+              value={cp.taxId}
+              renderValue={(v) => <span style={{ color: T.textSecondary }}>{(v as string) || "—"}</span>}
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={cp.taxId ?? ""}
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "taxId"}
+              saving={savingField === "taxId"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("taxId")}
+              onCommit={(v) => patchField("taxId", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="IBAN"
+              field="iban"
+              value={cp.iban}
+              renderValue={(v) =>
+                v ? (
+                  <code className="text-[12px]" style={{ color: T.textPrimary }}>
+                    {v as string}
+                  </code>
+                ) : (
+                  <span style={{ color: T.textMuted }}>—</span>
+                )
+              }
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={cp.iban ?? ""}
+                  placeholder="UA..."
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "iban"}
+              saving={savingField === "iban"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("iban")}
+              onCommit={(v) => patchField("iban", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="Платник ПДВ"
+              field="vatPayer"
+              value={cp.vatPayer}
+              renderValue={(v) => (
+                <span style={{ color: v ? T.violet : T.textMuted }}>{v ? "Так" : "Ні"}</span>
+              )}
+              editing={false}
+              saving={savingField === "vatPayer"}
+              canEdit={canEdit}
+              onStartEdit={() => {
+                if (savingField) return;
+                void patchField("vatPayer", !cp.vatPayer);
+              }}
+              onCommit={() => undefined}
+              onCancel={() => undefined}
+              renderEditor={() => null}
+            />
+            <PropertyRow
+              label="Телефон"
+              field="phone"
+              value={cp.phone}
+              renderValue={(v) =>
+                v ? (
+                  <a href={`tel:${v}`} className="hover:underline" style={{ color: T.textSecondary }}>
+                    {v as string}
+                  </a>
+                ) : (
+                  <span style={{ color: T.textMuted }}>—</span>
+                )
+              }
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={cp.phone ?? ""}
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "phone"}
+              saving={savingField === "phone"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("phone")}
+              onCommit={(v) => patchField("phone", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="Email"
+              field="email"
+              value={cp.email}
+              renderValue={(v) =>
+                v ? (
+                  <a href={`mailto:${v}`} className="hover:underline" style={{ color: T.textSecondary }}>
+                    {v as string}
+                  </a>
+                ) : (
+                  <span style={{ color: T.textMuted }}>—</span>
+                )
+              }
+              renderEditor={(stop) => (
+                <TextEditor
+                  type="email"
+                  initial={cp.email ?? ""}
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "email"}
+              saving={savingField === "email"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("email")}
+              onCommit={(v) => patchField("email", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="Адреса"
+              field="address"
+              value={cp.address}
+              renderValue={(v) => <span style={{ color: T.textSecondary }}>{(v as string) || "—"}</span>}
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={cp.address ?? ""}
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "address"}
+              saving={savingField === "address"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("address")}
+              onCommit={(v) => patchField("address", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            <PropertyRow
+              label="Нотатки"
+              field="notes"
+              value={cp.notes}
+              renderValue={(v) =>
+                v ? (
+                  <span style={{ color: T.textSecondary }}>{v as string}</span>
+                ) : (
+                  <span style={{ color: T.textMuted }}>—</span>
+                )
+              }
+              renderEditor={(stop) => (
+                <TextareaEditor
+                  initial={cp.notes ?? ""}
+                  onCommit={(v) => stop(v.trim() || null)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+              editing={editingField === "notes"}
+              saving={savingField === "notes"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("notes")}
+              onCommit={(v) => patchField("notes", v)}
+              onCancel={() => setEditingField(null)}
+            />
+            {canToggleActive && (
+              <PropertyRow
+                label="Активний"
+                field="isActive"
+                value={cp.isActive}
+                renderValue={(v) => (
+                  <span style={{ color: v ? T.success : T.textMuted }}>{v ? "Так" : "Ні"}</span>
+                )}
+                editing={false}
+                saving={savingField === "isActive"}
+                canEdit={canEdit}
+                onStartEdit={() => {
+                  if (savingField) return;
+                  void patchField("isActive", !cp.isActive);
+                }}
+                onCommit={() => undefined}
+                onCancel={() => undefined}
+                renderEditor={() => null}
+              />
+            )}
+          </tbody>
+        </table>
+      </div>
 
       {/* KPI strip */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -606,6 +722,141 @@ export function CounterpartyDossier({
   );
 }
 
+function PropertyRow({
+  label,
+  value,
+  renderValue,
+  renderEditor,
+  editing,
+  saving,
+  canEdit,
+  onStartEdit,
+  onCommit,
+  onCancel,
+}: {
+  label: string;
+  field: FieldKey;
+  value: unknown;
+  renderValue: (v: unknown) => React.ReactNode;
+  renderEditor: (stop: (next: unknown | undefined) => void) => React.ReactNode;
+  editing: boolean;
+  saving: boolean;
+  canEdit: boolean;
+  onStartEdit: () => void;
+  onCommit: (v: unknown) => void;
+  onCancel: () => void;
+}) {
+  function stop(next: unknown | undefined) {
+    if (next === undefined) {
+      onCancel();
+    } else {
+      onCommit(next);
+    }
+  }
+  return (
+    <tr className="border-t" style={{ borderColor: T.borderSoft }}>
+      <th
+        scope="row"
+        className="px-4 py-2.5 text-left text-[10px] font-bold uppercase tracking-wider align-middle w-[180px]"
+        style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+      >
+        {label}
+      </th>
+      <td
+        className={`px-3 py-2.5 align-middle ${canEdit ? "cursor-pointer hover:bg-black/5" : ""}`}
+        onClick={() => {
+          if (!canEdit || editing || saving) return;
+          onStartEdit();
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            {editing ? renderEditor(stop) : renderValue(value)}
+          </div>
+          {saving && <Loader2 size={12} className="animate-spin" style={{ color: T.textMuted }} />}
+          {!editing && !saving && canEdit && (
+            <Pencil size={11} className="opacity-0 group-hover:opacity-100" style={{ color: T.textMuted }} />
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function TextEditor({
+  initial,
+  type = "text",
+  placeholder,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  type?: string;
+  placeholder?: string;
+  onCommit: (v: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <input
+      type={type}
+      autoFocus
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onCommit(value);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+      className="w-full rounded-lg px-2 py-1 text-sm outline-none"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderStrong}`,
+        color: T.textPrimary,
+      }}
+    />
+  );
+}
+
+function TextareaEditor({
+  initial,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  onCommit: (v: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <textarea
+      autoFocus
+      rows={3}
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+      className="w-full rounded-lg px-2 py-1.5 text-sm outline-none resize-none"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderStrong}`,
+        color: T.textPrimary,
+      }}
+    />
+  );
+}
+
 function KpiCell({
   label,
   value,
@@ -646,16 +897,5 @@ function KpiCell({
         {formatCurrencyCompact(value)}
       </div>
     </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: T.textMuted }}>
-        {label}
-      </span>
-      {children}
-    </label>
   );
 }

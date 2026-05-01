@@ -36,7 +36,15 @@ export async function GET(request: NextRequest) {
     const activeRole = getActiveRoleFromSession(session, firmId);
     if (!canReadFinance(activeRole)) return forbiddenResponse();
     const filters = parseListParams(searchParams, firmId);
-    const where = await expandFolderFilter(filters);
+    const baseWhere = await expandFolderFilter(filters);
+
+    // HR не повинен бачити транзакції ЗП (category="salary") у меню Контрагенти.
+    // Цей ендпоінт використовується дос'є контрагента, тому застосовуємо фільтр
+    // на рівні запиту — щоб ЗП взагалі не доходила до клієнта.
+    const where =
+      activeRole === "HR"
+        ? { AND: [baseWhere, { NOT: { category: "salary" } }] }
+        : baseWhere;
 
     const [data, summary] = await Promise.all([
       prisma.financeEntry.findMany({

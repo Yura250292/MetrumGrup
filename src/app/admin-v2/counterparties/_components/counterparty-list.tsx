@@ -7,7 +7,6 @@ import {
   CheckCircle2,
   ExternalLink,
   Loader2,
-  Pencil,
   Plus,
   Search,
   Upload,
@@ -46,8 +45,6 @@ type FormState = {
   phone: string;
   email: string;
   address: string;
-  notes: string;
-  isActive: boolean;
 };
 
 const EMPTY_FORM: FormState = {
@@ -60,8 +57,6 @@ const EMPTY_FORM: FormState = {
   phone: "",
   email: "",
   address: "",
-  notes: "",
-  isActive: true,
 };
 
 const TYPE_LABELS: Record<CounterpartyType, string> = {
@@ -76,9 +71,17 @@ const TYPE_COLORS: Record<CounterpartyType, { bg: string; fg: string }> = {
   INDIVIDUAL: { bg: T.violetSoft, fg: T.violet },
 };
 
-function taxLabel(type: CounterpartyType): string {
-  return type === "LEGAL" ? "ЄДРПОУ" : "РНОКПП";
-}
+type EditableField =
+  | "name"
+  | "type"
+  | "edrpou"
+  | "taxId"
+  | "iban"
+  | "vatPayer"
+  | "phone"
+  | "email"
+  | "address"
+  | "isActive";
 
 export function CounterpartyList({ currentUserRole }: { currentUserRole: string }) {
   const canCreate = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"].includes(currentUserRole);
@@ -89,12 +92,13 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
   const [typeFilter, setTypeFilter] = useState<"" | CounterpartyType>("");
   const [showInactive, setShowInactive] = useState(false);
 
-  type FormMode = { kind: "create" } | { kind: "edit"; id: string };
-  const [formMode, setFormMode] = useState<FormMode | null>(null);
+  const [editingCell, setEditingCell] = useState<{ id: string; field: EditableField } | null>(null);
+  const [savingCell, setSavingCell] = useState<{ id: string; field: EditableField } | null>(null);
   const [showImport, setShowImport] = useState(false);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const [creating, setCreating] = useState<FormState | null>(null);
+  const [creatingError, setCreatingError] = useState<string | null>(null);
+  const [creatingSaving, setCreatingSaving] = useState(false);
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -139,91 +143,78 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
         c.name.toLowerCase().includes(needle) ||
         (c.edrpou ?? "").toLowerCase().includes(needle) ||
         (c.taxId ?? "").toLowerCase().includes(needle) ||
+        (c.iban ?? "").toLowerCase().includes(needle) ||
         (c.phone ?? "").toLowerCase().includes(needle) ||
         (c.email ?? "").toLowerCase().includes(needle)
       );
     });
   }, [items, search, typeFilter]);
 
-  function resetForm() {
-    setForm(EMPTY_FORM);
-    setFormMode(null);
-    setError(null);
+  function taxLabel(type: CounterpartyType): string {
+    return type === "LEGAL" ? "ЄДРПОУ" : "РНОКПП";
   }
 
-  function startCreate() {
-    setForm(EMPTY_FORM);
-    setFormMode({ kind: "create" });
-    setError(null);
-  }
-
-  function startEdit(c: Counterparty) {
-    setForm({
-      name: c.name,
-      type: c.type,
-      edrpou: c.edrpou ?? "",
-      taxId: c.taxId ?? "",
-      iban: c.iban ?? "",
-      vatPayer: c.vatPayer,
-      phone: c.phone ?? "",
-      email: c.email ?? "",
-      address: c.address ?? "",
-      notes: c.notes ?? "",
-      isActive: c.isActive,
-    });
-    setFormMode({ kind: "edit", id: c.id });
-    setError(null);
-  }
-
-  async function handleSubmit(ev: React.FormEvent) {
-    ev.preventDefault();
-    if (!formMode) return;
-    if (!form.name.trim()) {
-      setError("Назва обовʼязкова");
+  async function patchField(c: Counterparty, field: EditableField, value: unknown) {
+    const current = c[field as keyof Counterparty];
+    if (current === value) {
+      setEditingCell(null);
       return;
     }
-    setSaving(true);
-    setError(null);
+    setSavingCell({ id: c.id, field });
     try {
-      const payload: Record<string, unknown> = {
-        name: form.name.trim(),
-        type: form.type,
-        edrpou: form.edrpou.trim() || null,
-        taxId: form.taxId.trim() || null,
-        iban: form.iban.trim() || null,
-        vatPayer: form.vatPayer,
-        phone: form.phone.trim() || null,
-        email: form.email.trim() || null,
-        address: form.address.trim() || null,
-      };
-      if (formMode.kind === "edit") {
-        payload.notes = form.notes.trim() || null;
-        payload.isActive = form.isActive;
+      const res = await fetch(`/api/admin/financing/counterparties/${c.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        alert(j.error ?? "Помилка збереження");
+        return;
       }
+      const saved: Counterparty = j.data;
+      setItems((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
+    } finally {
+      setSavingCell(null);
+      setEditingCell(null);
+    }
+  }
 
-      const url =
-        formMode.kind === "create"
-          ? `/api/admin/financing/counterparties`
-          : `/api/admin/financing/counterparties/${formMode.id}`;
-      const method = formMode.kind === "create" ? "POST" : "PATCH";
-      const res = await fetch(url, {
-        method,
+  async function submitCreate() {
+    if (!creating) return;
+    if (!creating.name.trim()) {
+      setCreatingError("Назва обовʼязкова");
+      return;
+    }
+    setCreatingSaving(true);
+    setCreatingError(null);
+    try {
+      const payload = {
+        name: creating.name.trim(),
+        type: creating.type,
+        edrpou: creating.edrpou.trim() || null,
+        taxId: creating.taxId.trim() || null,
+        iban: creating.iban.trim() || null,
+        vatPayer: creating.vatPayer,
+        phone: creating.phone.trim() || null,
+        email: creating.email.trim() || null,
+        address: creating.address.trim() || null,
+      };
+      const res = await fetch(`/api/admin/financing/counterparties`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       const j = await res.json();
       if (!res.ok) {
-        setError(j.error ?? "Помилка");
+        setCreatingError(j.error ?? "Помилка");
         return;
       }
       const saved: Counterparty = j.data;
-      setItems((prev) => {
-        const without = prev.filter((c) => c.id !== saved.id);
-        return formMode.kind === "create" ? [saved, ...without] : prev.map((c) => (c.id === saved.id ? saved : c));
-      });
-      resetForm();
+      setItems((prev) => [saved, ...prev]);
+      setCreating(null);
     } finally {
-      setSaving(false);
+      setCreatingSaving(false);
     }
   }
 
@@ -256,7 +247,10 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
               <Upload size={13} /> Імпорт з Excel
             </button>
             <button
-              onClick={() => (formMode ? resetForm() : startCreate())}
+              onClick={() => {
+                setCreating((c) => (c ? null : { ...EMPTY_FORM }));
+                setCreatingError(null);
+              }}
               className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
               style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
             >
@@ -285,213 +279,6 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
         }}
       />
 
-      {formMode && (
-        <div
-          className="rounded-2xl p-5"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.accentPrimary}40` }}
-        >
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold" style={{ color: T.textPrimary }}>
-              {formMode.kind === "create" ? "Новий контрагент" : `Редагувати: ${form.name || "—"}`}
-            </h3>
-            <button onClick={resetForm} aria-label="Скасувати">
-              <X size={16} style={{ color: T.textMuted }} />
-            </button>
-          </div>
-          <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-2">
-            <Field label="Назва" required>
-              <input
-                value={form.name}
-                onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-                required
-              />
-            </Field>
-            <Field label="Тип">
-              <div className="flex gap-2">
-                {(["LEGAL", "FOP", "INDIVIDUAL"] as const).map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() => setForm((p) => ({ ...p, type: t }))}
-                    className="flex-1 rounded-xl px-3 py-2 text-[12px] font-semibold"
-                    style={{
-                      backgroundColor: form.type === t ? T.accentPrimarySoft : T.panelSoft,
-                      color: form.type === t ? T.accentPrimary : T.textSecondary,
-                      border: `1px solid ${form.type === t ? T.borderAccent : T.borderStrong}`,
-                    }}
-                  >
-                    {TYPE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            </Field>
-            <Field label={taxLabel(form.type)}>
-              <input
-                value={form.edrpou}
-                onChange={(e) => setForm((p) => ({ ...p, edrpou: e.target.value }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              />
-            </Field>
-            <Field label="ІПН (якщо інший)">
-              <input
-                value={form.taxId}
-                onChange={(e) => setForm((p) => ({ ...p, taxId: e.target.value }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              />
-            </Field>
-            <Field label="IBAN">
-              <input
-                value={form.iban}
-                onChange={(e) => setForm((p) => ({ ...p, iban: e.target.value }))}
-                placeholder="UA..."
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              />
-            </Field>
-            <Field label="Платник ПДВ?">
-              <label
-                className="flex items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.vatPayer}
-                  onChange={(e) => setForm((p) => ({ ...p, vatPayer: e.target.checked }))}
-                />
-                <span className="text-sm" style={{ color: T.textPrimary }}>
-                  {form.vatPayer ? "Так" : "Ні"}
-                </span>
-              </label>
-            </Field>
-            <Field label="Телефон">
-              <input
-                value={form.phone}
-                onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              />
-            </Field>
-            <Field label="Email">
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                style={{
-                  backgroundColor: T.panelSoft,
-                  border: `1px solid ${T.borderStrong}`,
-                  color: T.textPrimary,
-                }}
-              />
-            </Field>
-            <div className="sm:col-span-2">
-              <Field label="Адреса">
-                <input
-                  value={form.address}
-                  onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
-                  className="w-full rounded-xl px-3 py-2.5 text-sm outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                    color: T.textPrimary,
-                  }}
-                />
-              </Field>
-            </div>
-
-            {formMode?.kind === "edit" && (
-              <>
-                <div className="sm:col-span-2">
-                  <Field label="Нотатки">
-                    <textarea
-                      value={form.notes}
-                      onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
-                      rows={2}
-                      className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
-                      style={{
-                        backgroundColor: T.panelSoft,
-                        border: `1px solid ${T.borderStrong}`,
-                        color: T.textPrimary,
-                      }}
-                    />
-                  </Field>
-                </div>
-                <label
-                  className="sm:col-span-2 flex items-center gap-2 rounded-xl px-3 py-2.5 cursor-pointer"
-                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) => setForm((p) => ({ ...p, isActive: e.target.checked }))}
-                  />
-                  <span className="text-sm" style={{ color: T.textPrimary }}>
-                    Активний
-                  </span>
-                </label>
-              </>
-            )}
-
-            {error && (
-              <div
-                className="sm:col-span-2 rounded-xl px-3 py-2 text-[12px]"
-                style={{
-                  backgroundColor: T.dangerSoft,
-                  color: T.danger,
-                  border: `1px solid ${T.danger}40`,
-                }}
-              >
-                {error}
-              </div>
-            )}
-
-            <div className="sm:col-span-2 flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="rounded-xl px-4 py-2 text-[12px] font-semibold"
-                style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
-              >
-                Скасувати
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-semibold disabled:opacity-50"
-                style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-              >
-                {saving ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                {formMode?.kind === "create" ? "Додати" : "Зберегти зміни"}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
       {/* Toolbar */}
       <div
         className="flex flex-wrap items-center gap-2 rounded-2xl p-3"
@@ -506,7 +293,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук — назва / ЄДРПОУ / телефон / email…"
+            placeholder="Пошук — назва / ЄДРПОУ / IBAN / телефон / email…"
             className="w-full rounded-xl pl-9 pr-3 py-2 text-sm outline-none"
             style={{
               backgroundColor: T.panelSoft,
@@ -587,83 +374,234 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                 <th className="px-4 py-3 text-left">Назва</th>
                 <th className="px-3 py-3 text-left">Тип</th>
                 <th className="px-3 py-3 text-left">Код</th>
+                <th className="px-3 py-3 text-left">IBAN</th>
+                <th className="px-3 py-3 text-center">ПДВ</th>
                 <th className="px-3 py-3 text-left">Контакти</th>
+                <th className="px-3 py-3 text-left">Адреса</th>
                 <th className="px-3 py-3 text-center">Статус</th>
                 <th className="px-3 py-3 text-right">Дії</th>
               </tr>
             </thead>
             <tbody>
+              {creating && (
+                <CreateRow
+                  form={creating}
+                  setForm={setCreating}
+                  saving={creatingSaving}
+                  error={creatingError}
+                  onCancel={() => {
+                    setCreating(null);
+                    setCreatingError(null);
+                  }}
+                  onSubmit={submitCreate}
+                />
+              )}
               {filtered.map((c, idx) => {
                 const tc = TYPE_COLORS[c.type];
+                const isEditing = (field: EditableField) =>
+                  editingCell?.id === c.id && editingCell.field === field;
+                const isSaving = (field: EditableField) =>
+                  savingCell?.id === c.id && savingCell.field === field;
+                const startEdit = (field: EditableField) => {
+                  if (!canCreate) return;
+                  if (savingCell) return;
+                  setEditingCell({ id: c.id, field });
+                };
+                const cancelEdit = () => setEditingCell(null);
                 return (
                   <tr
                     key={c.id}
-                    className={`border-t transition hover:bg-black/5 cursor-pointer ${idx < 20 ? "data-table-row-enter" : ""}`}
+                    className={`border-t transition ${idx < 20 ? "data-table-row-enter" : ""}`}
                     style={{
                       borderColor: T.borderSoft,
                       opacity: c.isActive ? 1 : 0.55,
                       ...(idx < 20 ? { animationDelay: `${idx * 30}ms` } : {}),
                     }}
-                    onClick={(e) => {
-                      // Don't trigger when clicking on inner buttons / links.
-                      if ((e.target as HTMLElement).closest("a, button")) return;
-                      if (canCreate) startEdit(c);
-                    }}
                   >
-                    <td className="px-4 py-2.5">
-                      <span className="font-medium" style={{ color: T.textPrimary }}>
-                        {c.name}
-                      </span>
-                      {c.vatPayer && (
+                    {/* Назва */}
+                    <td
+                      className={`px-4 py-2 ${canCreate ? "cursor-text hover:bg-black/5" : ""}`}
+                      onClick={() => startEdit("name")}
+                    >
+                      {isEditing("name") ? (
+                        <CellTextInput
+                          initial={c.name}
+                          onCommit={(v) => patchField(c, "name", v.trim())}
+                          onCancel={cancelEdit}
+                        />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium" style={{ color: T.textPrimary }}>
+                            {c.name}
+                          </span>
+                          {isSaving("name") && (
+                            <Loader2 size={12} className="animate-spin" style={{ color: T.textMuted }} />
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    {/* Тип */}
+                    <td
+                      className={`px-3 py-2 ${canCreate ? "cursor-pointer hover:bg-black/5" : ""}`}
+                      onClick={() => startEdit("type")}
+                    >
+                      {isEditing("type") ? (
+                        <select
+                          autoFocus
+                          defaultValue={c.type}
+                          onChange={(e) => patchField(c, "type", e.target.value as CounterpartyType)}
+                          onBlur={(e) => patchField(c, "type", e.target.value as CounterpartyType)}
+                          className="rounded-lg px-2 py-1 text-[12px] outline-none"
+                          style={{
+                            backgroundColor: T.panelSoft,
+                            border: `1px solid ${T.borderStrong}`,
+                            color: T.textPrimary,
+                          }}
+                        >
+                          <option value="LEGAL">ТОВ / ЮО</option>
+                          <option value="FOP">ФОП</option>
+                          <option value="INDIVIDUAL">Фіз. особа</option>
+                        </select>
+                      ) : (
                         <span
-                          className="ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase"
+                          className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
+                          style={{ backgroundColor: tc.bg, color: tc.fg }}
+                        >
+                          {TYPE_LABELS[c.type]}
+                        </span>
+                      )}
+                    </td>
+                    {/* Код (ЄДРПОУ / РНОКПП) */}
+                    <td
+                      className={`px-3 py-2 text-[12px] ${canCreate ? "cursor-text hover:bg-black/5" : ""}`}
+                      style={{ color: T.textSecondary }}
+                      title={taxLabel(c.type)}
+                      onClick={() => startEdit("edrpou")}
+                    >
+                      {isEditing("edrpou") ? (
+                        <CellTextInput
+                          initial={c.edrpou ?? ""}
+                          onCommit={(v) => patchField(c, "edrpou", v.trim() || null)}
+                          onCancel={cancelEdit}
+                        />
+                      ) : (
+                        c.edrpou ?? c.taxId ?? "—"
+                      )}
+                    </td>
+                    {/* IBAN */}
+                    <td
+                      className={`px-3 py-2 text-[11px] ${canCreate ? "cursor-text hover:bg-black/5" : ""}`}
+                      style={{ color: T.textSecondary }}
+                      onClick={() => startEdit("iban")}
+                    >
+                      {isEditing("iban") ? (
+                        <CellTextInput
+                          initial={c.iban ?? ""}
+                          placeholder="UA..."
+                          onCommit={(v) => patchField(c, "iban", v.trim() || null)}
+                          onCancel={cancelEdit}
+                        />
+                      ) : c.iban ? (
+                        <code style={{ color: T.textPrimary }}>{c.iban}</code>
+                      ) : (
+                        <span style={{ color: T.textMuted }}>—</span>
+                      )}
+                    </td>
+                    {/* ПДВ */}
+                    <td
+                      className={`px-3 py-2 text-center ${canCreate ? "cursor-pointer hover:bg-black/5" : ""}`}
+                      onClick={() => {
+                        if (!canCreate || savingCell) return;
+                        void patchField(c, "vatPayer", !c.vatPayer);
+                      }}
+                    >
+                      {isSaving("vatPayer") ? (
+                        <Loader2 size={12} className="animate-spin inline" style={{ color: T.textMuted }} />
+                      ) : c.vatPayer ? (
+                        <span
+                          className="rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase"
                           style={{ backgroundColor: T.violetSoft, color: T.violet }}
                         >
                           ПДВ
                         </span>
+                      ) : (
+                        <span style={{ color: T.textMuted }}>—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <span
-                        className="rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
-                        style={{ backgroundColor: tc.bg, color: tc.fg }}
-                      >
-                        {TYPE_LABELS[c.type]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-                      {c.edrpou ?? c.taxId ?? "—"}
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                    {/* Контакти */}
+                    <td
+                      className="px-3 py-2 text-[12px]"
+                      style={{ color: T.textSecondary }}
+                    >
                       <div className="flex flex-col gap-0.5">
-                        {c.phone && <span>{c.phone}</span>}
-                        {c.email && <span>{c.email}</span>}
-                        {!c.phone && !c.email && <span style={{ color: T.textMuted }}>—</span>}
+                        <div
+                          className={canCreate ? "cursor-text hover:bg-black/5 rounded px-1 -mx-1" : ""}
+                          onClick={() => startEdit("phone")}
+                        >
+                          {isEditing("phone") ? (
+                            <CellTextInput
+                              initial={c.phone ?? ""}
+                              onCommit={(v) => patchField(c, "phone", v.trim() || null)}
+                              onCancel={cancelEdit}
+                            />
+                          ) : c.phone ? (
+                            c.phone
+                          ) : (
+                            <span style={{ color: T.textMuted }}>—</span>
+                          )}
+                        </div>
+                        <div
+                          className={canCreate ? "cursor-text hover:bg-black/5 rounded px-1 -mx-1" : ""}
+                          onClick={() => startEdit("email")}
+                        >
+                          {isEditing("email") ? (
+                            <CellTextInput
+                              type="email"
+                              initial={c.email ?? ""}
+                              onCommit={(v) => patchField(c, "email", v.trim() || null)}
+                              onCancel={cancelEdit}
+                            />
+                          ) : c.email ? (
+                            c.email
+                          ) : (
+                            <span style={{ color: T.textMuted }}>—</span>
+                          )}
+                        </div>
                       </div>
                     </td>
-                    <td className="px-3 py-2.5 text-center">
+                    {/* Адреса */}
+                    <td
+                      className={`px-3 py-2 text-[12px] ${canCreate ? "cursor-text hover:bg-black/5" : ""}`}
+                      style={{ color: T.textSecondary }}
+                      onClick={() => startEdit("address")}
+                    >
+                      {isEditing("address") ? (
+                        <CellTextInput
+                          initial={c.address ?? ""}
+                          onCommit={(v) => patchField(c, "address", v.trim() || null)}
+                          onCancel={cancelEdit}
+                        />
+                      ) : c.address ? (
+                        <span className="truncate inline-block max-w-[220px] align-middle">{c.address}</span>
+                      ) : (
+                        <span style={{ color: T.textMuted }}>—</span>
+                      )}
+                    </td>
+                    {/* Статус */}
+                    <td className="px-3 py-2 text-center">
                       {c.isActive ? (
                         <CheckCircle2 size={14} style={{ color: T.success }} className="inline" />
                       ) : (
                         <XCircle size={14} style={{ color: T.textMuted }} className="inline" />
                       )}
                     </td>
-                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                      {canCreate && (
-                        <button
-                          onClick={() => startEdit(c)}
-                          className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
-                          title="Швидке редагування"
-                          aria-label="Редагувати"
-                        >
-                          <Pencil size={13} style={{ color: T.textSecondary }} />
-                        </button>
-                      )}
+                    {/* Дії */}
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
                       <Link
                         href={`/admin-v2/counterparties/${c.id}`}
                         className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
-                        title="Відкрити досьє з історією"
-                        aria-label="Досьє"
+                        title="Відкрити дос'є з історією"
+                        aria-label="Дос'є"
                       >
                         <ExternalLink size={13} style={{ color: T.accentPrimary }} />
                       </Link>
@@ -671,9 +609,9 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                   </tr>
                 );
               })}
-              {filtered.length === 0 && (
+              {filtered.length === 0 && !creating && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
+                  <td colSpan={9} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
                     {search.trim() || typeFilter
                       ? "Нічого не знайдено за фільтрами."
                       : "Список порожній. Додайте через кнопку «Новий контрагент» або імпортуйте з Excel."}
@@ -688,22 +626,194 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
   );
 }
 
-function Field({
-  label,
-  required,
-  children,
+function CreateRow({
+  form,
+  setForm,
+  saving,
+  error,
+  onCancel,
+  onSubmit,
 }: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
+  form: FormState;
+  setForm: (updater: (prev: FormState | null) => FormState | null) => void;
+  saving: boolean;
+  error: string | null;
+  onCancel: () => void;
+  onSubmit: () => void;
 }) {
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((p) => (p ? { ...p, [key]: value } : p));
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: T.panelSoft,
+    border: `1px solid ${T.borderStrong}`,
+    color: T.textPrimary,
+  };
+
   return (
-    <label className="flex flex-col gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: T.textMuted }}>
-        {label}
-        {required && <span style={{ color: T.danger }}> *</span>}
-      </span>
-      {children}
-    </label>
+    <>
+      <tr style={{ borderTop: `2px solid ${T.accentPrimary}`, backgroundColor: T.accentPrimarySoft }}>
+        <td className="px-4 py-2">
+          <input
+            autoFocus
+            value={form.name}
+            onChange={(e) => set("name", e.target.value)}
+            placeholder="Назва *"
+            className="w-full rounded-lg px-2 py-1 text-sm outline-none"
+            style={inputStyle}
+          />
+        </td>
+        <td className="px-3 py-2">
+          <select
+            value={form.type}
+            onChange={(e) => set("type", e.target.value as CounterpartyType)}
+            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
+            style={inputStyle}
+          >
+            <option value="LEGAL">ТОВ / ЮО</option>
+            <option value="FOP">ФОП</option>
+            <option value="INDIVIDUAL">Фіз. особа</option>
+          </select>
+        </td>
+        <td className="px-3 py-2">
+          <input
+            value={form.edrpou}
+            onChange={(e) => set("edrpou", e.target.value)}
+            placeholder={form.type === "LEGAL" ? "ЄДРПОУ" : "РНОКПП"}
+            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
+            style={inputStyle}
+          />
+        </td>
+        <td className="px-3 py-2">
+          <input
+            value={form.iban}
+            onChange={(e) => set("iban", e.target.value)}
+            placeholder="UA..."
+            className="w-full rounded-lg px-2 py-1 text-[11px] outline-none"
+            style={inputStyle}
+          />
+        </td>
+        <td className="px-3 py-2 text-center">
+          <input
+            type="checkbox"
+            checked={form.vatPayer}
+            onChange={(e) => set("vatPayer", e.target.checked)}
+          />
+        </td>
+        <td className="px-3 py-2">
+          <div className="flex flex-col gap-1">
+            <input
+              value={form.phone}
+              onChange={(e) => set("phone", e.target.value)}
+              placeholder="Телефон"
+              className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
+              style={inputStyle}
+            />
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => set("email", e.target.value)}
+              placeholder="Email"
+              className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
+              style={inputStyle}
+            />
+          </div>
+        </td>
+        <td className="px-3 py-2">
+          <input
+            value={form.address}
+            onChange={(e) => set("address", e.target.value)}
+            placeholder="Адреса"
+            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
+            style={inputStyle}
+          />
+        </td>
+        <td className="px-3 py-2 text-center" colSpan={1}>
+          <span
+            className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase"
+            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+          >
+            Новий
+          </span>
+        </td>
+        <td className="px-3 py-2 text-right whitespace-nowrap">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
+            title="Скасувати"
+            aria-label="Скасувати"
+          >
+            <X size={14} style={{ color: T.textSecondary }} />
+          </button>
+          <button
+            onClick={onSubmit}
+            disabled={saving}
+            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
+            title="Зберегти"
+            aria-label="Зберегти"
+          >
+            {saving ? (
+              <Loader2 size={14} className="animate-spin" style={{ color: T.accentPrimary }} />
+            ) : (
+              <CheckCircle2 size={14} style={{ color: T.success }} />
+            )}
+          </button>
+        </td>
+      </tr>
+      {error && (
+        <tr>
+          <td
+            colSpan={9}
+            className="px-4 py-2 text-[12px]"
+            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+          >
+            {error}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function CellTextInput({
+  initial,
+  type = "text",
+  placeholder,
+  onCommit,
+  onCancel,
+}: {
+  initial: string;
+  type?: string;
+  placeholder?: string;
+  onCommit: (v: string) => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <input
+      type={type}
+      autoFocus
+      value={value}
+      placeholder={placeholder}
+      onChange={(e) => setValue(e.target.value)}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={() => onCommit(value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          onCommit(value);
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
+      className="w-full rounded-lg px-2 py-1 text-sm outline-none"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderStrong}`,
+        color: T.textPrimary,
+      }}
+    />
   );
 }
