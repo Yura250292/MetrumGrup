@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
-import { ArrowLeft, Calculator, ChevronDown, Copy, FileText, FolderKanban, Loader2, Mail, MessageSquare, Sparkles, Users, Wand2, X } from "lucide-react";
+import { ArrowLeft, Calculator, ChevronDown, Copy, FileText, FolderKanban, Globe, Loader2, Mail, MessageSquare, Sparkles, Users, Wand2, X } from "lucide-react";
 import {
   useConversation,
   useMarkRead,
@@ -12,6 +12,7 @@ import {
   useToggleMessageReaction,
   type ChatMessage,
 } from "@/hooks/useChat";
+import { ChatParticipantsDialog } from "./ChatParticipantsDialog";
 import { ConversationActionsMenu } from "./ConversationActionsMenu";
 import { MessageComposer } from "./MessageComposer";
 import { ReactionBar } from "@/components/collab/ReactionBar";
@@ -27,6 +28,14 @@ function formatStamp(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function pluralizeParticipants(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return "учасник";
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return "учасники";
+  return "учасників";
 }
 
 function formatFileSize(bytes: number): string {
@@ -283,6 +292,7 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastReadCountRef = useRef(0);
 
+  const [participantsDialogOpen, setParticipantsDialogOpen] = useState(false);
   const [letterOpen, setLetterOpen] = useState(false);
   const [letterTone, setLetterTone] = useState<"formal" | "friendly" | "concise">("formal");
   const [letterLanguage, setLetterLanguage] = useState<"uk" | "en">("uk");
@@ -408,15 +418,50 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
           <p className="truncate text-sm font-semibold" style={{ color: T.textPrimary }}>
             {title}
           </p>
-          {subtitleHref && subtitleText && (
-            <Link
-              href={subtitleHref}
-              className="text-[11px] hover:underline"
-              style={{ color: T.accentPrimary }}
-            >
-              {subtitleText}
-            </Link>
-          )}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {subtitleHref && subtitleText && (
+              <Link
+                href={subtitleHref}
+                className="text-[11px] hover:underline"
+                style={{ color: T.accentPrimary }}
+              >
+                {subtitleText}
+              </Link>
+            )}
+            {conversation && conversation.type !== "DM" && (
+              <>
+                {subtitleHref && (
+                  <span
+                    aria-hidden
+                    className="text-[11px]"
+                    style={{ color: T.textMuted }}
+                  >
+                    •
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setParticipantsDialogOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium transition active:scale-95"
+                  style={{
+                    color: T.textSecondary,
+                    backgroundColor: T.panelElevated,
+                  }}
+                  title="Показати учасників"
+                  aria-label="Показати учасників"
+                >
+                  {conversation.visibility === "EVERYONE" ? (
+                    <Globe className="h-3 w-3" />
+                  ) : (
+                    <Users className="h-3 w-3" />
+                  )}
+                  {conversation.visibility === "EVERYONE"
+                    ? `Усі співробітники • ${conversation.participants.length}`
+                    : `${conversation.participants.length} ${pluralizeParticipants(conversation.participants.length)}`}
+                </button>
+              </>
+            )}
+          </div>
         </div>
         <button
           type="button"
@@ -446,6 +491,12 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
           />
         )}
       </div>
+
+      <ChatParticipantsDialog
+        conversationId={conversationId}
+        open={participantsDialogOpen}
+        onOpenChange={setParticipantsDialogOpen}
+      />
 
       {/* Messages */}
       <div
