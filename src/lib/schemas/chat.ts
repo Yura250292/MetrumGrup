@@ -13,14 +13,27 @@ export const createConversationSchema = z.discriminatedUnion("type", [
     type: z.literal("ESTIMATE"),
     estimateId: z.string().min(1),
   }),
-  z.object({
-    type: z.literal("GROUP"),
-    title: z.string().trim().min(1, "Назва обов'язкова").max(120, "Максимум 120 символів"),
-    participantIds: z
-      .array(z.string().min(1))
-      .min(1, "Додайте принаймні одного учасника")
-      .max(50, "Максимум 50 учасників"),
-  }),
+  z
+    .object({
+      type: z.literal("GROUP"),
+      title: z
+        .string()
+        .trim()
+        .min(1, "Назва обов'язкова")
+        .max(120, "Максимум 120 символів"),
+      visibility: z.enum(["MEMBERS", "EVERYONE"]).default("MEMBERS"),
+      participantIds: z
+        .array(z.string().min(1))
+        .max(50, "Максимум 50 учасників")
+        .default([]),
+    })
+    .refine(
+      (v) => v.visibility === "EVERYONE" || v.participantIds.length >= 1,
+      {
+        message: "Додайте принаймні одного учасника",
+        path: ["participantIds"],
+      },
+    ),
 ]);
 
 export type CreateConversationInput = z.infer<typeof createConversationSchema>;

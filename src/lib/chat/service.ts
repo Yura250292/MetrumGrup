@@ -60,7 +60,22 @@ async function assertParticipant(conversationId: string, userId: string) {
   const participant = await prisma.conversationParticipant.findUnique({
     where: { conversationId_userId: { conversationId, userId } },
   });
+
+  // Need conversation context for both branches (visibility + project gate).
+  const conv = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      type: true,
+      visibility: true,
+      projectId: true,
+      estimate: { select: { projectId: true } },
+    },
+  });
+
   if (!participant) {
+    // Public chats: any active staff user may join (auto-participant created on
+    // first action by the caller — postMessage / archive / markRead).
+    if (conv?.visibility === "EVERYONE") return null;
     if (await canSeeAllChats(userId)) return null;
     throw new Error("Forbidden");
   }
@@ -69,14 +84,6 @@ async function assertParticipant(conversationId: string, userId: string) {
   // This catches the race where a user is removed from the team between
   // opening the chat and posting a message — without this they could keep
   // posting until their participant row was reaped by sync.
-  const conv = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: {
-      type: true,
-      projectId: true,
-      estimate: { select: { projectId: true } },
-    },
-  });
   if (conv) {
     const projectId =
       conv.type === "PROJECT"
@@ -174,13 +181,17 @@ export async function getOrCreateProjectChannel(projectId: string, currentUserId
 export async function createGroupConversation(
   ownerId: string,
   title: string,
-  participantIds: string[]
+  participantIds: string[],
+  visibility: "MEMBERS" | "EVERYONE" = "MEMBERS",
 ) {
   const cleanTitle = title.trim();
   if (!cleanTitle) throw new Error("Назва групи не може бути порожньою");
 
   const uniqueIds = Array.from(new Set([ownerId, ...participantIds]));
-  if (uniqueIds.length < 2) {
+
+  // Public groups can be created without explicit invites — everyone sees them.
+  // Private groups still require at least one other invited user.
+  if (visibility === "MEMBERS" && uniqueIds.length < 2) {
     throw new Error("Додайте принаймні одного учасника");
   }
 
@@ -195,6 +206,7 @@ export async function createGroupConversation(
   return prisma.conversation.create({
     data: {
       type: "GROUP",
+      visibility,
       title: cleanTitle,
       participants: {
         create: uniqueIds.map((userId) => ({ userId })),
@@ -289,7 +301,13 @@ export async function listConversationsForUser(userId: string) {
   const conversations = hasOversight
     ? await prisma.conversation.findMany({ include: conversationInclude })
     : await prisma.conversation.findMany({
-        where: { id: { in: memberships.map((m) => m.conversationId) } },
+        where: {
+          OR: [
+            { id: { in: memberships.map((m) => m.conversationId) } },
+            // Public groups are visible to all staff users by design.
+            { visibility: "EVERYONE" },
+          ],
+        },
         include: conversationInclude,
       });
 
@@ -322,6 +340,7 @@ export async function listConversationsForUser(userId: string) {
       return {
         id: conv.id,
         type: conv.type,
+        visibility: conv.visibility,
         title: conv.title,
         project: conv.project,
         estimate: conv.estimate,
@@ -584,8 +603,13 @@ export async function postMessage(
 export async function markRead(conversationId: string, userId: string) {
   const participant = await assertParticipant(conversationId, userId);
   if (!participant) {
-    // Observer reading without being a participant — no-op (no unread state to clear)
-    return null;
+    // Public-chat or oversight reader without a participant row yet —
+    // create one so unread tracking starts from this point onward.
+    return prisma.conversationParticipant.upsert({
+      where: { conversationId_userId: { conversationId, userId } },
+      create: { conversationId, userId, lastReadAt: new Date() },
+      update: { lastReadAt: new Date() },
+    });
   }
   return prisma.conversationParticipant.update({
     where: { conversationId_userId: { conversationId, userId } },
@@ -614,9 +638,16 @@ export async function setConversationArchived(
     where: { conversationId_userId: { conversationId, userId } },
   });
   if (!participant) {
-    // Oversight users may not have a participant row yet — create one so the
-    // archive flag is persisted; this matches ensureOversightParticipant logic.
-    if (!(await canSeeAllChats(userId))) throw new Error("Forbidden");
+    // No participant row yet: allowed if user has oversight OR the chat is
+    // public (EVERYONE). In both cases we lazily create the row so the archive
+    // flag persists per user.
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { visibility: true },
+    });
+    const allowed =
+      conv?.visibility === "EVERYONE" || (await canSeeAllChats(userId));
+    if (!allowed) throw new Error("Forbidden");
     await prisma.conversationParticipant.create({
       data: {
         conversationId,
@@ -639,11 +670,18 @@ async function assertCanManageParticipants(
 ) {
   const conv = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { type: true },
+    select: { type: true, visibility: true },
   });
   if (!conv) throw new Error("Розмову не знайдено");
   if (conv.type !== "GROUP") {
     throw new Error("Учасників можна змінювати тільки у груповому чаті");
+  }
+  // Public groups have an implicit member set (everyone) — explicit
+  // add/remove doesn't apply. Convert to a private group first if needed.
+  if (conv.visibility === "EVERYONE") {
+    throw new Error(
+      "Це публічна розмова — її бачать усі. Учасників не призначають вручну.",
+    );
   }
   // Either an existing participant of the group, or oversight (SUPER_ADMIN).
   const participant = await prisma.conversationParticipant.findUnique({

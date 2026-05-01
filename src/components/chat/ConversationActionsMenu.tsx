@@ -21,7 +21,10 @@ import {
 import { ManageParticipantsDialog } from "./ManageParticipantsDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
-type ConversationLite = Pick<ChatConversation, "id" | "type" | "isArchived">;
+type ConversationLite = Pick<
+  ChatConversation,
+  "id" | "type" | "isArchived" | "visibility"
+>;
 
 export function ConversationActionsMenu({
   conversation,
@@ -59,7 +62,10 @@ export function ConversationActionsMenu({
   }, [open]);
 
   const isGroup = conversation.type === "GROUP";
-  const canManageParticipants = isGroup;
+  // Public groups have an implicit "everyone" member set — explicit add/remove
+  // is meaningless. Project/Estimate channels sync from project membership.
+  const canManageParticipants =
+    isGroup && conversation.visibility !== "EVERYONE";
   const archived = Boolean(conversation.isArchived);
   const busy = archive.isPending || remove.isPending;
 

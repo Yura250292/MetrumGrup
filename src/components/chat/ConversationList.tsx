@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSession } from "next-auth/react";
-import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle, Eye, Settings, Archive } from "lucide-react";
+import { Plus, MessageSquare, FolderKanban, Calculator, Users, Search, AlertCircle, Eye, Settings, Archive, Globe } from "lucide-react";
 import { useConversations, type ChatConversation } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { NewConversationDialog } from "./NewConversationDialog";
@@ -83,7 +83,20 @@ function ConversationRow({
             >
               {title}
             </p>
-            {conversation.isObserver && (
+            {conversation.visibility === "EVERYONE" && (
+              <span
+                className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{
+                  backgroundColor: T.accentPrimarySoft,
+                  color: T.accentPrimary,
+                }}
+                title="Публічна розмова — бачать усі співробітники"
+              >
+                <Globe className="h-2.5 w-2.5" />
+                Публічна
+              </span>
+            )}
+            {conversation.isObserver && conversation.visibility !== "EVERYONE" && (
               <span
                 className="inline-flex flex-shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold"
                 style={{

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { X, MessageSquare, FolderKanban, Calculator, Users, Check } from "lucide-react";
+import { X, MessageSquare, FolderKanban, Calculator, Users, Check, Globe, Lock } from "lucide-react";
 import { useCreateConversation, useStaffUsers } from "@/hooks/useChat";
 import { Button } from "@/components/ui/button";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -31,6 +31,9 @@ export function NewConversationDialog({
   const [estimates, setEstimates] = useState<AdminEstimate[] | null>(null);
   const [groupTitle, setGroupTitle] = useState("");
   const [groupMemberIds, setGroupMemberIds] = useState<string[]>([]);
+  const [groupVisibility, setGroupVisibility] = useState<"MEMBERS" | "EVERYONE">(
+    "MEMBERS",
+  );
   const { data: users } = useStaffUsers();
   const createConversation = useCreateConversation();
 
@@ -38,6 +41,7 @@ export function NewConversationDialog({
     if (!open) {
       setGroupTitle("");
       setGroupMemberIds([]);
+      setGroupVisibility("MEMBERS");
     }
   }, [open]);
 
@@ -73,7 +77,12 @@ export function NewConversationDialog({
       | { type: "DM"; userId: string }
       | { type: "PROJECT"; projectId: string }
       | { type: "ESTIMATE"; estimateId: string }
-      | { type: "GROUP"; title: string; participantIds: string[] }
+      | {
+          type: "GROUP";
+          title: string;
+          participantIds: string[];
+          visibility?: "MEMBERS" | "EVERYONE";
+        }
   ) => {
     try {
       const conversation = await createConversation.mutateAsync(input);
@@ -91,7 +100,9 @@ export function NewConversationDialog({
   };
 
   const canCreateGroup =
-    groupTitle.trim().length > 0 && groupMemberIds.length > 0 && !createConversation.isPending;
+    groupTitle.trim().length > 0 &&
+    (groupVisibility === "EVERYONE" || groupMemberIds.length > 0) &&
+    !createConversation.isPending;
 
   const tabItems = [
     { id: "DM" as const, label: "Особиста", icon: MessageSquare },
@@ -210,6 +221,70 @@ export function NewConversationDialog({
                   <span>Учасників: {groupMemberIds.length}</span>
                   <span>{groupTitle.length}/120</span>
                 </div>
+                <div className="mt-3">
+                  <label
+                    className="block text-xs font-semibold mb-1.5"
+                    style={{ color: T.textSecondary }}
+                  >
+                    Видимість
+                  </label>
+                  <div
+                    className="grid grid-cols-2 gap-2 rounded-lg p-1"
+                    style={{
+                      backgroundColor: T.panelElevated,
+                      border: `1px solid ${T.borderSoft}`,
+                    }}
+                  >
+                    {(
+                      [
+                        {
+                          id: "MEMBERS" as const,
+                          label: "Тільки запрошені",
+                          icon: Lock,
+                          hint: "Бачать лише обрані учасники",
+                        },
+                        {
+                          id: "EVERYONE" as const,
+                          label: "Усі співробітники",
+                          icon: Globe,
+                          hint: "Публічна — бачать усі staff",
+                        },
+                      ]
+                    ).map((opt) => {
+                      const Icon = opt.icon;
+                      const active = groupVisibility === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setGroupVisibility(opt.id)}
+                          className="flex flex-col items-start gap-0.5 rounded-md px-2.5 py-2 text-left transition active:scale-[0.99]"
+                          style={{
+                            backgroundColor: active ? T.panel : "transparent",
+                            border: `1px solid ${active ? T.accentPrimary : "transparent"}`,
+                          }}
+                          aria-pressed={active}
+                        >
+                          <span
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold"
+                            style={{
+                              color: active ? T.accentPrimary : T.textPrimary,
+                            }}
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {opt.label}
+                          </span>
+                          <span
+                            className="text-[11px]"
+                            style={{ color: T.textMuted }}
+                          >
+                            {opt.hint}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </div>
               <div>
                 {!users && (
@@ -269,10 +344,15 @@ export function NewConversationDialog({
                       type: "GROUP",
                       title: groupTitle.trim(),
                       participantIds: groupMemberIds,
+                      visibility: groupVisibility,
                     })
                   }
                 >
-                  {createConversation.isPending ? "Створюємо…" : "Створити групу"}
+                  {createConversation.isPending
+                    ? "Створюємо…"
+                    : groupVisibility === "EVERYONE"
+                      ? "Створити публічну розмову"
+                      : "Створити групу"}
                 </Button>
               </div>
             </div>

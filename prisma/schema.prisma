@@ -1186,6 +1186,7 @@ model ProzorroEstimateItem {
 model Conversation {
   id            String                    @id @default(cuid())
   type          ConversationType
+  visibility    ConversationVisibility    @default(MEMBERS)
   projectId     String?                   @unique
   estimateId    String?                   @unique
   dmKey         String?                   @unique
@@ -1199,7 +1200,13 @@ model Conversation {
   messages      ChatMessage[]
 
   @@index([lastMessageAt])
+  @@index([visibility])
   @@map("conversations")
+}
+
+enum ConversationVisibility {
+  MEMBERS
+  EVERYONE
 }
 
 model ConversationParticipant {

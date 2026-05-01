@@ -50,7 +50,8 @@ export async function POST(request: NextRequest) {
       conversation = await createGroupConversation(
         session.user.id,
         parsed.data.title,
-        parsed.data.participantIds
+        parsed.data.participantIds,
+        parsed.data.visibility,
       );
     }
 

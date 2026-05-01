@@ -57,6 +57,7 @@ export type EstimateRef = {
 export type ChatConversation = {
   id: string;
   type: "DM" | "PROJECT" | "ESTIMATE" | "GROUP";
+  visibility?: "MEMBERS" | "EVERYONE";
   title: string | null;
   project: { id: string; title: string; slug: string } | null;
   estimate: EstimateRef | null;
@@ -165,7 +166,12 @@ export function useCreateConversation() {
         | { type: "DM"; userId: string }
         | { type: "PROJECT"; projectId: string }
         | { type: "ESTIMATE"; estimateId: string }
-        | { type: "GROUP"; title: string; participantIds: string[] }
+        | {
+            type: "GROUP";
+            title: string;
+            participantIds: string[];
+            visibility?: "MEMBERS" | "EVERYONE";
+          }
     ) =>
       jsonFetch<{ conversation: { id: string } }>("/api/admin/chat/conversations", {
         method: "POST",

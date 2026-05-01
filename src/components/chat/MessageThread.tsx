@@ -440,6 +440,7 @@ export function MessageThread({ conversationId }: { conversationId: string }) {
             conversation={{
               id: conversationId,
               type: conversation.type,
+              visibility: conversation.visibility,
               isArchived: Boolean(conversation.isArchived),
             }}
           />
