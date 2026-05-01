@@ -3,6 +3,11 @@ import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import {
+  type EmployeeRecord,
+  redactSalaryForHr,
+  stripSalaryWritesForHr,
+} from "@/lib/hr/employee-privacy";
 
 async function guard() {
   const session = await auth();
@@ -66,7 +71,9 @@ export async function GET() {
   const employees = await prisma.employee.findMany({
     orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
   });
-  return NextResponse.json({ data: employees });
+  const role = g.session.user.role;
+  const data = employees.map((e) => redactSalaryForHr(e as EmployeeRecord, role));
+  return NextResponse.json({ data });
 }
 
 export async function POST(request: NextRequest) {
@@ -74,7 +81,7 @@ export async function POST(request: NextRequest) {
   if (g.error) return g.error;
 
   const body = await request.json();
-  const parsed = createSchema.safeParse(body);
+  const parsed = createSchema.safeParse(stripSalaryWritesForHr(body, g.session.user.role));
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Невірні дані", details: parsed.error.flatten() },
@@ -83,7 +90,10 @@ export async function POST(request: NextRequest) {
   }
 
   const employee = await prisma.employee.create({ data: parsed.data });
-  return NextResponse.json({ data: employee }, { status: 201 });
+  return NextResponse.json(
+    { data: redactSalaryForHr(employee as EmployeeRecord, g.session.user.role) },
+    { status: 201 },
+  );
 }
 
 export async function PATCH(request: NextRequest) {
@@ -91,7 +101,7 @@ export async function PATCH(request: NextRequest) {
   if (g.error) return g.error;
 
   const body = await request.json();
-  const parsed = updateSchema.safeParse(body);
+  const parsed = updateSchema.safeParse(stripSalaryWritesForHr(body, g.session.user.role));
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Невірні дані", details: parsed.error.flatten() },
@@ -101,7 +111,9 @@ export async function PATCH(request: NextRequest) {
 
   const { id, ...data } = parsed.data;
   const employee = await prisma.employee.update({ where: { id }, data });
-  return NextResponse.json({ data: employee });
+  return NextResponse.json({
+    data: redactSalaryForHr(employee as EmployeeRecord, g.session.user.role),
+  });
 }
 
 export async function DELETE(request: NextRequest) {
