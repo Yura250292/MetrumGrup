@@ -1037,11 +1037,16 @@ function NameCell({
           }}
           onDragEnd={() => onDragHandleEnd?.()}
           onClick={(e) => e.stopPropagation()}
-          className="flex h-4 w-3 flex-shrink-0 cursor-grab items-center justify-center opacity-0 transition group-hover/name:opacity-60 active:cursor-grabbing active:opacity-100"
+          className="flex h-6 w-5 flex-shrink-0 cursor-grab items-center justify-center rounded transition hover:opacity-100 active:cursor-grabbing"
           title="Перетягнути етап (на інший = всередину; на верх/низ рядка = поряд)"
-          style={{ color: T.textMuted }}
+          style={{
+            color: T.textMuted,
+            opacity: 0.45,
+            backgroundColor: T.panelSoft,
+            border: `1px solid ${T.borderSoft}`,
+          }}
         >
-          <GripVertical size={11} />
+          <GripVertical size={14} />
         </span>
       )}
       {isDirty && (
