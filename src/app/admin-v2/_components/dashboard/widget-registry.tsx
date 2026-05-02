@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Calendar,
   Home,
+  TableProperties,
 } from "lucide-react";
 import type { WidgetSize, WidgetType } from "./layout-schema";
 import { WIDGET_SIZES } from "./layout-schema";
@@ -23,6 +24,7 @@ import { ChatsWidget } from "./widgets/chats-widget";
 import { MyTasksWidget } from "./widgets/my-tasks-widget";
 import { MeetingsWidget } from "./widgets/meetings-widget";
 import { FinanceQuickWidget } from "./widgets/finance-quick-widget";
+import { PivotQuickWidget } from "./widgets/pivot-quick-widget";
 
 export type WidgetRendererProps = {
   slot?: ReactNode;
@@ -189,6 +191,15 @@ export const WIDGET_REGISTRY: Record<WidgetType, WidgetDefinition> = {
     defaultSize: "2x1",
     sizes: WIDE_SIZES,
     Render: () => <MeetingsWidget />,
+  },
+  "pivot-quick": {
+    type: "pivot-quick",
+    label: "Зведена таблиця · міні",
+    description: "Топ проєктів за чистим прибутком за останні 3 місяці",
+    icon: TableProperties,
+    defaultSize: "4x2",
+    sizes: ["2x2", "3x1", "4x2"],
+    Render: () => <PivotQuickWidget />,
   },
 };
 

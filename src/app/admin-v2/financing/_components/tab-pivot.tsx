@@ -5,10 +5,13 @@ import { Loader2, AlertCircle, Download, RefreshCw, ChevronDown, ChevronRight } 
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
-import type { FinancingFilters } from "./types";
+import type { FinancingFilters, ProjectOption } from "./types";
 
 type PivotKindMode = "ALL" | "PLAN" | "FACT";
 type GroupByMode = "PROJECT" | "CATEGORY";
+type ScopeMode = "ALL" | "SALARY" | "GENERAL_EXPENSES" | "PROJECTS_ONLY" | "PROJECT";
+
+const GENERAL_EXPENSES_FOLDER_ID = "fld_sys_general_expenses";
 
 type PivotRow = {
   type: "INCOME" | "EXPENSE";
@@ -172,12 +175,16 @@ function groupByProject(rows: PivotRow[], months: string[]): ProjectGroup[] {
 export function TabPivot({
   scope,
   filters,
+  projects = [],
 }: {
   scope?: { id: string; title: string };
   filters: FinancingFilters;
+  projects?: ProjectOption[];
 }) {
   const [kindMode, setKindMode] = useState<PivotKindMode>("ALL");
   const [groupBy, setGroupBy] = useState<GroupByMode>("PROJECT");
+  const [scopeMode, setScopeMode] = useState<ScopeMode>("ALL");
+  const [scopeProjectId, setScopeProjectId] = useState<string>("");
   const [data, setData] = useState<PivotResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,13 +193,27 @@ export function TabPivot({
   const query = useMemo(() => {
     const p = new URLSearchParams();
 
+    // Scope from page (e.g., on a single project page) wins over local scope filter
     if (scope) {
       p.set("projectId", scope.id);
-    } else if (filters.projectId) {
-      p.set("projectId", filters.projectId);
+    } else {
+      // Local pivot scope filter
+      if (scopeMode === "SALARY") {
+        p.set("category", "salary");
+      } else if (scopeMode === "GENERAL_EXPENSES") {
+        p.set("folderId", GENERAL_EXPENSES_FOLDER_ID);
+      } else if (scopeMode === "PROJECT" && scopeProjectId) {
+        p.set("projectId", scopeProjectId);
+      } else if (filters.projectId) {
+        p.set("projectId", filters.projectId);
+      }
+      // PROJECTS_ONLY filtered client-side after fetch (no projectId NOT NULL filter in API)
     }
 
-    if (filters.folderId) p.set("folderId", filters.folderId);
+    // Folder from global filters only when not overridden by scopeMode
+    if (!scope && scopeMode !== "GENERAL_EXPENSES" && filters.folderId) {
+      p.set("folderId", filters.folderId);
+    }
 
     if (filters.from) p.set("from", new Date(filters.from).toISOString());
     if (filters.to) {
@@ -206,7 +227,7 @@ export function TabPivot({
     if (kindMode !== "ALL") p.set("kind", kindMode);
 
     return p.toString();
-  }, [scope, filters, kindMode]);
+  }, [scope, filters, kindMode, scopeMode, scopeProjectId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -231,18 +252,52 @@ export function TabPivot({
     };
   }, [query]);
 
+  // Client-side filter for PROJECTS_ONLY mode + recompute totals
+  const filteredData = useMemo<PivotResponse | null>(() => {
+    if (!data) return null;
+    if (scopeMode !== "PROJECTS_ONLY") return data;
+
+    const rows = data.rows.filter((r) => r.projectId !== null);
+    const months = data.months;
+    const incomePerMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]));
+    const expensePerMonth: Record<string, number> = Object.fromEntries(months.map((m) => [m, 0]));
+    let incomeTotal = 0;
+    let expenseTotal = 0;
+    for (const r of rows) {
+      const target = r.type === "INCOME" ? incomePerMonth : expensePerMonth;
+      for (const m of months) {
+        target[m] = (target[m] ?? 0) + (r.perMonth[m] ?? 0);
+      }
+      if (r.type === "INCOME") incomeTotal += r.total;
+      else expenseTotal += r.total;
+    }
+    const netPerMonth: Record<string, number> = {};
+    for (const m of months) {
+      netPerMonth[m] = (incomePerMonth[m] ?? 0) - (expensePerMonth[m] ?? 0);
+    }
+    return {
+      ...data,
+      rows,
+      totals: {
+        income: { perMonth: incomePerMonth, total: incomeTotal },
+        expense: { perMonth: expensePerMonth, total: expenseTotal },
+        net: { perMonth: netPerMonth, total: incomeTotal - expenseTotal },
+      },
+    };
+  }, [data, scopeMode]);
+
   const projectGroups = useMemo(
-    () => (data ? groupByProject(data.rows, data.months) : []),
-    [data],
+    () => (filteredData ? groupByProject(filteredData.rows, filteredData.months) : []),
+    [filteredData],
   );
 
   const incomeRowsForCategoryView = useMemo(
-    () => (data ? data.rows.filter((r) => r.type === "INCOME") : []),
-    [data],
+    () => (filteredData ? filteredData.rows.filter((r) => r.type === "INCOME") : []),
+    [filteredData],
   );
   const expenseRowsForCategoryView = useMemo(
-    () => (data ? data.rows.filter((r) => r.type === "EXPENSE") : []),
-    [data],
+    () => (filteredData ? filteredData.rows.filter((r) => r.type === "EXPENSE") : []),
+    [filteredData],
   );
 
   function toggleProjectCollapse(id: string) {
@@ -255,13 +310,13 @@ export function TabPivot({
   }
 
   function handleExportCsv() {
-    if (!data) return;
-    const csv = buildCsv(data);
+    if (!filteredData) return;
+    const csv = buildCsv(filteredData);
     const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    const fromTag = data.range.from.slice(0, 10);
-    const toTag = data.range.to.slice(0, 10);
+    const fromTag = filteredData.range.from.slice(0, 10);
+    const toTag = filteredData.range.to.slice(0, 10);
     a.href = url;
     a.download = `pivot-${fromTag}-${toTag}.csv`;
     document.body.appendChild(a);
@@ -270,7 +325,8 @@ export function TabPivot({
     URL.revokeObjectURL(url);
   }
 
-  const monthsCount = data?.months.length ?? 0;
+  const monthsCount = filteredData?.months.length ?? 0;
+  const showScopeFilter = !scope;
 
   return (
     <div className="flex flex-col gap-4">
@@ -321,13 +377,80 @@ export function TabPivot({
 
         <button
           onClick={handleExportCsv}
-          disabled={!data || loading}
+          disabled={!filteredData || loading}
           className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition disabled:opacity-50"
           style={{ borderColor: T.borderSoft, color: T.textPrimary, background: T.panel }}
         >
           <Download size={14} /> CSV
         </button>
       </div>
+
+      {/* Scope filter — hidden when page is scoped to a single project */}
+      {showScopeFilter && (
+        <div
+          className="flex flex-wrap items-center gap-2 rounded-lg border p-2"
+          style={{ borderColor: T.borderSoft, background: T.panelSoft }}
+        >
+          <span className="text-xs font-semibold" style={{ color: T.textMuted }}>
+            Розділ:
+          </span>
+          {(
+            [
+              { mode: "ALL" as const, label: "Усі" },
+              { mode: "SALARY" as const, label: "ЗП" },
+              { mode: "GENERAL_EXPENSES" as const, label: "Загальні витрати" },
+              { mode: "PROJECTS_ONLY" as const, label: "Усі проєкти" },
+            ]
+          ).map(({ mode, label }) => {
+            const active = scopeMode === mode;
+            return (
+              <button
+                key={mode}
+                onClick={() => {
+                  setScopeMode(mode);
+                  setScopeProjectId("");
+                }}
+                className="rounded-md px-3 py-1 text-xs font-medium transition"
+                style={{
+                  background: active ? T.accentPrimary : T.panel,
+                  color: active ? "#fff" : T.textSecondary,
+                  border: `1px solid ${active ? T.accentPrimary : T.borderSoft}`,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {projects.length > 0 && (
+            <select
+              value={scopeMode === "PROJECT" ? scopeProjectId : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === "") {
+                  if (scopeMode === "PROJECT") setScopeMode("ALL");
+                  setScopeProjectId("");
+                } else {
+                  setScopeMode("PROJECT");
+                  setScopeProjectId(v);
+                }
+              }}
+              className="rounded-md px-2 py-1 text-xs"
+              style={{
+                background: scopeMode === "PROJECT" ? T.accentPrimary : T.panel,
+                color: scopeMode === "PROJECT" ? "#fff" : T.textPrimary,
+                border: `1px solid ${scopeMode === "PROJECT" ? T.accentPrimary : T.borderSoft}`,
+              }}
+            >
+              <option value="">— Конкретний проєкт —</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      )}
 
       {error && (
         <div
@@ -339,13 +462,13 @@ export function TabPivot({
         </div>
       )}
 
-      {loading && !data && (
+      {loading && !filteredData && (
         <div className="flex items-center justify-center gap-2 rounded-lg border p-12 text-sm" style={{ borderColor: T.borderSoft, color: T.textSecondary }}>
           <Loader2 size={16} className="animate-spin" /> Завантаження…
         </div>
       )}
 
-      {data && data.rows.length === 0 && !loading && (
+      {filteredData && filteredData.rows.length === 0 && !loading && (
         <div
           className="flex flex-col items-center gap-3 rounded-lg border p-12 text-sm"
           style={{ borderColor: T.borderSoft, color: T.textSecondary, background: T.panel }}
@@ -355,7 +478,7 @@ export function TabPivot({
         </div>
       )}
 
-      {data && data.rows.length > 0 && (
+      {filteredData && filteredData.rows.length > 0 && (
         <div
           className="overflow-x-auto rounded-lg border"
           style={{ borderColor: T.borderSoft, background: T.panel }}
@@ -374,7 +497,7 @@ export function TabPivot({
                 >
                   {groupBy === "PROJECT" ? "Проєкт / Категорія" : "Категорія"}
                 </th>
-                {data.months.map((m) => (
+                {filteredData.months.map((m) => (
                   <th
                     key={m}
                     className="px-3 py-2 text-right font-semibold whitespace-nowrap"
@@ -397,7 +520,7 @@ export function TabPivot({
                 {projectGroups.map((g) => {
                   const collapsed = collapsedProjects.has(g.projectId);
                   const netPerMonth: Record<string, number> = {};
-                  for (const m of data.months) {
+                  for (const m of filteredData.months) {
                     netPerMonth[m] = (g.incomePerMonth[m] ?? 0) - (g.expensePerMonth[m] ?? 0);
                   }
                   const netTotal = g.incomeTotal - g.expenseTotal;
@@ -406,7 +529,7 @@ export function TabPivot({
                     <ProjectBlock
                       key={g.projectId}
                       group={g}
-                      months={data.months}
+                      months={filteredData.months}
                       collapsed={collapsed}
                       onToggle={() => toggleProjectCollapse(g.projectId)}
                       netPerMonth={netPerMonth}
@@ -416,17 +539,17 @@ export function TabPivot({
                 })}
 
                 {/* Grand total */}
-                <GrandTotalRows data={data} />
+                <GrandTotalRows data={filteredData} />
               </tbody>
             )}
 
             {groupBy === "CATEGORY" && (
               <tbody>
                 <CategoryViewBody
-                  months={data.months}
+                  months={filteredData.months}
                   incomeRows={incomeRowsForCategoryView}
                   expenseRows={expenseRowsForCategoryView}
-                  totals={data.totals}
+                  totals={filteredData.totals}
                 />
               </tbody>
             )}
@@ -434,9 +557,9 @@ export function TabPivot({
         </div>
       )}
 
-      {data && (
+      {filteredData && (
         <div className="text-xs" style={{ color: T.textMuted }}>
-          Період: {data.range.from.slice(0, 10)} — {data.range.to.slice(0, 10)} · {monthsCount} міс. · {data.rows.length} рядків · {projectGroups.length} проєкт(ів)
+          Період: {filteredData.range.from.slice(0, 10)} — {filteredData.range.to.slice(0, 10)} · {monthsCount} міс. · {filteredData.rows.length} рядків · {projectGroups.length} проєкт(ів)
         </div>
       )}
     </div>

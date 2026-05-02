@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
   const folderIdRaw = searchParams.get("folderId");
   const kindRaw = searchParams.get("kind");
   const archivedRaw = searchParams.get("archived");
+  const categoryRaw = searchParams.get("category");
 
   const projectId =
     projectIdRaw === null
@@ -46,6 +47,7 @@ export async function GET(request: NextRequest) {
   const folderId = folderIdRaw && folderIdRaw !== "" ? folderIdRaw : undefined;
   const kind = kindRaw === "PLAN" || kindRaw === "FACT" ? kindRaw : undefined;
   const archived = archivedRaw === "true";
+  const category = categoryRaw && categoryRaw !== "" ? categoryRaw : undefined;
 
   try {
     const { firmId } = await resolveFirmScopeForRequest(session);
@@ -59,6 +61,7 @@ export async function GET(request: NextRequest) {
       projectId,
       folderId,
       kind,
+      category,
       archived,
       firmId,
     });

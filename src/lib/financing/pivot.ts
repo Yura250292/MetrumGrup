@@ -146,6 +146,7 @@ export type PivotQueryParams = {
   projectId?: string | null;
   folderId?: string | null;
   kind?: "PLAN" | "FACT";
+  category?: string;
   archived: boolean;
   firmId?: string | null;
 };
@@ -155,6 +156,7 @@ export async function computePivot(p: PivotQueryParams): Promise<PivotResponse> 
     projectId: p.projectId === "" ? undefined : p.projectId,
     folderId: p.folderId ?? undefined,
     kind: p.kind,
+    category: p.category,
     from: p.from,
     to: p.to,
     archived: p.archived,

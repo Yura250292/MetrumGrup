@@ -22,6 +22,7 @@ export const WIDGET_TYPES = [
   "chats",
   "my-tasks",
   "meetings",
+  "pivot-quick",
 ] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 

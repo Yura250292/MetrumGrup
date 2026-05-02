@@ -94,7 +94,13 @@ export function FinancingView({
   const searchParams = useSearchParams();
   const folderId = scope ? null : (searchParams.get("folderId") ?? null);
 
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const tabFromUrl = searchParams.get("tab");
+  const initialTab: TabKey =
+    tabFromUrl &&
+    (TABS as readonly { key: TabKey }[]).some((t) => t.key === tabFromUrl)
+      ? (tabFromUrl as TabKey)
+      : "overview";
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showOcrScan, setShowOcrScan] = useState(false);
   const [showEstimateUpload, setShowEstimateUpload] = useState(false);
@@ -621,7 +627,7 @@ export function FinancingView({
         )}
 
         {activeTab === "pivot" && (
-          <TabPivot scope={scope} filters={filters} />
+          <TabPivot scope={scope} filters={filters} projects={projects} />
         )}
       </div>
 
