@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
-import { computePivot } from "@/lib/financing/pivot";
+import { computePivot, type PivotGranularity } from "@/lib/financing/pivot";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { isHomeFirmFor, getActiveRoleFromSession } from "@/lib/firm/scope";
 
@@ -37,6 +37,14 @@ export async function GET(request: NextRequest) {
   const kindRaw = searchParams.get("kind");
   const archivedRaw = searchParams.get("archived");
   const categoryRaw = searchParams.get("category");
+  const granularityRaw = searchParams.get("granularity");
+
+  const VALID_GRANULARITY: PivotGranularity[] = ["DAY", "WEEK", "MONTH", "YEAR", "TOTAL"];
+  const granularity: PivotGranularity = VALID_GRANULARITY.includes(
+    granularityRaw as PivotGranularity,
+  )
+    ? (granularityRaw as PivotGranularity)
+    : "TOTAL";
 
   const projectId =
     projectIdRaw === null
@@ -58,6 +66,7 @@ export async function GET(request: NextRequest) {
     const data = await computePivot({
       from,
       to,
+      granularity,
       projectId,
       folderId,
       kind,

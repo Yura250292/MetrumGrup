@@ -47,13 +47,13 @@ export type CashflowResponse = {
   gaps: { from: string; to: string; depth: number }[];
 };
 
-function startOfDay(d: Date): Date {
+export function startOfDay(d: Date): Date {
   const r = new Date(d);
   r.setHours(0, 0, 0, 0);
   return r;
 }
 
-function startOfWeek(d: Date): Date {
+export function startOfWeek(d: Date): Date {
   const r = startOfDay(d);
   const day = r.getDay();
   // Monday-based week
@@ -62,8 +62,12 @@ function startOfWeek(d: Date): Date {
   return r;
 }
 
-function startOfMonth(d: Date): Date {
+export function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+export function startOfYear(d: Date): Date {
+  return new Date(d.getFullYear(), 0, 1);
 }
 
 function addUnit(d: Date, granularity: CashflowGranularity): Date {

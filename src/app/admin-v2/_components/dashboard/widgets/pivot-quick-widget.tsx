@@ -7,61 +7,46 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
 import { WidgetShell } from "./widget-shell";
 
+type Bucket = "PROJECTS" | "SALARY" | "ADMIN";
+
+const SALARY_CATEGORY = "salary";
+
+const BUCKET_LABELS: Record<Bucket, string> = {
+  PROJECTS: "ПРОЄКТИ",
+  SALARY: "ЗП",
+  ADMIN: "Адмін",
+};
+
 type PivotRow = {
+  kind: "PLAN" | "FACT";
   type: "INCOME" | "EXPENSE";
   category: string;
   subcategory: string | null;
   projectId: string | null;
   projectTitle: string | null;
-  perMonth: Record<string, number>;
+  perBucket: Record<string, number>;
   total: number;
 };
 
 type PivotResponse = {
   range: { from: string; to: string };
-  months: string[];
+  granularity: "TOTAL" | "DAY" | "WEEK" | "MONTH" | "YEAR";
+  buckets: string[];
   rows: PivotRow[];
   totals: {
-    income: { perMonth: Record<string, number>; total: number };
-    expense: { perMonth: Record<string, number>; total: number };
-    net: { perMonth: Record<string, number>; total: number };
+    income: { perBucket: Record<string, number>; total: number };
+    expense: { perBucket: Record<string, number>; total: number };
+    net: { perBucket: Record<string, number>; total: number };
   };
 };
 
-type ScopeMode = "ALL" | "SALARY" | "GENERAL_EXPENSES" | "PROJECTS_ONLY";
-type KindMode = "ALL" | "PLAN" | "FACT";
-type PeriodMonths = 3 | 6 | 12;
-
 type Filters = {
-  scope: ScopeMode;
-  kind: KindMode;
-  months: PeriodMonths;
+  bucket: Bucket;
+  showPlan: boolean;
 };
 
 const STORAGE_KEY = "admin-v2:dashboard:pivot-quick:filters";
-
-const DEFAULT_FILTERS: Filters = {
-  scope: "ALL",
-  kind: "ALL",
-  months: 6,
-};
-
-const GENERAL_EXPENSES_FOLDER_ID = "fld_sys_general_expenses";
-
-const MONTH_LABELS_UK = [
-  "Січ", "Лют", "Бер", "Кві", "Тра", "Чер",
-  "Лип", "Сер", "Вер", "Жов", "Лис", "Гру",
-];
-
-function formatMonthHeader(key: string): string {
-  const [yearStr, monthStr] = key.split("-");
-  const m = Number(monthStr) - 1;
-  return `${MONTH_LABELS_UK[m] ?? monthStr} ${yearStr.slice(2)}`;
-}
-
-function lastN<T>(arr: T[], n: number): T[] {
-  return arr.length <= n ? arr : arr.slice(arr.length - n);
-}
+const DEFAULT_FILTERS: Filters = { bucket: "PROJECTS", showPlan: true };
 
 function loadFilters(): Filters {
   if (typeof window === "undefined") return DEFAULT_FILTERS;
@@ -70,9 +55,8 @@ function loadFilters(): Filters {
     if (!raw) return DEFAULT_FILTERS;
     const parsed = JSON.parse(raw) as Partial<Filters>;
     return {
-      scope: (parsed.scope as ScopeMode) ?? DEFAULT_FILTERS.scope,
-      kind: (parsed.kind as KindMode) ?? DEFAULT_FILTERS.kind,
-      months: (parsed.months as PeriodMonths) ?? DEFAULT_FILTERS.months,
+      bucket: (parsed.bucket as Bucket) ?? DEFAULT_FILTERS.bucket,
+      showPlan: parsed.showPlan ?? DEFAULT_FILTERS.showPlan,
     };
   } catch {
     return DEFAULT_FILTERS;
@@ -84,14 +68,12 @@ function saveFilters(f: Filters) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(f));
   } catch {
-    // ignore quota / privacy errors
+    // ignore
   }
 }
 
-function buildLink(filters: Filters): string {
-  // Forward filter state into the full pivot tab via query params it understands
-  const p = new URLSearchParams({ tab: "pivot" });
-  if (filters.scope === "GENERAL_EXPENSES") p.set("folderId", GENERAL_EXPENSES_FOLDER_ID);
+function buildOpenLink(filters: Filters): string {
+  const p = new URLSearchParams({ tab: "pivot", bucket: filters.bucket });
   return `/admin-v2/financing?${p.toString()}`;
 }
 
@@ -99,8 +81,6 @@ export function PivotQuickWidget() {
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 
   useEffect(() => {
-    // Hydrate from localStorage post-mount. queueMicrotask defers the setState
-    // past the effect's synchronous body so the linter doesn't flag a cascade.
     queueMicrotask(() => setFilters(loadFilters()));
   }, []);
 
@@ -114,17 +94,12 @@ export function PivotQuickWidget() {
 
   const queryString = useMemo(() => {
     const now = new Date();
-    const from = new Date(now.getFullYear(), now.getMonth() - (filters.months - 1), 1).toISOString();
+    const from = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString();
     const to = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).toISOString();
-    const p = new URLSearchParams({ from, to });
-
-    if (filters.scope === "SALARY") p.set("category", "salary");
-    else if (filters.scope === "GENERAL_EXPENSES") p.set("folderId", GENERAL_EXPENSES_FOLDER_ID);
-
-    if (filters.kind !== "ALL") p.set("kind", filters.kind);
-
+    const p = new URLSearchParams({ from, to, granularity: "TOTAL" });
+    if (filters.bucket === "SALARY") p.set("category", SALARY_CATEGORY);
     return p.toString();
-  }, [filters]);
+  }, [filters.bucket]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["dashboard", "pivot-quick", queryString],
@@ -140,48 +115,49 @@ export function PivotQuickWidget() {
 
   const filteredRows = useMemo(() => {
     if (!data) return [] as PivotRow[];
-    if (filters.scope === "PROJECTS_ONLY") return data.rows.filter((r) => r.projectId !== null);
-    return data.rows;
-  }, [data, filters.scope]);
+    const base = filters.showPlan ? data.rows : data.rows.filter((r) => r.kind === "FACT");
+    if (filters.bucket === "PROJECTS") return base.filter((r) => r.projectId !== null);
+    if (filters.bucket === "ADMIN") return base.filter((r) => r.projectId === null && r.category !== SALARY_CATEGORY);
+    return base;
+  }, [data, filters]);
 
-  // Show last 3 months only — compact view
-  const visibleMonths = useMemo(() => (data ? lastN(data.months, 3) : []), [data]);
+  // Project blocks (top 4 by abs net) when bucket=PROJECTS, otherwise show category aggregate
+  const summary = useMemo(() => {
+    if (!data) return null;
+    let totalExpense = 0;
+    let totalIncome = 0;
 
-  // Top 4 projects by absolute net (recomputed from filteredRows)
-  const { topProjects, netPerMonth, netTotal } = useMemo(() => {
-    if (!data) return { topProjects: [], netPerMonth: {}, netTotal: 0 };
-
-    const projectAggregates = new Map<
-      string,
-      { title: string; net: number; netPerMonth: Record<string, number> }
-    >();
-    const overallNetPerMonth: Record<string, number> = Object.fromEntries(visibleMonths.map((m) => [m, 0]));
-    let overallNetTotal = 0;
+    const projectMap = new Map<string, { title: string; expense: number; income: number }>();
 
     for (const r of filteredRows) {
       const key = r.projectId ?? "__none__";
       const title = r.projectTitle ?? "Без проєкту";
-      let agg = projectAggregates.get(key);
+      let agg = projectMap.get(key);
       if (!agg) {
-        agg = { title, net: 0, netPerMonth: Object.fromEntries(visibleMonths.map((m) => [m, 0])) };
-        projectAggregates.set(key, agg);
+        agg = { title, expense: 0, income: 0 };
+        projectMap.set(key, agg);
       }
-      const sign = r.type === "INCOME" ? 1 : -1;
-      agg.net += sign * r.total;
-      overallNetTotal += sign * r.total;
-      for (const m of visibleMonths) {
-        const v = sign * (r.perMonth[m] ?? 0);
-        agg.netPerMonth[m] = (agg.netPerMonth[m] ?? 0) + v;
-        overallNetPerMonth[m] = (overallNetPerMonth[m] ?? 0) + v;
+      if (r.type === "EXPENSE") {
+        agg.expense += r.total;
+        totalExpense += r.total;
+      } else {
+        agg.income += r.total;
+        totalIncome += r.total;
       }
     }
 
-    const top = Array.from(projectAggregates.values())
+    const projects = Array.from(projectMap.values())
+      .map((p) => ({ ...p, net: p.income - p.expense }))
       .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
       .slice(0, 4);
 
-    return { topProjects: top, netPerMonth: overallNetPerMonth, netTotal: overallNetTotal };
-  }, [data, filteredRows, visibleMonths]);
+    return {
+      projects,
+      totalExpense,
+      totalIncome,
+      totalNet: totalIncome - totalExpense,
+    };
+  }, [data, filteredRows]);
 
   if (data === null) {
     return (
@@ -193,54 +169,38 @@ export function PivotQuickWidget() {
     );
   }
 
-  const balanceColor = netTotal >= 0 ? T.success : T.danger;
+  const balanceColor = (summary?.totalNet ?? 0) >= 0 ? T.success : T.danger;
 
   return (
     <WidgetShell
       icon={<TableProperties size={14} />}
       title="Зведена таблиця"
-      subtitle={data ? `${visibleMonths.length} міс. · ${filteredRows.length} рядків` : "Завантаження…"}
+      subtitle={data ? `${BUCKET_LABELS[filters.bucket]} · ${filteredRows.length} рядків` : "Завантаження…"}
       accent={balanceColor}
-      action={{ href: buildLink(filters), label: "Відкрити" }}
+      action={{ href: buildOpenLink(filters), label: "Відкрити" }}
     >
       <div className="flex h-full flex-col gap-2 overflow-y-auto overscroll-contain px-1 pb-1">
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-1">
-          <FilterPill active={filters.scope === "ALL"} onClick={() => patch({ scope: "ALL" })}>
-            Усі
-          </FilterPill>
-          <FilterPill active={filters.scope === "SALARY"} onClick={() => patch({ scope: "SALARY" })}>
-            ЗП
-          </FilterPill>
-          <FilterPill active={filters.scope === "GENERAL_EXPENSES"} onClick={() => patch({ scope: "GENERAL_EXPENSES" })}>
-            Загальні
-          </FilterPill>
-          <FilterPill active={filters.scope === "PROJECTS_ONLY"} onClick={() => patch({ scope: "PROJECTS_ONLY" })}>
-            Проєкти
-          </FilterPill>
-          <span className="mx-1 h-3 w-px" style={{ background: T.borderSoft }} />
-          <FilterPill active={filters.kind === "ALL"} onClick={() => patch({ kind: "ALL" })}>
-            План+Факт
-          </FilterPill>
-          <FilterPill active={filters.kind === "PLAN"} onClick={() => patch({ kind: "PLAN" })}>
-            План
-          </FilterPill>
-          <FilterPill active={filters.kind === "FACT"} onClick={() => patch({ kind: "FACT" })}>
-            Факт
-          </FilterPill>
-          <span className="mx-1 h-3 w-px" style={{ background: T.borderSoft }} />
-          {([3, 6, 12] as const).map((m) => (
+          {(["PROJECTS", "SALARY", "ADMIN"] as Bucket[]).map((b) => (
             <FilterPill
-              key={m}
-              active={filters.months === m}
-              onClick={() => patch({ months: m })}
+              key={b}
+              active={filters.bucket === b}
+              onClick={() => patch({ bucket: b })}
             >
-              {m}м
+              {BUCKET_LABELS[b]}
             </FilterPill>
           ))}
+          <span className="mx-1 h-3 w-px" style={{ background: T.borderSoft }} />
+          <FilterPill
+            active={filters.showPlan}
+            onClick={() => patch({ showPlan: !filters.showPlan })}
+          >
+            {filters.showPlan ? "✓ План" : "План"}
+          </FilterPill>
         </div>
 
-        {(isLoading || !data) && (
+        {(isLoading || !data || !summary) && (
           <div className="flex flex-1 items-center justify-center gap-2 text-[12px]" style={{ color: T.textMuted }}>
             <Loader2 size={14} className="animate-spin" /> Завантаження…
           </div>
@@ -252,7 +212,7 @@ export function PivotQuickWidget() {
           </div>
         )}
 
-        {data && (
+        {data && summary && (
           <table className="w-full border-collapse text-[11px]">
             <thead>
               <tr style={{ background: T.panelSoft }}>
@@ -260,42 +220,48 @@ export function PivotQuickWidget() {
                   className="px-2 py-1.5 text-left font-semibold"
                   style={{ color: T.textSecondary, borderBottom: `1px solid ${T.borderSoft}` }}
                 >
-                  Проєкт
+                  {filters.bucket === "PROJECTS" ? "Проєкт" : "Розділ"}
                 </th>
-                {visibleMonths.map((m) => (
-                  <th
-                    key={m}
-                    className="px-2 py-1.5 text-right font-semibold whitespace-nowrap"
-                    style={{ color: T.textSecondary, borderBottom: `1px solid ${T.borderSoft}` }}
-                  >
-                    {formatMonthHeader(m)}
-                  </th>
-                ))}
-                <th
-                  className="px-2 py-1.5 text-right font-semibold"
-                  style={{ color: T.textSecondary, borderBottom: `1px solid ${T.borderSoft}` }}
-                >
-                  Σ
+                <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap" style={{ color: T.textSecondary, borderBottom: `1px solid ${T.borderSoft}` }}>
+                  Витр
+                </th>
+                <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap" style={{ color: T.textSecondary, borderBottom: `1px solid ${T.borderSoft}` }}>
+                  Дох
+                </th>
+                <th className="px-2 py-1.5 text-right font-semibold whitespace-nowrap" style={{ color: T.textSecondary, borderBottom: `1px solid ${T.borderSoft}` }}>
+                  Рез
                 </th>
               </tr>
             </thead>
             <tbody>
-              {topProjects.length === 0 ? (
+              {/* Grand total — pinned at top */}
+              <tr style={{ background: T.accentPrimarySoft, borderTop: `2px solid ${T.borderStrong}` }}>
+                <td
+                  className="px-2 py-1.5 font-bold uppercase"
+                  style={{ color: T.accentPrimary, fontSize: 10, letterSpacing: 0.5 }}
+                >
+                  Загалом
+                </td>
+                <td className="px-2 py-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.danger }}>
+                  {summary.totalExpense === 0 ? "—" : formatCurrencyCompact(summary.totalExpense)}
+                </td>
+                <td className="px-2 py-1.5 text-right font-bold whitespace-nowrap" style={{ color: T.success }}>
+                  {summary.totalIncome === 0 ? "—" : formatCurrencyCompact(summary.totalIncome)}
+                </td>
+                <td className="px-2 py-1.5 text-right font-bold whitespace-nowrap" style={{ color: balanceColor }}>
+                  {summary.totalNet === 0 ? "—" : formatCurrencyCompact(summary.totalNet)}
+                </td>
+              </tr>
+
+              {summary.projects.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={visibleMonths.length + 2}
-                    className="px-2 py-4 text-center"
-                    style={{ color: T.textMuted }}
-                  >
+                  <td colSpan={4} className="px-2 py-4 text-center" style={{ color: T.textMuted }}>
                     Немає даних
                   </td>
                 </tr>
               ) : (
-                topProjects.map((p, idx) => (
-                  <tr
-                    key={idx}
-                    style={{ borderTop: idx > 0 ? `1px solid ${T.borderSoft}` : undefined }}
-                  >
+                summary.projects.map((p, idx) => (
+                  <tr key={idx} style={{ borderTop: `1px solid ${T.borderSoft}` }}>
                     <td
                       className="px-2 py-1.5 truncate max-w-[140px]"
                       style={{ color: T.textPrimary }}
@@ -303,55 +269,18 @@ export function PivotQuickWidget() {
                     >
                       {p.title}
                     </td>
-                    {visibleMonths.map((m) => {
-                      const v = p.netPerMonth[m] ?? 0;
-                      const color = v > 0 ? T.success : v < 0 ? T.danger : T.textMuted;
-                      return (
-                        <td
-                          key={m}
-                          className="px-2 py-1.5 text-right whitespace-nowrap"
-                          style={{ color }}
-                        >
-                          {v === 0 ? "—" : formatCurrencyCompact(v)}
-                        </td>
-                      );
-                    })}
-                    <td
-                      className="px-2 py-1.5 text-right font-semibold whitespace-nowrap"
-                      style={{ color: p.net >= 0 ? T.success : T.danger }}
-                    >
-                      {formatCurrencyCompact(p.net)}
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap" style={{ color: p.expense > 0 ? T.danger : T.textMuted }}>
+                      {p.expense === 0 ? "—" : formatCurrencyCompact(p.expense)}
+                    </td>
+                    <td className="px-2 py-1.5 text-right whitespace-nowrap" style={{ color: p.income > 0 ? T.success : T.textMuted }}>
+                      {p.income === 0 ? "—" : formatCurrencyCompact(p.income)}
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-semibold whitespace-nowrap" style={{ color: p.net >= 0 ? T.success : T.danger }}>
+                      {p.net === 0 ? "—" : formatCurrencyCompact(p.net)}
                     </td>
                   </tr>
                 ))
               )}
-              <tr style={{ borderTop: `2px solid ${T.borderStrong}`, background: T.accentPrimarySoft }}>
-                <td
-                  className="px-2 py-1.5 font-bold uppercase"
-                  style={{ color: T.accentPrimary, fontSize: 10, letterSpacing: 0.5 }}
-                >
-                  Чистий
-                </td>
-                {visibleMonths.map((m) => {
-                  const v = netPerMonth[m] ?? 0;
-                  const color = v > 0 ? T.success : v < 0 ? T.danger : T.textMuted;
-                  return (
-                    <td
-                      key={m}
-                      className="px-2 py-1.5 text-right font-bold whitespace-nowrap"
-                      style={{ color }}
-                    >
-                      {v === 0 ? "—" : formatCurrencyCompact(v)}
-                    </td>
-                  );
-                })}
-                <td
-                  className="px-2 py-1.5 text-right font-bold whitespace-nowrap"
-                  style={{ color: balanceColor }}
-                >
-                  {formatCurrencyCompact(netTotal)}
-                </td>
-              </tr>
             </tbody>
           </table>
         )}

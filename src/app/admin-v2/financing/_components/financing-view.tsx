@@ -222,6 +222,40 @@ export function FinancingView({
     router.replace(qs ? `/admin-v2/financing?${qs}` : "/admin-v2/financing", { scroll: false });
   }, [newParam, kindParam, folderId, router, searchParams, setCreatePreset]);
 
+  // Deep-link drill-in from Pivot tab → Operations:
+  // ?tab=operations&projectId=…&category=…&subcategory=…&kind=…&type=…&from=…&to=…
+  // Patches global filters once per URL change so Operations shows the matching slice.
+  const consumedDrillRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (tabFromUrl !== "operations") {
+      consumedDrillRef.current = null;
+      return;
+    }
+    const drillProjectId = searchParams.get("projectId") ?? "";
+    const drillCategory = searchParams.get("category") ?? "";
+    const drillSubcategory = searchParams.get("subcategory") ?? "";
+    const drillKind = searchParams.get("kind") ?? "";
+    const drillType = searchParams.get("type") ?? "";
+    const drillFrom = searchParams.get("from") ?? "";
+    const drillTo = searchParams.get("to") ?? "";
+    const hasAny =
+      drillProjectId || drillCategory || drillSubcategory || drillKind || drillType || drillFrom || drillTo;
+    if (!hasAny) return;
+    const token = [drillProjectId, drillCategory, drillSubcategory, drillKind, drillType, drillFrom, drillTo].join(":");
+    if (consumedDrillRef.current === token) return;
+    consumedDrillRef.current = token;
+    setFilters((prev) => ({
+      ...prev,
+      projectId: drillProjectId || prev.projectId,
+      category: drillCategory || prev.category,
+      subcategory: drillSubcategory || prev.subcategory,
+      kind: drillKind || prev.kind,
+      type: drillType || prev.type,
+      from: drillFrom ? drillFrom.slice(0, 10) : prev.from,
+      to: drillTo ? drillTo.slice(0, 10) : prev.to,
+    }));
+  }, [tabFromUrl, searchParams, setFilters]);
+
   const planBalance = summary.plan.income.sum - summary.plan.expense.sum;
   const factBalance = summary.balance;
 
@@ -627,7 +661,7 @@ export function FinancingView({
         )}
 
         {activeTab === "pivot" && (
-          <TabPivot scope={scope} filters={filters} projects={projects} />
+          <TabPivot scope={scope} filters={filters} />
         )}
       </div>
 
