@@ -147,7 +147,9 @@ type ColumnId =
   | "clientPrice"
   | "expense"
   | "income"
-  | "result";
+  | "result"
+  | "margin"
+  | "deviation";
 
 const COLUMN_LABELS: Record<ColumnId, string> = {
   volume: "Обсяг",
@@ -157,6 +159,8 @@ const COLUMN_LABELS: Record<ColumnId, string> = {
   expense: "Витрати",
   income: "Надход.",
   result: "Результат",
+  margin: "Маржа",
+  deviation: "Відхил.",
 };
 
 const DEFAULT_COL_ORDER: ColumnId[] = [
@@ -266,6 +270,7 @@ export function StageTable({
   const [planOrder, setPlanOrder] = useState<ColumnId[]>(DEFAULT_COL_ORDER);
   const [factOrder, setFactOrder] = useState<ColumnId[]>(DEFAULT_COL_ORDER);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPlanOrder(loadOrder(STORAGE_KEYS.plan));
     setFactOrder(loadOrder(STORAGE_KEYS.fact));
   }, []);
@@ -364,6 +369,16 @@ export function StageTable({
                     Факт
                   </ThGroup>
                 )}
+              </>
+            )}
+            {!isCompare && (
+              <>
+                <Th width={80} rowSpan={2}>
+                  {COLUMN_LABELS.margin}
+                </Th>
+                <Th width={110} rowSpan={2}>
+                  {COLUMN_LABELS.deviation}
+                </Th>
               </>
             )}
             <Th width={170} rowSpan={2}>
@@ -666,6 +681,13 @@ export function StageTable({
                   </>
                 )}
 
+                {!isCompare && (
+                  <>
+                    <BodyCell id="margin">{renderPlanCell("margin")}</BodyCell>
+                    <BodyCell id="deviation">{renderPlanCell("deviation")}</BodyCell>
+                  </>
+                )}
+
                 {/* Коментар */}
                 <Td>
                   <TextCell
@@ -769,6 +791,34 @@ function renderCell(ctx: RenderCtx): React.ReactNode {
       </span>
     );
   }
+  if (id === "margin") {
+    // Маржа% не залежить від plan/fact-сторони — рахуємо однакову на обох групах.
+    // Беремо planIncome/planExpense як стабільну основу (бюджетна маржа).
+    const inc = node.planIncome;
+    const exp = node.planExpense;
+    if (!inc || inc <= 0) return <span style={{ color: T.textMuted }}>—</span>;
+    const pct = Math.round(((inc - exp) / inc) * 100);
+    const color =
+      pct >= 25 ? T.success : pct >= 15 ? T.warning : T.danger;
+    return (
+      <span style={{ color, fontWeight: 600 }}>{pct}%</span>
+    );
+  }
+  if (id === "deviation") {
+    // Відхилення = factExpense - planExpense. Додатне (перевитрата) — червоне.
+    const dev = node.factExpense - node.planExpense;
+    if (node.factExpense === 0 || dev === 0) {
+      return <span style={{ color: T.textMuted }}>—</span>;
+    }
+    const color = dev > 0 ? T.danger : T.success;
+    const sign = dev > 0 ? "+" : "";
+    return (
+      <span style={{ color, fontWeight: 600 }}>
+        {sign}
+        <ReadOnlyMoney value={Math.abs(dev)} />
+      </span>
+    );
+  }
   return null;
 }
 
@@ -777,7 +827,13 @@ function alignFor(id: ColumnId): "left" | "right" | "center" {
   return "right";
 }
 
-const READONLY_COLUMNS = new Set<ColumnId>(["expense", "income", "result"]);
+const READONLY_COLUMNS = new Set<ColumnId>([
+  "expense",
+  "income",
+  "result",
+  "margin",
+  "deviation",
+]);
 
 function BodyCell({ id, children }: { id: ColumnId; children: React.ReactNode }) {
   // Readonly-колонки (Витрати / Надход. / Результат) — клік повністю

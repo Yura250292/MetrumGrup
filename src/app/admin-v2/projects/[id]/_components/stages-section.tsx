@@ -1,10 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Edit3,
   Eye,
   EyeOff,
   Plus,
@@ -48,6 +46,23 @@ export function StagesSection({
   const [stages, setStages] = useState<StageRow[]>(initialStages);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(false);
+
+  // Persist hideCompleted in localStorage like viewMode.
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("metrum.stage-table.hide-completed");
+      if (raw === "1") setHideCompleted(true);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "metrum.stage-table.hide-completed",
+        hideCompleted ? "1" : "0",
+      );
+    } catch {}
+  }, [hideCompleted]);
   const [importOpen, setImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -416,6 +431,22 @@ export function StagesSection({
           </button>
           <button
             type="button"
+            onClick={() => setHideCompleted((v) => !v)}
+            className="flex items-center gap-1 text-[11px] font-medium transition hover:brightness-95"
+            style={{
+              color: hideCompleted ? T.accentPrimary : T.textMuted,
+            }}
+            title={
+              hideCompleted
+                ? "Показати завершені етапи"
+                : "Сховати етапи зі статусом «Завершено»"
+            }
+          >
+            {hideCompleted ? <Eye size={12} /> : <EyeOff size={12} />}
+            {hideCompleted ? "Показ. завершені" : "Сховати завершені"}
+          </button>
+          <button
+            type="button"
             onClick={() => setPasteOpen(true)}
             className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
             style={{ color: T.accentPrimary }}
@@ -430,13 +461,6 @@ export function StagesSection({
           >
             <FileDown size={12} /> Імпорт з кошторису
           </button>
-          <Link
-            href={`/admin-v2/projects/${projectId}/stages`}
-            className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
-            style={{ color: T.accentPrimary }}
-          >
-            <Edit3 size={12} /> Редагувати
-          </Link>
           <button
             type="button"
             onClick={() => setPublishOpen(true)}
@@ -465,7 +489,11 @@ export function StagesSection({
       </div>
 
       <StageTable
-        stages={stages}
+        stages={
+          hideCompleted
+            ? stages.filter((s) => s.status !== "COMPLETED")
+            : stages
+        }
         selectedStageId={selectedStageId}
         onStageClick={setSelectedStageId}
         onInlineUpdate={inlineUpdate}
