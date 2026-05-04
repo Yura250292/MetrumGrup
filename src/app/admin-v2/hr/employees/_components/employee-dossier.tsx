@@ -129,8 +129,6 @@ const PRIORITY_TONE: Record<TaskPriority, { bg: string; fg: string; label: strin
   URGENT: { bg: T.dangerSoft, fg: T.danger, label: "Терміново" },
 };
 
-type SalaryType = "MONTHLY" | "HOURLY";
-
 type Employee = {
   id: string;
   fullName: string;
@@ -145,22 +143,12 @@ type Employee = {
   terminatedAt: string | null;
   notes: string | null;
   isActive: boolean;
-  // Нові поля (deferral / department)
   departmentId: string | null;
   department: { id: string; name: string } | null;
   deferralType: DeferralType;
   deferralUntil: string | null;
-  // Історія ЗП — лише для не-HR. HR отримує [].
+  /// Історія ЗП — лише для не-HR. HR отримує [].
   salaries: SalaryPeriod[];
-  // Deprecated кеш (legacy payroll/forecast). Не показуємо у UI.
-  salaryType: SalaryType | null;
-  salaryAmount: number | string | null;
-  burdenMultiplier: number | string | null;
-  currency: string;
-  // Deprecated: УI більше не використовує residence/maritalStatus/extraData.
-  residence: string | null;
-  maritalStatus: string | null;
-  extraData: string | null;
   createdAt: string;
   updatedAt: string;
 };

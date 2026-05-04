@@ -26,8 +26,6 @@ export async function GET(_request: NextRequest) {
         id: true,
         fullName: true,
         position: true,
-        salaryType: true,
-        salaryAmount: true,
       },
     }),
     prisma.worker.findMany({
@@ -45,12 +43,14 @@ export async function GET(_request: NextRequest) {
   ]);
 
   return NextResponse.json({
+    // У новій моделі ЗП погодинної ставки немає (лише місячний оклад
+    // + коефіцієнт). Hourly rate для співробітників завжди null —
+    // користувач вводить вручну при створенні табелю.
     employees: employees.map((e) => ({
       id: e.id,
       name: e.fullName,
       role: e.position ?? null,
-      defaultHourlyRate:
-        e.salaryAmount && e.salaryType === "HOURLY" ? Number(e.salaryAmount) : null,
+      defaultHourlyRate: null,
     })),
     workers: workers.map((w) => ({
       id: w.id,

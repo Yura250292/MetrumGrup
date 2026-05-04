@@ -17,8 +17,6 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "../../_components/excel-import-modal";
 
-type SalaryType = "MONTHLY" | "HOURLY";
-
 type Employee = {
   id: string;
   fullName: string;
@@ -26,16 +24,10 @@ type Employee = {
   email: string | null;
   position: string | null;
   birthDate: string | null;
-  residence: string | null;
-  maritalStatus: string | null;
   hiredAt: string | null;
   terminatedAt: string | null;
   departmentId: string | null;
   department: { id: string; name: string } | null;
-  salaryType: SalaryType | null;
-  salaryAmount: number | string | null;
-  currency: string;
-  extraData: string | null;
   notes: string | null;
   isActive: boolean;
   createdAt: string;

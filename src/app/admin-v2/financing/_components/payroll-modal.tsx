@@ -21,7 +21,6 @@ type PreviewRow = {
   id: string;
   fullName: string;
   position: string | null;
-  salaryType: "MONTHLY" | "HOURLY";
   amount: number | null;
   currency: string;
   cashPaid: { count: number; total: number };
@@ -403,8 +402,6 @@ export function PayrollModal({
                         </div>
                         <div className="text-[10.5px] truncate" style={{ color: T.textMuted }}>
                           {row.position || "—"}
-                          {" · "}
-                          {row.salaryType === "MONTHLY" ? "помісячна" : "погодинна"}
                           {row.amount != null && (
                             <>
                               {" · оклад "}

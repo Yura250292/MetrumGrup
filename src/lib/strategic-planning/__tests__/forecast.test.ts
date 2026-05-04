@@ -60,14 +60,20 @@ describe("buildForecast", () => {
     expect(result.rows[0].monthly).toEqual([80_000, 80_000, 80_000, 80_000, 80_000, 80_000]);
   });
 
-  it("співробітник із burden 0.4 додає 70k витрат за місяць × 3", () => {
+  it("співробітник з одним періодом ЗП — 70k за місяць × 3", () => {
     const emp: EmployeeDTO = {
       id: "e1",
       fullName: "Іван",
       position: null,
-      salaryType: "MONTHLY",
-      salaryAmount: 50_000,
-      burdenMultiplier: 0.4,
+      salaries: [
+        {
+          baseSalary: 50_000,
+          coefficient: 20_000,
+          effectiveFrom: "2026-01-01",
+          effectiveTo: null,
+          currency: "UAH",
+        },
+      ],
     };
     const result = buildForecast(
       makeInput({
@@ -78,6 +84,47 @@ describe("buildForecast", () => {
     );
     expect(result.rows[0].monthly).toEqual([70_000, 70_000, 70_000]);
     expect(result.summary.totalExpense).toBe(210_000);
+  });
+
+  it("історія ЗП: різні значення в різні місяці forecast-горизонту", () => {
+    // Січень-Березень 100, Березень-Листопад 300, Грудень 400.
+    const emp: EmployeeDTO = {
+      id: "e2",
+      fullName: "Тарас",
+      position: null,
+      salaries: [
+        {
+          baseSalary: 100,
+          coefficient: 0,
+          effectiveFrom: "2026-01-01",
+          effectiveTo: "2026-03-01",
+          currency: "UAH",
+        },
+        {
+          baseSalary: 300,
+          coefficient: 0,
+          effectiveFrom: "2026-03-01",
+          effectiveTo: "2026-11-30",
+          currency: "UAH",
+        },
+        {
+          baseSalary: 400,
+          coefficient: 0,
+          effectiveFrom: "2026-12-01",
+          effectiveTo: null,
+          currency: "UAH",
+        },
+      ],
+    };
+    // Бачимо січень..травень → [100, 100, 300, 300, 300]
+    const result = buildForecast(
+      makeInput({
+        period: { startMonth: "2026-01-01", durationMonths: 5 },
+        employees: [emp],
+        selectedEmployeeIds: ["e2"],
+      }),
+    );
+    expect(result.rows[0].monthly).toEqual([100, 100, 300, 300, 300]);
   });
 
   it("шаблон 30k × 6 = 180k витрат", () => {

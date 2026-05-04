@@ -2380,11 +2380,6 @@ enum MeetingStatus {
   FAILED
 }
 
-enum EmployeeSalaryType {
-  MONTHLY
-  HOURLY
-}
-
 /// Тип відстрочки/бронювання військовозобовʼязаного.
 /// NONE — відсутня (не підлягає бронюванню/не виплачується).
 enum DeferralType {
@@ -2422,52 +2417,41 @@ model EmployeeSalary {
 }
 
 model Employee {
-  id               String             @id @default(cuid())
+  id            String           @id @default(cuid())
   /// Збірне відображення (= "lastName firstName middleName"). Тримається
   /// синхронним з частинами імені на API-боці; лишилось для старого пошуку.
-  fullName         String
+  fullName      String
   /// Прізвище.
-  lastName         String?
+  lastName      String?
   /// Імʼя.
-  firstName        String?
+  firstName     String?
   /// По-батькові.
-  middleName       String?
-  phone            String?
-  email            String?
-  position         String?
-  birthDate        DateTime?
+  middleName    String?
+  phone         String?
+  email         String?
+  position      String?
+  birthDate     DateTime?
   /// Deprecated: видалено з UI; колонку лишили для історичних значень.
-  residence        String?
+  residence     String?
   /// Deprecated: видалено з UI; колонку лишили для історичних значень.
-  maritalStatus    String?
-  hiredAt          DateTime?
-  terminatedAt     DateTime?
-  /// Deprecated. Канонічне джерело — EmployeeSalary[]; це поле кешує
-  /// поточний baseSalary+coefficient для payroll/forecast (legacy code).
-  salaryType       EmployeeSalaryType @default(MONTHLY)
-  /// Deprecated. Кеш поточного baseSalary+coefficient.
-  salaryAmount     Decimal?           @db.Decimal(12, 2)
-  /// Burdened multiplier for project labor cost (oklad × this = full burden).
-  /// Used when payroll allocates labor to cost-codes; payouts still use salaryAmount.
-  burdenMultiplier Decimal?           @db.Decimal(5, 3)
-  currency         String             @default("UAH")
-  /// Deprecated: обʼєднано з notes на UI; колонку лишили на випадок recovery.
-  extraData        String?
-  notes            String?
-  isActive         Boolean            @default(true)
+  maritalStatus String?
+  hiredAt       DateTime?
+  terminatedAt  DateTime?
+  notes         String?
+  isActive      Boolean          @default(true)
   /// Структурний підрозділ.
-  departmentId     String?
-  department       Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  departmentId  String?
+  department    Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   /// Тип відстрочки/бронювання.
-  deferralType     DeferralType       @default(NONE)
+  deferralType  DeferralType     @default(NONE)
   /// До коли діє відстрочка/бронювання.
-  deferralUntil    DateTime?
-  userId           String?            @unique
-  user             User?              @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
-  timesheets       Timesheet[]        @relation("EmployeeTimesheets")
-  salaries         EmployeeSalary[]   @relation("EmployeeSalaryHistory")
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
+  deferralUntil DateTime?
+  userId        String?          @unique
+  user          User?            @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
+  timesheets    Timesheet[]      @relation("EmployeeTimesheets")
+  salaries      EmployeeSalary[] @relation("EmployeeSalaryHistory")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@index([isActive])
   @@index([fullName])

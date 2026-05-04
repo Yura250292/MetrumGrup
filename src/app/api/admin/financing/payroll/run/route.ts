@@ -79,7 +79,22 @@ export async function POST(request: NextRequest) {
         projectId: true,
         costCodeId: true,
         costType: true,
-        employee: { select: { fullName: true, currency: true, burdenMultiplier: true } },
+        date: true,
+        employee: {
+          select: {
+            fullName: true,
+            // Активний запис ЗП на дату табелю — звідти беремо валюту.
+            salaries: {
+              orderBy: { effectiveFrom: "desc" },
+              take: 5,
+              select: {
+                effectiveFrom: true,
+                effectiveTo: true,
+                currency: true,
+              },
+            },
+          },
+        },
         worker: { select: { name: true } },
       },
     });
@@ -113,11 +128,18 @@ export async function POST(request: NextRequest) {
       }
     >();
     for (const s of sheets) {
-      const burden = s.employee?.burdenMultiplier
-        ? Number(s.employee.burdenMultiplier)
-        : 1;
-      const amt = Number(s.amount) * burden;
+      // У новій моделі ЗП burden multiplier не зберігається (співробітник
+      // має лише оклад + коефіцієнт). Тож табель іде у фінанси сумою як є.
+      const amt = Number(s.amount);
       const counterparty = s.employee?.fullName ?? s.worker?.name ?? "?";
+      // Валюта з активного EmployeeSalary на дату табеля.
+      const sheetT = s.date.getTime();
+      const activeOnDate = s.employee?.salaries.find((sal) => {
+        const start = sal.effectiveFrom.getTime();
+        const end = sal.effectiveTo ? sal.effectiveTo.getTime() : Infinity;
+        return start <= sheetT && sheetT <= end;
+      });
+      const currency = activeOnDate?.currency ?? "UAH";
       const key = `${s.employeeId ?? "_"}|${s.workerId ?? "_"}|${s.projectId}|${s.costCodeId ?? "_"}|${s.costType ?? "_"}`;
       const g = groups.get(key);
       if (g) {
@@ -131,7 +153,7 @@ export async function POST(request: NextRequest) {
           costCodeId: s.costCodeId,
           costType: s.costType,
           counterparty,
-          currency: s.employee?.currency ?? "UAH",
+          currency,
           employeeId: s.employeeId,
           workerId: s.workerId,
         });
@@ -221,7 +243,19 @@ export async function POST(request: NextRequest) {
 
   const employees = await prisma.employee.findMany({
     where: { id: { in: items.map((i) => i.employeeId) }, isActive: true },
-    select: { id: true, fullName: true, currency: true },
+    select: {
+      id: true,
+      fullName: true,
+      salaries: {
+        where: {
+          effectiveFrom: { lte: occurredAt },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: occurredAt } }],
+        },
+        orderBy: { effectiveFrom: "desc" },
+        take: 1,
+        select: { currency: true },
+      },
+    },
   });
   const employeeById = new Map(employees.map((e) => [e.id, e]));
 
@@ -273,7 +307,7 @@ export async function POST(request: NextRequest) {
           type: "EXPENSE",
           source: "MANUAL",
           amount: new Prisma.Decimal(item.amount),
-          currency: emp.currency || "UAH",
+          currency: emp.salaries[0]?.currency ?? "UAH",
           projectId: null,
           folderId: folderId ?? null,
           category: "salary",

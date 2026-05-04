@@ -40,11 +40,13 @@ export default async function StrategicPlanningPage() {
   });
 
   // Співробітники поточної фірми. Employee не має firmId напряму — фільтруємо
-  // через user.firmId. Якщо userId=null (зовнішні) — показуємо всім.
+  // через user.firmId. Якщо userId=null (зовнішні) — показуємо всім. Беремо
+  // лише тих, у кого є хоч один запис історії ЗП (інакше вони не дають
+  // витрат у forecast).
   const employeesRaw = await prisma.employee.findMany({
     where: {
       isActive: true,
-      salaryAmount: { not: null },
+      salaries: { some: {} },
       OR: firmId
         ? [{ userId: null }, { user: { firmId } }]
         : undefined,
@@ -53,9 +55,16 @@ export default async function StrategicPlanningPage() {
       id: true,
       fullName: true,
       position: true,
-      salaryType: true,
-      salaryAmount: true,
-      burdenMultiplier: true,
+      salaries: {
+        orderBy: { effectiveFrom: "desc" },
+        select: {
+          baseSalary: true,
+          coefficient: true,
+          effectiveFrom: true,
+          effectiveTo: true,
+          currency: true,
+        },
+      },
     },
     orderBy: { fullName: "asc" },
   });
@@ -87,12 +96,13 @@ export default async function StrategicPlanningPage() {
     id: e.id,
     fullName: e.fullName,
     position: e.position,
-    salaryType: e.salaryType,
-    salaryAmount: e.salaryAmount ? Number(e.salaryAmount) : 0,
-    burdenMultiplier:
-      e.burdenMultiplier !== null && e.burdenMultiplier !== undefined
-        ? Number(e.burdenMultiplier)
-        : null,
+    salaries: e.salaries.map((s) => ({
+      baseSalary: Number(s.baseSalary),
+      coefficient: Number(s.coefficient ?? 0),
+      effectiveFrom: s.effectiveFrom.toISOString(),
+      effectiveTo: s.effectiveTo ? s.effectiveTo.toISOString() : null,
+      currency: s.currency,
+    })),
   }));
 
   const templates: TemplateDTO[] = templatesRaw.map((t) => ({

@@ -10,13 +10,22 @@ export type ProjectDTO = {
   expectedEndDate: string | null; // ISO
 };
 
+/// Один історичний період ЗП (для forecast: місяць → активний період).
+/// Дати у ISO-стрінгах, конвертовані на сервері.
+export type SalaryPeriodDTO = {
+  baseSalary: number;
+  coefficient: number;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  currency: string;
+};
+
 export type EmployeeDTO = {
   id: string;
   fullName: string;
   position: string | null;
-  salaryType: "MONTHLY" | "HOURLY";
-  salaryAmount: number;
-  burdenMultiplier: number | null;
+  /// Історія періодів ЗП. Forecast обходить місяці і знаходить активний на кожен.
+  salaries: SalaryPeriodDTO[];
 };
 
 export type TemplateDTO = {
@@ -33,6 +42,35 @@ export type InitialData = {
   employees: EmployeeDTO[];
   templates: TemplateDTO[];
 };
+
+/// Знаходить активний період ЗП на конкретну дату.
+export function pickSalaryPeriod(
+  periods: SalaryPeriodDTO[],
+  asOf: Date,
+): SalaryPeriodDTO | null {
+  const t = asOf.getTime();
+  let best: SalaryPeriodDTO | null = null;
+  let bestStart = -Infinity;
+  for (const s of periods) {
+    const start = new Date(s.effectiveFrom).getTime();
+    const end = s.effectiveTo ? new Date(s.effectiveTo).getTime() : Infinity;
+    if (start <= t && t <= end && start > bestStart) {
+      best = s;
+      bestStart = start;
+    }
+  }
+  return best;
+}
+
+/// Місячна ЗП (Оклад + Коеф) на дату. 0 якщо запису ще не було.
+export function monthlySalaryAt(
+  periods: SalaryPeriodDTO[],
+  asOf: Date,
+): number {
+  const p = pickSalaryPeriod(periods, asOf);
+  if (!p) return 0;
+  return p.baseSalary + p.coefficient;
+}
 
 // Calculator state types
 
@@ -110,5 +148,3 @@ export type ForecastResult = {
   summary: ForecastSummary;
 };
 
-/** Для HOURLY співробітників — грубе наближення «годин на місяць». */
-export const HOURS_PER_MONTH = 168;

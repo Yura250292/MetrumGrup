@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrencyCompact } from "@/lib/utils";
 import {
-  HOURS_PER_MONTH,
+  monthlySalaryAt,
   type EmployeeDTO,
 } from "@/lib/strategic-planning/types";
 
@@ -110,12 +110,10 @@ export function StaffSection({
           )}
           {employees.map((e) => {
             const checked = selectedIds.has(e.id);
-            const burden = e.burdenMultiplier ?? 0;
-            const baseMonthly =
-              e.salaryType === "MONTHLY"
-                ? e.salaryAmount
-                : e.salaryAmount * HOURS_PER_MONTH;
-            const monthlyCost = baseMonthly * (1 + burden);
+            // Поточний місячний оклад (Оклад + Коеф) на сьогодні. Для
+            // forecast беремо зміну ЗП по місяцях — а тут показуємо просто
+            // актуальну цифру в чекбоксному списку.
+            const monthlyCost = monthlySalaryAt(e.salaries, new Date());
             return (
               <label
                 key={e.id}
@@ -138,8 +136,6 @@ export function StaffSection({
                     style={{ color: T.textMuted }}
                   >
                     {e.position ?? "—"}
-                    {e.salaryType === "HOURLY" ? " · погодинно" : ""}
-                    {burden > 0 ? ` · burden ×${(1 + burden).toFixed(2)}` : ""}
                   </span>
                 </div>
                 <Badge variant="secondary" className="shrink-0">
@@ -152,8 +148,8 @@ export function StaffSection({
             className="px-2 pt-2 text-[11px]"
             style={{ color: T.textMuted }}
           >
-            Погодинні рахуються як ставка × {HOURS_PER_MONTH} год — це грубо.
-            При потребі — додай custom-рядок із точною сумою.
+            Forecast враховує зміни ЗП у часі: на кожен місяць береться
+            активний період (Оклад + Коефіцієнт).
           </p>
         </CardContent>
       )}

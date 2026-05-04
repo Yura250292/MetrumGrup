@@ -3,6 +3,7 @@ import type { Role } from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { computeMonthlyTotal } from "@/lib/hr/employee-salary";
 
 export const runtime = "nodejs";
 
@@ -49,6 +50,8 @@ export async function GET(request: NextRequest) {
 
   const periodStart = new Date(Date.UTC(year, month - 1, 1));
   const periodEnd = new Date(Date.UTC(year, month, 1));
+  // Беремо ЗП, активну на 15-й день місяця (типова дата виплати).
+  const asOfMid = new Date(Date.UTC(year, month - 1, 15));
 
   const employees = await prisma.employee.findMany({
     where: { isActive: true },
@@ -57,9 +60,14 @@ export async function GET(request: NextRequest) {
       id: true,
       fullName: true,
       position: true,
-      salaryType: true,
-      salaryAmount: true,
-      currency: true,
+      salaries: {
+        where: {
+          effectiveFrom: { lte: asOfMid },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: asOfMid } }],
+        },
+        orderBy: { effectiveFrom: "desc" },
+        take: 1,
+      },
     },
   });
 
@@ -110,15 +118,17 @@ export async function GET(request: NextRequest) {
     rows: employees.map((e) => {
       const cashPaid = cashByName.get(e.fullName) ?? { count: 0, total: 0 };
       const taxRecord = taxByName.get(e.fullName);
-      const baseSalary = e.salaryAmount != null ? Number(e.salaryAmount) : null;
+      const active = e.salaries[0] ?? null;
+      const baseSalary = active
+        ? computeMonthlyTotal(active.baseSalary, active.coefficient)
+        : null;
       const remainingCash = baseSalary != null ? Math.max(0, baseSalary - cashPaid.total) : null;
       return {
         id: e.id,
         fullName: e.fullName,
         position: e.position,
-        salaryType: e.salaryType,
         amount: baseSalary,
-        currency: e.currency,
+        currency: active?.currency ?? "UAH",
         cashPaid,
         remainingCash,
         // For 'taxes' mode the dedup behaves like before

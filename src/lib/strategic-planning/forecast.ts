@@ -7,7 +7,7 @@ import {
 } from "date-fns";
 
 import {
-  HOURS_PER_MONTH,
+  monthlySalaryAt,
   type ForecastInput,
   type ForecastResult,
   type ForecastRow,
@@ -83,25 +83,25 @@ export function buildForecast(input: ForecastInput): ForecastResult {
     });
   }
 
-  // 2. Співробітники (постійна витрата)
+  // 2. Співробітники (постійна витрата). Для кожного місяця знаходимо
+  // активний період ЗП (історія підтримує зміни Оклад/Коеф у часі).
+  // Беремо 15-те число місяця як точку відліку — стабільно проти TZ-edge
+  // і однозначно потрапляє "всередину" періоду.
   const employeesById = new Map(input.employees.map((e) => [e.id, e]));
   for (const id of input.selectedEmployeeIds) {
     const emp = employeesById.get(id);
     if (!emp) continue;
-    const burden = emp.burdenMultiplier ?? 0;
-    const base =
-      emp.salaryType === "MONTHLY"
-        ? emp.salaryAmount
-        : emp.salaryAmount * HOURS_PER_MONTH;
-    const monthlyCost = base * (1 + burden);
-    const monthly = new Array<number>(months.length).fill(monthlyCost);
+    const monthly = months.map((m) => {
+      const mid = new Date(m.getFullYear(), m.getMonth(), 15);
+      return monthlySalaryAt(emp.salaries, mid);
+    });
     rows.push({
       id: `staff:${emp.id}`,
       label: emp.position ? `${emp.fullName} — ${emp.position}` : emp.fullName,
       kind: "STAFF",
       type: "EXPENSE",
       monthly,
-      total: monthlyCost * months.length,
+      total: monthly.reduce((s, v) => s + v, 0),
     });
   }
 
