@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
-import { LayoutGrid, Table as TableIcon, Rows3, Plus, ListTree } from "lucide-react";
+import { LayoutGrid, Table as TableIcon, Rows3, Plus } from "lucide-react";
 import {
   PageToolbar,
   ViewModeSwitcher,
@@ -65,16 +64,7 @@ export function ProjectsView({
           />
         }
         rightSlot={
-          <div className="flex items-center gap-2">
-            <Link
-              href="/admin-v2/projects/stages"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-zinc-200 dark:border-zinc-700 text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              title="Кросс-проєктний вигляд: усі етапи всіх проєктів"
-            >
-              <ListTree size={14} />
-              Етапи · дерево
-            </Link>
-            <SavedViewsMenu<ProjectsViewState>
+          <SavedViewsMenu<ProjectsViewState>
             views={views}
             activeId={activeViewId}
             onApply={(state, id) => {
@@ -89,8 +79,7 @@ export function ProjectsView({
               removeView(id);
               if (activeViewId === id) setActiveViewId(null);
             }}
-            />
-          </div>
+          />
         }
       />
       {mode === "cards" && (

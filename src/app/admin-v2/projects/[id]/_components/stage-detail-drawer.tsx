@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { X, Check, Calendar, User2, Loader2, History, Ruler, ChevronRight, Package } from "lucide-react";
+import { X, Check, Calendar, User2, Loader2, History, Ruler, ChevronRight } from "lucide-react";
 import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -38,23 +38,6 @@ type FinanceHistoryEntry = {
   createdBy: { id: string; name: string };
 };
 
-type MaterialRow = {
-  id: string;
-  name: string;
-  sku: string | null;
-  itemType: string | null;
-  supplier: string | null;
-  unit: string;
-  planQty: number;
-  factQty: number | null;
-  planPrice: number;
-  factPrice: number;
-  planSum: number;
-  factSum: number;
-  deviation: number;
-  status: string;
-};
-
 const STATUS_COLORS: Record<StageStatus, { bg: string; fg: string }> = {
   PENDING: { bg: T.panelElevated, fg: T.textMuted },
   IN_PROGRESS: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
@@ -72,8 +55,6 @@ export function StageDetailDrawer({
 }: StageDetailDrawerProps) {
   const [history, setHistory] = useState<FinanceHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [materials, setMaterials] = useState<MaterialRow[]>([]);
-  const [materialsLoading, setMaterialsLoading] = useState(true);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
 
@@ -108,30 +89,6 @@ export function StageDetailDrawer({
     void loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage.id]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setMaterialsLoading(true);
-    fetch(`/api/admin/projects/${projectId}/stages/${stage.id}/materials`, {
-      cache: "no-store",
-    })
-      .then((r) => (r.ok ? r.json() : { data: [] }))
-      .then((j: { data: MaterialRow[] }) => {
-        if (!cancelled) {
-          setMaterials(j.data ?? []);
-          setMaterialsLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setMaterials([]);
-          setMaterialsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, stage.id]);
 
   async function patchStage(data: Record<string, unknown>, fieldKey: string) {
     setSavingField(fieldKey);
@@ -598,100 +555,6 @@ export function StageDetailDrawer({
                 </ul>
               )}
             </div>
-          </Section>
-
-          {/* Матеріали етапу — з кошторису через sourceEstimateItem/Section */}
-          <Section title="Матеріали">
-            <div
-              className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold"
-              style={{ color: T.textSecondary }}
-            >
-              <Package size={12} />
-              Позиції ({materials.length})
-            </div>
-            {materialsLoading ? (
-              <div
-                className="flex items-center gap-2 text-[11px]"
-                style={{ color: T.textMuted }}
-              >
-                <Loader2 size={12} className="animate-spin" /> Завантаження…
-              </div>
-            ) : materials.length === 0 ? (
-              <div
-                className="rounded border border-dashed p-3 text-center text-[11px]"
-                style={{ borderColor: T.borderSoft, color: T.textMuted }}
-              >
-                Не привʼязано до позицій кошторису.
-              </div>
-            ) : (
-              <ul className="space-y-1.5">
-                {materials.map((m) => {
-                  const tone =
-                    m.status === "Використано"
-                      ? T.success
-                      : m.status === "Частково"
-                        ? T.warning
-                        : T.textMuted;
-                  return (
-                    <li
-                      key={m.id}
-                      className="rounded border px-2 py-1.5 text-[11px]"
-                      style={{
-                        borderColor: T.borderSoft,
-                        backgroundColor: T.panel,
-                      }}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div
-                          className="min-w-0 flex-1 truncate font-medium"
-                          style={{ color: T.textPrimary }}
-                        >
-                          {m.name}
-                        </div>
-                        <span
-                          className="rounded px-1.5 py-0.5 text-[9px] font-medium"
-                          style={{
-                            color: tone,
-                            backgroundColor: T.panelSoft,
-                          }}
-                        >
-                          {m.status}
-                        </span>
-                      </div>
-                      <div
-                        className="mt-1 flex items-center justify-between gap-2 text-[10px]"
-                        style={{ color: T.textMuted }}
-                      >
-                        <span>
-                          {m.planQty.toLocaleString("uk-UA")}
-                          {m.unit ? " " + m.unit : ""} · {formatCurrency(m.planPrice)}
-                        </span>
-                        <span style={{ color: T.textPrimary, fontWeight: 600 }}>
-                          {formatCurrency(m.planSum)}
-                          {m.factSum > 0 && (
-                            <>
-                              {" → "}
-                              <span
-                                style={{
-                                  color:
-                                    m.deviation === 0
-                                      ? T.textMuted
-                                      : m.deviation > 0
-                                        ? T.danger
-                                        : T.success,
-                                }}
-                              >
-                                {formatCurrency(m.factSum)}
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
           </Section>
 
           {/* Notes — короткий «опис ризиків» зберігається у самій моделі етапу */}

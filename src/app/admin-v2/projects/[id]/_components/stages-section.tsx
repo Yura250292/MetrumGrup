@@ -21,6 +21,7 @@ import {
   type DropPosition,
 } from "./stage-table";
 import { StageDetailDrawer } from "./stage-detail-drawer";
+import { StageMaterialsPopup } from "./stage-materials-popup";
 import { ImportEstimateModal } from "./import-estimate-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
 import { PublishFinanceDialog } from "./publish-finance-dialog";
@@ -47,6 +48,10 @@ export function StagesSection({
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
+  // Materials popup live окремо від drawer-а: користувач може закрити popup
+  // (materialsHidden=true) залишивши drawer відкритим. Зміна selectedStageId
+  // ресетить materialsHidden — popup знову зʼявляється для нового етапу.
+  const [materialsHidden, setMaterialsHidden] = useState(false);
 
   // Persist hideCompleted in localStorage like viewMode.
   useEffect(() => {
@@ -495,7 +500,10 @@ export function StagesSection({
             : stages
         }
         selectedStageId={selectedStageId}
-        onStageClick={setSelectedStageId}
+        onStageClick={(id) => {
+          setSelectedStageId(id);
+          setMaterialsHidden(false); // re-show popup для нового етапу
+        }}
         onInlineUpdate={inlineUpdate}
         onAddChild={addChild}
         onDelete={deleteStage}
@@ -562,6 +570,16 @@ export function StagesSection({
         onClose={() => setPublishOpen(false)}
         onPublished={onPublished}
       />
+
+      {selected && (
+        <StageMaterialsPopup
+          projectId={projectId}
+          stageId={selected.id}
+          stageName={stageDisplayName(selected)}
+          open={!materialsHidden}
+          onClose={() => setMaterialsHidden(true)}
+        />
+      )}
     </div>
   );
 }
