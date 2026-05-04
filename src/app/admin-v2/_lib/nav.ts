@@ -56,7 +56,6 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Проєкти",
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
-      { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
       { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
     ],
   },
@@ -66,7 +65,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
       { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, pillBadge: { text: "NEW", color: "violet" } },
       { href: "/admin-v2/reports", label: "Звіти", icon: FileText },
-      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
@@ -93,6 +91,8 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2/hr/employees", label: "Співробітники", icon: Users, hrAllowed: true },
       { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
+      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
+      { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
     ],
   },
   {
