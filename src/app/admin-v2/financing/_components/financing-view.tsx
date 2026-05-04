@@ -37,6 +37,7 @@ import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
 import { TabBudgetActual } from "./tab-budget-actual";
 import { TabPivot } from "./tab-pivot";
+import { PivotFullscreenModal } from "./pivot-fullscreen-modal";
 import { ExportMenu } from "./export-menu";
 import { TabTimesheets } from "./tab-timesheets";
 import { FolderEstimateCard } from "./folder-estimate-card";
@@ -104,6 +105,7 @@ export function FinancingView({
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showOcrScan, setShowOcrScan] = useState(false);
   const [showEstimateUpload, setShowEstimateUpload] = useState(false);
+  const [showPivotFullscreen, setShowPivotFullscreen] = useState(false);
 
   const { data: folders = [] } = useFolders("FINANCE", folderId);
   const { data: detailData } = useFolderDetail(folderId);
@@ -312,6 +314,38 @@ export function FinancingView({
               <ExportMenu onExport={handleExport} exporting={exporting} disabled={loading} />
             </div>
           </div>
+
+          {/* Pivot fullscreen entry — primary action */}
+          <button
+            onClick={() => setShowPivotFullscreen(true)}
+            className="group flex w-full items-center gap-4 rounded-2xl border p-4 sm:p-5 text-left transition hover:brightness-105"
+            style={{
+              borderColor: T.borderSoft,
+              background: `linear-gradient(135deg, ${T.accentPrimarySoft}, ${T.panel})`,
+              boxShadow: T.shadow1,
+            }}
+          >
+            <div
+              className="flex h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 items-center justify-center rounded-xl"
+              style={{ background: T.accentPrimary, color: "#fff" }}
+            >
+              <TableIcon size={24} />
+            </div>
+            <div className="flex flex-1 flex-col min-w-0">
+              <div className="text-base sm:text-lg font-bold" style={{ color: T.textPrimary }}>
+                Зведена таблиця
+              </div>
+              <div className="text-[12px] sm:text-[13px] truncate" style={{ color: T.textSecondary }}>
+                Фінансовий результат по проєктах, ЗП, адміністративних · повний екран
+              </div>
+            </div>
+            <div
+              className="hidden sm:flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold transition group-hover:brightness-110"
+              style={{ background: T.accentPrimary, color: "#fff" }}
+            >
+              Відкрити
+            </div>
+          </button>
 
           {/* Hero balance with dual radial */}
           <HeroBalance summary={summary} />
@@ -714,6 +748,14 @@ export function FinancingView({
           onCreated={() => loadData()}
         />
       )}
+
+      {/* Pivot fullscreen modal */}
+      <PivotFullscreenModal
+        open={showPivotFullscreen}
+        onClose={() => setShowPivotFullscreen(false)}
+        scope={scope}
+        filters={filters}
+      />
 
       {/* Estimate upload modal */}
       {showEstimateUpload && (
