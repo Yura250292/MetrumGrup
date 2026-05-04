@@ -26,7 +26,18 @@ export async function GET(
   if (g.error) return g.error;
 
   const { id } = await ctx.params;
-  const employee = await prisma.employee.findUnique({ where: { id } });
+  const role = g.session.user.role;
+  const isHr = role === "HR";
+  const employee = await prisma.employee.findUnique({
+    where: { id },
+    include: {
+      department: { select: { id: true, name: true } },
+      // HR не повинен бачити історію ЗП взагалі.
+      salaries: isHr
+        ? false
+        : { orderBy: [{ effectiveFrom: "desc" }] },
+    },
+  });
   if (!employee) {
     return NextResponse.json({ error: "Співробітника не знайдено" }, { status: 404 });
   }
@@ -34,7 +45,7 @@ export async function GET(
   const engagement = await loadEngagement(id, employee.userId);
 
   return NextResponse.json({
-    data: redactSalaryForHr(employee as EmployeeRecord, g.session.user.role),
+    data: redactSalaryForHr(employee as EmployeeRecord, role),
     engagement,
   });
 }

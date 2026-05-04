@@ -58,6 +58,9 @@ const createSchema = z.object({
   extraData: nullableString,
   notes: nullableString,
   isActive: z.boolean().default(true),
+  departmentId: z.string().trim().nullable().optional().transform((v) => v ?? null),
+  deferralType: z.enum(["NONE", "RESERVATION", "DEFERMENT"]).default("NONE"),
+  deferralUntil: dateField,
 });
 
 const updateSchema = createSchema.partial().extend({
@@ -70,6 +73,7 @@ export async function GET() {
 
   const employees = await prisma.employee.findMany({
     orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
+    include: { department: { select: { id: true, name: true } } },
   });
   const role = g.session.user.role;
   const data = employees.map((e) => redactSalaryForHr(e as EmployeeRecord, role));

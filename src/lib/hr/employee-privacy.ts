@@ -4,12 +4,18 @@ export type EmployeeRecord = {
   salaryType?: unknown;
   salaryAmount?: Prisma.Decimal | number | string | null;
   burdenMultiplier?: Prisma.Decimal | number | string | null;
+  salaries?: unknown;
 } & Record<string, unknown>;
 
-const SALARY_FIELDS = ["salaryAmount", "salaryType", "burdenMultiplier"] as const;
+/// Поля, які HR не повинен бачити ні редагувати. Канонічне джерело
+/// тепер EmployeeSalary[], але legacy-кеш salary* теж приховуємо.
+const SALARY_FIELDS = [
+  "salaryAmount",
+  "salaryType",
+  "burdenMultiplier",
+  "salaries",
+] as const;
 
-// HR не повинен бачити ні редагувати компенсаційні поля. SUPER_ADMIN/MANAGER —
-// бачать. Викликається на API-боці і для read, і для write.
 export function isHrRole(role: string | null | undefined): boolean {
   return role === "HR";
 }
@@ -19,11 +25,14 @@ export function redactSalaryForHr<T extends EmployeeRecord>(
   role: string | null | undefined,
 ): T {
   if (!isHrRole(role)) return record;
-  const cleaned = { ...record };
+  const cleaned: Record<string, unknown> = { ...record };
   for (const f of SALARY_FIELDS) {
-    if (f in cleaned) cleaned[f] = null;
+    if (f in cleaned) {
+      // salaries — це масив, очищуємо у []. Інше — null.
+      cleaned[f] = f === "salaries" ? [] : null;
+    }
   }
-  return cleaned;
+  return cleaned as T;
 }
 
 export function stripSalaryWritesForHr<T extends Record<string, unknown>>(

@@ -7,14 +7,17 @@ import {
   AlertTriangle,
   ArrowLeft,
   Briefcase,
+  CheckCircle2,
   Clock,
   ExternalLink,
   ListChecks,
   Loader2,
   Pencil,
+  Plus,
   Target,
   Trash2,
   Users,
+  X,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
@@ -135,19 +138,47 @@ type Employee = {
   email: string | null;
   position: string | null;
   birthDate: string | null;
-  residence: string | null;
-  maritalStatus: string | null;
   hiredAt: string | null;
   terminatedAt: string | null;
+  notes: string | null;
+  isActive: boolean;
+  // Нові поля (deferral / department)
+  departmentId: string | null;
+  department: { id: string; name: string } | null;
+  deferralType: DeferralType;
+  deferralUntil: string | null;
+  // Історія ЗП — лише для не-HR. HR отримує [].
+  salaries: SalaryPeriod[];
+  // Deprecated кеш (legacy payroll/forecast). Не показуємо у UI.
   salaryType: SalaryType | null;
   salaryAmount: number | string | null;
   burdenMultiplier: number | string | null;
   currency: string;
+  // Deprecated: УI більше не використовує residence/maritalStatus/extraData.
+  residence: string | null;
+  maritalStatus: string | null;
   extraData: string | null;
-  notes: string | null;
-  isActive: boolean;
   createdAt: string;
   updatedAt: string;
+};
+
+type DeferralType = "NONE" | "RESERVATION" | "DEFERMENT";
+
+type SalaryPeriod = {
+  id: string;
+  baseSalary: number | string;
+  officialPart: number | string | null;
+  coefficient: number | string;
+  description: string | null;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  currency: string;
+};
+
+const DEFERRAL_LABEL: Record<DeferralType, string> = {
+  NONE: "Відсутня",
+  RESERVATION: "Бронювання",
+  DEFERMENT: "Відстрочка",
 };
 
 type FieldKey =
@@ -156,13 +187,11 @@ type FieldKey =
   | "phone"
   | "email"
   | "birthDate"
-  | "residence"
-  | "maritalStatus"
   | "hiredAt"
   | "terminatedAt"
-  | "salaryType"
-  | "salaryAmount"
-  | "extraData"
+  | "departmentId"
+  | "deferralType"
+  | "deferralUntil"
   | "notes"
   | "isActive";
 
@@ -507,42 +536,6 @@ export function EmployeeDossier({
               )}
             />
             <PropertyRow
-              label="Сімейний стан"
-              field="maritalStatus"
-              editing={editingField === "maritalStatus"}
-              saving={savingField === "maritalStatus"}
-              canEdit={canEdit}
-              onStartEdit={() => setEditingField("maritalStatus")}
-              onCommit={(v) => patchField("maritalStatus", (v as string).trim() || null)}
-              onCancel={() => setEditingField(null)}
-              renderValue={() => textOrDash(employee.maritalStatus)}
-              renderEditor={(stop) => (
-                <TextEditor
-                  initial={employee.maritalStatus ?? ""}
-                  onCommit={(v) => stop(v)}
-                  onCancel={() => stop(undefined)}
-                />
-              )}
-            />
-            <PropertyRow
-              label="Місце проживання"
-              field="residence"
-              editing={editingField === "residence"}
-              saving={savingField === "residence"}
-              canEdit={canEdit}
-              onStartEdit={() => setEditingField("residence")}
-              onCommit={(v) => patchField("residence", (v as string).trim() || null)}
-              onCancel={() => setEditingField(null)}
-              renderValue={() => textOrDash(employee.residence)}
-              renderEditor={(stop) => (
-                <TextEditor
-                  initial={employee.residence ?? ""}
-                  onCommit={(v) => stop(v)}
-                  onCancel={() => stop(undefined)}
-                />
-              )}
-            />
-            <PropertyRow
               label="Прийнятий"
               field="hiredAt"
               editing={editingField === "hiredAt"}
@@ -591,96 +584,83 @@ export function EmployeeDossier({
                 />
               )}
             />
-            {canSeeSalary && (
-              <>
-                <PropertyRow
-                  label="Тип ЗП"
-                  field="salaryType"
-                  editing={editingField === "salaryType"}
-                  saving={savingField === "salaryType"}
-                  canEdit={canEdit}
-                  onStartEdit={() => setEditingField("salaryType")}
-                  onCommit={(v) => patchField("salaryType", v)}
-                  onCancel={() => setEditingField(null)}
-                  renderValue={() => (
-                    <span style={{ color: T.textSecondary }}>
-                      {employee.salaryType === "HOURLY" ? "Погодинна" : "Місячна"}
-                    </span>
-                  )}
-                  renderEditor={(stop) => (
-                    <select
-                      autoFocus
-                      defaultValue={employee.salaryType ?? "MONTHLY"}
-                      onChange={(e) => stop(e.target.value as SalaryType)}
-                      onBlur={(e) => stop(e.target.value as SalaryType)}
-                      className="rounded-lg px-2 py-1 text-sm outline-none"
-                      style={{
-                        backgroundColor: T.panelSoft,
-                        border: `1px solid ${T.borderStrong}`,
-                        color: T.textPrimary,
-                      }}
-                    >
-                      <option value="MONTHLY">Місячна</option>
-                      <option value="HOURLY">Погодинна</option>
-                    </select>
-                  )}
-                />
-                <PropertyRow
-                  label={employee.salaryType === "HOURLY" ? "Ставка / год, ₴" : "ЗП на місяць, ₴"}
-                  field="salaryAmount"
-                  editing={editingField === "salaryAmount"}
-                  saving={savingField === "salaryAmount"}
-                  canEdit={canEdit}
-                  onStartEdit={() => setEditingField("salaryAmount")}
-                  onCommit={(v) => {
-                    const num = v === "" || v === null ? null : Number(v);
-                    if (num !== null && !Number.isFinite(num)) {
-                      setEditingField(null);
-                      return;
-                    }
-                    void patchField("salaryAmount", num);
-                  }}
-                  onCancel={() => setEditingField(null)}
-                  renderValue={() => (
-                    <span className="tabular-nums font-semibold" style={{ color: T.textPrimary }}>
-                      {employee.salaryAmount != null
-                        ? `${formatCurrency(Number(employee.salaryAmount))}${
-                            employee.salaryType === "HOURLY" ? " /год" : " /міс"
-                          }`
-                        : "—"}
-                    </span>
-                  )}
-                  renderEditor={(stop) => (
-                    <TextEditor
-                      type="number"
-                      initial={employee.salaryAmount != null ? String(employee.salaryAmount) : ""}
-                      onCommit={(v) => stop(v)}
-                      onCancel={() => stop(undefined)}
-                    />
-                  )}
-                />
-              </>
-            )}
-            <PropertyRow
-              label="Додаткові дані"
-              field="extraData"
-              editing={editingField === "extraData"}
-              saving={savingField === "extraData"}
+            <DepartmentRow
+              employee={employee}
               canEdit={canEdit}
-              onStartEdit={() => setEditingField("extraData")}
-              onCommit={(v) => patchField("extraData", (v as string).trim() || null)}
+              editing={editingField === "departmentId"}
+              saving={savingField === "departmentId"}
+              onStartEdit={() => setEditingField("departmentId")}
+              onCommit={(v) => patchField("departmentId", v)}
               onCancel={() => setEditingField(null)}
-              renderValue={() => textOrDash(employee.extraData)}
-              renderEditor={(stop) => (
-                <TextEditor
-                  initial={employee.extraData ?? ""}
-                  onCommit={(v) => stop(v)}
-                  onCancel={() => stop(undefined)}
-                />
-              )}
             />
             <PropertyRow
-              label="Нотатки"
+              label="Тип відстрочки"
+              field="deferralType"
+              editing={editingField === "deferralType"}
+              saving={savingField === "deferralType"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("deferralType")}
+              onCommit={(v) => patchField("deferralType", v)}
+              onCancel={() => setEditingField(null)}
+              renderValue={() => (
+                <span style={{ color: T.textSecondary }}>
+                  {DEFERRAL_LABEL[employee.deferralType]}
+                </span>
+              )}
+              renderEditor={(stop) => (
+                <select
+                  autoFocus
+                  defaultValue={employee.deferralType}
+                  onChange={(e) => stop(e.target.value as DeferralType)}
+                  onBlur={(e) => stop(e.target.value as DeferralType)}
+                  className="rounded-lg px-2 py-1 text-sm outline-none"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderStrong}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  <option value="NONE">Відсутня</option>
+                  <option value="RESERVATION">Бронювання</option>
+                  <option value="DEFERMENT">Відстрочка</option>
+                </select>
+              )}
+            />
+            {employee.deferralType !== "NONE" && (
+              <PropertyRow
+                label="Відстрочка дійсна до"
+                field="deferralUntil"
+                editing={editingField === "deferralUntil"}
+                saving={savingField === "deferralUntil"}
+                canEdit={canEdit}
+                onStartEdit={() => setEditingField("deferralUntil")}
+                onCommit={(v) => patchField("deferralUntil", (v as string) || null)}
+                onCancel={() => setEditingField(null)}
+                renderValue={() => {
+                  if (!employee.deferralUntil) return <span style={{ color: T.textMuted }}>—</span>;
+                  const d = new Date(employee.deferralUntil);
+                  const overdue = !Number.isNaN(d.getTime()) && d.getTime() < Date.now();
+                  return (
+                    <span style={{ color: overdue ? T.danger : T.textSecondary }}>
+                      {formatDate(employee.deferralUntil)}
+                      {overdue && (
+                        <AlertTriangle size={11} className="inline ml-1 -mt-0.5" />
+                      )}
+                    </span>
+                  );
+                }}
+                renderEditor={(stop) => (
+                  <TextEditor
+                    type="date"
+                    initial={toDateInput(employee.deferralUntil)}
+                    onCommit={(v) => stop(v)}
+                    onCancel={() => stop(undefined)}
+                  />
+                )}
+              />
+            )}
+            <PropertyRow
+              label="Додаткова інформація"
               field="notes"
               editing={editingField === "notes"}
               saving={savingField === "notes"}
@@ -719,6 +699,15 @@ export function EmployeeDossier({
           </tbody>
         </table>
       </div>
+
+      {canSeeSalary && (
+        <SalaryHistorySection
+          employeeId={id}
+          salaries={employee.salaries}
+          canEdit={canEdit}
+          onChanged={() => void load()}
+        />
+      )}
 
       {engagement && <EngagementPanel data={engagement} />}
 
@@ -1275,5 +1264,497 @@ function TextareaEditor({
         color: T.textPrimary,
       }}
     />
+  );
+}
+
+function DepartmentRow({
+  employee,
+  canEdit,
+  editing,
+  saving,
+  onStartEdit,
+  onCommit,
+  onCancel,
+}: {
+  employee: Employee;
+  canEdit: boolean;
+  editing: boolean;
+  saving: boolean;
+  onStartEdit: () => void;
+  onCommit: (v: string | null) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <PropertyRow
+      label="Структурний підрозділ"
+      field="departmentId"
+      editing={editing}
+      saving={saving}
+      canEdit={canEdit}
+      onStartEdit={onStartEdit}
+      onCommit={(v) => onCommit((v as string | null) ?? null)}
+      onCancel={onCancel}
+      renderValue={() =>
+        employee.department ? (
+          <span style={{ color: T.textSecondary }}>{employee.department.name}</span>
+        ) : (
+          <span style={{ color: T.textMuted }}>—</span>
+        )
+      }
+      renderEditor={(stop) => (
+        <DepartmentSelect
+          currentId={employee.departmentId}
+          onCommit={(id) => stop(id)}
+          onCancel={() => stop(undefined)}
+        />
+      )}
+    />
+  );
+}
+
+function DepartmentSelect({
+  currentId,
+  onCommit,
+  onCancel,
+}: {
+  currentId: string | null;
+  onCommit: (id: string | null) => void;
+  onCancel: () => void;
+}) {
+  const [departments, setDepartments] = useState<Array<{ id: string; name: string }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    void fetch("/api/admin/hr/departments", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive) setDepartments(j.data ?? []);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function createDepartment() {
+    const name = newName.trim();
+    if (!name) {
+      setCreating(false);
+      return;
+    }
+    const res = await fetch("/api/admin/hr/departments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    const j = await res.json();
+    if (res.ok) {
+      onCommit(j.data.id);
+    } else {
+      alert(j.error ?? "Помилка");
+      setCreating(false);
+    }
+  }
+
+  if (creating) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input
+          autoFocus
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void createDepartment();
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              onCancel();
+            }
+          }}
+          placeholder="Новий підрозділ…"
+          className="rounded-lg px-2 py-1 text-sm outline-none"
+          style={{
+            backgroundColor: T.panelSoft,
+            border: `1px solid ${T.borderStrong}`,
+            color: T.textPrimary,
+          }}
+        />
+        <button
+          onClick={createDepartment}
+          className="rounded-md p-1 hover:bg-black/10"
+          title="Створити"
+          aria-label="Створити"
+        >
+          <CheckCircle2 size={14} style={{ color: T.success }} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <select
+        autoFocus
+        defaultValue={currentId ?? ""}
+        disabled={loading}
+        onChange={(e) => {
+          if (e.target.value === "__new__") {
+            setCreating(true);
+            return;
+          }
+          onCommit(e.target.value || null);
+        }}
+        onBlur={(e) => {
+          if (e.target.value === "__new__") return;
+          onCommit(e.target.value || null);
+        }}
+        className="rounded-lg px-2 py-1 text-sm outline-none"
+        style={{
+          backgroundColor: T.panelSoft,
+          border: `1px solid ${T.borderStrong}`,
+          color: T.textPrimary,
+        }}
+      >
+        <option value="">— без підрозділу —</option>
+        {departments.map((d) => (
+          <option key={d.id} value={d.id}>
+            {d.name}
+          </option>
+        ))}
+        <option value="__new__">+ Новий підрозділ…</option>
+      </select>
+    </div>
+  );
+}
+
+function SalaryHistorySection({
+  employeeId,
+  salaries,
+  canEdit,
+  onChanged,
+}: {
+  employeeId: string;
+  salaries: SalaryPeriod[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({
+    baseSalary: "",
+    officialPart: "",
+    coefficient: "0",
+    description: "",
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    effectiveTo: "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    const base = Number(form.baseSalary);
+    if (!Number.isFinite(base) || base < 0) {
+      setError("Оклад обовʼязковий і не може бути від'ємним");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/hr/employees/${employeeId}/salaries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          baseSalary: base,
+          officialPart: form.officialPart === "" ? null : Number(form.officialPart),
+          coefficient: form.coefficient === "" ? 0 : Number(form.coefficient),
+          description: form.description.trim() || null,
+          effectiveFrom: form.effectiveFrom,
+          effectiveTo: form.effectiveTo || null,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setError(j.error ?? "Помилка");
+        return;
+      }
+      setCreating(false);
+      setForm({
+        baseSalary: "",
+        officialPart: "",
+        coefficient: "0",
+        description: "",
+        effectiveFrom: new Date().toISOString().slice(0, 10),
+        effectiveTo: "",
+      });
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function remove(id: string) {
+    if (!confirm("Видалити цей запис ЗП?")) return;
+    const res = await fetch(`/api/admin/hr/employees/${employeeId}/salaries/${id}`, {
+      method: "DELETE",
+    });
+    if (res.ok) onChanged();
+    else {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error ?? "Помилка видалення");
+    }
+  }
+
+  const sorted = [...salaries].sort(
+    (a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime(),
+  );
+
+  const inputStyle: React.CSSProperties = {
+    backgroundColor: T.panelSoft,
+    border: `1px solid ${T.borderStrong}`,
+    color: T.textPrimary,
+  };
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+    >
+      <div
+        className="flex items-center gap-2 px-4 py-2.5"
+        style={{ backgroundColor: T.panelSoft, borderBottom: `1px solid ${T.borderSoft}` }}
+      >
+        <span
+          className="text-[11px] font-bold uppercase tracking-wider"
+          style={{ color: T.textSecondary }}
+        >
+          Зарплата (історія)
+        </span>
+        <span className="text-[11px]" style={{ color: T.textMuted }}>
+          Оклад + Коефіцієнт = підсумок
+        </span>
+        <div className="flex-1" />
+        {canEdit && !creating && (
+          <button
+            onClick={() => setCreating(true)}
+            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold"
+            style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+          >
+            <Plus size={12} /> Додати період
+          </button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+            >
+              <th className="px-4 py-2.5 text-left">Період</th>
+              <th className="px-3 py-2.5 text-right">Оклад</th>
+              <th className="px-3 py-2.5 text-right">Офіц. частина</th>
+              <th className="px-3 py-2.5 text-right">Коеф.</th>
+              <th className="px-3 py-2.5 text-right">Підсумок</th>
+              <th className="px-3 py-2.5 text-left">Опис</th>
+              <th className="px-3 py-2.5 text-right">Дії</th>
+            </tr>
+          </thead>
+          <tbody>
+            {creating && (
+              <>
+                <tr style={{ borderTop: `2px solid ${T.accentPrimary}`, backgroundColor: T.accentPrimarySoft }}>
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-1 text-[11px]">
+                      <input
+                        type="date"
+                        value={form.effectiveFrom}
+                        onChange={(e) => setForm((p) => ({ ...p, effectiveFrom: e.target.value }))}
+                        className="rounded-lg px-1.5 py-0.5 outline-none"
+                        style={inputStyle}
+                      />
+                      <span style={{ color: T.textMuted }}>—</span>
+                      <input
+                        type="date"
+                        value={form.effectiveTo}
+                        onChange={(e) => setForm((p) => ({ ...p, effectiveTo: e.target.value }))}
+                        placeholder="досі"
+                        className="rounded-lg px-1.5 py-0.5 outline-none"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      autoFocus
+                      type="number"
+                      value={form.baseSalary}
+                      onChange={(e) => setForm((p) => ({ ...p, baseSalary: e.target.value }))}
+                      placeholder="Оклад *"
+                      className="w-24 rounded-lg px-2 py-1 text-right outline-none"
+                      style={inputStyle}
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      value={form.officialPart}
+                      onChange={(e) => setForm((p) => ({ ...p, officialPart: e.target.value }))}
+                      placeholder="—"
+                      className="w-24 rounded-lg px-2 py-1 text-right outline-none"
+                      style={inputStyle}
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <input
+                      type="number"
+                      value={form.coefficient}
+                      onChange={(e) => setForm((p) => ({ ...p, coefficient: e.target.value }))}
+                      className="w-20 rounded-lg px-2 py-1 text-right outline-none"
+                      style={inputStyle}
+                    />
+                  </td>
+                  <td
+                    className="px-3 py-2 text-right tabular-nums"
+                    style={{ color: T.textMuted }}
+                  >
+                    {form.baseSalary && (
+                      <span style={{ color: T.textPrimary, fontWeight: 600 }}>
+                        {formatCurrency(
+                          Number(form.baseSalary || 0) + Number(form.coefficient || 0),
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={form.description}
+                      onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
+                      placeholder="Опис (за що, як)"
+                      className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
+                      style={inputStyle}
+                    />
+                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => {
+                        setCreating(false);
+                        setError(null);
+                      }}
+                      disabled={saving}
+                      className="rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
+                      title="Скасувати"
+                      aria-label="Скасувати"
+                    >
+                      <X size={14} style={{ color: T.textSecondary }} />
+                    </button>
+                    <button
+                      onClick={submit}
+                      disabled={saving}
+                      className="rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
+                      title="Зберегти"
+                      aria-label="Зберегти"
+                    >
+                      {saving ? (
+                        <Loader2 size={14} className="animate-spin" style={{ color: T.accentPrimary }} />
+                      ) : (
+                        <CheckCircle2 size={14} style={{ color: T.success }} />
+                      )}
+                    </button>
+                  </td>
+                </tr>
+                {error && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-4 py-2 text-[12px]"
+                      style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                    >
+                      {error}
+                    </td>
+                  </tr>
+                )}
+              </>
+            )}
+            {sorted.map((s) => {
+              const total = Number(s.baseSalary) + Number(s.coefficient ?? 0);
+              const isOpen = !s.effectiveTo;
+              return (
+                <tr key={s.id} className="border-t" style={{ borderColor: T.borderSoft }}>
+                  <td className="px-4 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                    <span className="whitespace-nowrap">
+                      {formatDate(s.effectiveFrom)} — {s.effectiveTo ? formatDate(s.effectiveTo) : "досі"}
+                    </span>
+                    {isOpen && (
+                      <span
+                        className="ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase"
+                        style={{ backgroundColor: T.successSoft, color: T.success }}
+                      >
+                        Активний
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textPrimary }}>
+                    {formatCurrency(Number(s.baseSalary))}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-right tabular-nums"
+                    style={{ color: s.officialPart ? T.textSecondary : T.textMuted }}
+                  >
+                    {s.officialPart != null ? formatCurrency(Number(s.officialPart)) : "—"}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-right tabular-nums"
+                    style={{
+                      color:
+                        Number(s.coefficient ?? 0) === 0
+                          ? T.textMuted
+                          : Number(s.coefficient ?? 0) < 0
+                          ? T.danger
+                          : T.textPrimary,
+                    }}
+                  >
+                    {Number(s.coefficient ?? 0) === 0 ? "—" : formatCurrency(Number(s.coefficient))}
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-right tabular-nums font-semibold"
+                    style={{ color: T.textPrimary }}
+                  >
+                    {formatCurrency(total)} <span style={{ color: T.textMuted }}>{s.currency}</span>
+                  </td>
+                  <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                    {s.description ?? <span style={{ color: T.textMuted }}>—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-right">
+                    {canEdit && (
+                      <button
+                        onClick={() => remove(s.id)}
+                        className="rounded-md p-1.5 hover:bg-black/10"
+                        title="Видалити"
+                        aria-label="Видалити"
+                      >
+                        <Trash2 size={13} style={{ color: T.danger }} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {!creating && sorted.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: T.textMuted }}>
+                  Записів про ЗП ще немає. Додайте перший період.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

@@ -30,6 +30,8 @@ type Employee = {
   maritalStatus: string | null;
   hiredAt: string | null;
   terminatedAt: string | null;
+  departmentId: string | null;
+  department: { id: string; name: string } | null;
   salaryType: SalaryType | null;
   salaryAmount: number | string | null;
   currency: string;
@@ -44,7 +46,6 @@ type FormState = {
   position: string;
   phone: string;
   email: string;
-  residence: string;
   hiredAt: string;
 };
 
@@ -53,7 +54,6 @@ const EMPTY_FORM: FormState = {
   position: "",
   phone: "",
   email: "",
-  residence: "",
   hiredAt: "",
 };
 
@@ -136,7 +136,7 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
         (e.position?.toLowerCase().includes(needle) ?? false) ||
         (e.phone?.toLowerCase().includes(needle) ?? false) ||
         (e.email?.toLowerCase().includes(needle) ?? false) ||
-        (e.residence?.toLowerCase().includes(needle) ?? false)
+        (e.department?.name.toLowerCase().includes(needle) ?? false)
       );
     });
   }, [items, search, showInactive]);
@@ -157,7 +157,6 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
         position: creating.position.trim() || null,
         phone: creating.phone.trim() || null,
         email: creating.email.trim() || null,
-        residence: creating.residence.trim() || null,
         hiredAt: creating.hiredAt || null,
       };
       const res = await fetch(`/api/admin/hr/employees`, {
@@ -254,7 +253,7 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук — ПІБ / посада / телефон / email / адреса…"
+            placeholder="Пошук — ПІБ / посада / телефон / email / підрозділ…"
             className="w-full rounded-xl pl-9 pr-3 py-2 text-sm outline-none"
             style={{
               backgroundColor: T.panelSoft,
@@ -320,7 +319,7 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
                 <th className="px-3 py-3 text-left">Посада</th>
                 <th className="px-3 py-3 text-left">Телефон</th>
                 <th className="px-3 py-3 text-left">Email</th>
-                <th className="px-3 py-3 text-left">Проживання</th>
+                <th className="px-3 py-3 text-left">Підрозділ</th>
                 <th className="px-3 py-3 text-left">Прийнятий</th>
                 <th className="px-3 py-3 text-left">Стаж</th>
                 <th className="px-3 py-3 text-center">Статус</th>
@@ -382,16 +381,36 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
                       )}
                     </td>
                     <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-                      {e.phone ?? <span style={{ color: T.textMuted }}>—</span>}
+                      {e.phone ? (
+                        <a
+                          href={`tel:${e.phone}`}
+                          className="hover:underline"
+                          onClick={(ev) => ev.stopPropagation()}
+                        >
+                          {e.phone}
+                        </a>
+                      ) : (
+                        <span style={{ color: T.textMuted }}>—</span>
+                      )}
                     </td>
                     <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-                      {e.email ?? <span style={{ color: T.textMuted }}>—</span>}
+                      {e.email ? (
+                        <a
+                          href={`mailto:${e.email}`}
+                          className="hover:underline"
+                          onClick={(ev) => ev.stopPropagation()}
+                        >
+                          {e.email}
+                        </a>
+                      ) : (
+                        <span style={{ color: T.textMuted }}>—</span>
+                      )}
                     </td>
                     <td
                       className="px-3 py-2.5 text-[12px] truncate max-w-[200px]"
                       style={{ color: T.textSecondary }}
                     >
-                      {e.residence ?? <span style={{ color: T.textMuted }}>—</span>}
+                      {e.department?.name ?? <span style={{ color: T.textMuted }}>—</span>}
                     </td>
                     <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
                       {formatDate(e.hiredAt)}
@@ -484,6 +503,8 @@ function CreateRow({
         </td>
         <td className="px-3 py-2">
           <input
+            type="tel"
+            inputMode="tel"
             value={form.phone}
             onChange={(e) => set("phone", e.target.value)}
             placeholder="Телефон"
@@ -501,14 +522,8 @@ function CreateRow({
             style={inputStyle}
           />
         </td>
-        <td className="px-3 py-2">
-          <input
-            value={form.residence}
-            onChange={(e) => set("residence", e.target.value)}
-            placeholder="Місто / адреса"
-            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
-            style={inputStyle}
-          />
+        <td className="px-3 py-2 text-[11px]" style={{ color: T.textMuted }}>
+          —
         </td>
         <td className="px-3 py-2">
           <input
