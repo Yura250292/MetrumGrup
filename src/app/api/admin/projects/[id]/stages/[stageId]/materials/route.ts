@@ -3,6 +3,8 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
+import { ensureStageMaterialsSection } from "@/lib/projects/stage-materials";
+import { stageDisplayName } from "@/lib/constants";
 
 /**
  * Materials linked to a stage. Source priority:
@@ -125,4 +127,114 @@ export async function GET(
   });
 
   return NextResponse.json({ data });
+}
+
+/**
+ * Додає матеріал до етапу. Якщо stage ще не має sourceEstimateSection —
+ * автоматично створює системний Estimate «Матеріали етапів» (один на
+ * проєкт) і EstimateSection (одну на етап), потім додає EstimateItem
+ * у цю секцію.
+ */
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; stageId: string }> },
+) {
+  const { id: projectId, stageId } = await params;
+  const session = await auth();
+  if (!session?.user) return unauthorizedResponse();
+  if (
+    session.user.role !== "SUPER_ADMIN" &&
+    session.user.role !== "MANAGER" &&
+    session.user.role !== "ENGINEER"
+  ) {
+    return forbiddenResponse();
+  }
+
+  const stage = await prisma.projectStageRecord.findUnique({
+    where: { id: stageId },
+    select: {
+      id: true,
+      projectId: true,
+      stage: true,
+      customName: true,
+      project: { select: { firmId: true } },
+    },
+  });
+  if (!stage || stage.projectId !== projectId) {
+    return NextResponse.json({ error: "Етап не знайдено" }, { status: 404 });
+  }
+  try {
+    assertCanAccessFirm(session, stage.project.firmId);
+  } catch {
+    return forbiddenResponse();
+  }
+
+  const body = await request.json();
+  const name =
+    typeof body.name === "string" && body.name.trim() ? body.name.trim() : null;
+  if (!name) {
+    return NextResponse.json({ error: "Назва обовʼязкова" }, { status: 400 });
+  }
+  const unit =
+    typeof body.unit === "string" && body.unit.trim() ? body.unit.trim() : "шт";
+  const planQty = Number(body.planQty);
+  const planPrice = Number(body.planPrice);
+  if (!Number.isFinite(planQty) || planQty < 0) {
+    return NextResponse.json(
+      { error: "Невірна кількість" },
+      { status: 400 },
+    );
+  }
+  if (!Number.isFinite(planPrice) || planPrice < 0) {
+    return NextResponse.json(
+      { error: "Невірна ціна" },
+      { status: 400 },
+    );
+  }
+  const supplier =
+    typeof body.supplier === "string" && body.supplier.trim()
+      ? body.supplier.trim()
+      : null;
+
+  const stageName = stageDisplayName({
+    stage: stage.stage,
+    customName: stage.customName,
+  });
+  const sectionId = await ensureStageMaterialsSection(
+    projectId,
+    stageId,
+    stageName,
+    session.user.id,
+  );
+
+  const section = await prisma.estimateSection.findUnique({
+    where: { id: sectionId },
+    select: { estimateId: true, items: { select: { sortOrder: true }, orderBy: { sortOrder: "desc" }, take: 1 } },
+  });
+  if (!section) {
+    return NextResponse.json(
+      { error: "Не вдалось підготувати секцію матеріалів" },
+      { status: 500 },
+    );
+  }
+  const sortOrder = (section.items[0]?.sortOrder ?? -1) + 1;
+
+  const created = await prisma.estimateItem.create({
+    data: {
+      description: name,
+      unit,
+      quantity: planQty,
+      unitPrice: planPrice,
+      amount: planQty * planPrice,
+      estimateId: section.estimateId,
+      sectionId,
+      sortOrder,
+      priceSource: supplier,
+      itemType: "material",
+      stageRecords: { connect: { id: stageId } },
+    },
+    select: { id: true },
+  });
+
+  return NextResponse.json({ data: { id: created.id } }, { status: 201 });
 }

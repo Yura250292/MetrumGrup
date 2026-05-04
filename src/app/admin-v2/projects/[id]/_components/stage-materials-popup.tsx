@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Package, X } from "lucide-react";
+import { Loader2, Package, Plus, Trash2, X } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+
+const UNIT_OPTIONS = ["шт", "м", "м²", "м³", "кг", "т", "л", "пог.м"];
 
 type MaterialRow = {
   id: string;
@@ -57,11 +59,20 @@ export function StageMaterialsPopup({
 }: Props) {
   const [rows, setRows] = useState<MaterialRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    unit: "шт",
+    planQty: "",
+    planPrice: "",
+    supplier: "",
+  });
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     fetch(`/api/admin/projects/${projectId}/stages/${stageId}/materials`, {
       cache: "no-store",
@@ -82,7 +93,53 @@ export function StageMaterialsPopup({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, stageId]);
+  }, [open, projectId, stageId, reloadKey]);
+
+  // Reset form коли змінюється етап
+  useEffect(() => {
+    setAdding(false);
+    setForm({ name: "", unit: "шт", planQty: "", planPrice: "", supplier: "" });
+  }, [stageId]);
+
+  async function submitAdd() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/admin/projects/${projectId}/stages/${stageId}/materials`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: form.name.trim(),
+            unit: form.unit,
+            planQty: Number(form.planQty || 0),
+            planPrice: Number(form.planPrice || 0),
+            supplier: form.supplier.trim() || null,
+          }),
+        },
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j.error ?? "Не вдалось додати матеріал");
+        return;
+      }
+      setAdding(false);
+      setForm({ name: "", unit: "шт", planQty: "", planPrice: "", supplier: "" });
+      setReloadKey((k) => k + 1);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteItem(id: string) {
+    if (!confirm("Видалити матеріал з етапу?")) return;
+    const res = await fetch(
+      `/api/admin/projects/${projectId}/stages/${stageId}/materials/${id}`,
+      { method: "DELETE" },
+    );
+    if (res.ok) setReloadKey((k) => k + 1);
+  }
 
   const totalPlan = rows.reduce((a, r) => a + r.planSum, 0);
   const totalFact = rows.reduce((a, r) => a + r.factSum, 0);
@@ -145,6 +202,26 @@ export function StageMaterialsPopup({
         </span>
         <button
           type="button"
+          onClick={() => setAdding((v) => !v)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "4px 10px",
+            borderRadius: 5,
+            background: adding ? T.panel : T.accentPrimary,
+            border: adding ? `1px solid ${T.borderSoft}` : "none",
+            color: adding ? T.textMuted : "#fff",
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          <Plus size={12} />
+          {adding ? "Скасувати" : "Додати матеріал"}
+        </button>
+        <button
+          type="button"
           onClick={onClose}
           aria-label="Закрити"
           style={{
@@ -163,6 +240,131 @@ export function StageMaterialsPopup({
           <X size={14} />
         </button>
       </div>
+
+      {adding && (
+        <div
+          style={{
+            padding: "8px 16px",
+            borderBottom: `1px solid ${T.borderSoft}`,
+            background: T.panelSoft,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            flexShrink: 0,
+            fontSize: 12,
+          }}
+        >
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Назва матеріалу"
+            autoFocus
+            style={{
+              flex: 1,
+              padding: "5px 8px",
+              borderRadius: 4,
+              border: `1px solid ${T.borderSoft}`,
+              background: T.panel,
+              color: T.textPrimary,
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+          <input
+            type="text"
+            value={form.supplier}
+            onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+            placeholder="Постачальник"
+            style={{
+              width: 130,
+              padding: "5px 8px",
+              borderRadius: 4,
+              border: `1px solid ${T.borderSoft}`,
+              background: T.panel,
+              color: T.textPrimary,
+              fontSize: 12,
+              outline: "none",
+            }}
+          />
+          <select
+            value={form.unit}
+            onChange={(e) => setForm({ ...form, unit: e.target.value })}
+            style={{
+              width: 70,
+              padding: "5px 6px",
+              borderRadius: 4,
+              border: `1px solid ${T.borderSoft}`,
+              background: T.panel,
+              color: T.textPrimary,
+              fontSize: 12,
+              outline: "none",
+            }}
+          >
+            {UNIT_OPTIONS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            value={form.planQty}
+            onChange={(e) => setForm({ ...form, planQty: e.target.value })}
+            placeholder="К-сть"
+            min={0}
+            step="0.001"
+            style={{
+              width: 80,
+              padding: "5px 8px",
+              borderRadius: 4,
+              border: `1px solid ${T.borderSoft}`,
+              background: T.panel,
+              color: T.textPrimary,
+              fontSize: 12,
+              outline: "none",
+              textAlign: "right",
+            }}
+          />
+          <input
+            type="number"
+            value={form.planPrice}
+            onChange={(e) => setForm({ ...form, planPrice: e.target.value })}
+            placeholder="Ціна"
+            min={0}
+            step="0.01"
+            style={{
+              width: 100,
+              padding: "5px 8px",
+              borderRadius: 4,
+              border: `1px solid ${T.borderSoft}`,
+              background: T.panel,
+              color: T.textPrimary,
+              fontSize: 12,
+              outline: "none",
+              textAlign: "right",
+            }}
+          />
+          <button
+            type="button"
+            onClick={submitAdd}
+            disabled={saving || !form.name.trim()}
+            style={{
+              padding: "5px 12px",
+              borderRadius: 4,
+              background: T.success,
+              border: "none",
+              color: "#fff",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: saving || !form.name.trim() ? "not-allowed" : "pointer",
+              opacity: saving || !form.name.trim() ? 0.5 : 1,
+            }}
+          >
+            {saving ? "..." : "Зберегти"}
+          </button>
+        </div>
+      )}
 
       {/* Body */}
       <div style={{ flex: 1, overflow: "auto" }}>
@@ -216,9 +418,10 @@ export function StageMaterialsPopup({
                   { l: "Сума П", a: "right" as const },
                   { l: "Сума Ф", a: "right" as const },
                   { l: "Відхил.", a: "right" as const },
-                ].map((h) => (
+                  { l: "", a: "right" as const },
+                ].map((h, i) => (
                   <th
-                    key={h.l}
+                    key={h.l + i}
                     style={{
                       fontSize: 10,
                       fontWeight: 600,
@@ -363,6 +566,28 @@ export function StageMaterialsPopup({
                         : (r.deviation > 0 ? "+" : "") +
                           formatCurrency(r.deviation)}
                     </td>
+                    <td
+                      style={{
+                        padding: "6px 12px",
+                        textAlign: "right",
+                        borderBottom: `1px solid ${T.borderSoft}`,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => deleteItem(r.id)}
+                        title="Видалити з етапу"
+                        style={{
+                          background: "transparent",
+                          border: "none",
+                          color: T.textMuted,
+                          cursor: "pointer",
+                          padding: 2,
+                        }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -417,6 +642,11 @@ export function StageMaterialsPopup({
                       ? "—"
                       : (totalDev > 0 ? "+" : "") + formatCurrency(totalDev)}
                   </td>
+                  <td
+                    style={{
+                      borderTop: `1px solid ${T.borderStrong}`,
+                    }}
+                  />
                 </tr>
               </tfoot>
             )}
