@@ -89,7 +89,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "HR",
     items: [
-      { href: "/admin-v2/hr/employees", label: "Співробітники", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/hr/employees", label: "Співробітники та акаунти", icon: Users, hrAllowed: true },
       { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
       { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
@@ -113,7 +113,6 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Адміністрування",
     items: [
-      { href: "/admin-v2/users", label: "Користувачі", icon: Users, superAdminOnly: true },
       { href: "/admin-v2/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
     ],
   },
@@ -144,11 +143,10 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/resources/equipment": "Техніка",
   "/admin-v2/resources/warehouse": "Склад",
   "/admin-v2/resources/workers": "Бригади",
-  "/admin-v2/hr/employees": "Співробітники",
+  "/admin-v2/hr/employees": "Співробітники та акаунти",
   "/admin-v2/hr/subcontractors": "Підрядники",
   "/admin-v2/cms/portfolio": "Портфоліо",
   "/admin-v2/cms/news": "Новини",
-  "/admin-v2/users": "Користувачі",
   "/admin-v2/settings": "Налаштування",
   "/admin-v2/feed": "Активність",
   "/admin-v2/chat": "Чат",

@@ -8,6 +8,11 @@ import {
   redactSalaryForHr,
   stripSalaryWritesForHr,
 } from "@/lib/hr/employee-privacy";
+import {
+  AccountSyncError,
+  buildEmployeeNameSlice,
+  syncUserFromEmployee,
+} from "@/lib/hr/account-sync";
 
 async function guard() {
   const session = await auth();
@@ -85,7 +90,12 @@ export async function GET() {
 
   const employees = await prisma.employee.findMany({
     orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
-    include: { department: { select: { id: true, name: true } } },
+    include: {
+      department: { select: { id: true, name: true } },
+      user: {
+        select: { id: true, email: true, role: true, isActive: true },
+      },
+    },
   });
   const role = g.session.user.role;
   const data = employees.map((e) => redactSalaryForHr(e as EmployeeRecord, role));
@@ -157,10 +167,47 @@ export async function PATCH(request: NextRequest) {
   }
   const finalData =
     fullNameOverride !== undefined ? { ...data, fullName: fullNameOverride } : data;
-  const employee = await prisma.employee.update({ where: { id }, data: finalData });
-  return NextResponse.json({
-    data: redactSalaryForHr(employee as EmployeeRecord, g.session.user.role),
-  });
+
+  // Якщо до Employee привʼязаний User І зачеплено sync-поля — оновлюємо обидва
+  // рядки в одній транзакції (Employee — джерело правди для name/email/phone).
+  const syncTriggered =
+    "lastName" in data ||
+    "firstName" in data ||
+    "middleName" in data ||
+    "email" in data ||
+    "phone" in data ||
+    "isActive" in data;
+
+  try {
+    const employee = await prisma.$transaction(async (tx) => {
+      const updated = await tx.employee.update({
+        where: { id },
+        data: finalData,
+        include: {
+          department: { select: { id: true, name: true } },
+          user: {
+            select: { id: true, email: true, role: true, isActive: true },
+          },
+        },
+      });
+      if (syncTriggered && updated.userId) {
+        await syncUserFromEmployee(
+          tx,
+          updated.userId,
+          buildEmployeeNameSlice(updated),
+        );
+      }
+      return updated;
+    });
+    return NextResponse.json({
+      data: redactSalaryForHr(employee as EmployeeRecord, g.session.user.role),
+    });
+  } catch (e) {
+    if (e instanceof AccountSyncError) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    throw e;
+  }
 }
 
 export async function DELETE(request: NextRequest) {

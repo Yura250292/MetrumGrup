@@ -9,18 +9,30 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
+  Copy,
   ExternalLink,
+  KeyRound,
+  Link2,
+  Link2Off,
   ListChecks,
   Loader2,
   Pencil,
   Plus,
+  ShieldCheck,
   Target,
   Trash2,
+  UserPlus,
   Users,
   X,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+import {
+  ROLE_COLORS,
+  ROLE_LABELS,
+  assignableRolesFor,
+  canAssignRole,
+} from "@/app/admin-v2/_lib/role-display";
 
 type ProjectRole =
   | "PROJECT_ADMIN"
@@ -129,6 +141,13 @@ const PRIORITY_TONE: Record<TaskPriority, { bg: string; fg: string; label: strin
   URGENT: { bg: T.dangerSoft, fg: T.danger, label: "Терміново" },
 };
 
+type LinkedUser = {
+  id: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+};
+
 type Employee = {
   id: string;
   fullName: string;
@@ -147,6 +166,8 @@ type Employee = {
   department: { id: string; name: string } | null;
   deferralType: DeferralType;
   deferralUntil: string | null;
+  userId: string | null;
+  user: LinkedUser | null;
   /// Історія ЗП — лише для не-HR. HR отримує [].
   salaries: SalaryPeriod[];
   createdAt: string;
@@ -734,6 +755,12 @@ export function EmployeeDossier({
           </tbody>
         </table>
       </div>
+
+      <AccountSection
+        employee={employee}
+        currentUserRole={currentUserRole}
+        onChanged={() => void load()}
+      />
 
       {canSeeSalary && (
         <SalaryHistorySection
@@ -1789,6 +1816,498 @@ function SalaryHistorySection({
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function AccountSection({
+  employee,
+  currentUserRole,
+  onChanged,
+}: {
+  employee: Employee;
+  currentUserRole: string;
+  onChanged: () => void;
+}) {
+  const [mode, setMode] = useState<"idle" | "create" | "link">("idle");
+  const [form, setForm] = useState({ email: "", password: "", role: "USER" });
+  const [linkSearch, setLinkSearch] = useState("");
+  const [linkResults, setLinkResults] = useState<
+    Array<{ id: string; name: string; email: string; role: string }>
+  >([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+  const [editingRole, setEditingRole] = useState(false);
+
+  const linked = employee.user;
+  const allowedRoles = useMemo(
+    () => assignableRolesFor(currentUserRole),
+    [currentUserRole],
+  );
+  const canTouch = linked
+    ? canAssignRole(currentUserRole, linked.role)
+    : allowedRoles.length > 0;
+
+  useEffect(() => {
+    if (mode !== "link" || !linkSearch.trim()) {
+      setLinkResults([]);
+      return;
+    }
+    const ctl = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/users?onlyWithoutEmployee=1`,
+          { cache: "no-store", signal: ctl.signal },
+        );
+        if (!res.ok) return;
+        const j = await res.json();
+        const needle = linkSearch.trim().toLowerCase();
+        const filtered = (j.data ?? []).filter(
+          (u: { name: string; email: string }) =>
+            u.name.toLowerCase().includes(needle) ||
+            u.email.toLowerCase().includes(needle),
+        );
+        setLinkResults(filtered.slice(0, 8));
+      } catch {
+        // ignore
+      }
+    })();
+    return () => ctl.abort();
+  }, [mode, linkSearch]);
+
+  function resetForm() {
+    setMode("idle");
+    setForm({ email: employee.email ?? "", password: "", role: allowedRoles[0] ?? "USER" });
+    setError(null);
+    setTempPassword(null);
+    setLinkSearch("");
+    setLinkResults([]);
+  }
+
+  async function handleCreate() {
+    if (!form.email.trim()) {
+      setError("Email обовʼязковий");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/hr/employees/${employee.id}/account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password.trim() || undefined,
+          role: form.role,
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setError(j.error ?? "Помилка створення");
+        return;
+      }
+      if (j.data?.oneTimePassword) {
+        setTempPassword(j.data.oneTimePassword);
+      }
+      setMode("idle");
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleLink(userId: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/hr/employees/${employee.id}/account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ existingUserId: userId }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setError(j.error ?? "Помилка");
+        return;
+      }
+      resetForm();
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRoleChange(newRole: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/hr/employees/${employee.id}/account`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setError(j.error ?? "Помилка");
+        return;
+      }
+      setEditingRole(false);
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleToggleActive() {
+    if (!linked) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/hr/employees/${employee.id}/account`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: !linked.isActive }),
+      });
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleResetPassword() {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/hr/employees/${employee.id}/account`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetPassword: true }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setError(j.error ?? "Помилка");
+        return;
+      }
+      if (j.data?.oneTimePassword) {
+        setTempPassword(j.data.oneTimePassword);
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleUnlink() {
+    if (!confirm("Відвʼязати акаунт від співробітника? Сам акаунт залишиться.")) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/admin/hr/employees/${employee.id}/account`, {
+        method: "DELETE",
+      });
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function copyToClipboard(text: string) {
+    void navigator.clipboard?.writeText(text);
+  }
+
+  // ===== Render =====
+  return (
+    <div
+      className="overflow-hidden rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+    >
+      <div
+        className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+        style={{ color: T.textSecondary, backgroundColor: T.panelSoft, borderBottom: `1px solid ${T.borderSoft}` }}
+      >
+        <ShieldCheck size={12} />
+        <span>Акаунт користувача</span>
+      </div>
+
+      <div className="p-4 flex flex-col gap-3">
+        {tempPassword && (
+          <div
+            className="flex items-center gap-2 rounded-xl px-3 py-2 text-[12px]"
+            style={{ backgroundColor: T.warningSoft, color: T.warning, border: `1px solid ${T.warning}40` }}
+          >
+            <KeyRound size={13} />
+            <span className="font-mono select-all flex-1">{tempPassword}</span>
+            <button
+              onClick={() => copyToClipboard(tempPassword)}
+              className="rounded-md px-2 py-1 text-[11px] font-semibold inline-flex items-center gap-1"
+              style={{ backgroundColor: T.warning, color: "#fff" }}
+            >
+              <Copy size={11} /> Копіювати
+            </button>
+            <button onClick={() => setTempPassword(null)}>
+              <X size={13} />
+            </button>
+          </div>
+        )}
+
+        {error && (
+          <div
+            className="rounded-xl px-3 py-2 text-[12px]"
+            style={{ backgroundColor: T.dangerSoft, color: T.danger, border: `1px solid ${T.danger}40` }}
+          >
+            {error}
+          </div>
+        )}
+
+        {linked ? (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-[13px]">
+              <span style={{ color: T.textMuted }}>Email:</span>
+              <span className="font-medium" style={{ color: T.textPrimary }}>
+                {linked.email}
+              </span>
+              <span className="ml-2" style={{ color: T.textMuted }}>
+                Роль:
+              </span>
+              {editingRole && canTouch ? (
+                <select
+                  autoFocus
+                  defaultValue={linked.role}
+                  onBlur={() => setEditingRole(false)}
+                  onChange={(e) => void handleRoleChange(e.target.value)}
+                  className="rounded-md px-2 py-0.5 text-[11px] outline-none"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderStrong}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  {allowedRoles.map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </option>
+                  ))}
+                  {/* Якщо поточна роль недоступна для редактора — показати її як read-only пункт */}
+                  {!allowedRoles.includes(linked.role as never) && (
+                    <option value={linked.role} disabled>
+                      {ROLE_LABELS[linked.role] ?? linked.role}
+                    </option>
+                  )}
+                </select>
+              ) : (
+                <button
+                  onClick={() => canTouch && setEditingRole(true)}
+                  disabled={!canTouch}
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
+                  style={{
+                    backgroundColor: ROLE_COLORS[linked.role]?.bg ?? T.panelSoft,
+                    color: ROLE_COLORS[linked.role]?.fg ?? T.textMuted,
+                    cursor: canTouch ? "pointer" : "default",
+                  }}
+                >
+                  {ROLE_LABELS[linked.role] ?? linked.role}
+                </button>
+              )}
+              <span className="ml-auto text-[11px]" style={{ color: T.textMuted }}>
+                {linked.isActive ? "Активний" : "Неактивний"}
+              </span>
+            </div>
+            {canTouch && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => void handleResetPassword()}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    color: T.textSecondary,
+                    border: `1px solid ${T.borderStrong}`,
+                  }}
+                >
+                  <KeyRound size={12} /> Скинути пароль
+                </button>
+                <button
+                  onClick={() => void handleToggleActive()}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    color: T.textSecondary,
+                    border: `1px solid ${T.borderStrong}`,
+                  }}
+                >
+                  {linked.isActive ? "Деактивувати" : "Активувати"}
+                </button>
+                <button
+                  onClick={() => void handleUnlink()}
+                  disabled={saving}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                  style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                >
+                  <Link2Off size={12} /> Відвʼязати
+                </button>
+              </div>
+            )}
+          </div>
+        ) : mode === "create" ? (
+          <div className="flex flex-col gap-2">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input
+                value={form.email}
+                onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                placeholder="email@example.com"
+                type="email"
+                className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                style={{
+                  backgroundColor: T.panelSoft,
+                  border: `1px solid ${T.borderStrong}`,
+                  color: T.textPrimary,
+                }}
+              />
+              <input
+                value={form.password}
+                onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                placeholder="Пароль (опц., згенерується)"
+                type="text"
+                className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                style={{
+                  backgroundColor: T.panelSoft,
+                  border: `1px solid ${T.borderStrong}`,
+                  color: T.textPrimary,
+                }}
+              />
+              <select
+                value={form.role}
+                onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
+                className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                style={{
+                  backgroundColor: T.panelSoft,
+                  border: `1px solid ${T.borderStrong}`,
+                  color: T.textPrimary,
+                }}
+              >
+                {allowedRoles.map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => void handleCreate()}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+                style={{ backgroundColor: T.accentPrimary }}
+              >
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                Створити акаунт
+              </button>
+              <button
+                onClick={resetForm}
+                disabled={saving}
+                className="rounded-xl px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                style={{ color: T.textSecondary }}
+              >
+                Скасувати
+              </button>
+            </div>
+            <p className="text-[11px]" style={{ color: T.textMuted }}>
+              ПІБ і телефон скопіюються зі співробітника. Якщо пароль порожній — буде згенерований одноразовий.
+            </p>
+          </div>
+        ) : mode === "link" ? (
+          <div className="flex flex-col gap-2">
+            <input
+              value={linkSearch}
+              onChange={(e) => setLinkSearch(e.target.value)}
+              placeholder="Пошук акаунта без співробітника — імʼя або email…"
+              className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+              style={{
+                backgroundColor: T.panelSoft,
+                border: `1px solid ${T.borderStrong}`,
+                color: T.textPrimary,
+              }}
+            />
+            <div className="flex flex-col gap-1">
+              {linkResults.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => void handleLink(u.id)}
+                  disabled={saving}
+                  className="flex items-center justify-between rounded-lg px-3 py-1.5 text-left text-[12px] hover:bg-black/5 disabled:opacity-50"
+                  style={{ border: `1px solid ${T.borderSoft}` }}
+                >
+                  <span>
+                    <span className="font-medium" style={{ color: T.textPrimary }}>
+                      {u.name}
+                    </span>
+                    <span className="ml-2" style={{ color: T.textMuted }}>
+                      {u.email}
+                    </span>
+                  </span>
+                  <span
+                    className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase"
+                    style={{
+                      backgroundColor: ROLE_COLORS[u.role]?.bg ?? T.panelSoft,
+                      color: ROLE_COLORS[u.role]?.fg ?? T.textMuted,
+                    }}
+                  >
+                    {ROLE_LABELS[u.role] ?? u.role}
+                  </span>
+                </button>
+              ))}
+              {linkSearch && linkResults.length === 0 && (
+                <p className="text-[11px]" style={{ color: T.textMuted }}>
+                  Нічого не знайдено серед акаунтів без співробітника.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={resetForm}
+              disabled={saving}
+              className="self-start rounded-xl px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+              style={{ color: T.textSecondary }}
+            >
+              Скасувати
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-[13px]" style={{ color: T.textSecondary }}>
+              Акаунт ще не створено. Співробітник не зможе входити в систему.
+            </span>
+            {canTouch && (
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={() => {
+                    setForm({
+                      email: employee.email ?? "",
+                      password: "",
+                      role: allowedRoles[0] ?? "USER",
+                    });
+                    setMode("create");
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold text-white"
+                  style={{ backgroundColor: T.accentPrimary }}
+                >
+                  <UserPlus size={12} /> Створити акаунт
+                </button>
+                <button
+                  onClick={() => setMode("link")}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    color: T.textSecondary,
+                    border: `1px solid ${T.borderStrong}`,
+                  }}
+                >
+                  <Link2 size={12} /> Привʼязати існуючий
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

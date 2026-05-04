@@ -15,6 +15,9 @@ export async function GET(request: NextRequest) {
 
   const roleParam = request.nextUrl.searchParams.get("role");
   const roles = roleParam ? (roleParam.split(",") as Role[]) : undefined;
+  const onlyWithoutEmployee =
+    request.nextUrl.searchParams.get("onlyWithoutEmployee") === "1" ||
+    request.nextUrl.searchParams.get("onlyUnlinked") === "1";
 
   const { firmId } = await resolveFirmScopeForRequest(session);
   const activeRole = getActiveRoleFromSession(session, firmId);
@@ -48,6 +51,12 @@ export async function GET(request: NextRequest) {
     } else {
       where = { role: { in: roles } };
     }
+  }
+
+  // Тільки SUPER_ADMIN/MANAGER можуть бачити повний список без привʼязки.
+  if (onlyWithoutEmployee) {
+    if (!isAdminOrManager) return forbiddenResponse();
+    where = { ...(where ?? {}), employeeProfile: null };
   }
 
   const users = await prisma.user.findMany({

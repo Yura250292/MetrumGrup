@@ -9,6 +9,7 @@ import {
   Loader2,
   Plus,
   Search,
+  ShieldCheck,
   Upload,
   Users,
   X,
@@ -16,6 +17,14 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "../../_components/excel-import-modal";
+import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
+
+type LinkedUser = {
+  id: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+};
 
 type Employee = {
   id: string;
@@ -30,8 +39,23 @@ type Employee = {
   department: { id: string; name: string } | null;
   notes: string | null;
   isActive: boolean;
+  userId: string | null;
+  user: LinkedUser | null;
   createdAt: string;
 };
+
+type ExternalUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: string;
+  isActive: boolean;
+  createdAt: string;
+};
+
+type AccountFilter = "all" | "linked" | "unlinked";
+type Tab = "employees" | "external";
 
 type FormState = {
   fullName: string;
@@ -78,13 +102,25 @@ function initialsOf(fullName: string): string {
     .join("");
 }
 
-export function EmployeesList({ currentUserRole }: { currentUserRole: string }) {
+export function EmployeesList({
+  currentUserRole,
+  initialTab,
+}: {
+  currentUserRole: string;
+  initialTab?: Tab;
+}) {
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
+  const canSeeExternal = currentUserRole === "SUPER_ADMIN";
 
+  const [tab, setTab] = useState<Tab>(
+    initialTab === "external" && canSeeExternal ? "external" : "employees",
+  );
   const [items, setItems] = useState<Employee[]>([]);
+  const [externalUsers, setExternalUsers] = useState<ExternalUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
+  const [accountFilter, setAccountFilter] = useState<AccountFilter>("all");
   const [showImport, setShowImport] = useState(false);
 
   const [creating, setCreating] = useState<FormState | null>(null);
@@ -97,18 +133,31 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
     setLoading(true);
     setLoadError(null);
     try {
-      const res = await fetch("/api/admin/hr/employees", { cache: "no-store" });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        setLoadError(`Не вдалось завантажити: ${j.error ?? `HTTP ${res.status}`}`);
-        setItems([]);
-        return;
+      if (tab === "employees") {
+        const res = await fetch("/api/admin/hr/employees", { cache: "no-store" });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          setLoadError(`Не вдалось завантажити: ${j.error ?? `HTTP ${res.status}`}`);
+          setItems([]);
+          return;
+        }
+        const j = await res.json();
+        setItems(j.data ?? []);
+      } else {
+        const res = await fetch("/api/admin/users?onlyWithoutEmployee=1", {
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          setLoadError(`Не вдалось завантажити: ${j.error ?? `HTTP ${res.status}`}`);
+          setExternalUsers([]);
+          return;
+        }
+        const j = await res.json();
+        setExternalUsers(j.data ?? []);
       }
-      const j = await res.json();
-      setItems(j.data ?? []);
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : "Network error");
-      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -116,22 +165,39 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
 
   useEffect(() => {
     void load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return items.filter((e) => {
       if (!showInactive && !e.isActive) return false;
+      if (accountFilter === "linked" && !e.userId) return false;
+      if (accountFilter === "unlinked" && e.userId) return false;
       if (!needle) return true;
       return (
         e.fullName.toLowerCase().includes(needle) ||
         (e.position?.toLowerCase().includes(needle) ?? false) ||
         (e.phone?.toLowerCase().includes(needle) ?? false) ||
         (e.email?.toLowerCase().includes(needle) ?? false) ||
-        (e.department?.name.toLowerCase().includes(needle) ?? false)
+        (e.department?.name.toLowerCase().includes(needle) ?? false) ||
+        (e.user?.email?.toLowerCase().includes(needle) ?? false)
       );
     });
-  }, [items, search, showInactive]);
+  }, [items, search, showInactive, accountFilter]);
+
+  const filteredExternal = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return externalUsers.filter((u) => {
+      if (!showInactive && !u.isActive) return false;
+      if (!needle) return true;
+      return (
+        u.name.toLowerCase().includes(needle) ||
+        u.email.toLowerCase().includes(needle) ||
+        (u.phone?.toLowerCase().includes(needle) ?? false)
+      );
+    });
+  }, [externalUsers, search, showInactive]);
 
   const activeCount = items.filter((e) => e.isActive).length;
 
@@ -174,18 +240,20 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
       <div className="flex items-center gap-2 flex-wrap">
         <Users size={20} style={{ color: T.textPrimary }} />
         <h1 className="text-xl font-bold" style={{ color: T.textPrimary }}>
-          Співробітники
+          Співробітники та акаунти
         </h1>
         <span
           className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
           style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
         >
-          {filtered.length}
-          {filtered.length !== items.length ? ` / ${items.length}` : ""} ·{" "}
-          {activeCount} активних
+          {tab === "employees"
+            ? `${filtered.length}${
+                filtered.length !== items.length ? ` / ${items.length}` : ""
+              } · ${activeCount} активних`
+            : `${filteredExternal.length} зовнішніх акаунтів`}
         </span>
         <div className="flex-1" />
-        {canEdit && (
+        {tab === "employees" && canEdit && (
           <>
             <button
               onClick={() => setShowImport(true)}
@@ -211,6 +279,36 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
           </>
         )}
       </div>
+
+      {canSeeExternal && (
+        <div
+          className="inline-flex w-fit gap-1 rounded-xl p-1"
+          style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+        >
+          {(
+            [
+              { id: "employees" as const, label: "Співробітники" },
+              { id: "external" as const, label: "Зовнішні акаунти" },
+            ]
+          ).map((t) => {
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition"
+                style={{
+                  backgroundColor: active ? T.panel : "transparent",
+                  color: active ? T.textPrimary : T.textMuted,
+                  border: active ? `1px solid ${T.borderStrong}` : "1px solid transparent",
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <ExcelImportModal
         open={showImport}
@@ -245,7 +343,11 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Пошук — ПІБ / посада / телефон / email / підрозділ…"
+            placeholder={
+              tab === "employees"
+                ? "Пошук — ПІБ / посада / телефон / email / підрозділ…"
+                : "Пошук — імʼя / email / телефон…"
+            }
             className="w-full rounded-xl pl-9 pr-3 py-2 text-sm outline-none"
             style={{
               backgroundColor: T.panelSoft,
@@ -254,6 +356,22 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
             }}
           />
         </div>
+        {tab === "employees" && (
+          <select
+            value={accountFilter}
+            onChange={(e) => setAccountFilter(e.target.value as AccountFilter)}
+            className="rounded-xl px-2.5 py-1.5 text-[12px] outline-none"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px solid ${T.borderSoft}`,
+              color: T.textPrimary,
+            }}
+          >
+            <option value="all">Усі</option>
+            <option value="linked">З акаунтом</option>
+            <option value="unlinked">Без акаунта</option>
+          </select>
+        )}
         <label
           className="flex items-center gap-1.5 text-[12px] cursor-pointer"
           style={{ color: T.textSecondary }}
@@ -296,7 +414,7 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
         </div>
       )}
 
-      {!loading && (
+      {!loading && tab === "employees" && (
         <div
           className="overflow-x-auto rounded-2xl"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
@@ -311,6 +429,7 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
                 <th className="px-3 py-3 text-left">Посада</th>
                 <th className="px-3 py-3 text-left">Телефон</th>
                 <th className="px-3 py-3 text-left">Email</th>
+                <th className="px-3 py-3 text-left">Акаунт</th>
                 <th className="px-3 py-3 text-left">Підрозділ</th>
                 <th className="px-3 py-3 text-left">Прийнятий</th>
                 <th className="px-3 py-3 text-left">Стаж</th>
@@ -398,6 +517,27 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
                         <span style={{ color: T.textMuted }}>—</span>
                       )}
                     </td>
+                    <td className="px-3 py-2.5 text-[12px]">
+                      {e.user ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                          style={{
+                            backgroundColor: ROLE_COLORS[e.user.role]?.bg ?? T.panelSoft,
+                            color: ROLE_COLORS[e.user.role]?.fg ?? T.textMuted,
+                          }}
+                        >
+                          <ShieldCheck size={10} />
+                          {ROLE_LABELS[e.user.role] ?? e.user.role}
+                        </span>
+                      ) : (
+                        <span
+                          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+                          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+                        >
+                          Без акаунта
+                        </span>
+                      )}
+                    </td>
                     <td
                       className="px-3 py-2.5 text-[12px] truncate max-w-[200px]"
                       style={{ color: T.textSecondary }}
@@ -432,8 +572,8 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
               })}
               {filtered.length === 0 && !creating && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
-                    {search.trim()
+                  <td colSpan={10} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
+                    {search.trim() || accountFilter !== "all"
                       ? "Нічого не знайдено за фільтрами."
                       : "Список порожній. Додайте через кнопку «Додати співробітника» або імпорт з Excel."}
                   </td>
@@ -443,6 +583,97 @@ export function EmployeesList({ currentUserRole }: { currentUserRole: string }) 
           </table>
         </div>
       )}
+
+      {!loading && tab === "external" && (
+        <ExternalAccountsTable
+          users={filteredExternal}
+          searchActive={Boolean(search.trim())}
+        />
+      )}
+    </div>
+  );
+}
+
+function ExternalAccountsTable({
+  users,
+  searchActive,
+}: {
+  users: ExternalUser[];
+  searchActive: boolean;
+}) {
+  return (
+    <div
+      className="overflow-x-auto rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+    >
+      <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
+        <thead>
+          <tr
+            className="text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+          >
+            <th className="px-4 py-3 text-left">Імʼя</th>
+            <th className="px-3 py-3 text-left">Email</th>
+            <th className="px-3 py-3 text-left">Телефон</th>
+            <th className="px-3 py-3 text-left">Роль</th>
+            <th className="px-3 py-3 text-center">Статус</th>
+            <th className="px-3 py-3 text-left">Створено</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map((u) => (
+            <tr key={u.id} className="border-t" style={{ borderColor: T.borderSoft, opacity: u.isActive ? 1 : 0.55 }}>
+              <td className="px-4 py-2.5 font-medium" style={{ color: T.textPrimary }}>
+                {u.name}
+              </td>
+              <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                <a href={`mailto:${u.email}`} className="hover:underline">
+                  {u.email}
+                </a>
+              </td>
+              <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                {u.phone ? (
+                  <a href={`tel:${u.phone}`} className="hover:underline">
+                    {u.phone}
+                  </a>
+                ) : (
+                  <span style={{ color: T.textMuted }}>—</span>
+                )}
+              </td>
+              <td className="px-3 py-2.5">
+                <span
+                  className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase"
+                  style={{
+                    backgroundColor: ROLE_COLORS[u.role]?.bg ?? T.panelSoft,
+                    color: ROLE_COLORS[u.role]?.fg ?? T.textMuted,
+                  }}
+                >
+                  {ROLE_LABELS[u.role] ?? u.role}
+                </span>
+              </td>
+              <td className="px-3 py-2.5 text-center">
+                {u.isActive ? (
+                  <CheckCircle2 size={14} style={{ color: T.success }} className="inline" />
+                ) : (
+                  <XCircle size={14} style={{ color: T.textMuted }} className="inline" />
+                )}
+              </td>
+              <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
+                {formatDate(u.createdAt)}
+              </td>
+            </tr>
+          ))}
+          {users.length === 0 && (
+            <tr>
+              <td colSpan={6} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
+                {searchActive
+                  ? "Нічого не знайдено."
+                  : "Немає зовнішніх акаунтів. Усі User-и у системі привʼязані до співробітників."}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -517,6 +748,9 @@ function CreateRow({
         <td className="px-3 py-2 text-[11px]" style={{ color: T.textMuted }}>
           —
         </td>
+        <td className="px-3 py-2 text-[11px]" style={{ color: T.textMuted }}>
+          —
+        </td>
         <td className="px-3 py-2">
           <input
             type="date"
@@ -565,7 +799,7 @@ function CreateRow({
       {error && (
         <tr>
           <td
-            colSpan={9}
+            colSpan={10}
             className="px-4 py-2 text-[12px]"
             style={{ backgroundColor: T.dangerSoft, color: T.danger }}
           >

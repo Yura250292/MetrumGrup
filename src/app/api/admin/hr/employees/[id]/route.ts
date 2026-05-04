@@ -32,6 +32,9 @@ export async function GET(
     where: { id },
     include: {
       department: { select: { id: true, name: true } },
+      user: {
+        select: { id: true, email: true, role: true, isActive: true },
+      },
       // HR не повинен бачити історію ЗП взагалі.
       salaries: isHr
         ? false
