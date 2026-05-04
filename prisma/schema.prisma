@@ -2423,7 +2423,15 @@ model EmployeeSalary {
 
 model Employee {
   id               String             @id @default(cuid())
+  /// Збірне відображення (= "lastName firstName middleName"). Тримається
+  /// синхронним з частинами імені на API-боці; лишилось для старого пошуку.
   fullName         String
+  /// Прізвище.
+  lastName         String?
+  /// Імʼя.
+  firstName        String?
+  /// По-батькові.
+  middleName       String?
   phone            String?
   email            String?
   position         String?

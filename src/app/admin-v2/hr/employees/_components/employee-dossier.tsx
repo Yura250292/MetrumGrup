@@ -134,6 +134,9 @@ type SalaryType = "MONTHLY" | "HOURLY";
 type Employee = {
   id: string;
   fullName: string;
+  lastName: string | null;
+  firstName: string | null;
+  middleName: string | null;
   phone: string | null;
   email: string | null;
   position: string | null;
@@ -182,7 +185,9 @@ const DEFERRAL_LABEL: Record<DeferralType, string> = {
 };
 
 type FieldKey =
-  | "fullName"
+  | "lastName"
+  | "firstName"
+  | "middleName"
   | "position"
   | "phone"
   | "email"
@@ -419,18 +424,60 @@ export function EmployeeDossier({
         <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
           <tbody>
             <PropertyRow
-              label="ПІБ"
-              field="fullName"
-              editing={editingField === "fullName"}
-              saving={savingField === "fullName"}
+              label="Прізвище"
+              field="lastName"
+              editing={editingField === "lastName"}
+              saving={savingField === "lastName"}
               canEdit={canEdit}
-              onStartEdit={() => setEditingField("fullName")}
-              onCommit={(v) => patchField("fullName", (v as string).trim() || employee.fullName)}
+              onStartEdit={() => setEditingField("lastName")}
+              onCommit={(v) => patchField("lastName", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
-              renderValue={() => <span className="font-medium">{employee.fullName}</span>}
+              renderValue={() =>
+                employee.lastName ? (
+                  <span className="font-medium">{employee.lastName}</span>
+                ) : (
+                  textOrDash(null)
+                )
+              }
               renderEditor={(stop) => (
                 <TextEditor
-                  initial={employee.fullName}
+                  initial={employee.lastName ?? ""}
+                  onCommit={(v) => stop(v)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+            />
+            <PropertyRow
+              label="Імʼя"
+              field="firstName"
+              editing={editingField === "firstName"}
+              saving={savingField === "firstName"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("firstName")}
+              onCommit={(v) => patchField("firstName", (v as string).trim() || null)}
+              onCancel={() => setEditingField(null)}
+              renderValue={() => textOrDash(employee.firstName)}
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={employee.firstName ?? ""}
+                  onCommit={(v) => stop(v)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+            />
+            <PropertyRow
+              label="По-батькові"
+              field="middleName"
+              editing={editingField === "middleName"}
+              saving={savingField === "middleName"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("middleName")}
+              onCommit={(v) => patchField("middleName", (v as string).trim() || null)}
+              onCancel={() => setEditingField(null)}
+              renderValue={() => textOrDash(employee.middleName)}
+              renderEditor={(stop) => (
+                <TextEditor
+                  initial={employee.middleName ?? ""}
                   onCommit={(v) => stop(v)}
                   onCancel={() => stop(undefined)}
                 />
