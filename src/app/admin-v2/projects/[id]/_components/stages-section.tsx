@@ -577,6 +577,7 @@ export function StagesSection({
           stageId={selected.id}
           stageName={stageDisplayName(selected)}
           open={!materialsHidden}
+          rightOffset={340}
           onClose={() => setMaterialsHidden(true)}
         />
       )}

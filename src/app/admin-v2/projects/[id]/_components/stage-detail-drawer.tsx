@@ -145,7 +145,7 @@ export function StageDetailDrawer({
         aria-hidden
       />
       <aside
-        className="fixed right-0 top-0 z-50 flex h-screen w-full max-w-[420px] flex-col shadow-2xl"
+        className="fixed right-0 top-0 z-50 flex h-screen w-full max-w-[340px] flex-col shadow-2xl"
         style={{ backgroundColor: T.panel, borderLeft: `1px solid ${T.borderSoft}` }}
       >
         {/* Header */}

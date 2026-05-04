@@ -27,6 +27,8 @@ type Props = {
   stageId: string;
   stageName: string;
   open: boolean;
+  /** Зсув popup-а праворуч щоб не перекривати drawer (зазвичай width drawer-a). */
+  rightOffset?: number;
   onClose: () => void;
 };
 
@@ -50,6 +52,7 @@ export function StageMaterialsPopup({
   stageId,
   stageName,
   open,
+  rightOffset = 0,
   onClose,
 }: Props) {
   const [rows, setRows] = useState<MaterialRow[]>([]);
@@ -93,13 +96,14 @@ export function StageMaterialsPopup({
       style={{
         position: "fixed",
         left: 0,
-        right: 0,
+        right: rightOffset,
         bottom: 0,
-        height: 320,
+        height: 220,
         background: T.panel,
         borderTop: `1px solid ${T.borderStrong}`,
+        borderRight: rightOffset > 0 ? `1px solid ${T.borderStrong}` : "none",
         boxShadow: "0 -8px 24px rgba(0,0,0,0.25)",
-        transform: open ? "translateY(0)" : "translateY(100%)",
+        transform: open ? "translateY(0)" : "translateY(110%)",
         transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
         zIndex: 40,
         display: "flex",
