@@ -22,7 +22,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { STAGE_ORDER, stageDisplayName } from "@/lib/constants";
-import type { ProjectStage } from "@prisma/client";
+import type { ProjectStage, StageKind } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 const MAX_DEPTH = 2; // 0-indexed
@@ -33,6 +33,7 @@ type StageData = {
   stage: ProjectStage | null;
   customName: string;
   isHidden: boolean;
+  kind: StageKind;
   status: "PENDING" | "IN_PROGRESS" | "COMPLETED";
   progress: number;
   notes: string;
@@ -51,6 +52,7 @@ type FlatStageDTO = {
   stage: ProjectStage | null;
   customName: string | null;
   isHidden: boolean;
+  kind?: StageKind;
   status: StageData["status"];
   progress: number;
   notes: string | null;
@@ -99,6 +101,7 @@ function buildTree(flat: FlatStageDTO[]): StageData[] {
       stage: f.stage,
       customName: f.customName ?? "",
       isHidden: f.isHidden,
+      kind: f.kind ?? "STAGE",
       status: f.status,
       progress: f.progress,
       notes: f.notes ?? "",
@@ -133,6 +136,7 @@ function defaultStages(): StageData[] {
     stage,
     customName: "",
     isHidden: false,
+    kind: "STAGE" as StageKind,
     status: "PENDING" as const,
     progress: 0,
     notes: "",
@@ -229,15 +233,16 @@ export default function AdminV2ProjectStagesPage({
     );
   }
 
-  function addChildAt(parentPath: number[]) {
+  function addChildAt(parentPath: number[], kind: StageKind = "STAGE") {
     setStages((prev) =>
       modifySiblings(prev, parentPath, (siblings) => [
         ...siblings,
         {
           clientKey: genKey(),
           stage: null,
-          customName: "Новий підетап",
+          customName: kind === "GROUP" ? "Нова група" : "Новий підетап",
           isHidden: false,
+          kind,
           status: "PENDING",
           progress: 0,
           notes: "",
@@ -253,14 +258,15 @@ export default function AdminV2ProjectStagesPage({
     );
   }
 
-  function addRoot() {
+  function addRoot(kind: StageKind = "STAGE") {
     setStages((prev) => [
       ...prev,
       {
         clientKey: genKey(),
         stage: null,
-        customName: "Новий етап",
+        customName: kind === "GROUP" ? "Нова група" : "Новий етап",
         isHidden: false,
+        kind,
         status: "PENDING",
         progress: 0,
         notes: "",
@@ -405,17 +411,31 @@ export default function AdminV2ProjectStagesPage({
           />
         ))}
 
-        <button
-          onClick={addRoot}
-          className="flex items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition hover:brightness-[0.97]"
-          style={{
-            backgroundColor: T.panelSoft,
-            color: T.accentPrimary,
-            border: `1px dashed ${T.borderStrong}`,
-          }}
-        >
-          <Plus size={15} /> Додати етап
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => addRoot("STAGE")}
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition hover:brightness-[0.97]"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.accentPrimary,
+              border: `1px dashed ${T.borderStrong}`,
+            }}
+          >
+            <Plus size={15} /> Додати етап
+          </button>
+          <button
+            onClick={() => addRoot("GROUP")}
+            className="flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-sm font-semibold transition hover:brightness-[0.97]"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.textSecondary,
+              border: `1px dashed ${T.borderStrong}`,
+            }}
+            title="Група об'єднує етапи (без власних робіт/фінансів)"
+          >
+            <Plus size={15} /> Додати групу
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -802,6 +822,7 @@ function serialize(nodes: StageData[]): unknown[] {
     stage: n.stage,
     customName: n.customName.trim() || null,
     isHidden: n.isHidden,
+    kind: n.kind,
     status: n.status,
     progress: n.progress,
     notes: n.notes || null,

@@ -226,6 +226,7 @@ model ProjectStageRecord {
   stage                        ProjectStage?
   customName                   String?
   isHidden                     Boolean              @default(false)
+  kind                         StageKind            @default(STAGE)
   status                       StageStatus          @default(PENDING)
   progress                     Int                  @default(0)
   notes                        String?
@@ -1393,6 +1394,11 @@ enum StageStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
+}
+
+enum StageKind {
+  GROUP
+  STAGE
 }
 
 enum PaymentStatus {

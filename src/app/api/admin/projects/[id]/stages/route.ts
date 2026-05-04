@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
-import { ProjectStage, StageStatus } from "@prisma/client";
+import { ProjectStage, StageKind, StageStatus } from "@prisma/client";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { auditLog } from "@/lib/audit";
@@ -15,6 +15,7 @@ type IncomingStage = {
   stage: ProjectStage | null;
   customName?: string | null;
   isHidden?: boolean;
+  kind?: StageKind | null;
   status: StageStatus;
   progress?: number;
   notes?: string | null;
@@ -174,6 +175,7 @@ export async function PUT(
         factVolume:
           s.factVolume !== null && s.factVolume !== undefined ? s.factVolume : null,
         sortOrder: f.sortOrder,
+        kind: s.kind === "GROUP" ? StageKind.GROUP : StageKind.STAGE,
       };
 
       if (s.id) {
@@ -312,6 +314,9 @@ export async function POST(
   });
   const sortOrder = (lastSibling?.sortOrder ?? -1) + 1;
 
+  const kind: StageKind =
+    body.kind === "GROUP" ? StageKind.GROUP : StageKind.STAGE;
+
   const created = await prisma.projectStageRecord.create({
     data: {
       projectId,
@@ -321,6 +326,7 @@ export async function POST(
       sortOrder,
       status: "PENDING",
       progress: 0,
+      kind,
     },
   });
 
