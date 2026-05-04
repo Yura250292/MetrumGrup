@@ -344,8 +344,18 @@ export function TabPivot({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* Toolbar — sticky щоб фільтри завжди залишались зверху, а таблиця оновлювалась знизу */}
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 -mx-1 px-1 py-2"
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 30,
+          background: T.background,
+          borderBottom: `1px solid ${T.borderSoft}`,
+          backdropFilter: "saturate(180%) blur(8px)",
+        }}
+      >
         <div className="flex flex-wrap items-center gap-2">
           {/* Bucket chips */}
           {showScopeFilter && (
@@ -452,9 +462,17 @@ export function TabPivot({
 
       {data && filteredRows.length > 0 && (
         <div
-          className="overflow-x-auto rounded-lg border"
-          style={{ borderColor: T.borderSoft, background: T.panel }}
+          className="overflow-x-auto rounded-lg border relative"
+          style={{ borderColor: T.borderSoft, background: T.panel, opacity: loading ? 0.6 : 1, transition: "opacity 120ms ease" }}
         >
+          {loading && (
+            <div
+              className="absolute right-3 top-3 z-30 flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-medium"
+              style={{ borderColor: T.borderSoft, background: T.panel, color: T.textSecondary, boxShadow: T.shadow1 }}
+            >
+              <Loader2 size={12} className="animate-spin" /> Оновлення…
+            </div>
+          )}
           <table className="w-full border-collapse text-sm">
             <thead>
               {/* Row 1: bucket headers (each spans 3 sub-columns) */}
