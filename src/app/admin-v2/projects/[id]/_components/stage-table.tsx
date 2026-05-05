@@ -647,6 +647,10 @@ export function StageTable({
                   style={{
                     paddingLeft: 12 + node.depth * 18,
                     backgroundColor: isSelected ? T.accentPrimarySoft : T.panel,
+                    width: widthFor("name", 260),
+                    maxWidth: widthFor("name", 260),
+                    minWidth: widthFor("name", 260),
+                    overflow: "hidden",
                   }}
                 >
                   <NameCell
