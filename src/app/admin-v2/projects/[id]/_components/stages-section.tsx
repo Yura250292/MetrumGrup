@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Eye,
   EyeOff,
@@ -10,6 +10,8 @@ import {
   ClipboardPaste,
   Save,
   CheckCircle2,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
@@ -20,11 +22,15 @@ import {
   type ViewMode,
   type DropPosition,
 } from "./stage-table";
-import { StageDetailDrawer } from "./stage-detail-drawer";
-import { StageMaterialsPopup } from "./stage-materials-popup";
+import { StageDetailDrawer, StageDetailEmbedded } from "./stage-detail-drawer";
+import {
+  StageMaterialsPopup,
+  StageMaterialsEmbedded,
+} from "./stage-materials-popup";
 import { ImportEstimateModal } from "./import-estimate-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
 import { PublishFinanceDialog } from "./publish-finance-dialog";
+import { ProjectsSidebar } from "./projects-sidebar";
 
 export type ResponsibleCandidate = { id: string; name: string };
 
@@ -44,6 +50,21 @@ export function StagesSection({
   isTestProject,
 }: StagesSectionProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isFullscreen = searchParams.get("fs") === "1";
+
+  const setFullscreen = useCallback(
+    (next: boolean) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next) params.set("fs", "1");
+      else params.delete("fs");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
   const [stages, setStages] = useState<StageRow[]>(initialStages);
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
@@ -97,6 +118,38 @@ export function StagesSection({
   useEffect(() => {
     setStages(initialStages);
   }, [initialStages]);
+
+  // Body scroll lock у fullscreen-режимі (паттерн із pivot-fullscreen-modal).
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isFullscreen]);
+
+  // Централізований ESC-handler (для desktop/embedded + fullscreen):
+  // 1. Якщо fullscreen → exit fullscreen.
+  // 2. Інакше якщо вибрано етап → deselect.
+  // У floating-режимі (mobile) ESC обробляє сам StageDetailDrawer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (isFullscreen) {
+        setFullscreen(false);
+        return;
+      }
+      if (selectedStageId) {
+        // Тільки на desktop (lg+) — на mobile drawer сам слухає ESC.
+        if (typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches) {
+          setSelectedStageId(null);
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isFullscreen, selectedStageId, setFullscreen]);
 
   const inlineUpdate = useCallback(
     async (stageId: string, data: StageInlineUpdate) => {
@@ -395,11 +448,80 @@ export function StagesSection({
 
   const selected = stages.find((s) => s.id === selectedStageId) ?? null;
 
-  return (
-    <div
-      className="rounded-2xl p-5"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-    >
+  const parentStageNameOf = (s: StageRow) =>
+    s.parentStageId
+      ? (() => {
+          const p = stages.find((x) => x.id === s.parentStageId);
+          return p ? stageDisplayName(p) : null;
+        })()
+      : null;
+
+  const tableBlock = (
+    <>
+      <StageTable
+        stages={
+          hideCompleted
+            ? stages.filter((s) => s.status !== "COMPLETED")
+            : stages
+        }
+        selectedStageId={selectedStageId}
+        onStageClick={(id) => {
+          setSelectedStageId(id);
+          setMaterialsHidden(false);
+        }}
+        onInlineUpdate={inlineUpdate}
+        onAddChild={addChild}
+        onDelete={deleteStage}
+        candidates={candidates}
+        showHidden={showHidden}
+        dirtyStageIds={dirtyStageIds}
+        viewMode={viewMode}
+        onMoveStage={moveStage}
+      />
+      <button
+        type="button"
+        onClick={() => addChild(null)}
+        className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[12px] font-medium transition hover:brightness-95"
+        style={{
+          borderColor: T.borderSoft,
+          color: T.accentPrimary,
+          backgroundColor: T.panelSoft,
+        }}
+      >
+        <Plus size={14} />
+        Додати етап
+      </button>
+    </>
+  );
+
+  const sharedModals = (
+    <>
+      {importOpen && (
+        <ImportEstimateModal
+          projectId={projectId}
+          onClose={() => setImportOpen(false)}
+          onImported={refetch}
+        />
+      )}
+      {pasteOpen && (
+        <PasteSpreadsheetModal
+          projectId={projectId}
+          onClose={() => setPasteOpen(false)}
+          onImported={refetch}
+        />
+      )}
+      <PublishFinanceDialog
+        projectId={projectId}
+        open={publishOpen}
+        stages={stages}
+        onClose={() => setPublishOpen(false)}
+        onPublished={onPublished}
+      />
+    </>
+  );
+
+  const innerBody = (
+    <>
       <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
           <h2 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
@@ -468,6 +590,16 @@ export function StagesSection({
           </button>
           <button
             type="button"
+            onClick={() => setFullscreen(!isFullscreen)}
+            title={isFullscreen ? "Згорнути на сторінку" : "Розгорнути на весь екран"}
+            className="hidden lg:flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
+            style={{ color: T.textSecondary }}
+          >
+            {isFullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            {isFullscreen ? "Згорнути" : "Розгорнути"}
+          </button>
+          <button
+            type="button"
             onClick={() => setPublishOpen(true)}
             disabled={isTestProject || dirtyStageIds.size === 0}
             title={
@@ -493,94 +625,102 @@ export function StagesSection({
         </div>
       </div>
 
-      <StageTable
-        stages={
-          hideCompleted
-            ? stages.filter((s) => s.status !== "COMPLETED")
-            : stages
+      {/* Desktop (lg+): pinned split-grid коли вибрано етап. Інакше — одна колонка. */}
+      <div
+        className={
+          selected
+            ? "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-4"
+            : "hidden lg:block"
         }
-        selectedStageId={selectedStageId}
-        onStageClick={(id) => {
-          setSelectedStageId(id);
-          setMaterialsHidden(false); // re-show popup для нового етапу
-        }}
-        onInlineUpdate={inlineUpdate}
-        onAddChild={addChild}
-        onDelete={deleteStage}
-        candidates={candidates}
-        showHidden={showHidden}
-        dirtyStageIds={dirtyStageIds}
-        viewMode={viewMode}
-        onMoveStage={moveStage}
-      />
-
-      <button
-        type="button"
-        onClick={() => addChild(null)}
-        className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[12px] font-medium transition hover:brightness-95"
-        style={{
-          borderColor: T.borderSoft,
-          color: T.accentPrimary,
-          backgroundColor: T.panelSoft,
-        }}
       >
-        <Plus size={14} />
-        Додати етап
-      </button>
+        <div className="flex min-w-0 flex-col gap-4">
+          {tableBlock}
+          {selected && !materialsHidden && (
+            <StageMaterialsEmbedded
+              projectId={projectId}
+              stageId={selected.id}
+              stageName={stageDisplayName(selected)}
+              onClose={() => setMaterialsHidden(true)}
+              style={{
+                maxHeight: isFullscreen ? "calc(100vh - 360px)" : "40vh",
+                minHeight: 200,
+              }}
+            />
+          )}
+        </div>
+        {selected && (
+          <div
+            className={
+              isFullscreen
+                ? "h-[calc(100vh-160px)] sticky top-0"
+                : "max-h-[75vh] sticky top-4"
+            }
+          >
+            <StageDetailEmbedded
+              projectId={projectId}
+              projectTitle={projectTitle}
+              stage={selected}
+              parentStageName={parentStageNameOf(selected)}
+              candidates={candidates}
+              onClose={() => setSelectedStageId(null)}
+              onChanged={refetch}
+              className="h-full"
+            />
+          </div>
+        )}
+      </div>
 
-      {selected && (
-        <StageDetailDrawer
-          projectId={projectId}
-          projectTitle={projectTitle}
-          stage={selected}
-          parentStageName={
-            selected.parentStageId
-              ? (() => {
-                  const p = stages.find((s) => s.id === selected.parentStageId);
-                  return p ? stageDisplayName(p) : null;
-                })()
-              : null
-          }
-          candidates={candidates}
-          onClose={() => setSelectedStageId(null)}
-          onChanged={refetch}
-        />
-      )}
+      {/* Mobile (<lg): floating drawer + slide-up popup (поточний UX) */}
+      <div className="lg:hidden">
+        {tableBlock}
+        {selected && (
+          <StageDetailDrawer
+            projectId={projectId}
+            projectTitle={projectTitle}
+            stage={selected}
+            parentStageName={parentStageNameOf(selected)}
+            candidates={candidates}
+            onClose={() => setSelectedStageId(null)}
+            onChanged={refetch}
+          />
+        )}
+        {selected && !materialsHidden && (
+          <StageMaterialsPopup
+            projectId={projectId}
+            stageId={selected.id}
+            stageName={stageDisplayName(selected)}
+            onClose={() => setMaterialsHidden(true)}
+          />
+        )}
+      </div>
 
-      {importOpen && (
-        <ImportEstimateModal
-          projectId={projectId}
-          onClose={() => setImportOpen(false)}
-          onImported={refetch}
-        />
-      )}
+      {sharedModals}
+    </>
+  );
 
-      {pasteOpen && (
-        <PasteSpreadsheetModal
-          projectId={projectId}
-          onClose={() => setPasteOpen(false)}
-          onImported={refetch}
-        />
-      )}
+  // Fullscreen overlay або звичайна картка-обгортка.
+  if (isFullscreen) {
+    return (
+      <div
+        className="fixed inset-0 z-[100] flex"
+        style={{ backgroundColor: T.background }}
+      >
+        <div className="hidden lg:block w-[260px] flex-shrink-0">
+          <ProjectsSidebar activeProjectId={projectId} preserveFullscreen />
+        </div>
+        <div className="flex flex-1 flex-col overflow-y-auto p-5">
+          {innerBody}
+        </div>
+      </div>
+    );
+  }
 
-      <PublishFinanceDialog
-        projectId={projectId}
-        open={publishOpen}
-        stages={stages}
-        onClose={() => setPublishOpen(false)}
-        onPublished={onPublished}
-      />
-
-      {selected && (
-        <StageMaterialsPopup
-          projectId={projectId}
-          stageId={selected.id}
-          stageName={stageDisplayName(selected)}
-          open={!materialsHidden}
-          rightOffset={340}
-          onClose={() => setMaterialsHidden(true)}
-        />
-      )}
+  return (
+    <div
+      className="rounded-2xl p-5"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      {innerBody}
     </div>
   );
 }

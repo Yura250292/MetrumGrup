@@ -44,7 +44,7 @@ const STATUS_COLORS: Record<StageStatus, { bg: string; fg: string }> = {
   COMPLETED: { bg: T.successSoft, fg: T.success },
 };
 
-export function StageDetailDrawer({
+function StageDetailPanelBody({
   projectId,
   projectTitle,
   stage,
@@ -57,15 +57,6 @@ export function StageDetailDrawer({
   const [historyLoading, setHistoryLoading] = useState(true);
   const [savingField, setSavingField] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
-
-  // ESC закриває drawer.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   async function loadHistory() {
     setHistoryLoading(true);
@@ -138,16 +129,7 @@ export function StageDetailDrawer({
   const overrun = planRef > 0 && factExpense > planRef;
 
   return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-screen w-full max-w-[340px] flex-col shadow-2xl"
-        style={{ backgroundColor: T.panel, borderLeft: `1px solid ${T.borderSoft}` }}
-      >
+    <div className="flex h-full w-full flex-col">
         {/* Header */}
         <div
           className="flex items-start justify-between gap-3 border-b px-5 py-4"
@@ -613,8 +595,61 @@ export function StageDetailDrawer({
             {stage.status === "COMPLETED" ? "Завершено" : "Закрити задачу"}
           </button>
         </div>
+    </div>
+  );
+}
+
+/**
+ * Floating-режим (mobile fallback): fixed-overlay з backdrop і власним ESC.
+ * Зберігає поточну поведінку для зворотної сумісності.
+ */
+export function StageDetailDrawer(props: StageDetailDrawerProps) {
+  // ESC закриває drawer (тільки у floating-режимі).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") props.onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [props]);
+
+  return (
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
+        onClick={props.onClose}
+        aria-hidden
+      />
+      <aside
+        className="fixed right-0 top-0 z-50 flex h-screen w-full max-w-[340px] flex-col shadow-2xl"
+        style={{ backgroundColor: T.panel, borderLeft: `1px solid ${T.borderSoft}` }}
+      >
+        <StageDetailPanelBody {...props} />
       </aside>
     </>
+  );
+}
+
+/**
+ * Embedded-режим: pinned панель усередині батьківського grid (без fixed/backdrop).
+ * Висота керується батьком (зазвичай h-full + max-h обмеження).
+ */
+export function StageDetailEmbedded({
+  className,
+  style,
+  ...props
+}: StageDetailDrawerProps & { className?: string; style?: React.CSSProperties }) {
+  return (
+    <aside
+      className={`flex flex-col overflow-hidden rounded-xl shadow-sm ${className ?? ""}`}
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+        ...style,
+      }}
+    >
+      <StageDetailPanelBody {...props} />
+    </aside>
   );
 }
 

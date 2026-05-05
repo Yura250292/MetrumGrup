@@ -28,9 +28,6 @@ type Props = {
   projectId: string;
   stageId: string;
   stageName: string;
-  open: boolean;
-  /** Зсув popup-а праворуч щоб не перекривати drawer (зазвичай width drawer-a). */
-  rightOffset?: number;
   onClose: () => void;
 };
 
@@ -41,20 +38,14 @@ const STATUS_TONE: Record<string, { bg: string; fg: string }> = {
 };
 
 /**
- * Slide-up popup закріплений знизу viewport. Показує матеріали етапу
- * (з кошторису через sourceEstimateItem/Section). Ширина — на повну
- * ширину viewport (overlay поверх контенту), висота — фіксована 320px.
- *
- * Open/close стан керується пропсом `open`: коли false — popup захований
- * за межі (translateY 100%), мауреріали не fetch-аться. Коли true —
- * слайд-апaнім ration і fetch.
+ * Презентаційний body матеріалів етапу. Без позиціонування — батьківський
+ * wrapper (`StageMaterialsPopup` для floating mobile або `StageMaterialsEmbedded`
+ * для pinned desktop) задає layout. Fetch виконується при mount + зміні stageId.
  */
-export function StageMaterialsPopup({
+function StageMaterialsBody({
   projectId,
   stageId,
   stageName,
-  open,
-  rightOffset = 0,
   onClose,
 }: Props) {
   const [rows, setRows] = useState<MaterialRow[]>([]);
@@ -71,7 +62,6 @@ export function StageMaterialsPopup({
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!open) return;
     let cancelled = false;
     setLoading(true);
     fetch(`/api/admin/projects/${projectId}/stages/${stageId}/materials`, {
@@ -93,7 +83,7 @@ export function StageMaterialsPopup({
     return () => {
       cancelled = true;
     };
-  }, [open, projectId, stageId, reloadKey]);
+  }, [projectId, stageId, reloadKey]);
 
   // Reset form коли змінюється етап
   useEffect(() => {
@@ -147,25 +137,15 @@ export function StageMaterialsPopup({
 
   return (
     <div
-      role="dialog"
+      role="region"
       aria-label="Матеріали етапу"
-      aria-hidden={!open}
       style={{
-        position: "fixed",
-        left: 0,
-        right: rightOffset,
-        bottom: 0,
-        height: 220,
         background: T.panel,
-        borderTop: `1px solid ${T.borderStrong}`,
-        borderRight: rightOffset > 0 ? `1px solid ${T.borderStrong}` : "none",
-        boxShadow: "0 -8px 24px rgba(0,0,0,0.25)",
-        transform: open ? "translateY(0)" : "translateY(110%)",
-        transition: "transform 0.25s cubic-bezier(0.4,0,0.2,1)",
-        zIndex: 40,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        height: "100%",
+        width: "100%",
       }}
     >
       {/* Header */}
@@ -653,6 +633,51 @@ export function StageMaterialsPopup({
           </table>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Floating-режим (mobile fallback): фіксований унизу viewport.
+ * Mount керує батько (зазвичай `{selected && !materialsHidden && <Popup />}`).
+ */
+export function StageMaterialsPopup(props: Props) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 0,
+        right: 0,
+        bottom: 0,
+        height: 260,
+        zIndex: 40,
+        boxShadow: "0 -8px 24px rgba(0,0,0,0.25)",
+        borderTop: `1px solid ${T.borderStrong}`,
+      }}
+    >
+      <StageMaterialsBody {...props} />
+    </div>
+  );
+}
+
+/**
+ * Embedded-режим: pinned панель усередині батьківського layout.
+ * Висота керується батьком (h-full + max-h обмеження).
+ */
+export function StageMaterialsEmbedded({
+  className,
+  style,
+  ...props
+}: Props & { className?: string; style?: React.CSSProperties }) {
+  return (
+    <div
+      className={`overflow-hidden rounded-xl shadow-sm ${className ?? ""}`}
+      style={{
+        border: `1px solid ${T.borderSoft}`,
+        ...style,
+      }}
+    >
+      <StageMaterialsBody {...props} />
     </div>
   );
 }
