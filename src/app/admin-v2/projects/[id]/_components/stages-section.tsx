@@ -568,10 +568,9 @@ export function StagesSection({
     </>
   );
 
-  const innerBody = (
-    <>
-      <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
+  const toolbarBlock = (
+    <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="flex items-center gap-3">
           <h2 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
             Етапи виконання
           </h2>
@@ -671,7 +670,12 @@ export function StagesSection({
               : "Опублікувати у фінансування"}
           </button>
         </div>
-      </div>
+    </div>
+  );
+
+  const innerBody = (
+    <>
+      <div className="mb-4">{toolbarBlock}</div>
 
       {/* Desktop (lg+): pinned split-grid коли вибрано етап АБО fullscreen.
           У fullscreen панелі завжди видимі (X-кнопка прихована — користувач
@@ -787,16 +791,24 @@ export function StagesSection({
     </>
   );
 
-  // Fullscreen overlay або звичайна картка-обгортка.
+  // Fullscreen Excel-like layout: ліва і права панелі — на ВСЮ висоту
+  // (зовнішні flex items), материали — впритик внизу між ними, без paddings.
+  // Toolbar над таблицею у центральній колонці.
   if (isFullscreen) {
+    const showRightPanel = Boolean(selected);
+    const showMaterials = Boolean(selected) && (isFullscreen || !materialsHidden);
     return (
       <div
         className="fixed inset-0 z-[100] flex"
         style={{ backgroundColor: T.background }}
       >
+        {/* Left sidebar — full viewport height */}
         <div
           className="hidden lg:block flex-shrink-0"
-          style={{ width: leftCollapsed ? 36 : 200 }}
+          style={{
+            width: leftCollapsed ? 36 : 200,
+            borderRight: `1px solid ${T.borderStrong}`,
+          }}
         >
           <ProjectsSidebar
             activeProjectId={projectId}
@@ -805,9 +817,110 @@ export function StagesSection({
             onToggleCollapse={() => setLeftCollapsed((c) => !c)}
           />
         </div>
-        <div className="flex flex-1 flex-col overflow-y-auto p-4">
-          {innerBody}
+
+        {/* Center column — toolbar + scrollable table + bottom materials strip */}
+        <div className="flex flex-1 min-w-0 flex-col overflow-hidden">
+          {/* Toolbar — sticky top */}
+          <div
+            className="flex-shrink-0 px-3 py-2"
+            style={{
+              backgroundColor: T.panel,
+              borderBottom: `1px solid ${T.borderStrong}`,
+            }}
+          >
+            {toolbarBlock}
+          </div>
+
+          {/* Table — flex-1 scrollable */}
+          <div className="flex-1 min-h-0 overflow-auto px-2 py-2">
+            {tableBlock}
+          </div>
+
+          {/* Materials — впритик внизу, fixed height, без rounded/border ззовні */}
+          {showMaterials && selected && (
+            <div
+              className="flex-shrink-0"
+              style={{
+                height: 240,
+                borderTop: `1px solid ${T.borderStrong}`,
+                backgroundColor: T.panel,
+              }}
+            >
+              <StageMaterialsEmbedded
+                projectId={projectId}
+                stageId={selected.id}
+                stageName={stageDisplayName(selected)}
+                onClose={() => setMaterialsHidden(true)}
+                hideClose={isFullscreen}
+                className="!rounded-none !border-0 !shadow-none"
+                style={{
+                  height: "100%",
+                  borderRadius: 0,
+                  border: "none",
+                  boxShadow: "none",
+                }}
+              />
+            </div>
+          )}
         </div>
+
+        {/* Right drawer — full viewport height, окремий flex item */}
+        {showRightPanel && rightCollapsed && (
+          <div
+            className="hidden lg:block flex-shrink-0"
+            style={{ borderLeft: `1px solid ${T.borderStrong}` }}
+          >
+            <CollapsedRail
+              side="right"
+              label={selected ? stageDisplayName(selected) : ""}
+              onExpand={() => setRightCollapsed(false)}
+            />
+          </div>
+        )}
+        {showRightPanel && !rightCollapsed && selected && (
+          <div
+            className="hidden lg:flex flex-shrink-0 flex-col relative"
+            style={{
+              width: 300,
+              borderLeft: `1px solid ${T.borderStrong}`,
+              backgroundColor: T.panel,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setRightCollapsed(true)}
+              title="Згорнути панель"
+              className="absolute z-10 flex h-6 w-6 items-center justify-center rounded transition hover:brightness-95"
+              style={{
+                top: 8,
+                left: 8,
+                color: T.textMuted,
+                backgroundColor: T.panelSoft,
+              }}
+            >
+              <PanelRightClose size={13} />
+            </button>
+            <StageDetailEmbedded
+              projectId={projectId}
+              projectTitle={projectTitle}
+              stage={selected}
+              parentStageName={parentStageNameOf(selected)}
+              candidates={candidates}
+              onClose={() => setSelectedStageId(null)}
+              onChanged={refetch}
+              hideClose={isFullscreen}
+              className="!rounded-none !border-0 !shadow-none h-full w-full"
+              style={{
+                height: "100%",
+                borderRadius: 0,
+                border: "none",
+                boxShadow: "none",
+              }}
+            />
+          </div>
+        )}
+
+        {sharedModals}
       </div>
     );
   }
