@@ -373,9 +373,9 @@ export function StageTable({
     // поки контейнер у viewport.
     <div style={{ overflowX: "auto", overflowY: "hidden" }}>
       <table
-        className="w-full text-[12px]"
+        className="w-full text-[11px]"
         style={{
-          minWidth: isCompare ? 1500 : 1900,
+          minWidth: isCompare ? 1300 : 1600,
           borderCollapse: "collapse",
           border: `1px solid ${T.borderSoft}`,
         }}
@@ -384,7 +384,7 @@ export function StageTable({
           <tr style={{ backgroundColor: T.panelSoft }}>
             <Th
               sticky
-              width={260}
+              width={200}
               rowSpan={2}
               stickyDivider
               colKey="name"
@@ -394,7 +394,7 @@ export function StageTable({
               Назва
             </Th>
             <Th
-              width={140}
+              width={110}
               rowSpan={2}
               colKey="responsible"
               getWidth={widthFor}
@@ -403,7 +403,7 @@ export function StageTable({
               Відповідальний
             </Th>
             <Th
-              width={110}
+              width={90}
               rowSpan={2}
               colKey="status"
               getWidth={widthFor}
@@ -434,7 +434,7 @@ export function StageTable({
             {!isCompare && (
               <>
                 <Th
-                  width={80}
+                  width={70}
                   rowSpan={2}
                   colKey="margin"
                   getWidth={widthFor}
@@ -443,7 +443,7 @@ export function StageTable({
                   {COLUMN_LABELS.margin}
                 </Th>
                 <Th
-                  width={110}
+                  width={90}
                   rowSpan={2}
                   colKey="deviation"
                   getWidth={widthFor}
@@ -454,7 +454,7 @@ export function StageTable({
               </>
             )}
             <Th
-              width={170}
+              width={140}
               rowSpan={2}
               colKey="comment"
               getWidth={widthFor}
@@ -645,11 +645,11 @@ export function StageTable({
                   sticky
                   stickyDivider
                   style={{
-                    paddingLeft: 12 + node.depth * 18,
+                    paddingLeft: 8 + node.depth * 14,
                     backgroundColor: isSelected ? T.accentPrimarySoft : T.panel,
-                    width: widthFor("name", 260),
-                    maxWidth: widthFor("name", 260),
-                    minWidth: widthFor("name", 260),
+                    width: widthFor("name", 200),
+                    maxWidth: widthFor("name", 200),
+                    minWidth: widthFor("name", 200),
                     overflow: "hidden",
                   }}
                 >
@@ -1089,7 +1089,7 @@ function DraggableHeader({
   const isDragging = drag?.group === group && drag.id === id;
   const isOver = dragOver?.group === group && dragOver.id === id && !isDragging;
   const colKey = `${group}-${id}`;
-  const fallbackWidth = 110;
+  const fallbackWidth = 85;
   const effectiveWidth = getWidth(colKey, fallbackWidth);
   return (
     <th
@@ -1124,7 +1124,7 @@ function DraggableHeader({
         setDrag(null);
         setDragOver(null);
       }}
-      className="px-3 py-1.5 text-right text-[10px] font-medium select-none"
+      className="px-2 py-1.5 text-right text-[10px] font-medium select-none"
       style={{
         color: T.textMuted,
         cursor: "grab",
@@ -1686,7 +1686,7 @@ function Th({
   return (
     <th
       rowSpan={rowSpan}
-      className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider"
+      className="px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-wider"
       style={{
         color: T.textMuted,
         width: effectiveWidth,
@@ -1725,7 +1725,7 @@ function ThGroup({
   return (
     <th
       colSpan={colSpan}
-      className="px-3 py-1.5 text-center text-[10px] font-bold uppercase tracking-wider"
+      className="px-2 py-1 text-center text-[10px] font-bold uppercase tracking-wider"
       style={{
         color: T.textPrimary,
         backgroundColor: bg,
@@ -1757,7 +1757,7 @@ function Td({
   return (
     <td
       onClick={onClick}
-      className="px-3 py-2 align-middle"
+      className="px-2 py-1.5 align-middle"
       style={{
         textAlign: align,
         color: accent ?? T.textPrimary,
