@@ -1271,8 +1271,10 @@ function NameCell({
         </span>
       )}
       {node.isHidden && <EyeOff size={11} style={{ color: T.textMuted }} />}
-      {/* Actions — show on row hover */}
-      <span className="ml-1 flex items-center gap-0.5 opacity-0 transition group-hover/name:opacity-100">
+      {/* Actions — show on row hover. hidden→flex (не opacity), щоб не займали
+          місце у flex коли невидимі — інакше колонка "Назва" завжди ширша
+          ніж потрібно через зарезервоване місце під 3 кнопки. */}
+      <span className="ml-1 hidden items-center gap-0.5 group-hover/name:flex">
         {canAddChild && (
           <ActionIcon
             title="Додати підетап"
