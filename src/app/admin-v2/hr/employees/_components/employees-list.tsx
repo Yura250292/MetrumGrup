@@ -57,19 +57,25 @@ type ExternalUser = {
 type AccountFilter = "all" | "linked" | "unlinked";
 type Tab = "employees" | "external";
 
-type FormState = {
-  fullName: string;
+type CreateForm = {
+  lastName: string;
+  firstName: string;
+  middleName: string;
   position: string;
   phone: string;
   email: string;
+  birthDate: string;
   hiredAt: string;
 };
 
-const EMPTY_FORM: FormState = {
-  fullName: "",
+const EMPTY_CREATE_FORM: CreateForm = {
+  lastName: "",
+  firstName: "",
+  middleName: "",
   position: "",
   phone: "",
   email: "",
+  birthDate: "",
   hiredAt: "",
 };
 
@@ -122,10 +128,7 @@ export function EmployeesList({
   const [showInactive, setShowInactive] = useState(false);
   const [accountFilter, setAccountFilter] = useState<AccountFilter>("all");
   const [showImport, setShowImport] = useState(false);
-
-  const [creating, setCreating] = useState<FormState | null>(null);
-  const [creatingError, setCreatingError] = useState<string | null>(null);
-  const [creatingSaving, setCreatingSaving] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -201,40 +204,6 @@ export function EmployeesList({
 
   const activeCount = items.filter((e) => e.isActive).length;
 
-  async function submitCreate() {
-    if (!creating) return;
-    if (!creating.fullName.trim()) {
-      setCreatingError("ПІБ обовʼязкове");
-      return;
-    }
-    setCreatingSaving(true);
-    setCreatingError(null);
-    try {
-      const payload = {
-        fullName: creating.fullName.trim(),
-        position: creating.position.trim() || null,
-        phone: creating.phone.trim() || null,
-        email: creating.email.trim() || null,
-        hiredAt: creating.hiredAt || null,
-      };
-      const res = await fetch(`/api/admin/hr/employees`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const j = await res.json();
-      if (!res.ok) {
-        setCreatingError(j.error ?? "Помилка");
-        return;
-      }
-      const saved: Employee = j.data;
-      setItems((prev) => [saved, ...prev]);
-      setCreating(null);
-    } finally {
-      setCreatingSaving(false);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 flex-wrap">
@@ -267,10 +236,7 @@ export function EmployeesList({
               <Upload size={13} /> Імпорт з Excel
             </button>
             <button
-              onClick={() => {
-                setCreating((c) => (c ? null : { ...EMPTY_FORM }));
-                setCreatingError(null);
-              }}
+              onClick={() => setShowCreateModal(true)}
               className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
               style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
             >
@@ -328,6 +294,16 @@ export function EmployeesList({
           void load();
         }}
       />
+
+      {showCreateModal && (
+        <CreateEmployeeModal
+          onClose={() => setShowCreateModal(false)}
+          onCreated={(emp) => {
+            setItems((prev) => [emp, ...prev]);
+            setShowCreateModal(false);
+          }}
+        />
+      )}
 
       {/* Toolbar */}
       <div
@@ -438,19 +414,6 @@ export function EmployeesList({
               </tr>
             </thead>
             <tbody>
-              {creating && (
-                <CreateRow
-                  form={creating}
-                  setForm={setCreating}
-                  saving={creatingSaving}
-                  error={creatingError}
-                  onCancel={() => {
-                    setCreating(null);
-                    setCreatingError(null);
-                  }}
-                  onSubmit={submitCreate}
-                />
-              )}
               {filtered.map((e, idx) => {
                 const tenure = formatTenure(e.hiredAt, e.terminatedAt);
                 return (
@@ -570,7 +533,7 @@ export function EmployeesList({
                   </tr>
                 );
               })}
-              {filtered.length === 0 && !creating && (
+              {filtered.length === 0 && (
                 <tr>
                   <td colSpan={10} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
                     {search.trim() || accountFilter !== "all"
@@ -678,135 +641,247 @@ function ExternalAccountsTable({
   );
 }
 
-function CreateRow({
-  form,
-  setForm,
-  saving,
-  error,
-  onCancel,
-  onSubmit,
+function CreateEmployeeModal({
+  onClose,
+  onCreated,
 }: {
-  form: FormState;
-  setForm: (updater: (prev: FormState | null) => FormState | null) => void;
-  saving: boolean;
-  error: string | null;
-  onCancel: () => void;
-  onSubmit: () => void;
+  onClose: () => void;
+  onCreated: (e: Employee) => void;
 }) {
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((p) => (p ? { ...p, [key]: value } : p));
+  const [form, setForm] = useState<CreateForm>(EMPTY_CREATE_FORM);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const inputStyle: React.CSSProperties = {
+  function set<K extends keyof CreateForm>(key: K, value: CreateForm[K]) {
+    setForm((p) => ({ ...p, [key]: value }));
+  }
+
+  async function submit(e?: React.FormEvent) {
+    e?.preventDefault();
+    setError(null);
+
+    const lastName = form.lastName.trim();
+    const firstName = form.firstName.trim();
+    const middleName = form.middleName.trim();
+    if (!lastName && !firstName) {
+      setError("Вкажіть хоча б Прізвище або Імʼя");
+      return;
+    }
+    const email = form.email.trim();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("Невірний формат email");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        lastName: lastName || null,
+        firstName: firstName || null,
+        middleName: middleName || null,
+        position: form.position.trim() || null,
+        phone: form.phone.trim() || null,
+        email: email || null,
+        birthDate: form.birthDate || null,
+        hiredAt: form.hiredAt || null,
+      };
+      const res = await fetch("/api/admin/hr/employees", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail =
+          j?.details?.fieldErrors &&
+          Object.values(j.details.fieldErrors)
+            .flat()
+            .filter(Boolean)
+            .join("; ");
+        setError(detail || j?.error || "Помилка збереження");
+        return;
+      }
+      onCreated(j.data as Employee);
+    } catch {
+      setError("Помилка мережі");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(15,23,42,0.55)" }}
+      onClick={onClose}
+    >
+      <form
+        onSubmit={submit}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-xl rounded-2xl"
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderStrong}`,
+          boxShadow: "0 24px 48px rgba(15,23,42,0.25)",
+        }}
+      >
+        <div
+          className="flex items-center justify-between px-5 py-3"
+          style={{ borderBottom: `1px solid ${T.borderSoft}` }}
+        >
+          <h3 className="text-base font-bold" style={{ color: T.textPrimary }}>
+            Новий співробітник
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5 hover:bg-black/5"
+            aria-label="Закрити"
+          >
+            <X size={16} style={{ color: T.textMuted }} />
+          </button>
+        </div>
+
+        <div className="grid gap-3 p-5 sm:grid-cols-2">
+          <FormField label="Прізвище" required>
+            <input
+              autoFocus
+              value={form.lastName}
+              onChange={(e) => set("lastName", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="Імʼя">
+            <input
+              value={form.firstName}
+              onChange={(e) => set("firstName", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="По-батькові" full>
+            <input
+              value={form.middleName}
+              onChange={(e) => set("middleName", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="Посада" full>
+            <input
+              value={form.position}
+              onChange={(e) => set("position", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="Телефон">
+            <input
+              type="tel"
+              inputMode="tel"
+              value={form.phone}
+              onChange={(e) => set("phone", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="Email">
+            <input
+              type="email"
+              value={form.email}
+              onChange={(e) => set("email", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="Дата народження">
+            <input
+              type="date"
+              value={form.birthDate}
+              onChange={(e) => set("birthDate", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+          <FormField label="Прийнятий">
+            <input
+              type="date"
+              value={form.hiredAt}
+              onChange={(e) => set("hiredAt", e.target.value)}
+              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+              style={modalInputStyle()}
+            />
+          </FormField>
+
+          {error && (
+            <div
+              className="sm:col-span-2 rounded-xl px-3 py-2 text-[12px]"
+              style={{
+                backgroundColor: T.dangerSoft,
+                color: T.danger,
+                border: `1px solid ${T.danger}40`,
+              }}
+            >
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div
+          className="flex items-center justify-end gap-2 px-5 py-3"
+          style={{ borderTop: `1px solid ${T.borderSoft}` }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="rounded-xl px-4 py-2 text-[13px] font-semibold disabled:opacity-50"
+            style={{ color: T.textSecondary }}
+          >
+            Скасувати
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
+            {saving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            Створити співробітника
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function FormField({
+  label,
+  required,
+  full,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  full?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`flex flex-col gap-1.5 ${full ? "sm:col-span-2" : ""}`}>
+      <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+        {label.toUpperCase()}
+        {required && <span style={{ color: T.danger }}> *</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function modalInputStyle(): React.CSSProperties {
+  return {
     backgroundColor: T.panelSoft,
     border: `1px solid ${T.borderStrong}`,
     color: T.textPrimary,
   };
-
-  return (
-    <>
-      <tr style={{ borderTop: `2px solid ${T.accentPrimary}`, backgroundColor: T.accentPrimarySoft }}>
-        <td className="px-4 py-2">
-          <input
-            autoFocus
-            value={form.fullName}
-            onChange={(e) => set("fullName", e.target.value)}
-            placeholder="ПІБ *"
-            className="w-full rounded-lg px-2 py-1 text-sm outline-none"
-            style={inputStyle}
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            value={form.position}
-            onChange={(e) => set("position", e.target.value)}
-            placeholder="Посада"
-            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
-            style={inputStyle}
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            type="tel"
-            inputMode="tel"
-            value={form.phone}
-            onChange={(e) => set("phone", e.target.value)}
-            placeholder="Телефон"
-            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
-            style={inputStyle}
-          />
-        </td>
-        <td className="px-3 py-2">
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => set("email", e.target.value)}
-            placeholder="Email"
-            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
-            style={inputStyle}
-          />
-        </td>
-        <td className="px-3 py-2 text-[11px]" style={{ color: T.textMuted }}>
-          —
-        </td>
-        <td className="px-3 py-2 text-[11px]" style={{ color: T.textMuted }}>
-          —
-        </td>
-        <td className="px-3 py-2">
-          <input
-            type="date"
-            value={form.hiredAt}
-            onChange={(e) => set("hiredAt", e.target.value)}
-            className="w-full rounded-lg px-2 py-1 text-[12px] outline-none"
-            style={inputStyle}
-          />
-        </td>
-        <td className="px-3 py-2 text-[11px]" style={{ color: T.textMuted }}>
-          —
-        </td>
-        <td className="px-3 py-2 text-center">
-          <span
-            className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase"
-            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-          >
-            Новий
-          </span>
-        </td>
-        <td className="px-3 py-2 text-right whitespace-nowrap">
-          <button
-            onClick={onCancel}
-            disabled={saving}
-            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
-            title="Скасувати"
-            aria-label="Скасувати"
-          >
-            <X size={14} style={{ color: T.textSecondary }} />
-          </button>
-          <button
-            onClick={onSubmit}
-            disabled={saving}
-            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
-            title="Зберегти"
-            aria-label="Зберегти"
-          >
-            {saving ? (
-              <Loader2 size={14} className="animate-spin" style={{ color: T.accentPrimary }} />
-            ) : (
-              <CheckCircle2 size={14} style={{ color: T.success }} />
-            )}
-          </button>
-        </td>
-      </tr>
-      {error && (
-        <tr>
-          <td
-            colSpan={10}
-            className="px-4 py-2 text-[12px]"
-            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-          >
-            {error}
-          </td>
-        </tr>
-      )}
-    </>
-  );
 }
