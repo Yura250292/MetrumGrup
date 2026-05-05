@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -189,7 +189,23 @@ function deltaColor(metric: ColumnId, delta: number): string {
 const STORAGE_KEYS = {
   plan: "metrum.stage-table.plan-cols",
   fact: "metrum.stage-table.fact-cols",
+  widths: "metrum.stage-table.col-widths",
 } as const;
+
+const MIN_COL_WIDTH = 60;
+
+function loadColWidths(): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEYS.widths);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as Record<string, number>;
+    if (typeof parsed !== "object" || parsed === null) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
 
 function loadOrder(key: string): ColumnId[] {
   if (typeof window === "undefined") return DEFAULT_COL_ORDER;
@@ -285,6 +301,30 @@ export function StageTable({
     } catch {}
   }, [factOrder]);
 
+  // Persist user-resized column widths (Excel-like drag-handle на правій межі th).
+  // Init як {} → підвантажуємо у useEffect (як column orders, щоб уникнути SSR mismatch).
+  const [colWidths, setColWidths] = useState<Record<string, number>>({});
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setColWidths(loadColWidths());
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEYS.widths, JSON.stringify(colWidths));
+    } catch {}
+  }, [colWidths]);
+  const setColWidth = useCallback((key: string, w: number) => {
+    setColWidths((prev) => {
+      const clamped = Math.max(MIN_COL_WIDTH, Math.round(w));
+      if (prev[key] === clamped) return prev;
+      return { ...prev, [key]: clamped };
+    });
+  }, []);
+  const widthFor = useCallback(
+    (key: string, fallback: number) => colWidths[key] ?? fallback,
+    [colWidths],
+  );
+
   // Drag state
   const [drag, setDrag] = useState<{ group: "plan" | "fact"; id: ColumnId } | null>(null);
   const [dragOver, setDragOver] = useState<{ group: "plan" | "fact"; id: ColumnId } | null>(
@@ -342,13 +382,33 @@ export function StageTable({
       >
         <thead>
           <tr style={{ backgroundColor: T.panelSoft }}>
-            <Th sticky width={260} rowSpan={2} stickyDivider>
+            <Th
+              sticky
+              width={260}
+              rowSpan={2}
+              stickyDivider
+              colKey="name"
+              getWidth={widthFor}
+              onResize={setColWidth}
+            >
               Назва
             </Th>
-            <Th width={140} rowSpan={2}>
+            <Th
+              width={140}
+              rowSpan={2}
+              colKey="responsible"
+              getWidth={widthFor}
+              onResize={setColWidth}
+            >
               Відповідальний
             </Th>
-            <Th width={110} rowSpan={2}>
+            <Th
+              width={110}
+              rowSpan={2}
+              colKey="status"
+              getWidth={widthFor}
+              onResize={setColWidth}
+            >
               Статус
             </Th>
             {isCompare ? (
@@ -373,15 +433,33 @@ export function StageTable({
             )}
             {!isCompare && (
               <>
-                <Th width={80} rowSpan={2}>
+                <Th
+                  width={80}
+                  rowSpan={2}
+                  colKey="margin"
+                  getWidth={widthFor}
+                  onResize={setColWidth}
+                >
                   {COLUMN_LABELS.margin}
                 </Th>
-                <Th width={110} rowSpan={2}>
+                <Th
+                  width={110}
+                  rowSpan={2}
+                  colKey="deviation"
+                  getWidth={widthFor}
+                  onResize={setColWidth}
+                >
                   {COLUMN_LABELS.deviation}
                 </Th>
               </>
             )}
-            <Th width={170} rowSpan={2}>
+            <Th
+              width={170}
+              rowSpan={2}
+              colKey="comment"
+              getWidth={widthFor}
+              onResize={setColWidth}
+            >
               Коментар
             </Th>
           </tr>
@@ -403,6 +481,8 @@ export function StageTable({
                       setDrag={setDrag}
                       setDragOver={setDragOver}
                       moveColumn={moveColumn}
+                      getWidth={widthFor}
+                      onResize={setColWidth}
                     />
                   ))}
                 {showFact &&
@@ -416,6 +496,8 @@ export function StageTable({
                       setDrag={setDrag}
                       setDragOver={setDragOver}
                       moveColumn={moveColumn}
+                      getWidth={widthFor}
+                      onResize={setColWidth}
                     />
                   ))}
               </>
@@ -987,6 +1069,8 @@ function DraggableHeader({
   setDrag,
   setDragOver,
   moveColumn,
+  getWidth,
+  onResize,
 }: {
   id: ColumnId;
   group: "plan" | "fact";
@@ -995,9 +1079,14 @@ function DraggableHeader({
   setDrag: (v: { group: "plan" | "fact"; id: ColumnId } | null) => void;
   setDragOver: (v: { group: "plan" | "fact"; id: ColumnId } | null) => void;
   moveColumn: (group: "plan" | "fact", src: ColumnId, dst: ColumnId) => void;
+  getWidth: (key: string, fallback: number) => number;
+  onResize: (key: string, w: number) => void;
 }) {
   const isDragging = drag?.group === group && drag.id === id;
   const isOver = dragOver?.group === group && dragOver.id === id && !isDragging;
+  const colKey = `${group}-${id}`;
+  const fallbackWidth = 110;
+  const effectiveWidth = getWidth(colKey, fallbackWidth);
   return (
     <th
       draggable
@@ -1039,6 +1128,9 @@ function DraggableHeader({
         boxShadow: isOver ? `inset 2px 0 0 ${T.accentPrimary}` : undefined,
         border: `1px solid ${T.borderSoft}`,
         backgroundColor: isOver ? T.accentPrimarySoft : T.panelSoft,
+        position: "relative",
+        width: effectiveWidth,
+        minWidth: effectiveWidth,
       }}
       title="Перетягни щоб поміняти порядок"
     >
@@ -1046,6 +1138,10 @@ function DraggableHeader({
         <GripVertical size={9} style={{ color: T.textMuted, opacity: 0.6 }} />
         {COLUMN_LABELS[id]}
       </span>
+      <ResizeHandle
+        getCurrentWidth={() => getWidth(colKey, fallbackWidth)}
+        onResize={(w) => onResize(colKey, w)}
+      />
     </th>
   );
 }
@@ -1504,27 +1600,92 @@ function TextCell({
 
 // ---------- Static cells ----------
 
+/**
+ * Drag-handle на правій межі th для Excel-like resize. Mousedown захоплює
+ * стартовий X та ширину, mousemove оновлює state у реальному часі, mouseup
+ * відписується. Body cursor=col-resize + user-select=none на час drag,
+ * щоб не виділявся текст.
+ */
+function ResizeHandle({
+  getCurrentWidth,
+  onResize,
+}: {
+  getCurrentWidth: () => number;
+  onResize: (newWidth: number) => void;
+}) {
+  const onMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startWidth = getCurrentWidth();
+    const onMove = (ev: MouseEvent) => {
+      onResize(startWidth + (ev.clientX - startX));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "col-resize";
+  };
+  return (
+    <span
+      onMouseDown={onMouseDown}
+      onClick={(e) => e.stopPropagation()}
+      onDragStart={(e) => e.preventDefault()}
+      title="Перетягни щоб змінити ширину"
+      style={{
+        position: "absolute",
+        top: 0,
+        right: -3,
+        width: 6,
+        height: "100%",
+        cursor: "col-resize",
+        userSelect: "none",
+        zIndex: 3,
+      }}
+    />
+  );
+}
+
 function Th({
   children,
   width,
   sticky,
   rowSpan,
   stickyDivider,
+  colKey,
+  onResize,
+  getWidth,
 }: {
   children?: React.ReactNode;
   width?: number;
   sticky?: boolean;
   rowSpan?: number;
   stickyDivider?: boolean;
+  /** Якщо передано — вмикає resize-handle і узгоджує ширину з parent state. */
+  colKey?: string;
+  onResize?: (key: string, w: number) => void;
+  getWidth?: (key: string, fallback: number) => number;
 }) {
+  const fallback = width ?? 120;
+  const effectiveWidth =
+    colKey && getWidth ? getWidth(colKey, fallback) : width;
+  const resizable = Boolean(colKey && onResize && getWidth);
   return (
     <th
       rowSpan={rowSpan}
       className="px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wider"
       style={{
         color: T.textMuted,
-        width,
-        position: sticky ? "sticky" : undefined,
+        width: effectiveWidth,
+        minWidth: effectiveWidth,
+        position: sticky ? "sticky" : "relative",
         left: sticky ? 0 : undefined,
         backgroundColor: sticky ? T.panelSoft : T.panelSoft,
         zIndex: sticky ? 2 : undefined,
@@ -1536,6 +1697,12 @@ function Th({
       }}
     >
       {children}
+      {resizable && (
+        <ResizeHandle
+          getCurrentWidth={() => getWidth!(colKey!, fallback)}
+          onResize={(w) => onResize!(colKey!, w)}
+        />
+      )}
     </th>
   );
 }

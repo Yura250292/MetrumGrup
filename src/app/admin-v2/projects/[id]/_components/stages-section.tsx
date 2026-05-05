@@ -647,7 +647,7 @@ export function StagesSection({
       <div
         className={
           selected || isFullscreen
-            ? "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-4"
+            ? "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-3"
             : "hidden lg:block"
         }
       >
@@ -725,10 +725,10 @@ export function StagesSection({
         className="fixed inset-0 z-[100] flex"
         style={{ backgroundColor: T.background }}
       >
-        <div className="hidden lg:block w-[260px] flex-shrink-0">
+        <div className="hidden lg:block w-[200px] flex-shrink-0">
           <ProjectsSidebar activeProjectId={projectId} preserveFullscreen />
         </div>
-        <div className="flex flex-1 flex-col overflow-y-auto p-5">
+        <div className="flex flex-1 flex-col overflow-y-auto p-4">
           {innerBody}
         </div>
       </div>
