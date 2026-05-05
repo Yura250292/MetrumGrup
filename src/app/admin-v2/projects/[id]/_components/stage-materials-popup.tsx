@@ -29,6 +29,8 @@ type Props = {
   stageId: string;
   stageName: string;
   onClose: () => void;
+  /** Сховати X-кнопку (для fullscreen split-view, де панель завжди видима). */
+  hideClose?: boolean;
 };
 
 const STATUS_TONE: Record<string, { bg: string; fg: string }> = {
@@ -47,6 +49,7 @@ function StageMaterialsBody({
   stageId,
   stageName,
   onClose,
+  hideClose,
 }: Props) {
   const [rows, setRows] = useState<MaterialRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -200,25 +203,27 @@ function StageMaterialsBody({
           <Plus size={12} />
           {adding ? "Скасувати" : "Додати матеріал"}
         </button>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Закрити"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 24,
-            height: 24,
-            borderRadius: 4,
-            background: "transparent",
-            border: "none",
-            color: T.textMuted,
-            cursor: "pointer",
-          }}
-        >
-          <X size={14} />
-        </button>
+        {!hideClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Закрити"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 24,
+              height: 24,
+              borderRadius: 4,
+              background: "transparent",
+              border: "none",
+              color: T.textMuted,
+              cursor: "pointer",
+            }}
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {adding && (

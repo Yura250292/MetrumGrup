@@ -23,6 +23,8 @@ type StageDetailDrawerProps = {
   candidates: ResponsibleCandidate[];
   onClose: () => void;
   onChanged: () => Promise<void> | void;
+  /** Сховати X-кнопку та "Закрити" у footer (для fullscreen split-view, де панель завжди видима). */
+  hideClose?: boolean;
 };
 
 type FinanceHistoryEntry = {
@@ -52,6 +54,7 @@ function StageDetailPanelBody({
   candidates,
   onClose,
   onChanged,
+  hideClose,
 }: StageDetailDrawerProps) {
   const [history, setHistory] = useState<FinanceHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -180,15 +183,17 @@ function StageDetailPanelBody({
               {stageDisplayName(stage)}
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition hover:brightness-95"
-            style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
-            aria-label="Закрити"
-          >
-            <X size={14} />
-          </button>
+          {!hideClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition hover:brightness-95"
+              style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+              aria-label="Закрити"
+            >
+              <X size={14} />
+            </button>
+          )}
         </div>
 
         {/* Body */}
@@ -570,17 +575,21 @@ function StageDetailPanelBody({
           className="flex items-center justify-between gap-2 border-t px-5 py-3"
           style={{ borderColor: T.borderSoft }}
         >
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded px-3 py-1.5 text-[12px] font-medium transition"
-            style={{
-              backgroundColor: T.panelSoft,
-              color: T.textSecondary,
-            }}
-          >
-            Закрити
-          </button>
+          {hideClose ? (
+            <span />
+          ) : (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded px-3 py-1.5 text-[12px] font-medium transition"
+              style={{
+                backgroundColor: T.panelSoft,
+                color: T.textSecondary,
+              }}
+            >
+              Закрити
+            </button>
+          )}
           <button
             type="button"
             onClick={handleClose}

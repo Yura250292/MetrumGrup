@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Eye,
@@ -128,6 +128,22 @@ export function StagesSection({
       document.body.style.overflow = prev;
     };
   }, [isFullscreen]);
+
+  // У fullscreen split-view панелі мають бути завжди видимі (як у BuildCRM).
+  // Авто-обираємо перший етап при вході у fullscreen (ОДИН раз — після
+  // explicit-deselect не повторюємо, інакше X-кнопка не зможе закрити).
+  const wasFullscreenRef = useRef(false);
+  useEffect(() => {
+    const justEntered = !wasFullscreenRef.current && isFullscreen;
+    wasFullscreenRef.current = isFullscreen;
+    if (!justEntered) return;
+    if (selectedStageId) return;
+    const first = stages.find((s) => !s.isHidden) ?? stages[0] ?? null;
+    if (first) {
+      setSelectedStageId(first.id);
+      setMaterialsHidden(false);
+    }
+  }, [isFullscreen, selectedStageId, stages]);
 
   // Централізований ESC-handler (для desktop/embedded + fullscreen):
   // 1. Якщо fullscreen → exit fullscreen.
@@ -625,22 +641,25 @@ export function StagesSection({
         </div>
       </div>
 
-      {/* Desktop (lg+): pinned split-grid коли вибрано етап. Інакше — одна колонка. */}
+      {/* Desktop (lg+): pinned split-grid коли вибрано етап АБО fullscreen.
+          У fullscreen панелі завжди видимі (X-кнопка прихована — користувач
+          перемикається між етапами кліком у таблиці). */}
       <div
         className={
-          selected
+          selected || isFullscreen
             ? "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-4"
             : "hidden lg:block"
         }
       >
         <div className="flex min-w-0 flex-col gap-4">
           {tableBlock}
-          {selected && !materialsHidden && (
+          {selected && (isFullscreen || !materialsHidden) && (
             <StageMaterialsEmbedded
               projectId={projectId}
               stageId={selected.id}
               stageName={stageDisplayName(selected)}
               onClose={() => setMaterialsHidden(true)}
+              hideClose={isFullscreen}
               style={{
                 maxHeight: isFullscreen ? "calc(100vh - 360px)" : "40vh",
                 minHeight: 200,
@@ -664,6 +683,7 @@ export function StagesSection({
               candidates={candidates}
               onClose={() => setSelectedStageId(null)}
               onChanged={refetch}
+              hideClose={isFullscreen}
               className="h-full"
             />
           </div>
