@@ -32,6 +32,17 @@ import {
   handleWarehouseApproveCallback,
   handleWarehouseRejectCallback,
 } from './scanwarehouse';
+import {
+  linkProjectCommand,
+  unlinkProjectCommand,
+  handleGroupExpenseText,
+  handleExpenseSendCallback,
+  handleExpenseCancelCallback,
+} from './expense-text';
+import {
+  handleFinanceApproveCallback,
+  handleFinanceRejectCallback,
+} from './finance-approval';
 import { requireAdmin } from '../middleware/auth';
 import { getUserProjects } from '../services/database';
 import { formatProjectsList } from '../services/formatter';
@@ -52,6 +63,10 @@ export function registerCommands(bot: Telegraf<BotContext>) {
   bot.command('status', requireAdmin, statusCommand);
   bot.command('receipt', requireAdmin, receiptCommand);
   bot.command('scanwarehouse', requireAdmin, scanwarehouseCommand);
+
+  // Group-binding commands — own role check inside (work in groups, not requireAdmin)
+  bot.command('link', linkProjectCommand);
+  bot.command('unlink', unlinkProjectCommand);
   bot.command('cancel', async (ctx) => {
     let cancelled = false;
     if (ctx.session?.pendingReceipt) {
@@ -153,6 +168,16 @@ export function registerCommands(bot: Telegraf<BotContext>) {
   // Обробка текстових повідомлень
   bot.on('text', async (ctx) => {
     const text = ctx.message.text;
+
+    // Group-expense handler runs first — it checks chat type internally and
+    // returns false if the message isn't from a linked group, so private flows
+    // are unaffected.
+    try {
+      const handledByGroup = await handleGroupExpenseText(ctx);
+      if (handledByGroup) return;
+    } catch (err) {
+      console.error('[expense-text] handler error:', err);
+    }
 
     // Якщо є активний процес додавання чеку — обробляємо текст для receipt
     if (ctx.session?.pendingReceipt && !text.startsWith('/')) {
@@ -339,6 +364,26 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     }
     if (data === 'receipt_cancel') {
       await handleReceiptCancel(ctx);
+      return;
+    }
+
+    // Expense-text flow callbacks (master writes expenses in group chat)
+    if (data.startsWith('exp_send:')) {
+      await handleExpenseSendCallback(ctx, data.replace('exp_send:', ''));
+      return;
+    }
+    if (data.startsWith('exp_cancel:')) {
+      await handleExpenseCancelCallback(ctx, data.replace('exp_cancel:', ''));
+      return;
+    }
+
+    // Finance approval (manager approves PENDING entry from TG DM)
+    if (data.startsWith('fin_approve:')) {
+      await handleFinanceApproveCallback(ctx, data.replace('fin_approve:', ''));
+      return;
+    }
+    if (data.startsWith('fin_reject:')) {
+      await handleFinanceRejectCallback(ctx, data.replace('fin_reject:', ''));
       return;
     }
 

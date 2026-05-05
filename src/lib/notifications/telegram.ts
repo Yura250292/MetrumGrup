@@ -2,10 +2,17 @@ import { prisma } from "@/lib/prisma";
 
 const TELEGRAM_API = "https://api.telegram.org";
 
+type InlineButton =
+  | { text: string; callback_data: string }
+  | { text: string; url: string };
+
 type TelegramPayload = {
   title: string;
   body?: string | null;
   url?: string | null;
+  /// Optional inline keyboard (rows of buttons). If passed, the message is
+  /// sent without the trailing "Open" link — buttons replace it.
+  inlineKeyboard?: InlineButton[][];
 };
 
 function escapeHtml(s: string): string {
@@ -22,7 +29,11 @@ function formatMessage(payload: TelegramPayload, baseUrl: string): string {
 
   let text = `<b>${title}</b>`;
   if (body) text += `\n\n${body}`;
-  if (linkUrl) text += `\n\n<a href="${escapeHtml(linkUrl)}">Відкрити</a>`;
+  // When inline buttons are provided, callers usually include an "Open" button
+  // there — skip the redundant link in body.
+  if (linkUrl && !payload.inlineKeyboard) {
+    text += `\n\n<a href="${escapeHtml(linkUrl)}">Відкрити</a>`;
+  }
   return text;
 }
 
@@ -49,15 +60,20 @@ export async function sendTelegramNotification(
   const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || "";
   const text = formatMessage(payload, baseUrl);
 
+  const body: Record<string, unknown> = {
+    chat_id: botUser.telegramId.toString(),
+    text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+  };
+  if (payload.inlineKeyboard && payload.inlineKeyboard.length > 0) {
+    body.reply_markup = { inline_keyboard: payload.inlineKeyboard };
+  }
+
   const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: botUser.telegramId.toString(),
-      text,
-      parse_mode: "HTML",
-      disable_web_page_preview: true,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {

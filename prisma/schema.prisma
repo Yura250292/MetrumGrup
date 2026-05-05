@@ -153,6 +153,12 @@ model Project {
   managerId              String?
   folderId               String?
   firmId                 String?
+  /// Telegram group chat_id (negative for groups). When set, the bot listens
+  /// to text messages in this chat and parses expenses for this project.
+  /// Bound by a manager via /link <project_slug_or_id> in the group.
+  telegramChatId         BigInt?                 @unique
+  telegramLinkedAt       DateTime?
+  telegramLinkedById     String?
   auditLogs              AuditLog[]
   completionActs         CompletionAct[]
   crewAssignments        CrewAssignment[]
@@ -197,6 +203,7 @@ model Project {
   @@index([isTestProject])
   @@index([firmId])
   @@index([clientCounterpartyId])
+  @@index([telegramChatId])
   @@map("projects")
 }
 
@@ -2265,6 +2272,26 @@ model TelegramLinkToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("telegram_link_tokens")
+}
+
+/// Тимчасовий draft витрат що бот розпарсив з тексту майстра в TG-групі
+/// до моменту підтвердження кнопкою «Відправити менеджеру».
+/// Cleanup: cron видаляє старші 1 год.
+model PendingExpenseDraft {
+  id           String   @id @default(cuid())
+  chatId       BigInt
+  messageId    Int
+  authorUserId String
+  projectId    String
+  /// Масив ParsedExpense елементів (див. lib/ai/parse-expense-text.ts)
+  parsedJson   Json
+  rawText      String   @db.Text
+  createdAt    DateTime @default(now())
+
+  @@index([authorUserId])
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("pending_expense_drafts")
 }
 
 model SavedView {

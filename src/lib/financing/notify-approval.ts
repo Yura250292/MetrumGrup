@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { sendNotificationEmail } from "@/lib/notifications/email";
 import { sendPush } from "@/lib/notifications/push";
+import { sendTelegramNotification } from "@/lib/notifications/telegram";
 
 /**
  * Approver role set — these users receive approval notifications.
@@ -68,7 +69,23 @@ export async function notifyFinanceApprovers(
       })),
     });
 
-    // Fan out to push + email (best-effort, parallel)
+    const tgKeyboard = opts?.isReminder
+      ? [
+          [
+            { text: "✅ Підтвердити", callback_data: `fin_approve:${entry.id}` },
+            { text: "❌ Відхилити", callback_data: `fin_reject:${entry.id}` },
+          ],
+          [{ text: "📋 Відкрити в Metrum", url: baseUrl + url }],
+        ]
+      : [
+          [
+            { text: "✅ Підтвердити", callback_data: `fin_approve:${entry.id}` },
+            { text: "❌ Відхилити", callback_data: `fin_reject:${entry.id}` },
+          ],
+          [{ text: "📋 Відкрити в Metrum", url: baseUrl + url }],
+        ];
+
+    // Fan out to push + email + telegram (best-effort, parallel)
     await Promise.allSettled(
       approvers.flatMap((u) => [
         sendPush(u.id, { title, body, url }).catch((e) => {
@@ -82,6 +99,14 @@ export async function notifyFinanceApprovers(
           actionLabel: "Переглянути",
         }).catch((e) => {
           console.error("[notify-finance] email error:", e);
+        }),
+        sendTelegramNotification(u.id, {
+          title,
+          body,
+          url,
+          inlineKeyboard: tgKeyboard,
+        }).catch((e) => {
+          console.error("[notify-finance] telegram error:", e);
         }),
       ]),
     );
