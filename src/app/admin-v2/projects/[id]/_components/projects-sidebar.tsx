@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Search } from "lucide-react";
+import { Loader2, Search, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectStatus } from "@prisma/client";
 
@@ -19,6 +19,10 @@ type Props = {
   activeProjectId: string;
   /** Зберігати fullscreen-режим у URL під час навігації між проєктами. */
   preserveFullscreen?: boolean;
+  /** Згорнутий режим (тонкий 36px rail з кнопкою expand). */
+  collapsed?: boolean;
+  /** Toggle згортання — рендериться кнопка у header sidebar-а. */
+  onToggleCollapse?: () => void;
 };
 
 const STATUS_DOT: Record<ProjectStatus, string> = {
@@ -34,7 +38,12 @@ const STATUS_DOT: Record<ProjectStatus, string> = {
  * (firm-scoped через GET /api/admin/projects). Lazy-fetch при mount —
  * монтується лише коли StagesSection переходить у fullscreen.
  */
-export function ProjectsSidebar({ activeProjectId, preserveFullscreen }: Props) {
+export function ProjectsSidebar({
+  activeProjectId,
+  preserveFullscreen,
+  collapsed,
+  onToggleCollapse,
+}: Props) {
   const [projects, setProjects] = useState<ProjectListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -63,6 +72,40 @@ export function ProjectsSidebar({ activeProjectId, preserveFullscreen }: Props) 
     );
   });
 
+  // Collapsed-режим: тонкий rail тільки з кнопкою expand. Менше 40px,
+  // звільняє ~165px горизонталі під таблицю.
+  if (collapsed) {
+    return (
+      <aside
+        className="flex h-full flex-col items-center overflow-hidden py-2"
+        style={{
+          backgroundColor: T.panelSoft,
+          borderRight: `1px solid ${T.borderSoft}`,
+        }}
+      >
+        <button
+          type="button"
+          onClick={onToggleCollapse}
+          title="Розгорнути список проєктів"
+          className="flex h-7 w-7 items-center justify-center rounded transition hover:brightness-95"
+          style={{ color: T.textMuted, backgroundColor: T.panel }}
+        >
+          <PanelLeftOpen size={14} />
+        </button>
+        <span
+          className="mt-3 text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            color: T.textMuted,
+            writingMode: "vertical-rl",
+            transform: "rotate(180deg)",
+          }}
+        >
+          Проєкти {projects ? `· ${projects.length}` : ""}
+        </span>
+      </aside>
+    );
+  }
+
   return (
     <aside
       className="flex h-full flex-col overflow-hidden"
@@ -82,9 +125,20 @@ export function ProjectsSidebar({ activeProjectId, preserveFullscreen }: Props) 
           Усі проєкти
         </span>
         {projects && (
-          <span className="ml-auto text-[10px]" style={{ color: T.textMuted }}>
+          <span className="text-[10px]" style={{ color: T.textMuted }}>
             {projects.length}
           </span>
+        )}
+        {onToggleCollapse && (
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            title="Згорнути"
+            className="ml-auto flex h-6 w-6 items-center justify-center rounded transition hover:brightness-95"
+            style={{ color: T.textMuted }}
+          >
+            <PanelLeftClose size={13} />
+          </button>
         )}
       </div>
 

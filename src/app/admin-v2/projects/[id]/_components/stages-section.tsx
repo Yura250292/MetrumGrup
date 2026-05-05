@@ -12,6 +12,10 @@ import {
   CheckCircle2,
   Maximize2,
   Minimize2,
+  PanelLeftClose,
+  PanelLeftOpen,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
@@ -69,6 +73,34 @@ export function StagesSection({
   const [selectedStageId, setSelectedStageId] = useState<string | null>(null);
   const [showHidden, setShowHidden] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
+  // Згортувані сайдбари — більше місця під робочу зону таблиці. Init як false
+  // → load з localStorage у useEffect (як viewMode/hideCompleted).
+  const [leftCollapsed, setLeftCollapsed] = useState(false);
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem("metrum.stages.left-collapsed") === "1")
+        setLeftCollapsed(true);
+      if (window.localStorage.getItem("metrum.stages.right-collapsed") === "1")
+        setRightCollapsed(true);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "metrum.stages.left-collapsed",
+        leftCollapsed ? "1" : "0",
+      );
+    } catch {}
+  }, [leftCollapsed]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        "metrum.stages.right-collapsed",
+        rightCollapsed ? "1" : "0",
+      );
+    } catch {}
+  }, [rightCollapsed]);
   // Materials popup live окремо від drawer-а: користувач може закрити popup
   // (materialsHidden=true) залишивши drawer відкритим. Зміна selectedStageId
   // ресетить materialsHidden — popup знову зʼявляється для нового етапу.
@@ -647,8 +679,15 @@ export function StagesSection({
       <div
         className={
           selected || isFullscreen
-            ? "hidden lg:grid lg:grid-cols-[minmax(0,1fr)_300px] lg:gap-3"
+            ? "hidden lg:grid lg:gap-3"
             : "hidden lg:block"
+        }
+        style={
+          selected || isFullscreen
+            ? {
+                gridTemplateColumns: `minmax(0,1fr) ${rightCollapsed ? 36 : 300}px`,
+              }
+            : undefined
         }
       >
         <div className="flex min-w-0 flex-col gap-4">
@@ -667,7 +706,7 @@ export function StagesSection({
             />
           )}
         </div>
-        {selected && (
+        {selected && rightCollapsed && (
           <div
             className={
               isFullscreen
@@ -675,6 +714,36 @@ export function StagesSection({
                 : "max-h-[75vh] sticky top-4"
             }
           >
+            <CollapsedRail
+              side="right"
+              label={stageDisplayName(selected)}
+              onExpand={() => setRightCollapsed(false)}
+            />
+          </div>
+        )}
+        {selected && !rightCollapsed && (
+          <div
+            className={
+              isFullscreen
+                ? "h-[calc(100vh-160px)] sticky top-0"
+                : "max-h-[75vh] sticky top-4"
+            }
+            style={{ position: "relative" }}
+          >
+            <button
+              type="button"
+              onClick={() => setRightCollapsed(true)}
+              title="Згорнути панель"
+              className="absolute z-10 flex h-6 w-6 items-center justify-center rounded transition hover:brightness-95"
+              style={{
+                top: 8,
+                left: 8,
+                color: T.textMuted,
+                backgroundColor: T.panelSoft,
+              }}
+            >
+              <PanelRightClose size={13} />
+            </button>
             <StageDetailEmbedded
               projectId={projectId}
               projectTitle={projectTitle}
@@ -725,8 +794,16 @@ export function StagesSection({
         className="fixed inset-0 z-[100] flex"
         style={{ backgroundColor: T.background }}
       >
-        <div className="hidden lg:block w-[200px] flex-shrink-0">
-          <ProjectsSidebar activeProjectId={projectId} preserveFullscreen />
+        <div
+          className="hidden lg:block flex-shrink-0"
+          style={{ width: leftCollapsed ? 36 : 200 }}
+        >
+          <ProjectsSidebar
+            activeProjectId={projectId}
+            preserveFullscreen
+            collapsed={leftCollapsed}
+            onToggleCollapse={() => setLeftCollapsed((c) => !c)}
+          />
         </div>
         <div className="flex flex-1 flex-col overflow-y-auto p-4">
           {innerBody}
@@ -742,6 +819,53 @@ export function StagesSection({
     >
       {innerBody}
     </div>
+  );
+}
+
+/**
+ * Тонкий 36px-rail замість повної панелі коли користувач згорнув її.
+ * Кнопка expand + вертикальний label (назва етапу або просто "Деталі").
+ */
+function CollapsedRail({
+  side,
+  label,
+  onExpand,
+}: {
+  side: "left" | "right";
+  label: string;
+  onExpand: () => void;
+}) {
+  const Icon = side === "left" ? PanelLeftOpen : PanelRightOpen;
+  return (
+    <aside
+      className="flex h-full w-9 flex-col items-center overflow-hidden rounded-xl py-2 shadow-sm"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <button
+        type="button"
+        onClick={onExpand}
+        title="Розгорнути панель"
+        className="flex h-7 w-7 items-center justify-center rounded transition hover:brightness-95"
+        style={{ color: T.textMuted, backgroundColor: T.panel }}
+      >
+        <Icon size={14} />
+      </button>
+      <span
+        className="mt-3 truncate text-[10px] font-bold uppercase tracking-wider"
+        style={{
+          color: T.textMuted,
+          writingMode: "vertical-rl",
+          transform: "rotate(180deg)",
+          maxHeight: "calc(100% - 50px)",
+        }}
+        title={label}
+      >
+        {label}
+      </span>
+    </aside>
   );
 }
 
