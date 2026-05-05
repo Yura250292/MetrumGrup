@@ -35,7 +35,11 @@ import {
 import {
   linkProjectCommand,
   unlinkProjectCommand,
+  numCommand,
+  handleForumTopicCreated,
   handleGroupExpenseText,
+  handleGroupExpensePhoto,
+  handleGroupExpenseDocument,
   handleExpenseSendCallback,
   handleExpenseCancelCallback,
 } from './expense-text';
@@ -67,6 +71,20 @@ export function registerCommands(bot: Telegraf<BotContext>) {
   // Group-binding commands — own role check inside (work in groups, not requireAdmin)
   bot.command('link', linkProjectCommand);
   bot.command('unlink', unlinkProjectCommand);
+  bot.command('num', numCommand);
+
+  // Auto-bind new forum topics by number from name
+  bot.on('message', async (ctx, next) => {
+    const msg: any = ctx.message;
+    if (msg && 'forum_topic_created' in msg && msg.forum_topic_created) {
+      try {
+        await handleForumTopicCreated(ctx);
+      } catch (err) {
+        console.error('[forum_topic_created] error:', err);
+      }
+    }
+    return next();
+  });
   bot.command('cancel', async (ctx) => {
     let cancelled = false;
     if (ctx.session?.pendingReceipt) {
@@ -149,8 +167,14 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     }
   });
 
-  // Обробка фото — спершу warehouse-scan flow (якщо активний), потім receipt
+  // Обробка фото — спершу group-expense (linked group + topic), потім приватний flow
   bot.on('photo', async (ctx) => {
+    try {
+      const handledByGroup = await handleGroupExpensePhoto(ctx);
+      if (handledByGroup) return;
+    } catch (err) {
+      console.error('[expense-photo] error:', err);
+    }
     if (!ctx.session?.isAdmin) return;
     const handled = await handleWarehouseScanPhoto(ctx);
     if (handled) return;
@@ -159,6 +183,12 @@ export function registerCommands(bot: Telegraf<BotContext>) {
 
   // Обробка документів — аналогічно
   bot.on('document', async (ctx) => {
+    try {
+      const handledByGroup = await handleGroupExpenseDocument(ctx);
+      if (handledByGroup) return;
+    } catch (err) {
+      console.error('[expense-doc] error:', err);
+    }
     if (!ctx.session?.isAdmin) return;
     const handled = await handleWarehouseScanDocument(ctx);
     if (handled) return;

@@ -286,11 +286,18 @@ model ProjectStageRecord {
   sourceEstimateItemId         String?
   sourceEstimateItem           EstimateItem?        @relation("EstimateItemToStage", fields: [sourceEstimateItemId], references: [id], onDelete: SetNull)
 
+  /// Telegram forum topic this stage receives expense reports from. Bound by
+  /// /num <N> in a topic, by forum_topic_created auto-binding, or by manager
+  /// in admin UI. The pair (project.telegramChatId, telegramThreadId) is
+  /// effectively unique — enforced in code, not at DB level (chatId lives on Project).
+  telegramThreadId             Int?
+
   @@index([projectId, stage])
   @@index([projectId, parentStageId])
   @@index([responsibleUserId])
   @@index([sourceEstimateSectionId])
   @@index([sourceEstimateItemId])
+  @@index([telegramThreadId])
   @@map("project_stage_records")
 }
 
@@ -2278,18 +2285,27 @@ model TelegramLinkToken {
 /// до моменту підтвердження кнопкою «Відправити менеджеру».
 /// Cleanup: cron видаляє старші 1 год.
 model PendingExpenseDraft {
-  id           String   @id @default(cuid())
-  chatId       BigInt
-  messageId    Int
-  authorUserId String
-  projectId    String
+  id             String   @id @default(cuid())
+  chatId         BigInt
+  threadId       Int?
+  messageId      Int
+  authorUserId   String
+  projectId      String
+  stageRecordId  String?
   /// Масив ParsedExpense елементів (див. lib/ai/parse-expense-text.ts)
-  parsedJson   Json
-  rawText      String   @db.Text
-  createdAt    DateTime @default(now())
+  parsedJson     Json
+  rawText        String   @db.Text
+  /// Файл-першоджерело (фото/PDF/Excel) залитий у R2 на момент парсингу,
+  /// прив'язується до FinanceEntryAttachment при підтвердженні.
+  r2Key          String?
+  attachmentMime String?
+  attachmentName String?
+  attachmentSize Int?
+  createdAt      DateTime @default(now())
 
   @@index([authorUserId])
   @@index([projectId])
+  @@index([stageRecordId])
   @@index([createdAt])
   @@map("pending_expense_drafts")
 }

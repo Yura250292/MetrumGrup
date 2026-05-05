@@ -69,6 +69,25 @@ function getClient(): GoogleGenerativeAI {
   return cachedClient;
 }
 
+function coerce(raw: string): ParsedExpense[] {
+  const parsed = safeParseJson<unknown>(raw);
+  if (!parsed.ok) {
+    console.warn("[parse-expense] JSON parse failed:", parsed.error);
+    return [];
+  }
+  let arr: unknown = parsed.value;
+  if (arr && typeof arr === "object" && !Array.isArray(arr)) {
+    const obj = arr as Record<string, unknown>;
+    arr = obj.expenses ?? obj.items ?? obj.data ?? [];
+  }
+  const validated = ResponseSchema.safeParse(arr);
+  if (!validated.success) {
+    console.warn("[parse-expense] schema validation failed:", validated.error.issues);
+    return [];
+  }
+  return validated.data.filter((e) => e.confidence >= 0.5);
+}
+
 /**
  * Parse a free-form Telegram message into a structured list of expenses.
  * Returns [] for non-expense chatter or when the model can't extract anything
@@ -87,26 +106,42 @@ export async function parseExpenseText(text: string): Promise<ParsedExpense[]> {
 
   const prompt = PROMPT.replace("{TEXT}", trimmed);
   const result = await model.generateContent(prompt);
-  const raw = result.response.text();
+  return coerce(result.response.text());
+}
 
-  const parsed = safeParseJson<unknown>(raw);
-  if (!parsed.ok) {
-    console.warn("[parse-expense-text] JSON parse failed:", parsed.error);
-    return [];
-  }
+const VISION_PROMPT = `Це фото чека, накладної, рахунку або фото з рукописом — список витрат на будівельний проект.
 
-  // Model sometimes wraps the array in an object — accept both shapes.
-  let arr: unknown = parsed.value;
-  if (arr && typeof arr === "object" && !Array.isArray(arr)) {
-    const obj = arr as Record<string, unknown>;
-    arr = obj.expenses ?? obj.items ?? obj.data ?? [];
-  }
+Поверни ВИКЛЮЧНО валідний JSON-масив (без markdown-fence, без пояснень). Кожен елемент:
+{
+  "costType": "MATERIAL" | "LABOR",
+  "title": string,
+  "quantity": число або null,
+  "unit": string або null,
+  "unitPrice": число або null,
+  "amount": число,
+  "currency": "UAH",
+  "confidence": число 0..1,
+  "rawLine": string
+}
 
-  const validated = ResponseSchema.safeParse(arr);
-  if (!validated.success) {
-    console.warn("[parse-expense-text] schema validation failed:", validated.error.issues);
-    return [];
-  }
+Правила: див. правила класифікації matierial/labor як у текстовому парсері. Якщо це чек з постачальника — зазвичай весь список = MATERIAL.
+Якщо нечитко — пропусти позицію.`;
 
-  return validated.data.filter((e) => e.confidence >= 0.5);
+/**
+ * Parse expenses from an image (photo, scan) via Gemini Vision in a single shot.
+ */
+export async function parseExpenseFromImage(
+  buffer: Buffer,
+  mimeType: string,
+): Promise<ParsedExpense[]> {
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({
+    model: MODEL,
+    generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
+  });
+  const result = await model.generateContent([
+    { inlineData: { mimeType, data: buffer.toString("base64") } },
+    { text: VISION_PROMPT },
+  ]);
+  return coerce(result.response.text());
 }
