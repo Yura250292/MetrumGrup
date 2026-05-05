@@ -841,7 +841,7 @@ export function StagesSection({
             <div
               className="flex-shrink-0"
               style={{
-                height: 240,
+                height: 170,
                 borderTop: `1px solid ${T.borderStrong}`,
                 backgroundColor: T.panel,
               }}
@@ -881,7 +881,7 @@ export function StagesSection({
           <div
             className="hidden lg:flex flex-shrink-0 flex-col relative"
             style={{
-              width: 300,
+              width: 240,
               borderLeft: `1px solid ${T.borderStrong}`,
               backgroundColor: T.panel,
             }}
