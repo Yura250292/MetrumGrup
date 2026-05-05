@@ -50,3 +50,8 @@ next-env.d.ts
 # Testing
 coverage/
 *.log
+
+# MTProto backfill — local-only state and downloads
+scripts/.session*
+scripts/tmp/
+tmp/
