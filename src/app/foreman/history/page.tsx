@@ -62,31 +62,39 @@ export default async function ForemanHistoryPage({ searchParams }: PageProps) {
           {reports.map((r) => {
             const total = r.items.reduce((sum, it) => sum + Number(it.amount), 0);
             const status = STATUS_LABELS[r.status] ?? { label: r.status, classes: "bg-zinc-800" };
+            // DRAFT → продовжити редагувати у review screen.
+            // Інші → read-only сторінка деталей.
+            const href =
+              r.status === "DRAFT"
+                ? `/foreman/report/project/${r.project.id}/review/${r.id}`
+                : `/foreman/history/${r.id}`;
             return (
-              <li
-                key={r.id}
-                className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-2"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-sm text-zinc-500">{formatDate(r.occurredAt)}</div>
-                    <div className="font-semibold text-white">{r.project.title}</div>
+              <li key={r.id}>
+                <Link
+                  href={href}
+                  className="block rounded-2xl bg-zinc-900 border border-zinc-800 hover:border-emerald-500 active:scale-[0.99] transition p-4 space-y-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm text-zinc-500">{formatDate(r.occurredAt)}</div>
+                      <div className="font-semibold text-white">{r.project.title}</div>
+                    </div>
+                    <span className={`text-xs font-semibold uppercase rounded-full px-3 py-1 ${status.classes}`}>
+                      {status.label}
+                    </span>
                   </div>
-                  <span className={`text-xs font-semibold uppercase rounded-full px-3 py-1 ${status.classes}`}>
-                    {status.label}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-zinc-400">
-                    {r.items.length} {r.items.length === 1 ? "позиція" : "позицій"}
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-zinc-400">
+                      {r.items.length} {r.items.length === 1 ? "позиція" : "позицій"} · переглянути ›
+                    </div>
+                    <div className="font-bold text-emerald-400">{total.toFixed(2)} грн</div>
                   </div>
-                  <div className="font-bold text-emerald-400">{total.toFixed(2)} грн</div>
-                </div>
-                {r.status === "REJECTED" && r.rejectionReason && (
-                  <div className="text-sm text-rose-300 bg-rose-500/10 rounded-lg px-3 py-2">
-                    Причина: {r.rejectionReason}
-                  </div>
-                )}
+                  {r.status === "REJECTED" && r.rejectionReason && (
+                    <div className="text-sm text-rose-300 bg-rose-500/10 rounded-lg px-3 py-2">
+                      Причина: {r.rejectionReason}
+                    </div>
+                  )}
+                </Link>
               </li>
             );
           })}
