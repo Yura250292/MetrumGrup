@@ -24,7 +24,8 @@ import { z } from "zod";
 import { prisma } from "../src/lib/prisma";
 import { safeParseJson } from "../src/lib/ai/json-parse";
 
-const PROJECT_SLUG = "tiffani";
+const FOLDER_NAME = "Тіфані";
+const FIRM_ID = "metrum-studio";
 const MODEL = "gemini-2.5-flash";
 
 const PROMPT = `Ти асистент будівельного менеджера. Я даю тобі список витрат на ремонт КОНКРЕТНОЇ квартири (матеріали і роботи). Розклади їх по категоріях будівельних робіт — таких щоб менеджер бачив структуру ремонту.
@@ -105,11 +106,13 @@ async function classifyEntries(entries: EntryForAI[]): Promise<{ name: string; e
   return validated.data.categories;
 }
 
-async function clusterApartment(stageId: string, customName: string, dryRun: boolean) {
-  console.log(`\n▶ ${customName} (${stageId})`);
+async function clusterApartment(projectId: string, projectTitle: string, dryRun: boolean) {
+  console.log(`\n▶ ${projectTitle} (${projectId})`);
 
+  // Беремо лише ще-не-категоризовані entries (stageRecordId=null) щоб
+  // повторний запуск не чіпав уже розкладені.
   const entries = await prisma.financeEntry.findMany({
-    where: { stageRecordId: stageId, tgImportKey: { not: null } },
+    where: { projectId, stageRecordId: null, tgImportKey: { not: null } },
     select: { id: true, title: true, costType: true, amount: true },
   });
   if (entries.length === 0) {
@@ -173,16 +176,16 @@ async function clusterApartment(stageId: string, customName: string, dryRun: boo
       continue;
     }
 
-    // Idempotent: knife by parent + customName
+    // Ідемпотентність: stage з тим же projectId+customName переюзаємо.
     let sub = await prisma.projectStageRecord.findFirst({
-      where: { parentStageId: stageId, customName: name },
+      where: { projectId, parentStageId: null, customName: name },
       select: { id: true },
     });
     if (!sub) {
       sub = await prisma.projectStageRecord.create({
         data: {
-          projectId: (await prisma.projectStageRecord.findUnique({ where: { id: stageId }, select: { projectId: true } }))!.projectId,
-          parentStageId: stageId,
+          projectId,
+          parentStageId: null,
           customName: name,
           kind: "STAGE",
           status: "IN_PROGRESS",
@@ -193,12 +196,12 @@ async function clusterApartment(stageId: string, customName: string, dryRun: boo
       });
     }
     await prisma.financeEntry.updateMany({
-      where: { id: { in: ids }, stageRecordId: stageId },
+      where: { id: { in: ids }, projectId, stageRecordId: null },
       data: { stageRecordId: sub.id },
     });
   }
 
-  console.log(`  ✓ ${customName}: створено ${ordered.length} підстейджів`);
+  console.log(`  ✓ ${projectTitle}: створено/оновлено ${ordered.length} категорій`);
 }
 
 async function main() {
@@ -208,39 +211,33 @@ async function main() {
     process.exit(1);
   }
 
-  const project = await prisma.project.findUnique({
-    where: { slug: PROJECT_SLUG },
+  const folder = await prisma.folder.findFirst({
+    where: { name: FOLDER_NAME, firmId: FIRM_ID, domain: "PROJECT" },
     select: { id: true },
   });
-  if (!project) throw new Error("Project tiffani не знайдено");
+  if (!folder) throw new Error(`Folder "${FOLDER_NAME}" у firm "${FIRM_ID}" не знайдено`);
 
-  const stageWhere: Record<string, unknown> = {
-    projectId: project.id,
-    parentStageId: null,
-  };
+  const where: Record<string, unknown> = { folderId: folder.id };
   if (args.apartment) {
-    stageWhere.customName = { contains: String(args.apartment) };
+    where.title = { contains: String(args.apartment) };
   }
 
-  const stages = await prisma.projectStageRecord.findMany({
-    where: stageWhere,
-    select: { id: true, customName: true },
-    orderBy: { sortOrder: "asc" },
+  const projects = await prisma.project.findMany({
+    where,
+    select: { id: true, title: true },
+    orderBy: { title: "asc" },
   });
-  if (stages.length === 0) {
-    console.error(`Не знайдено stage records для критерію ${JSON.stringify(stageWhere)}`);
+  if (projects.length === 0) {
+    console.error(`Не знайдено проектів-квартир у Folder "${FOLDER_NAME}"`);
     process.exit(1);
   }
 
-  console.log(`Кластеризація для ${stages.length} квартир${args.dryRun ? " (DRY RUN)" : ""}`);
-  for (const s of stages) {
-    if (!s.customName) continue;
-    if (s.customName.toLowerCase().includes("тестова")) continue;
-    if (s.customName.toLowerCase().includes("загальна")) continue;
+  console.log(`Кластеризація для ${projects.length} квартир${args.dryRun ? " (DRY RUN)" : ""}`);
+  for (const p of projects) {
     try {
-      await clusterApartment(s.id, s.customName, args.dryRun);
+      await clusterApartment(p.id, p.title, args.dryRun);
     } catch (err) {
-      console.error(`  ❌ ${s.customName}: ${err instanceof Error ? err.message : err}`);
+      console.error(`  ❌ ${p.title}: ${err instanceof Error ? err.message : err}`);
     }
   }
   console.log(`\n──────\nГотово.`);
