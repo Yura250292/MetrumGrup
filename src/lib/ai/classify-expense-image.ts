@@ -44,10 +44,16 @@ const PROMPT = `Це зображення з робочої Telegram-групи 
       "amount": число,
       "currency": "UAH",
       "confidence": число 0..1,
-      "rawLine": string
+      "rawLine": string,
+      "apartmentNumber": число або null  // якщо рядок явно про іншу квартиру (див. правила)
     }
   ]
 }
+
+ПРАВИЛО apartmentNumber:
+- Якщо в чеку/обрахунку є явна згадка квартири ("192 кв", "Кв 154", "квартира 49") — це номер квартири на яку йде позиція. Зведені чеки на весь поверх — типовий випадок ("плитка: 154 кв — 3000, 159 кв — 3000").
+- НЕ плутай з: номерами накладних ("Накладна 16435"), розмірами ("Свердло 160мм", "Канал 60*204"), моделями ("Franke MRG 610-52").
+- Якщо явно не вказано → apartmentNumber=null.
 
 Правила:
 - Якщо це план/схема/фото без сум → type="non_expense", items=[], totalAmount=null
@@ -67,6 +73,7 @@ const ItemSchema = z.object({
   currency: z.string().default("UAH"),
   confidence: z.number().min(0).max(1).default(0.7),
   rawLine: z.string().default(""),
+  apartmentNumber: z.number().int().positive().nullable().optional(),
 });
 
 const ResponseSchema = z.object({

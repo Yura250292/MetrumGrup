@@ -31,13 +31,53 @@ function formatAmount(n: number): string {
   return n.toLocaleString('uk-UA', { maximumFractionDigits: 2 });
 }
 
-function formatExpenseLine(e: ClassifiedExpense): string {
+function formatExpenseLine(e: ClassifiedExpense, currentApartment?: number): string {
   const icon = e.costType === 'MATERIAL' ? '📦' : '🔨';
   const label = e.costType === 'MATERIAL' ? 'Матеріал' : 'Робота';
   const qty = e.quantity ? ` — ${e.quantity}${e.unit ? ' ' + e.unit : ''}` : '';
   const price = e.unitPrice ? ` × ${formatAmount(e.unitPrice)}` : '';
   const breadcrumb = e.breadcrumb ? `\n   <i>→ 📂 ${escapeHtml(e.breadcrumb)}</i>` : '';
-  return `${icon} <b>${label}:</b> ${escapeHtml(e.title)}${qty}${price} = ${formatAmount(e.amount)} грн${breadcrumb}`;
+  const altApt =
+    e.apartmentNumber && currentApartment && e.apartmentNumber !== currentApartment
+      ? `\n   <i>🔀 на Квартиру ${e.apartmentNumber} (зведений чек)</i>`
+      : '';
+  return `${icon} <b>${label}:</b> ${escapeHtml(e.title)}${qty}${price} = ${formatAmount(e.amount)} грн${breadcrumb}${altApt}`;
+}
+
+function extractApartmentNum(title: string): number | null {
+  const m = title.match(/(\d+)/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Pre-confirm fuzzy duplicate check: чи є вже у проекті entry з тою ж сумою
+ * + схожим title за останні 7 днів. Якщо так — повертає список підозр.
+ */
+async function findFuzzyDuplicates(
+  projectId: string,
+  parsed: ClassifiedExpense[],
+): Promise<Map<number, { id: string; title: string; createdAt: Date }>> {
+  const { prisma } = await import('../../src/lib/prisma');
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const map = new Map<number, { id: string; title: string; createdAt: Date }>();
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i];
+    const titleHead = item.title.slice(0, 20).toLowerCase();
+    const dup = await prisma.financeEntry.findFirst({
+      where: {
+        projectId,
+        amount: item.amount,
+        createdAt: { gte: cutoff },
+        title: { startsWith: item.title.slice(0, 10), mode: 'insensitive' },
+      },
+      select: { id: true, title: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (dup && dup.title.toLowerCase().slice(0, 20) === titleHead) {
+      map.set(i, dup);
+    }
+  }
+  return map;
 }
 
 function extractApartmentNumber(s: string | undefined | null): number | null {
@@ -373,22 +413,33 @@ async function showConfirmCard(
   ctx: BotContext,
   draftId: string,
   parsed: ClassifiedExpense[],
-  stageName: string,
+  projectTitle: string,
   attachmentNote?: string,
+  duplicates?: Map<number, { id: string; title: string; createdAt: Date }>,
 ) {
   const total = parsed.reduce((s, e) => s + e.amount, 0);
-  const lines = parsed.map(formatExpenseLine).join('\n');
+  const currentApt = extractApartmentNum(projectTitle) ?? undefined;
+  const lines = parsed
+    .map((e, i) => {
+      const base = formatExpenseLine(e, currentApt);
+      const dup = duplicates?.get(i);
+      return dup ? `${base}\n   ⚠️ <i>схоже існує: "${escapeHtml(dup.title.slice(0, 40))}" від ${dup.createdAt.toLocaleDateString('uk-UA')}</i>` : base;
+    })
+    .join('\n');
   const lowConf = parsed.filter((e) => e.confidence < 0.7).length;
   const warning = lowConf > 0 ? `\n\n⚠️ <i>Перевір — ${lowConf} рядок(ів) розпізнано неоднозначно</i>` : '';
+  const dupCount = duplicates?.size ?? 0;
+  const dupWarn = dupCount > 0 ? `\n⚠️ <i>${dupCount} рядок(ів) схожі на вже існуючі — перевір перед відправкою!</i>` : '';
   const note = attachmentNote ? `\n📎 <i>${escapeHtml(attachmentNote)}</i>` : '';
   const msgId = ctx.message?.message_id;
 
   await ctx.reply(
-    `🧾 <b>Зрозумів ${parsed.length} витрат · ${escapeHtml(stageName)}</b>\n\n` +
+    `🧾 <b>Зрозумів ${parsed.length} витрат · ${escapeHtml(projectTitle)}</b>\n\n` +
       lines +
       `\n\n<b>Разом:</b> ${formatAmount(total)} грн` +
       note +
-      warning,
+      warning +
+      dupWarn,
     {
       parse_mode: 'HTML',
       ...(msgId ? { reply_parameters: { message_id: msgId } } : {}),
@@ -457,8 +508,9 @@ export async function handleGroupExpenseText(ctx: BotContext): Promise<boolean> 
   if (parsed.length === 0) return false; // chatter — fall through
 
   const classified = await classifyExpensesToStage(parsed, link.project.id);
+  const dupes = await findFuzzyDuplicates(link.project.id, classified);
   const draftId = await persistDraft({ ctx, link, parsed: classified, rawText: text });
-  await showConfirmCard(ctx, draftId, classified, link.project.title);
+  await showConfirmCard(ctx, draftId, classified, link.project.title, undefined, dupes);
   return true;
 }
 
@@ -513,7 +565,8 @@ export async function handleGroupExpensePhoto(ctx: BotContext): Promise<boolean>
     rawText: msg.caption ?? classification.summary ?? '[photo]',
     attachment: r2 ? { r2Key: r2.key, mime: 'image/jpeg', name: 'photo.jpg', size: r2.size } : undefined,
   });
-  await showConfirmCard(ctx, draftId, classified, link.project.title, note);
+  const dupes = await findFuzzyDuplicates(link.project.id, classified);
+  await showConfirmCard(ctx, draftId, classified, link.project.title, note, dupes);
   return true;
 }
 
@@ -603,7 +656,8 @@ export async function handleGroupExpenseDocument(ctx: BotContext): Promise<boole
       ? { r2Key: r2.key, mime: mime || (isPdf ? PDF_MIME : 'application/octet-stream'), name: doc.file_name || `file.${ext}`, size: r2.size }
       : undefined,
   });
-  await showConfirmCard(ctx, draftId, classified, link.project.title, r2 ? `${ext.toUpperCase()} додано до запису` : undefined);
+  const dupes = await findFuzzyDuplicates(link.project.id, classified);
+  await showConfirmCard(ctx, draftId, classified, link.project.title, r2 ? `${ext.toUpperCase()} додано до запису` : undefined, dupes);
   return true;
 }
 
@@ -646,8 +700,35 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
 
   await ctx.answerCbQuery('⏳ Створюю записи...');
 
+  // Cache for sibling-projects lookup (auto-routing for items with apartmentNumber).
+  const siblingCache = new Map<number, { id: string; firmId: string | null; folderId: string | null }>();
+  const currentApt = extractApartmentNum(project.title);
+  const projectFolderId = (await prisma.project.findUnique({
+    where: { id: project.id },
+    select: { folderId: true },
+  }))?.folderId;
+
+  async function resolveTargetProject(item: ClassifiedExpense) {
+    const apt = item.apartmentNumber;
+    if (!apt || apt === currentApt || !projectFolderId) {
+      return { id: project.id, firmId: project.firmId ?? null, folderId: null, isRouted: false };
+    }
+    if (siblingCache.has(apt)) return { ...siblingCache.get(apt)!, isRouted: true };
+    const sibling = await prisma.project.findFirst({
+      where: { folderId: projectFolderId, title: { contains: String(apt) } },
+      select: { id: true, firmId: true, financeFolderMirror: { select: { id: true } } },
+    });
+    if (!sibling) return { id: project.id, firmId: project.firmId ?? null, folderId: null, isRouted: false };
+    const info = { id: sibling.id, firmId: sibling.firmId, folderId: sibling.financeFolderMirror?.id ?? null };
+    siblingCache.set(apt, info);
+    return { ...info, isRouted: true };
+  }
+
   const created: { id: string; title: string; amount: number }[] = [];
+  let routedCount = 0;
   for (const item of items) {
+    const target = await resolveTargetProject(item);
+    if (target.isRouted) routedCount++;
     const category = item.costType === 'MATERIAL' ? 'materials' : 'subcontractors';
     const entry = await prisma.financeEntry.create({
       data: {
@@ -657,13 +738,14 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
         amount: item.amount,
         currency: item.currency || 'UAH',
         occurredAt: new Date(),
-        projectId: project.id,
-        firmId: project.firmId ?? null,
-        stageRecordId: item.stageRecordId ?? draft.stageRecordId,
+        projectId: target.id,
+        firmId: target.firmId ?? project.firmId ?? null,
+        folderId: target.isRouted ? target.folderId : undefined,
+        stageRecordId: target.isRouted ? null : item.stageRecordId ?? draft.stageRecordId,
         category,
         costType: item.costType,
         title: item.title,
-        description: `Telegram (${username}): ${item.rawLine || draft.rawText.slice(0, 200)}`,
+        description: `Telegram (${username}): ${item.rawLine || draft.rawText.slice(0, 200)}${target.isRouted ? `\n[auto-routed from ${project.title} → Кв ${item.apartmentNumber}]` : ''}`,
         createdById: draft.authorUserId,
         source: 'MANUAL',
       },
