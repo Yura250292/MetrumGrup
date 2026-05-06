@@ -4,6 +4,7 @@ import {
   User as UserIcon,
   Wrench,
   Calculator,
+  HardHat,
   type LucideIcon,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -14,6 +15,7 @@ export const ROLE_LABELS: Record<string, string> = {
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",
   HR: "HR",
+  FOREMAN: "Виконроб",
   USER: "Користувач",
   CLIENT: "Клієнт",
 };
@@ -24,6 +26,7 @@ export const ROLE_ICONS: Record<string, LucideIcon> = {
   ENGINEER: Wrench,
   FINANCIER: Calculator,
   HR: UsersIcon,
+  FOREMAN: HardHat,
   USER: UserIcon,
   CLIENT: UserIcon,
 };
@@ -34,6 +37,7 @@ export const ROLE_COLORS: Record<string, { bg: string; fg: string }> = {
   ENGINEER: { bg: T.successSoft, fg: T.success },
   FINANCIER: { bg: T.warningSoft, fg: T.warning },
   HR: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
+  FOREMAN: { bg: T.successSoft, fg: T.success },
   USER: { bg: T.panelElevated, fg: T.textMuted },
   CLIENT: { bg: T.panelElevated, fg: T.textMuted },
 };
@@ -44,6 +48,7 @@ const ALL_ROLES = [
   "ENGINEER",
   "FINANCIER",
   "HR",
+  "FOREMAN",
   "USER",
   "CLIENT",
 ] as const;
@@ -58,7 +63,7 @@ export function canAssignRole(
   if (actorRole === "SUPER_ADMIN") return true;
   if (actorRole === "MANAGER") return targetRole !== "SUPER_ADMIN";
   if (actorRole === "HR") {
-    return ["USER", "ENGINEER", "FINANCIER", "HR"].includes(targetRole);
+    return ["USER", "ENGINEER", "FINANCIER", "HR", "FOREMAN"].includes(targetRole);
   }
   return false;
 }
