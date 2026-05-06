@@ -41,7 +41,10 @@ function extractApartmentNumber(s: string | undefined | null): number | null {
   return m ? Number(m[1]) : null;
 }
 
-// ─── /link <slug-or-id> ───────────────────────────────────────────────
+// ─── /link <folder-or-project-slug> ───────────────────────────────────
+// Group-level link. Use in the General topic of a forum that hosts multiple
+// apartments (each apartment = separate Project under one Folder). The arg
+// can be either a Folder name or a single Project slug.
 
 export async function linkProjectCommand(ctx: BotContext) {
   const chat = ctx.chat;
@@ -53,9 +56,7 @@ export async function linkProjectCommand(ctx: BotContext) {
   const text = (ctx.message && 'text' in ctx.message ? ctx.message.text : '') || '';
   const arg = text.replace(/^\/link(@\w+)?/i, '').trim();
   if (!arg) {
-    await ctx.reply('⚠️ Вкажи slug або id проекту: <code>/link tiffani</code>', {
-      parse_mode: 'HTML',
-    });
+    await ctx.reply('⚠️ Вкажи назву Folder або slug проекту: <code>/link Тіфані</code>', { parse_mode: 'HTML' });
     return;
   }
 
@@ -63,7 +64,6 @@ export async function linkProjectCommand(ctx: BotContext) {
   if (!fromId) return;
 
   const { prisma } = await import('../../src/lib/prisma');
-
   const botUser = await prisma.telegramBotUser.findUnique({
     where: { telegramId: BigInt(fromId) },
     select: { user: { select: { id: true, role: true, firmId: true, isActive: true } } },
@@ -78,46 +78,50 @@ export async function linkProjectCommand(ctx: BotContext) {
     return;
   }
 
+  const chatId = BigInt(chat.id);
+
+  // 1) Try Folder by name (case-insensitive) — the multi-apartment case.
+  const folder = await prisma.folder.findFirst({
+    where: {
+      domain: 'PROJECT',
+      name: { equals: arg, mode: 'insensitive' },
+      ...(linked.firmId ? { firmId: linked.firmId } : {}),
+    },
+    select: { id: true, name: true },
+  });
+
+  if (folder) {
+    const result = await prisma.project.updateMany({
+      where: { folderId: folder.id, telegramThreadId: { not: null } },
+      data: { telegramChatId: chatId, telegramLinkedAt: new Date(), telegramLinkedById: linked.id },
+    });
+    const total = await prisma.project.count({ where: { folderId: folder.id } });
+    await ctx.reply(
+      `✅ Folder <b>${escapeHtml(folder.name)}</b>: оновлено ${result.count} з ${total} проектів. ` +
+        `Проекти без topic (telegramThreadId=null) — додай вручну /num у відповідних топіках.`,
+      { parse_mode: 'HTML' },
+    );
+    return;
+  }
+
+  // 2) Fallback: single Project by slug or id.
   const project = await prisma.project.findFirst({
     where: { OR: [{ slug: arg }, { id: arg }] },
-    select: { id: true, title: true, slug: true, firmId: true },
+    select: { id: true, title: true, firmId: true, telegramThreadId: true },
   });
   if (!project) {
-    await ctx.reply(`❌ Проект "${arg}" не знайдено.`);
+    await ctx.reply(`❌ Не знайшов Folder ані Project з назвою/slug "${arg}".`);
     return;
   }
   if (linked.firmId && project.firmId && linked.firmId !== project.firmId) {
     await ctx.reply('⛔️ Цей проект належить іншій фірмі.');
     return;
   }
-
-  const chatId = BigInt(chat.id);
-  const conflict = await prisma.project.findFirst({
-    where: { telegramChatId: chatId, NOT: { id: project.id } },
-    select: { id: true, title: true },
-  });
-  if (conflict) {
-    await ctx.reply(
-      `⚠️ Ця група вже прив'язана до проекту "${escapeHtml(conflict.title)}". Спочатку відв'яжи через /unlink в тому проекті.`,
-      { parse_mode: 'HTML' },
-    );
-    return;
-  }
-
   await prisma.project.update({
     where: { id: project.id },
-    data: {
-      telegramChatId: chatId,
-      telegramLinkedAt: new Date(),
-      telegramLinkedById: linked.id,
-    },
+    data: { telegramChatId: chatId, telegramLinkedAt: new Date(), telegramLinkedById: linked.id },
   });
-
-  await ctx.reply(
-    `✅ Група прив'язана до проекту <b>${escapeHtml(project.title)}</b>.\n\n` +
-      `Тепер у кожному топіку (квартирі) напиши <code>/num &lt;номер&gt;</code> або просто додай нові топіки — бот автозв'яже за номером з назви.`,
-    { parse_mode: 'HTML' },
-  );
+  await ctx.reply(`✅ Проект <b>${escapeHtml(project.title)}</b> прив'язаний до цієї групи.`, { parse_mode: 'HTML' });
 }
 
 export async function unlinkProjectCommand(ctx: BotContext) {
@@ -140,17 +144,24 @@ export async function unlinkProjectCommand(ctx: BotContext) {
 
   const updated = await prisma.project.updateMany({
     where: { telegramChatId: BigInt(chat.id) },
-    data: { telegramChatId: null, telegramLinkedAt: null, telegramLinkedById: null },
+    data: { telegramChatId: null, telegramThreadId: null, telegramLinkedAt: null, telegramLinkedById: null },
   });
-  await ctx.reply(updated.count > 0 ? "✅ Група відв'язана." : 'ℹ️ Ця група не була прив\'язана.');
+  await ctx.reply(updated.count > 0 ? `✅ Відв'язано ${updated.count} проектів.` : 'ℹ️ Ця група не була прив\'язана.');
 }
 
 // ─── /num <N> та авто-bind топіків ───────────────────────────────────
 
-async function bindStageToTopic(
+/**
+ * Bind the current forum topic to a Project (apartment) by number. Looks up the
+ * Project by title "Квартира <num>" within the same firm, scoped to the group's
+ * Folder if any project under that chatId is already linked. Sets composite
+ * (telegramChatId, telegramThreadId) on the Project, detaching any other.
+ */
+async function bindProjectToTopic(
   ctx: BotContext,
   apartmentNumber: number,
-): Promise<{ ok: true; stageName: string } | { ok: false; reason: string }> {
+  authorFirmId: string | null,
+): Promise<{ ok: true; projectTitle: string } | { ok: false; reason: string }> {
   const chat = ctx.chat;
   const msg = ctx.message;
   if (!chat || !msg) return { ok: false, reason: 'no chat' };
@@ -158,42 +169,46 @@ async function bindStageToTopic(
     return { ok: false, reason: 'Команду треба писати у топіку (квартирі), а не в General.' };
   }
   const threadId = msg.message_thread_id;
+  const chatId = BigInt(chat.id);
 
   const { prisma } = await import('../../src/lib/prisma');
+
+  // Prefer projects in the Folder that already has another project linked to
+  // this chat (so we stay within the same building). Fallback: any project
+  // titled "Квартира N" in the author's firm.
+  const peerProject = await prisma.project.findFirst({
+    where: { telegramChatId: chatId, folderId: { not: null } },
+    select: { folderId: true, firmId: true },
+  });
+  const folderId = peerProject?.folderId;
+  const firmFilter = peerProject?.firmId ?? authorFirmId ?? null;
+
   const project = await prisma.project.findFirst({
-    where: { telegramChatId: BigInt(chat.id) },
-    select: { id: true, title: true, firmId: true },
+    where: {
+      title: { equals: `Квартира ${apartmentNumber}`, mode: 'insensitive' },
+      ...(folderId ? { folderId } : {}),
+      ...(firmFilter ? { firmId: firmFilter } : {}),
+    },
+    select: { id: true, title: true },
   });
   if (!project) {
-    return { ok: false, reason: 'Цю групу не прив\'язано до проекту. Спочатку /link <slug>.' };
+    return {
+      ok: false,
+      reason: `Не знайшов проект "Квартира ${apartmentNumber}"${folderId ? ' у цьому Folder' : ''}. Створи його в Metrum.`,
+    };
   }
 
-  const stage = await prisma.projectStageRecord.findFirst({
-    where: {
-      projectId: project.id,
-      OR: [
-        { customName: { equals: `Квартира ${apartmentNumber}`, mode: 'insensitive' } },
-        { customName: { contains: String(apartmentNumber), mode: 'insensitive' } },
-      ],
-    },
-    select: { id: true, customName: true, telegramThreadId: true },
-    orderBy: { sortOrder: 'asc' },
+  // Detach any other project bound to this (chatId, threadId) and bind this one.
+  await prisma.project.updateMany({
+    where: { telegramChatId: chatId, telegramThreadId: threadId, NOT: { id: project.id } },
+    data: { telegramChatId: null, telegramThreadId: null },
   });
-  if (!stage) {
-    return { ok: false, reason: `Квартиру №${apartmentNumber} у проекті "${project.title}" не знайдено. Створи її в Metrum.` };
-  }
-
-  // Detach this thread from any other stage first (one thread = one stage).
-  await prisma.projectStageRecord.updateMany({
-    where: { projectId: project.id, telegramThreadId: threadId, NOT: { id: stage.id } },
-    data: { telegramThreadId: null },
-  });
-  await prisma.projectStageRecord.update({
-    where: { id: stage.id },
-    data: { telegramThreadId: threadId },
+  await prisma.project.update({
+    where: { id: project.id },
+    data: { telegramChatId: chatId, telegramThreadId: threadId, telegramLinkedAt: new Date() },
   });
 
-  return { ok: true, stageName: stage.customName || `Квартира ${apartmentNumber}` };
+  return { ok: true, projectTitle: project.title };
 }
 
 export async function numCommand(ctx: BotContext) {
@@ -210,7 +225,7 @@ export async function numCommand(ctx: BotContext) {
   const { prisma } = await import('../../src/lib/prisma');
   const botUser = await prisma.telegramBotUser.findUnique({
     where: { telegramId: BigInt(fromId) },
-    select: { user: { select: { role: true, isActive: true } } },
+    select: { user: { select: { role: true, firmId: true, isActive: true } } },
   });
   const role = botUser?.user?.role;
   if (!botUser?.user?.isActive || !role || !APPROVER_ROLES.includes(role as ApproverRole)) {
@@ -218,13 +233,13 @@ export async function numCommand(ctx: BotContext) {
     return;
   }
 
-  const r = await bindStageToTopic(ctx, num);
+  const r = await bindProjectToTopic(ctx, num, botUser.user.firmId ?? null);
   if (!r.ok) {
     await ctx.reply(`❌ ${r.reason}`);
     return;
   }
   await ctx.reply(
-    `✅ Топік прив'язаний до <b>${escapeHtml(r.stageName)}</b>.\n\nМожеш писати сюди витрати — бот сам розпізнає.`,
+    `✅ Топік прив'язаний до проекту <b>${escapeHtml(r.projectTitle)}</b>.\n\nМожеш писати сюди витрати — бот сам розпізнає.`,
     { parse_mode: 'HTML' },
   );
 }
@@ -239,13 +254,13 @@ export async function handleForumTopicCreated(ctx: BotContext) {
 
   const name = msg.forum_topic_created.name;
   const num = extractApartmentNumber(name);
-  if (!num) return; // topic without number — can't auto-bind
+  if (!num) return;
 
-  const r = await bindStageToTopic(ctx, num);
+  const r = await bindProjectToTopic(ctx, num, null);
   if (r.ok) {
     await ctx.telegram.sendMessage(
       ctx.chat!.id,
-      `🔗 Автоприв'язано до <b>${escapeHtml(r.stageName)}</b>. Майстри можуть писати сюди витрати.`,
+      `🔗 Автоприв'язано до проекту <b>${escapeHtml(r.projectTitle)}</b>. Майстри можуть писати сюди витрати.`,
       { parse_mode: 'HTML', message_thread_id: msg.message_thread_id },
     );
   }
@@ -256,7 +271,6 @@ export async function handleForumTopicCreated(ctx: BotContext) {
 interface LinkedContext {
   project: { id: string; title: string; firmId: string | null };
   author: { id: string; firmId: string | null };
-  stage: { id: string; customName: string | null };
   threadId: number;
 }
 
@@ -273,28 +287,28 @@ async function resolveLinkedContext(ctx: BotContext): Promise<
   const fromId = ctx.from?.id;
   if (!fromId) return { ok: false, silent: true };
 
-  const { prisma } = await import('../../src/lib/prisma');
-  const project = await prisma.project.findFirst({
-    where: { telegramChatId: BigInt(chat.id) },
-    select: { id: true, title: true, firmId: true },
-  });
-  if (!project) return { ok: false, silent: true }; // group not linked
-
-  // Forum: messages in General have no message_thread_id (or is_topic_message=false).
   const threadId =
     'message_thread_id' in msg && msg.message_thread_id ? msg.message_thread_id : null;
   const isTopic = 'is_topic_message' in msg ? Boolean(msg.is_topic_message) : !!threadId;
   if (!threadId || !isTopic) return { ok: false, silent: true }; // ignore General
 
-  const stage = await prisma.projectStageRecord.findFirst({
-    where: { projectId: project.id, telegramThreadId: threadId },
-    select: { id: true, customName: true },
+  const { prisma } = await import('../../src/lib/prisma');
+  const project = await prisma.project.findFirst({
+    where: { telegramChatId: BigInt(chat.id), telegramThreadId: threadId },
+    select: { id: true, title: true, firmId: true },
   });
-  if (!stage) {
+  if (!project) {
+    // The group might be linked at folder-level but this specific topic isn't.
+    const groupHasAnyProject = await prisma.project.findFirst({
+      where: { telegramChatId: BigInt(chat.id) },
+      select: { id: true },
+    });
+    if (!groupHasAnyProject) return { ok: false, silent: true }; // group not linked at all
+
     return {
       ok: false,
       replyToUser:
-        '⚠️ Цей топік ще не прив\'язаний до квартири. Менеджере, напиши <code>/num &lt;номер&gt;</code> один раз.',
+        "⚠️ Цей топік ще не прив'язаний. Менеджере, напиши <code>/num &lt;номер&gt;</code> один раз.",
     };
   }
 
@@ -314,7 +328,7 @@ async function resolveLinkedContext(ctx: BotContext): Promise<
     return { ok: false, silent: true };
   }
 
-  return { ok: true, ctx: { project, author: { id: author.id, firmId: author.firmId }, stage, threadId } };
+  return { ok: true, ctx: { project, author: { id: author.id, firmId: author.firmId }, threadId } };
 }
 
 async function uploadBufferToR2(
@@ -397,7 +411,7 @@ async function persistDraft(opts: {
       messageId: ctx.message!.message_id,
       authorUserId: link.author.id,
       projectId: link.project.id,
-      stageRecordId: link.stage.id,
+      stageRecordId: null,
       parsedJson: parsed as unknown as object,
       rawText: rawText.slice(0, 4000),
       r2Key: attachment?.r2Key,
@@ -438,7 +452,7 @@ export async function handleGroupExpenseText(ctx: BotContext): Promise<boolean> 
   if (parsed.length === 0) return false; // chatter — fall through
 
   const draftId = await persistDraft({ ctx, link, parsed, rawText: text });
-  await showConfirmCard(ctx, draftId, parsed, link.stage.customName ?? '');
+  await showConfirmCard(ctx, draftId, parsed, link.project.title);
   return true;
 }
 
@@ -490,7 +504,7 @@ export async function handleGroupExpensePhoto(ctx: BotContext): Promise<boolean>
     rawText: msg.caption ?? '[photo]',
     attachment: r2 ? { r2Key: r2.key, mime: 'image/jpeg', name: 'photo.jpg', size: r2.size } : undefined,
   });
-  await showConfirmCard(ctx, draftId, parsed, link.stage.customName ?? '', r2 ? 'фото додано до запису' : undefined);
+  await showConfirmCard(ctx, draftId, parsed, link.project.title, r2 ? 'фото додано до запису' : undefined);
   return true;
 }
 
@@ -578,7 +592,7 @@ export async function handleGroupExpenseDocument(ctx: BotContext): Promise<boole
       ? { r2Key: r2.key, mime: mime || (isPdf ? PDF_MIME : 'application/octet-stream'), name: doc.file_name || `file.${ext}`, size: r2.size }
       : undefined,
   });
-  await showConfirmCard(ctx, draftId, parsed, link.stage.customName ?? '', r2 ? `${ext.toUpperCase()} додано до запису` : undefined);
+  await showConfirmCard(ctx, draftId, parsed, link.project.title, r2 ? `${ext.toUpperCase()} додано до запису` : undefined);
   return true;
 }
 

@@ -68,18 +68,20 @@ interface Args {
   since?: Date;
   chatId?: string;
   chatUsername?: string;
+  chatTitle: string;
   topicNumber?: number;
   dryRun: boolean;
 }
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
-  const out: Args = { dryRun: false };
+  const out: Args = { dryRun: false, chatTitle: "Тіфані" };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--since" && argv[i + 1]) out.since = new Date(argv[++i]);
     else if (a === "--chat" && argv[i + 1]) out.chatId = argv[++i];
     else if (a === "--chat-username" && argv[i + 1]) out.chatUsername = argv[++i];
+    else if (a === "--chat-title" && argv[i + 1]) out.chatTitle = argv[++i];
     else if (a === "--topic" && argv[i + 1]) out.topicNumber = Number(argv[++i]);
     else if (a === "--dry-run") out.dryRun = true;
   }
@@ -127,14 +129,54 @@ async function resolveProject() {
   return project;
 }
 
+async function findDialogByTitle(client: TelegramClient, title: string) {
+  const wanted = title.trim().toLowerCase();
+  for await (const d of client.iterDialogs({})) {
+    const t = (d.title || d.name || "").trim().toLowerCase();
+    if (t === wanted) return d.entity;
+  }
+  // Fallback — partial match (case-insensitive contains)
+  for await (const d of client.iterDialogs({})) {
+    const t = (d.title || d.name || "").trim().toLowerCase();
+    if (t.includes(wanted)) return d.entity;
+  }
+  return null;
+}
+
 async function resolveChatEntity(client: TelegramClient, args: Args, projectChatId: bigint | null) {
   if (args.chatUsername) return await client.getEntity(args.chatUsername);
   if (args.chatId) return await client.getEntity(bigInt(args.chatId));
   if (projectChatId) return await client.getEntity(bigInt(projectChatId.toString()));
-  throw new Error(
-    'Не вказано Telegram-чат. Або зроби /link tiffani в групі через бота, ' +
-      'або передай --chat <id> чи --chat-username <username>',
-  );
+
+  // Fallback — search among user's dialogs by title (default "Тіфані").
+  console.log(`🔎 Шукаю групу "${args.chatTitle}" серед діалогів...`);
+  const found = await findDialogByTitle(client, args.chatTitle);
+  if (!found) {
+    throw new Error(
+      `Не знайшов групу "${args.chatTitle}" серед твоїх діалогів. ` +
+        `Передай явно --chat <id> чи --chat-username <name>, ` +
+        `або зроби /link tiffani через бота в потрібній групі.`,
+    );
+  }
+  // any-cast — Entity is a discriminated union; id exists on all member types we care about
+  // (Channel, Chat). We persist it back so live-бот теж не потребує /link.
+  const id = (found as unknown as { id: { toString(): string } }).id?.toString();
+  if (id) {
+    const idBig = BigInt(id.startsWith("-") ? id : `-100${id}`);
+    try {
+      await prisma.project.update({
+        where: { slug: PROJECT_SLUG },
+        data: {
+          telegramChatId: idBig,
+          telegramLinkedAt: new Date(),
+        },
+      });
+      console.log(`✓ Знайшов і прив'язав до Metrum: chatId=${idBig}`);
+    } catch (err) {
+      console.warn("[link-back] не вдалось зберегти chatId у Project:", err);
+    }
+  }
+  return found;
 }
 
 // ─── Forum topics ─────────────────────────────────────────────────────
@@ -279,11 +321,28 @@ const fallbackAdminCache = new Map<string, string>();
 async function resolveFallbackAdmin(firmId: string | null): Promise<string> {
   const key = firmId ?? "_";
   if (fallbackAdminCache.has(key)) return fallbackAdminCache.get(key)!;
-  const admin = await prisma.user.findFirst({
-    where: { role: "SUPER_ADMIN", isActive: true, ...(firmId ? { firmId } : {}) },
-    select: { id: true },
-  });
-  if (!admin) throw new Error(`Не знайдено SUPER_ADMIN${firmId ? ` для firmId=${firmId}` : ""}`);
+
+  // Cascade: same-firm SUPER_ADMIN → global (no firm) SUPER_ADMIN → any SUPER_ADMIN.
+  let admin =
+    firmId &&
+    (await prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN", isActive: true, firmId },
+      select: { id: true },
+    }));
+  if (!admin) {
+    admin = await prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN", isActive: true, firmId: null },
+      select: { id: true },
+    });
+  }
+  if (!admin) {
+    admin = await prisma.user.findFirst({
+      where: { role: "SUPER_ADMIN", isActive: true },
+      select: { id: true },
+    });
+  }
+  if (!admin) throw new Error("Не знайдено жодного SUPER_ADMIN у системі");
+
   fallbackAdminCache.set(key, admin.id);
   return admin.id;
 }

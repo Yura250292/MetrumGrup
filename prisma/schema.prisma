@@ -153,10 +153,13 @@ model Project {
   managerId              String?
   folderId               String?
   firmId                 String?
-  /// Telegram group chat_id (negative for groups). When set, the bot listens
-  /// to text messages in this chat and parses expenses for this project.
-  /// Bound by a manager via /link <project_slug_or_id> in the group.
-  telegramChatId         BigInt?                 @unique
+  /// Telegram chat (forum) + thread (topic) the bot listens to for this
+  /// project. For multi-apartment buildings: every apartment is a Project
+  /// pinned to the same chatId but a different threadId. Composite unique
+  /// (chatId, threadId) guarantees one project per topic. Both NULL = not
+  /// linked (allowed in multiples since NULL ≠ NULL in Postgres uniques).
+  telegramChatId         BigInt?
+  telegramThreadId       Int?
   telegramLinkedAt       DateTime?
   telegramLinkedById     String?
   auditLogs              AuditLog[]
@@ -199,11 +202,13 @@ model Project {
   kb2Forms               KB2Form[]               @relation("ProjectKB2Forms")
   kb3Forms               KB3Form[]               @relation("ProjectKB3Forms")
 
+  @@unique([telegramChatId, telegramThreadId], name: "project_telegram_chat_thread_unique")
   @@index([folderId])
   @@index([isTestProject])
   @@index([firmId])
   @@index([clientCounterpartyId])
   @@index([telegramChatId])
+  @@index([telegramThreadId])
   @@map("projects")
 }
 
