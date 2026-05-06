@@ -33,6 +33,8 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
 
 const UpdateBody = z.object({
   title: z.string().max(200).optional(),
+  isPinned: z.boolean().optional(),
+  folderId: z.string().nullable().optional(),
 });
 
 export async function PATCH(req: NextRequest, { params }: RouteContext) {
@@ -56,9 +58,24 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
   const parsed = UpdateBody.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Bad request" }, { status: 400 });
 
+  // Folder ownership check (якщо folderId передано і не null)
+  if (parsed.data.folderId) {
+    const folder = await prisma.ownerChatFolder.findFirst({
+      where: { id: parsed.data.folderId, userId: session.user.id },
+      select: { id: true },
+    });
+    if (!folder) return NextResponse.json({ error: "Folder not found" }, { status: 400 });
+  }
+
   await prisma.ownerConversation.update({
     where: { id },
-    data: { title: parsed.data.title?.trim() || undefined },
+    data: {
+      title: parsed.data.title?.trim() || undefined,
+      ...(parsed.data.isPinned !== undefined
+        ? { isPinned: parsed.data.isPinned, pinnedAt: parsed.data.isPinned ? new Date() : null }
+        : {}),
+      ...(parsed.data.folderId !== undefined ? { folderId: parsed.data.folderId } : {}),
+    },
   });
   return NextResponse.json({ ok: true });
 }

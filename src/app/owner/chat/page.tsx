@@ -16,32 +16,50 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
   const session = await auth();
   const { firmId } = await resolveFirmScopeForRequest(session);
 
-  // Завантажити список розмов для sidebar
-  const conversations = session?.user
-    ? await prisma.ownerConversation.findMany({
-        where: { userId: session.user.id },
-        orderBy: { updatedAt: "desc" },
-        take: 50,
-        select: { id: true, title: true, messageCount: true, updatedAt: true },
-      })
-    : [];
+  // Завантажити список розмов + теки для sidebar
+  const [conversations, folders] = session?.user
+    ? await Promise.all([
+        prisma.ownerConversation.findMany({
+          where: { userId: session.user.id },
+          orderBy: [
+            { isPinned: "desc" },
+            { pinnedAt: "desc" },
+            { updatedAt: "desc" },
+          ],
+          take: 100,
+          select: {
+            id: true,
+            title: true,
+            messageCount: true,
+            updatedAt: true,
+            isPinned: true,
+            folderId: true,
+            shareToken: true,
+          },
+        }),
+        prisma.ownerChatFolder.findMany({
+          where: { userId: session.user.id },
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          include: { _count: { select: { conversations: true } } },
+        }),
+      ])
+    : [[], []];
 
-  // Якщо немає ?c у URL і немає ?new=1 — редиректимо у найновішу розмову
-  // (якщо є хоча б одна). Тоді власник продовжує там де зупинився.
   if (!sp.c && !sp.new && conversations.length > 0) {
     redirect(`/owner/chat?c=${conversations[0].id}`);
   }
 
-  // Якщо обрано конкретну conversation — підвантажуємо її messages
   let initialConversation: {
     id: string;
     title: string;
+    shareToken: string | null;
     messages: Array<{
       id: string;
       role: "user" | "assistant";
       content: string;
       toolCallsJson: unknown;
       createdAt: string;
+      isBookmarked: boolean;
     }>;
   } | null = null;
 
@@ -54,12 +72,14 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
       initialConversation = {
         id: conv.id,
         title: conv.title,
+        shareToken: conv.shareToken,
         messages: conv.messages.map((m) => ({
           id: m.id,
           role: m.role as "user" | "assistant",
           content: m.content,
           toolCallsJson: m.toolCallsJson,
           createdAt: m.createdAt.toISOString(),
+          isBookmarked: m.isBookmarked,
         })),
       };
     }
@@ -68,13 +88,21 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
   return (
     <OwnerShell title="AI асистент" backHref="/owner" activeFirmId={firmId} wide lockHeight>
       <OwnerChat
-        // Force remount при зміні conversation — щоб state messages оновлювалось
         key={initialConversation?.id ?? "new"}
         conversations={conversations.map((c) => ({
           id: c.id,
           title: c.title,
           messageCount: c.messageCount,
           updatedAt: c.updatedAt.toISOString(),
+          isPinned: c.isPinned,
+          folderId: c.folderId,
+          shareToken: c.shareToken,
+        }))}
+        folders={folders.map((f) => ({
+          id: f.id,
+          name: f.name,
+          color: f.color,
+          conversationCount: f._count.conversations,
         }))}
         initialConversation={initialConversation}
       />

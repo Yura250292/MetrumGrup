@@ -108,6 +108,7 @@ model User {
   foremanReportsReviewed ForemanReport[]           @relation("ForemanReportReviewer")
   foremanReportFiles     ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
   ownerConversations     OwnerConversation[]       @relation("OwnerConversationUser")
+  ownerChatFolders       OwnerChatFolder[]         @relation("OwnerChatFolderUser")
 
   @@index([firmId])
   @@map("users")
@@ -3045,23 +3046,54 @@ enum PriceSnapshotSource {
 /// Owner AI chat persistence — кожна conversation це сесія діалогу
 /// власника з асистентом. Дозволяє повернутись до минулих запитів.
 model OwnerConversation {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   userId       String
   /// firmId на момент початку розмови (фіксується для контексту).
   firmId       String?
-  title        String   @default("Нова розмова")
+  title        String    @default("Нова розмова")
   /// Кількість повідомлень — для швидкого відображення списку.
-  messageCount Int      @default(0)
+  messageCount Int       @default(0)
   /// Поки розмова в роботі (стрімінг) — true. Після завершення — false.
-  isActive     Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  isActive     Boolean   @default(false)
+  /// Закріплено зверху списку (як starred у Telegram/Slack).
+  isPinned     Boolean   @default(false)
+  /// Дата закріплення — щоб сортувати закріплені окремо за recency.
+  pinnedAt     DateTime?
+  /// Опційно: розмова належить теці (для групування у sidebar).
+  folderId     String?
+  /// Токен для read-only public-share лінку. NULL = не shared.
+  shareToken   String?   @unique
+  shareTokenAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   user     User               @relation("OwnerConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  folder   OwnerChatFolder?   @relation(fields: [folderId], references: [id], onDelete: SetNull)
   messages OwnerChatMessage[]
 
   @@index([userId, updatedAt])
+  @@index([userId, isPinned, pinnedAt])
+  @@index([folderId])
+  @@index([shareToken])
   @@map("owner_conversations")
+}
+
+/// Тека для групування розмов власника. Плоский список (без вкладеності) —
+/// достатньо для перших користувачів.
+model OwnerChatFolder {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String?
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user          User                @relation("OwnerChatFolderUser", fields: [userId], references: [id], onDelete: Cascade)
+  conversations OwnerConversation[]
+
+  @@index([userId, sortOrder])
+  @@map("owner_chat_folders")
 }
 
 enum OwnerChatRole {
@@ -3077,10 +3109,13 @@ model OwnerChatMessage {
   content        String        @db.Text
   /// Tool calls/results як JSON масив для відновлення UI.
   toolCallsJson  Json?
+  /// Закладка — для збереження важливих моментів. Видно у sidebar tab "Закладки".
+  isBookmarked   Boolean       @default(false)
   createdAt      DateTime      @default(now())
 
   conversation OwnerConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
+  @@index([isBookmarked])
   @@map("owner_chat_messages")
 }

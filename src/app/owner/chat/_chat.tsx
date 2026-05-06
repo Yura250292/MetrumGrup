@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -27,6 +27,16 @@ import {
   RefreshCcw,
   Search,
   Pencil,
+  Pin,
+  PinOff,
+  Folder,
+  FolderInput,
+  Bookmark,
+  BookmarkCheck,
+  Volume2,
+  VolumeX,
+  Share2,
+  FileDown as FileDownIcon,
 } from "lucide-react";
 import { ChartBlock, parseChartConfig, type ChartKind } from "./_chart-block";
 import { exportMessageToPdf, exportMessageToText } from "./_export";
@@ -56,6 +66,7 @@ interface Message {
   error?: string;
   /** ISO timestamp. Для нових клієнтських — Date.now(); для server-loaded — з БД. */
   createdAt?: string;
+  isBookmarked?: boolean;
 }
 
 interface ConversationListItem {
@@ -63,17 +74,29 @@ interface ConversationListItem {
   title: string;
   messageCount: number;
   updatedAt: string;
+  isPinned: boolean;
+  folderId: string | null;
+  shareToken: string | null;
+}
+
+interface FolderItem {
+  id: string;
+  name: string;
+  color: string | null;
+  conversationCount: number;
 }
 
 interface InitialConversation {
   id: string;
   title: string;
+  shareToken: string | null;
   messages: Array<{
     id: string;
     role: "user" | "assistant";
     content: string;
     toolCallsJson: unknown;
     createdAt?: string;
+    isBookmarked?: boolean;
   }>;
 }
 
@@ -92,14 +115,20 @@ const newId = () => {
 
 interface Props {
   conversations: ConversationListItem[];
+  folders: FolderItem[];
   initialConversation: InitialConversation | null;
 }
 
-export function OwnerChat({ conversations: initialConversations, initialConversation }: Props) {
+export function OwnerChat({
+  conversations: initialConversations,
+  folders: initialFolders,
+  initialConversation,
+}: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
   const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations);
+  const [folders, setFolders] = useState<FolderItem[]>(initialFolders);
   const [conversationId, setConversationId] = useState<string | null>(
     initialConversation?.id ?? null,
   );
@@ -141,6 +170,9 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
           title: conversation.title,
           messageCount: 0,
           updatedAt: new Date().toISOString(),
+          isPinned: false,
+          folderId: null,
+          shareToken: null,
         },
         ...prev,
       ]);
@@ -364,6 +396,114 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
     }
   };
 
+  const togglePin = async (id: string) => {
+    const cur = conversations.find((c) => c.id === id);
+    if (!cur) return;
+    const next = !cur.isPinned;
+    setConversations((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, isPinned: next } : c)),
+    );
+    try {
+      await fetch(`/api/owner/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPinned: next }),
+      });
+    } catch {}
+  };
+
+  const moveToFolder = async (convId: string, folderId: string | null) => {
+    setConversations((prev) =>
+      prev.map((c) => (c.id === convId ? { ...c, folderId } : c)),
+    );
+    try {
+      await fetch(`/api/owner/conversations/${convId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderId }),
+      });
+    } catch {}
+  };
+
+  const createFolder = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    try {
+      const res = await fetch("/api/owner/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (!res.ok) return null;
+      const { folder } = (await res.json()) as { folder: FolderItem };
+      setFolders((prev) => [...prev, { ...folder, conversationCount: 0 }]);
+      return folder;
+    } catch {
+      return null;
+    }
+  };
+
+  const deleteFolder = async (folderId: string) => {
+    if (!confirm("Видалити теку? Розмови всередині не видаляться, лише втратять прив'язку.")) return;
+    try {
+      const res = await fetch(`/api/owner/folders/${folderId}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setFolders((prev) => prev.filter((f) => f.id !== folderId));
+      // Conversations залишаються — folderId стає null автоматично через DB
+      setConversations((prev) =>
+        prev.map((c) => (c.folderId === folderId ? { ...c, folderId: null } : c)),
+      );
+    } catch {}
+  };
+
+  const [shareModal, setShareModal] = useState<{ open: boolean; url: string | null }>({
+    open: false,
+    url: null,
+  });
+
+  const generateShareLink = async () => {
+    if (!conversationId) return;
+    try {
+      const res = await fetch(`/api/owner/conversations/${conversationId}/share`, {
+        method: "POST",
+      });
+      if (!res.ok) return;
+      const { token } = (await res.json()) as { token: string };
+      const url = `${window.location.origin}/share/${token}`;
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? { ...c, shareToken: token } : c)),
+      );
+      setShareModal({ open: true, url });
+    } catch {}
+  };
+
+  const revokeShareLink = async () => {
+    if (!conversationId) return;
+    try {
+      await fetch(`/api/owner/conversations/${conversationId}/share`, { method: "DELETE" });
+      setConversations((prev) =>
+        prev.map((c) => (c.id === conversationId ? { ...c, shareToken: null } : c)),
+      );
+      setShareModal({ open: false, url: null });
+    } catch {}
+  };
+
+  const toggleBookmark = async (msgId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === msgId ? { ...m, isBookmarked: !m.isBookmarked } : m)),
+    );
+    try {
+      await fetch(`/api/owner/messages/${msgId}/bookmark`, { method: "POST" });
+    } catch {}
+  };
+
+  const exportConversationToPdf = async () => {
+    const el = document.querySelector(".owner-chat-messages") as HTMLElement | null;
+    if (!el) return;
+    const { exportMessageToPdf } = await import("./_export");
+    await exportMessageToPdf(el, `metrum-chat-${conversationId ?? Date.now()}`);
+  };
+
   const [sidebarSearch, setSidebarSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -371,6 +511,26 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
   const filteredConversations = conversations.filter((c) =>
     sidebarSearch.trim() ? c.title.toLowerCase().includes(sidebarSearch.toLowerCase()) : true,
   );
+
+  // Групування: Pinned → Folders → Без теки
+  const grouped = useMemo(() => {
+    const pinned: ConversationListItem[] = [];
+    const byFolder = new Map<string, ConversationListItem[]>();
+    const noFolder: ConversationListItem[] = [];
+    for (const c of filteredConversations) {
+      if (c.isPinned) {
+        pinned.push(c);
+        continue;
+      }
+      if (c.folderId) {
+        if (!byFolder.has(c.folderId)) byFolder.set(c.folderId, []);
+        byFolder.get(c.folderId)!.push(c);
+      } else {
+        noFolder.push(c);
+      }
+    }
+    return { pinned, byFolder, noFolder };
+  }, [filteredConversations]);
 
   const activeConvLabel = conversationId
     ? conversations.find((c) => c.id === conversationId)?.title ?? "Розмова"
@@ -396,7 +556,27 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
           <History size={14} />
           <span className="max-w-[180px] truncate">{activeConvLabel}</span>
         </button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {conversationId && messages.length > 0 && (
+            <>
+              <button
+                type="button"
+                onClick={generateShareLink}
+                title="Поділитись лінком (read-only)"
+                className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/10 hover:border-emerald-500/40 text-zinc-400 hover:text-emerald-300 flex items-center justify-center cursor-pointer transition"
+              >
+                <Share2 size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={exportConversationToPdf}
+                title="Зберегти всю розмову у PDF"
+                className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/10 hover:border-sky-500/40 text-zinc-400 hover:text-sky-300 flex items-center justify-center cursor-pointer transition"
+              >
+                <FileDownIcon size={14} />
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setThinkingMode(!thinkingMode)}
@@ -468,7 +648,7 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
                   />
                 </div>
               </div>
-              <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+              <div className="flex-1 overflow-y-auto px-2 py-2 space-y-3">
                 {filteredConversations.length === 0 ? (
                   <div className="text-xs text-zinc-500 text-center py-8 px-3">
                     {sidebarSearch
@@ -476,90 +656,85 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
                       : "Розмов поки немає. Задай перше питання — і вона з'явиться тут."}
                   </div>
                 ) : (
-                  filteredConversations.map((c) => {
-                    const isEditing = editingId === c.id;
-                    return (
-                      <div
-                        key={c.id}
-                        className={`group flex items-center gap-1 rounded-xl px-2 py-2 transition ${
-                          c.id === conversationId
-                            ? "bg-violet-500/15 border border-violet-500/30"
-                            : "hover:bg-white/[0.04] border border-transparent"
-                        }`}
-                      >
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editingValue}
-                            onChange={(e) => setEditingValue(e.target.value)}
-                            onBlur={() => {
-                              if (editingValue.trim() && editingValue !== c.title) {
-                                void renameConversation(c.id, editingValue);
-                              }
-                              setEditingId(null);
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                if (editingValue.trim() && editingValue !== c.title) {
-                                  void renameConversation(c.id, editingValue);
-                                }
-                                setEditingId(null);
-                              } else if (e.key === "Escape") {
-                                setEditingId(null);
-                              }
-                            }}
-                            className="flex-1 bg-zinc-950 border border-violet-500/40 text-sm text-white px-2 py-1 rounded focus:outline-none"
-                          />
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => switchConversation(c.id)}
-                            onDoubleClick={() => {
-                              setEditingId(c.id);
-                              setEditingValue(c.title);
-                            }}
-                            className="flex-1 text-left min-w-0 cursor-pointer"
-                            title="Подвійний клік — перейменувати"
-                          >
-                            <div className="text-sm text-white truncate">{c.title}</div>
-                            <div className="text-[10px] text-zinc-500 mt-0.5">
-                              {c.messageCount} {c.messageCount === 1 ? "повід." : "повід."} ·{" "}
-                              {new Date(c.updatedAt).toLocaleDateString("uk-UA")}
-                            </div>
-                          </button>
-                        )}
-                        {!isEditing && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingId(c.id);
-                                setEditingValue(c.title);
-                              }}
-                              className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-violet-300 p-1.5 transition cursor-pointer"
-                              aria-label="Перейменувати"
-                            >
-                              <Pencil size={11} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                deleteConversation(c.id);
-                              }}
-                              className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-rose-400 p-1.5 transition cursor-pointer"
-                              aria-label="Видалити"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  })
+                  <>
+                    {/* Pinned */}
+                    {grouped.pinned.length > 0 && (
+                      <SidebarGroup
+                        label="Закріплено"
+                        icon={<Pin size={10} />}
+                        items={grouped.pinned}
+                        conversationId={conversationId}
+                        editingId={editingId}
+                        editingValue={editingValue}
+                        setEditingId={setEditingId}
+                        setEditingValue={setEditingValue}
+                        switchConversation={switchConversation}
+                        renameConversation={renameConversation}
+                        deleteConversation={deleteConversation}
+                        togglePin={togglePin}
+                        moveToFolder={moveToFolder}
+                        folders={folders}
+                      />
+                    )}
+
+                    {/* By folder */}
+                    {folders.map((f) => {
+                      const items = grouped.byFolder.get(f.id) ?? [];
+                      if (items.length === 0) return null;
+                      return (
+                        <SidebarGroup
+                          key={f.id}
+                          label={f.name}
+                          icon={<Folder size={10} />}
+                          onDelete={() => deleteFolder(f.id)}
+                          items={items}
+                          conversationId={conversationId}
+                          editingId={editingId}
+                          editingValue={editingValue}
+                          setEditingId={setEditingId}
+                          setEditingValue={setEditingValue}
+                          switchConversation={switchConversation}
+                          renameConversation={renameConversation}
+                          deleteConversation={deleteConversation}
+                          togglePin={togglePin}
+                          moveToFolder={moveToFolder}
+                          folders={folders}
+                        />
+                      );
+                    })}
+
+                    {/* Без теки */}
+                    {grouped.noFolder.length > 0 && (
+                      <SidebarGroup
+                        label={folders.length > 0 ? "Інші" : ""}
+                        items={grouped.noFolder}
+                        conversationId={conversationId}
+                        editingId={editingId}
+                        editingValue={editingValue}
+                        setEditingId={setEditingId}
+                        setEditingValue={setEditingValue}
+                        switchConversation={switchConversation}
+                        renameConversation={renameConversation}
+                        deleteConversation={deleteConversation}
+                        togglePin={togglePin}
+                        moveToFolder={moveToFolder}
+                        folders={folders}
+                      />
+                    )}
+                  </>
                 )}
+
+                {/* Add folder */}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const name = prompt("Назва теки:");
+                    if (name) await createFolder(name);
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-violet-500/30 text-xs text-zinc-400 hover:text-zinc-200 transition cursor-pointer mt-2"
+                >
+                  <Plus size={11} /> Нова тека
+                </button>
               </div>
             </motion.aside>
           </>
@@ -568,14 +743,19 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
 
       <div
         ref={scrollRef}
-        className="flex-1 space-y-4 overflow-y-auto pr-1 -mr-1 scroll-smooth"
+        className="owner-chat-messages flex-1 space-y-4 overflow-y-auto pr-1 -mr-1 scroll-smooth"
         style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.1) transparent" }}
       >
         {messages.length === 0 && <EmptyState onPick={(q) => send(q)} />}
 
         <AnimatePresence initial={false}>
           {messages.map((m) => (
-            <MessageRow key={m.id} message={m} onSuggestionClick={(q) => send(q)} />
+            <MessageRow
+              key={m.id}
+              message={m}
+              onSuggestionClick={(q) => send(q)}
+              onToggleBookmark={() => toggleBookmark(m.id)}
+            />
           ))}
         </AnimatePresence>
 
@@ -609,7 +789,84 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
         thinkingMode={thinkingMode}
         savedHint={savedHint}
       />
+
+      {/* Share modal */}
+      <AnimatePresence>
+        {shareModal.open && shareModal.url && (
+          <ShareModal
+            url={shareModal.url}
+            onClose={() => setShareModal({ open: false, url: null })}
+            onRevoke={revokeShareLink}
+          />
+        )}
+      </AnimatePresence>
     </div>
+  );
+}
+
+function ShareModal({
+  url,
+  onClose,
+  onRevoke,
+}: {
+  url: string;
+  onClose: () => void;
+  onRevoke: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <>
+      <motion.button
+        type="button"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-50 bg-black/60"
+        aria-label="Закрити"
+        onClick={onClose}
+      />
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 16 }}
+        className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[60] w-[90%] max-w-md rounded-2xl bg-zinc-900 border border-white/10 p-5 shadow-2xl"
+      >
+        <div className="flex items-center gap-2 mb-3">
+          <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+            <Share2 size={16} className="text-emerald-300" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-white">Лінк створено</h3>
+            <p className="text-xs text-zinc-400">Хто має посилання — побачить розмову read-only</p>
+          </div>
+        </div>
+        <div className="rounded-xl bg-zinc-950 border border-white/10 p-3 mb-3 break-all text-xs text-zinc-200 font-mono">
+          {url}
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-sm font-semibold cursor-pointer transition"
+          >
+            {copied ? <Check size={14} /> : <Copy size={14} />}
+            {copied ? "Скопійовано" : "Копіювати"}
+          </button>
+          <button
+            type="button"
+            onClick={onRevoke}
+            className="px-3 py-2.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 text-rose-300 text-sm font-semibold cursor-pointer transition"
+          >
+            Відкликати
+          </button>
+        </div>
+      </motion.div>
+    </>
   );
 }
 
@@ -649,12 +906,43 @@ function EmptyState({ onPick }: { onPick: (q: string) => void }) {
 function MessageRow({
   message,
   onSuggestionClick,
+  onToggleBookmark,
 }: {
   message: Message;
   onSuggestionClick?: (q: string) => void;
+  onToggleBookmark?: () => void;
 }) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+
+  const toggleSpeak = () => {
+    if (typeof window === "undefined") return;
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    if (speaking) {
+      synth.cancel();
+      setSpeaking(false);
+      return;
+    }
+    // Strip markdown for cleaner reading: код-блоки, посилання, жирний/курсив
+    const cleaned = message.content
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      .replace(/!?\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/\|/g, " ")
+      .replace(/[-=]{3,}/g, " ")
+      .replace(/#+\s/g, "")
+      .replace(/\s+/g, " ");
+    const utter = new SpeechSynthesisUtterance(cleaned);
+    utter.lang = "uk-UA";
+    utter.rate = 1;
+    utter.onend = () => setSpeaking(false);
+    utter.onerror = () => setSpeaking(false);
+    synth.speak(utter);
+    setSpeaking(true);
+  };
   const messageRef = useRef<HTMLDivElement | null>(null);
 
   const handleCopy = async () => {
@@ -802,6 +1090,34 @@ function MessageRow({
             >
               <FileDown size={11} /> TXT
             </button>
+            <button
+              type="button"
+              onClick={toggleSpeak}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition cursor-pointer ${
+                speaking
+                  ? "bg-violet-500/20 text-violet-300"
+                  : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300"
+              }`}
+              title={speaking ? "Зупинити" : "Прослухати голосом"}
+            >
+              {speaking ? <VolumeX size={11} /> : <Volume2 size={11} />}
+              {speaking ? "Стоп" : "Озвучити"}
+            </button>
+            {onToggleBookmark && (
+              <button
+                type="button"
+                onClick={onToggleBookmark}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition cursor-pointer ${
+                  message.isBookmarked
+                    ? "bg-amber-500/20 text-amber-300"
+                    : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300"
+                }`}
+                title={message.isBookmarked ? "Прибрати закладку" : "Закласти"}
+              >
+                {message.isBookmarked ? <BookmarkCheck size={11} /> : <Bookmark size={11} />}
+                {message.isBookmarked ? "У закладках" : "Закласти"}
+              </button>
+            )}
 
             {message.createdAt && (
               <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">
@@ -869,6 +1185,238 @@ function SuggestionChips({
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+interface SidebarGroupProps {
+  label: string;
+  icon?: React.ReactNode;
+  items: ConversationListItem[];
+  conversationId: string | null;
+  editingId: string | null;
+  editingValue: string;
+  setEditingId: (id: string | null) => void;
+  setEditingValue: (v: string) => void;
+  switchConversation: (id: string) => void;
+  renameConversation: (id: string, t: string) => void;
+  deleteConversation: (id: string) => void;
+  togglePin: (id: string) => void;
+  moveToFolder: (convId: string, folderId: string | null) => void;
+  folders: FolderItem[];
+  onDelete?: () => void;
+}
+
+function SidebarGroup({
+  label,
+  icon,
+  items,
+  conversationId,
+  editingId,
+  editingValue,
+  setEditingId,
+  setEditingValue,
+  switchConversation,
+  renameConversation,
+  deleteConversation,
+  togglePin,
+  moveToFolder,
+  folders,
+  onDelete,
+}: SidebarGroupProps) {
+  return (
+    <div>
+      {label && (
+        <div className="flex items-center justify-between px-2 mb-1 group/header">
+          <div className="flex items-center gap-1 text-[9px] uppercase tracking-[0.2em] text-zinc-500 font-bold">
+            {icon}
+            {label}
+          </div>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="opacity-0 group-hover/header:opacity-100 text-zinc-500 hover:text-rose-400 p-0.5 transition cursor-pointer"
+              aria-label="Видалити теку"
+            >
+              <Trash2 size={10} />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="space-y-1">
+        {items.map((c) => {
+          const isEditing = editingId === c.id;
+          return (
+            <div
+              key={c.id}
+              className={`group flex items-center gap-1 rounded-xl px-2 py-2 transition ${
+                c.id === conversationId
+                  ? "bg-violet-500/15 border border-violet-500/30"
+                  : "hover:bg-white/[0.04] border border-transparent"
+              }`}
+            >
+              {isEditing ? (
+                <input
+                  type="text"
+                  autoFocus
+                  value={editingValue}
+                  onChange={(e) => setEditingValue(e.target.value)}
+                  onBlur={() => {
+                    if (editingValue.trim() && editingValue !== c.title) {
+                      renameConversation(c.id, editingValue);
+                    }
+                    setEditingId(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (editingValue.trim() && editingValue !== c.title) {
+                        renameConversation(c.id, editingValue);
+                      }
+                      setEditingId(null);
+                    } else if (e.key === "Escape") {
+                      setEditingId(null);
+                    }
+                  }}
+                  className="flex-1 bg-zinc-950 border border-violet-500/40 text-sm text-white px-2 py-1 rounded focus:outline-none"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => switchConversation(c.id)}
+                  onDoubleClick={() => {
+                    setEditingId(c.id);
+                    setEditingValue(c.title);
+                  }}
+                  className="flex-1 text-left min-w-0 cursor-pointer"
+                  title="Подвійний клік — перейменувати"
+                >
+                  <div className="flex items-center gap-1.5">
+                    {c.isPinned && <Pin size={9} className="text-amber-400 shrink-0" />}
+                    {c.shareToken && <Share2 size={9} className="text-emerald-400 shrink-0" />}
+                    <div className="text-sm text-white truncate">{c.title}</div>
+                  </div>
+                  <div className="text-[10px] text-zinc-500 mt-0.5">
+                    {c.messageCount} {c.messageCount === 1 ? "повід." : "повід."} ·{" "}
+                    {new Date(c.updatedAt).toLocaleDateString("uk-UA")}
+                  </div>
+                </button>
+              )}
+              {!isEditing && (
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePin(c.id);
+                    }}
+                    className="text-zinc-500 hover:text-amber-300 p-1.5 cursor-pointer"
+                    aria-label={c.isPinned ? "Відкріпити" : "Закріпити"}
+                  >
+                    {c.isPinned ? <PinOff size={11} /> : <Pin size={11} />}
+                  </button>
+                  {folders.length > 0 && (
+                    <FolderMenu
+                      folders={folders}
+                      currentId={c.folderId}
+                      onPick={(fid) => moveToFolder(c.id, fid)}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(c.id);
+                      setEditingValue(c.title);
+                    }}
+                    className="text-zinc-500 hover:text-violet-300 p-1.5 cursor-pointer"
+                    aria-label="Перейменувати"
+                  >
+                    <Pencil size={11} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      deleteConversation(c.id);
+                    }}
+                    className="text-zinc-500 hover:text-rose-400 p-1.5 cursor-pointer"
+                    aria-label="Видалити"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function FolderMenu({
+  folders,
+  currentId,
+  onPick,
+}: {
+  folders: FolderItem[];
+  currentId: string | null;
+  onPick: (folderId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }}
+        className="text-zinc-500 hover:text-emerald-300 p-1.5 cursor-pointer"
+        aria-label="Перенести у теку"
+      >
+        <FolderInput size={11} />
+      </button>
+      {open && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-50"
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(false);
+            }}
+          />
+          <div className="absolute right-0 top-full mt-1 z-[60] min-w-[160px] rounded-lg bg-zinc-900 border border-white/10 shadow-2xl py-1">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPick(null);
+                setOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/[0.04] cursor-pointer ${currentId === null ? "text-white font-semibold" : "text-zinc-300"}`}
+            >
+              Без теки
+            </button>
+            {folders.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPick(f.id);
+                  setOpen(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 text-xs hover:bg-white/[0.04] cursor-pointer ${currentId === f.id ? "text-white font-semibold" : "text-zinc-300"}`}
+              >
+                {f.name}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
