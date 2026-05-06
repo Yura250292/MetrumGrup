@@ -35,7 +35,18 @@ export function ForemanShell({
     <div className="relative min-h-dvh bg-zinc-950 text-zinc-100 flex flex-col overflow-x-hidden">
       <AmbientBackdrop brand={brand} />
 
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-zinc-950/80 border-b border-white/5">
+      {/* Top sticky band — тонка фірмова лінія одразу під status bar.
+          Перекриває білий бордюр URL bar при scroll, дає 'continuous chrome' */}
+      <div
+        className="sticky top-0 z-40 h-[3px] pointer-events-none"
+        style={{
+          background: `linear-gradient(90deg, transparent 0%, ${brand.glow} 35%, ${brand.glow} 65%, transparent 100%)`,
+          boxShadow: `0 1px 12px ${brand.glow}`,
+        }}
+        aria-hidden
+      />
+
+      <header className="sticky top-[3px] z-30 backdrop-blur-xl bg-zinc-950/85 border-b border-white/5">
         <div className="max-w-md mx-auto px-4 py-2.5">
           <div className="flex items-center gap-3 min-h-[44px]">
             {!isRoot &&
@@ -93,6 +104,17 @@ export function ForemanShell({
       >
         {children}
       </motion.main>
+
+      {/* Bottom anchor band — тонка фірмова смужка над Safari/Chrome toolbar.
+          Перекриває білий бордюр і додає завершенню сторінки premium-finish. */}
+      <div
+        className="sticky bottom-0 z-40 h-[2px] pointer-events-none"
+        style={{
+          background: `linear-gradient(90deg, transparent 0%, ${brand.glow} 50%, transparent 100%)`,
+          boxShadow: `0 -1px 8px ${brand.glow}`,
+        }}
+        aria-hidden
+      />
     </div>
   );
 }

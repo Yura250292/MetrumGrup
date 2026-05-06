@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Метрум — Виконроб",
   description: "Звіти виконроба про витрати на об'єкті",
-  // iOS PWA / Safari hints — мінімізує browser chrome, robить status bar
+  // iOS PWA / Safari hints — мінімізує browser chrome, робить status bar
   // прозорим над dark контентом, дозволяє повноекранний "app-feel".
   appleWebApp: {
     capable: true,
@@ -24,14 +24,29 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#09090b",
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
-  viewportFit: "cover", // simul. extending під notch/home-indicator
-};
+/**
+ * Dynamic theme-color per firm — Safari/Chrome тонує URL bar у глибокий
+ * фірмовий тон замість плоского чорного. Виглядає як вибраний колір системи,
+ * а не браузерний бордюр.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const session = await auth();
+  const { firmId } = await resolveFirmScopeForRequest(session);
+  const themeColor =
+    firmId === "metrum-studio"
+      ? "#1a0f04" // deep amber-bronze
+      : firmId === "metrum-group"
+        ? "#0a0f25" // deep indigo
+        : "#09090b"; // default zinc
+  return {
+    themeColor,
+    width: "device-width",
+    initialScale: 1,
+    maximumScale: 1,
+    userScalable: false,
+    viewportFit: "cover",
+  };
+}
 
 export default async function ForemanLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
