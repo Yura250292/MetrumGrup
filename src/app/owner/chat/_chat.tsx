@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { ChartBlock, parseChartConfig, type ChartKind } from "./_chart-block";
 import { exportMessageToPdf, exportMessageToText } from "./_export";
+import { fixMarkdownTables } from "./_md-fix";
 
 interface Attachment {
   type: "image" | "document";
@@ -305,7 +306,7 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
   }, [searchParams, conversationId]);
 
   return (
-    <div className="flex flex-col gap-3 min-h-[calc(100dvh-180px)]">
+    <div className="flex flex-col gap-3 h-[calc(100dvh-130px)]">
       {/* Top toolbar */}
       <div className="flex items-center justify-between gap-2 px-1">
         <button
@@ -418,7 +419,11 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
         )}
       </AnimatePresence>
 
-      <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="flex-1 space-y-4 overflow-y-auto pr-1 -mr-1 scroll-smooth"
+        style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(255,255,255,0.1) transparent" }}
+      >
         {messages.length === 0 && <EmptyState onPick={(q) => send(q)} />}
 
         <AnimatePresence initial={false}>
@@ -583,7 +588,7 @@ function MessageRow({ message }: { message: Message }) {
                   },
                 }}
               >
-                {message.content}
+                {fixMarkdownTables(message.content)}
               </ReactMarkdown>
             )}
           </div>
@@ -782,7 +787,7 @@ function ChatInput({
   };
 
   return (
-    <div className="sticky bottom-3 z-20">
+    <div className="shrink-0 z-20">
       <div
         className={`rounded-2xl bg-zinc-900/85 backdrop-blur-xl border p-2 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)] transition ${thinkingMode ? "border-violet-500/40" : "border-white/10"}`}
       >
