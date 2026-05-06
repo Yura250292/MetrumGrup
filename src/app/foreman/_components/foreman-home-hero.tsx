@@ -25,64 +25,57 @@ interface Props {
 export function ForemanHomeHero({ firmId, userName, pending, approved }: Props) {
   const brand = resolveFirmBrand(firmId);
 
+  const hasStats = pending > 0 || approved > 0;
+
   return (
-    <div className="space-y-6 mt-2">
-      {/* Hero card з firm-brand градієнтом */}
+    <div className="space-y-4 mt-1">
+      {/* Compact identity row: firm + user + tiny stats — все одним рядком */}
       <motion.div
-        initial={{ opacity: 0, y: 16 }}
+        initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="relative rounded-3xl overflow-hidden bg-zinc-900/50 backdrop-blur-xl border border-white/10 p-6 shadow-[0_20px_60px_-20px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.06)]"
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="relative rounded-2xl overflow-hidden bg-white/[0.04] backdrop-blur-xl border border-white/10 px-4 py-3 shadow-[0_8px_30px_-12px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)]"
       >
-        {/* firm-specific glow */}
         <div
-          className="pointer-events-none absolute -top-24 -right-16 w-64 h-64 rounded-full opacity-60 blur-3xl"
-          style={{ backgroundColor: brand.glow }}
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute -bottom-20 -left-10 w-48 h-48 rounded-full opacity-40 blur-3xl"
+          className="pointer-events-none absolute -top-16 -right-10 w-40 h-40 rounded-full opacity-50 blur-3xl"
           style={{ backgroundColor: brand.glow }}
           aria-hidden
         />
 
-        <div className="relative space-y-4">
-          <FirmLogo brand={brand} size="lg" />
-
-          <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-semibold">
-              Робочий день
+        <div className="relative flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <FirmLogo brand={brand} size="sm" />
+            <div className="mt-1 flex items-center gap-2">
+              <div
+                className="w-7 h-7 rounded-full bg-gradient-to-br from-zinc-700 to-zinc-800 border border-white/10 flex items-center justify-center text-[11px] font-bold text-white shrink-0"
+                aria-hidden
+              >
+                {userName.charAt(0).toUpperCase()}
+              </div>
+              <span className="text-sm font-semibold text-white truncate">{userName}</span>
             </div>
-            <h2 className="mt-1 text-3xl font-bold text-white tracking-tight">
-              Доброго дня, {userName}
-            </h2>
-            <p className="mt-2 text-sm text-zinc-400 leading-relaxed">
-              Створіть звіт по витратах AI миттєво розпізнає матеріали та роботи з тексту,
-              фото або накладної.
-            </p>
           </div>
 
-          {/* mini-stats */}
-          {(pending > 0 || approved > 0) && (
-            <div className="flex gap-2 pt-1">
+          {hasStats && (
+            <div className="flex gap-1.5 shrink-0">
               {pending > 0 && (
-                <div className="flex-1 rounded-xl bg-amber-500/10 border border-amber-500/30 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-amber-400/80 font-semibold">
-                    На перевірці
-                  </div>
-                  <div className="text-xl font-bold text-amber-300 tabular-nums mt-0.5">
+                <div className="flex flex-col items-center justify-center min-w-[44px] px-2 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                  <span className="text-base font-bold text-amber-300 tabular-nums leading-none">
                     {pending}
-                  </div>
+                  </span>
+                  <span className="text-[8px] uppercase tracking-wider text-amber-400/80 font-bold mt-0.5">
+                    очік.
+                  </span>
                 </div>
               )}
               {approved > 0 && (
-                <div className="flex-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 px-3 py-2">
-                  <div className="text-[10px] uppercase tracking-wider text-emerald-400/80 font-semibold">
-                    Підтверджено
-                  </div>
-                  <div className="text-xl font-bold text-emerald-300 tabular-nums mt-0.5">
+                <div className="flex flex-col items-center justify-center min-w-[44px] px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                  <span className="text-base font-bold text-emerald-300 tabular-nums leading-none">
                     {approved}
-                  </div>
+                  </span>
+                  <span className="text-[8px] uppercase tracking-wider text-emerald-400/80 font-bold mt-0.5">
+                    готово
+                  </span>
                 </div>
               )}
             </div>

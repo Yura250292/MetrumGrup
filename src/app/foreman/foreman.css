@@ -1,0 +1,96 @@
+/* Foreman PWA — full-bleed dark "app-feel" overrides.
+   Optimized for iOS Safari (15+), Android Chrome, Samsung Internet, Firefox Mobile.
+   Fights typical browser-chrome leakage: white overscroll, status-bar tinting,
+   tap highlights, text-zoom inconsistencies. */
+
+html:has(.foreman-root) {
+  background-color: #09090b;
+  /* iOS bounce-overscroll сторінки показує bg документа — чорним */
+  overscroll-behavior-y: none;
+  /* iOS/Android: Не масштабувати текст коли користувач змінив "default text size" */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Acceleration на старих Android (Chrome/WebView) */
+  -webkit-tap-highlight-color: transparent;
+}
+
+body:has(.foreman-root) {
+  background-color: #09090b;
+  color: #f4f4f5;
+  overscroll-behavior-y: none;
+  /* Прибираємо синій тап-highlight на Android Chrome */
+  -webkit-tap-highlight-color: transparent;
+  /* Tabular numbers за замовчуванням — рівні цифри у балансах і таблицях */
+  font-feature-settings: "tnum" off, "ss01" on;
+  /* Гладкий скрол на iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Root container — займає весь viewport включно зі safe areas */
+.foreman-root {
+  background-color: #09090b;
+  min-height: 100vh;
+  /* dvh = dynamic viewport height: iOS Safari (15+) і Chrome 108+
+     повертає висоту що враховує згортання URL bar. Без dvh — стрибки. */
+  min-height: 100dvh;
+  /* Safe areas — iOS notch/dynamic island, Android display cutouts */
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+/* Sticky bottom CTAs (.fixed.bottom-0 у формах) — підняти над home-indicator */
+.foreman-root .fixed.bottom-0 {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+
+/* Дефолтні текстові інпути на iOS мають рамку/радіус які ми не контролюємо */
+.foreman-root input,
+.foreman-root textarea,
+.foreman-root select {
+  -webkit-appearance: none;
+  appearance: none;
+  /* Якщо font-size <16px, iOS Safari автоматично zoom-ить при focus.
+     Тому всі inputs у foreman повинні мати font-size ≥16px. */
+}
+
+/* iOS: позбутися дефолтних стилів для select arrow */
+.foreman-root select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px;
+  padding-right: 36px;
+}
+
+/* Android Chrome: tap-highlight на links/buttons — disable */
+.foreman-root a,
+.foreman-root button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* блокує double-tap zoom */
+}
+
+/* Reduce motion — поважаємо preference */
+@media (prefers-reduced-motion: reduce) {
+  .foreman-root * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Дуже малі екрани (320-360px — старий Samsung A0x, iPhone SE 1) */
+@media (max-width: 359px) {
+  .foreman-root .max-w-md {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Великі phones / phablets — обмежуємо max-width центром, фон по краях темний */
+@media (min-width: 600px) {
+  .foreman-root .max-w-md {
+    max-width: 480px;
+  }
+}

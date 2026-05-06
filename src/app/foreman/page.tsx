@@ -31,7 +31,7 @@ export default async function ForemanHomePage() {
     : [0, 0];
 
   return (
-    <ForemanShell title={`Привіт, ${userName}`} showLogout firmId={firmId}>
+    <ForemanShell isRoot showLogout firmId={firmId}>
       <ForemanHomeHero firmId={firmId} userName={userName} pending={pending} approved={approved} />
     </ForemanShell>
   );
