@@ -10,7 +10,7 @@
  *  - Other: NetworkFirst with offline fallback
  */
 
-const VERSION = 'v5.4.0';
+const VERSION = 'v5.5.0';
 const STATIC_CACHE = `metrum-static-${VERSION}`;
 const HTML_CACHE = `metrum-html-${VERSION}`;
 const ASSET_CACHE = `metrum-assets-${VERSION}`;
@@ -209,6 +209,17 @@ self.addEventListener('fetch', (event) => {
 
   // Same-origin only (skip cross-origin to avoid breaking auth/3rd-party)
   if (url.origin !== self.location.origin) return;
+
+  // /foreman/* + /api/foreman/* + /api/admin/foreman-reports/* — kiosk PWA
+  // для виконробів. State змінюється часто (новий project member, новий звіт),
+  // а stale кеш зробив би "Немає призначень" застряглим. Повністю обходимо SW.
+  if (
+    url.pathname.startsWith('/foreman') ||
+    url.pathname.startsWith('/api/foreman') ||
+    url.pathname.startsWith('/api/admin/foreman-reports')
+  ) {
+    return;
+  }
 
   // API: NetworkFirst short cache. Long-running endpoints (AI, sync) bypass
   // the SW completely — they exceed our 4s timeout and would otherwise return
