@@ -3,6 +3,7 @@ import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
+import { prisma } from "@/lib/prisma";
 
 export async function getSession() {
   return await auth();
@@ -84,6 +85,10 @@ export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
 // HR has read+write access to employees/counterparties/subcontractors/clients and read to
 // equipment/warehouse/workers/meetings/chat. Treated as an admin peer for its allowlist only.
 export const HR_ACCESSIBLE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "HR"];
+// Foreman: kiosk PWA users (виконроб). Submit expense reports → manager approves.
+export const FOREMAN_ROLES: Role[] = ["FOREMAN"];
+// Хто бачить queue звітів виконробів і може approve/reject.
+export const FOREMAN_REPORT_REVIEWERS: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
 
 export async function requireAdminRole() {
   const session = await requireAuth();
@@ -134,4 +139,83 @@ export async function requireProjectAccess(projectId: string) {
     throw new Error("Forbidden");
   }
   return session;
+}
+
+/**
+ * Гард для роль FOREMAN. Повертає session + активну фірму для firm-isolation
+ * усередині foreman API endpoints. SUPER_ADMIN не пропускається — це окрема
+ * роль для kiosk-у, не для адмінів.
+ */
+export async function requireForeman() {
+  const session = await requireAuth();
+  let firmId: string | null;
+  try {
+    ({ firmId } = await resolveFirmScopeForRequest(session));
+  } catch {
+    firmId = session.user.firmId ?? null;
+  }
+  const role = getActiveRoleFromSession(session, firmId);
+  if (role !== "FOREMAN") {
+    throw new Error("Forbidden");
+  }
+  return { session, firmId, role };
+}
+
+/**
+ * Список проектів виконроба у активній фірмі. Foreman бачить ТІЛЬКИ ті проекти,
+ * де він є ProjectMember з roleInProject=FOREMAN та isActive=true. Single source
+ * of truth для всіх foreman endpoints.
+ */
+export async function getForemanProjects(userId: string, firmId: string | null) {
+  const memberships = await prisma.projectMember.findMany({
+    where: {
+      userId,
+      roleInProject: "FOREMAN",
+      isActive: true,
+      project: {
+        firmId: firmId ?? undefined,
+        status: { not: "CANCELLED" },
+      },
+    },
+    include: {
+      project: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          address: true,
+          folderId: true,
+          firmId: true,
+          status: true,
+        },
+      },
+    },
+  });
+  return memberships.map((m) => m.project);
+}
+
+/**
+ * Defensive guard: foreman пробує писати у проект → перевір що проект справді
+ * у його активній фірмі і він на нього призначений. Кидає "Forbidden" якщо ні.
+ */
+export async function assertForemanCanAccessProject(
+  userId: string,
+  firmId: string | null,
+  projectId: string,
+) {
+  const member = await prisma.projectMember.findFirst({
+    where: {
+      userId,
+      projectId,
+      roleInProject: "FOREMAN",
+      isActive: true,
+      project: {
+        firmId: firmId ?? undefined,
+      },
+    },
+    select: { id: true },
+  });
+  if (!member) {
+    throw new Error("Forbidden");
+  }
 }

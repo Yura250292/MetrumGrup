@@ -99,7 +99,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const isLoggedIn = !!auth?.user;
       const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
       const isOnAdmin = nextUrl.pathname.startsWith("/admin");
+      const isOnForeman = nextUrl.pathname.startsWith("/foreman");
       const isOnAuth = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/register");
+
+      // /foreman scope — kiosk PWA для виконробів
+      if (isOnForeman) {
+        if (!isLoggedIn) {
+          const callbackUrl = nextUrl.pathname + nextUrl.search;
+          return Response.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`, nextUrl));
+        }
+        const role = auth.user.role;
+        if (role !== "FOREMAN") {
+          // Не-виконробів — на їх "домашню" сторінку
+          if (role === "CLIENT") return Response.redirect(new URL("/dashboard", nextUrl));
+          return Response.redirect(new URL("/admin-v2", nextUrl));
+        }
+        return true;
+      }
 
       if (isOnDashboard || isOnAdmin) {
         if (!isLoggedIn) {
@@ -108,6 +124,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const role = auth.user.role;
+
+        // FOREMAN на admin/dashboard → redirect на /foreman
+        if (role === "FOREMAN") {
+          return Response.redirect(new URL("/foreman", nextUrl));
+        }
 
         // Staff roles on /dashboard → redirect to /admin-v2
         if (isOnDashboard && ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER", "HR"].includes(role)) {
@@ -135,6 +156,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // Redirect logged in users from auth pages
       if (isOnAuth && isLoggedIn) {
         const role = auth.user.role;
+        if (role === "FOREMAN") {
+          return Response.redirect(new URL("/foreman", nextUrl));
+        }
         if (role === "CLIENT") {
           return Response.redirect(new URL("/dashboard", nextUrl));
         }

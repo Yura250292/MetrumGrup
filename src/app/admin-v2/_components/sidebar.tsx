@@ -19,6 +19,7 @@ const ROLE_LABELS: Record<string, string> = {
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",
   HR: "HR",
+  FOREMAN: "Виконроб",
   CLIENT: "Клієнт",
   USER: "Користувач",
 };
