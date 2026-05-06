@@ -15,6 +15,9 @@ type EntryForNotification = {
   amount: number | string;
   counterparty?: string | null;
   projectTitle?: string | null;
+  /// "Малярні роботи / Шпаклювання / Матеріали" — додається в кінці DM
+  /// щоб менеджер бачив куди саме лягає витрата без переходу в Metrum.
+  breadcrumb?: string | null;
 };
 
 function formatBody(entry: EntryForNotification): string {
@@ -23,6 +26,7 @@ function formatBody(entry: EntryForNotification): string {
   const parts = [`${typeLabel} — ${amount} грн`];
   if (entry.counterparty) parts.push(entry.counterparty);
   if (entry.projectTitle) parts.push(entry.projectTitle);
+  if (entry.breadcrumb) parts.push(`📂 ${entry.breadcrumb}`);
   return parts.join(" · ");
 }
 

@@ -3,9 +3,13 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { BotContext } from '../types';
 import {
   parseExpenseText,
-  parseExpenseFromImage,
   type ParsedExpense,
 } from '../../src/lib/ai/parse-expense-text';
+import { classifyExpenseImage } from '../../src/lib/ai/classify-expense-image';
+import {
+  classifyExpensesToStage,
+  type ClassifiedExpense,
+} from '../../src/lib/ai/classify-expense-to-stage';
 import { r2Client } from '../../src/lib/r2-client';
 
 const APPROVER_ROLES = ['SUPER_ADMIN', 'MANAGER', 'FINANCIER'] as const;
@@ -27,12 +31,13 @@ function formatAmount(n: number): string {
   return n.toLocaleString('uk-UA', { maximumFractionDigits: 2 });
 }
 
-function formatExpenseLine(e: ParsedExpense): string {
+function formatExpenseLine(e: ClassifiedExpense): string {
   const icon = e.costType === 'MATERIAL' ? '📦' : '🔨';
   const label = e.costType === 'MATERIAL' ? 'Матеріал' : 'Робота';
   const qty = e.quantity ? ` — ${e.quantity}${e.unit ? ' ' + e.unit : ''}` : '';
   const price = e.unitPrice ? ` × ${formatAmount(e.unitPrice)}` : '';
-  return `${icon} <b>${label}:</b> ${escapeHtml(e.title)}${qty}${price} = ${formatAmount(e.amount)} грн`;
+  const breadcrumb = e.breadcrumb ? `\n   <i>→ 📂 ${escapeHtml(e.breadcrumb)}</i>` : '';
+  return `${icon} <b>${label}:</b> ${escapeHtml(e.title)}${qty}${price} = ${formatAmount(e.amount)} грн${breadcrumb}`;
 }
 
 function extractApartmentNumber(s: string | undefined | null): number | null {
@@ -367,7 +372,7 @@ async function downloadTelegramFile(ctx: BotContext, fileId: string): Promise<Bu
 async function showConfirmCard(
   ctx: BotContext,
   draftId: string,
-  parsed: ParsedExpense[],
+  parsed: ClassifiedExpense[],
   stageName: string,
   attachmentNote?: string,
 ) {
@@ -398,7 +403,7 @@ async function showConfirmCard(
 async function persistDraft(opts: {
   ctx: BotContext;
   link: LinkedContext;
-  parsed: ParsedExpense[];
+  parsed: ClassifiedExpense[];
   rawText: string;
   attachment?: { r2Key: string; mime: string; name: string; size: number };
 }): Promise<string> {
@@ -451,8 +456,9 @@ export async function handleGroupExpenseText(ctx: BotContext): Promise<boolean> 
   }
   if (parsed.length === 0) return false; // chatter — fall through
 
-  const draftId = await persistDraft({ ctx, link, parsed, rawText: text });
-  await showConfirmCard(ctx, draftId, parsed, link.project.title);
+  const classified = await classifyExpensesToStage(parsed, link.project.id);
+  const draftId = await persistDraft({ ctx, link, parsed: classified, rawText: text });
+  await showConfirmCard(ctx, draftId, classified, link.project.title);
   return true;
 }
 
@@ -480,31 +486,34 @@ export async function handleGroupExpensePhoto(ctx: BotContext): Promise<boolean>
     return true;
   }
 
-  let parsed: ParsedExpense[] = [];
-  try {
-    parsed = await parseExpenseFromImage(buffer, 'image/jpeg');
-  } catch (err) {
-    console.error('[expense-text] image parse error:', err);
+  const classification = await classifyExpenseImage(buffer, 'image/jpeg');
+
+  // Non-expense (план, фото приміщення, селфі) — silent skip
+  if (classification.type === 'non_expense' || classification.type === 'unclear') {
+    return false;
   }
-  if (parsed.length === 0) {
-    await ctx.reply(
-      '🤔 Не зміг розпізнати витрати на фото. Якщо це чек — спробуй чіткіше або напиши текстом.',
-      msg.message_id ? { reply_parameters: { message_id: msg.message_id } } : {},
-    );
-    return true;
+
+  if (classification.items.length === 0) {
+    return false;
   }
+
+  const classified = await classifyExpensesToStage(classification.items, link.project.id);
 
   const r2Key = `financing/drafts/${link.project.id}/${Date.now()}_${photo.file_unique_id}.jpg`;
   const r2 = await uploadBufferToR2(buffer, r2Key, 'image/jpeg');
 
+  const note = classification.type === 'expense_total_only'
+    ? `розпізнано сумарно: ${classification.summary || 'фінальна сума без позицій'}`
+    : r2 ? 'фото додано до запису' : undefined;
+
   const draftId = await persistDraft({
     ctx,
     link,
-    parsed,
-    rawText: msg.caption ?? '[photo]',
+    parsed: classified,
+    rawText: msg.caption ?? classification.summary ?? '[photo]',
     attachment: r2 ? { r2Key: r2.key, mime: 'image/jpeg', name: 'photo.jpg', size: r2.size } : undefined,
   });
-  await showConfirmCard(ctx, draftId, parsed, link.project.title, r2 ? 'фото додано до запису' : undefined);
+  await showConfirmCard(ctx, draftId, classified, link.project.title, note);
   return true;
 }
 
@@ -579,6 +588,8 @@ export async function handleGroupExpenseDocument(ctx: BotContext): Promise<boole
     return true;
   }
 
+  const classified = await classifyExpensesToStage(parsed, link.project.id);
+
   const ext = isPdf ? 'pdf' : 'xlsx';
   const r2Key = `financing/drafts/${link.project.id}/${Date.now()}_${doc.file_unique_id}.${ext}`;
   const r2 = await uploadBufferToR2(buffer, r2Key, mime || (isPdf ? PDF_MIME : 'application/octet-stream'));
@@ -586,13 +597,13 @@ export async function handleGroupExpenseDocument(ctx: BotContext): Promise<boole
   const draftId = await persistDraft({
     ctx,
     link,
-    parsed,
+    parsed: classified,
     rawText: msg.caption || doc.file_name || `[${ext}]`,
     attachment: r2
       ? { r2Key: r2.key, mime: mime || (isPdf ? PDF_MIME : 'application/octet-stream'), name: doc.file_name || `file.${ext}`, size: r2.size }
       : undefined,
   });
-  await showConfirmCard(ctx, draftId, parsed, link.project.title, r2 ? `${ext.toUpperCase()} додано до запису` : undefined);
+  await showConfirmCard(ctx, draftId, classified, link.project.title, r2 ? `${ext.toUpperCase()} додано до запису` : undefined);
   return true;
 }
 
@@ -630,7 +641,7 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
     return;
   }
 
-  const items = draft.parsedJson as unknown as ParsedExpense[];
+  const items = draft.parsedJson as unknown as ClassifiedExpense[];
   const username = ctx.from?.username ? '@' + ctx.from.username : ctx.from?.first_name || 'TG';
 
   await ctx.answerCbQuery('⏳ Створюю записи...');
@@ -648,7 +659,7 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
         occurredAt: new Date(),
         projectId: project.id,
         firmId: project.firmId ?? null,
-        stageRecordId: draft.stageRecordId,
+        stageRecordId: item.stageRecordId ?? draft.stageRecordId,
         category,
         costType: item.costType,
         title: item.title,
@@ -681,7 +692,9 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
   }
 
   const { notifyFinanceApprovers } = await import('../../src/lib/financing/notify-approval');
-  for (const c of created) {
+  for (let i = 0; i < created.length; i++) {
+    const c = created[i];
+    const breadcrumb = items[i]?.breadcrumb ?? null;
     await notifyFinanceApprovers(
       {
         id: c.id,
@@ -689,6 +702,7 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
         type: 'EXPENSE',
         amount: c.amount,
         projectTitle: project.title,
+        breadcrumb,
       },
       draft.authorUserId,
     );
