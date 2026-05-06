@@ -1,5 +1,6 @@
 import {
   Shield,
+  Crown,
   Users as UsersIcon,
   User as UserIcon,
   Wrench,
@@ -11,6 +12,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 export const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
+  OWNER: "Власник",
   MANAGER: "Менеджер",
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",
@@ -22,6 +24,7 @@ export const ROLE_LABELS: Record<string, string> = {
 
 export const ROLE_ICONS: Record<string, LucideIcon> = {
   SUPER_ADMIN: Shield,
+  OWNER: Crown,
   MANAGER: UsersIcon,
   ENGINEER: Wrench,
   FINANCIER: Calculator,
@@ -33,6 +36,7 @@ export const ROLE_ICONS: Record<string, LucideIcon> = {
 
 export const ROLE_COLORS: Record<string, { bg: string; fg: string }> = {
   SUPER_ADMIN: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
+  OWNER: { bg: T.warningSoft, fg: T.warning },
   MANAGER: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
   ENGINEER: { bg: T.successSoft, fg: T.success },
   FINANCIER: { bg: T.warningSoft, fg: T.warning },
@@ -44,6 +48,7 @@ export const ROLE_COLORS: Record<string, { bg: string; fg: string }> = {
 
 const ALL_ROLES = [
   "SUPER_ADMIN",
+  "OWNER",
   "MANAGER",
   "ENGINEER",
   "FINANCIER",

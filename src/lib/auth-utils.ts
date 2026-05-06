@@ -89,6 +89,9 @@ export const HR_ACCESSIBLE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "HR"];
 export const FOREMAN_ROLES: Role[] = ["FOREMAN"];
 // Хто бачить queue звітів виконробів і може approve/reject.
 export const FOREMAN_REPORT_REVIEWERS: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
+// Owner: директор/засновник — мінімалістичний read-only аналітичний дашборд.
+// SUPER_ADMIN теж пропускається у /owner (може дивитись overview якщо хоче).
+export const OWNER_ROLES: Role[] = ["OWNER", "SUPER_ADMIN"];
 
 export async function requireAdminRole() {
   const session = await requireAuth();
@@ -218,4 +221,23 @@ export async function assertForemanCanAccessProject(
   if (!member) {
     throw new Error("Forbidden");
   }
+}
+
+/**
+ * Гард для роль OWNER (директор/засновник). Read-only доступ до аналітики
+ * усіх фірм. SUPER_ADMIN теж пропускається. Повертає session + активну фірму.
+ */
+export async function requireOwner() {
+  const session = await requireAuth();
+  let firmId: string | null;
+  try {
+    ({ firmId } = await resolveFirmScopeForRequest(session));
+  } catch {
+    firmId = session.user.firmId ?? null;
+  }
+  const role = getActiveRoleFromSession(session, firmId);
+  if (role !== "OWNER" && role !== "SUPER_ADMIN") {
+    throw new Error("Forbidden");
+  }
+  return { session, firmId, role };
 }

@@ -15,6 +15,7 @@ import { getFirmBrand, getActiveRoleFromSession } from "@/lib/firm/scope";
 
 const ROLE_LABELS: Record<string, string> = {
   SUPER_ADMIN: "Адміністратор",
+  OWNER: "Власник",
   MANAGER: "Менеджер",
   ENGINEER: "Інженер",
   FINANCIER: "Фінансист",

@@ -22,7 +22,8 @@ export const runtime = "nodejs";
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+  // OWNER (директор) теж має cross-firm view — для аналітики на рівні групи.
+  const canCrossFirm = session.user.role === "SUPER_ADMIN" || session.user.role === "OWNER";
 
   let body: { firmId?: string | null } = {};
   try {
@@ -41,9 +42,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (firmId === FIRM_OVERRIDE_ALL) {
-    if (!isSuperAdmin) {
+    if (!canCrossFirm) {
       return NextResponse.json(
-        { error: "Cross-firm view доступний лише адміністраторам" },
+        { error: "Cross-firm view доступний лише адміністраторам та власникам" },
         { status: 403 },
       );
     }

@@ -122,6 +122,10 @@ export function getActiveRoleFromSession(
   const user = session?.user;
   if (!user) return null;
   if (user.role === "SUPER_ADMIN") return "SUPER_ADMIN";
+  // OWNER (директор/засновник) бачить аналітику всіх фірм як OWNER —
+  // незалежно від того яка фірма активна. Це read-only роль для дашборда,
+  // тому cross-firm view безпечний.
+  if (user.role === "OWNER") return "OWNER";
   if (activeFirmId === null) return null;
   const userFirmId = user.firmId ?? DEFAULT_FIRM_ID;
   if (userFirmId === activeFirmId) return user.role;
@@ -138,7 +142,7 @@ export function getActiveRoleFromSession(
 export function getAccessibleFirmIds(session: SessionLike): string[] {
   const user = session?.user;
   if (!user) return [];
-  if (user.role === "SUPER_ADMIN") return Object.keys(KNOWN_FIRMS);
+  if (user.role === "SUPER_ADMIN" || user.role === "OWNER") return Object.keys(KNOWN_FIRMS);
   const homeFirmId = user.firmId ?? DEFAULT_FIRM_ID;
   const access = (user as { firmAccess?: Record<string, Role> } | undefined)
     ?.firmAccess ?? {};

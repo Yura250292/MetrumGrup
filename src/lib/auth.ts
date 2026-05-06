@@ -100,6 +100,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
       const isOnAdmin = nextUrl.pathname.startsWith("/admin");
       const isOnForeman = nextUrl.pathname.startsWith("/foreman");
+      const isOnOwner = nextUrl.pathname.startsWith("/owner");
       const isOnAuth = nextUrl.pathname.startsWith("/login") || nextUrl.pathname.startsWith("/register");
 
       // /foreman scope — kiosk PWA для виконробів
@@ -110,8 +111,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         const role = auth.user.role;
         if (role !== "FOREMAN") {
-          // Не-виконробів — на їх "домашню" сторінку
           if (role === "CLIENT") return Response.redirect(new URL("/dashboard", nextUrl));
+          if (role === "OWNER") return Response.redirect(new URL("/owner", nextUrl));
+          return Response.redirect(new URL("/admin-v2", nextUrl));
+        }
+        return true;
+      }
+
+      // /owner scope — мінімалістичний аналітичний дашборд для директора
+      if (isOnOwner) {
+        if (!isLoggedIn) {
+          const callbackUrl = nextUrl.pathname + nextUrl.search;
+          return Response.redirect(new URL(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`, nextUrl));
+        }
+        const role = auth.user.role;
+        // OWNER + SUPER_ADMIN можуть зайти (адмін бачить власник-в'ю якщо хоче)
+        if (role !== "OWNER" && role !== "SUPER_ADMIN") {
+          if (role === "CLIENT") return Response.redirect(new URL("/dashboard", nextUrl));
+          if (role === "FOREMAN") return Response.redirect(new URL("/foreman", nextUrl));
           return Response.redirect(new URL("/admin-v2", nextUrl));
         }
         return true;
@@ -128,6 +145,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // FOREMAN на admin/dashboard → redirect на /foreman
         if (role === "FOREMAN") {
           return Response.redirect(new URL("/foreman", nextUrl));
+        }
+
+        // OWNER на admin/dashboard → redirect на /owner (мінімалістичний дашборд)
+        if (role === "OWNER") {
+          return Response.redirect(new URL("/owner", nextUrl));
         }
 
         // Staff roles on /dashboard → redirect to /admin-v2
@@ -158,6 +180,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const role = auth.user.role;
         if (role === "FOREMAN") {
           return Response.redirect(new URL("/foreman", nextUrl));
+        }
+        if (role === "OWNER") {
+          return Response.redirect(new URL("/owner", nextUrl));
         }
         if (role === "CLIENT") {
           return Response.redirect(new URL("/dashboard", nextUrl));

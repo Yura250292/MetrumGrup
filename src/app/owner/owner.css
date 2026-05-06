@@ -1,0 +1,62 @@
+/* Owner premium dashboard — full-bleed dark з прозорим status bar.
+   Спільний стиль з foreman, але окремий scope щоб не плутались. */
+
+html:has(.owner-root) {
+  background-color: #09090b;
+  overscroll-behavior-y: none;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body:has(.owner-root) {
+  background-color: #09090b;
+  color: #f4f4f5;
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+  font-feature-settings: "tnum" off;
+  -webkit-overflow-scrolling: touch;
+}
+
+.owner-root {
+  background-color: #09090b;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-bottom: env(safe-area-inset-bottom, 0);
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
+}
+
+.owner-root .fixed.bottom-0 {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 12px);
+}
+
+.owner-root input,
+.owner-root textarea,
+.owner-root select {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.owner-root select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px;
+  padding-right: 36px;
+}
+
+.owner-root a,
+.owner-root button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-root * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
