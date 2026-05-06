@@ -41,14 +41,26 @@ type StaffUser = {
   avatar: string | null;
 };
 
+// Staff roles that can be added to a project team. Includes FOREMAN — the
+// kiosk-PWA role for site supervisors (виконроби) submitting expense reports.
+const PROJECT_MEMBER_CANDIDATE_ROLES = [
+  "SUPER_ADMIN",
+  "MANAGER",
+  "ENGINEER",
+  "FINANCIER",
+  "HR",
+  "FOREMAN",
+].join(",");
+
 function useStaffUsers() {
   return useQuery({
-    queryKey: ["chat", "staffUsers"],
+    queryKey: ["projects", "memberCandidates", PROJECT_MEMBER_CANDIDATE_ROLES],
     queryFn: async () => {
-      const res = await fetch("/api/admin/chat/users");
+      const res = await fetch(`/api/admin/users?role=${PROJECT_MEMBER_CANDIDATE_ROLES}`);
       if (!res.ok) throw new Error("Не вдалося завантажити список співробітників");
       const data = await res.json();
-      return data.users as StaffUser[];
+      const list = (data.data ?? data.users ?? []) as StaffUser[];
+      return list;
     },
   });
 }
