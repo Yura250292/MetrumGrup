@@ -2,7 +2,17 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ClipboardList, History, FileText, ChevronRight, Sparkles } from "lucide-react";
+import {
+  ClipboardList,
+  History,
+  FileText,
+  ChevronRight,
+  Sparkles,
+  Calculator,
+  Package,
+  Ruler,
+  Camera,
+} from "lucide-react";
 import { resolveFirmBrand, FirmLogo } from "./firm-brand";
 
 interface Props {
@@ -130,11 +140,60 @@ export function ForemanHomeHero({ firmId, userName, pending, approved }: Props) 
         </Link>
       </motion.div>
 
+      {/* Tools section */}
+      <motion.section
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        aria-labelledby="foreman-tools-heading"
+      >
+        <div className="flex items-baseline justify-between mb-3 px-1">
+          <h3
+            id="foreman-tools-heading"
+            className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-bold"
+          >
+            Інструменти
+          </h3>
+          <span className="text-[10px] text-zinc-600 uppercase tracking-wider">для роботи</span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <ToolTile
+            href="/foreman/tools/area"
+            icon={<Calculator size={20} strokeWidth={2} />}
+            label="Калькулятор"
+            sublabel="Площа кімнати"
+            iconBg="bg-sky-500/10 text-sky-300 border-sky-500/30"
+          />
+          <ToolTile
+            href="/foreman/tools/materials"
+            icon={<Package size={20} strokeWidth={2} />}
+            label="Матеріали"
+            sublabel="Витрата на м²"
+            iconBg="bg-violet-500/10 text-violet-300 border-violet-500/30"
+          />
+          <ToolTile
+            href="/foreman/tools/level"
+            icon={<Ruler size={20} strokeWidth={2} />}
+            label="Лінійка"
+            sublabel="Рівень / waterpas"
+            iconBg="bg-amber-500/10 text-amber-300 border-amber-500/30"
+          />
+          <ToolTile
+            href="/foreman/tools/photo-log"
+            icon={<Camera size={20} strokeWidth={2} />}
+            label="Фотолог"
+            sublabel="Прогрес обʼєкту"
+            iconBg="bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+          />
+        </div>
+      </motion.section>
+
       {/* Secondary actions grid */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.16, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: 0.5, delay: 0.22, ease: [0.22, 1, 0.36, 1] }}
         className="grid grid-cols-1 gap-3"
       >
         <Link
@@ -175,5 +234,32 @@ export function ForemanHomeHero({ firmId, userName, pending, approved }: Props) 
         </div>
       </motion.div>
     </div>
+  );
+}
+
+interface ToolTileProps {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  sublabel: string;
+  iconBg: string;
+}
+
+function ToolTile({ href, icon, label, sublabel, iconBg }: ToolTileProps) {
+  return (
+    <Link
+      href={href}
+      className="group relative flex flex-col gap-2.5 p-4 rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 hover:border-white/25 active:scale-[0.97] transition-all duration-200 shadow-[0_4px_20px_-8px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.05)] select-none cursor-pointer overflow-hidden min-h-[100px]"
+    >
+      <span
+        className={`flex items-center justify-center w-10 h-10 rounded-xl border ${iconBg}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-white tracking-tight leading-tight">{label}</div>
+        <div className="text-[11px] text-zinc-500 mt-0.5 truncate">{sublabel}</div>
+      </div>
+    </Link>
   );
 }
