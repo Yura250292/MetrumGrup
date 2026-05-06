@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { auth } from "@/lib/auth";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getDashboardKpis, getProjectsFinanceOverview } from "@/lib/owner/queries";
@@ -6,6 +5,7 @@ import { OwnerShell } from "./_components/owner-shell";
 import { KpiGrid } from "./_components/kpi-grid";
 import { ProjectsRows } from "./_components/projects-rows";
 import { OwnerHomeActions } from "./_components/home-actions";
+import { CollapsibleSection } from "./_components/collapsible-section";
 
 export const dynamic = "force-dynamic";
 
@@ -35,18 +35,15 @@ export default async function OwnerHomePage() {
 
         <OwnerHomeActions />
 
-        {/* Top projects by spend */}
-        <section>
-          <div className="flex items-baseline justify-between mb-2 px-1">
-            <h2 className="text-xs uppercase tracking-[0.2em] text-zinc-500 font-bold">
-              Топ проекти за витратами
-            </h2>
-            <Link href="/owner/projects" className="text-[11px] text-zinc-400 hover:text-white">
-              Усі →
-            </Link>
-          </div>
+        {/* Top projects by spend — collapsible */}
+        <CollapsibleSection
+          title="Топ проекти за витратами"
+          caption={`${projects.length}`}
+          href="/owner/projects"
+          defaultOpen
+        >
           <ProjectsRows projects={projects} />
-        </section>
+        </CollapsibleSection>
       </div>
     </OwnerShell>
   );
