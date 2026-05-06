@@ -7,17 +7,32 @@ export type MeetingStatus =
   | "READY"
   | "FAILED";
 
+export type MeetingPriorityLevel = "HIGH" | "MEDIUM" | "LOW";
+
 export type MeetingTask = {
   title: string;
   assignee: string | null;
   dueDate: string | null;
+  priority?: MeetingPriorityLevel | null;
+  context?: string | null;
+  successCriteria?: string | null;
+};
+
+export type MeetingPriority = {
+  title: string;
+  level: MeetingPriorityLevel;
+  reason?: string | null;
 };
 
 export type MeetingStructured = {
   summary: string;
+  context?: string | null;
+  goals?: string[];
   keyPoints: string[];
   decisions: string[];
+  priorities?: MeetingPriority[];
   tasks: MeetingTask[];
+  risks?: string[];
   nextSteps: string[];
   openQuestions: string[];
 };

@@ -58,6 +58,7 @@ export default function MeetingDetailPage() {
   const [delegated, setDelegated] = useState<DelegationState>({});
   const [movingFolder, setMovingFolder] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
   const summaryTriggeredRef = useRef(false);
   const { open: openAiPanel } = useAiPanel();
 
@@ -134,6 +135,35 @@ export default function MeetingDetailPage() {
   async function retrySummarize() {
     await fetch(`/api/admin/meetings/${id}/summarize`, { method: "POST" });
     await refresh();
+  }
+
+  async function regenerateSummary() {
+    if (!meeting?.transcript) return;
+    if (
+      meeting.structured &&
+      !confirm(
+        "Перезапустити AI-аналіз? Поточний підсумок буде замінено новим. Делегованих задач це не торкнеться."
+      )
+    ) {
+      return;
+    }
+    setRegenerating(true);
+    summaryTriggeredRef.current = true;
+    try {
+      const res = await fetch(`/api/admin/meetings/${id}/summarize`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося перегенерувати підсумок");
+      }
+      setDelegated({});
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка");
+    } finally {
+      setRegenerating(false);
+    }
   }
 
   async function moveToFolder(targetFolderId: string | null) {
@@ -255,6 +285,25 @@ export default function MeetingDetailPage() {
           >
             {STATUS_LABELS[meeting.status]}
           </span>
+          {meeting.transcript && (
+            <button
+              onClick={regenerateSummary}
+              disabled={regenerating || processing}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+              style={{
+                background: T.accentPrimarySoft,
+                color: T.accentPrimary,
+              }}
+              title="Перезапустити AI-аналіз з тим же транскриптом, щоб отримати глибший підсумок"
+            >
+              {regenerating ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Sparkles size={14} />
+              )}
+              {meeting.structured ? "Перегенерувати" : "Сформувати підсумок"}
+            </button>
+          )}
           <button
             onClick={() => setMoveOpen(true)}
             className="rounded-lg p-2"

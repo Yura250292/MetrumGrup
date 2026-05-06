@@ -9,9 +9,29 @@ import {
   Sparkles,
   UserPlus,
   Wand2,
+  Target,
+  Flag,
+  AlertTriangle,
+  BookOpen,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import type { MeetingStructured, MeetingTask } from "./types";
+import type {
+  MeetingStructured,
+  MeetingTask,
+  MeetingPriorityLevel,
+} from "./types";
+
+const PRIORITY_LABEL: Record<MeetingPriorityLevel, string> = {
+  HIGH: "Високий",
+  MEDIUM: "Середній",
+  LOW: "Низький",
+};
+
+function priorityColors(level: MeetingPriorityLevel) {
+  if (level === "HIGH") return { bg: T.dangerSoft, fg: T.danger };
+  if (level === "MEDIUM") return { bg: T.amberSoft, fg: T.amber };
+  return { bg: T.tealSoft, fg: T.teal };
+}
 
 export type DelegationState = {
   [taskIndex: number]: { taskId: string };
@@ -32,9 +52,69 @@ export function SummaryView({
     <div className="flex flex-col gap-4">
       {data.summary && (
         <Card icon={<Sparkles size={18} />} title="Підсумок" color={T.accentPrimary} tint={T.accentPrimarySoft}>
-          <p className="text-sm leading-relaxed" style={{ color: T.textPrimary }}>
+          <p
+            className="whitespace-pre-line text-sm leading-relaxed"
+            style={{ color: T.textPrimary }}
+          >
             {data.summary}
           </p>
+        </Card>
+      )}
+
+      {data.context && (
+        <Card icon={<BookOpen size={18} />} title="Контекст" color={T.sky} tint={T.skySoft}>
+          <p
+            className="whitespace-pre-line text-sm leading-relaxed"
+            style={{ color: T.textPrimary }}
+          >
+            {data.context}
+          </p>
+        </Card>
+      )}
+
+      {data.goals && data.goals.length > 0 && (
+        <Card icon={<Target size={18} />} title="Цілі" color={T.emerald} tint={T.emeraldSoft}>
+          <BulletList items={data.goals} />
+        </Card>
+      )}
+
+      {data.priorities && data.priorities.length > 0 && (
+        <Card icon={<Flag size={18} />} title="Пріоритети" color={T.rose} tint={T.roseSoft}>
+          <div className="flex flex-col gap-2">
+            {data.priorities.map((p, i) => {
+              const c = priorityColors(p.level);
+              return (
+                <div
+                  key={i}
+                  className="rounded-lg p-3"
+                  style={{ background: T.panelElevated }}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p
+                      className="text-sm font-medium"
+                      style={{ color: T.textPrimary }}
+                    >
+                      {p.title}
+                    </p>
+                    <span
+                      className="rounded-md px-2 py-0.5 text-xs font-semibold"
+                      style={{ background: c.bg, color: c.fg }}
+                    >
+                      {PRIORITY_LABEL[p.level]}
+                    </span>
+                  </div>
+                  {p.reason && (
+                    <p
+                      className="mt-1 text-xs leading-relaxed"
+                      style={{ color: T.textMuted }}
+                    >
+                      {p.reason}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </Card>
       )}
 
@@ -55,6 +135,9 @@ export function SummaryView({
           <div className="flex flex-col gap-2">
             {data.tasks.map((task, i) => {
               const isDelegated = !!delegated?.[i];
+              const pri = task.priority
+                ? priorityColors(task.priority)
+                : null;
               return (
                 <div
                   key={i}
@@ -62,14 +145,40 @@ export function SummaryView({
                   style={{ background: T.panelElevated }}
                 >
                   <div className="min-w-0 flex-1">
-                    <p
-                      className="text-sm font-medium"
-                      style={{ color: T.textPrimary }}
-                    >
-                      {task.title}
-                    </p>
+                    <div className="flex items-start gap-2">
+                      <p
+                        className="flex-1 text-sm font-medium"
+                        style={{ color: T.textPrimary }}
+                      >
+                        {task.title}
+                      </p>
+                      {task.priority && pri && (
+                        <span
+                          className="flex-shrink-0 rounded-md px-2 py-0.5 text-[10px] font-semibold uppercase"
+                          style={{ background: pri.bg, color: pri.fg }}
+                        >
+                          {PRIORITY_LABEL[task.priority]}
+                        </span>
+                      )}
+                    </div>
+                    {task.context && (
+                      <p
+                        className="mt-1.5 text-xs leading-relaxed"
+                        style={{ color: T.textSecondary }}
+                      >
+                        {task.context}
+                      </p>
+                    )}
+                    {task.successCriteria && (
+                      <p
+                        className="mt-1 text-xs leading-relaxed"
+                        style={{ color: T.textMuted }}
+                      >
+                        <span style={{ color: T.success }}>✓</span> Критерій успіху: {task.successCriteria}
+                      </p>
+                    )}
                     <div
-                      className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs"
+                      className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs"
                       style={{ color: T.textMuted }}
                     >
                       {task.assignee && (
@@ -117,6 +226,17 @@ export function SummaryView({
               );
             })}
           </div>
+        </Card>
+      )}
+
+      {data.risks && data.risks.length > 0 && (
+        <Card
+          icon={<AlertTriangle size={18} />}
+          title="Ризики та блокери"
+          color={T.amber}
+          tint={T.amberSoft}
+        >
+          <BulletList items={data.risks} />
         </Card>
       )}
 
