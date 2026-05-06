@@ -3,17 +3,34 @@ import Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { requireOwner, forbiddenResponse, unauthorizedResponse } from "@/lib/auth-utils";
 import { TOOLS, dispatchTool } from "@/lib/owner/ai-tools";
+import { EXTRA_TOOLS, dispatchExtraTool } from "@/lib/owner/ai-tools-extra";
+import { WRITE_TOOLS, dispatchWriteTool } from "@/lib/owner/ai-tools-write";
 import { KNOWN_FIRMS } from "@/lib/firm/scope";
+import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+const AttachmentSchema = z.object({
+  type: z.enum(["image", "document"]), // image (jpeg/png/webp/gif) | document (PDF)
+  mediaType: z.string(),
+  /** Base64-encoded data WITHOUT data: prefix. */
+  base64: z.string(),
+  /** Original filename — для контексту. */
+  name: z.string().optional(),
+});
+
 const Body = z.object({
+  conversationId: z.string().optional(),
+  thinking: z.boolean().optional().default(false),
   messages: z
     .array(
       z.object({
         role: z.enum(["user", "assistant"]),
         content: z.string(),
+        /** Attachments — тільки на user повідомленнях. */
+        attachments: z.array(AttachmentSchema).max(5).optional(),
       }),
     )
     .min(1)
@@ -33,8 +50,9 @@ const SYSTEM_PROMPT = (firmId: string | null, today: string) => `Ти — фін
 - Усі грошові суми — у гривнях (UAH).
 
 # Доступні tools
-- **Custom tools** (query_*, search_*, forecast_*) — твій основний інструмент для фінансових даних компанії.
-- **web_search** — використовуй для актуальних ринкових даних: курси валют НБУ, ціни на матеріали в магазинах, тендери Prozorro, новини індустрії. НЕ використовуй для внутрішніх даних компанії.
+- **Read tools** (query_*, search_*, forecast_*) — читання фінансів, проектів, кошторисів, ЗП, контрагентів, задач, файлів.
+- **Write tools** (create_task_draft, create_reminder) — обережно. Створюй ЛИШЕ якщо власник явно просить ('постав задачу X', 'нагадай мені Y'). Завжди підтверджуй коротко що створив.
+- **web_search** — для актуальних ринкових даних: курси НБУ, ціни матеріалів, тендери Prozorro, новини індустрії. НЕ використовуй для внутрішніх даних.
 
 # Принципи відповіді
 1. **Завжди користуйся tools** для фактичних даних. НЕ вигадуй цифри.
@@ -95,8 +113,6 @@ export async function POST(req: NextRequest) {
     if (msg === "Forbidden") return forbiddenResponse();
     return unauthorizedResponse();
   }
-  void session; // tracking only — не використовуємо в логіці
-
   if (!process.env.ANTHROPIC_API_KEY) {
     return new Response("ANTHROPIC_API_KEY not configured", { status: 500 });
   }
@@ -107,8 +123,31 @@ export async function POST(req: NextRequest) {
     return new Response("Bad request", { status: 400 });
   }
 
+  // Validate conversationId якщо передано — ownership check
+  let conversationId: string | null = null;
+  if (parsed.data.conversationId) {
+    const conv = await prisma.ownerConversation.findFirst({
+      where: { id: parsed.data.conversationId, userId: session.user.id },
+      select: { id: true },
+    });
+    if (conv) conversationId = conv.id;
+  }
+
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const today = new Date().toISOString().slice(0, 10);
+
+  // Останнє user повідомлення — для збереження
+  const lastUserMessage = [...parsed.data.messages].reverse().find((m) => m.role === "user");
+  // Зберігаємо user повідомлення одразу (щоб з'явилось у DB до того як AI почне відповідати)
+  if (conversationId && lastUserMessage) {
+    await prisma.ownerChatMessage.create({
+      data: { conversationId, role: "user", content: lastUserMessage.content },
+    });
+    await prisma.ownerConversation.update({
+      where: { id: conversationId },
+      data: { messageCount: { increment: 1 }, updatedAt: new Date() },
+    });
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -117,23 +156,58 @@ export async function POST(req: NextRequest) {
         controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
       };
 
+      let assistantTextBuffer = "";
+      const toolCallsLog: Array<{ name: string; result?: string; server?: boolean }> = [];
+
       try {
-        // Anthropic message conversation z tools loop
         type AnyMsg = Anthropic.Messages.MessageParam;
-        const messages: AnyMsg[] = parsed.data.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
+        // Перетворюємо messages — для останнього user-повідомлення з attachments
+        // створюємо multimodal content array (text + image/document blocks).
+        const inputMessages = parsed.data.messages;
+        const messages: AnyMsg[] = inputMessages.map((m, idx) => {
+          const isLast = idx === inputMessages.length - 1;
+          if (m.role === "user" && isLast && m.attachments && m.attachments.length > 0) {
+            type Block =
+              | { type: "text"; text: string }
+              | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
+              | { type: "document"; source: { type: "base64"; media_type: string; data: string } };
+            const blocks: Block[] = [];
+            for (const att of m.attachments) {
+              if (att.type === "image") {
+                blocks.push({
+                  type: "image",
+                  source: {
+                    type: "base64",
+                    media_type: att.mediaType,
+                    data: att.base64,
+                  },
+                });
+              } else if (att.type === "document") {
+                blocks.push({
+                  type: "document",
+                  source: {
+                    type: "base64",
+                    media_type: att.mediaType,
+                    data: att.base64,
+                  },
+                });
+              }
+            }
+            blocks.push({ type: "text", text: m.content });
+            return { role: m.role, content: blocks } as unknown as AnyMsg;
+          }
+          return { role: m.role, content: m.content };
+        });
 
         // Tool loop — до 5 ітерацій (захист від нескінченного циклу)
         for (let iter = 0; iter < 5; iter++) {
           send("status", { phase: "thinking", iteration: iter });
 
-          // Tools = custom + Anthropic server-managed web_search.
-          // web_search виконується на стороні Anthropic — нам не треба
-          // dispatch'ити його у dispatchTool. Просто включаємо у tools array.
+          // Tools = core (TOOLS) + extras (Phase A) + Anthropic web_search.
           const allTools = [
             ...(TOOLS as unknown as Anthropic.Messages.Tool[]),
+            ...(EXTRA_TOOLS as unknown as Anthropic.Messages.Tool[]),
+            ...(WRITE_TOOLS as unknown as Anthropic.Messages.Tool[]),
             {
               type: "web_search_20250305",
               name: "web_search",
@@ -141,27 +215,45 @@ export async function POST(req: NextRequest) {
             } as unknown as Anthropic.Messages.Tool,
           ];
 
-          const response = await anthropic.messages.create({
+          const apiParams: Anthropic.Messages.MessageCreateParamsNonStreaming = {
             model: MODEL,
-            max_tokens: 4096,
+            max_tokens: parsed.data.thinking ? 16000 : 4096,
             system: SYSTEM_PROMPT(firmId, today),
             tools: allTools,
             messages,
-          });
+          };
+
+          // Extended thinking — для складних аналітичних запитів власник
+          // вмикає toggle "Глибокий аналіз". Claude думає до 8000 токенів
+          // перед відповіддю — для прогнозів, мульти-проектних аналізів.
+          if (parsed.data.thinking) {
+            (apiParams as unknown as Record<string, unknown>).thinking = {
+              type: "enabled",
+              budget_tokens: 8000,
+            };
+          }
+
+          const response = await anthropic.messages.create(apiParams);
 
           // Stream text from response.content
           for (const block of response.content) {
             if (block.type === "text") {
               send("text", { delta: block.text });
+              assistantTextBuffer += block.text;
             } else if (block.type === "tool_use") {
               send("tool_call", { name: block.name, input: block.input });
+              toolCallsLog.push({ name: block.name });
             } else if ((block as { type: string }).type === "server_tool_use") {
-              // Anthropic server tool (e.g. web_search) — щоб UI показав feedback
               const b = block as unknown as { name: string; input: unknown };
               send("tool_call", { name: b.name, input: b.input, server: true });
+              toolCallsLog.push({ name: b.name, server: true });
             } else if ((block as { type: string }).type === "web_search_tool_result") {
-              // Результат web_search — Anthropic уже виконав, передаємо у UI
               send("tool_result", { name: "web_search", result: "✓ пошук в інтернеті завершено" });
+              const last = toolCallsLog[toolCallsLog.length - 1];
+              if (last && last.name === "web_search") last.result = "✓";
+            } else if ((block as { type: string }).type === "thinking") {
+              // Розширене thinking — пропускаємо у відповідь користувачу
+              // (Claude думає мовчки), не зберігаємо у БД.
             }
           }
 
@@ -180,8 +272,26 @@ export async function POST(req: NextRequest) {
           const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
           for (const block of response.content) {
             if (block.type !== "tool_use") continue;
-            const result = await dispatchTool({ firmId }, block.name, block.input);
+            // Маршрутизація: write tools → extras → core. Перший що поверне non-null — переможець.
+            let result = await dispatchWriteTool(
+              { firmId, ownerUserId: session.user.id },
+              block.name,
+              block.input,
+            );
+            if (result === null) {
+              result = await dispatchExtraTool({ firmId }, block.name, block.input);
+            }
+            if (result === null) {
+              result = await dispatchTool({ firmId }, block.name, block.input);
+            }
             send("tool_result", { name: block.name, result });
+            // Update last matching tool in log
+            for (let i = toolCallsLog.length - 1; i >= 0; i--) {
+              if (toolCallsLog[i].name === block.name && !toolCallsLog[i].result) {
+                toolCallsLog[i].result = result.slice(0, 4000); // cap
+                break;
+              }
+            }
             toolResults.push({
               type: "tool_result",
               tool_use_id: block.id,
@@ -189,6 +299,33 @@ export async function POST(req: NextRequest) {
             });
           }
           messages.push({ role: "user", content: toolResults });
+        }
+
+        // Зберегти assistant повідомлення у БД
+        if (conversationId && assistantTextBuffer.trim().length > 0) {
+          await prisma.ownerChatMessage.create({
+            data: {
+              conversationId,
+              role: "assistant",
+              content: assistantTextBuffer,
+              toolCallsJson:
+                toolCallsLog.length > 0
+                  ? (toolCallsLog as unknown as Prisma.InputJsonValue)
+                  : Prisma.JsonNull,
+            },
+          });
+          await prisma.ownerConversation.update({
+            where: { id: conversationId },
+            data: {
+              messageCount: { increment: 1 },
+              updatedAt: new Date(),
+              // Auto-title з першого user повідомлення (якщо ще "Нова розмова")
+              title:
+                lastUserMessage && parsed.data.messages.length <= 2
+                  ? lastUserMessage.content.slice(0, 80)
+                  : undefined,
+            },
+          });
         }
 
         send("done", { ok: true });

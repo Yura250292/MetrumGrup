@@ -107,6 +107,7 @@ model User {
   foremanReportsCreated  ForemanReport[]           @relation("ForemanReportCreator")
   foremanReportsReviewed ForemanReport[]           @relation("ForemanReportReviewer")
   foremanReportFiles     ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
+  ownerConversations     OwnerConversation[]       @relation("OwnerConversationUser")
 
   @@index([firmId])
   @@map("users")
@@ -3039,4 +3040,47 @@ enum PriceSnapshotSource {
   MANUAL
   ESTIMATE
   IMPORT
+}
+
+/// Owner AI chat persistence — кожна conversation це сесія діалогу
+/// власника з асистентом. Дозволяє повернутись до минулих запитів.
+model OwnerConversation {
+  id           String   @id @default(cuid())
+  userId       String
+  /// firmId на момент початку розмови (фіксується для контексту).
+  firmId       String?
+  title        String   @default("Нова розмова")
+  /// Кількість повідомлень — для швидкого відображення списку.
+  messageCount Int      @default(0)
+  /// Поки розмова в роботі (стрімінг) — true. Після завершення — false.
+  isActive     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user     User               @relation("OwnerConversationUser", fields: [userId], references: [id], onDelete: Cascade)
+  messages OwnerChatMessage[]
+
+  @@index([userId, updatedAt])
+  @@map("owner_conversations")
+}
+
+enum OwnerChatRole {
+  user
+  assistant
+}
+
+model OwnerChatMessage {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           OwnerChatRole
+  /// Сирий markdown контент.
+  content        String        @db.Text
+  /// Tool calls/results як JSON масив для відновлення UI.
+  toolCallsJson  Json?
+  createdAt      DateTime      @default(now())
+
+  conversation OwnerConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("owner_chat_messages")
 }

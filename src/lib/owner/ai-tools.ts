@@ -291,6 +291,8 @@ export async function queryProjectSummary(
 
 export const QueryTopOverspendInput = z.object({
   limit: z.number().int().min(1).max(20).default(10),
+  /** "overspend" — перевитрата (fact > plan); "savings" — економія (fact < plan); "both" — обидва. */
+  mode: z.enum(["overspend", "savings", "both"]).default("overspend"),
 });
 
 export async function queryTopOverspend(
@@ -316,7 +318,7 @@ export async function queryTopOverspend(
     plan: number;
     fact: number;
     burn: number;
-    over: number;
+    diff: number; // fact − plan: позитивне = перевитрата, негативне = економія
   }> = [];
 
   for (const p of projects) {
@@ -330,17 +332,53 @@ export async function queryTopOverspend(
     }
     if (plan === 0 && fact === 0) continue;
     const burn = plan > 0 ? fact / plan : 0;
-    rows.push({ title: p.title, firmId: p.firmId, plan, fact, burn, over: fact - plan });
+    rows.push({ title: p.title, firmId: p.firmId, plan, fact, burn, diff: fact - plan });
   }
 
-  rows.sort((a, b) => b.over - a.over);
-  const top = rows.slice(0, input.limit);
+  if (rows.length === 0) {
+    return "Немає проектів з фінансовими записами.";
+  }
 
-  let md = `**Топ ${top.length} проектів за перевитратами:**\n\n`;
-  md += `| Проект | План | Факт | Перевитрата | Burn % |\n|---|---:|---:|---:|---:|\n`;
-  for (const r of top) {
-    const overFmt = r.over > 0 ? `+${formatUah(r.over)}` : formatUah(r.over);
-    md += `| ${r.title} ${r.firmId === "metrum-studio" ? "(S)" : "(G)"} | ${formatUah(r.plan)} | ${formatUah(r.fact)} | ${overFmt} | ${(r.burn * 100).toFixed(0)}% |\n`;
+  if (input.mode === "overspend") {
+    const overspent = rows.filter((r) => r.diff > 0).sort((a, b) => b.diff - a.diff);
+    if (overspent.length === 0) {
+      // Жодного проекту не перевищено — покажемо найближчі до перевитрат + сповістимо
+      const closest = rows.sort((a, b) => b.burn - a.burn).slice(0, input.limit);
+      let md = `✓ **Жодного проекту з перевитратами наразі немає.**\n\n`;
+      md += `Усі активні проекти у межах планового бюджету. Ось найближчі до планових витрат:\n\n`;
+      md += `| Проект | План | Факт | Залишок | Burn % |\n|---|---:|---:|---:|---:|\n`;
+      for (const r of closest) {
+        md += `| ${r.title} ${r.firmId === "metrum-studio" ? "(S)" : "(G)"} | ${formatUah(r.plan)} | ${formatUah(r.fact)} | ${formatUah(-r.diff)} | ${(r.burn * 100).toFixed(0)}% |\n`;
+      }
+      return md;
+    }
+    let md = `**Проекти з перевитратами (${overspent.length}):**\n\n`;
+    md += `| Проект | План | Факт | Перевитрата | Burn % |\n|---|---:|---:|---:|---:|\n`;
+    for (const r of overspent.slice(0, input.limit)) {
+      md += `| ${r.title} ${r.firmId === "metrum-studio" ? "(S)" : "(G)"} | ${formatUah(r.plan)} | ${formatUah(r.fact)} | **+${formatUah(r.diff)}** | ${(r.burn * 100).toFixed(0)}% |\n`;
+    }
+    return md;
+  }
+
+  if (input.mode === "savings") {
+    const saved = rows.filter((r) => r.diff < 0).sort((a, b) => a.diff - b.diff);
+    if (saved.length === 0) return "Немає проектів з економією — усі або у межах плану, або з перевитратами.";
+    let md = `**Топ проектів з економією (${saved.length}):**\n\n`;
+    md += `| Проект | План | Факт | Економія | Burn % |\n|---|---:|---:|---:|---:|\n`;
+    for (const r of saved.slice(0, input.limit)) {
+      md += `| ${r.title} ${r.firmId === "metrum-studio" ? "(S)" : "(G)"} | ${formatUah(r.plan)} | ${formatUah(r.fact)} | **${formatUah(-r.diff)}** | ${(r.burn * 100).toFixed(0)}% |\n`;
+    }
+    return md;
+  }
+
+  // both
+  rows.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+  let md = `**Топ ${input.limit} проектів за відхиленням план/факт:**\n\n`;
+  md += `| Проект | План | Факт | Δ | Статус | Burn % |\n|---|---:|---:|---:|---|---:|\n`;
+  for (const r of rows.slice(0, input.limit)) {
+    const status = r.diff > 0 ? "⚠️ перевитрата" : r.diff < 0 ? "✓ економія" : "= план";
+    const sign = r.diff > 0 ? "+" : "";
+    md += `| ${r.title} ${r.firmId === "metrum-studio" ? "(S)" : "(G)"} | ${formatUah(r.plan)} | ${formatUah(r.fact)} | ${sign}${formatUah(r.diff)} | ${status} | ${(r.burn * 100).toFixed(0)}% |\n`;
   }
   return md;
 }
@@ -543,11 +581,12 @@ export const TOOLS = [
   {
     name: "query_top_overspend",
     description:
-      "Топ проектів за перевитратами (factExpense - planExpense). Використовуй для 'покажи де у нас перевитрати', 'які проекти пілять бюджет'.",
+      "Топ проектів за відхиленням план/факт. mode='overspend' (default) → лише ті де fact > plan (справжні перевитрати). mode='savings' → ті де fact < plan (економія). mode='both' → відсортовано по абсолютному відхиленню. Використовуй коли користувач питає 'де перевитрати', 'де економимо', 'найбільші відхилення'.",
     input_schema: {
       type: "object",
       properties: {
         limit: { type: "number", default: 10 },
+        mode: { type: "string", enum: ["overspend", "savings", "both"], default: "overspend" },
       },
     },
   },

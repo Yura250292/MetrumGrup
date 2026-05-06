@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Send,
@@ -15,9 +17,25 @@ import {
   Copy,
   Check,
   Globe,
+  Plus,
+  History,
+  Trash2,
+  Brain,
+  X,
+  Paperclip,
+  FileText,
 } from "lucide-react";
 import { ChartBlock, parseChartConfig, type ChartKind } from "./_chart-block";
 import { exportMessageToPdf, exportMessageToText } from "./_export";
+
+interface Attachment {
+  type: "image" | "document";
+  mediaType: string;
+  base64: string;
+  name: string;
+  /** Object URL for preview before send. */
+  previewUrl?: string;
+}
 
 interface ToolCall {
   name: string;
@@ -34,11 +52,29 @@ interface Message {
   error?: string;
 }
 
+interface ConversationListItem {
+  id: string;
+  title: string;
+  messageCount: number;
+  updatedAt: string;
+}
+
+interface InitialConversation {
+  id: string;
+  title: string;
+  messages: Array<{
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    toolCallsJson: unknown;
+  }>;
+}
+
 const SAMPLE_QUESTIONS = [
   "Які проекти у нас з найбільшими перевитратами?",
   "Скільки потратили на цемент за останній місяць?",
-  "Спрогнозуй чи вистачить бюджету на проекті Тіфані",
-  "Який зараз курс долара НБУ?",
+  "Покажи зарплати за квартал",
+  "Які кошториси перевищують 1 млн?",
 ];
 
 let counter = 0;
@@ -47,20 +83,74 @@ const newId = () => {
   return `m-${Date.now()}-${counter}`;
 };
 
-export function OwnerChat() {
-  const [messages, setMessages] = useState<Message[]>([]);
+interface Props {
+  conversations: ConversationListItem[];
+  initialConversation: InitialConversation | null;
+}
+
+export function OwnerChat({ conversations: initialConversations, initialConversation }: Props) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const [conversations, setConversations] = useState<ConversationListItem[]>(initialConversations);
+  const [conversationId, setConversationId] = useState<string | null>(
+    initialConversation?.id ?? null,
+  );
+
+  const initialMessages: Message[] = initialConversation
+    ? initialConversation.messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        toolCalls: Array.isArray(m.toolCallsJson) ? (m.toolCallsJson as ToolCall[]) : undefined,
+      }))
+    : [];
+
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [pending, setPending] = useState(false);
+  const [thinkingMode, setThinkingMode] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
-  async function send(text: string) {
-    if (!text.trim() || pending) return;
+  async function ensureConversation(): Promise<string | null> {
+    if (conversationId) return conversationId;
+    try {
+      const res = await fetch("/api/owner/conversations", { method: "POST" });
+      if (!res.ok) return null;
+      const { conversation } = (await res.json()) as { conversation: { id: string; title: string } };
+      setConversationId(conversation.id);
+      setConversations((prev) => [
+        {
+          id: conversation.id,
+          title: conversation.title,
+          messageCount: 0,
+          updatedAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+      // Update URL без перезавантаження
+      router.replace(`/owner/chat?c=${conversation.id}`, { scroll: false });
+      return conversation.id;
+    } catch {
+      return null;
+    }
+  }
 
-    const userMsg: Message = { id: newId(), role: "user", content: text.trim() };
+  async function send(text: string) {
+    if ((!text.trim() && attachments.length === 0) || pending) return;
+
+    const convId = await ensureConversation();
+
+    const sentAttachments = attachments;
+    const userText = text.trim() || (sentAttachments.length > 0 ? "(прикріплено файл)" : "");
+
+    const userMsg: Message = { id: newId(), role: "user", content: userText };
     const assistantId = newId();
     const assistantMsg: Message = {
       id: assistantId,
@@ -72,14 +162,35 @@ export function OwnerChat() {
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInput("");
+    setAttachments([]);
     setPending(true);
+
+    // Створюємо payload: усі попередні повідомлення без attachments,
+    // останнє user — з ними.
+    const historyPayload = messages.map((m) => ({ role: m.role, content: m.content }));
+    historyPayload.push({
+      role: "user",
+      content: userText,
+      ...(sentAttachments.length > 0
+        ? {
+            attachments: sentAttachments.map((a) => ({
+              type: a.type,
+              mediaType: a.mediaType,
+              base64: a.base64,
+              name: a.name,
+            })),
+          }
+        : {}),
+    } as { role: "user"; content: string });
 
     try {
       const res = await fetch("/api/owner/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })),
+          conversationId: convId,
+          thinking: thinkingMode,
+          messages: historyPayload,
         }),
       });
       if (!res.ok || !res.body) {
@@ -156,8 +267,157 @@ export function OwnerChat() {
     }
   }
 
+  const newChat = () => {
+    setMessages([]);
+    setConversationId(null);
+    router.replace("/owner/chat", { scroll: false });
+  };
+
+  const switchConversation = (id: string) => {
+    if (id !== conversationId) {
+      router.push(`/owner/chat?c=${id}`);
+    }
+    setShowSidebar(false);
+  };
+
+  const deleteConversation = async (id: string) => {
+    if (!confirm("Видалити цю розмову? Дані не можна буде відновити.")) return;
+    try {
+      const res = await fetch(`/api/owner/conversations/${id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      setConversations((prev) => prev.filter((c) => c.id !== id));
+      if (id === conversationId) newChat();
+    } catch {
+      // ignore
+    }
+  };
+
+  const activeConvLabel = conversationId
+    ? conversations.find((c) => c.id === conversationId)?.title ?? "Розмова"
+    : "Нова розмова";
+
+  // Sync URL ?c=ID changes (browser back/forward)
+  useEffect(() => {
+    const c = searchParams.get("c");
+    if (c !== conversationId) {
+      // do nothing — server-side rendered initial state, just track state
+    }
+  }, [searchParams, conversationId]);
+
   return (
-    <div className="flex flex-col gap-4 min-h-[calc(100dvh-180px)]">
+    <div className="flex flex-col gap-3 min-h-[calc(100dvh-180px)]">
+      {/* Top toolbar */}
+      <div className="flex items-center justify-between gap-2 px-1">
+        <button
+          type="button"
+          onClick={() => setShowSidebar(!showSidebar)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/25 text-sm text-zinc-200 cursor-pointer transition"
+        >
+          <History size={14} />
+          <span className="max-w-[180px] truncate">{activeConvLabel}</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setThinkingMode(!thinkingMode)}
+            title="Глибокий аналіз — для прогнозів та складних запитів"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition cursor-pointer ${
+              thinkingMode
+                ? "bg-violet-500/20 border border-violet-500/40 text-violet-200"
+                : "bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            <Brain size={14} />
+            <span className="hidden sm:inline">Думати</span>
+          </button>
+          <button
+            type="button"
+            onClick={newChat}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/25 text-sm text-zinc-200 cursor-pointer transition"
+          >
+            <Plus size={14} />
+            <span className="hidden sm:inline">Нова</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Conversations sidebar (drawer) */}
+      <AnimatePresence>
+        {showSidebar && (
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-40 bg-black/50"
+              aria-label="Закрити"
+              onClick={() => setShowSidebar(false)}
+            />
+            <motion.aside
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              transition={{ type: "spring", damping: 24, stiffness: 240 }}
+              className="fixed left-0 top-0 bottom-0 w-[280px] z-50 bg-zinc-950 border-r border-white/10 backdrop-blur-xl shadow-2xl flex flex-col"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h3 className="text-sm font-semibold text-white">Історія розмов</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowSidebar(false)}
+                  className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                  aria-label="Закрити"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+                {conversations.length === 0 ? (
+                  <div className="text-xs text-zinc-500 text-center py-8 px-3">
+                    Розмов поки немає. Задай перше питання — і вона з{"’"}явиться тут.
+                  </div>
+                ) : (
+                  conversations.map((c) => (
+                    <div
+                      key={c.id}
+                      className={`group flex items-center gap-1 rounded-xl px-2 py-2 transition cursor-pointer ${
+                        c.id === conversationId
+                          ? "bg-violet-500/15 border border-violet-500/30"
+                          : "hover:bg-white/[0.04] border border-transparent"
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => switchConversation(c.id)}
+                        className="flex-1 text-left min-w-0 cursor-pointer"
+                      >
+                        <div className="text-sm text-white truncate">{c.title}</div>
+                        <div className="text-[10px] text-zinc-500 mt-0.5">
+                          {c.messageCount} {c.messageCount === 1 ? "повід." : "повід."} ·{" "}
+                          {new Date(c.updatedAt).toLocaleDateString("uk-UA")}
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteConversation(c.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-rose-400 p-1.5 transition cursor-pointer"
+                        aria-label="Видалити"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
       <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto">
         {messages.length === 0 && <EmptyState onPick={(q) => send(q)} />}
 
@@ -168,7 +428,15 @@ export function OwnerChat() {
         </AnimatePresence>
       </div>
 
-      <ChatInput input={input} setInput={setInput} pending={pending} onSend={() => send(input)} />
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        attachments={attachments}
+        setAttachments={setAttachments}
+        pending={pending}
+        onSend={() => send(input)}
+        thinkingMode={thinkingMode}
+      />
     </div>
   );
 }
@@ -186,8 +454,8 @@ function EmptyState({ onPick }: { onPick: (q: string) => void }) {
       </motion.div>
       <h2 className="text-xl font-bold text-white mb-1">Запитай про бізнес</h2>
       <p className="text-sm text-zinc-400 max-w-sm mx-auto leading-relaxed">
-        Я знаю всі ваші фінанси, проекти, контрагентів. Можу шукати в інтернеті актуальні ціни і
-        курси валют.
+        Я знаю фінанси, проекти, кошториси, зарплати, контрагентів. Шукаю в інтернеті актуальні
+        дані. Усі розмови зберігаються.
       </p>
 
       <div className="grid grid-cols-1 gap-2 mt-6 max-w-md mx-auto">
@@ -267,6 +535,7 @@ function MessageRow({ message }: { message: Message }) {
               <p className="whitespace-pre-wrap m-0">{message.content}</p>
             ) : (
               <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
                 components={{
                   table: ({ children }) => (
                     <div className="overflow-x-auto my-2 -mx-1">
@@ -291,7 +560,6 @@ function MessageRow({ message }: { message: Message }) {
                   li: ({ children }) => <li className="text-zinc-200">{children}</li>,
                   strong: ({ children }) => <strong className="text-white font-bold">{children}</strong>,
                   hr: () => <hr className="my-3 border-white/10" />,
-                  // Custom code: chart-bar / chart-line / chart-pie рендеримо як графік
                   code: ({ className, children }) => {
                     const lang = (className ?? "").replace(/^language-/, "");
                     const text = String(children).trim();
@@ -321,7 +589,6 @@ function MessageRow({ message }: { message: Message }) {
           </div>
         )}
 
-        {/* Action bar — тільки для assistant з готовою відповіддю */}
         {!isUser && !message.loading && message.content && !message.error && (
           <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center gap-2 opacity-50 group-hover:opacity-100 transition">
             <button
@@ -363,20 +630,85 @@ function MessageRow({ message }: { message: Message }) {
   );
 }
 
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+const MAX_ATTACHMENT_SIZE = 5 * 1024 * 1024; // 5MB
+
 function ChatInput({
   input,
   setInput,
+  attachments,
+  setAttachments,
   pending,
   onSend,
+  thinkingMode,
 }: {
   input: string;
   setInput: (s: string) => void;
+  attachments: Attachment[];
+  setAttachments: (a: Attachment[]) => void;
   pending: boolean;
   onSend: () => void;
+  thinkingMode: boolean;
 }) {
   const [recording, setRecording] = useState(false);
-  // Speech API підтримка — оцінюємо через useState initializer щоб не
-  // тригерити cascading render (eslint react-hooks/set-state-in-effect).
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files) return;
+    setAttachError(null);
+    const newOnes: Attachment[] = [];
+    for (const file of Array.from(files)) {
+      if (attachments.length + newOnes.length >= 5) {
+        setAttachError("Максимум 5 файлів");
+        break;
+      }
+      if (file.size > MAX_ATTACHMENT_SIZE) {
+        setAttachError(`${file.name} > 5 МБ — занадто великий`);
+        continue;
+      }
+      const isImage = file.type.startsWith("image/");
+      const isPdf = file.type === "application/pdf";
+      if (!isImage && !isPdf) {
+        setAttachError(`${file.name}: підтримуються тільки зображення і PDF`);
+        continue;
+      }
+      try {
+        const base64 = await fileToBase64(file);
+        newOnes.push({
+          type: isImage ? "image" : "document",
+          mediaType: file.type,
+          base64,
+          name: file.name,
+          previewUrl: isImage ? URL.createObjectURL(file) : undefined,
+        });
+      } catch {
+        setAttachError(`${file.name}: помилка читання`);
+      }
+    }
+    if (newOnes.length > 0) {
+      setAttachments([...attachments, ...newOnes]);
+    }
+  };
+
+  const removeAttachment = (idx: number) => {
+    const att = attachments[idx];
+    if (att.previewUrl) URL.revokeObjectURL(att.previewUrl);
+    setAttachments(attachments.filter((_, i) => i !== idx));
+  };
+
   const [voiceSupported] = useState(() => {
     if (typeof window === "undefined") return false;
     const W = window as unknown as {
@@ -438,12 +770,9 @@ function ChatInput({
       const combined = (baseInput + " " + finalText + interim).trim();
       setInput(combined);
     };
-    r.onerror = () => {
-      setRecording(false);
-    };
+    r.onerror = () => setRecording(false);
     r.onend = () => {
       setRecording(false);
-      // Зберегти final text у baseInput для наступної сесії
       baseInput = (baseInput + " " + finalText).trim();
     };
 
@@ -454,8 +783,80 @@ function ChatInput({
 
   return (
     <div className="sticky bottom-3 z-20">
-      <div className="rounded-2xl bg-zinc-900/85 backdrop-blur-xl border border-white/10 p-2 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)]">
+      <div
+        className={`rounded-2xl bg-zinc-900/85 backdrop-blur-xl border p-2 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)] transition ${thinkingMode ? "border-violet-500/40" : "border-white/10"}`}
+      >
+        {thinkingMode && (
+          <div className="px-2 pt-1 pb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-violet-300">
+            <Brain size={10} />
+            Глибокий аналіз увімкнено · відповідь буде довшою
+          </div>
+        )}
+
+        {/* Attachments preview */}
+        {attachments.length > 0 && (
+          <div className="px-2 pt-1 pb-2 flex flex-wrap gap-2">
+            {attachments.map((a, i) => (
+              <div
+                key={i}
+                className="relative group rounded-lg overflow-hidden bg-white/[0.04] border border-white/10"
+              >
+                {a.type === "image" && a.previewUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={a.previewUrl}
+                    alt={a.name}
+                    className="w-16 h-16 object-cover"
+                  />
+                ) : (
+                  <div className="w-16 h-16 flex flex-col items-center justify-center text-zinc-400">
+                    <FileText size={20} />
+                    <span className="text-[8px] mt-0.5">PDF</span>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => removeAttachment(i)}
+                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                  aria-label="Видалити"
+                >
+                  <X size={10} />
+                </button>
+                <div className="px-1.5 pb-0.5 text-[9px] text-zinc-500 truncate max-w-[64px]">
+                  {a.name}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {attachError && (
+          <div className="px-2 pb-1 text-[11px] text-rose-300">{attachError}</div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*,application/pdf"
+          multiple
+          className="sr-only"
+          onChange={(e) => {
+            handleFiles(e.target.files);
+            e.currentTarget.value = "";
+          }}
+        />
+
         <div className="flex items-end gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={pending || attachments.length >= 5}
+            className="shrink-0 w-10 h-10 rounded-xl bg-white/[0.06] text-zinc-300 hover:bg-white/[0.10] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
+            aria-label="Прикріпити файл"
+            title="Зображення або PDF (до 5MB кожен, до 5 файлів)"
+          >
+            <Paperclip size={16} />
+          </button>
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -481,7 +882,6 @@ function ChatInput({
                   : "bg-white/[0.06] text-zinc-300 hover:bg-white/[0.10]"
               }`}
               aria-label={recording ? "Зупинити запис" : "Голосовий ввід"}
-              title={recording ? "Зупинити запис" : "Голосовий ввід (Speech API)"}
             >
               {recording ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
