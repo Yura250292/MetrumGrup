@@ -22,7 +22,6 @@ import {
   Trash2,
   Brain,
   X,
-  Paperclip,
   FileText,
 } from "lucide-react";
 import { ChartBlock, parseChartConfig, type ChartKind } from "./_chart-block";
@@ -786,82 +785,87 @@ function ChatInput({
     setRecording(true);
   };
 
+  const hasContent = input.trim().length > 0 || attachments.length > 0;
+  // Send button shows: Send (purple) when has content, Mic (white) when empty + voice supported, MicOff (red) when recording
+  const rightButtonState: "send" | "mic" | "stop" = recording
+    ? "stop"
+    : hasContent || !voiceSupported
+      ? "send"
+      : "mic";
+
   return (
-    <div className="shrink-0 z-20">
-      <div
-        className={`rounded-2xl bg-zinc-900/85 backdrop-blur-xl border p-2 shadow-[0_8px_30px_-8px_rgba(0,0,0,0.6)] transition ${thinkingMode ? "border-violet-500/40" : "border-white/10"}`}
-      >
-        {thinkingMode && (
-          <div className="px-2 pt-1 pb-1 flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold text-violet-300">
-            <Brain size={10} />
-            Глибокий аналіз увімкнено · відповідь буде довшою
-          </div>
-        )}
+    <div className="shrink-0 z-20 px-1 pb-1 space-y-2">
+      {thinkingMode && (
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-[10px] uppercase tracking-wider font-bold text-violet-300 w-fit mx-auto">
+          <Brain size={10} />
+          Глибокий аналіз
+        </div>
+      )}
 
-        {/* Attachments preview */}
-        {attachments.length > 0 && (
-          <div className="px-2 pt-1 pb-2 flex flex-wrap gap-2">
-            {attachments.map((a, i) => (
-              <div
-                key={i}
-                className="relative group rounded-lg overflow-hidden bg-white/[0.04] border border-white/10"
-              >
-                {a.type === "image" && a.previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={a.previewUrl}
-                    alt={a.name}
-                    className="w-16 h-16 object-cover"
-                  />
-                ) : (
-                  <div className="w-16 h-16 flex flex-col items-center justify-center text-zinc-400">
-                    <FileText size={20} />
-                    <span className="text-[8px] mt-0.5">PDF</span>
-                  </div>
-                )}
-                <button
-                  type="button"
-                  onClick={() => removeAttachment(i)}
-                  className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition cursor-pointer"
-                  aria-label="Видалити"
-                >
-                  <X size={10} />
-                </button>
-                <div className="px-1.5 pb-0.5 text-[9px] text-zinc-500 truncate max-w-[64px]">
-                  {a.name}
+      {/* Attachments preview — over the input */}
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-1">
+          {attachments.map((a, i) => (
+            <div
+              key={i}
+              className="relative group rounded-xl overflow-hidden bg-white/[0.04] border border-white/10"
+            >
+              {a.type === "image" && a.previewUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.previewUrl} alt={a.name} className="w-16 h-16 object-cover" />
+              ) : (
+                <div className="w-16 h-16 flex flex-col items-center justify-center text-zinc-400">
+                  <FileText size={20} />
+                  <span className="text-[8px] mt-0.5">PDF</span>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              )}
+              <button
+                type="button"
+                onClick={() => removeAttachment(i)}
+                className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-rose-500 text-white flex items-center justify-center cursor-pointer"
+                aria-label="Видалити"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
-        {attachError && (
-          <div className="px-2 pb-1 text-[11px] text-rose-300">{attachError}</div>
-        )}
+      {attachError && <div className="px-3 text-[11px] text-rose-300">{attachError}</div>}
 
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*,application/pdf"
-          multiple
-          className="sr-only"
-          onChange={(e) => {
-            handleFiles(e.target.files);
-            e.currentTarget.value = "";
-          }}
-        />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,application/pdf"
+        multiple
+        className="sr-only"
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          e.currentTarget.value = "";
+        }}
+      />
 
-        <div className="flex items-end gap-2">
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={pending || attachments.length >= 5}
-            className="shrink-0 w-10 h-10 rounded-xl bg-white/[0.06] text-zinc-300 hover:bg-white/[0.10] flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition"
-            aria-label="Прикріпити файл"
-            title="Зображення або PDF (до 5MB кожен, до 5 файлів)"
-          >
-            <Paperclip size={16} />
-          </button>
+      {/* Main row: [+] [pill input] [send/mic] */}
+      <div className="flex items-end gap-2">
+        {/* + Attach round button */}
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={pending || attachments.length >= 5}
+          className="shrink-0 w-12 h-12 rounded-full bg-zinc-800/90 hover:bg-zinc-700/90 text-zinc-200 flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition active:scale-90 border border-white/5"
+          aria-label="Прикріпити файл"
+          title="Зображення або PDF"
+        >
+          <Plus size={22} strokeWidth={2.4} />
+        </button>
+
+        {/* Pill input */}
+        <div
+          className={`flex-1 flex items-end gap-2 rounded-3xl bg-zinc-900/85 backdrop-blur-xl border px-4 py-2 transition ${
+            thinkingMode ? "border-violet-500/40" : "border-white/10"
+          }`}
+        >
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -871,36 +875,49 @@ function ChatInput({
                 onSend();
               }
             }}
-            placeholder={recording ? "🎙️ Слухаю…" : "Спитай про витрати, проекти, прогнози…"}
+            placeholder={recording ? "🎙️ Слухаю…" : "Запитати асистента"}
             rows={1}
-            className="flex-1 bg-transparent resize-none px-3 py-2.5 text-sm text-white focus:outline-none max-h-[160px] placeholder-zinc-500"
-            style={{ minHeight: 40 }}
+            className="flex-1 bg-transparent resize-none py-2 text-base text-white focus:outline-none max-h-[160px] placeholder-zinc-500 leading-snug"
+            style={{ minHeight: 28 }}
           />
-          {voiceSupported && (
-            <button
-              type="button"
-              onClick={toggleRecord}
-              disabled={pending}
-              className={`shrink-0 w-10 h-10 rounded-xl flex items-center justify-center transition cursor-pointer ${
-                recording
-                  ? "bg-rose-500 text-white animate-pulse shadow-[0_4px_12px_rgba(244,63,94,0.5)]"
-                  : "bg-white/[0.06] text-zinc-300 hover:bg-white/[0.10]"
-              }`}
-              aria-label={recording ? "Зупинити запис" : "Голосовий ввід"}
-            >
-              {recording ? <MicOff size={16} /> : <Mic size={16} />}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onSend}
-            disabled={!input.trim() || pending}
-            className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer active:scale-90 transition shadow-[0_4px_12px_-2px_rgba(168,85,247,0.5)]"
-            aria-label="Надіслати"
-          >
-            {pending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
         </div>
+
+        {/* Send / Mic round button */}
+        <button
+          type="button"
+          onClick={
+            rightButtonState === "send"
+              ? onSend
+              : rightButtonState === "stop"
+                ? toggleRecord
+                : toggleRecord
+          }
+          disabled={pending && rightButtonState === "send"}
+          className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition active:scale-90 ${
+            rightButtonState === "send"
+              ? "bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-[0_4px_16px_-2px_rgba(168,85,247,0.6)]"
+              : rightButtonState === "stop"
+                ? "bg-rose-500 text-white animate-pulse shadow-[0_4px_12px_rgba(244,63,94,0.5)]"
+                : "bg-white text-zinc-900 shadow-[0_4px_12px_rgba(255,255,255,0.15)]"
+          }`}
+          aria-label={
+            rightButtonState === "send"
+              ? "Надіслати"
+              : rightButtonState === "stop"
+                ? "Зупинити запис"
+                : "Голосовий ввід"
+          }
+        >
+          {pending && rightButtonState === "send" ? (
+            <Loader2 size={20} className="animate-spin" />
+          ) : rightButtonState === "send" ? (
+            <Send size={20} strokeWidth={2.4} />
+          ) : rightButtonState === "stop" ? (
+            <MicOff size={20} strokeWidth={2.4} />
+          ) : (
+            <Mic size={20} strokeWidth={2.4} />
+          )}
+        </button>
       </div>
     </div>
   );
