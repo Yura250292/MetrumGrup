@@ -50,7 +50,16 @@ async function main() {
       _sum: { amount: true },
     });
     const planExpense = await prisma.financeEntry.aggregate({
-      where: { projectId: p.id, kind: "PLAN", type: "EXPENSE", isArchived: false, description: { contains: "[plan-expense-budget]" } },
+      where: {
+        projectId: p.id,
+        kind: "PLAN",
+        type: "EXPENSE",
+        isArchived: false,
+        OR: [
+          { description: { contains: "[plan-detail]" } },
+          { description: { contains: "[plan-expense-budget]" } },
+        ],
+      },
       _sum: { amount: true },
     });
     const factExpense = await prisma.financeEntry.aggregate({
