@@ -12,6 +12,7 @@ import { parseExpenseText } from "@/lib/ai/parse-expense-text";
 import { classifyExpenseImage } from "@/lib/ai/classify-expense-image";
 import { ocrReceiptStructured } from "@/lib/ocr/receipt-ocr";
 import { parseExcelEstimate } from "@/lib/parsers/excel-estimate-parser";
+import { parseKB2ActExcel } from "@/lib/parsers/kb2-act-parser";
 import { mergeForemanItems, fromParsedExpense, type ForemanDraftItem } from "@/lib/foreman/merge-items";
 import type { CostType } from "@prisma/client";
 
@@ -164,20 +165,37 @@ export async function POST(req: NextRequest) {
             );
           } else if (isExcel(f.mime, f.originalName)) {
             const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
-            const xls = await parseExcelEstimate(ab);
-            aiRaw[`xls:${f.key}`] = { items: xls.items.length, errors: xls.errors };
-            sources.push(
-              xls.items.map((it) => ({
-                costType: "MATERIAL" as CostType,
-                title: it.description,
-                unit: it.unit,
-                quantity: it.quantity,
-                unitPrice: it.unitPrice,
-                amount: it.totalPrice,
-                currency: "UAH",
-                confidence: 0.8,
-              })).filter((it) => it.amount > 0),
-            );
+            // Спроба 1: звичайний кошторис (з заголовками)
+            let estimateItems: ForemanDraftItem[] = [];
+            try {
+              const xls = await parseExcelEstimate(ab);
+              aiRaw[`xls:${f.key}`] = { kind: "estimate", items: xls.items.length, errors: xls.errors };
+              estimateItems = xls.items
+                .map((it) => ({
+                  costType: "MATERIAL" as CostType,
+                  title: it.description,
+                  unit: it.unit,
+                  quantity: it.quantity,
+                  unitPrice: it.unitPrice,
+                  amount: it.totalPrice,
+                  currency: "UAH",
+                  confidence: 0.8,
+                }))
+                .filter((it) => it.amount > 0);
+            } catch (e) {
+              aiRaw[`xls:${f.key}`] = { kind: "estimate", error: (e as Error).message };
+            }
+            // Спроба 2: КБ-2в акт (Робота / Матеріали з підрозділами 1.1, 1.2)
+            // Якщо звичайний парсер нічого не знайшов — пробуємо акт.
+            if (estimateItems.length === 0) {
+              const kb2Items = parseKB2ActExcel(ab);
+              aiRaw[`xls:${f.key}-kb2`] = { kind: "kb2-act", items: kb2Items.length };
+              if (kb2Items.length > 0) {
+                sources.push(kb2Items);
+              }
+            } else {
+              sources.push(estimateItems);
+            }
           }
         } catch (e) {
           console.warn(`[foreman/parse] file ${f.key} failed:`, e);
