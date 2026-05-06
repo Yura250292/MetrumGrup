@@ -903,6 +903,34 @@ function EmptyState({ onPick }: { onPick: (q: string) => void }) {
   );
 }
 
+function IconAction({
+  onClick,
+  title,
+  active,
+  activeClass = "bg-white/[0.08] text-white",
+  children,
+}: {
+  onClick: () => void;
+  title: string;
+  active?: boolean;
+  activeClass?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
+        active ? activeClass : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function MessageRow({
   message,
   onSuggestionClick,
@@ -1064,63 +1092,47 @@ function MessageRow({
         )}
 
         {!isUser && !message.loading && message.content && !message.error && (
-          <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center gap-2 opacity-50 group-hover:opacity-100 transition">
-            <button
-              type="button"
+          <div className="mt-2.5 pt-2 border-t border-white/5 flex items-center gap-1 opacity-60 group-hover:opacity-100 transition">
+            <IconAction
               onClick={handleCopy}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[11px] text-zinc-300 transition cursor-pointer"
-              title="Копіювати markdown"
+              title={copied ? "Скопійовано" : "Копіювати"}
+              active={copied}
             >
-              {copied ? <Check size={11} /> : <Copy size={11} />}
-              {copied ? "Скопійовано" : "Копіювати"}
-            </button>
-            <button
-              type="button"
+              {copied ? <Check size={13} /> : <Copy size={13} />}
+            </IconAction>
+            <IconAction
               onClick={() => exportMessageToPdf(messageRef.current, `metrum-chat-${Date.now()}`)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[11px] text-zinc-300 transition cursor-pointer"
               title="Зберегти як PDF"
             >
-              <FileDown size={11} /> PDF
-            </button>
-            <button
-              type="button"
+              <FileDown size={13} />
+            </IconAction>
+            <IconAction
               onClick={() => exportMessageToText(message.content, `metrum-answer-${Date.now()}`)}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[11px] text-zinc-300 transition cursor-pointer"
-              title="Зберегти як текст"
+              title="Зберегти як текст (.md)"
             >
-              <FileDown size={11} /> TXT
-            </button>
-            <button
-              type="button"
+              <FileText size={13} />
+            </IconAction>
+            <IconAction
               onClick={toggleSpeak}
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition cursor-pointer ${
-                speaking
-                  ? "bg-violet-500/20 text-violet-300"
-                  : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300"
-              }`}
-              title={speaking ? "Зупинити" : "Прослухати голосом"}
+              title={speaking ? "Зупинити озвучення" : "Озвучити"}
+              active={speaking}
+              activeClass="bg-violet-500/20 text-violet-300"
             >
-              {speaking ? <VolumeX size={11} /> : <Volume2 size={11} />}
-              {speaking ? "Стоп" : "Озвучити"}
-            </button>
+              {speaking ? <VolumeX size={13} /> : <Volume2 size={13} />}
+            </IconAction>
             {onToggleBookmark && (
-              <button
-                type="button"
+              <IconAction
                 onClick={onToggleBookmark}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] transition cursor-pointer ${
-                  message.isBookmarked
-                    ? "bg-amber-500/20 text-amber-300"
-                    : "bg-white/[0.04] hover:bg-white/[0.08] text-zinc-300"
-                }`}
                 title={message.isBookmarked ? "Прибрати закладку" : "Закласти"}
+                active={!!message.isBookmarked}
+                activeClass="bg-amber-500/20 text-amber-300"
               >
-                {message.isBookmarked ? <BookmarkCheck size={11} /> : <Bookmark size={11} />}
-                {message.isBookmarked ? "У закладках" : "Закласти"}
-              </button>
+                {message.isBookmarked ? <BookmarkCheck size={13} /> : <Bookmark size={13} />}
+              </IconAction>
             )}
 
             {message.createdAt && (
-              <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">
+              <span className="text-[10px] text-zinc-600 ml-auto tabular-nums shrink-0">
                 {formatMessageTime(message.createdAt)}
               </span>
             )}
@@ -1168,23 +1180,25 @@ function SuggestionChips({
 }) {
   if (!onPick) return null;
   return (
-    <div className="not-prose mt-3 -mx-1 flex flex-col gap-1.5">
-      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold flex items-center gap-1.5 px-1">
-        <Sparkles size={10} />
+    <div className="not-prose mt-3 pt-2 border-t border-white/5">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold flex items-center gap-1 mb-1.5">
+        <Sparkles size={10} className="text-violet-400" />
         Що ще можу зробити
       </div>
-      <div className="flex flex-wrap gap-1.5">
+      <ul className="space-y-0.5">
         {items.map((q, i) => (
-          <button
-            key={i}
-            type="button"
-            onClick={() => onPick(q)}
-            className="text-left text-xs text-zinc-200 px-3 py-2 rounded-2xl bg-violet-500/10 border border-violet-500/30 hover:border-violet-400 hover:bg-violet-500/20 transition cursor-pointer max-w-full"
-          >
-            {q}
-          </button>
+          <li key={i} className="leading-relaxed">
+            <button
+              type="button"
+              onClick={() => onPick(q)}
+              className="text-left text-xs text-violet-300 hover:text-violet-200 underline decoration-violet-500/40 hover:decoration-violet-400 underline-offset-2 cursor-pointer transition"
+            >
+              <span className="text-zinc-600 mr-1">›</span>
+              {q}
+            </button>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 }
