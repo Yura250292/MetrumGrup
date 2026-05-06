@@ -385,9 +385,9 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
   }, [searchParams, conversationId]);
 
   return (
-    <div className="flex flex-col gap-3 h-[calc(100dvh-130px)]">
+    <div className="flex flex-col gap-3 h-full min-h-0">
       {/* Top toolbar */}
-      <div className="flex items-center justify-between gap-2 px-1">
+      <div className="shrink-0 flex items-center justify-between gap-2 px-1">
         <button
           type="button"
           onClick={() => setShowSidebar(!showSidebar)}
@@ -575,7 +575,7 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
 
         <AnimatePresence initial={false}>
           {messages.map((m) => (
-            <MessageRow key={m.id} message={m} />
+            <MessageRow key={m.id} message={m} onSuggestionClick={(q) => send(q)} />
           ))}
         </AnimatePresence>
 
@@ -646,7 +646,13 @@ function EmptyState({ onPick }: { onPick: (q: string) => void }) {
   );
 }
 
-function MessageRow({ message }: { message: Message }) {
+function MessageRow({
+  message,
+  onSuggestionClick,
+}: {
+  message: Message;
+  onSuggestionClick?: (q: string) => void;
+}) {
   const isUser = message.role === "user";
   const [copied, setCopied] = useState(false);
   const messageRef = useRef<HTMLDivElement | null>(null);
@@ -740,6 +746,14 @@ function MessageRow({ message }: { message: Message }) {
                       const kind = lang.split("-")[1] as ChartKind;
                       if (config) return <ChartBlock kind={kind} config={config} />;
                     }
+                    if (lang === "suggestions") {
+                      const items = parseSuggestions(text);
+                      if (items.length > 0) {
+                        return (
+                          <SuggestionChips items={items} onPick={onSuggestionClick} />
+                        );
+                      }
+                    }
                     if (className) {
                       return (
                         <pre className="my-2 p-2 rounded-lg bg-black/40 border border-white/5 overflow-x-auto text-[11px]">
@@ -815,6 +829,50 @@ function MessageRow({ message }: { message: Message }) {
   );
 }
 
+function parseSuggestions(raw: string): string[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+        .slice(0, 4);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+function SuggestionChips({
+  items,
+  onPick,
+}: {
+  items: string[];
+  onPick?: (q: string) => void;
+}) {
+  if (!onPick) return null;
+  return (
+    <div className="not-prose mt-3 -mx-1 flex flex-col gap-1.5">
+      <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold flex items-center gap-1.5 px-1">
+        <Sparkles size={10} />
+        Що ще можу зробити
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((q, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => onPick(q)}
+            className="text-left text-xs text-zinc-200 px-3 py-2 rounded-2xl bg-violet-500/10 border border-violet-500/30 hover:border-violet-400 hover:bg-violet-500/20 transition cursor-pointer max-w-full"
+          >
+            {q}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function formatMessageTime(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
@@ -865,7 +923,17 @@ function ChatInput({
 }) {
   const [recording, setRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [attachError, setAttachError] = useState<string | null>(null);
+
+  // Auto-resize textarea: висота підлаштовується під контент до 160px.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const next = Math.min(el.scrollHeight, 160);
+    el.style.height = `${next}px`;
+  }, [input]);
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
@@ -1064,6 +1132,7 @@ function ChatInput({
           }`}
         >
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -1074,8 +1143,8 @@ function ChatInput({
             }}
             placeholder={recording ? "🎙️ Слухаю…" : "Запитати асистента"}
             rows={1}
-            className="flex-1 bg-transparent resize-none py-2 text-base text-white focus:outline-none max-h-[160px] placeholder-zinc-500 leading-snug"
-            style={{ minHeight: 28 }}
+            className="flex-1 bg-transparent resize-none py-2 text-base text-white focus:outline-none placeholder-zinc-500 leading-snug overflow-y-auto"
+            style={{ minHeight: 28, maxHeight: 160 }}
           />
         </div>
 

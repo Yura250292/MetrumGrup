@@ -20,6 +20,9 @@ interface OwnerShellProps {
   belowHeader?: React.ReactNode;
   /** Контейнер сторінки — не обмежувати max-width якщо потрібен wide layout (chat). */
   wide?: boolean;
+  /** App-feel mode: вся сторінка фіксована висотою viewport, тільки внутрішній
+   * scroll контейнер (children) скролиться. Використовуй для chat / kanban. */
+  lockHeight?: boolean;
   children: React.ReactNode;
 }
 
@@ -32,18 +35,21 @@ export function OwnerShell({
   activeFirmId,
   belowHeader,
   wide,
+  lockHeight,
   children,
 }: OwnerShellProps) {
   const router = useRouter();
   const brand = resolveOwnerBrand(activeFirmId);
 
   return (
-    <div className="relative min-h-dvh bg-zinc-950 text-zinc-100 flex flex-col overflow-x-hidden">
+    <div
+      className={`relative ${lockHeight ? "h-dvh overflow-hidden" : "min-h-dvh"} bg-zinc-950 text-zinc-100 flex flex-col overflow-x-hidden`}
+    >
       <AmbientBackdrop brand={brand} />
 
       {/* Top accent stripe з фірмовим glow */}
       <div
-        className="sticky top-0 z-40 h-[3px] pointer-events-none"
+        className={`${lockHeight ? "shrink-0" : "sticky top-0"} z-40 h-[3px] pointer-events-none`}
         style={{
           background: `linear-gradient(90deg, transparent 0%, ${brand.glow} 35%, ${brand.glow} 65%, transparent 100%)`,
           boxShadow: `0 1px 12px ${brand.glow}`,
@@ -51,7 +57,7 @@ export function OwnerShell({
         aria-hidden
       />
 
-      <header className="sticky top-[3px] z-30 backdrop-blur-xl bg-zinc-950/85 border-b border-white/5">
+      <header className={`${lockHeight ? "shrink-0" : "sticky top-[3px]"} z-30 backdrop-blur-xl bg-zinc-950/85 border-b border-white/5`}>
         <div className={`${wide ? "max-w-3xl" : "max-w-md"} mx-auto px-4 py-2.5`}>
           <div className="flex items-center gap-3 min-h-[44px]">
             {!isRoot &&
@@ -104,13 +110,13 @@ export function OwnerShell({
         initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-        className={`relative z-10 flex-1 ${wide ? "max-w-3xl" : "max-w-md"} w-full mx-auto px-4 pt-3 pb-24`}
+        className={`relative z-10 flex-1 ${wide ? "max-w-3xl" : "max-w-md"} w-full mx-auto px-4 pt-3 ${lockHeight ? "overflow-hidden flex flex-col min-h-0" : "pb-24"}`}
       >
         {children}
       </motion.main>
 
       <div
-        className="sticky bottom-0 z-40 h-[2px] pointer-events-none"
+        className={`${lockHeight ? "shrink-0" : "sticky bottom-0"} z-40 h-[2px] pointer-events-none`}
         style={{
           background: `linear-gradient(90deg, transparent 0%, ${brand.glow} 50%, transparent 100%)`,
           boxShadow: `0 -1px 8px ${brand.glow}`,

@@ -66,7 +66,7 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
   }
 
   return (
-    <OwnerShell title="AI асистент" backHref="/owner" activeFirmId={firmId} wide>
+    <OwnerShell title="AI асистент" backHref="/owner" activeFirmId={firmId} wide lockHeight>
       <OwnerChat
         // Force remount при зміні conversation — щоб state messages оновлювалось
         key={initialConversation?.id ?? "new"}
