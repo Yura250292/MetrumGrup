@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { prisma } from "@/lib/prisma";
@@ -7,7 +8,7 @@ import { OwnerChat } from "./_chat";
 export const dynamic = "force-dynamic";
 
 interface PageProps {
-  searchParams: Promise<{ c?: string }>;
+  searchParams: Promise<{ c?: string; new?: string }>;
 }
 
 export default async function OwnerChatPage({ searchParams }: PageProps) {
@@ -20,16 +21,28 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
     ? await prisma.ownerConversation.findMany({
         where: { userId: session.user.id },
         orderBy: { updatedAt: "desc" },
-        take: 20,
+        take: 50,
         select: { id: true, title: true, messageCount: true, updatedAt: true },
       })
     : [];
+
+  // Якщо немає ?c у URL і немає ?new=1 — редиректимо у найновішу розмову
+  // (якщо є хоча б одна). Тоді власник продовжує там де зупинився.
+  if (!sp.c && !sp.new && conversations.length > 0) {
+    redirect(`/owner/chat?c=${conversations[0].id}`);
+  }
 
   // Якщо обрано конкретну conversation — підвантажуємо її messages
   let initialConversation: {
     id: string;
     title: string;
-    messages: Array<{ id: string; role: "user" | "assistant"; content: string; toolCallsJson: unknown }>;
+    messages: Array<{
+      id: string;
+      role: "user" | "assistant";
+      content: string;
+      toolCallsJson: unknown;
+      createdAt: string;
+    }>;
   } | null = null;
 
   if (sp.c && session?.user) {
@@ -46,6 +59,7 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
           role: m.role as "user" | "assistant",
           content: m.content,
           toolCallsJson: m.toolCallsJson,
+          createdAt: m.createdAt.toISOString(),
         })),
       };
     }
@@ -54,6 +68,8 @@ export default async function OwnerChatPage({ searchParams }: PageProps) {
   return (
     <OwnerShell title="AI асистент" backHref="/owner" activeFirmId={firmId} wide>
       <OwnerChat
+        // Force remount при зміні conversation — щоб state messages оновлювалось
+        key={initialConversation?.id ?? "new"}
         conversations={conversations.map((c) => ({
           id: c.id,
           title: c.title,

@@ -23,6 +23,10 @@ import {
   Brain,
   X,
   FileText,
+  Square,
+  RefreshCcw,
+  Search,
+  Pencil,
 } from "lucide-react";
 import { ChartBlock, parseChartConfig, type ChartKind } from "./_chart-block";
 import { exportMessageToPdf, exportMessageToText } from "./_export";
@@ -50,6 +54,8 @@ interface Message {
   toolCalls?: ToolCall[];
   loading?: boolean;
   error?: string;
+  /** ISO timestamp. Для нових клієнтських — Date.now(); для server-loaded — з БД. */
+  createdAt?: string;
 }
 
 interface ConversationListItem {
@@ -67,6 +73,7 @@ interface InitialConversation {
     role: "user" | "assistant";
     content: string;
     toolCallsJson: unknown;
+    createdAt?: string;
   }>;
 }
 
@@ -103,6 +110,7 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
         role: m.role,
         content: m.content,
         toolCalls: Array.isArray(m.toolCallsJson) ? (m.toolCallsJson as ToolCall[]) : undefined,
+        createdAt: m.createdAt,
       }))
     : [];
 
@@ -112,7 +120,9 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
   const [pending, setPending] = useState(false);
   const [thinkingMode, setThinkingMode] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [savedHint, setSavedHint] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -150,7 +160,8 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
     const sentAttachments = attachments;
     const userText = text.trim() || (sentAttachments.length > 0 ? "(прикріплено файл)" : "");
 
-    const userMsg: Message = { id: newId(), role: "user", content: userText };
+    const nowIso = new Date().toISOString();
+    const userMsg: Message = { id: newId(), role: "user", content: userText, createdAt: nowIso };
     const assistantId = newId();
     const assistantMsg: Message = {
       id: assistantId,
@@ -158,6 +169,7 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
       content: "",
       toolCalls: [],
       loading: true,
+      createdAt: nowIso,
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
@@ -183,6 +195,9 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
         : {}),
     } as { role: "user"; content: string });
 
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     try {
       const res = await fetch("/api/owner/chat", {
         method: "POST",
@@ -192,6 +207,7 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
           thinking: thinkingMode,
           messages: historyPayload,
         }),
+        signal: controller.signal,
       });
       if (!res.ok || !res.body) {
         throw new Error(`HTTP ${res.status}`);
@@ -258,19 +274,60 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
         }
       }
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Помилка";
+      const isAbort =
+        (e instanceof Error && e.name === "AbortError") ||
+        (typeof e === "object" && e !== null && "name" in e && (e as { name: string }).name === "AbortError");
+      const message = isAbort
+        ? "Зупинено користувачем"
+        : e instanceof Error
+          ? e.message
+          : "Помилка";
       setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, error: message, loading: false } : m)),
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                error: isAbort ? undefined : message,
+                content: m.content || (isAbort ? "_(відповідь зупинено)_" : ""),
+                loading: false,
+              }
+            : m,
+        ),
       );
     } finally {
       setPending(false);
+      abortRef.current = null;
+      // Збережено: показати тостер на 1.5с
+      if (convId) {
+        setSavedHint(true);
+        setTimeout(() => setSavedHint(false), 1500);
+      }
     }
   }
+
+  const stopGeneration = () => {
+    abortRef.current?.abort();
+  };
+
+  const regenerateLast = () => {
+    // Знаходимо останнє user повідомлення і шлемо його ще раз,
+    // попередньо видаливши останній assistant.
+    if (pending) return;
+    const lastUserIdx = [...messages].reverse().findIndex((m) => m.role === "user");
+    if (lastUserIdx < 0) return;
+    const realIdx = messages.length - 1 - lastUserIdx;
+    const lastUser = messages[realIdx];
+    // Прибираємо повідомлення після last user (включно з assistant)
+    setMessages(messages.slice(0, realIdx));
+    // Шлемо знов
+    void send(lastUser.content);
+  };
 
   const newChat = () => {
     setMessages([]);
     setConversationId(null);
-    router.replace("/owner/chat", { scroll: false });
+    // ?new=1 щоб server-side не редиректив назад у останню розмову
+    router.push("/owner/chat?new=1", { scroll: false });
   };
 
   const switchConversation = (id: string) => {
@@ -291,6 +348,29 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
       // ignore
     }
   };
+
+  const renameConversation = async (id: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    try {
+      await fetch(`/api/owner/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: trimmed }),
+      });
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
+    } catch {
+      // ignore
+    }
+  };
+
+  const [sidebarSearch, setSidebarSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingValue, setEditingValue] = useState("");
+
+  const filteredConversations = conversations.filter((c) =>
+    sidebarSearch.trim() ? c.title.toLowerCase().includes(sidebarSearch.toLowerCase()) : true,
+  );
 
   const activeConvLabel = conversationId
     ? conversations.find((c) => c.id === conversationId)?.title ?? "Розмова"
@@ -372,45 +452,113 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
                   <X size={16} />
                 </button>
               </div>
+              {/* Search input */}
+              <div className="px-3 pt-2 pb-1">
+                <div className="relative">
+                  <Search
+                    size={12}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none"
+                  />
+                  <input
+                    type="text"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="Пошук…"
+                    className="w-full pl-7 pr-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-white focus:border-violet-500/40 focus:outline-none placeholder-zinc-500"
+                  />
+                </div>
+              </div>
               <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
-                {conversations.length === 0 ? (
+                {filteredConversations.length === 0 ? (
                   <div className="text-xs text-zinc-500 text-center py-8 px-3">
-                    Розмов поки немає. Задай перше питання — і вона з{"’"}явиться тут.
+                    {sidebarSearch
+                      ? "Розмов з такою назвою не знайдено."
+                      : "Розмов поки немає. Задай перше питання — і вона з'явиться тут."}
                   </div>
                 ) : (
-                  conversations.map((c) => (
-                    <div
-                      key={c.id}
-                      className={`group flex items-center gap-1 rounded-xl px-2 py-2 transition cursor-pointer ${
-                        c.id === conversationId
-                          ? "bg-violet-500/15 border border-violet-500/30"
-                          : "hover:bg-white/[0.04] border border-transparent"
-                      }`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => switchConversation(c.id)}
-                        className="flex-1 text-left min-w-0 cursor-pointer"
+                  filteredConversations.map((c) => {
+                    const isEditing = editingId === c.id;
+                    return (
+                      <div
+                        key={c.id}
+                        className={`group flex items-center gap-1 rounded-xl px-2 py-2 transition ${
+                          c.id === conversationId
+                            ? "bg-violet-500/15 border border-violet-500/30"
+                            : "hover:bg-white/[0.04] border border-transparent"
+                        }`}
                       >
-                        <div className="text-sm text-white truncate">{c.title}</div>
-                        <div className="text-[10px] text-zinc-500 mt-0.5">
-                          {c.messageCount} {c.messageCount === 1 ? "повід." : "повід."} ·{" "}
-                          {new Date(c.updatedAt).toLocaleDateString("uk-UA")}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteConversation(c.id);
-                        }}
-                        className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-rose-400 p-1.5 transition cursor-pointer"
-                        aria-label="Видалити"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    </div>
-                  ))
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            autoFocus
+                            value={editingValue}
+                            onChange={(e) => setEditingValue(e.target.value)}
+                            onBlur={() => {
+                              if (editingValue.trim() && editingValue !== c.title) {
+                                void renameConversation(c.id, editingValue);
+                              }
+                              setEditingId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                if (editingValue.trim() && editingValue !== c.title) {
+                                  void renameConversation(c.id, editingValue);
+                                }
+                                setEditingId(null);
+                              } else if (e.key === "Escape") {
+                                setEditingId(null);
+                              }
+                            }}
+                            className="flex-1 bg-zinc-950 border border-violet-500/40 text-sm text-white px-2 py-1 rounded focus:outline-none"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => switchConversation(c.id)}
+                            onDoubleClick={() => {
+                              setEditingId(c.id);
+                              setEditingValue(c.title);
+                            }}
+                            className="flex-1 text-left min-w-0 cursor-pointer"
+                            title="Подвійний клік — перейменувати"
+                          >
+                            <div className="text-sm text-white truncate">{c.title}</div>
+                            <div className="text-[10px] text-zinc-500 mt-0.5">
+                              {c.messageCount} {c.messageCount === 1 ? "повід." : "повід."} ·{" "}
+                              {new Date(c.updatedAt).toLocaleDateString("uk-UA")}
+                            </div>
+                          </button>
+                        )}
+                        {!isEditing && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(c.id);
+                                setEditingValue(c.title);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-violet-300 p-1.5 transition cursor-pointer"
+                              aria-label="Перейменувати"
+                            >
+                              <Pencil size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                deleteConversation(c.id);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 text-zinc-500 hover:text-rose-400 p-1.5 transition cursor-pointer"
+                              aria-label="Видалити"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </motion.aside>
@@ -430,6 +578,24 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
             <MessageRow key={m.id} message={m} />
           ))}
         </AnimatePresence>
+
+        {/* Regenerate — після останнього assistant, якщо є user message раніше */}
+        {!pending &&
+          messages.length >= 2 &&
+          messages[messages.length - 1].role === "assistant" &&
+          !messages[messages.length - 1].loading && (
+            <div className="flex justify-start">
+              <button
+                type="button"
+                onClick={regenerateLast}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 hover:border-violet-500/40 text-[11px] text-zinc-300 hover:text-white transition cursor-pointer"
+                title="Перегенерувати відповідь"
+              >
+                <RefreshCcw size={11} />
+                Перегенерувати
+              </button>
+            </div>
+          )}
       </div>
 
       <ChatInput
@@ -439,7 +605,9 @@ export function OwnerChat({ conversations: initialConversations, initialConversa
         setAttachments={setAttachments}
         pending={pending}
         onSend={() => send(input)}
+        onStop={stopGeneration}
         thinkingMode={thinkingMode}
+        savedHint={savedHint}
       />
     </div>
   );
@@ -620,6 +788,12 @@ function MessageRow({ message }: { message: Message }) {
             >
               <FileDown size={11} /> TXT
             </button>
+
+            {message.createdAt && (
+              <span className="text-[10px] text-zinc-600 ml-auto tabular-nums">
+                {formatMessageTime(message.createdAt)}
+              </span>
+            )}
           </div>
         )}
 
@@ -629,9 +803,28 @@ function MessageRow({ message }: { message: Message }) {
             {message.error}
           </div>
         )}
+
+        {/* Timestamp для user messages (assistant має у action bar) */}
+        {isUser && message.createdAt && (
+          <div className="mt-1 text-[10px] text-violet-100/50 text-right tabular-nums">
+            {formatMessageTime(message.createdAt)}
+          </div>
+        )}
       </div>
     </motion.div>
   );
+}
+
+function formatMessageTime(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const time = d.toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" });
+  if (sameDay) return time;
+  return `${d.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" })} ${time}`;
 }
 
 async function fileToBase64(file: File): Promise<string> {
@@ -656,7 +849,9 @@ function ChatInput({
   setAttachments,
   pending,
   onSend,
+  onStop,
   thinkingMode,
+  savedHint,
 }: {
   input: string;
   setInput: (s: string) => void;
@@ -664,7 +859,9 @@ function ChatInput({
   setAttachments: (a: Attachment[]) => void;
   pending: boolean;
   onSend: () => void;
+  onStop: () => void;
   thinkingMode: boolean;
+  savedHint: boolean;
 }) {
   const [recording, setRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -794,7 +991,7 @@ function ChatInput({
       : "mic";
 
   return (
-    <div className="shrink-0 z-20 px-1 pb-1 space-y-2">
+    <div className="shrink-0 z-20 px-1 pb-1 space-y-2 relative">
       {thinkingMode && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/15 border border-violet-500/30 text-[10px] uppercase tracking-wider font-bold text-violet-300 w-fit mx-auto">
           <Brain size={10} />
@@ -882,43 +1079,69 @@ function ChatInput({
           />
         </div>
 
-        {/* Send / Mic round button */}
-        <button
-          type="button"
-          onClick={
-            rightButtonState === "send"
-              ? onSend
-              : rightButtonState === "stop"
-                ? toggleRecord
-                : toggleRecord
-          }
-          disabled={pending && rightButtonState === "send"}
-          className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition active:scale-90 ${
-            rightButtonState === "send"
-              ? "bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-[0_4px_16px_-2px_rgba(168,85,247,0.6)]"
-              : rightButtonState === "stop"
-                ? "bg-rose-500 text-white animate-pulse shadow-[0_4px_12px_rgba(244,63,94,0.5)]"
-                : "bg-white text-zinc-900 shadow-[0_4px_12px_rgba(255,255,255,0.15)]"
-          }`}
-          aria-label={
-            rightButtonState === "send"
-              ? "Надіслати"
-              : rightButtonState === "stop"
-                ? "Зупинити запис"
-                : "Голосовий ввід"
-          }
-        >
-          {pending && rightButtonState === "send" ? (
-            <Loader2 size={20} className="animate-spin" />
-          ) : rightButtonState === "send" ? (
-            <Send size={20} strokeWidth={2.4} />
-          ) : rightButtonState === "stop" ? (
-            <MicOff size={20} strokeWidth={2.4} />
-          ) : (
-            <Mic size={20} strokeWidth={2.4} />
-          )}
-        </button>
+        {/* Send / Mic / Stop round button */}
+        {pending ? (
+          // Streaming → кнопка зупинити (квадрат)
+          <button
+            type="button"
+            onClick={onStop}
+            className="shrink-0 w-12 h-12 rounded-full bg-zinc-700 text-white flex items-center justify-center cursor-pointer transition active:scale-90 shadow-[0_4px_12px_rgba(0,0,0,0.4)]"
+            aria-label="Зупинити генерацію"
+            title="Зупинити генерацію"
+          >
+            <Square size={16} strokeWidth={3} fill="currentColor" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={
+              rightButtonState === "send"
+                ? onSend
+                : rightButtonState === "stop"
+                  ? toggleRecord
+                  : toggleRecord
+            }
+            className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center cursor-pointer transition active:scale-90 ${
+              rightButtonState === "send"
+                ? "bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-[0_4px_16px_-2px_rgba(168,85,247,0.6)]"
+                : rightButtonState === "stop"
+                  ? "bg-rose-500 text-white animate-pulse shadow-[0_4px_12px_rgba(244,63,94,0.5)]"
+                  : "bg-white text-zinc-900 shadow-[0_4px_12px_rgba(255,255,255,0.15)]"
+            }`}
+            aria-label={
+              rightButtonState === "send"
+                ? "Надіслати"
+                : rightButtonState === "stop"
+                  ? "Зупинити запис"
+                  : "Голосовий ввід"
+            }
+          >
+            {rightButtonState === "send" ? (
+              <Send size={20} strokeWidth={2.4} />
+            ) : rightButtonState === "stop" ? (
+              <MicOff size={20} strokeWidth={2.4} />
+            ) : (
+              <Mic size={20} strokeWidth={2.4} />
+            )}
+          </button>
+        )}
       </div>
+
+      {/* Save hint pill */}
+      <AnimatePresence>
+        {savedHint && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 8 }}
+            transition={{ duration: 0.25 }}
+            className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-[10px] uppercase tracking-wider font-bold text-emerald-300 pointer-events-none"
+          >
+            <Check size={10} />
+            Збережено
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
