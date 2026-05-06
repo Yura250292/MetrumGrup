@@ -28,7 +28,7 @@ export default async function ForemanReportInputPage({ params }: PageProps) {
     : "/foreman/report/folder/none";
 
   return (
-    <ForemanShell title={project.title} backHref={backHref}>
+    <ForemanShell title={project.title} backHref={backHref} firmId={firmId}>
       <ReportInputForm projectId={project.id} projectTitle={project.title} />
     </ForemanShell>
   );

@@ -38,7 +38,7 @@ export default async function ForemanReviewPage({ params }: PageProps) {
   }
 
   return (
-    <ForemanShell title="Перевірте звіт" backHref={`/foreman/report/project/${projectId}`}>
+    <ForemanShell title="Перевірте звіт" backHref={`/foreman/report/project/${projectId}`} firmId={firmId}>
       <ReviewForm
         reportId={report.id}
         projectId={report.project.id}

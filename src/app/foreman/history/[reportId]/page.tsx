@@ -131,7 +131,7 @@ export default async function ForemanHistoryDetailPage({ params }: PageProps) {
   );
 
   return (
-    <ForemanShell title={report.project.title} backHref="/foreman/history">
+    <ForemanShell title={report.project.title} backHref="/foreman/history" firmId={firmId}>
       <div className="space-y-4 pb-8">
         {/* Header card */}
         <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-4 space-y-3">
