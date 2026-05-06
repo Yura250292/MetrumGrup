@@ -32,6 +32,10 @@ const SYSTEM_PROMPT = (firmId: string | null, today: string) => `Ти — фін
 - Активна фірма: ${firmId ? KNOWN_FIRMS[firmId]?.name : "Усі (cross-firm view)"}
 - Усі грошові суми — у гривнях (UAH).
 
+# Доступні tools
+- **Custom tools** (query_*, search_*, forecast_*) — твій основний інструмент для фінансових даних компанії.
+- **web_search** — використовуй для актуальних ринкових даних: курси валют НБУ, ціни на матеріали в магазинах, тендери Prozorro, новини індустрії. НЕ використовуй для внутрішніх даних компанії.
+
 # Принципи відповіді
 1. **Завжди користуйся tools** для фактичних даних. НЕ вигадуй цифри.
 2. Відповідай по-українськи, **коротко і структуровано**: підзаголовки, маркдаун-таблиці, виділення жирним.
@@ -40,6 +44,40 @@ const SYSTEM_PROMPT = (firmId: string | null, today: string) => `Ти — фін
 5. Якщо запит неоднозначний — попроси уточнення (наприклад «який період?», «який конкретний проект?»).
 6. Якщо користувач питає про період без дати — припускай **поточний місяць**.
 7. Можеш викликати кілька tools у одному turn — наприклад спочатку знайти проект, потім зробити прогноз.
+
+# Графіки
+Коли результат добре візуалізується (тренд за час, порівняння категорій, частки) — додавай графік у відповідь fenced-кодом з мовою \`chart-bar\`, \`chart-line\` або \`chart-pie\`. Формат:
+
+\`\`\`chart-bar
+{
+  "title": "Витрати по категоріях",
+  "data": [
+    {"name": "Матеріали", "value": 45000},
+    {"name": "Робота", "value": 32000}
+  ],
+  "valueLabel": "грн"
+}
+\`\`\`
+
+Для chart-line додавай \`xKey\` (зазвичай "name" або "date") + multiple value series:
+\`\`\`chart-line
+{
+  "title": "Витрати по місяцях",
+  "data": [
+    {"month": "Січ", "plan": 100000, "fact": 95000},
+    {"month": "Лют", "plan": 120000, "fact": 130000}
+  ],
+  "xKey": "month",
+  "series": [
+    {"key": "plan", "label": "План", "color": "#60a5fa"},
+    {"key": "fact", "label": "Факт", "color": "#f87171"}
+  ]
+}
+\`\`\`
+
+Для chart-pie — той самий формат що bar, але показує частки.
+
+**Не зловживай графіками** — додавай тільки коли > 3 точок даних і дійсно покращує сприйняття.
 
 # Стиль
 - Формально-дружній, як консультант на нараді.
@@ -91,11 +129,23 @@ export async function POST(req: NextRequest) {
         for (let iter = 0; iter < 5; iter++) {
           send("status", { phase: "thinking", iteration: iter });
 
+          // Tools = custom + Anthropic server-managed web_search.
+          // web_search виконується на стороні Anthropic — нам не треба
+          // dispatch'ити його у dispatchTool. Просто включаємо у tools array.
+          const allTools = [
+            ...(TOOLS as unknown as Anthropic.Messages.Tool[]),
+            {
+              type: "web_search_20250305",
+              name: "web_search",
+              max_uses: 5,
+            } as unknown as Anthropic.Messages.Tool,
+          ];
+
           const response = await anthropic.messages.create({
             model: MODEL,
             max_tokens: 4096,
             system: SYSTEM_PROMPT(firmId, today),
-            tools: TOOLS as unknown as Anthropic.Messages.Tool[],
+            tools: allTools,
             messages,
           });
 
@@ -105,6 +155,13 @@ export async function POST(req: NextRequest) {
               send("text", { delta: block.text });
             } else if (block.type === "tool_use") {
               send("tool_call", { name: block.name, input: block.input });
+            } else if ((block as { type: string }).type === "server_tool_use") {
+              // Anthropic server tool (e.g. web_search) — щоб UI показав feedback
+              const b = block as unknown as { name: string; input: unknown };
+              send("tool_call", { name: b.name, input: b.input, server: true });
+            } else if ((block as { type: string }).type === "web_search_tool_result") {
+              // Результат web_search — Anthropic уже виконав, передаємо у UI
+              send("tool_result", { name: "web_search", result: "✓ пошук в інтернеті завершено" });
             }
           }
 
