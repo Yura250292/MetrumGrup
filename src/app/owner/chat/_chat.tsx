@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -39,7 +40,7 @@ import {
   FileDown as FileDownIcon,
 } from "lucide-react";
 import { ChartBlock, parseChartConfig, type ChartKind } from "./_chart-block";
-import { exportMessageToPdf, exportMessageToText } from "./_export";
+import { exportMessageToPdf } from "./_export";
 import { fixMarkdownTables } from "./_md-fix";
 
 interface Attachment {
@@ -151,6 +152,10 @@ export function OwnerChat({
   const [showSidebar, setShowSidebar] = useState(false);
   const [savedHint, setSavedHint] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -546,64 +551,72 @@ export function OwnerChat({
 
   return (
     <div className="flex flex-col gap-3 h-full min-h-0">
-      {/* Top toolbar */}
-      <div className="shrink-0 flex items-center justify-between gap-2 px-1">
+      {/* Top toolbar — icon-only на mobile, нічого не виходить за межі */}
+      <div className="shrink-0 flex items-center justify-between gap-1.5 px-1">
         <button
           type="button"
           onClick={() => setShowSidebar(!showSidebar)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/25 text-sm text-zinc-200 cursor-pointer transition"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/25 text-xs text-zinc-200 cursor-pointer transition min-w-0"
+          title="Історія розмов"
         >
-          <History size={14} />
-          <span className="max-w-[180px] truncate">{activeConvLabel}</span>
+          <History size={13} className="shrink-0" />
+          <span className="truncate max-w-[120px]">{activeConvLabel}</span>
         </button>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 shrink-0">
           {conversationId && messages.length > 0 && (
             <>
               <button
                 type="button"
                 onClick={generateShareLink}
                 title="Поділитись лінком (read-only)"
-                className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/10 hover:border-emerald-500/40 text-zinc-400 hover:text-emerald-300 flex items-center justify-center cursor-pointer transition"
+                className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/10 hover:border-emerald-500/40 text-zinc-400 hover:text-emerald-300 flex items-center justify-center cursor-pointer transition"
+                aria-label="Поділитись"
               >
-                <Share2 size={14} />
+                <Share2 size={13} />
               </button>
               <button
                 type="button"
                 onClick={exportConversationToPdf}
                 title="Зберегти всю розмову у PDF"
-                className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/10 hover:border-sky-500/40 text-zinc-400 hover:text-sky-300 flex items-center justify-center cursor-pointer transition"
+                className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/10 hover:border-sky-500/40 text-zinc-400 hover:text-sky-300 flex items-center justify-center cursor-pointer transition"
+                aria-label="Експорт у PDF"
               >
-                <FileDownIcon size={14} />
+                <FileDownIcon size={13} />
               </button>
             </>
           )}
           <button
             type="button"
             onClick={() => setThinkingMode(!thinkingMode)}
-            title="Глибокий аналіз — для прогнозів та складних запитів"
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition cursor-pointer ${
+            title="Глибокий аналіз — детальніша відповідь"
+            aria-label="Думати"
+            aria-pressed={thinkingMode}
+            className={`w-8 h-8 rounded-lg flex items-center justify-center cursor-pointer transition ${
               thinkingMode
                 ? "bg-violet-500/20 border border-violet-500/40 text-violet-200"
                 : "bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            <Brain size={14} />
-            <span className="hidden sm:inline">Думати</span>
+            <Brain size={13} />
           </button>
           <button
             type="button"
             onClick={newChat}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.04] border border-white/10 hover:border-white/25 text-sm text-zinc-200 cursor-pointer transition"
+            title="Нова розмова"
+            aria-label="Нова розмова"
+            className="w-8 h-8 rounded-lg bg-violet-500 hover:bg-violet-400 text-white flex items-center justify-center cursor-pointer transition"
           >
-            <Plus size={14} />
-            <span className="hidden sm:inline">Нова</span>
+            <Plus size={14} strokeWidth={2.4} />
           </button>
         </div>
       </div>
 
-      {/* Conversations sidebar (drawer) */}
-      <AnimatePresence>
-        {showSidebar && (
+      {/* Sidebar drawer — рендериться у document.body через portal,
+          щоб уникнути clipping від overflow-hidden parent у lockHeight mode */}
+      {mounted &&
+        createPortal(
+          <AnimatePresence>
+            {showSidebar && (
           <>
             <motion.button
               type="button"
@@ -724,22 +737,15 @@ export function OwnerChat({
                   </>
                 )}
 
-                {/* Add folder */}
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const name = prompt("Назва теки:");
-                    if (name) await createFolder(name);
-                  }}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-violet-500/30 text-xs text-zinc-400 hover:text-zinc-200 transition cursor-pointer mt-2"
-                >
-                  <Plus size={11} /> Нова тека
-                </button>
+                {/* Add folder — inline form (PWA-safe, no native prompt) */}
+                <FolderCreator onCreate={(name) => createFolder(name)} />
               </div>
             </motion.aside>
           </>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+          document.body,
+        )}
 
       <div
         ref={scrollRef}
@@ -944,16 +950,26 @@ function MessageRow({
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
 
-  const toggleSpeak = () => {
-    if (typeof window === "undefined") return;
-    const synth = window.speechSynthesis;
-    if (!synth) return;
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  const stopSpeaking = () => {
+    if (typeof window !== "undefined") {
+      window.speechSynthesis?.cancel();
+    }
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setSpeaking(false);
+  };
+
+  const toggleSpeak = async () => {
     if (speaking) {
-      synth.cancel();
-      setSpeaking(false);
+      stopSpeaking();
       return;
     }
-    // Strip markdown for cleaner reading: код-блоки, посилання, жирний/курсив
+    // Strip markdown — для читання потрібен plain text
     const cleaned = message.content
       .replace(/```[\s\S]*?```/g, " ")
       .replace(/\*\*(.+?)\*\*/g, "$1")
@@ -962,14 +978,78 @@ function MessageRow({
       .replace(/\|/g, " ")
       .replace(/[-=]{3,}/g, " ")
       .replace(/#+\s/g, "")
-      .replace(/\s+/g, " ");
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return;
+
+    // Спершу пробуємо OpenAI TTS (HD якість, людський голос).
+    // Якщо не вдалось — fallback на browser SpeechSynthesis.
+    setSpeaking(true);
+    try {
+      const res = await fetch("/api/owner/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: cleaned.slice(0, 4000), voice: "nova" }),
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        audio.onended = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+          audioRef.current = null;
+        };
+        audio.onerror = () => {
+          setSpeaking(false);
+          URL.revokeObjectURL(url);
+          audioRef.current = null;
+        };
+        await audio.play();
+        return;
+      }
+      // Fallback to browser TTS
+      console.warn("[tts] OpenAI failed, falling back to browser:", res.status);
+    } catch (e) {
+      console.warn("[tts] network error, falling back to browser:", e);
+    }
+
+    // Browser SpeechSynthesis fallback з premium voice selection
+    if (typeof window === "undefined") {
+      setSpeaking(false);
+      return;
+    }
+    const synth = window.speechSynthesis;
+    if (!synth) {
+      setSpeaking(false);
+      return;
+    }
+    let voices = synth.getVoices();
+    if (voices.length === 0) {
+      await new Promise<void>((resolve) => {
+        synth.onvoiceschanged = () => resolve();
+        setTimeout(resolve, 500);
+      });
+      voices = synth.getVoices();
+    }
+    const ukVoices = voices.filter((v) => v.lang.startsWith("uk"));
+    const premium = ukVoices.find((v) =>
+      /premium|enhanced|natural|neural|hd/i.test(v.name),
+    );
+    const namedPremium = ukVoices.find((v) =>
+      /lesya|olena|mariana|tetiana/i.test(v.name),
+    );
+    const best = premium ?? namedPremium ?? ukVoices[0] ?? null;
+
     const utter = new SpeechSynthesisUtterance(cleaned);
     utter.lang = "uk-UA";
-    utter.rate = 1;
+    if (best) utter.voice = best;
+    utter.rate = 0.95;
+    utter.pitch = 1.0;
     utter.onend = () => setSpeaking(false);
     utter.onerror = () => setSpeaking(false);
     synth.speak(utter);
-    setSpeaking(true);
   };
   const messageRef = useRef<HTMLDivElement | null>(null);
 
@@ -1107,14 +1187,8 @@ function MessageRow({
               <FileDown size={13} />
             </IconAction>
             <IconAction
-              onClick={() => exportMessageToText(message.content, `metrum-answer-${Date.now()}`)}
-              title="Зберегти як текст (.md)"
-            >
-              <FileText size={13} />
-            </IconAction>
-            <IconAction
               onClick={toggleSpeak}
-              title={speaking ? "Зупинити озвучення" : "Озвучити"}
+              title={speaking ? "Зупинити озвучення" : "Озвучити голосом"}
               active={speaking}
               activeClass="bg-violet-500/20 text-violet-300"
             >
@@ -1123,7 +1197,11 @@ function MessageRow({
             {onToggleBookmark && (
               <IconAction
                 onClick={onToggleBookmark}
-                title={message.isBookmarked ? "Прибрати закладку" : "Закласти"}
+                title={
+                  message.isBookmarked
+                    ? "Прибрати закладку — не буде у важливому"
+                    : "Закласти у важливе для швидкого пошуку"
+                }
                 active={!!message.isBookmarked}
                 activeClass="bg-amber-500/20 text-amber-300"
               >
@@ -1365,6 +1443,73 @@ function SidebarGroup({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function FolderCreator({ onCreate }: { onCreate: (name: string) => Promise<unknown> }) {
+  const [opening, setOpening] = useState(false);
+  const [value, setValue] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  if (!opening) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpening(true)}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.02] border border-white/5 hover:border-violet-500/30 text-xs text-zinc-400 hover:text-zinc-200 transition cursor-pointer mt-2"
+      >
+        <Plus size={11} /> Нова тека
+      </button>
+    );
+  }
+
+  const submit = async () => {
+    if (!value.trim() || creating) return;
+    setCreating(true);
+    await onCreate(value);
+    setValue("");
+    setOpening(false);
+    setCreating(false);
+  };
+
+  return (
+    <div className="mt-2 flex items-center gap-1.5 px-1">
+      <input
+        autoFocus
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="Назва теки…"
+        onKeyDown={(e) => {
+          if (e.key === "Enter") void submit();
+          else if (e.key === "Escape") {
+            setOpening(false);
+            setValue("");
+          }
+        }}
+        className="flex-1 px-3 py-2 rounded-xl bg-zinc-950 border border-violet-500/40 text-xs text-white focus:outline-none placeholder-zinc-500"
+      />
+      <button
+        type="button"
+        onClick={() => void submit()}
+        disabled={!value.trim() || creating}
+        className="shrink-0 w-8 h-8 rounded-xl bg-violet-500 hover:bg-violet-400 disabled:opacity-40 text-white flex items-center justify-center cursor-pointer transition"
+        aria-label="Створити теку"
+      >
+        <Check size={13} strokeWidth={3} />
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          setOpening(false);
+          setValue("");
+        }}
+        className="shrink-0 w-8 h-8 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] text-zinc-400 flex items-center justify-center cursor-pointer transition"
+        aria-label="Скасувати"
+      >
+        <X size={13} />
+      </button>
     </div>
   );
 }
