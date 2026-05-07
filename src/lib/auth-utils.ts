@@ -102,6 +102,15 @@ export async function requireAdminRole() {
   return session;
 }
 
+export async function requireSuperAdmin() {
+  const session = await requireAuth();
+  const role = await getActiveRoleForRequest(session);
+  if (role !== "SUPER_ADMIN") {
+    throw new Error("Forbidden");
+  }
+  return session;
+}
+
 export async function requireHrOrAdminRole() {
   const session = await requireAuth();
   const role = await getActiveRoleForRequest(session);

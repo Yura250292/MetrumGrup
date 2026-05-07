@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  requireAdminRole,
+  requireSuperAdmin,
   unauthorizedResponse,
   forbiddenResponse,
 } from "@/lib/auth-utils";
@@ -16,7 +16,7 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await requireAdminRole();
+    await requireSuperAdmin();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unauthorized";
     return msg === "Forbidden" ? forbiddenResponse() : unauthorizedResponse();
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   let session;
   try {
-    session = await requireAdminRole();
+    session = await requireSuperAdmin();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unauthorized";
     return msg === "Forbidden" ? forbiddenResponse() : unauthorizedResponse();

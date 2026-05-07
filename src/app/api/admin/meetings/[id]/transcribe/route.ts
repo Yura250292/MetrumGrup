@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { prisma } from "@/lib/prisma";
 import {
-  requireAdminRole,
+  requireSuperAdmin,
   unauthorizedResponse,
   forbiddenResponse,
 } from "@/lib/auth-utils";
@@ -19,7 +19,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdminRole();
+    await requireSuperAdmin();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unauthorized";
     return msg === "Forbidden" ? forbiddenResponse() : unauthorizedResponse();
@@ -33,7 +33,10 @@ export async function POST(
   }
 
   const { id } = await params;
-  const meeting = await prisma.meeting.findUnique({ where: { id } });
+  const meeting = await prisma.meeting.findUnique({
+    where: { id },
+    include: { project: { select: { title: true, address: true } } },
+  });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
@@ -56,11 +59,25 @@ export async function POST(
       type: meeting.audioMimeType || "audio/webm",
     });
 
+    // Whisper prompt — словник-підказка (≤244 токени). Підвищує точність на іменах,
+    // власних назвах, фахових термінах. Без діакритик все одно пропускає, бо whisper-1
+    // не вміє діаризації — справжнє рішення це AssemblyAI.
+    const namePool = await collectNameHints();
+    const whisperPrompt = buildWhisperHint({
+      meetingTitle: meeting.title,
+      meetingDescription: meeting.description,
+      projectTitle: meeting.project?.title,
+      projectAddress: meeting.project?.address,
+      names: namePool,
+    });
+
     const result = await openai.audio.transcriptions.create({
       file,
       model: "whisper-1",
       language: "uk",
       response_format: "verbose_json",
+      prompt: whisperPrompt,
+      temperature: 0,
     });
 
     const transcript = result.text || "";
@@ -88,6 +105,55 @@ export async function POST(
     });
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function collectNameHints(): Promise<string[]> {
+  // Імена і ПІБ активних користувачів — щоб Whisper розпізнавав їх правильно.
+  // 60 свіжих не-CLIENT — більше не вліземо в ліміт промпта.
+  const users = await prisma.user.findMany({
+    where: { role: { not: "CLIENT" } },
+    select: { name: true },
+    take: 60,
+    orderBy: { updatedAt: "desc" },
+  });
+  return users.map((u) => u.name).filter((n): n is string => !!n && n.trim().length > 0);
+}
+
+function buildWhisperHint(opts: {
+  meetingTitle: string;
+  meetingDescription?: string | null;
+  projectTitle?: string;
+  projectAddress?: string | null;
+  names: string[];
+}): string {
+  const GLOSSARY = [
+    // будівельні/проєктні
+    "підрядник", "субпідрядник", "виконроб", "кошторис", "акт виконаних робіт",
+    "КП-2в", "КП-3", "Прозорро", "тендер", "лот", "договір",
+    "генпідрядник", "обʼєкт", "обʼєкти", "майданчик", "графік робіт",
+    "матеріали", "постачальник", "доставка", "логістика",
+    "оплата", "рахунок", "ПДВ", "контрагент", "ФОП", "ТОВ",
+    // ролі / фірми
+    "Metrum Group", "Metrum Studio", "RD-02", "Раковського",
+    "директор", "менеджер", "інженер", "фінансист", "бухгалтер",
+    // дії-маркери (щоб «треба піти», «звернутись» розпізнавалось)
+    "треба", "потрібно", "звернутись", "подзвонити", "написати",
+    "запитати", "перевірити", "узгодити", "підтвердити",
+  ];
+  const parts: string[] = [
+    `Українська ділова нарада будівельної компанії Metrum Group.`,
+    opts.projectTitle ? `Проєкт: ${opts.projectTitle}.` : "",
+    opts.projectAddress ? `Адреса: ${opts.projectAddress}.` : "",
+    opts.meetingTitle ? `Тема: ${opts.meetingTitle}.` : "",
+    opts.meetingDescription ? `Контекст: ${opts.meetingDescription}.` : "",
+    opts.names.length > 0
+      ? `Імена учасників (зберігай у такому написанні): ${opts.names.join(", ")}.`
+      : "",
+    `Терміни: ${GLOSSARY.join(", ")}.`,
+  ].filter(Boolean);
+  // Whisper жорстко обмежує на ~244 токени. Грубо ~4 символи на токен → ріжемо на 900 симв.
+  const joined = parts.join(" ");
+  return joined.length > 900 ? joined.slice(0, 900) : joined;
 }
 
 function extractExtension(key: string, mime?: string | null): string {

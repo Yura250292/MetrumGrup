@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
-  requireAdminRole,
+  requireSuperAdmin,
   unauthorizedResponse,
   forbiddenResponse,
 } from "@/lib/auth-utils";
@@ -47,7 +47,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAdminRole();
+    await requireSuperAdmin();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unauthorized";
     return msg === "Forbidden" ? forbiddenResponse() : unauthorizedResponse();

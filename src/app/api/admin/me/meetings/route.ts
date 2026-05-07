@@ -18,6 +18,9 @@ export async function GET() {
   const { firmId } = await resolveFirmScopeForRequest(session);
   const activeRole = getActiveRoleFromSession(session, firmId);
   const isSuper = activeRole === "SUPER_ADMIN";
+  if (!isSuper) {
+    return NextResponse.json({ data: { items: [] } });
+  }
 
   const since = new Date();
   since.setDate(since.getDate() - 14);

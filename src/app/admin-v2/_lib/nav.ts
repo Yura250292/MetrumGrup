@@ -100,7 +100,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Комунікація",
     items: [
       { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true, hrAllowed: true },
-      { href: "/admin-v2/meetings", label: "Наради", icon: Mic, hrAllowed: true },
+      { href: "/admin-v2/meetings", label: "Наради", icon: Mic, superAdminOnly: true },
       { href: "/admin-v2/feed", label: "Активність", icon: Activity },
     ],
   },
@@ -205,5 +205,4 @@ export const HR_ALLOWED_PREFIXES: string[] = [
   "/admin-v2/resources/workers",
   "/admin-v2/hr",
   "/admin-v2/chat",
-  "/admin-v2/meetings",
 ];
