@@ -973,11 +973,17 @@ function MessageRow({
   const [speaking, setSpeaking] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const ttsAbortRef = useRef<AbortController | null>(null);
 
   const stopSpeaking = () => {
+    // 1. Перервати in-flight OpenAI TTS fetch якщо він триває
+    ttsAbortRef.current?.abort();
+    ttsAbortRef.current = null;
+    // 2. Зупинити браузерний синтезатор (якщо fallback йшов через нього)
     if (typeof window !== "undefined") {
       window.speechSynthesis?.cancel();
     }
+    // 3. Зупинити audio element якщо вже грає
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.src = "";
@@ -987,7 +993,8 @@ function MessageRow({
   };
 
   const toggleSpeak = async () => {
-    if (speaking) {
+    // Тап коли вже active (або поки fetch у польоті) — повне scenario stop
+    if (speaking || ttsAbortRef.current) {
       stopSpeaking();
       return;
     }
@@ -1004,9 +1011,12 @@ function MessageRow({
       .trim();
     if (!cleaned) return;
 
-    // Спершу пробуємо OpenAI TTS (HD якість, людський голос).
-    // Якщо не вдалось — fallback на browser SpeechSynthesis.
+    // Створюємо AbortController для цього TTS-запиту.
+    // Якщо користувач натисне 'Стоп' поки чекаємо OpenAI — fetch перерветься.
+    const controller = new AbortController();
+    ttsAbortRef.current = controller;
     setSpeaking(true);
+
     try {
       const res = await fetch("/api/owner/tts", {
         method: "POST",
@@ -1017,21 +1027,33 @@ function MessageRow({
             (typeof window !== "undefined" && window.localStorage.getItem("owner-tts-voice")) ||
             "sage",
         }),
+        signal: controller.signal,
       });
+
+      // Якщо нас перервали поки чекали — нічого не робимо
+      if (controller.signal.aborted) return;
+
       if (res.ok) {
         const blob = await res.blob();
+        if (controller.signal.aborted) return;
         const url = URL.createObjectURL(blob);
         const audio = new Audio(url);
         audioRef.current = audio;
         audio.onended = () => {
-          setSpeaking(false);
           URL.revokeObjectURL(url);
-          audioRef.current = null;
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+            ttsAbortRef.current = null;
+            setSpeaking(false);
+          }
         };
         audio.onerror = () => {
-          setSpeaking(false);
           URL.revokeObjectURL(url);
-          audioRef.current = null;
+          if (audioRef.current === audio) {
+            audioRef.current = null;
+            ttsAbortRef.current = null;
+            setSpeaking(false);
+          }
         };
         await audio.play();
         return;
@@ -1039,6 +1061,10 @@ function MessageRow({
       // Fallback to browser TTS
       console.warn("[tts] OpenAI failed, falling back to browser:", res.status);
     } catch (e) {
+      // AbortError — користувач натиснув Стоп. Ігноруємо.
+      if (e instanceof Error && e.name === "AbortError") {
+        return;
+      }
       console.warn("[tts] network error, falling back to browser:", e);
     }
 
@@ -1074,8 +1100,14 @@ function MessageRow({
     if (best) utter.voice = best;
     utter.rate = 0.95;
     utter.pitch = 1.0;
-    utter.onend = () => setSpeaking(false);
-    utter.onerror = () => setSpeaking(false);
+    utter.onend = () => {
+      ttsAbortRef.current = null;
+      setSpeaking(false);
+    };
+    utter.onerror = () => {
+      ttsAbortRef.current = null;
+      setSpeaking(false);
+    };
     synth.speak(utter);
   };
   const messageRef = useRef<HTMLDivElement | null>(null);
