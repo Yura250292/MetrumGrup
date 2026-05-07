@@ -25,6 +25,7 @@ export type MeetingPriority = {
 };
 
 export type MeetingStructured = {
+  suggestedTitle?: string;
   summary: string;
   context?: string | null;
   goals?: string[];

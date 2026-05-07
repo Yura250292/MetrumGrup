@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -54,6 +54,7 @@ export default function NewMeetingPage() {
   const [stage, setStage] = useState<Stage>("form");
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const {
     state: recState,
@@ -118,15 +119,15 @@ export default function NewMeetingPage() {
     if (!pending) return;
     setError(null);
     try {
-      if (!title.trim()) throw new Error("Введіть назву наради");
       if (!projectId) throw new Error("Оберіть проєкт");
+      const finalTitle = title.trim() || autoDefaultTitle();
 
       setStage("creating");
       const createRes = await fetch("/api/admin/meetings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: title.trim(),
+          title: finalTitle,
           description: description.trim() || null,
           projectId,
           folderId: folderId || null,
@@ -196,8 +197,9 @@ export default function NewMeetingPage() {
     resetRecording();
   }
 
-  const formValid = title.trim() && projectId;
+  const formValid = !!projectId;
   const busy = stage !== "form";
+  const titlePlaceholder = autoDefaultTitle();
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -209,123 +211,148 @@ export default function NewMeetingPage() {
         <ArrowLeft size={14} /> До списку нарад
       </Link>
 
-      <h1 className="mb-6 text-2xl font-bold" style={{ color: T.textPrimary }}>
+      <h1 className="mb-2 text-2xl font-bold" style={{ color: T.textPrimary }}>
         Нова нарада
       </h1>
+      <p className="mb-4 flex items-center gap-1.5 text-sm" style={{ color: T.textMuted }}>
+        <Sparkles size={14} style={{ color: T.accentPrimary }} />
+        Просто натисніть «Почати запис». Назву AI підбере сам після розпізнавання — її потім можна перейменувати.
+      </p>
 
-      <div
-        className="mb-4 rounded-xl p-5"
-        style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
-      >
-        <div className="mb-3">
-          <label
-            className="mb-1 block text-xs font-medium"
-            style={{ color: T.textSecondary }}
-          >
-            Назва *
-          </label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            disabled={busy}
-            placeholder="Нарада по проєкту..."
-            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: T.panelElevated,
-              color: T.textPrimary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          />
-        </div>
-
-        <div className="mb-3">
-          <label
-            className="mb-1 block text-xs font-medium"
-            style={{ color: T.textSecondary }}
-          >
-            Проєкт *
-          </label>
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            disabled={busy || loadingProjects}
-            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: T.panelElevated,
-              color: T.textPrimary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          >
-            <option value="">— Оберіть проєкт —</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.title}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mb-3">
-          <label
-            className="mb-1 block text-xs font-medium"
-            style={{ color: T.textSecondary }}
-          >
-            Папка (необов'язково)
-          </label>
-          <select
-            value={folderId}
-            onChange={(e) => setFolderId(e.target.value)}
-            disabled={busy}
-            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: T.panelElevated,
-              color: T.textPrimary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          >
-            <option value="">— Без папки —</option>
-            {folderOptions.map((f) => (
-              <option key={f.id} value={f.id}>
-                {`${"— ".repeat(f.depth)}${f.name}`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label
-            className="mb-1 block text-xs font-medium"
-            style={{ color: T.textSecondary }}
-          >
-            Опис (необов'язково)
-          </label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={busy}
-            rows={2}
-            placeholder="Короткий контекст наради…"
-            className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-            style={{
-              background: T.panelElevated,
-              color: T.textPrimary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          />
-        </div>
-      </div>
-
-      {!pending && !busy && (formValid || recState !== "idle") && (
+      {!pending && !busy && (
         <>
           <MeetingRecorder />
-          {recState === "idle" && formValid && (
+          {recState === "idle" && (
             <>
               <div className="my-3" />
-              <MeetingUploader onFile={handleFile} />
+              <MeetingUploader onFile={handleFile} disabled={!formValid} />
             </>
           )}
         </>
+      )}
+
+      {!busy && (
+        <div
+          className="mt-4 rounded-xl"
+          style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <button
+            type="button"
+            onClick={() => setDetailsOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-3 text-sm font-medium"
+            style={{ color: T.textPrimary }}
+          >
+            <span>
+              Деталі (необов'язково)
+              <span className="ml-2 text-xs" style={{ color: T.textMuted }}>
+                {projects.find((p) => p.id === projectId)?.title || "проєкт не обрано"}
+                {title.trim() ? ` · ${title.trim()}` : ""}
+              </span>
+            </span>
+            {detailsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          {detailsOpen && (
+            <div className="border-t px-5 pb-5 pt-3" style={{ borderColor: T.borderSoft }}>
+              <div className="mb-3">
+                <label
+                  className="mb-1 block text-xs font-medium"
+                  style={{ color: T.textSecondary }}
+                >
+                  Назва
+                </label>
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  disabled={busy}
+                  placeholder={`Залиште порожньою — AI назве сам · напр. «${titlePlaceholder}»`}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                />
+              </div>
+
+              <div className="mb-3">
+                <label
+                  className="mb-1 block text-xs font-medium"
+                  style={{ color: T.textSecondary }}
+                >
+                  Проєкт *
+                </label>
+                <select
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  disabled={busy || loadingProjects}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  <option value="">— Оберіть проєкт —</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mb-3">
+                <label
+                  className="mb-1 block text-xs font-medium"
+                  style={{ color: T.textSecondary }}
+                >
+                  Папка
+                </label>
+                <select
+                  value={folderId}
+                  onChange={(e) => setFolderId(e.target.value)}
+                  disabled={busy}
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  <option value="">— Без папки —</option>
+                  {folderOptions.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {`${"— ".repeat(f.depth)}${f.name}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  className="mb-1 block text-xs font-medium"
+                  style={{ color: T.textSecondary }}
+                >
+                  Опис
+                </label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={busy}
+                  rows={2}
+                  placeholder="Короткий контекст для AI (опційно)…"
+                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {pending && (
@@ -365,6 +392,16 @@ export default function NewMeetingPage() {
       )}
     </div>
   );
+}
+
+function autoDefaultTitle(): string {
+  const now = new Date();
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = now.getFullYear();
+  const hh = String(now.getHours()).padStart(2, "0");
+  const min = String(now.getMinutes()).padStart(2, "0");
+  return `Нарада ${dd}.${mm}.${yyyy} ${hh}:${min}`;
 }
 
 function flattenFolderTree(

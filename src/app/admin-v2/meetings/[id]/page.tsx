@@ -15,6 +15,9 @@ import {
   Folder,
   FolderInput,
   RefreshCw,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -59,6 +62,9 @@ export default function MeetingDetailPage() {
   const [movingFolder, setMovingFolder] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
   const summaryTriggeredRef = useRef(false);
   const { open: openAiPanel } = useAiPanel();
 
@@ -166,6 +172,39 @@ export default function MeetingDetailPage() {
     }
   }
 
+  function startEditTitle() {
+    if (!meeting) return;
+    setTitleDraft(meeting.title);
+    setEditingTitle(true);
+  }
+
+  async function saveTitle() {
+    if (!meeting) return;
+    const next = titleDraft.trim();
+    if (!next || next === meeting.title) {
+      setEditingTitle(false);
+      return;
+    }
+    setSavingTitle(true);
+    try {
+      const res = await fetch(`/api/admin/meetings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: next }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося зберегти назву");
+      }
+      await refresh();
+      setEditingTitle(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка");
+    } finally {
+      setSavingTitle(false);
+    }
+  }
+
   async function moveToFolder(targetFolderId: string | null) {
     setMovingFolder(true);
     try {
@@ -225,7 +264,59 @@ export default function MeetingDetailPage() {
             style={{ color: T.textPrimary }}
           >
             <Mic size={22} style={{ color: T.accentPrimary }} />
-            {meeting.title}
+            {editingTitle ? (
+              <span className="flex flex-1 items-center gap-2">
+                <input
+                  type="text"
+                  value={titleDraft}
+                  onChange={(e) => setTitleDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveTitle();
+                    if (e.key === "Escape") setEditingTitle(false);
+                  }}
+                  autoFocus
+                  disabled={savingTitle}
+                  className="min-w-0 flex-1 rounded-lg px-3 py-1.5 text-2xl font-bold outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                />
+                <button
+                  onClick={saveTitle}
+                  disabled={savingTitle}
+                  className="rounded-lg p-2"
+                  style={{ background: T.successSoft, color: T.success }}
+                  title="Зберегти"
+                >
+                  {savingTitle ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                </button>
+                <button
+                  onClick={() => setEditingTitle(false)}
+                  disabled={savingTitle}
+                  className="rounded-lg p-2"
+                  style={{ background: T.panelElevated, color: T.textSecondary }}
+                  title="Скасувати"
+                >
+                  <X size={16} />
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={startEditTitle}
+                className="group flex flex-1 items-center gap-2 rounded-lg px-2 -mx-2 py-1 text-left hover:bg-[var(--t-panel-el)]"
+                style={{ color: T.textPrimary }}
+                title="Натисніть, щоб перейменувати"
+              >
+                <span className="flex-1">{meeting.title}</span>
+                <Pencil
+                  size={14}
+                  className="opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ color: T.textMuted }}
+                />
+              </button>
+            )}
           </h1>
           <div
             className="mt-1 flex items-center gap-3 text-sm"

@@ -39,6 +39,11 @@ const RESPONSE_SCHEMA = {
   type: "object",
   additionalProperties: false,
   properties: {
+    suggestedTitle: {
+      type: "string",
+      description:
+        "Коротка змістовна назва наради (4-8 слів) на основі того, про що насправді йшла мова. Без дати, без слова «Нарада» на початку якщо тема явна. Приклади: «Оптимізація бухгалтерії і відпустки команди», «Затвердження бюджету RD-02 на травень», «Графік постачань цегли і кран». Українською.",
+    },
     summary: {
       type: "string",
       description:
@@ -137,6 +142,7 @@ const RESPONSE_SCHEMA = {
     },
   },
   required: [
+    "suggestedTitle",
     "summary",
     "context",
     "goals",
@@ -149,6 +155,8 @@ const RESPONSE_SCHEMA = {
     "openQuestions",
   ],
 } as const;
+
+const AUTO_TITLE_RE = /^Нарада(\s+\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|$)/i;
 
 export async function POST(
   _request: NextRequest,
@@ -219,10 +227,18 @@ export async function POST(
     const structured = JSON.parse(raw);
     const tokensUsed = response.usage?.total_tokens ?? null;
 
+    const suggested =
+      typeof structured.suggestedTitle === "string"
+        ? structured.suggestedTitle.trim()
+        : "";
+    const shouldAutoRename =
+      suggested.length > 0 && AUTO_TITLE_RE.test(meeting.title.trim());
+
     const updated = await prisma.meeting.update({
       where: { id },
       data: {
         status: "READY",
+        title: shouldAutoRename ? suggested : undefined,
         summary: structured.summary ?? null,
         structured,
         aiModelUsed: MODEL,
