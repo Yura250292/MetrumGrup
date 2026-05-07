@@ -5,20 +5,32 @@ import { requireOwner, forbiddenResponse, unauthorizedResponse } from "@/lib/aut
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
+const VOICE_VALUES = [
+  "alloy",
+  "ash",
+  "ballad",
+  "coral",
+  "echo",
+  "fable",
+  "nova",
+  "onyx",
+  "sage",
+  "shimmer",
+] as const;
+
 const Body = z.object({
   text: z.string().min(1).max(4096),
-  voice: z.enum(["alloy", "echo", "fable", "onyx", "nova", "shimmer"]).optional().default("nova"),
+  voice: z.enum(VOICE_VALUES).optional().default("sage"),
 });
 
 /**
- * POST /api/owner/tts — генерує MP3 аудіо з тексту через OpenAI TTS API.
- * Голос якісно "людський" (gpt-4o-mini-tts → але tts-1-hd кращий для української).
+ * POST /api/owner/tts — генерує MP3 з тексту через OpenAI gpt-4o-mini-tts.
+ * Найновіша модель з voice 'instructions' — звучить значно природніше
+ * за tts-1/tts-1-hd і коректно вимовляє українську.
  *
- * Vibrant voices для української мови:
- *  - nova: жіночий, виразний (default)
- *  - shimmer: жіночий, м'який
- *  - alloy: нейтральний
- *  - onyx: чоловічий, серйозний
+ * Voices: alloy, ash, ballad, coral, echo, fable, nova, onyx, sage, shimmer.
+ * За замовчуванням 'sage' — теплий жіночий нейтральний акцент,
+ * добре звучить для бізнес-аналітики.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -45,9 +57,11 @@ export async function POST(req: NextRequest) {
         Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "tts-1-hd",
+        model: "gpt-4o-mini-tts",
         input: parsed.data.text,
         voice: parsed.data.voice,
+        instructions:
+          "Speak in fluent natural Ukrainian language with warm calm professional tone — like a financial analyst presenting to a director. Use natural intonation pauses for tables and numbers. Do not sound robotic.",
         response_format: "mp3",
         speed: 1.0,
       }),

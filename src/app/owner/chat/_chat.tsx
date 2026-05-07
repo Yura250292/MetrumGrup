@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -645,6 +646,27 @@ export function OwnerChat({
                   <X size={16} />
                 </button>
               </div>
+
+              {/* Bookmarks link — окрема сторінка з усіма збереженими повідомленнями */}
+              <Link
+                href="/owner/bookmarks"
+                onClick={() => setShowSidebar(false)}
+                className="mx-2 mt-2 flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:border-amber-400/60 hover:bg-amber-500/15 transition cursor-pointer group"
+              >
+                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/20 text-amber-300 shrink-0">
+                  <BookmarkCheck size={13} />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-amber-200">Закладки</div>
+                  <div className="text-[10px] text-amber-400/70 mt-0.5">
+                    Збережені важливі відповіді
+                  </div>
+                </div>
+                <span className="text-amber-300/60 group-hover:translate-x-0.5 transition">
+                  →
+                </span>
+              </Link>
+
               {/* Search input */}
               <div className="px-3 pt-2 pb-1">
                 <div className="relative">
@@ -989,7 +1011,12 @@ function MessageRow({
       const res = await fetch("/api/owner/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: cleaned.slice(0, 4000), voice: "nova" }),
+        body: JSON.stringify({
+          text: cleaned.slice(0, 4000),
+          voice:
+            (typeof window !== "undefined" && window.localStorage.getItem("owner-tts-voice")) ||
+            "sage",
+        }),
       });
       if (res.ok) {
         const blob = await res.blob();
