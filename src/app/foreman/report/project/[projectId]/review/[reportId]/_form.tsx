@@ -138,7 +138,7 @@ export function ReviewForm({ reportId, projectId, initialItems }: Props) {
   }
 
   return (
-    <div className="space-y-4 pb-44">
+    <div className="space-y-4 pb-32 sm:pb-44">
       {items.length === 0 ? (
         <div className="rounded-2xl bg-amber-500/10 border border-amber-500/40 p-4 text-amber-200 text-sm">
           AI не розпізнав витрат. Додайте їх вручну ↓

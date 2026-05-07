@@ -47,7 +47,7 @@ export function ProjectsRows({ projects }: Props) {
             >
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-white truncate">{p.title}</div>
+                  <div className="text-sm font-semibold text-white truncate" title={p.title}>{p.title}</div>
                   <div className="text-[11px] text-zinc-500 mt-0.5 flex items-center gap-2">
                     {p.firmId === "metrum-studio" ? (
                       <span className="text-amber-400">Studio</span>

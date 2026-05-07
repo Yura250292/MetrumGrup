@@ -146,7 +146,7 @@ export function PhotoLogTool({ projects }: Props) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(body.message ?? "Не вдалось зберегти");
       }
-      router.push("/foreman?phototlog=ok");
+      router.push("/foreman?photolog=ok");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка");
       setSubmitting(false);

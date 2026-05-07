@@ -70,10 +70,10 @@ export function ChartBlock({ kind, config }: { kind: ChartKind; config: ChartCon
       {config.title && (
         <div className="text-xs font-semibold text-zinc-300 mb-2 px-1">{config.title}</div>
       )}
-      <div className="h-56 w-full">
+      <div className="h-44 sm:h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           {kind === "bar" ? (
-            <BarChart data={config.data} margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
+            <BarChart data={config.data} margin={{ top: 6, right: 12, bottom: 6, left: 4 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.04)" vertical={false} />
               <XAxis
                 dataKey={xKey}
@@ -111,7 +111,7 @@ export function ChartBlock({ kind, config }: { kind: ChartKind; config: ChartCon
               ))}
             </BarChart>
           ) : kind === "line" ? (
-            <LineChart data={config.data} margin={{ top: 6, right: 6, bottom: 6, left: 6 }}>
+            <LineChart data={config.data} margin={{ top: 6, right: 12, bottom: 6, left: 4 }}>
               <CartesianGrid stroke="rgba(255,255,255,0.04)" />
               <XAxis
                 dataKey={xKey}

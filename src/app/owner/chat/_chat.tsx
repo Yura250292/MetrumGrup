@@ -375,8 +375,20 @@ export function OwnerChat({
     setShowSidebar(false);
   };
 
+  const [pendingDeleteConvId, setPendingDeleteConvId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingDeleteConvId) return;
+    const t = setTimeout(() => setPendingDeleteConvId(null), 3000);
+    return () => clearTimeout(t);
+  }, [pendingDeleteConvId]);
+
   const deleteConversation = async (id: string) => {
-    if (!confirm("Видалити цю розмову? Дані не можна буде відновити.")) return;
+    // 2-tap pattern (PWA-safe, no confirm() dialog)
+    if (pendingDeleteConvId !== id) {
+      setPendingDeleteConvId(id);
+      return;
+    }
+    setPendingDeleteConvId(null);
     try {
       const res = await fetch(`/api/owner/conversations/${id}`, { method: "DELETE" });
       if (!res.ok) return;
@@ -449,13 +461,23 @@ export function OwnerChat({
     }
   };
 
+  const [pendingDeleteFolderId, setPendingDeleteFolderId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingDeleteFolderId) return;
+    const t = setTimeout(() => setPendingDeleteFolderId(null), 3000);
+    return () => clearTimeout(t);
+  }, [pendingDeleteFolderId]);
+
   const deleteFolder = async (folderId: string) => {
-    if (!confirm("Видалити теку? Розмови всередині не видаляться, лише втратять прив'язку.")) return;
+    if (pendingDeleteFolderId !== folderId) {
+      setPendingDeleteFolderId(folderId);
+      return;
+    }
+    setPendingDeleteFolderId(null);
     try {
       const res = await fetch(`/api/owner/folders/${folderId}`, { method: "DELETE" });
       if (!res.ok) return;
       setFolders((prev) => prev.filter((f) => f.id !== folderId));
-      // Conversations залишаються — folderId стає null автоматично через DB
       setConversations((prev) =>
         prev.map((c) => (c.folderId === folderId ? { ...c, folderId: null } : c)),
       );
@@ -633,7 +655,7 @@ export function OwnerChat({
               animate={{ x: 0 }}
               exit={{ x: -300 }}
               transition={{ type: "spring", damping: 24, stiffness: 240 }}
-              className="fixed left-0 top-0 bottom-0 w-[280px] z-50 bg-zinc-950 border-r border-white/10 backdrop-blur-xl shadow-2xl flex flex-col"
+              className="fixed left-0 top-0 bottom-0 w-full max-w-[320px] sm:max-w-[300px] z-50 bg-zinc-950 border-r border-white/10 backdrop-blur-xl shadow-2xl flex flex-col"
             >
               <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                 <h3 className="text-sm font-semibold text-white">Історія розмов</h3>
@@ -701,6 +723,7 @@ export function OwnerChat({
                         conversationId={conversationId}
                         editingId={editingId}
                         editingValue={editingValue}
+                        pendingDeleteId={pendingDeleteConvId}
                         setEditingId={setEditingId}
                         setEditingValue={setEditingValue}
                         switchConversation={switchConversation}
@@ -726,6 +749,8 @@ export function OwnerChat({
                           conversationId={conversationId}
                           editingId={editingId}
                           editingValue={editingValue}
+                          pendingDeleteId={pendingDeleteConvId}
+                          onDeletePending={pendingDeleteFolderId === f.id}
                           setEditingId={setEditingId}
                           setEditingValue={setEditingValue}
                           switchConversation={switchConversation}
@@ -746,6 +771,7 @@ export function OwnerChat({
                         conversationId={conversationId}
                         editingId={editingId}
                         editingValue={editingValue}
+                        pendingDeleteId={pendingDeleteConvId}
                         setEditingId={setEditingId}
                         setEditingValue={setEditingValue}
                         switchConversation={switchConversation}
@@ -1017,6 +1043,16 @@ function MessageRow({
     ttsAbortRef.current = controller;
     setSpeaking(true);
 
+    // Safety timeout — якщо TTS зависло на 15с, авто-зупиняємо щоб
+    // кнопка не залишалась "Стоп" назавжди.
+    const safetyTimer = setTimeout(() => {
+      if (ttsAbortRef.current === controller) {
+        controller.abort();
+        ttsAbortRef.current = null;
+        setSpeaking(false);
+      }
+    }, 15000);
+
     try {
       const res = await fetch("/api/owner/tts", {
         method: "POST",
@@ -1029,6 +1065,8 @@ function MessageRow({
         }),
         signal: controller.signal,
       });
+
+      clearTimeout(safetyTimer); // отримали відповідь — більше не потрібен
 
       // Якщо нас перервали поки чекали — нічого не робимо
       if (controller.signal.aborted) return;
@@ -1061,6 +1099,7 @@ function MessageRow({
       // Fallback to browser TTS
       console.warn("[tts] OpenAI failed, falling back to browser:", res.status);
     } catch (e) {
+      clearTimeout(safetyTimer);
       // AbortError — користувач натиснув Стоп. Ігноруємо.
       if (e instanceof Error && e.name === "AbortError") {
         return;
@@ -1127,7 +1166,7 @@ function MessageRow({
     >
       <div
         ref={messageRef}
-        className={`max-w-[88%] rounded-2xl px-4 py-3 ${
+        className={`max-w-[85%] sm:max-w-[88%] rounded-2xl px-4 py-3 ${
           isUser
             ? "bg-gradient-to-br from-violet-500 to-fuchsia-600 text-white shadow-[0_8px_30px_-10px_rgba(168,85,247,0.5)]"
             : "bg-white/[0.04] border border-white/10 text-zinc-100"
@@ -1171,7 +1210,7 @@ function MessageRow({
                 remarkPlugins={[remarkGfm]}
                 components={{
                   table: ({ children }) => (
-                    <div className="overflow-x-auto my-2 -mx-1">
+                    <div className="overflow-x-auto my-2 -mx-2 px-2">
                       <table className="w-full text-xs border-collapse">{children}</table>
                     </div>
                   ),
@@ -1347,6 +1386,7 @@ interface SidebarGroupProps {
   conversationId: string | null;
   editingId: string | null;
   editingValue: string;
+  pendingDeleteId: string | null;
   setEditingId: (id: string | null) => void;
   setEditingValue: (v: string) => void;
   switchConversation: (id: string) => void;
@@ -1356,6 +1396,7 @@ interface SidebarGroupProps {
   moveToFolder: (convId: string, folderId: string | null) => void;
   folders: FolderItem[];
   onDelete?: () => void;
+  onDeletePending?: boolean;
 }
 
 function SidebarGroup({
@@ -1365,6 +1406,7 @@ function SidebarGroup({
   conversationId,
   editingId,
   editingValue,
+  pendingDeleteId,
   setEditingId,
   setEditingValue,
   switchConversation,
@@ -1374,6 +1416,7 @@ function SidebarGroup({
   moveToFolder,
   folders,
   onDelete,
+  onDeletePending,
 }: SidebarGroupProps) {
   return (
     <div>
@@ -1387,8 +1430,13 @@ function SidebarGroup({
             <button
               type="button"
               onClick={onDelete}
-              className="opacity-0 group-hover/header:opacity-100 text-zinc-500 hover:text-rose-400 p-0.5 transition cursor-pointer"
-              aria-label="Видалити теку"
+              className={`p-0.5 transition cursor-pointer ${
+                onDeletePending
+                  ? "text-rose-400 bg-rose-500/15 rounded animate-pulse opacity-100"
+                  : "opacity-0 group-hover/header:opacity-100 text-zinc-500 hover:text-rose-400"
+              }`}
+              aria-label={onDeletePending ? "Підтвердити видалення теки" : "Видалити теку"}
+              title={onDeletePending ? "Натисніть ще раз" : "Видалити"}
             >
               <Trash2 size={10} />
             </button>
@@ -1491,8 +1539,13 @@ function SidebarGroup({
                       e.stopPropagation();
                       deleteConversation(c.id);
                     }}
-                    className="text-zinc-500 hover:text-rose-400 p-1.5 cursor-pointer"
-                    aria-label="Видалити"
+                    className={`p-1.5 cursor-pointer transition ${
+                      pendingDeleteId === c.id
+                        ? "text-rose-400 bg-rose-500/15 rounded-lg animate-pulse"
+                        : "text-zinc-500 hover:text-rose-400"
+                    }`}
+                    aria-label={pendingDeleteId === c.id ? "Підтвердити видалення" : "Видалити"}
+                    title={pendingDeleteId === c.id ? "Натисніть ще раз для підтвердження" : "Видалити"}
                   >
                     <Trash2 size={12} />
                   </button>

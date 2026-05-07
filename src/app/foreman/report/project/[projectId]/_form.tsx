@@ -104,7 +104,7 @@ export function ReportInputForm({ projectId, projectTitle }: Props) {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={PLACEHOLDER}
-          className="w-full mt-1 h-72 px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-white text-lg leading-relaxed focus:border-emerald-500 focus:outline-none resize-none"
+          className="w-full mt-1 h-48 sm:h-72 max-h-[40vh] px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-white text-lg leading-relaxed focus:border-emerald-500 focus:outline-none resize-none"
         />
       </label>
 
