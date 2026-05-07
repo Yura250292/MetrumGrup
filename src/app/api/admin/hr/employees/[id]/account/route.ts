@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { canAssignRole } from "@/app/admin-v2/_lib/role-display";
+import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import {
   AccountSyncError,
   buildEmployeeNameSlice,
@@ -162,6 +163,12 @@ export async function POST(
     .filter(Boolean)
     .join(" ") || employee.fullName;
 
+  // Прибиваємо firmId з активного скоупу — інакше юзер створюється з
+  // firmId=null і випадає з firm-aware ендпойнтів (напр. пікер команди
+  // проєкту в /api/admin/users). Для cross-firm view (firmId=null) лишаємо null —
+  // SUPER_ADMIN тоді присвоїть фірму вручну.
+  const { firmId: scopeFirmId } = await resolveFirmScopeForRequest(g.session);
+
   const created = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
@@ -172,8 +179,7 @@ export async function POST(
         lastName: employee.lastName,
         phone: employee.phone,
         role: role as Role,
-        // firmId — нехай ставиться як null за замовчуванням; SUPER_ADMIN зможе
-        // присвоїти у профілі. У поточних зразках це опціонально.
+        firmId: scopeFirmId ?? null,
         isActive: employee.isActive,
       },
       select: { id: true, email: true, role: true, isActive: true },
