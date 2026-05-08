@@ -14,6 +14,7 @@ import { ocrReceiptStructured } from "@/lib/ocr/receipt-ocr";
 import { parseExcelEstimate } from "@/lib/parsers/excel-estimate-parser";
 import { parseKB2ActExcel } from "@/lib/parsers/kb2-act-parser";
 import { mergeForemanItems, fromParsedExpense, type ForemanDraftItem } from "@/lib/foreman/merge-items";
+import { resolveSuppliersBulk } from "@/lib/foreman/resolve-supplier";
 import type { CostType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -210,21 +211,34 @@ export async function POST(req: NextRequest) {
   // 3. Merge + dedupe
   const merged = mergeForemanItems(sources);
 
-  // 4. Зберегти items + raw json
+  // 4. Resolve supplier для кожного item — мапимо AI-guess на існуючу Counterparty
+  // (якщо є), інакше зберігаємо raw текст у supplierGuess. UI потім дає вибір
+  // підтвердити автомат або створити нового постачальника.
+  const resolutions = await resolveSuppliersBulk({
+    firmId: firmId ?? null,
+    guesses: merged.map((it) => ({ guess: it.supplier ?? null })),
+  });
+
+  // 5. Зберегти items + raw json
   if (merged.length > 0) {
     await prisma.foremanReportItem.createMany({
-      data: merged.map((it, idx) => ({
-        reportId: report.id,
-        costType: it.costType,
-        title: it.title,
-        unit: it.unit,
-        quantity: it.quantity,
-        unitPrice: it.unitPrice,
-        amount: it.amount,
-        currency: it.currency,
-        confidence: it.confidence,
-        sortOrder: idx,
-      })),
+      data: merged.map((it, idx) => {
+        const r = resolutions[idx];
+        return {
+          reportId: report.id,
+          costType: it.costType,
+          title: it.title,
+          unit: it.unit,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          amount: it.amount,
+          currency: it.currency,
+          confidence: it.confidence,
+          sortOrder: idx,
+          counterpartyId: r?.counterpartyId ?? null,
+          supplierGuess: r?.supplierGuess ?? null,
+        };
+      }),
     });
   }
 

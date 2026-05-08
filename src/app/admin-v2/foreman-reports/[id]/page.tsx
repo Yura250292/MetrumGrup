@@ -18,6 +18,24 @@ type Item = {
   amount: string;
   currency: string;
   confidence: number | null;
+  counterpartyId: string | null;
+  supplierGuess: string | null;
+  counterparty: { id: string; name: string } | null;
+  priceIncreaseFlag: boolean;
+  previousUnitPrice: string | null;
+};
+
+type SupplierSearchResult = {
+  id: string;
+  name: string;
+  edrpou: string | null;
+};
+
+type PendingSupplier = {
+  id: string;
+  title: string;
+  costType: string;
+  supplierGuess: string | null;
 };
 
 type Attachment = {
@@ -62,6 +80,8 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
   const [submitting, setSubmitting] = useState(false);
   const [showReject, setShowReject] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+  const [pendingSuppliers, setPendingSuppliers] = useState<PendingSupplier[] | null>(null);
+  const [pickerForItem, setPickerForItem] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/admin/foreman-reports/${id}`)
@@ -91,6 +111,19 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
     setSubmitting(true);
     try {
       const res = await fetch(`/api/admin/foreman-reports/${id}/approve`, { method: "POST" });
+      if (res.status === 422) {
+        // Phase 2: backend блокує approve без counterparty для MATERIAL/SUBCONTRACT.
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string;
+          pendingItems?: PendingSupplier[];
+        };
+        if (body.pendingItems && body.pendingItems.length > 0) {
+          setPendingSuppliers(body.pendingItems);
+          setSubmitting(false);
+          return;
+        }
+        throw new Error(body.message ?? "Потрібно довибрати постачальника");
+      }
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { message?: string };
         throw new Error(body.message ?? "Не вдалось підтвердити");
@@ -100,6 +133,46 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
     } catch (e) {
       alert(e instanceof Error ? e.message : "Помилка");
       setSubmitting(false);
+    }
+  }
+
+  async function setItemSupplier(
+    itemId: string,
+    counterpartyId: string | null,
+    counterpartyName: string | null,
+  ) {
+    const res = await fetch(`/api/admin/foreman-reports/${id}/items/${itemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ counterpartyId }),
+    });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(body.error ?? "Не вдалось зберегти");
+      return;
+    }
+    setReport((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: prev.items.map((it) =>
+              it.id === itemId
+                ? {
+                    ...it,
+                    counterpartyId,
+                    supplierGuess: counterpartyId ? null : it.supplierGuess,
+                    counterparty: counterpartyId
+                      ? { id: counterpartyId, name: counterpartyName ?? "Постачальник" }
+                      : null,
+                  }
+                : it,
+            ),
+          }
+        : prev,
+    );
+    setPickerForItem(null);
+    if (pendingSuppliers) {
+      setPendingSuppliers((prev) => (prev ? prev.filter((p) => p.id !== itemId) : prev));
     }
   }
 
@@ -199,12 +272,25 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
         </div>
       )}
 
+      {pendingSuppliers && pendingSuppliers.length > 0 && (
+        <div className="rounded-xl bg-amber-500/10 border border-amber-500/40 p-4 mb-4">
+          <div className="text-sm font-bold text-amber-200 mb-1">
+            Затвердження заблоковано: {pendingSuppliers.length} {pendingSuppliers.length === 1 ? "позиція" : "позицій"} без постачальника
+          </div>
+          <div className="text-xs text-amber-300/80">
+            Матеріали і субпідряд мають бути привʼязані до постачальника, інакше борг
+            не агрегуватиметься. Виберіть для кожної позиції нижче ↓
+          </div>
+        </div>
+      )}
+
       <div className="rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden mb-4">
         <table className="w-full text-sm">
           <thead className="bg-zinc-950 text-xs uppercase text-zinc-500">
             <tr>
               <th className="text-left px-4 py-2">Тип</th>
               <th className="text-left px-4 py-2">Назва</th>
+              <th className="text-left px-4 py-2 min-w-[180px]">Постачальник</th>
               <th className="text-right px-4 py-2">К-сть</th>
               <th className="text-left px-4 py-2">Од.</th>
               <th className="text-right px-4 py-2">Ціна</th>
@@ -212,30 +298,83 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
             </tr>
           </thead>
           <tbody>
-            {report.items.map((it) => (
-              <tr key={it.id} className="border-t border-zinc-800">
-                <td className="px-4 py-2">
-                  <span
-                    className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                      it.costType === "LABOR"
-                        ? "bg-blue-500/20 text-blue-300"
-                        : "bg-emerald-500/20 text-emerald-300"
-                    }`}
-                  >
-                    {COST_TYPE_LABELS[it.costType] ?? it.costType}
-                  </span>
-                </td>
-                <td className="px-4 py-2 font-medium">{it.title}</td>
-                <td className="px-4 py-2 text-right">{it.quantity ?? "—"}</td>
-                <td className="px-4 py-2">{it.unit ?? "—"}</td>
-                <td className="px-4 py-2 text-right">
-                  {it.unitPrice ? `${Number(it.unitPrice).toFixed(2)}` : "—"}
-                </td>
-                <td className="px-4 py-2 text-right font-bold text-emerald-400">
-                  {Number(it.amount).toFixed(2)}
-                </td>
-              </tr>
-            ))}
+            {report.items.map((it) => {
+              const needsSupplier = (it.costType === "MATERIAL" || it.costType === "SUBCONTRACT") && !it.counterpartyId;
+              const isHighlighted = pendingSuppliers?.some((p) => p.id === it.id);
+              return (
+                <tr
+                  key={it.id}
+                  className={`border-t border-zinc-800 ${isHighlighted ? "bg-amber-500/5" : ""}`}
+                >
+                  <td className="px-4 py-2">
+                    <span
+                      className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        it.costType === "LABOR"
+                          ? "bg-blue-500/20 text-blue-300"
+                          : "bg-emerald-500/20 text-emerald-300"
+                      }`}
+                    >
+                      {COST_TYPE_LABELS[it.costType] ?? it.costType}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2 font-medium">{it.title}</td>
+                  <td className="px-4 py-2">
+                    {pickerForItem === it.id ? (
+                      <AdminSupplierPicker
+                        initialQuery={it.supplierGuess ?? ""}
+                        onPick={(opt) => setItemSupplier(it.id, opt.id, opt.name)}
+                        onClose={() => setPickerForItem(null)}
+                      />
+                    ) : it.counterparty ? (
+                      <button
+                        onClick={() => setPickerForItem(it.id)}
+                        className="text-xs text-emerald-300 bg-emerald-500/10 rounded px-2 py-1 hover:bg-emerald-500/20"
+                      >
+                        ✓ {it.counterparty.name}
+                      </button>
+                    ) : it.supplierGuess ? (
+                      <button
+                        onClick={() => setPickerForItem(it.id)}
+                        className="text-xs text-amber-300 bg-amber-500/10 rounded px-2 py-1 hover:bg-amber-500/20"
+                      >
+                        🤖 AI: {it.supplierGuess}
+                      </button>
+                    ) : needsSupplier ? (
+                      <button
+                        onClick={() => setPickerForItem(it.id)}
+                        className="text-xs text-rose-300 bg-rose-500/10 rounded px-2 py-1 hover:bg-rose-500/20 font-semibold"
+                      >
+                        ⚠ Вибрати постачальника
+                      </button>
+                    ) : (
+                      <span className="text-xs text-zinc-600">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right">{it.quantity ?? "—"}</td>
+                  <td className="px-4 py-2">{it.unit ?? "—"}</td>
+                  <td className="px-4 py-2 text-right">
+                    {it.unitPrice ? (
+                      <span className="inline-flex items-center gap-1">
+                        {it.priceIncreaseFlag && it.previousUnitPrice && (
+                          <span
+                            className="text-[10px] font-bold text-rose-300 bg-rose-500/15 px-1 rounded"
+                            title={`Подорожчання: було ${Number(it.previousUnitPrice).toFixed(2)} грн, стало ${Number(it.unitPrice).toFixed(2)} грн`}
+                          >
+                            ▲
+                          </span>
+                        )}
+                        {Number(it.unitPrice).toFixed(2)}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="px-4 py-2 text-right font-bold text-emerald-400">
+                    {Number(it.amount).toFixed(2)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -306,6 +445,115 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function AdminSupplierPicker({
+  initialQuery,
+  onPick,
+  onClose,
+}: {
+  initialQuery: string;
+  onPick: (opt: SupplierSearchResult) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState(initialQuery);
+  const [results, setResults] = useState<SupplierSearchResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    const t = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (search.trim()) params.set("q", search.trim());
+        params.set("role", "SUPPLIER");
+        params.set("take", "20");
+        const res = await fetch(`/api/admin/financing/counterparties?${params}`, {
+          cache: "no-store",
+        });
+        const j = await res.json();
+        setResults(j.data ?? []);
+      } finally {
+        setLoading(false);
+      }
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  async function createNew() {
+    const name = search.trim();
+    if (!name) return;
+    setCreating(true);
+    try {
+      const res = await fetch(`/api/admin/financing/counterparties`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type: "LEGAL" }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        alert(j.error ?? "Не вдалось створити");
+        return;
+      }
+      // Phase 2: щойно створений counterparty не обовʼязково має SUPPLIER role
+      // (admin-v2 endpoint цього не виставляє). PATCH сам на себе для додавання ролі —
+      // непотрібно для функціональності привʼязки, але краще для UX списку
+      // постачальників. Skip — додаємо лише через foreman path або вручну.
+      onPick({ id: j.data.id, name: j.data.name, edrpou: j.data.edrpou ?? null });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  const exact = results.find(
+    (r) => r.name.trim().toLowerCase() === search.trim().toLowerCase(),
+  );
+  const showCreate = search.trim().length >= 2 && !exact && !loading;
+
+  return (
+    <div className="rounded-lg bg-zinc-950 border border-emerald-500/40 p-2 space-y-1.5 min-w-[260px]">
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Будхата, Епіцентр…"
+          className="flex-1 px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-white text-xs focus:border-emerald-500 focus:outline-none"
+        />
+        <button
+          onClick={onClose}
+          className="text-[10px] text-zinc-500 px-1.5 py-1 rounded"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="max-h-40 overflow-y-auto -mx-1 px-1 space-y-0.5">
+        {loading && <div className="text-[11px] text-zinc-500 px-1 py-0.5">Шукаємо…</div>}
+        {results.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => onPick(r)}
+            className="w-full flex items-center justify-between gap-2 text-left px-2 py-1 rounded text-xs bg-zinc-900 hover:bg-emerald-500/15"
+          >
+            <span className="truncate">{r.name}</span>
+            {r.edrpou && (
+              <span className="text-[10px] text-zinc-500 tabular-nums">{r.edrpou}</span>
+            )}
+          </button>
+        ))}
+        {showCreate && (
+          <button
+            onClick={createNew}
+            disabled={creating}
+            className="w-full text-left px-2 py-1 rounded text-xs bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-60"
+          >
+            {creating ? "Створення…" : `+ Створити: «${search.trim()}»`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

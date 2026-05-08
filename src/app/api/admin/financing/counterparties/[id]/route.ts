@@ -105,6 +105,101 @@ export async function GET(
     take: 10,
   });
 
+  // Phase 1 (supplier-debt): outstanding breakdown by project + material(title).
+  // Outstanding = unpaid FACT EXPENSE − SUM(allocations).
+  const unpaidEntries = await prisma.financeEntry.findMany({
+    where: {
+      counterpartyId: id,
+      type: "EXPENSE",
+      kind: "FACT",
+      isArchived: false,
+      status: { in: ["APPROVED", "PENDING"] },
+      ...firmFilter,
+      ...salaryFilter,
+    },
+    select: {
+      id: true,
+      title: true,
+      amount: true,
+      projectId: true,
+      project: { select: { id: true, title: true, slug: true } },
+      occurredAt: true,
+    },
+  });
+
+  const allocByEntry = new Map<string, number>();
+  if (unpaidEntries.length > 0) {
+    const allocs = await prisma.supplierPaymentAllocation.groupBy({
+      by: ["financeEntryId"],
+      where: { financeEntryId: { in: unpaidEntries.map((e) => e.id) } },
+      _sum: { amount: true },
+    });
+    for (const a of allocs) {
+      allocByEntry.set(a.financeEntryId, Number(a._sum.amount ?? 0));
+    }
+  }
+
+  type ProjectAcc = {
+    projectId: string | null;
+    projectTitle: string | null;
+    projectSlug: string | null;
+    outstanding: number;
+    entryCount: number;
+  };
+  type MaterialAcc = { name: string; outstanding: number; count: number };
+
+  const byProject = new Map<string, ProjectAcc>();
+  const byMaterial = new Map<string, MaterialAcc>();
+  let totalOutstanding = 0;
+
+  for (const e of unpaidEntries) {
+    const left = Number(e.amount) - (allocByEntry.get(e.id) ?? 0);
+    if (left <= 0) continue;
+    totalOutstanding += left;
+
+    const projKey = e.projectId ?? "__none__";
+    const cur = byProject.get(projKey) ?? {
+      projectId: e.projectId,
+      projectTitle: e.project?.title ?? null,
+      projectSlug: e.project?.slug ?? null,
+      outstanding: 0,
+      entryCount: 0,
+    };
+    cur.outstanding += left;
+    cur.entryCount += 1;
+    byProject.set(projKey, cur);
+
+    // Phase 1: матеріал = title (вільний текст). Phase 3 → SupplierMaterial.
+    const matKey = e.title.trim().toLowerCase().replace(/\s+/g, " ") || "—";
+    const mat = byMaterial.get(matKey) ?? {
+      name: e.title || "—",
+      outstanding: 0,
+      count: 0,
+    };
+    mat.outstanding += left;
+    mat.count += 1;
+    byMaterial.set(matKey, mat);
+  }
+
+  // Останні платежі цьому постачальнику (для блока "Платежі" у дос'є).
+  const recentPayments = await prisma.supplierPayment.findMany({
+    where: { counterpartyId: id, ...firmFilter },
+    orderBy: { occurredAt: "desc" },
+    take: 20,
+    select: {
+      id: true,
+      amount: true,
+      currency: true,
+      occurredAt: true,
+      method: true,
+      reference: true,
+      status: true,
+      voidedAt: true,
+      project: { select: { id: true, title: true, slug: true } },
+      _count: { select: { allocations: true } },
+    },
+  });
+
   return NextResponse.json({
     data: cp,
     stats: {
@@ -116,8 +211,16 @@ export async function GET(
       pendingIncoming: pendingIn,
       pendingOutgoing: pendingOut,
       balance,
+      outstanding: totalOutstanding,
     },
+    outstandingByProject: Array.from(byProject.values()).sort(
+      (a, b) => b.outstanding - a.outstanding,
+    ),
+    outstandingByMaterial: Array.from(byMaterial.values()).sort(
+      (a, b) => b.outstanding - a.outstanding,
+    ),
     projects: recentProjects.map((r) => r.project).filter(Boolean),
+    recentPayments,
   });
 }
 

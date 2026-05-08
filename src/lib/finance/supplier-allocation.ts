@@ -1,0 +1,396 @@
+/**
+ * Supplier debt — FIFO allocation core.
+ *
+ * Один платіж постачальнику (SupplierPayment) розкидається по найстаріших
+ * несплачених FinanceEntry (kind=FACT, type=EXPENSE, status APPROVED|PENDING)
+ * у scope (counterpartyId, firmId, опційно projectId). Кожна часткова allocation
+ * — рядок SupplierPaymentAllocation. Коли SUM(allocations) на FE = amount,
+ * статус FE переводиться в PAID.
+ *
+ * Concurrency: транзакція бере SELECT FOR UPDATE по рядку counterparties — два
+ * паралельні платежі на того самого постачальника серіалізуються, тому один
+ * FE не отримає більше allocations ніж його amount.
+ *
+ * Idempotency:
+ *   - SupplierPayment.idempotencyKey має @unique → повторний submit з тим самим
+ *     ключем повертає вже створений payment (createSupplierPayment перевіряє це
+ *     до транзакції).
+ *   - SupplierPaymentAllocation @@unique([paymentId, financeEntryId]) — другий
+ *     рівень захисту якщо алгоритм допустив повторний прогон.
+ */
+import { Prisma, type FinanceEntry } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+
+const Decimal = Prisma.Decimal;
+type Decimal = Prisma.Decimal;
+
+const ZERO = new Decimal(0);
+
+export type AllocationLine = {
+  financeEntryId: string;
+  occurredAt: Date;
+  title: string;
+  projectId: string | null;
+  outstandingBefore: Decimal;
+  allocate: Decimal;
+  outstandingAfter: Decimal;
+  willBecomePaid: boolean;
+};
+
+export type AllocationPlan = {
+  lines: AllocationLine[];
+  totalAllocated: Decimal;
+  unallocated: Decimal;
+};
+
+type Tx = Prisma.TransactionClient;
+
+type CandidateRow = Pick<
+  FinanceEntry,
+  "id" | "amount" | "occurredAt" | "title" | "projectId"
+> & { allocated: Decimal };
+
+/** Сумарна allocation на конкретний FE (for-the-record use only). */
+export async function getAllocatedAmount(
+  tx: Tx | typeof prisma,
+  financeEntryId: string,
+): Promise<Decimal> {
+  const row = await tx.supplierPaymentAllocation.aggregate({
+    where: { financeEntryId },
+    _sum: { amount: true },
+  });
+  return new Decimal(row._sum.amount ?? 0);
+}
+
+/**
+ * Бере несплачені FinanceEntry постачальника у FIFO-порядку (occurredAt ASC, id ASC),
+ * рахує allocated на кожному. Використовується і для preview, і для actual allocation.
+ */
+async function loadCandidates(
+  tx: Tx | typeof prisma,
+  args: { counterpartyId: string; firmId: string; projectId?: string | null },
+): Promise<CandidateRow[]> {
+  const entries = await tx.financeEntry.findMany({
+    where: {
+      counterpartyId: args.counterpartyId,
+      firmId: args.firmId,
+      type: "EXPENSE",
+      kind: "FACT",
+      isArchived: false,
+      status: { in: ["APPROVED", "PENDING"] },
+      ...(args.projectId ? { projectId: args.projectId } : {}),
+    },
+    select: {
+      id: true,
+      amount: true,
+      occurredAt: true,
+      title: true,
+      projectId: true,
+    },
+    orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+  });
+
+  if (entries.length === 0) return [];
+
+  const allocated = await tx.supplierPaymentAllocation.groupBy({
+    by: ["financeEntryId"],
+    where: { financeEntryId: { in: entries.map((e) => e.id) } },
+    _sum: { amount: true },
+  });
+  const allocatedMap = new Map<string, Decimal>();
+  for (const r of allocated) {
+    allocatedMap.set(r.financeEntryId, new Decimal(r._sum.amount ?? 0));
+  }
+
+  return entries.map((e) => ({
+    ...e,
+    amount: new Decimal(e.amount),
+    allocated: allocatedMap.get(e.id) ?? ZERO,
+  }));
+}
+
+function planLines(
+  candidates: CandidateRow[],
+  amount: Decimal,
+): AllocationPlan {
+  let remaining = new Decimal(amount);
+  const lines: AllocationLine[] = [];
+  for (const c of candidates) {
+    if (remaining.lessThanOrEqualTo(0)) break;
+    const outstanding = c.amount.minus(c.allocated);
+    if (outstanding.lessThanOrEqualTo(0)) continue;
+    const take = Decimal.min(outstanding, remaining);
+    const after = outstanding.minus(take);
+    lines.push({
+      financeEntryId: c.id,
+      occurredAt: c.occurredAt,
+      title: c.title,
+      projectId: c.projectId,
+      outstandingBefore: outstanding,
+      allocate: take,
+      outstandingAfter: after,
+      willBecomePaid: after.equals(0),
+    });
+    remaining = remaining.minus(take);
+  }
+  const totalAllocated = new Decimal(amount).minus(remaining);
+  return {
+    lines,
+    totalAllocated,
+    unallocated: remaining,
+  };
+}
+
+/**
+ * Read-only preview FIFO-плану. UI кличе перед сабмітом форми, щоб показати
+ * "цей платіж покриє: 50k цемент → 30k плитка → 20k фарба (частково)".
+ */
+export async function previewSupplierAllocation(args: {
+  counterpartyId: string;
+  firmId: string;
+  amount: number | string | Decimal;
+  projectId?: string | null;
+}): Promise<AllocationPlan> {
+  const candidates = await loadCandidates(prisma, args);
+  return planLines(candidates, new Decimal(args.amount));
+}
+
+export type CreateSupplierPaymentInput = {
+  counterpartyId: string;
+  firmId: string;
+  projectId?: string | null;
+  amount: number | string | Decimal;
+  currency?: string;
+  occurredAt: Date;
+  method?: "CASH" | "BANK_TRANSFER" | "CARD";
+  reference?: string | null;
+  notes?: string | null;
+  createdById: string;
+  /** Header X-Idempotency-Key. Повторний submit з тим самим ключем поверне вже створений платіж. */
+  idempotencyKey?: string | null;
+};
+
+export type CreatedSupplierPayment = {
+  payment: {
+    id: string;
+    amount: Decimal;
+    currency: string;
+    occurredAt: Date;
+    status: "POSTED";
+    counterpartyId: string;
+    firmId: string;
+    projectId: string | null;
+  };
+  plan: AllocationPlan;
+  /** true якщо повернули існуючий платіж за idempotencyKey (без побічних ефектів). */
+  idempotentReplay: boolean;
+};
+
+/**
+ * Створити SupplierPayment + auto-allocate FIFO у транзакції.
+ *
+ * Інваріант: жоден FE не отримає allocations > свого amount. Гарантовано
+ * (a) SELECT FOR UPDATE на counterparty-row (від паралельних платежів),
+ * (b) перерахунком allocated всередині транзакції,
+ * (c) unique([paymentId, financeEntryId]).
+ */
+export async function createSupplierPaymentWithAllocation(
+  input: CreateSupplierPaymentInput,
+): Promise<CreatedSupplierPayment> {
+  // Idempotency check ДО транзакції — швидкий шлях для ретраїв.
+  if (input.idempotencyKey) {
+    const existing = await prisma.supplierPayment.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+      include: { allocations: true },
+    });
+    if (existing) {
+      const lines: AllocationLine[] = existing.allocations.map((a) => ({
+        financeEntryId: a.financeEntryId,
+        occurredAt: existing.occurredAt,
+        title: "",
+        projectId: null,
+        outstandingBefore: new Decimal(a.amount),
+        allocate: new Decimal(a.amount),
+        outstandingAfter: ZERO,
+        willBecomePaid: false,
+      }));
+      const totalAllocated = lines.reduce(
+        (acc, l) => acc.plus(l.allocate),
+        ZERO,
+      );
+      return {
+        payment: {
+          id: existing.id,
+          amount: new Decimal(existing.amount),
+          currency: existing.currency,
+          occurredAt: existing.occurredAt,
+          status: "POSTED",
+          counterpartyId: existing.counterpartyId,
+          firmId: existing.firmId,
+          projectId: existing.projectId,
+        },
+        plan: {
+          lines,
+          totalAllocated,
+          unallocated: new Decimal(existing.amount).minus(totalAllocated),
+        },
+        idempotentReplay: true,
+      };
+    }
+  }
+
+  const amount = new Decimal(input.amount);
+  if (amount.lessThanOrEqualTo(0)) {
+    throw new Error("Сума має бути більше нуля");
+  }
+
+  const result = await prisma.$transaction(async (tx) => {
+    // SELECT FOR UPDATE — серіалізує паралельні платежі на одного постачальника.
+    // Без цього два паралельні запити могли б побачити однаковий outstanding
+    // і алоцювати на той самий FE двічі (хоч @@unique і не дав би вставити —
+    // другий впав би з помилкою). Ця lock-стратегія дає чистий retry на app-рівні.
+    await tx.$queryRaw`SELECT id FROM "counterparties" WHERE id = ${input.counterpartyId} FOR UPDATE`;
+
+    const candidates = await loadCandidates(tx, {
+      counterpartyId: input.counterpartyId,
+      firmId: input.firmId,
+      projectId: input.projectId ?? null,
+    });
+    const plan = planLines(candidates, amount);
+
+    const payment = await tx.supplierPayment.create({
+      data: {
+        counterpartyId: input.counterpartyId,
+        firmId: input.firmId,
+        projectId: input.projectId ?? null,
+        amount,
+        currency: input.currency ?? "UAH",
+        occurredAt: input.occurredAt,
+        method: input.method ?? "BANK_TRANSFER",
+        reference: input.reference ?? null,
+        notes: input.notes ?? null,
+        status: "POSTED",
+        createdById: input.createdById,
+        idempotencyKey: input.idempotencyKey ?? null,
+      },
+      select: {
+        id: true,
+        amount: true,
+        currency: true,
+        occurredAt: true,
+        counterpartyId: true,
+        firmId: true,
+        projectId: true,
+      },
+    });
+
+    if (plan.lines.length > 0) {
+      await tx.supplierPaymentAllocation.createMany({
+        data: plan.lines.map((l) => ({
+          paymentId: payment.id,
+          financeEntryId: l.financeEntryId,
+          amount: l.allocate,
+        })),
+      });
+
+      const paidIds = plan.lines
+        .filter((l) => l.willBecomePaid)
+        .map((l) => l.financeEntryId);
+      if (paidIds.length > 0) {
+        await tx.financeEntry.updateMany({
+          where: { id: { in: paidIds } },
+          data: {
+            status: "PAID",
+            paidAt: input.occurredAt,
+            updatedById: input.createdById,
+          },
+        });
+      }
+    }
+
+    return { payment, plan };
+  });
+
+  return {
+    payment: { ...result.payment, status: "POSTED" as const, amount: new Decimal(result.payment.amount) },
+    plan: result.plan,
+    idempotentReplay: false,
+  };
+}
+
+export type VoidSupplierPaymentInput = {
+  paymentId: string;
+  voidedById: string;
+  reason?: string | null;
+};
+
+/**
+ * Скасувати платіж: видалити всі його allocations, поставити status=VOIDED,
+ * і повернути зачеплені FinanceEntry назад у APPROVED (якщо тепер outstanding > 0).
+ * Idempotent: повторний void на VOIDED — no-op.
+ */
+export async function voidSupplierPayment(input: VoidSupplierPaymentInput) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.supplierPayment.findUnique({
+      where: { id: input.paymentId },
+      include: { allocations: { select: { financeEntryId: true } } },
+    });
+    if (!payment) {
+      throw Object.assign(new Error("Платіж не знайдено"), { status: 404 });
+    }
+    if (payment.status === "VOIDED") {
+      return { payment, alreadyVoided: true };
+    }
+
+    const affectedFeIds = payment.allocations.map((a) => a.financeEntryId);
+
+    // Видалити allocations цього платежу.
+    await tx.supplierPaymentAllocation.deleteMany({
+      where: { paymentId: input.paymentId },
+    });
+
+    // Повернути зачеплені FE у APPROVED, якщо вони залишилися без повного покриття.
+    if (affectedFeIds.length > 0) {
+      const remainAlloc = await tx.supplierPaymentAllocation.groupBy({
+        by: ["financeEntryId"],
+        where: { financeEntryId: { in: affectedFeIds } },
+        _sum: { amount: true },
+      });
+      const remainMap = new Map<string, Decimal>();
+      for (const r of remainAlloc) {
+        remainMap.set(r.financeEntryId, new Decimal(r._sum.amount ?? 0));
+      }
+      const fes = await tx.financeEntry.findMany({
+        where: { id: { in: affectedFeIds } },
+        select: { id: true, amount: true, status: true },
+      });
+      for (const fe of fes) {
+        const stillAllocated = remainMap.get(fe.id) ?? ZERO;
+        const fullyCovered = stillAllocated.greaterThanOrEqualTo(fe.amount);
+        if (fullyCovered) continue; // інший платіж досі покриває повністю — лишаємо PAID
+        if (fe.status === "PAID") {
+          await tx.financeEntry.update({
+            where: { id: fe.id },
+            data: {
+              status: "APPROVED",
+              paidAt: null,
+              updatedById: input.voidedById,
+            },
+          });
+        }
+      }
+    }
+
+    const updated = await tx.supplierPayment.update({
+      where: { id: input.paymentId },
+      data: {
+        status: "VOIDED",
+        voidedAt: new Date(),
+        voidedById: input.voidedById,
+        voidReason: input.reason ?? null,
+      },
+    });
+
+    return { payment: updated, alreadyVoided: false };
+  });
+}

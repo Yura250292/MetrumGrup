@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowLeft,
   Building2,
   CheckCircle2,
@@ -17,14 +18,17 @@ import {
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { formatCurrencyCompact } from "@/lib/utils";
+import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
+import { SupplierPaymentModal } from "./supplier-payment-modal";
 
 type CounterpartyType = "LEGAL" | "INDIVIDUAL" | "FOP";
+type CounterpartyRole = "CLIENT" | "SUPPLIER" | "CONTRACTOR" | "EMPLOYEE" | "OTHER";
 
 type Counterparty = {
   id: string;
   name: string;
   type: CounterpartyType;
+  roles: CounterpartyRole[];
   edrpou: string | null;
   iban: string | null;
   vatPayer: boolean;
@@ -47,9 +51,46 @@ type Stats = {
   pendingIncoming: number;
   pendingOutgoing: number;
   balance: number;
+  outstanding: number;
 };
 
 type Project = { id: string; title: string; slug: string };
+
+type DebtByProject = {
+  projectId: string | null;
+  projectTitle: string | null;
+  projectSlug: string | null;
+  outstanding: number;
+  entryCount: number;
+};
+
+type DebtByMaterial = {
+  name: string;
+  outstanding: number;
+  count: number;
+};
+
+type SupplierPayment = {
+  id: string;
+  amount: number | string;
+  currency: string;
+  occurredAt: string;
+  method: "CASH" | "BANK_TRANSFER" | "CARD";
+  reference: string | null;
+  status: "POSTED" | "VOIDED";
+  voidedAt: string | null;
+  project: { id: string; title: string; slug: string } | null;
+  _count: { allocations: number };
+};
+
+type SupplierMaterial = {
+  id: string;
+  name: string;
+  unit: string | null;
+  lastPrice: string | number | null;
+  lastSeenAt: string | null;
+  priceHistory?: Array<{ id: string; price: string | number; observedAt: string }>;
+};
 
 type FinanceEntry = {
   id: string;
@@ -108,23 +149,39 @@ export function CounterpartyDossier({
   const [stats, setStats] = useState<Stats | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [entries, setEntries] = useState<FinanceEntry[]>([]);
+  const [debtByProject, setDebtByProject] = useState<DebtByProject[]>([]);
+  const [debtByMaterial, setDebtByMaterial] = useState<DebtByMaterial[]>([]);
+  const [recentPayments, setRecentPayments] = useState<SupplierPayment[]>([]);
+  const [supplierMaterials, setSupplierMaterials] = useState<SupplierMaterial[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<FieldKey | null>(null);
   const [savingField, setSavingField] = useState<FieldKey | null>(null);
 
+  const [paymentModal, setPaymentModal] = useState<{
+    projectId: string | null;
+    projectTitle: string | null;
+    outstandingHint: number;
+  } | null>(null);
+  const [voidingId, setVoidingId] = useState<string | null>(null);
+
   const canEdit = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"].includes(currentUserRole);
   const canDelete = currentUserRole === "SUPER_ADMIN";
   const canToggleActive = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
+  const canPay = ["SUPER_ADMIN", "MANAGER", "FINANCIER"].includes(currentUserRole);
+  const canVoid = ["SUPER_ADMIN", "FINANCIER"].includes(currentUserRole);
   const hideSalary = currentUserRole === "HR";
 
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
-      const [dossierRes, entriesRes] = await Promise.all([
+      const [dossierRes, entriesRes, materialsRes] = await Promise.all([
         fetch(`/api/admin/financing/counterparties/${id}`, { cache: "no-store" }),
         fetch(`/api/admin/financing?counterpartyId=${id}&archived=false`, { cache: "no-store" }),
+        fetch(`/api/admin/financing/supplier-materials?counterpartyId=${id}&withHistory=true`, {
+          cache: "no-store",
+        }),
       ]);
       if (!dossierRes.ok) {
         const j = await dossierRes.json().catch(() => ({}));
@@ -134,10 +191,18 @@ export function CounterpartyDossier({
       setCp(dossier.data);
       setStats(dossier.stats);
       setProjects(dossier.projects ?? []);
+      setDebtByProject(dossier.outstandingByProject ?? []);
+      setDebtByMaterial(dossier.outstandingByMaterial ?? []);
+      setRecentPayments(dossier.recentPayments ?? []);
 
       if (entriesRes.ok) {
         const j = await entriesRes.json();
         setEntries(j.data ?? []);
+      }
+
+      if (materialsRes.ok) {
+        const j = await materialsRes.json();
+        setSupplierMaterials(j.data ?? []);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка");
@@ -183,6 +248,29 @@ export function CounterpartyDossier({
     const res = await fetch(`/api/admin/financing/counterparties/${id}`, { method: "DELETE" });
     if (res.ok) await loadAll();
   }
+
+  async function voidPayment(paymentId: string) {
+    if (!confirm("Скасувати цей платіж? Розподіл буде скинуто, статус зачеплених фактів повернеться у APPROVED.")) {
+      return;
+    }
+    setVoidingId(paymentId);
+    try {
+      const res = await fetch(`/api/admin/financing/supplier-payments/${paymentId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j.error ?? "Помилка скасування");
+        return;
+      }
+      await loadAll();
+    } finally {
+      setVoidingId(null);
+    }
+  }
+
+  const isSupplier = (cp?.roles ?? []).includes("SUPPLIER");
+  const totalOutstanding = stats?.outstanding ?? 0;
 
   const visibleEntries = useMemo(
     () => (hideSalary ? entries.filter((e) => e.category !== "salary") : entries),
@@ -578,6 +666,385 @@ export function CounterpartyDossier({
           tooltip={stats.balance > 0 ? "Ми винні їм" : stats.balance < 0 ? "Вони винні нам" : "Розрахунки збалансовано"}
         />
       </div>
+
+      {/* Supplier debt — total + Pay button */}
+      {(isSupplier || totalOutstanding > 0) && (
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-2xl p-4"
+          style={{
+            backgroundColor: totalOutstanding > 0 ? T.dangerSoft : T.panel,
+            border: `1px solid ${totalOutstanding > 0 ? `${T.danger}40` : T.borderSoft}`,
+          }}
+        >
+          <div className="flex items-center gap-2">
+            <Wallet
+              size={18}
+              style={{ color: totalOutstanding > 0 ? T.danger : T.textMuted }}
+            />
+            <span
+              className="text-[10.5px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted }}
+            >
+              Заборгованість постачальнику
+            </span>
+          </div>
+          <div className="flex-1" />
+          <div
+            className="text-2xl font-bold tabular-nums"
+            style={{ color: totalOutstanding > 0 ? T.danger : T.textMuted }}
+          >
+            {totalOutstanding > 0 ? formatCurrency(totalOutstanding) : "0 ₴"}
+          </div>
+          {canPay && totalOutstanding > 0 && (
+            <button
+              onClick={() =>
+                setPaymentModal({
+                  projectId: null,
+                  projectTitle: null,
+                  outstandingHint: totalOutstanding,
+                })
+              }
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[12px] font-bold"
+              style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+            >
+              <Wallet size={13} /> Внести оплату
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Borg by project */}
+      {debtByProject.length > 0 && (
+        <div
+          className="rounded-2xl"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <div
+            className="px-4 pt-3 pb-2 text-[10.5px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted }}
+          >
+            Борг по проєктах
+          </div>
+          <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
+            <tbody>
+              {debtByProject.map((d) => (
+                <tr
+                  key={d.projectId ?? "__none__"}
+                  className="border-t"
+                  style={{ borderColor: T.borderSoft }}
+                >
+                  <td className="px-4 py-2.5">
+                    {d.projectId ? (
+                      <Link
+                        href={`/admin-v2/projects/${d.projectSlug ?? d.projectId}`}
+                        className="font-medium hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {d.projectTitle ?? "Проєкт"}
+                      </Link>
+                    ) : (
+                      <span style={{ color: T.textMuted }}>Без проєкту</span>
+                    )}
+                    <span
+                      className="ml-2 text-[11px]"
+                      style={{ color: T.textMuted }}
+                    >
+                      {d.entryCount} {d.entryCount === 1 ? "запис" : "записів"}
+                    </span>
+                  </td>
+                  <td
+                    className="px-3 py-2.5 text-right tabular-nums font-semibold"
+                    style={{ color: T.danger }}
+                  >
+                    {formatCurrency(d.outstanding)}
+                  </td>
+                  <td className="px-3 py-2.5 text-right whitespace-nowrap">
+                    {canPay && (
+                      <button
+                        onClick={() =>
+                          setPaymentModal({
+                            projectId: d.projectId,
+                            projectTitle: d.projectTitle,
+                            outstandingHint: d.outstanding,
+                          })
+                        }
+                        className="rounded-lg px-3 py-1 text-[11px] font-semibold"
+                        style={{
+                          backgroundColor: T.accentPrimarySoft,
+                          color: T.accentPrimary,
+                        }}
+                      >
+                        Оплатити
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Borg by material (Phase 1: groupBy title) */}
+      {debtByMaterial.length > 0 && (
+        <div
+          className="rounded-2xl p-4"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <div
+            className="text-[10.5px] font-bold uppercase tracking-wider mb-2"
+            style={{ color: T.textMuted }}
+          >
+            Борг по матеріалах
+          </div>
+          <div className="flex flex-col gap-1">
+            {debtByMaterial.slice(0, 12).map((m) => (
+              <div
+                key={m.name}
+                className="flex items-center justify-between gap-3 text-[12.5px] px-2 py-1.5 rounded-lg"
+                style={{ backgroundColor: T.panelSoft }}
+              >
+                <span className="truncate flex-1" style={{ color: T.textPrimary }}>
+                  {m.name}
+                </span>
+                <span className="text-[11px]" style={{ color: T.textMuted }}>
+                  {m.count}×
+                </span>
+                <span
+                  className="tabular-nums font-semibold whitespace-nowrap"
+                  style={{ color: T.danger }}
+                >
+                  {formatCurrency(m.outstanding)}
+                </span>
+              </div>
+            ))}
+            {debtByMaterial.length > 12 && (
+              <div
+                className="text-[11px] mt-1 text-center"
+                style={{ color: T.textMuted }}
+              >
+                + ще {debtByMaterial.length - 12}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Supplier materials catalog (Phase 3) */}
+      {supplierMaterials.length > 0 && (
+        <div
+          className="rounded-2xl p-4"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <div
+              className="text-[10.5px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted }}
+            >
+              Довідник матеріалів постачальника
+            </div>
+            <span className="text-[10px]" style={{ color: T.textMuted }}>
+              {supplierMaterials.length} {supplierMaterials.length === 1 ? "матеріал" : "матеріалів"}
+            </span>
+          </div>
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {supplierMaterials.slice(0, 30).map((m) => {
+              const lastPrice = m.lastPrice !== null ? Number(m.lastPrice) : null;
+              const history = m.priceHistory ?? [];
+              // Phase 3: показуємо стрілку тренду якщо є попередня ціна.
+              const prev =
+                history.length > 1 ? Number(history[1].price) : null;
+              const delta =
+                lastPrice !== null && prev !== null && prev > 0
+                  ? (lastPrice - prev) / prev
+                  : null;
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center justify-between gap-2 px-3 py-2 rounded-lg"
+                  style={{ backgroundColor: T.panelSoft }}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className="text-[12.5px] font-medium truncate"
+                      style={{ color: T.textPrimary }}
+                    >
+                      {m.name}
+                    </div>
+                    <div className="text-[10px]" style={{ color: T.textMuted }}>
+                      {m.unit ?? "—"}
+                      {m.lastSeenAt
+                        ? ` · ${format(new Date(m.lastSeenAt), "d MMM yy", { locale: uk })}`
+                        : ""}
+                      {history.length > 1 ? ` · ${history.length} спостережень` : ""}
+                    </div>
+                  </div>
+                  <div className="text-right whitespace-nowrap">
+                    {lastPrice !== null ? (
+                      <div
+                        className="text-[13px] font-bold tabular-nums"
+                        style={{ color: T.textPrimary }}
+                      >
+                        {formatCurrency(lastPrice)}
+                      </div>
+                    ) : (
+                      <span style={{ color: T.textMuted }}>—</span>
+                    )}
+                    {delta !== null && Math.abs(delta) >= 0.01 && (
+                      <div
+                        className="text-[10.5px] font-semibold"
+                        style={{
+                          color: delta > 0 ? T.danger : T.success,
+                        }}
+                        title={
+                          prev !== null
+                            ? `Раніше: ${formatCurrency(prev)}`
+                            : undefined
+                        }
+                      >
+                        {delta > 0 ? "▲" : "▼"} {(Math.abs(delta) * 100).toFixed(0)}%
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {supplierMaterials.length > 30 && (
+            <div
+              className="text-[11px] mt-2 text-center"
+              style={{ color: T.textMuted }}
+            >
+              + ще {supplierMaterials.length - 30}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Payments history */}
+      {recentPayments.length > 0 && (
+        <div
+          className="overflow-x-auto rounded-2xl"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <div
+            className="px-4 pt-3 pb-2 text-[10.5px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted }}
+          >
+            Платежі постачальнику
+          </div>
+          <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
+            <thead>
+              <tr
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                <th className="px-4 py-2 text-left">Дата</th>
+                <th className="px-3 py-2 text-left">Метод</th>
+                <th className="px-3 py-2 text-left">Проєкт</th>
+                <th className="px-3 py-2 text-left">№ платіжки</th>
+                <th className="px-3 py-2 text-right">Сума</th>
+                <th className="px-3 py-2 text-right">Алок.</th>
+                <th className="px-3 py-2 text-right">Статус</th>
+                {canVoid && <th className="px-3 py-2 text-right" />}
+              </tr>
+            </thead>
+            <tbody>
+              {recentPayments.map((p) => (
+                <tr
+                  key={p.id}
+                  className="border-t"
+                  style={{
+                    borderColor: T.borderSoft,
+                    opacity: p.status === "VOIDED" ? 0.5 : 1,
+                  }}
+                >
+                  <td className="px-4 py-2 whitespace-nowrap">
+                    {format(new Date(p.occurredAt), "d MMM yy", { locale: uk })}
+                  </td>
+                  <td className="px-3 py-2 text-[12px]" style={{ color: T.textSecondary }}>
+                    {p.method === "CASH" ? "Готівка" : p.method === "CARD" ? "Картка" : "Безгот."}
+                  </td>
+                  <td className="px-3 py-2 text-[12px]">
+                    {p.project ? (
+                      <Link
+                        href={`/admin-v2/projects/${p.project.slug}`}
+                        className="hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {p.project.title}
+                      </Link>
+                    ) : (
+                      <span style={{ color: T.textMuted }}>—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-[12px]" style={{ color: T.textSecondary }}>
+                    {p.reference || "—"}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums font-semibold">
+                    {formatCurrency(Number(p.amount))}
+                  </td>
+                  <td className="px-3 py-2 text-right text-[12px]" style={{ color: T.textMuted }}>
+                    {p._count.allocations}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    {p.status === "POSTED" ? (
+                      <span
+                        className="text-[10px] font-bold rounded px-1.5 py-0.5"
+                        style={{ backgroundColor: T.successSoft, color: T.success }}
+                      >
+                        Проведено
+                      </span>
+                    ) : (
+                      <span
+                        className="text-[10px] font-bold rounded px-1.5 py-0.5"
+                        style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+                      >
+                        Скасовано
+                      </span>
+                    )}
+                  </td>
+                  {canVoid && (
+                    <td className="px-3 py-2 text-right">
+                      {p.status === "POSTED" && (
+                        <button
+                          onClick={() => voidPayment(p.id)}
+                          disabled={voidingId === p.id}
+                          className="rounded-md p-1.5 hover:bg-black/10 disabled:opacity-50"
+                          title="Скасувати платіж"
+                        >
+                          {voidingId === p.id ? (
+                            <Loader2 size={13} className="animate-spin" style={{ color: T.textMuted }} />
+                          ) : (
+                            <AlertTriangle size={13} style={{ color: T.danger }} />
+                          )}
+                        </button>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Payment modal */}
+      {cp && paymentModal && (
+        <SupplierPaymentModal
+          open={true}
+          counterpartyId={cp.id}
+          counterpartyName={cp.name}
+          projectId={paymentModal.projectId}
+          projectTitle={paymentModal.projectTitle}
+          outstandingHint={paymentModal.outstandingHint}
+          onClose={() => setPaymentModal(null)}
+          onCreated={async () => {
+            setPaymentModal(null);
+            await loadAll();
+          }}
+        />
+      )}
 
       {/* Recent projects */}
       {projects.length > 0 && (

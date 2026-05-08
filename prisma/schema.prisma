@@ -109,6 +109,8 @@ model User {
   foremanReportFiles     ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
   ownerConversations     OwnerConversation[]       @relation("OwnerConversationUser")
   ownerChatFolders       OwnerChatFolder[]         @relation("OwnerChatFolderUser")
+  supplierPaymentsCreated SupplierPayment[]        @relation("SupplierPaymentCreator")
+  supplierPaymentsVoided  SupplierPayment[]        @relation("SupplierPaymentVoider")
 
   @@index([firmId])
   @@map("users")
@@ -207,6 +209,7 @@ model Project {
   kb2Forms               KB2Form[]               @relation("ProjectKB2Forms")
   kb3Forms               KB3Form[]               @relation("ProjectKB3Forms")
   foremanReports         ForemanReport[]
+  supplierPayments       SupplierPayment[]
 
   @@unique([telegramChatId, telegramThreadId], name: "project_telegram_chat_thread_unique")
   @@index([folderId])
@@ -507,10 +510,11 @@ model Material {
   isActive         Boolean                 @default(true)
   createdAt        DateTime                @default(now())
   updatedAt        DateTime                @updatedAt
-  estimateItems    EstimateItem[]
-  inventoryItems   InventoryItem[]
-  priceSnapshots   MaterialPriceSnapshot[]
-  receiptLineItems ReceiptLineItem[]       @relation("MaterialReceiptLines")
+  estimateItems     EstimateItem[]
+  inventoryItems    InventoryItem[]
+  priceSnapshots    MaterialPriceSnapshot[]
+  receiptLineItems  ReceiptLineItem[]       @relation("MaterialReceiptLines")
+  supplierMaterials SupplierMaterial[]
 
   @@map("materials")
 }
@@ -628,6 +632,10 @@ model FinanceEntry {
   kb2Form            KB2Form?                 @relation("FinanceEntryKB2")
   retentionRecord    RetentionRecord?         @relation("FinanceEntryRetention")
   foremanReportItem  ForemanReportItem?       @relation("ForemanReportItemToFinanceEntry", fields: [foremanReportItemId], references: [id], onDelete: SetNull)
+  /// Phase 1 (supplier-debt): allocations що покривають частину/всю суму
+  /// цього факту. Outstanding = amount − SUM(allocations.amount). Коли
+  /// outstanding = 0 → status переводиться в PAID транзакційно.
+  allocations        SupplierPaymentAllocation[] @relation("FinanceEntryAllocations")
 
   @@index([projectId, occurredAt])
   @@index([type, occurredAt])
@@ -750,11 +758,82 @@ model ForemanReportItem {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  report       ForemanReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  financeEntry FinanceEntry? @relation("ForemanReportItemToFinanceEntry")
+  /// Phase 2 (supplier-debt): постачальник, з якого взято матеріал. Заповнюється
+  /// AI-парсером (через resolveSupplier match по назві/ЄДРПОУ) або вручну
+  /// foreman-ом / менеджером. На approve переноситься у FinanceEntry.counterpartyId.
+  counterpartyId String?
+  /// Сирий текст постачальника, що AI запропонував, але не змаппив на існуючу
+  /// Counterparty (UI показує chip "AI запропонував: Будхата" + кнопка "Створити").
+  supplierGuess  String?
+  /// Phase 3: позначка "ціна зросла vs попередній чек цього постачальника".
+  /// Виставляється на approve через upsertSupplierMaterial. UI показує "!" tooltip.
+  priceIncreaseFlag Boolean @default(false)
+  /// Попередня unitPrice цього матеріалу у цього постачальника на момент approve.
+  /// Snapshot для UI tooltip ("було 200, стало 250").
+  previousUnitPrice Decimal? @db.Decimal(12, 2)
+
+  report       ForemanReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  counterparty Counterparty?  @relation("ForemanItemSupplier", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  financeEntry FinanceEntry?  @relation("ForemanReportItemToFinanceEntry")
 
   @@index([reportId])
+  @@index([counterpartyId])
   @@map("foreman_report_items")
+}
+
+/// Довідник матеріалів конкретного постачальника. Накопичується автоматично
+/// при approve foreman-report (upsertSupplierMaterial). Дає трекінг цін
+/// "цемент у Будхати раніше коштував 200, тепер 250" і flag подорожчання.
+///
+/// nameKey — нормалізована назва (lower + trim + collapse spaces) для unique
+/// у scope (counterpartyId, firmId). На рівні UI/API завжди показуємо `name`
+/// (display) — оригінальний title з останнього звіту.
+model SupplierMaterial {
+  id             String   @id @default(cuid())
+  counterpartyId String
+  firmId         String
+  /// Нормалізована назва (lower + trim + collapse). Ключ дедуплікації.
+  nameKey        String
+  /// Display name (з найсвіжішого звіту).
+  name           String
+  unit           String?
+  lastPrice      Decimal? @db.Decimal(12, 2)
+  lastSeenAt     DateTime?
+  /// Опційний звʼязок з глобальним каталогом Material (якщо менеджер змаппив
+  /// постачальницький матеріал на канонічний). Phase 3 не використовує — для
+  /// Phase 4+ коли буде уніфіковане BoQ.
+  materialId     String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  counterparty Counterparty                   @relation("CounterpartyMaterials", fields: [counterpartyId], references: [id], onDelete: Cascade)
+  firm         Firm                           @relation(fields: [firmId], references: [id])
+  material     Material?                      @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  priceHistory SupplierMaterialPriceHistory[]
+
+  @@unique([counterpartyId, nameKey])
+  @@index([firmId, nameKey])
+  @@index([materialId])
+  @@map("supplier_materials")
+}
+
+/// Історія цін одного матеріалу одного постачальника. Записується при кожному
+/// approve foreman-звіту з MATERIAL item (через upsertSupplierMaterial).
+model SupplierMaterialPriceHistory {
+  id                 String   @id @default(cuid())
+  supplierMaterialId String
+  price              Decimal  @db.Decimal(12, 2)
+  unit               String?
+  observedAt         DateTime
+  /// Audit trail — звідки прийшла ціна.
+  sourceReportId     String?
+  sourceItemId       String?
+  createdAt          DateTime @default(now())
+
+  supplierMaterial SupplierMaterial @relation(fields: [supplierMaterialId], references: [id], onDelete: Cascade)
+
+  @@index([supplierMaterialId, observedAt])
+  @@map("supplier_material_price_history")
 }
 
 /// Файл, прикріплений до звіту виконроба (фото накладної, PDF, Excel).
@@ -1594,14 +1673,16 @@ model Firm {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  users          User[]
-  projects       Project[]
-  financeEntries FinanceEntry[]
-  folders        Folder[]
-  userAccess     UserFirmAccess[]
-  counterparties Counterparty[]
-  foremanReports ForemanReport[]
-  meetings       Meeting[]
+  users             User[]
+  projects          Project[]
+  financeEntries    FinanceEntry[]
+  folders           Folder[]
+  userAccess        UserFirmAccess[]
+  counterparties    Counterparty[]
+  foremanReports    ForemanReport[]
+  supplierPayments  SupplierPayment[]
+  supplierMaterials SupplierMaterial[]
+  meetings          Meeting[]
 
   @@map("firms")
 }
@@ -2692,10 +2773,33 @@ enum CounterpartyType {
   FOP
 }
 
+/// Роль контрагента у бізнес-процесах. Масив, бо одна юрособа може водночас бути
+/// клієнтом і субпідрядником (типово в будівництві). Backfill заповнює існуючі
+/// рядки на основі того, де вони згадуються (Project.clientCounterpartyId →
+/// CLIENT, FinanceEntry.type=EXPENSE → SUPPLIER).
+enum CounterpartyRole {
+  CLIENT
+  SUPPLIER
+  CONTRACTOR
+  EMPLOYEE
+  OTHER
+}
+
+/// Lifecycle платежу постачальнику.
+/// POSTED — платіж проведено, allocations live, FinanceEntry оновлено.
+/// VOIDED — платіж скасовано, allocations видалено, FE статуси повернуті.
+enum SupplierPaymentStatus {
+  POSTED
+  VOIDED
+}
+
 model Counterparty {
   id        String           @id @default(cuid())
   name      String
   type      CounterpartyType @default(LEGAL)
+  /// Ролі у системі. Порожній масив = OTHER (не використовується активно).
+  /// Фільтрація списків постачальників відбувається через `roles has SUPPLIER`.
+  roles     CounterpartyRole[] @default([])
   taxId     String?
   /// EDRPOU (legal) / RNOKPP (FOP, individual) — Ukrainian tax identifier.
   edrpou    String?
@@ -2708,6 +2812,11 @@ model Counterparty {
   address   String?
   notes     String?
   isActive  Boolean          @default(true)
+  /// Default payment terms (днів) для SUPPLIER. Використовується UI для прогнозу
+  /// "коли треба заплатити". null — без терміну.
+  defaultPaymentTermsDays Int?
+  /// Підказка для UI: який метод оплати зазвичай використовується.
+  preferredPaymentMethod  PaymentMethod?
   /// Фірма-власник (Group / Studio). Контрагенти ізольовані між фірмами;
   /// один SUPPLIER може існувати окремо в Group і в Studio (різні рядки).
   firmId    String?
@@ -2720,13 +2829,86 @@ model Counterparty {
   kb2Forms         KB2Form[]                @relation("KB2FormCounterparty")
   kb3Forms         KB3Form[]                @relation("KB3FormCounterparty")
   /// Проекти, де цей контрагент виступає клієнтом (Project.clientCounterpartyId).
-  clientProjects   Project[]                @relation("ProjectClientCounterparty")
+  clientProjects     Project[]              @relation("ProjectClientCounterparty")
+  supplierPayments   SupplierPayment[]
+  foremanReportItems ForemanReportItem[]    @relation("ForemanItemSupplier")
+  supplierMaterials  SupplierMaterial[]     @relation("CounterpartyMaterials")
 
   @@index([isActive])
   @@index([type])
   @@index([name])
   @@index([firmId])
+  @@index([roles], type: Gin)
   @@map("counterparties")
+}
+
+/// Платіж постачальнику. Сума розкидається FIFO по несплачених FinanceEntry
+/// цього постачальника через SupplierPaymentAllocation. Один платіж може
+/// покривати декілька несплачених фактів (типовий кейс: постачальник дав
+/// матеріал на 3 проєкти, ми платимо одну суму що розподіляється).
+///
+/// Інваріант 1: SUM(allocations.amount) <= SupplierPayment.amount.
+///   Залишок (overpayment) лишається unallocated до майбутнього факту.
+/// Інваріант 2: SUM(allocations[forEntryId].amount) <= FinanceEntry.amount.
+///   Гарантовано унікальним індексом + транзакційною FIFO логікою.
+/// Multi-firm: counterpartyId.firmId має співпадати з SupplierPayment.firmId
+///   (валідація в API).
+model SupplierPayment {
+  id              String                @id @default(cuid())
+  counterpartyId  String
+  firmId          String
+  /// Опційно: якщо платіж зроблено в межах одного проєкту, FIFO обмежиться
+  /// фактами цього проєкту. Null = розподіл по всіх фактах постачальника.
+  projectId       String?
+  amount          Decimal               @db.Decimal(14, 2)
+  currency        String                @default("UAH")
+  occurredAt      DateTime
+  method          PaymentMethod         @default(BANK_TRANSFER)
+  /// Номер платіжки / чека / тощо (вільний текст для аудиту).
+  reference       String?
+  notes           String?
+  status          SupplierPaymentStatus @default(POSTED)
+  voidedAt        DateTime?
+  voidedById      String?
+  voidReason      String?
+  createdById     String
+  /// Idempotency-Key з UI/API. Захищає від подвійного submit (ретрай за
+  /// мережевих помилок створює один SupplierPayment, не два).
+  idempotencyKey  String?               @unique
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  counterparty Counterparty                @relation(fields: [counterpartyId], references: [id])
+  firm         Firm                        @relation(fields: [firmId], references: [id])
+  project      Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdBy    User                        @relation("SupplierPaymentCreator", fields: [createdById], references: [id])
+  voidedBy     User?                       @relation("SupplierPaymentVoider", fields: [voidedById], references: [id])
+  allocations  SupplierPaymentAllocation[]
+
+  @@index([counterpartyId, occurredAt])
+  @@index([firmId, occurredAt])
+  @@index([projectId])
+  @@index([status])
+  @@map("supplier_payments")
+}
+
+/// Розкидка платежу по конкретному FinanceEntry. Сума на пару (payment, entry)
+/// унікальна — це idempotency-замок на алгоритм FIFO (повторний прогон не задвоїть
+/// рядок). При void платежу всі його allocations видаляються каскадом, а статуси
+/// зачеплених FinanceEntry перераховуються (PAID → APPROVED) у тій же транзакції.
+model SupplierPaymentAllocation {
+  id             String   @id @default(cuid())
+  paymentId      String
+  financeEntryId String
+  amount         Decimal  @db.Decimal(14, 2)
+  createdAt      DateTime @default(now())
+
+  payment      SupplierPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  financeEntry FinanceEntry    @relation("FinanceEntryAllocations", fields: [financeEntryId], references: [id], onDelete: Cascade)
+
+  @@unique([paymentId, financeEntryId])
+  @@index([financeEntryId])
+  @@map("supplier_payment_allocations")
 }
 
 enum KB2Status {

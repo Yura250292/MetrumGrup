@@ -15,13 +15,18 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "@/app/admin-v2/hr/_components/excel-import-modal";
+import { formatCurrency } from "@/lib/utils";
+
+const formatUah = (n: number) => formatCurrency(n);
 
 type CounterpartyType = "LEGAL" | "INDIVIDUAL" | "FOP";
+type CounterpartyRole = "CLIENT" | "SUPPLIER" | "CONTRACTOR" | "EMPLOYEE" | "OTHER";
 
 type Counterparty = {
   id: string;
   name: string;
   type: CounterpartyType;
+  roles: CounterpartyRole[];
   edrpou: string | null;
   iban: string | null;
   vatPayer: boolean;
@@ -33,7 +38,19 @@ type Counterparty = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  /// Заповнюється сервером лише коли `withOutstanding=true` або `hasDebt=true`.
+  outstanding?: number;
 };
+
+type RoleFilter = "" | "SUPPLIER" | "CLIENT" | "CONTRACTOR";
+
+const ROLE_TABS: ReadonlyArray<{ value: RoleFilter; label: string }> = [
+  { value: "", label: "Всі" },
+  { value: "SUPPLIER", label: "Постачальники" },
+  { value: "CLIENT", label: "Клієнти" },
+  { value: "CONTRACTOR", label: "Підрядники" },
+];
+
 
 type FormState = {
   name: string;
@@ -90,6 +107,8 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"" | CounterpartyType>("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("");
+  const [hasDebt, setHasDebt] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
 
   const [editingCell, setEditingCell] = useState<{ id: string; field: EditableField } | null>(null);
@@ -109,6 +128,10 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
       const params = new URLSearchParams();
       params.set("take", "200");
       if (showInactive) params.set("includeInactive", "true");
+      if (roleFilter) params.set("role", roleFilter);
+      if (hasDebt) params.set("hasDebt", "true");
+      // Outstanding потрібен на табі SUPPLIER навіть без hasDebt, для колонки "Борг".
+      else if (roleFilter === "SUPPLIER") params.set("withOutstanding", "true");
       const res = await fetch(`/api/admin/financing/counterparties?${params}`, {
         cache: "no-store",
       });
@@ -132,7 +155,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showInactive]);
+  }, [showInactive, roleFilter, hasDebt]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -279,6 +302,40 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
         }}
       />
 
+      {/* Role tabs */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {ROLE_TABS.map((tab) => (
+          <button
+            key={tab.value || "all-roles"}
+            onClick={() => {
+              setRoleFilter(tab.value);
+              if (tab.value !== "SUPPLIER") setHasDebt(false);
+            }}
+            className="rounded-xl px-3 py-1.5 text-[12px] font-semibold transition"
+            style={{
+              backgroundColor: roleFilter === tab.value ? T.accentPrimary : T.panel,
+              color: roleFilter === tab.value ? "#fff" : T.textSecondary,
+              border: `1px solid ${roleFilter === tab.value ? T.accentPrimary : T.borderSoft}`,
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+        {roleFilter === "SUPPLIER" && (
+          <label
+            className="ml-2 flex items-center gap-1.5 text-[12px] cursor-pointer"
+            style={{ color: T.textSecondary }}
+          >
+            <input
+              type="checkbox"
+              checked={hasDebt}
+              onChange={(e) => setHasDebt(e.target.checked)}
+            />
+            Тільки з боргом
+          </label>
+        )}
+      </div>
+
       {/* Toolbar */}
       <div
         className="flex flex-wrap items-center gap-2 rounded-2xl p-3"
@@ -373,6 +430,9 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
               >
                 <th className="px-4 py-3 text-left">Назва</th>
                 <th className="px-3 py-3 text-left">Тип</th>
+                {roleFilter === "SUPPLIER" && (
+                  <th className="px-3 py-3 text-right">Борг</th>
+                )}
                 <th className="px-3 py-3 text-left">Код</th>
                 <th className="px-3 py-3 text-left">IBAN</th>
                 <th className="px-3 py-3 text-center">ПДВ</th>
@@ -389,6 +449,7 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                   setForm={setCreating}
                   saving={creatingSaving}
                   error={creatingError}
+                  showOutstandingCol={roleFilter === "SUPPLIER"}
                   onCancel={() => {
                     setCreating(null);
                     setCreatingError(null);
@@ -471,6 +532,23 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                         </span>
                       )}
                     </td>
+                    {/* Борг (тільки для SUPPLIER табу) */}
+                    {roleFilter === "SUPPLIER" && (
+                      <td className="px-3 py-2 text-right tabular-nums">
+                        {c.outstanding && c.outstanding > 0 ? (
+                          <Link
+                            href={`/admin-v2/counterparties/${c.id}`}
+                            className="font-semibold hover:underline"
+                            style={{ color: T.danger }}
+                            title="Відкрити дос'є для оплати"
+                          >
+                            {formatUah(c.outstanding)}
+                          </Link>
+                        ) : (
+                          <span style={{ color: T.textMuted }}>—</span>
+                        )}
+                      </td>
+                    )}
                     {/* Код (ЄДРПОУ / РНОКПП) */}
                     <td
                       className={`px-3 py-2 text-[12px] ${canCreate ? "cursor-text hover:bg-black/5" : ""}`}
@@ -611,8 +689,12 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
               })}
               {filtered.length === 0 && !creating && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
-                    {search.trim() || typeFilter
+                  <td
+                    colSpan={roleFilter === "SUPPLIER" ? 10 : 9}
+                    className="px-4 py-12 text-center text-sm"
+                    style={{ color: T.textMuted }}
+                  >
+                    {search.trim() || typeFilter || roleFilter || hasDebt
                       ? "Нічого не знайдено за фільтрами."
                       : "Список порожній. Додайте через кнопку «Новий контрагент» або імпортуйте з Excel."}
                   </td>
@@ -631,6 +713,7 @@ function CreateRow({
   setForm,
   saving,
   error,
+  showOutstandingCol,
   onCancel,
   onSubmit,
 }: {
@@ -638,6 +721,7 @@ function CreateRow({
   setForm: (updater: (prev: FormState | null) => FormState | null) => void;
   saving: boolean;
   error: string | null;
+  showOutstandingCol: boolean;
   onCancel: () => void;
   onSubmit: () => void;
 }) {
@@ -675,6 +759,11 @@ function CreateRow({
             <option value="INDIVIDUAL">Фіз. особа</option>
           </select>
         </td>
+        {showOutstandingCol && (
+          <td className="px-3 py-2 text-right" style={{ color: T.textMuted }}>
+            <span className="text-[11px]">—</span>
+          </td>
+        )}
         <td className="px-3 py-2">
           <input
             value={form.edrpou}
@@ -764,7 +853,7 @@ function CreateRow({
       {error && (
         <tr>
           <td
-            colSpan={9}
+            colSpan={showOutstandingCol ? 10 : 9}
             className="px-4 py-2 text-[12px]"
             style={{ backgroundColor: T.dangerSoft, color: T.danger }}
           >

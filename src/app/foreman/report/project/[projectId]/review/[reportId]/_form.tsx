@@ -26,6 +26,9 @@ function newRow(): EditableItem {
     amount: "0",
     currency: "UAH",
     confidence: null,
+    counterpartyId: null,
+    supplierGuess: null,
+    counterpartyName: null,
   };
 }
 
@@ -87,6 +90,20 @@ export function ReviewForm({ reportId, projectId, initialItems }: Props) {
       }
     }
 
+    // Phase 2: попередження про MATERIAL/SUBCONTRACT items без counterparty —
+    // менеджер не зможе approve без цього. Не блокуємо submit, але показуємо.
+    const supplierMissing = items.filter(
+      (it) =>
+        (it.costType === "MATERIAL" || it.costType === "SUBCONTRACT") &&
+        !it.counterpartyId,
+    );
+    if (supplierMissing.length > 0) {
+      const ok = confirm(
+        `${supplierMissing.length} ${supplierMissing.length === 1 ? "позиція без постачальника" : "позицій без постачальника"}. Менеджер не зможе затвердити — потрібно буде довибрати. Продовжити?`,
+      );
+      if (!ok) return;
+    }
+
     setSubmitting(true);
     setError(null);
     try {
@@ -104,6 +121,8 @@ export function ReviewForm({ reportId, projectId, initialItems }: Props) {
             amount: parseDecimal(it.amount),
             currency: it.currency,
             sortOrder: idx,
+            counterpartyId: it.counterpartyId ?? null,
+            supplierGuess: it.supplierGuess ?? null,
           })),
         }),
       });

@@ -25,6 +25,8 @@ const PatchBody = z.object({
       amount: z.number().positive(),
       currency: z.string().min(3).max(3).default("UAH"),
       sortOrder: z.number().int().nonnegative().default(0),
+      counterpartyId: z.string().min(1).nullable().optional(),
+      supplierGuess: z.string().max(200).nullable().optional(),
     }),
   ),
 });
@@ -103,6 +105,8 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         amount: it.amount,
         currency: it.currency || "UAH",
         sortOrder: it.sortOrder ?? idx,
+        counterpartyId: it.counterpartyId ?? null,
+        supplierGuess: it.supplierGuess ?? null,
       })),
     }),
     prisma.foremanReport.update({ where: { id }, data: { updatedAt: new Date() } }),

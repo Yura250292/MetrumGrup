@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse, FOREMAN_REPORT_REVIEWERS } from "@/lib/auth-utils";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
+import { upsertSupplierMaterial } from "@/lib/foreman/upsert-supplier-material";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +58,31 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
     return forbiddenResponse();
   }
 
+  // Phase 2 (supplier-debt): MATERIAL items мають бути привʼязані до постачальника,
+  // інакше факт не агрегуватиметься як борг. Менеджеру повертаємо 422 зі списком
+  // items що потребують ручної привʼязки — UI відкриває диалог вибору/створення.
+  // LABOR і OTHER пропускаються (необовʼязково мати постачальника).
+  const SUPPLIER_REQUIRED: ReadonlyArray<string> = ["MATERIAL", "SUBCONTRACT"];
+  const missingSupplierItems = report.items.filter(
+    (i) => SUPPLIER_REQUIRED.includes(i.costType) && !i.counterpartyId,
+  );
+  if (missingSupplierItems.length > 0) {
+    return NextResponse.json(
+      {
+        error: "Supplier required",
+        message:
+          "Для матеріалів і субпідряду треба вибрати постачальника, перш ніж затверджувати звіт.",
+        pendingItems: missingSupplierItems.map((i) => ({
+          id: i.id,
+          title: i.title,
+          costType: i.costType,
+          supplierGuess: i.supplierGuess,
+        })),
+      },
+      { status: 422 },
+    );
+  }
+
   const occurredAt = report.occurredAt;
   const folderId = report.project.folderId ?? null;
   const reviewerId = session.user.id;
@@ -96,10 +122,43 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
             createdById: report.createdById,
             updatedById: reviewerId,
             foremanReportItemId: item.id,
+            // Phase 2: переносимо постачальника на FinanceEntry — це критично для
+            // агрегацій боргу (counterparty-dossier рахує SUM unpaid expenses).
+            counterpartyId: item.counterpartyId,
           },
           select: { id: true },
         });
         financeEntryIds.push(entry.id);
+
+        // Phase 3: оновлюємо довідник матеріалів цього постачальника +
+        // детектимо подорожчання. Лише для MATERIAL items з прив'язаним постачальником
+        // і unitPrice — інші типи (LABOR/OVERHEAD) не мають сенсу як "матеріал".
+        if (
+          item.costType === "MATERIAL" &&
+          item.counterpartyId &&
+          item.unitPrice &&
+          report.firmId
+        ) {
+          const result = await upsertSupplierMaterial(tx, {
+            counterpartyId: item.counterpartyId,
+            firmId: report.firmId,
+            title: item.title,
+            unit: item.unit,
+            unitPrice: item.unitPrice,
+            occurredAt,
+            sourceReportId: report.id,
+            sourceItemId: item.id,
+          });
+          if (result?.priceIncrease) {
+            await tx.foremanReportItem.update({
+              where: { id: item.id },
+              data: {
+                priceIncreaseFlag: true,
+                previousUnitPrice: result.previousUnitPrice,
+              },
+            });
+          }
+        }
 
         // Скопіювати attachments звіту → FinanceEntryAttachment (той самий r2Key)
         if (report.attachments.length > 0) {

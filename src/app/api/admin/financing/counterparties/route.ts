@@ -21,6 +21,12 @@ const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"];
 const querySchema = z.object({
   q: z.string().trim().optional(),
   type: z.enum(["LEGAL", "INDIVIDUAL", "FOP"]).optional(),
+  role: z.enum(["CLIENT", "SUPPLIER", "CONTRACTOR", "EMPLOYEE", "OTHER"]).optional(),
+  /// Якщо true — повернути ТІЛЬКИ постачальників з outstanding > 0.
+  hasDebt: z.coerce.boolean().default(false),
+  /// Якщо true — додає поле `outstanding` (sum unpaid expenses) у відповідь.
+  /// hasDebt автоматично активує цей розрахунок.
+  withOutstanding: z.coerce.boolean().default(false),
   includeInactive: z.coerce.boolean().default(false),
   take: z.coerce.number().int().positive().max(500).default(50),
 });
@@ -58,13 +64,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { q, type, includeInactive, take } = parsed.data;
+  const { q, type, role, hasDebt, withOutstanding, includeInactive, take } = parsed.data;
 
   const items = await prisma.counterparty.findMany({
     where: {
       ...(firmId ? { firmId } : {}),
       ...(includeInactive ? {} : { isActive: true }),
       ...(type ? { type } : {}),
+      ...(role ? { roles: { has: role } } : {}),
       ...(q
         ? {
             OR: [
@@ -79,7 +86,61 @@ export async function GET(request: NextRequest) {
     take,
   });
 
-  return NextResponse.json({ data: items });
+  // outstanding agregation. hasDebt автоматично активує розрахунок (інакше нема як фільтрувати).
+  if (!withOutstanding && !hasDebt) {
+    return NextResponse.json({ data: items });
+  }
+
+  const ids = items.map((c) => c.id);
+  if (ids.length === 0) {
+    return NextResponse.json({ data: items.map((c) => ({ ...c, outstanding: 0 })) });
+  }
+
+  // Несплачені факти цих контрагентів (FACT/EXPENSE/APPROVED|PENDING).
+  const unpaidEntries = await prisma.financeEntry.findMany({
+    where: {
+      counterpartyId: { in: ids },
+      type: "EXPENSE",
+      kind: "FACT",
+      isArchived: false,
+      status: { in: ["APPROVED", "PENDING"] },
+      ...(firmId ? { firmId } : {}),
+    },
+    select: { id: true, counterpartyId: true, amount: true },
+  });
+
+  const allocByEntry = new Map<string, number>();
+  if (unpaidEntries.length > 0) {
+    const allocs = await prisma.supplierPaymentAllocation.groupBy({
+      by: ["financeEntryId"],
+      where: { financeEntryId: { in: unpaidEntries.map((e) => e.id) } },
+      _sum: { amount: true },
+    });
+    for (const a of allocs) {
+      allocByEntry.set(a.financeEntryId, Number(a._sum.amount ?? 0));
+    }
+  }
+
+  const outstandingByCp = new Map<string, number>();
+  for (const e of unpaidEntries) {
+    if (!e.counterpartyId) continue;
+    const left = Number(e.amount) - (allocByEntry.get(e.id) ?? 0);
+    if (left <= 0) continue;
+    outstandingByCp.set(
+      e.counterpartyId,
+      (outstandingByCp.get(e.counterpartyId) ?? 0) + left,
+    );
+  }
+
+  let result = items.map((c) => ({
+    ...c,
+    outstanding: outstandingByCp.get(c.id) ?? 0,
+  }));
+  if (hasDebt) {
+    result = result.filter((c) => c.outstanding > 0);
+  }
+
+  return NextResponse.json({ data: result });
 }
 
 export async function POST(request: NextRequest) {

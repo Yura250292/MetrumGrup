@@ -25,7 +25,10 @@ export default async function ForemanReviewPage({ params }: PageProps) {
       firmId: firmId ?? undefined,
     },
     include: {
-      items: { orderBy: { sortOrder: "asc" } },
+      items: {
+        orderBy: { sortOrder: "asc" },
+        include: { counterparty: { select: { id: true, name: true } } },
+      },
       project: { select: { id: true, title: true, folderId: true } },
     },
   });
@@ -53,6 +56,9 @@ export default async function ForemanReviewPage({ params }: PageProps) {
           amount: i.amount.toString(),
           currency: i.currency,
           confidence: i.confidence,
+          counterpartyId: i.counterpartyId,
+          supplierGuess: i.supplierGuess,
+          counterpartyName: i.counterparty?.name ?? null,
         }))}
       />
     </ForemanShell>

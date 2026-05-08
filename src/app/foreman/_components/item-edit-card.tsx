@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CostType } from "@prisma/client";
+import { SupplierPicker } from "./supplier-picker";
 
 export interface EditableItem {
   id: string;
@@ -13,6 +14,12 @@ export interface EditableItem {
   amount: string;
   currency: string;
   confidence: number | null;
+  /// Phase 2: постачальник з якого взято матеріал. counterpartyId — підтверджена
+  /// привʼязка, supplierGuess — raw AI-текст коли матч не знайшовся.
+  counterpartyId: string | null;
+  supplierGuess: string | null;
+  /// Snapshot імʼя постачальника на момент рендеру (для UI без додаткових fetch).
+  counterpartyName?: string | null;
 }
 
 interface ItemEditCardProps {
@@ -170,6 +177,28 @@ export function ItemEditCard({ item, index, onChange, onDelete }: ItemEditCardPr
               className="px-2 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-white text-sm font-semibold text-center focus:border-emerald-500 focus:outline-none"
             />
           </div>
+
+          {/* Supplier picker — критичний для MATERIAL і SUBCONTRACT, бо без нього
+              менеджер не зможе approve звіт (валідація на API). */}
+          {(item.costType === "MATERIAL" || item.costType === "SUBCONTRACT") && (
+            <div>
+              <div className="text-[10px] uppercase font-semibold text-zinc-500 mb-1.5">
+                Постачальник
+              </div>
+              <SupplierPicker
+                value={item.counterpartyId}
+                guess={item.supplierGuess}
+                preselectedName={item.counterpartyName}
+                onChange={(next) =>
+                  onChange({
+                    ...item,
+                    counterpartyId: next.counterpartyId,
+                    supplierGuess: next.supplierGuess,
+                  })
+                }
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

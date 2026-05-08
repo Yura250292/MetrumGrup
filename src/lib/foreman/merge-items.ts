@@ -10,6 +10,9 @@ export interface ForemanDraftItem {
   amount: number;
   currency: string;
   confidence: number | null;
+  /// Phase 2 (supplier-debt): постачальник, що AI витяг із тексту/чека (raw текст).
+  /// Резолвиться в counterpartyId через resolveSupplier на наступному кроці.
+  supplier?: string | null;
 }
 
 function normalizeKey(it: ForemanDraftItem): string {
@@ -36,12 +39,14 @@ export function mergeForemanItems(sources: ForemanDraftItem[][]): ForemanDraftIt
         map.set(key, item);
         continue;
       }
-      // Дубль — лишаємо з вищим confidence
+      // Дубль — лишаємо з вищим confidence, але supplier мерджимо: якщо хтось
+      // з парсерів витяг постачальника, не втрачаємо його (фото-чек часто
+      // знаходить supplier краще за вільний текст).
       const existingConf = existing.confidence ?? 0;
       const newConf = item.confidence ?? 0;
-      if (newConf > existingConf) {
-        map.set(key, item);
-      }
+      const winner = newConf > existingConf ? item : existing;
+      const supplier = winner.supplier ?? existing.supplier ?? item.supplier ?? null;
+      map.set(key, { ...winner, supplier });
     }
   }
   return Array.from(map.values());
@@ -57,5 +62,6 @@ export function fromParsedExpense(p: ParsedExpense): ForemanDraftItem {
     amount: p.amount,
     currency: p.currency || "UAH",
     confidence: p.confidence ?? null,
+    supplier: p.supplier ?? null,
   };
 }

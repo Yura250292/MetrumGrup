@@ -27,7 +27,12 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       project: { select: { id: true, title: true, folderId: true } },
       createdBy: { select: { id: true, name: true, email: true, phone: true } },
       reviewedBy: { select: { id: true, name: true } },
-      items: { orderBy: { sortOrder: "asc" } },
+      items: {
+        orderBy: { sortOrder: "asc" },
+        include: {
+          counterparty: { select: { id: true, name: true } },
+        },
+      },
       attachments: true,
     },
   });
