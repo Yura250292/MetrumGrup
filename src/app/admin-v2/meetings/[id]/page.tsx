@@ -895,15 +895,14 @@ function SeekableAudio({
           >
             {fixing ? "Готую…" : "Підготувати перемотку"}
           </button>
-          <a
-            href={src}
-            download
+          <button
+            onClick={() => void downloadAudio(src, mimeType)}
             className="rounded-md px-2 py-1 transition hover:underline"
             style={{ color: T.textMuted }}
             title="Завантажити аудіо-файл щоб слухати у плеєрі з повноцінною перемоткою (VLC, QuickTime, тощо)"
           >
             Завантажити файл
-          </a>
+          </button>
           {fixError && (
             <span style={{ color: T.warning }}>{fixError}</span>
           )}
@@ -916,4 +915,37 @@ function SeekableAudio({
       )}
     </div>
   );
+}
+
+// Forces a real file download for cross-origin URLs (R2 public bucket).
+// `<a download>` ignored by browsers on different origins → Safari opens
+// audio in new tab. Тут тягнемо blob і триггеримо клік по <a> з blob:URL.
+async function downloadAudio(src: string, mimeType: string | null) {
+  try {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error("Не вдалося завантажити файл");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const ext = mimeType?.includes("webm")
+      ? "webm"
+      : mimeType?.includes("mp4") || mimeType?.includes("m4a")
+        ? "m4a"
+        : mimeType?.includes("mpeg")
+          ? "mp3"
+          : mimeType?.includes("wav")
+            ? "wav"
+            : "audio";
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `meeting-${Date.now()}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    console.error("[downloadAudio] failed:", err);
+    alert(
+      "Не вдалося завантажити файл. Перевір консоль браузера або спробуй ще раз.",
+    );
+  }
 }
