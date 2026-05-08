@@ -111,18 +111,18 @@ async function transcribeWithAssemblyAI(meeting: NonNullable<MeetingRow>) {
   // AssemblyAI у 2026 депрекейтнули `speech_model` (single) — тепер `speech_models`.
   // ВАЖЛИВО: НЕ ставимо language_detection — він визначає ОДНУ домінантну мову
   // на весь файл, через що змішана UA/RU нарада виходить повністю в одній мові
-  // (та що звучить більше) і втрачає правильне написання іншої. Замість того
-  // ставимо language_code="uk" — Universal модель сама вміє code-switching:
-  // переключається між UA і RU посегментно, зберігає оригінальне написання
-  // (включно з RU-іменами як «Любовь Николаевна»).
+  // і втрачає правильне написання іншої. Замість того ставимо language_code="uk"
+  // — Universal сам вміє code-switching посегментно і зберігає RU-імена як
+  // «Любовь Николаевна».
+  //
+  // auto_chapters / auto_highlights — НЕ підтримуються для не-EN мов. Тож не
+  // тягнемо їх; розбивку на розділи натомість робить GPT-4o у summarize-кроці.
   const transcript = await client.transcripts.transcribe({
     audio: audioInput,
     speech_models: ["universal"],
     language_code: "uk",
     speaker_labels: true,
     entity_detection: true,
-    auto_chapters: true,
-    auto_highlights: true,
     word_boost: wordBoost.length > 0 ? wordBoost : undefined,
     boost_param: "high",
   } as unknown as Parameters<typeof client.transcripts.transcribe>[0]);
