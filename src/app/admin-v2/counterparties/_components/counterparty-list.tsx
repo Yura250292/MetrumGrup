@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
+// Initial role з URL (?role=SUPPLIER) — підтримка deep-link з зовнішніх місць.
+// Сайдбар «Постачальники» тепер веде на окрему сторінку /financing/suppliers,
+// але цей хук лишається для майбутніх deep-links і не шкодить UX.
 import {
   Building2,
   CheckCircle2,
