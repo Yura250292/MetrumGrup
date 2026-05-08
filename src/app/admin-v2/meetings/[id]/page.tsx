@@ -61,6 +61,7 @@ export default function MeetingDetailPage() {
   const [movingFolder, setMovingFolder] = useState(false);
   const [moveOpen, setMoveOpen] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [retranscribing, setRetranscribing] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
@@ -140,6 +141,47 @@ export default function MeetingDetailPage() {
   async function retrySummarize() {
     await fetch(`/api/admin/meetings/${id}/summarize`, { method: "POST" });
     await refresh();
+  }
+
+  async function retranscribeFromScratch() {
+    if (!meeting?.audioUrl) return;
+    if (
+      !confirm(
+        "Перетранскрибувати з нуля? Поточний транскрипт І підсумок буде ЗАМІНЕНО новим. Делегованих задач не торкнеться. Це може зайняти кілька хвилин."
+      )
+    ) {
+      return;
+    }
+    setRetranscribing(true);
+    summaryTriggeredRef.current = false;
+    setError(null);
+    try {
+      const tRes = await fetch(`/api/admin/meetings/${id}/transcribe`, {
+        method: "POST",
+      });
+      if (!tRes.ok) {
+        const j = await tRes.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося перетранскрибувати");
+      }
+      await refresh();
+      summaryTriggeredRef.current = true;
+      const sRes = await fetch(`/api/admin/meetings/${id}/summarize`, {
+        method: "POST",
+      });
+      if (!sRes.ok) {
+        const j = await sRes.json().catch(() => ({}));
+        throw new Error(
+          j.error ||
+            "Транскрипт оновлено, але не вдалося перегенерувати підсумок"
+        );
+      }
+      setDelegated({});
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка");
+    } finally {
+      setRetranscribing(false);
+    }
   }
 
   async function regenerateSummary() {
@@ -372,7 +414,7 @@ export default function MeetingDetailPage() {
           {meeting.transcript && (
             <button
               onClick={regenerateSummary}
-              disabled={regenerating || processing}
+              disabled={regenerating || retranscribing || processing}
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
               style={{
                 background: T.accentPrimarySoft,
@@ -386,6 +428,25 @@ export default function MeetingDetailPage() {
                 <Sparkles size={14} />
               )}
               {meeting.structured ? "Перегенерувати" : "Сформувати підсумок"}
+            </button>
+          )}
+          {meeting.audioUrl && (
+            <button
+              onClick={retranscribeFromScratch}
+              disabled={regenerating || retranscribing || processing}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
+              style={{
+                background: T.panelElevated,
+                color: T.textPrimary,
+              }}
+              title="Прослухати аудіо ще раз і повністю переробити транскрипт + підсумок (наприклад, якщо імена розпізнало неправильно)"
+            >
+              {retranscribing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <RefreshCw size={14} />
+              )}
+              Перетранскрибувати
             </button>
           )}
           <button
