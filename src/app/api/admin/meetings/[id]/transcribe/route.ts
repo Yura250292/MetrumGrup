@@ -9,7 +9,10 @@ import {
 } from "@/lib/auth-utils";
 import { downloadFileFromR2 } from "@/lib/r2-client";
 
-export const maxDuration = 600;
+// Vercel Pro дає максимум 300с на serverless. AssemblyAI Universal на коротких
+// нарадах (< 5хв) укладається у ~30-60с; на довгих може поломитись по timeout —
+// у цьому випадку треба буде перейти на webhook-pattern (submit+callback).
+export const maxDuration = 300;
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || "",
@@ -31,7 +34,7 @@ export async function POST(
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
-  if (!meeting.audioR2Key && !meeting.audioUrl) {
+  if (!meeting.audioR2Key) {
     return NextResponse.json(
       { error: "Аудіо ще не завантажено" },
       { status: 400 }
@@ -64,7 +67,18 @@ export async function POST(
     return NextResponse.json({ meeting: updated });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Transcription failed";
-    console.error("Transcription error:", err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    // Ставимо багато шуму в логи щоб у Vercel Functions можна було бачити
+    // ЯКА саме гілка зламалась (AssemblyAI vs Whisper, на якому етапі).
+    console.error("[transcribe] meeting", meeting.id, "failed:", {
+      provider: useAssemblyAI ? "assemblyai" : "whisper",
+      hasAudioUrl: !!meeting.audioUrl,
+      hasAudioR2Key: !!meeting.audioR2Key,
+      audioMimeType: meeting.audioMimeType,
+      audioSizeBytes: meeting.audioSizeBytes,
+      message,
+      stack,
+    });
     await prisma.meeting.update({
       where: { id: meeting.id },
       data: { status: "FAILED", processingError: message },
@@ -82,17 +96,13 @@ type MeetingRow = Awaited<ReturnType<typeof prisma.meeting.findUnique>>;
 async function transcribeWithAssemblyAI(meeting: NonNullable<MeetingRow>) {
   const client = new AssemblyAI({ apiKey: process.env.ASSEMBLYAI_API_KEY! });
 
-  // AssemblyAI приймає публічну URL аудіо. R2-публічний URL у нас уже є
-  // з upload flow (meeting.audioUrl). Якщо нема — fallback: завантажуємо
-  // буфер у AssemblyAI напряму через SDK (`audio: Buffer`).
-  let audioInput: string | Buffer;
-  if (meeting.audioUrl) {
-    audioInput = meeting.audioUrl;
-  } else if (meeting.audioR2Key) {
-    audioInput = await downloadFileFromR2(meeting.audioR2Key);
-  } else {
-    throw new Error("Немає аудіо для транскрипції");
+  // Завантажуємо аудіо локально через R2 SDK (auth) і передаємо Buffer
+  // напряму в AssemblyAI. Це уникає залежності від того, чи публічний R2-bucket
+  // (audioUrl може бути signed або вимагати CORS, що часто ламає AssemblyAI fetch).
+  if (!meeting.audioR2Key) {
+    throw new Error("Немає audioR2Key — не можу завантажити аудіо з R2");
   }
+  const audioInput: Buffer = await downloadFileFromR2(meeting.audioR2Key);
 
   // Імена з User бази — додатково підкажуть Universal-моделі правильне написання.
   const namePool = await collectNameHints();
