@@ -58,9 +58,12 @@ export async function POST(
       type: meeting.audioMimeType || "audio/webm",
     });
 
-    // Whisper prompt — словник-підказка (≤244 токени). Підвищує точність на іменах,
-    // власних назвах, фахових термінах. Без діакритик все одно пропускає, бо whisper-1
-    // не вміє діаризації — справжнє рішення це AssemblyAI.
+    // Whisper prompt — лише спелінг-підказки для імен (multilingual neutral).
+    // ВАЖЛИВО: не задаємо `language` — Whisper сам визначає мову на сегмент.
+    // Раніше було `language: "uk"` + UA-only словник, через що модель силкувалась
+    // мапити російське мовлення на українські слова і ламала імена
+    // («Любовь Николаевна» → «Кривом Ніколаєв»). RAW-транскрипт має зберігати
+    // оригінальну мову мовлення; переклад (за потреби) — на рівні summary.
     const namePool = await collectNameHints();
     const whisperPrompt = buildWhisperHint({
       meetingTitle: meeting.title,
@@ -71,7 +74,6 @@ export async function POST(
     const result = await openai.audio.transcriptions.create({
       file,
       model: "whisper-1",
-      language: "uk",
       response_format: "verbose_json",
       prompt: whisperPrompt,
       temperature: 0,
@@ -121,30 +123,16 @@ function buildWhisperHint(opts: {
   meetingDescription?: string | null;
   names: string[];
 }): string {
-  const GLOSSARY = [
-    // будівельні/проєктні
-    "підрядник", "субпідрядник", "виконроб", "кошторис", "акт виконаних робіт",
-    "КП-2в", "КП-3", "Прозорро", "тендер", "лот", "договір",
-    "генпідрядник", "обʼєкт", "обʼєкти", "майданчик", "графік робіт",
-    "матеріали", "постачальник", "доставка", "логістика",
-    "оплата", "рахунок", "ПДВ", "контрагент", "ФОП", "ТОВ",
-    // ролі / фірми
-    "Metrum Group", "Metrum Studio", "RD-02", "Раковського",
-    "директор", "менеджер", "інженер", "фінансист", "бухгалтер",
-    // дії-маркери (щоб «треба піти», «звернутись» розпізнавалось)
-    "треба", "потрібно", "звернутись", "подзвонити", "написати",
-    "запитати", "перевірити", "узгодити", "підтвердити",
-  ];
+  // Промпт — мовно-нейтральний. Whisper використовує його як спелінг-приклад,
+  // тож будь-яка односторонньо-українська преамбула біасить транскрипт у бік UA
+  // і ламає російські імена/слова. Лишаємо мінімум: назву наради (як її задав
+  // користувач) і список імен учасників у їх оригінальному написанні.
   const parts: string[] = [
-    `Українська ділова нарада будівельної компанії Metrum Group.`,
-    opts.meetingTitle ? `Тема: ${opts.meetingTitle}.` : "",
-    opts.meetingDescription ? `Контекст: ${opts.meetingDescription}.` : "",
-    opts.names.length > 0
-      ? `Імена учасників (зберігай у такому написанні): ${opts.names.join(", ")}.`
-      : "",
-    `Терміни: ${GLOSSARY.join(", ")}.`,
+    opts.meetingTitle ? opts.meetingTitle + "." : "",
+    opts.meetingDescription ? opts.meetingDescription + "." : "",
+    opts.names.length > 0 ? opts.names.join(", ") + "." : "",
   ].filter(Boolean);
-  // Whisper жорстко обмежує на ~244 токени. Грубо ~4 символи на токен → ріжемо на 900 симв.
+  // Whisper обмежує prompt на ~244 токени. ~4 символи на токен → 900 симв.
   const joined = parts.join(" ");
   return joined.length > 900 ? joined.slice(0, 900) : joined;
 }
