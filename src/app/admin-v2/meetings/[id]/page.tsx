@@ -14,6 +14,7 @@ import {
   Folder,
   FolderInput,
   RefreshCw,
+  Users,
   Pencil,
   Check,
   X,
@@ -384,6 +385,19 @@ export default function MeetingDetailPage() {
             {meeting.audioDurationMs && (
               <span>{formatDuration(meeting.audioDurationMs)}</span>
             )}
+            {meeting.speakerCount && meeting.speakerCount > 0 && (
+              <span
+                className="flex items-center gap-1"
+                title="AssemblyAI розпізнав окремих спікерів через діаризацію"
+              >
+                <Users size={12} /> {meeting.speakerCount}{" "}
+                {meeting.speakerCount === 1
+                  ? "учасник"
+                  : meeting.speakerCount < 5
+                    ? "учасники"
+                    : "учасників"}
+              </span>
+            )}
           </div>
           {meeting.description && (
             <p className="mt-2 text-sm" style={{ color: T.textSecondary }}>
@@ -585,16 +599,7 @@ export default function MeetingDetailPage() {
       )}
 
       {activeTab === "transcript" && meeting.transcript && (
-        <div
-          className="whitespace-pre-wrap rounded-xl p-5 text-sm leading-relaxed"
-          style={{
-            background: T.panel,
-            border: `1px solid ${T.borderSoft}`,
-            color: T.textPrimary,
-          }}
-        >
-          {meeting.transcript}
-        </div>
+        <TranscriptView transcript={meeting.transcript} />
       )}
 
       <MoveToFolderDialog
@@ -637,5 +642,115 @@ function TabBtn({
       {icon}
       {label}
     </button>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Transcript view: розбиваємо за лейблами «Speaker A [00:01:23]: ...»
+// якщо це AssemblyAI-формат; інакше показуємо як є.
+// ────────────────────────────────────────────────────────────────────────
+const SPEAKER_LINE_RE = /^Speaker\s+([A-Z]+)(?:\s+\[([0-9:]+)\])?:\s+([\s\S]*)$/;
+const SPEAKER_PALETTE = [
+  T.accentPrimary,
+  T.accentSecondary,
+  T.success,
+  T.warning,
+  T.danger,
+  "#0EA5E9",
+  "#A855F7",
+  "#14B8A6",
+];
+
+function TranscriptView({ transcript }: { transcript: string }) {
+  const blocks = transcript
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
+
+  const parsed = blocks.map((b) => {
+    const m = b.match(SPEAKER_LINE_RE);
+    if (!m) return { kind: "raw" as const, text: b };
+    return {
+      kind: "speaker" as const,
+      speaker: m[1],
+      timestamp: m[2] ?? null,
+      text: m[3].trim(),
+    };
+  });
+
+  // Якщо жодна репліка не розпізналась як спікер — рендеримо plain.
+  const hasSpeakers = parsed.some((p) => p.kind === "speaker");
+  if (!hasSpeakers) {
+    return (
+      <div
+        className="whitespace-pre-wrap rounded-xl p-5 text-sm leading-relaxed"
+        style={{
+          background: T.panel,
+          border: `1px solid ${T.borderSoft}`,
+          color: T.textPrimary,
+        }}
+      >
+        {transcript}
+      </div>
+    );
+  }
+
+  // Стабільний колір на спікера.
+  const speakerOrder = new Map<string, number>();
+  for (const p of parsed) {
+    if (p.kind === "speaker" && !speakerOrder.has(p.speaker)) {
+      speakerOrder.set(p.speaker, speakerOrder.size);
+    }
+  }
+
+  return (
+    <div
+      className="rounded-xl p-5 text-sm leading-relaxed"
+      style={{
+        background: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+        color: T.textPrimary,
+      }}
+    >
+      <div className="flex flex-col gap-3">
+        {parsed.map((p, idx) => {
+          if (p.kind === "raw") {
+            return (
+              <p key={idx} className="whitespace-pre-wrap">
+                {p.text}
+              </p>
+            );
+          }
+          const colorIdx = speakerOrder.get(p.speaker) ?? 0;
+          const color = SPEAKER_PALETTE[colorIdx % SPEAKER_PALETTE.length];
+          return (
+            <div key={idx} className="flex flex-col gap-1">
+              <div
+                className="flex items-center gap-2 text-[11px] font-bold tracking-wider"
+                style={{ color }}
+              >
+                <span
+                  className="inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5"
+                  style={{ background: color + "22", color }}
+                >
+                  Speaker {p.speaker}
+                </span>
+                {p.timestamp && (
+                  <span style={{ color: T.textMuted, fontWeight: 500 }}>
+                    {p.timestamp}
+                  </span>
+                )}
+              </div>
+              <p
+                className="whitespace-pre-wrap"
+                style={{ color: T.textPrimary }}
+              >
+                {p.text}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

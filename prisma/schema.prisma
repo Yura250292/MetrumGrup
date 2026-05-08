@@ -2620,6 +2620,20 @@ model Meeting {
   aiTokensUsed    Int?
   processingError String?       @db.Text
 
+  /// AssemblyAI-збагачені сигнали з аудіо (etap 1 у синергії з GPT-4o):
+  /// Скільки спікерів модель розпізнала.
+  speakerCount Int?
+  /// Сирі utterance-и з лейблами (Speaker A/B/...) і таймстемпами.
+  /// Структура: [{ speaker: "A", start: 1230, end: 4560, text: "..." }, ...]
+  utterances   Json?
+  /// AssemblyAI entity_detection — імена, суми, дати, локації, організації.
+  /// Структура: [{ entity_type: "person_name", text: "Любовь Николаевна", start, end }, ...]
+  entities     Json?
+  /// AssemblyAI auto_chapters — розбивка на тематичні розділи з summary.
+  chapters     Json?
+  /// Який сервіс зробив транскрипт (для діагностики/міграції).
+  transcribeProvider String? // 'assemblyai' | 'whisper'
+
   recordedAt DateTime @default(now())
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

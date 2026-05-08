@@ -207,16 +207,84 @@ export async function POST(
   });
 
   try {
+    // Synergy крок: GPT-4o отримує не лише сирий транскрипт, а збагачений
+    // пакет від AssemblyAI Universal — витягнуті імена/суми/дати/локації,
+    // тематичні розділи. Це різко знижує шанс що модель «вгадає» імʼя як
+    // «Кривом Ніколаєв» замість «Любовь Николаевна» — бо AssemblyAI вже
+    // витягнув його як person_name з вірною орфографією.
+    const enrichmentBlocks: string[] = [];
+
+    if (meeting.speakerCount && meeting.speakerCount > 0) {
+      enrichmentBlocks.push(
+        `СПІКЕРИ (за діаризацією AssemblyAI): ${meeting.speakerCount} особи. У транскрипті позначені як «Speaker A», «Speaker B» і тд. Якщо з контексту вдається ідентифікувати реальне імʼя — підставляй його у tasks.assignee і summary.`
+      );
+    }
+
+    type Entity = { entity_type?: string | null; text?: string | null };
+    const entitiesArr: Entity[] = Array.isArray(meeting.entities)
+      ? (meeting.entities as Entity[])
+      : [];
+    if (entitiesArr.length > 0) {
+      const grouped = new Map<string, Set<string>>();
+      for (const e of entitiesArr) {
+        const t = (e.entity_type ?? "").trim();
+        const v = (e.text ?? "").trim();
+        if (!t || !v) continue;
+        if (!grouped.has(t)) grouped.set(t, new Set());
+        grouped.get(t)!.add(v);
+      }
+      const lines: string[] = [];
+      for (const [type, values] of grouped) {
+        const list = Array.from(values).slice(0, 30).join(", ");
+        lines.push(`  - ${type}: ${list}`);
+      }
+      if (lines.length > 0) {
+        enrichmentBlocks.push(
+          `ENTITIES (вже витягнуті AssemblyAI з аудіо — не вгадуй, використовуй ці значення в оригінальному написанні):\n${lines.join("\n")}`
+        );
+      }
+    }
+
+    type Chapter = {
+      headline?: string | null;
+      summary?: string | null;
+      gist?: string | null;
+      start?: number | null;
+      end?: number | null;
+    };
+    const chaptersArr: Chapter[] = Array.isArray(meeting.chapters)
+      ? (meeting.chapters as Chapter[])
+      : [];
+    if (chaptersArr.length > 0) {
+      const lines = chaptersArr
+        .slice(0, 12)
+        .map((c, i) => {
+          const headline = (c.headline || c.gist || "").trim();
+          const summary = (c.summary || "").trim();
+          return `  ${i + 1}. ${headline}${summary ? " — " + summary : ""}`;
+        })
+        .filter(Boolean);
+      if (lines.length > 0) {
+        enrichmentBlocks.push(
+          `ТЕМАТИЧНІ РОЗДІЛИ (від AssemblyAI auto_chapters):\n${lines.join("\n")}`
+        );
+      }
+    }
+
     const userParts = [
       `Назва наради: ${meeting.title}`,
-      meeting.description ? `Опис/контекст від організатора: ${meeting.description}` : null,
+      meeting.description
+        ? `Опис/контекст від організатора: ${meeting.description}`
+        : null,
+      enrichmentBlocks.length > 0 ? "" : null,
+      enrichmentBlocks.length > 0 ? enrichmentBlocks.join("\n\n") : null,
       "",
-      "Транскрипт:",
+      "ТРАНСКРИПТ:",
       meeting.transcript,
       "",
-      "Витягни з цього транскрипту максимум корисної інформації згідно з інструкцією і схемою. Не економ на деталях. Не пропускай важливі цифри/імена/дати. Якщо нарада тривала довго — підсумок має це відображати глибиною аналізу.",
+      "Витягни з цього транскрипту максимум корисної інформації згідно з інструкцією і схемою. Не економ на деталях. Не пропускай важливі цифри/імена/дати. Імена/ПІБ використовуй ТОЧНО як вони записані у транскрипті або в блоці ENTITIES — не перекладай і не адаптуй. Якщо нарада тривала довго — підсумок має це відображати глибиною аналізу.",
     ]
-      .filter(Boolean)
+      .filter((p) => p !== null)
       .join("\n");
 
     const response = await openai.chat.completions.create({

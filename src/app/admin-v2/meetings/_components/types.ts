@@ -53,6 +53,21 @@ export type MeetingListItem = {
   folder?: { id: string; name: string } | null;
 };
 
+export type MeetingEntity = {
+  entity_type?: string | null;
+  text?: string | null;
+  start?: number | null;
+  end?: number | null;
+};
+
+export type MeetingChapter = {
+  headline?: string | null;
+  summary?: string | null;
+  gist?: string | null;
+  start?: number | null;
+  end?: number | null;
+};
+
 export type Meeting = MeetingListItem & {
   transcript: string | null;
   structured: MeetingStructured | null;
@@ -62,6 +77,10 @@ export type Meeting = MeetingListItem & {
   aiModelUsed: string | null;
   aiTokensUsed: number | null;
   processingError: string | null;
+  speakerCount: number | null;
+  entities: MeetingEntity[] | null;
+  chapters: MeetingChapter[] | null;
+  transcribeProvider: string | null;
 };
 
 export const STATUS_LABELS: Record<MeetingStatus, string> = {
