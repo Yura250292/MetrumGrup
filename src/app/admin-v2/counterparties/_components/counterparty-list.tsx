@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Building2,
   CheckCircle2,
@@ -50,6 +51,14 @@ const ROLE_TABS: ReadonlyArray<{ value: RoleFilter; label: string }> = [
   { value: "CLIENT", label: "Клієнти" },
   { value: "CONTRACTOR", label: "Підрядники" },
 ];
+
+const VALID_ROLE_FILTERS: ReadonlyArray<RoleFilter> = ["", "SUPPLIER", "CLIENT", "CONTRACTOR"];
+
+function useInitialRoleFilter(): RoleFilter {
+  const search = useSearchParams();
+  const raw = search?.get("role") ?? "";
+  return (VALID_ROLE_FILTERS as readonly string[]).includes(raw) ? (raw as RoleFilter) : "";
+}
 
 
 type FormState = {
@@ -103,11 +112,16 @@ type EditableField =
 export function CounterpartyList({ currentUserRole }: { currentUserRole: string }) {
   const canCreate = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"].includes(currentUserRole);
 
+  // Initial role з URL (?role=SUPPLIER) — щоб лінк із сайдбара одразу
+  // фільтрував список. Зчитуємо лише на mount: подальші перемикання вкладок
+  // не змінюють URL, бо інакше це ускладнило б back-навігацію.
+  const initialRole = useInitialRoleFilter();
+
   const [items, setItems] = useState<Counterparty[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"" | CounterpartyType>("");
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("");
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>(initialRole);
   const [hasDebt, setHasDebt] = useState(false);
   const [showInactive, setShowInactive] = useState(false);
 
