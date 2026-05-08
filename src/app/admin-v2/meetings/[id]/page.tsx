@@ -899,9 +899,9 @@ function SeekableAudio({
             onClick={() => void downloadAudio(src, mimeType)}
             className="rounded-md px-2 py-1 transition hover:underline"
             style={{ color: T.textMuted }}
-            title="Завантажити аудіо-файл щоб слухати у плеєрі з повноцінною перемоткою (VLC, QuickTime, тощо)"
+            title="Завантажити як WAV — універсальний формат із нативною перемоткою у будь-якому плеєрі"
           >
-            Завантажити файл
+            Завантажити як WAV
           </button>
           {fixError && (
             <span style={{ color: T.warning }}>{fixError}</span>
@@ -917,27 +917,30 @@ function SeekableAudio({
   );
 }
 
-// Forces a real file download for cross-origin URLs (R2 public bucket).
-// `<a download>` ignored by browsers on different origins → Safari opens
-// audio in new tab. Тут тягнемо blob і триггеримо клік по <a> з blob:URL.
-async function downloadAudio(src: string, mimeType: string | null) {
+// Завантажує webm/opus, декодує через Web Audio API, кодує у WAV (PCM)
+// і триггерить браузерне збереження. WAV — універсальний формат із
+// нативною підтримкою seek у будь-якому плеєрі. Файл важчий за webm
+// (~10×), але lossless і завжди працює.
+async function downloadAudio(src: string, _mimeType: string | null) {
   try {
     const res = await fetch(src);
     if (!res.ok) throw new Error("Не вдалося завантажити файл");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const ext = mimeType?.includes("webm")
-      ? "webm"
-      : mimeType?.includes("mp4") || mimeType?.includes("m4a")
-        ? "m4a"
-        : mimeType?.includes("mpeg")
-          ? "mp3"
-          : mimeType?.includes("wav")
-            ? "wav"
-            : "audio";
+    const arrayBuffer = await res.arrayBuffer();
+
+    const AudioCtor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!AudioCtor) throw new Error("AudioContext недоступний у браузері");
+    const ctx = new AudioCtor();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+    await ctx.close();
+
+    const wavBlob = audioBufferToWav(audioBuffer);
+    const url = URL.createObjectURL(wavBlob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `meeting-${Date.now()}.${ext}`;
+    a.download = `meeting-${Date.now()}.wav`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -945,7 +948,73 @@ async function downloadAudio(src: string, mimeType: string | null) {
   } catch (err) {
     console.error("[downloadAudio] failed:", err);
     alert(
-      "Не вдалося завантажити файл. Перевір консоль браузера або спробуй ще раз.",
+      "Не вдалося завантажити файл як WAV. Перевір консоль браузера.",
     );
   }
+}
+
+// Кодує AudioBuffer у WAV-blob (PCM 16-bit). Стандартний RIFF-header +
+// інтерлівнуті семпли. Безпечно для mono і stereo.
+function audioBufferToWav(buffer: AudioBuffer): Blob {
+  const numChannels = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const bytesPerSample = 2; // 16-bit PCM
+  const blockAlign = numChannels * bytesPerSample;
+  const byteRate = sampleRate * blockAlign;
+  const numFrames = buffer.length;
+  const dataSize = numFrames * blockAlign;
+  const headerSize = 44;
+  const totalSize = headerSize + dataSize;
+
+  const ab = new ArrayBuffer(totalSize);
+  const view = new DataView(ab);
+  let off = 0;
+
+  const writeStr = (s: string) => {
+    for (let i = 0; i < s.length; i++) view.setUint8(off++, s.charCodeAt(i));
+  };
+
+  // RIFF header
+  writeStr("RIFF");
+  view.setUint32(off, totalSize - 8, true);
+  off += 4;
+  writeStr("WAVE");
+
+  // fmt chunk
+  writeStr("fmt ");
+  view.setUint32(off, 16, true);
+  off += 4; // subchunk size
+  view.setUint16(off, 1, true);
+  off += 2; // PCM format
+  view.setUint16(off, numChannels, true);
+  off += 2;
+  view.setUint32(off, sampleRate, true);
+  off += 4;
+  view.setUint32(off, byteRate, true);
+  off += 4;
+  view.setUint16(off, blockAlign, true);
+  off += 2;
+  view.setUint16(off, bytesPerSample * 8, true);
+  off += 2;
+
+  // data chunk
+  writeStr("data");
+  view.setUint32(off, dataSize, true);
+  off += 4;
+
+  // Інтерлівні семпли (channel-by-channel у кожному фреймі)
+  const channels: Float32Array[] = [];
+  for (let c = 0; c < numChannels; c++) channels.push(buffer.getChannelData(c));
+
+  for (let i = 0; i < numFrames; i++) {
+    for (let c = 0; c < numChannels; c++) {
+      let s = channels[c][i];
+      // Clamp + конвертація у 16-bit signed
+      s = Math.max(-1, Math.min(1, s));
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+      off += 2;
+    }
+  }
+
+  return new Blob([ab], { type: "audio/wav" });
 }
