@@ -580,6 +580,22 @@ export default function MeetingDetailPage() {
           delegated={delegated}
           onDelegate={(index, task) => setDelegating({ index, task })}
           onAiHelp={askAiAboutTask}
+          onSpeakerEdit={async (label, patch) => {
+            const res = await fetch(
+              `/api/admin/meetings/${id}/speakers`,
+              {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ label, ...patch }),
+              },
+            );
+            if (!res.ok) {
+              const j = await res.json().catch(() => ({}));
+              setError(j.error || "Не вдалося зберегти імʼя спікера");
+              return;
+            }
+            await refresh();
+          }}
         />
       )}
 

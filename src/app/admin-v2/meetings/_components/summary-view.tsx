@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   CheckCircle2,
   ListTodo,
@@ -13,9 +14,15 @@ import {
   Flag,
   AlertTriangle,
   BookOpen,
+  Users,
+  Lightbulb,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type {
+  MeetingSpeaker,
   MeetingStructured,
   MeetingTask,
   MeetingPriorityLevel,
@@ -42,11 +49,16 @@ export function SummaryView({
   onDelegate,
   onAiHelp,
   delegated,
+  onSpeakerEdit,
 }: {
   data: MeetingStructured;
   onDelegate?: (index: number, task: MeetingTask) => void;
   onAiHelp?: (task: MeetingTask) => void;
   delegated?: DelegationState;
+  onSpeakerEdit?: (
+    label: string,
+    patch: { guessedName?: string | null; role?: string | null },
+  ) => Promise<void> | void;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -69,6 +81,20 @@ export function SummaryView({
           >
             {data.context}
           </p>
+        </Card>
+      )}
+
+      {data.speakers && data.speakers.length > 0 && (
+        <Card icon={<Users size={18} />} title="Спікери" color={T.indigo} tint={T.indigoSoft}>
+          <div className="flex flex-col gap-2">
+            {data.speakers.map((s, i) => (
+              <SpeakerCard
+                key={i}
+                speaker={s}
+                onEdit={onSpeakerEdit}
+              />
+            ))}
+          </div>
         </Card>
       )}
 
@@ -240,6 +266,74 @@ export function SummaryView({
         </Card>
       )}
 
+      {data.proposedSolutions && data.proposedSolutions.length > 0 && (
+        <Card
+          icon={<Lightbulb size={18} />}
+          title="Запропоновані рішення"
+          color={T.emerald}
+          tint={T.emeraldSoft}
+        >
+          <div className="flex flex-col gap-3">
+            {data.proposedSolutions.map((s, i) => (
+              <div
+                key={i}
+                className="rounded-lg p-3"
+                style={{ background: T.panelElevated }}
+              >
+                <div
+                  className="text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: T.amber }}
+                >
+                  Проблема
+                </div>
+                <p
+                  className="mt-1 text-sm font-medium leading-relaxed"
+                  style={{ color: T.textPrimary }}
+                >
+                  {s.problem}
+                </p>
+                <div
+                  className="mt-3 text-[11px] font-bold uppercase tracking-wider"
+                  style={{ color: T.emerald }}
+                >
+                  Порада
+                </div>
+                <p
+                  className="mt-1 whitespace-pre-line text-sm leading-relaxed"
+                  style={{ color: T.textPrimary }}
+                >
+                  {s.suggestion}
+                </p>
+                {s.rationale && (
+                  <>
+                    <div
+                      className="mt-3 text-[11px] font-bold uppercase tracking-wider"
+                      style={{ color: T.textMuted }}
+                    >
+                      Обґрунтування
+                    </div>
+                    <p
+                      className="mt-1 text-xs leading-relaxed"
+                      style={{ color: T.textMuted }}
+                    >
+                      {s.rationale}
+                    </p>
+                  </>
+                )}
+                {s.relatedTo && (
+                  <p
+                    className="mt-2 text-xs"
+                    style={{ color: T.textMuted }}
+                  >
+                    Стосується: <span style={{ color: T.textSecondary }}>{s.relatedTo}</span>
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {data.nextSteps?.length > 0 && (
         <Card icon={<ArrowRight size={18} />} title="Наступні кроки" color={T.teal} tint={T.tealSoft}>
           <BulletList items={data.nextSteps} />
@@ -303,5 +397,147 @@ function BulletList({ items }: { items: string[] }) {
         </li>
       ))}
     </ul>
+  );
+}
+
+function SpeakerCard({
+  speaker,
+  onEdit,
+}: {
+  speaker: MeetingSpeaker;
+  onEdit?: (
+    label: string,
+    patch: { guessedName?: string | null; role?: string | null },
+  ) => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(speaker.guessedName ?? "");
+  const [role, setRole] = useState(speaker.role ?? "");
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!onEdit) return;
+    setSaving(true);
+    try {
+      await onEdit(speaker.label, {
+        guessedName: name.trim() || null,
+        role: role.trim() || null,
+      });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancel() {
+    setName(speaker.guessedName ?? "");
+    setRole(speaker.role ?? "");
+    setEditing(false);
+  }
+
+  return (
+    <div
+      className="rounded-lg p-3"
+      style={{ background: T.panelElevated }}
+    >
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex h-6 min-w-6 items-center justify-center rounded-md px-2 text-xs font-bold"
+          style={{ background: T.indigoSoft, color: T.indigo }}
+        >
+          {speaker.label}
+        </span>
+        {editing ? (
+          <div className="flex flex-1 flex-wrap items-center gap-2">
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void save();
+                if (e.key === "Escape") cancel();
+              }}
+              placeholder="Імʼя (напр. Олег)"
+              className="flex-1 rounded-md px-2 py-1 text-sm outline-none"
+              style={{
+                background: T.panel,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+                minWidth: 140,
+              }}
+            />
+            <input
+              value={role}
+              onChange={(e) => setRole(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void save();
+                if (e.key === "Escape") cancel();
+              }}
+              placeholder="Роль (необов.)"
+              className="rounded-md px-2 py-1 text-xs outline-none"
+              style={{
+                background: T.panel,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+                width: 140,
+              }}
+            />
+            <button
+              onClick={() => void save()}
+              disabled={saving}
+              className="rounded-md p-1.5 disabled:opacity-50"
+              style={{ background: T.successSoft, color: T.success }}
+              title="Зберегти"
+            >
+              <Check size={14} />
+            </button>
+            <button
+              onClick={cancel}
+              disabled={saving}
+              className="rounded-md p-1.5 disabled:opacity-50"
+              style={{ background: T.panel, color: T.textMuted }}
+              title="Скасувати"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ) : (
+          <>
+            <span
+              className="text-sm font-semibold"
+              style={{ color: T.textPrimary }}
+            >
+              {speaker.guessedName ?? "не вдалося визначити"}
+            </span>
+            {speaker.role && (
+              <span
+                className="rounded-md px-2 py-0.5 text-xs"
+                style={{ background: T.panel, color: T.textMuted }}
+              >
+                {speaker.role}
+              </span>
+            )}
+            {onEdit && (
+              <button
+                onClick={() => setEditing(true)}
+                className="ml-auto rounded-md p-1 transition hover:bg-[var(--t-panel)]"
+                style={{ color: T.textMuted }}
+                title="Вказати імʼя і роль"
+              >
+                <Pencil size={12} />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      {!editing && speaker.evidence && (
+        <p
+          className="mt-1.5 text-xs italic leading-relaxed"
+          style={{ color: T.textMuted }}
+        >
+          «{speaker.evidence}»
+        </p>
+      )}
+    </div>
   );
 }

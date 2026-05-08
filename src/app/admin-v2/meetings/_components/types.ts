@@ -24,16 +24,32 @@ export type MeetingPriority = {
   reason?: string | null;
 };
 
+export type MeetingSpeaker = {
+  label: string;
+  guessedName: string | null;
+  role: string | null;
+  evidence: string;
+};
+
+export type MeetingProposedSolution = {
+  problem: string;
+  suggestion: string;
+  rationale: string;
+  relatedTo: string | null;
+};
+
 export type MeetingStructured = {
   suggestedTitle?: string;
   summary: string;
   context?: string | null;
+  speakers?: MeetingSpeaker[];
   goals?: string[];
   keyPoints: string[];
   decisions: string[];
   priorities?: MeetingPriority[];
   tasks: MeetingTask[];
   risks?: string[];
+  proposedSolutions?: MeetingProposedSolution[];
   nextSteps: string[];
   openQuestions: string[];
 };
