@@ -487,11 +487,10 @@ export default function MeetingDetailPage() {
           className="mb-4 rounded-xl p-4"
           style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
         >
-          <audio
-            controls
+          <SeekableAudio
             src={meeting.audioUrl}
-            className="w-full"
-            preload="metadata"
+            mimeType={meeting.audioMimeType}
+            durationMs={meeting.audioDurationMs}
           />
         </div>
       )}
@@ -767,6 +766,84 @@ function TranscriptView({ transcript }: { transcript: string }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// SeekableAudio: фіксить старі WebM-blob-и без duration у EBML-хедері
+// (записані MediaRecorder до фікса в MeetingRecordingContext). Тягне файл,
+// інжектить duration через fix-webm-duration, рендерить як object-URL —
+// тоді браузер вміє seek-ати назад/вперед.
+// ────────────────────────────────────────────────────────────────────────
+function SeekableAudio({
+  src,
+  mimeType,
+  durationMs,
+}: {
+  src: string;
+  mimeType: string | null;
+  durationMs: number | null;
+}) {
+  const [playableSrc, setPlayableSrc] = useState<string>(src);
+  const [fixing, setFixing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let createdUrl: string | null = null;
+
+    const isWebm = mimeType?.includes("webm") ?? src.includes(".webm");
+    if (!isWebm || !durationMs || durationMs <= 0) {
+      setPlayableSrc(src);
+      return () => {};
+    }
+
+    setFixing(true);
+    (async () => {
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error("fetch failed: " + res.status);
+        const rawBlob = await res.blob();
+        const { default: fixWebmDuration } = await import(
+          "fix-webm-duration"
+        );
+        const fixed = await fixWebmDuration(rawBlob, durationMs, {
+          logger: false,
+        });
+        if (cancelled) return;
+        createdUrl = URL.createObjectURL(fixed);
+        setPlayableSrc(createdUrl);
+      } catch (err) {
+        console.warn("[SeekableAudio] fix failed, fallback to raw URL:", err);
+        if (!cancelled) setPlayableSrc(src);
+      } finally {
+        if (!cancelled) setFixing(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (createdUrl) URL.revokeObjectURL(createdUrl);
+    };
+  }, [src, mimeType, durationMs]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      {fixing && (
+        <span
+          className="text-[11px]"
+          style={{ color: T.textMuted }}
+        >
+          Підготовка перемотки…
+        </span>
+      )}
+      <audio
+        key={playableSrc}
+        controls
+        src={playableSrc}
+        className="w-full"
+        preload="metadata"
+      />
     </div>
   );
 }
