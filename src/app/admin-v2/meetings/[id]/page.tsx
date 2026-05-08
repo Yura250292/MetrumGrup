@@ -771,10 +771,11 @@ function TranscriptView({ transcript }: { transcript: string }) {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// SeekableAudio: фіксить старі WebM-blob-и без duration у EBML-хедері
-// (записані MediaRecorder до фікса в MeetingRecordingContext). Тягне файл,
-// інжектить duration через fix-webm-duration, рендерить як object-URL —
-// тоді браузер вміє seek-ати назад/вперед.
+// SeekableAudio: за замовчуванням стрімить аудіо як є (як завжди працювало).
+// Старі WebM-записи з MediaRecorder не мають duration в EBML-хедері — через
+// це браузер не може seek-ати. Кнопка «Підготувати перемотку» тягне файл,
+// інжектить duration через fix-webm-duration і свапає на blob-URL.
+// Кнопка показується ТІЛЬКИ для webm-нарад де ймовірно є проблема.
 // ────────────────────────────────────────────────────────────────────────
 function SeekableAudio({
   src,
@@ -787,56 +788,44 @@ function SeekableAudio({
 }) {
   const [playableSrc, setPlayableSrc] = useState<string>(src);
   const [fixing, setFixing] = useState(false);
+  const [fixed, setFixed] = useState(false);
+  const [fixError, setFixError] = useState<string | null>(null);
+
+  const isWebm = (mimeType?.includes("webm") ?? src.includes(".webm")) === true;
+  const canFix = isWebm && !!durationMs && durationMs > 0 && !fixed && !fixing;
 
   useEffect(() => {
-    let cancelled = false;
-    let createdUrl: string | null = null;
-
-    const isWebm = mimeType?.includes("webm") ?? src.includes(".webm");
-    if (!isWebm || !durationMs || durationMs <= 0) {
-      setPlayableSrc(src);
-      return () => {};
-    }
-
-    setFixing(true);
-    (async () => {
-      try {
-        const res = await fetch(src);
-        if (!res.ok) throw new Error("fetch failed: " + res.status);
-        const rawBlob = await res.blob();
-        const { default: fixWebmDuration } = await import(
-          "fix-webm-duration"
-        );
-        const fixed = await fixWebmDuration(rawBlob, durationMs, {
-          logger: false,
-        });
-        if (cancelled) return;
-        createdUrl = URL.createObjectURL(fixed);
-        setPlayableSrc(createdUrl);
-      } catch (err) {
-        console.warn("[SeekableAudio] fix failed, fallback to raw URL:", err);
-        if (!cancelled) setPlayableSrc(src);
-      } finally {
-        if (!cancelled) setFixing(false);
-      }
-    })();
-
     return () => {
-      cancelled = true;
-      if (createdUrl) URL.revokeObjectURL(createdUrl);
+      if (playableSrc.startsWith("blob:")) URL.revokeObjectURL(playableSrc);
     };
-  }, [src, mimeType, durationMs]);
+  }, [playableSrc]);
+
+  async function prepareSeek() {
+    if (!durationMs || durationMs <= 0) return;
+    setFixing(true);
+    setFixError(null);
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error("fetch failed: " + res.status);
+      const rawBlob = await res.blob();
+      const { default: fixWebmDuration } = await import("fix-webm-duration");
+      const fixedBlob = await fixWebmDuration(rawBlob, durationMs, {
+        logger: false,
+      });
+      const blobUrl = URL.createObjectURL(fixedBlob);
+      setPlayableSrc(blobUrl);
+      setFixed(true);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Помилка підготовки";
+      console.warn("[SeekableAudio] fix failed:", err);
+      setFixError(msg);
+    } finally {
+      setFixing(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-2">
-      {fixing && (
-        <span
-          className="text-[11px]"
-          style={{ color: T.textMuted }}
-        >
-          Підготовка перемотки…
-        </span>
-      )}
       <audio
         key={playableSrc}
         controls
@@ -844,6 +833,31 @@ function SeekableAudio({
         className="w-full"
         preload="metadata"
       />
+      {canFix && (
+        <div className="flex items-center gap-2 text-[11px]">
+          <button
+            onClick={prepareSeek}
+            disabled={fixing}
+            className="rounded-md px-2 py-1 transition disabled:opacity-50"
+            style={{
+              background: T.panelElevated,
+              color: T.textSecondary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+            title="Завантажити файл і додати duration в EBML-хедер — після цього плеєр зможе перемотувати назад/вперед"
+          >
+            {fixing ? "Готую…" : "Підготувати перемотку"}
+          </button>
+          {fixError && (
+            <span style={{ color: T.danger }}>{fixError}</span>
+          )}
+        </div>
+      )}
+      {fixed && (
+        <span className="text-[11px]" style={{ color: T.success }}>
+          Перемотка готова — стрілка тепер працює
+        </span>
+      )}
     </div>
   );
 }
