@@ -16,13 +16,17 @@ import {
   Link2Off,
   ListChecks,
   Loader2,
+  Maximize2,
+  Minimize2,
   Pencil,
   Plus,
   ShieldCheck,
   Target,
   Trash2,
+  User,
   UserPlus,
   Users,
+  Wallet,
   X,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -162,6 +166,8 @@ type Employee = {
   terminatedAt: string | null;
   notes: string | null;
   isActive: boolean;
+  employmentType: EmploymentType;
+  employmentRate: number | string;
   departmentId: string | null;
   department: { id: string; name: string } | null;
   deferralType: DeferralType;
@@ -175,6 +181,7 @@ type Employee = {
 };
 
 type DeferralType = "NONE" | "RESERVATION" | "DEFERMENT";
+type EmploymentType = "FULL" | "PART" | "CONTRACT";
 
 type SalaryPeriod = {
   id: string;
@@ -193,6 +200,12 @@ const DEFERRAL_LABEL: Record<DeferralType, string> = {
   DEFERMENT: "Відстрочка",
 };
 
+const EMPLOYMENT_TYPE_LABEL: Record<EmploymentType, string> = {
+  FULL: "Повна",
+  PART: "Неповна",
+  CONTRACT: "Договір",
+};
+
 type FieldKey =
   | "lastName"
   | "firstName"
@@ -207,7 +220,9 @@ type FieldKey =
   | "deferralType"
   | "deferralUntil"
   | "notes"
-  | "isActive";
+  | "isActive"
+  | "employmentType"
+  | "employmentRate";
 
 function formatDate(iso: string | null): string {
   if (!iso) return "—";
@@ -245,12 +260,16 @@ function toDateInput(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
+type DossierTab = "basic" | "account" | "salary";
+
 export function EmployeeDossier({
   id,
   currentUserRole,
+  defaultExpanded = false,
 }: {
   id: string;
   currentUserRole: string;
+  defaultExpanded?: boolean;
 }) {
   const router = useRouter();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -259,6 +278,8 @@ export function EmployeeDossier({
   const [error, setError] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<FieldKey | null>(null);
   const [savingField, setSavingField] = useState<FieldKey | null>(null);
+  const [activeTab, setActiveTab] = useState<DossierTab>("basic");
+  const [expanded, setExpanded] = useState<boolean>(defaultExpanded);
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canDelete = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
@@ -413,6 +434,19 @@ export function EmployeeDossier({
             {tenure && <span>· стаж {tenure}</span>}
           </div>
         </div>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
+          style={{
+            backgroundColor: T.panelSoft,
+            color: T.textSecondary,
+            border: `1px solid ${T.borderStrong}`,
+          }}
+          title={expanded ? "Згорнути" : "Розгорнути всі секції"}
+        >
+          {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+          <span className="hidden sm:inline">{expanded ? "Згорнути" : "Розгорнути"}</span>
+        </button>
         {canDelete && (
           <button
             onClick={handleDelete}
@@ -425,7 +459,50 @@ export function EmployeeDossier({
         )}
       </div>
 
-      {/* Property table */}
+      {/* Tabs nav (приховуємо в expanded режимі) */}
+      {!expanded && (
+        <div
+          className="inline-flex w-fit gap-1 rounded-xl p-1"
+          style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+        >
+          {(
+            [
+              { id: "basic" as const, label: "Основне", icon: <User size={12} /> },
+              { id: "account" as const, label: "Користувач системи", icon: <ShieldCheck size={12} /> },
+              ...(canSeeSalary
+                ? [{ id: "salary" as const, label: "Зарплата", icon: <Wallet size={12} /> }]
+                : []),
+            ]
+          ).map((t) => {
+            const active = activeTab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setActiveTab(t.id)}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition"
+                style={{
+                  backgroundColor: active ? T.panel : "transparent",
+                  color: active ? T.textPrimary : T.textMuted,
+                  border: active ? `1px solid ${T.borderStrong}` : "1px solid transparent",
+                }}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sections — у expanded режимі рендериться side-by-side, у табовому — лише активна */}
+      <div
+        className={
+          expanded
+            ? "grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3"
+            : "flex flex-col gap-4"
+        }
+      >
+        {(expanded || activeTab === "basic") && (
       <div
         className="overflow-hidden rounded-2xl"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
@@ -650,6 +727,70 @@ export function EmployeeDossier({
               onCancel={() => setEditingField(null)}
             />
             <PropertyRow
+              label="Тип зайнятості"
+              field="employmentType"
+              editing={editingField === "employmentType"}
+              saving={savingField === "employmentType"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("employmentType")}
+              onCommit={(v) => patchField("employmentType", v)}
+              onCancel={() => setEditingField(null)}
+              renderValue={() => (
+                <span style={{ color: T.textSecondary }}>
+                  {EMPLOYMENT_TYPE_LABEL[employee.employmentType]}
+                </span>
+              )}
+              renderEditor={(stop) => (
+                <select
+                  autoFocus
+                  defaultValue={employee.employmentType}
+                  onChange={(e) => stop(e.target.value as EmploymentType)}
+                  onBlur={(e) => stop(e.target.value as EmploymentType)}
+                  className="rounded-lg px-2 py-1 text-sm outline-none"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderStrong}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  <option value="FULL">Повна</option>
+                  <option value="PART">Неповна</option>
+                  <option value="CONTRACT">Договір</option>
+                </select>
+              )}
+            />
+            <PropertyRow
+              label="Ставка зайнятості"
+              field="employmentRate"
+              editing={editingField === "employmentRate"}
+              saving={savingField === "employmentRate"}
+              canEdit={canEdit}
+              onStartEdit={() => setEditingField("employmentRate")}
+              onCommit={(v) => {
+                const num = Number(v);
+                if (!Number.isFinite(num) || num < 0.1 || num > 2.0) {
+                  alert("Ставка має бути в діапазоні 0.10 – 2.00");
+                  setEditingField(null);
+                  return;
+                }
+                void patchField("employmentRate", num);
+              }}
+              onCancel={() => setEditingField(null)}
+              renderValue={() => (
+                <span className="tabular-nums" style={{ color: T.textSecondary }}>
+                  {Number(employee.employmentRate).toFixed(2)}
+                </span>
+              )}
+              renderEditor={(stop) => (
+                <TextEditor
+                  type="number"
+                  initial={Number(employee.employmentRate).toFixed(2)}
+                  onCommit={(v) => stop(v)}
+                  onCancel={() => stop(undefined)}
+                />
+              )}
+            />
+            <PropertyRow
               label="Тип відстрочки"
               field="deferralType"
               editing={editingField === "deferralType"}
@@ -755,21 +896,25 @@ export function EmployeeDossier({
           </tbody>
         </table>
       </div>
+        )}
 
-      <AccountSection
-        employee={employee}
-        currentUserRole={currentUserRole}
-        onChanged={() => void load()}
-      />
+        {(expanded || activeTab === "account") && (
+          <AccountSection
+            employee={employee}
+            currentUserRole={currentUserRole}
+            onChanged={() => void load()}
+          />
+        )}
 
-      {canSeeSalary && (
-        <SalaryHistorySection
-          employeeId={id}
-          salaries={employee.salaries}
-          canEdit={canEdit}
-          onChanged={() => void load()}
-        />
-      )}
+        {canSeeSalary && (expanded || activeTab === "salary") && (
+          <SalarySection
+            employeeId={id}
+            salaries={employee.salaries}
+            canEdit={canEdit}
+            onChanged={() => void load()}
+          />
+        )}
+      </div>
 
       {engagement && <EngagementPanel data={engagement} />}
 
@@ -1816,6 +1961,113 @@ function SalaryHistorySection({
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Огортає підсумковий блок (актуальна ЗП — оклад/премія/офіційна частина) +
+ * існуючу `SalaryHistorySection`. Показується у вкладці «Зарплата» дос'є.
+ */
+function SalarySection({
+  employeeId,
+  salaries,
+  canEdit,
+  onChanged,
+}: {
+  employeeId: string;
+  salaries: SalaryPeriod[];
+  canEdit: boolean;
+  onChanged: () => void;
+}) {
+  const active = useMemo(() => {
+    const now = Date.now();
+    return (
+      [...salaries]
+        .sort(
+          (a, b) =>
+            new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime(),
+        )
+        .find((s) => {
+          if (s.effectiveTo) return new Date(s.effectiveTo).getTime() >= now;
+          return new Date(s.effectiveFrom).getTime() <= now;
+        }) ?? salaries[0] ?? null
+    );
+  }, [salaries]);
+
+  const base = active ? Number(active.baseSalary) : 0;
+  const coef = active ? Number(active.coefficient ?? 0) : 0;
+  const official = active && active.officialPart != null ? Number(active.officialPart) : null;
+  const total = base + coef;
+  const currency = active?.currency ?? "UAH";
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div
+        className="overflow-hidden rounded-2xl"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+      >
+        <div
+          className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+          style={{
+            color: T.textSecondary,
+            backgroundColor: T.panelSoft,
+            borderBottom: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <Wallet size={12} />
+          <span>Зарплата</span>
+          <span className="ml-auto text-[15px] font-bold tabular-nums" style={{ color: T.textPrimary }}>
+            {active ? `${formatCurrency(total)} ${currency}` : "—"}
+          </span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 divide-x" style={{ borderColor: T.borderSoft }}>
+          <SalarySummaryCell label="Оклад (на руки)" value={active ? formatCurrency(base) : "—"} />
+          <SalarySummaryCell
+            label="Премія / індексація"
+            value={active ? (coef === 0 ? "—" : formatCurrency(coef)) : "—"}
+            tone={coef < 0 ? "danger" : undefined}
+          />
+          <SalarySummaryCell
+            label="Офіційна частина"
+            value={official != null ? formatCurrency(official) : "—"}
+          />
+        </div>
+      </div>
+
+      <SalaryHistorySection
+        employeeId={employeeId}
+        salaries={salaries}
+        canEdit={canEdit}
+        onChanged={onChanged}
+      />
+    </div>
+  );
+}
+
+function SalarySummaryCell({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: "danger";
+}) {
+  return (
+    <div className="px-4 py-3" style={{ borderColor: T.borderSoft }}>
+      <div
+        className="text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: T.textMuted }}
+      >
+        {label}
+      </div>
+      <div
+        className="mt-1 text-[15px] font-semibold tabular-nums"
+        style={{ color: tone === "danger" ? T.danger : T.textPrimary }}
+      >
+        {value}
       </div>
     </div>
   );

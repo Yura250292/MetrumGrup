@@ -9,8 +9,10 @@ const ALLOWED = ["SUPER_ADMIN", "MANAGER", "HR"];
 
 export default async function EmployeeDossierPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
@@ -23,5 +25,14 @@ export default async function EmployeeDossierPage({
   });
   if (!exists) notFound();
 
-  return <EmployeeDossier id={id} currentUserRole={session.user.role} />;
+  const sp = await searchParams;
+  const expanded = sp.expanded === "1" || sp.expanded === "true";
+
+  return (
+    <EmployeeDossier
+      id={id}
+      currentUserRole={session.user.role}
+      defaultExpanded={expanded}
+    />
+  );
 }

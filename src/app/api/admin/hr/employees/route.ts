@@ -67,6 +67,18 @@ const createSchema = z.object({
   departmentId: z.string().trim().nullable().optional().transform((v) => v ?? null),
   deferralType: z.enum(["NONE", "RESERVATION", "DEFERMENT"]).default("NONE"),
   deferralUntil: dateField,
+  employmentType: z.enum(["FULL", "PART", "CONTRACT"]).default("FULL"),
+  employmentRate: z
+    .union([z.string(), z.number()])
+    .optional()
+    .transform((v) => {
+      if (v === undefined || v === "" || v === null) return undefined;
+      const n = typeof v === "string" ? Number(v) : v;
+      return Number.isFinite(n) ? n : undefined;
+    })
+    .refine((v) => v === undefined || (v >= 0.1 && v <= 2.0), {
+      message: "Ставка зайнятості має бути в діапазоні 0.10 – 2.00",
+    }),
 });
 
 const updateSchema = createSchema.partial().extend({
@@ -88,6 +100,9 @@ export async function GET() {
   const g = await guard();
   if (g.error) return g.error;
 
+  const role = g.session.user.role;
+  const isHr = role === "HR";
+
   const employees = await prisma.employee.findMany({
     orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
     include: {
@@ -95,9 +110,16 @@ export async function GET() {
       user: {
         select: { id: true, email: true, role: true, isActive: true },
       },
+      // Активний ЗП-період (один) — для зведеної індикації у картці.
+      // HR не бачить — повертаємо порожньо.
+      salaries: isHr
+        ? false
+        : {
+            orderBy: [{ effectiveFrom: "desc" }],
+            take: 1,
+          },
     },
   });
-  const role = g.session.user.role;
   const data = employees.map((e) => redactSalaryForHr(e as EmployeeRecord, role));
   return NextResponse.json({ data });
 }

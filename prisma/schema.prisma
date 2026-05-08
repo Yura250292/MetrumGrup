@@ -2664,6 +2664,13 @@ enum DeferralType {
   DEFERMENT
 }
 
+/// Тип зайнятості співробітника.
+enum EmploymentType {
+  FULL
+  PART
+  CONTRACT
+}
+
 /// Історія ЗП співробітника. Активний період — той, у якого effectiveTo IS NULL
 /// або effectiveTo > now. На UI HR не бачить цих записів. Кеш поточного значення
 /// тримається у Employee.salaryAmount (для legacy payroll/forecast), але джерело
@@ -2715,6 +2722,10 @@ model Employee {
   terminatedAt  DateTime?
   notes         String?
   isActive      Boolean          @default(true)
+  /// Тип зайнятості (Повна / Неповна / Договір).
+  employmentType EmploymentType  @default(FULL)
+  /// Ставка зайнятості (1.0 = ставка, 0.5 = пів-ставки тощо).
+  employmentRate Decimal         @default(1.0) @db.Decimal(4, 2)
   /// Структурний підрозділ.
   departmentId  String?
   department    Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)

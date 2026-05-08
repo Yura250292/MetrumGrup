@@ -1,15 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import {
-  Briefcase,
   CheckCircle2,
-  ExternalLink,
   Loader2,
   Plus,
   Search,
-  ShieldCheck,
   Upload,
   Users,
   X,
@@ -18,6 +14,7 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "../../_components/excel-import-modal";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
+import { EmployeeCard } from "./employee-card";
 
 type LinkedUser = {
   id: string;
@@ -26,9 +23,24 @@ type LinkedUser = {
   isActive: boolean;
 };
 
+type EmploymentType = "FULL" | "PART" | "CONTRACT";
+type DeferralType = "NONE" | "RESERVATION" | "DEFERMENT";
+
+type SalaryPeriod = {
+  baseSalary: number | string;
+  officialPart: number | string | null;
+  coefficient: number | string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  currency: string;
+};
+
 type Employee = {
   id: string;
   fullName: string;
+  lastName: string | null;
+  firstName: string | null;
+  middleName: string | null;
   phone: string | null;
   email: string | null;
   position: string | null;
@@ -39,8 +51,13 @@ type Employee = {
   department: { id: string; name: string } | null;
   notes: string | null;
   isActive: boolean;
+  employmentType: EmploymentType;
+  employmentRate: number | string;
+  deferralType: DeferralType;
+  deferralUntil: string | null;
   userId: string | null;
   user: LinkedUser | null;
+  salaries?: SalaryPeriod[];
   createdAt: string;
 };
 
@@ -86,28 +103,6 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("uk-UA");
 }
 
-function formatTenure(hired: string | null, terminated: string | null): string | null {
-  if (!hired) return null;
-  const start = new Date(hired);
-  const end = terminated ? new Date(terminated) : new Date();
-  const months =
-    (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth();
-  if (months < 1) return "< 1 міс";
-  if (months < 12) return `${months} міс`;
-  const years = Math.floor(months / 12);
-  const rem = months % 12;
-  return rem > 0 ? `${years} р ${rem} міс` : `${years} р`;
-}
-
-function initialsOf(fullName: string): string {
-  return fullName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-}
-
 export function EmployeesList({
   currentUserRole,
   initialTab,
@@ -117,6 +112,7 @@ export function EmployeesList({
 }) {
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canSeeExternal = currentUserRole === "SUPER_ADMIN";
+  const canSeeSalary = currentUserRole !== "HR";
 
   const [tab, setTab] = useState<Tab>(
     initialTab === "external" && canSeeExternal ? "external" : "employees",
@@ -391,160 +387,32 @@ export function EmployeesList({
       )}
 
       {!loading && tab === "employees" && (
-        <div
-          className="overflow-x-auto rounded-2xl"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
-        >
-          <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
-            <thead>
-              <tr
-                className="text-[10px] font-bold uppercase tracking-wider"
-                style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+        filtered.length === 0 ? (
+          <div
+            className="rounded-2xl px-4 py-12 text-center text-sm"
+            style={{
+              backgroundColor: T.panel,
+              border: `1px solid ${T.borderStrong}`,
+              color: T.textMuted,
+            }}
+          >
+            {search.trim() || accountFilter !== "all"
+              ? "Нічого не знайдено за фільтрами."
+              : "Список порожній. Додайте через кнопку «Додати співробітника» або імпорт з Excel."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((e, idx) => (
+              <div
+                key={e.id}
+                className={idx < 20 ? "data-table-row-enter" : ""}
+                style={idx < 20 ? { animationDelay: `${idx * 30}ms` } : undefined}
               >
-                <th className="px-4 py-3 text-left">ПІБ</th>
-                <th className="px-3 py-3 text-left">Посада</th>
-                <th className="px-3 py-3 text-left">Телефон</th>
-                <th className="px-3 py-3 text-left">Email</th>
-                <th className="px-3 py-3 text-left">Акаунт</th>
-                <th className="px-3 py-3 text-left">Підрозділ</th>
-                <th className="px-3 py-3 text-left">Прийнятий</th>
-                <th className="px-3 py-3 text-left">Стаж</th>
-                <th className="px-3 py-3 text-center">Статус</th>
-                <th className="px-3 py-3 text-right">Дії</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((e, idx) => {
-                const tenure = formatTenure(e.hiredAt, e.terminatedAt);
-                return (
-                  <tr
-                    key={e.id}
-                    className={`border-t cursor-pointer transition hover:bg-black/5 ${
-                      idx < 20 ? "data-table-row-enter" : ""
-                    }`}
-                    style={{
-                      borderColor: T.borderSoft,
-                      opacity: e.isActive ? 1 : 0.55,
-                      ...(idx < 20 ? { animationDelay: `${idx * 30}ms` } : {}),
-                    }}
-                    onClick={(ev) => {
-                      if ((ev.target as HTMLElement).closest("a, button")) return;
-                      window.location.href = `/admin-v2/hr/employees/${e.id}`;
-                    }}
-                  >
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold"
-                          style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-                        >
-                          {initialsOf(e.fullName) || <Users size={14} />}
-                        </div>
-                        <span className="font-medium truncate" style={{ color: T.textPrimary }}>
-                          {e.fullName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-                      {e.position ? (
-                        <span className="inline-flex items-center gap-1">
-                          <Briefcase size={11} style={{ color: T.textMuted }} /> {e.position}
-                        </span>
-                      ) : (
-                        <span style={{ color: T.textMuted }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-                      {e.phone ? (
-                        <a
-                          href={`tel:${e.phone}`}
-                          className="hover:underline"
-                          onClick={(ev) => ev.stopPropagation()}
-                        >
-                          {e.phone}
-                        </a>
-                      ) : (
-                        <span style={{ color: T.textMuted }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-                      {e.email ? (
-                        <a
-                          href={`mailto:${e.email}`}
-                          className="hover:underline"
-                          onClick={(ev) => ev.stopPropagation()}
-                        >
-                          {e.email}
-                        </a>
-                      ) : (
-                        <span style={{ color: T.textMuted }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px]">
-                      {e.user ? (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase"
-                          style={{
-                            backgroundColor: ROLE_COLORS[e.user.role]?.bg ?? T.panelSoft,
-                            color: ROLE_COLORS[e.user.role]?.fg ?? T.textMuted,
-                          }}
-                        >
-                          <ShieldCheck size={10} />
-                          {ROLE_LABELS[e.user.role] ?? e.user.role}
-                        </span>
-                      ) : (
-                        <span
-                          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-                          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
-                        >
-                          Без акаунта
-                        </span>
-                      )}
-                    </td>
-                    <td
-                      className="px-3 py-2.5 text-[12px] truncate max-w-[200px]"
-                      style={{ color: T.textSecondary }}
-                    >
-                      {e.department?.name ?? <span style={{ color: T.textMuted }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
-                      {formatDate(e.hiredAt)}
-                    </td>
-                    <td className="px-3 py-2.5 text-[12px] whitespace-nowrap" style={{ color: T.textSecondary }}>
-                      {tenure ?? <span style={{ color: T.textMuted }}>—</span>}
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      {e.isActive ? (
-                        <CheckCircle2 size={14} style={{ color: T.success }} className="inline" />
-                      ) : (
-                        <XCircle size={14} style={{ color: T.textMuted }} className="inline" />
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                      <Link
-                        href={`/admin-v2/hr/employees/${e.id}`}
-                        className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
-                        title="Відкрити дос'є"
-                        aria-label="Дос'є"
-                      >
-                        <ExternalLink size={13} style={{ color: T.accentPrimary }} />
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={10} className="px-4 py-12 text-center text-sm" style={{ color: T.textMuted }}>
-                    {search.trim() || accountFilter !== "all"
-                      ? "Нічого не знайдено за фільтрами."
-                      : "Список порожній. Додайте через кнопку «Додати співробітника» або імпорт з Excel."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                <EmployeeCard employee={e} canSeeSalary={canSeeSalary} />
+              </div>
+            ))}
+          </div>
+        )
       )}
 
       {!loading && tab === "external" && (
