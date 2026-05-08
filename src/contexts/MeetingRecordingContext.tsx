@@ -9,6 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import fixWebmDuration from "fix-webm-duration";
 
 export type RecState = "idle" | "recording" | "paused" | "stopped";
 
@@ -146,15 +147,41 @@ export function MeetingRecordingProvider({ children }: { children: ReactNode }) 
       recorder.ondataavailable = (ev) => {
         if (ev.data.size > 0) chunksRef.current.push(ev.data);
       };
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         stopTimer();
         const finalMs = Date.now() - startedAtRef.current;
-        const blob = new Blob(chunksRef.current, { type: mimeRef.current });
+        const rawBlob = new Blob(chunksRef.current, {
+          type: mimeRef.current,
+        });
         chunksRef.current = [];
         cleanupStream();
         void releaseWakeLock();
+
+        // Фіксимо duration в EBML-хедері WebM-blob: MediaRecorder не пише
+        // тривалість, через що `<audio>` не вміє seek-ати назад. Файли що
+        // юзер завантажує самостійно — мають хедер, тож для них пропускаємо.
+        // Для не-webm форматів (mp4) це теж не потрібно.
+        let finalBlob = rawBlob;
+        if (rawBlob.type.includes("webm") && finalMs > 0) {
+          try {
+            finalBlob = await fixWebmDuration(rawBlob, finalMs, {
+              logger: false,
+            });
+          } catch (err) {
+            // Якщо фікс не вдався — відкочуємось до сирого blob, краще
+            // мати хоч якийсь файл ніж нічого. Перемотка просто не буде
+            // працювати, як і раніше.
+            console.warn("[meeting-recorder] fixWebmDuration failed:", err);
+            finalBlob = rawBlob;
+          }
+        }
+
         setState("stopped");
-        setRecorded({ blob, mimeType: mimeRef.current, durationMs: finalMs });
+        setRecorded({
+          blob: finalBlob,
+          mimeType: mimeRef.current,
+          durationMs: finalMs,
+        });
       };
 
       // Collect chunks every 3s — limits data loss if tab crashes.

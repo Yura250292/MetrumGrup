@@ -108,13 +108,18 @@ async function transcribeWithAssemblyAI(meeting: NonNullable<MeetingRow>) {
   const namePool = await collectNameHints();
   const wordBoost = namePool.slice(0, 50); // ліміт ~1000 boost-токенів сумарно
 
-  // AssemblyAI у 2026 депрекейтнули `speech_model` (single) — тепер `speech_models`
-  // як масив. SDK типи ще не оновлені, тож кастимо до Record.
+  // AssemblyAI у 2026 депрекейтнули `speech_model` (single) — тепер `speech_models`.
+  // ВАЖЛИВО: НЕ ставимо language_detection — він визначає ОДНУ домінантну мову
+  // на весь файл, через що змішана UA/RU нарада виходить повністю в одній мові
+  // (та що звучить більше) і втрачає правильне написання іншої. Замість того
+  // ставимо language_code="uk" — Universal модель сама вміє code-switching:
+  // переключається між UA і RU посегментно, зберігає оригінальне написання
+  // (включно з RU-іменами як «Любовь Николаевна»).
   const transcript = await client.transcripts.transcribe({
     audio: audioInput,
     speech_models: ["universal"],
+    language_code: "uk",
     speaker_labels: true,
-    language_detection: true,
     entity_detection: true,
     auto_chapters: true,
     auto_highlights: true,
