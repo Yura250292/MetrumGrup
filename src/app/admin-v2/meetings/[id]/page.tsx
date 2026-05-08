@@ -801,15 +801,47 @@ function SeekableAudio({
   }, [playableSrc]);
 
   async function prepareSeek() {
-    if (!durationMs || durationMs <= 0) return;
     setFixing(true);
     setFixError(null);
     try {
       const res = await fetch(src);
       if (!res.ok) throw new Error("fetch failed: " + res.status);
-      const rawBlob = await res.blob();
+      const arrayBuffer = await res.arrayBuffer();
+
+      // Обчислюємо РЕАЛЬНУ тривалість через Web Audio API замість того щоб
+      // покладатись на audioDurationMs з БД (для старих записів він міг
+      // бути помилковим — наприклад, рахував і паузу). decodeAudioData
+      // декодує весь файл і повертає точну тривалість аудіо-даних.
+      let realDurationMs: number;
+      try {
+        const AudioCtor =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext })
+            .webkitAudioContext;
+        if (!AudioCtor) throw new Error("AudioContext недоступний");
+        const ctx = new AudioCtor();
+        // slice(0) бо decodeAudioData забирає буфер собі
+        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+        realDurationMs = Math.round(audioBuffer.duration * 1000);
+        await ctx.close();
+      } catch (decodeErr) {
+        console.warn(
+          "[SeekableAudio] decodeAudioData failed, using DB durationMs:",
+          decodeErr,
+        );
+        if (!durationMs || durationMs <= 0) {
+          throw new Error(
+            "Не вдалося визначити тривалість файлу і нема значення в БД",
+          );
+        }
+        realDurationMs = durationMs;
+      }
+
+      const rawBlob = new Blob([arrayBuffer], {
+        type: mimeType ?? "audio/webm",
+      });
       const { default: fixWebmDuration } = await import("fix-webm-duration");
-      const fixedBlob = await fixWebmDuration(rawBlob, durationMs, {
+      const fixedBlob = await fixWebmDuration(rawBlob, realDurationMs, {
         logger: false,
       });
       const blobUrl = URL.createObjectURL(fixedBlob);
@@ -824,6 +856,20 @@ function SeekableAudio({
     }
   }
 
+  function handleAudioError() {
+    // Якщо ми граємо виправлений blob і він не зміг завантажитись —
+    // повертаємось до оригінального URL без перемотки. Краще щоб плеєр
+    // продовжував грати без seek, ніж показував «Помилка».
+    if (playableSrc.startsWith("blob:") && playableSrc !== src) {
+      URL.revokeObjectURL(playableSrc);
+      setPlayableSrc(src);
+      setFixed(false);
+      setFixError(
+        "Виправлення не сумісне з цим записом (ймовірно, неправильна тривалість в БД). Перемотка недоступна.",
+      );
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <audio
@@ -832,6 +878,7 @@ function SeekableAudio({
         src={playableSrc}
         className="w-full"
         preload="metadata"
+        onError={handleAudioError}
       />
       {canFix && (
         <div className="flex items-center gap-2 text-[11px]">
@@ -848,8 +895,17 @@ function SeekableAudio({
           >
             {fixing ? "Готую…" : "Підготувати перемотку"}
           </button>
+          <a
+            href={src}
+            download
+            className="rounded-md px-2 py-1 transition hover:underline"
+            style={{ color: T.textMuted }}
+            title="Завантажити аудіо-файл щоб слухати у плеєрі з повноцінною перемоткою (VLC, QuickTime, тощо)"
+          >
+            Завантажити файл
+          </a>
           {fixError && (
-            <span style={{ color: T.danger }}>{fixError}</span>
+            <span style={{ color: T.warning }}>{fixError}</span>
           )}
         </div>
       )}
