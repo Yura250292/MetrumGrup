@@ -20,6 +20,7 @@ const querySchema = z.object({
   counterpartyId: z.string().trim().min(1),
   amount: z.coerce.number().positive(),
   projectId: z.string().trim().optional(),
+  strategy: z.enum(["HYBRID", "FIFO", "PROPORTIONAL"]).default("HYBRID"),
 });
 
 /**
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { counterpartyId, amount, projectId } = parsed.data;
+  const { counterpartyId, amount, projectId, strategy } = parsed.data;
   const entryFirmId = firmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
   const cp = await prisma.counterparty.findUnique({
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
     firmId: entryFirmId,
     amount,
     projectId: projectId ?? null,
+    strategy,
   });
 
   return NextResponse.json({

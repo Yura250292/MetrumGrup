@@ -109,7 +109,44 @@ async function loadCandidates(
   }));
 }
 
-function planLines(
+/**
+ * Стратегія розподілу платежу між несплаченими фактами:
+ *
+ * - HYBRID — пропорційно по проєктах (за часткою боргу), FIFO всередині проєкту.
+ *   Дефолт: розкидає гроші справедливо між обʼєктами + всередині обʼєкта
+ *   закриває старіші накладні першими.
+ *
+ * - FIFO — глобально найстаріші факти першими, без врахування проєктів.
+ *   Корисно якщо постачальник тисне за конкретні старі накладні.
+ *
+ * - PROPORTIONAL — кожен факт отримує % пропорційний своїй частці у боргу.
+ *   Усі накладні стають частково оплачені — використовується рідко, для
+ *   звітності "кожен факт сплачено на 50%".
+ */
+export type AllocationStrategy = "HYBRID" | "FIFO" | "PROPORTIONAL";
+
+const DEFAULT_STRATEGY: AllocationStrategy = "HYBRID";
+
+function makeLine(
+  c: CandidateRow,
+  outstanding: Decimal,
+  take: Decimal,
+): AllocationLine {
+  const after = outstanding.minus(take);
+  return {
+    financeEntryId: c.id,
+    occurredAt: c.occurredAt,
+    title: c.title,
+    projectId: c.projectId,
+    outstandingBefore: outstanding,
+    allocate: take,
+    outstandingAfter: after,
+    willBecomePaid: after.lessThanOrEqualTo(0),
+  };
+}
+
+/** Pure FIFO: проходимо по всіх кандидатах у відсортованому порядку. */
+function planFifo(
   candidates: CandidateRow[],
   amount: Decimal,
 ): AllocationPlan {
@@ -120,39 +157,193 @@ function planLines(
     const outstanding = c.amount.minus(c.allocated);
     if (outstanding.lessThanOrEqualTo(0)) continue;
     const take = Decimal.min(outstanding, remaining);
-    const after = outstanding.minus(take);
-    lines.push({
-      financeEntryId: c.id,
-      occurredAt: c.occurredAt,
-      title: c.title,
-      projectId: c.projectId,
-      outstandingBefore: outstanding,
-      allocate: take,
-      outstandingAfter: after,
-      willBecomePaid: after.equals(0),
-    });
+    lines.push(makeLine(c, outstanding, take));
     remaining = remaining.minus(take);
   }
   const totalAllocated = new Decimal(amount).minus(remaining);
+  return { lines, totalAllocated, unallocated: remaining };
+}
+
+/**
+ * Пропорційно по фактах: кожен FE отримує `(outstanding / totalOutstanding) * amount`.
+ * Округлення до 2 знаків. Останній (найбільший) FE отримує rounding-error,
+ * щоб сума allocations точно = amount.
+ */
+function planProportional(
+  candidates: CandidateRow[],
+  amount: Decimal,
+): AllocationPlan {
+  const live = candidates
+    .map((c) => ({ c, outstanding: c.amount.minus(c.allocated) }))
+    .filter((r) => r.outstanding.greaterThan(0));
+
+  if (live.length === 0) {
+    return { lines: [], totalAllocated: ZERO, unallocated: amount };
+  }
+
+  const grandTotal = live.reduce((acc, r) => acc.plus(r.outstanding), ZERO);
+  // Cap проти overpayment: не дозволяємо платити більше ніж загальний борг.
+  const usable = Decimal.min(amount, grandTotal);
+
+  // Сортуємо по outstanding desc — найбільший факт прийме rounding-error.
+  const sorted = [...live].sort((a, b) =>
+    b.outstanding.comparedTo(a.outstanding),
+  );
+
+  const lines: AllocationLine[] = [];
+  let assigned = ZERO;
+  for (let i = 0; i < sorted.length; i++) {
+    const { c, outstanding } = sorted[i];
+    let take: Decimal;
+    if (i === sorted.length - 1) {
+      // Найменший — додаємо те що лишилось щоб не було rounding-drift.
+      take = usable.minus(assigned);
+    } else {
+      const share = outstanding.dividedBy(grandTotal);
+      take = usable.times(share).toDecimalPlaces(2);
+    }
+    take = Decimal.min(take, outstanding);
+    if (take.greaterThan(0)) {
+      lines.push(makeLine(c, outstanding, take));
+      assigned = assigned.plus(take);
+    }
+  }
+
+  // Повертаємо в природному порядку (по occurredAt) для UI.
+  lines.sort(
+    (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() ||
+      a.financeEntryId.localeCompare(b.financeEntryId),
+  );
+
   return {
     lines,
-    totalAllocated,
-    unallocated: remaining,
+    totalAllocated: assigned,
+    unallocated: amount.minus(assigned),
   };
 }
 
 /**
- * Read-only preview FIFO-плану. UI кличе перед сабмітом форми, щоб показати
- * "цей платіж покриє: 50k цемент → 30k плитка → 20k фарба (частково)".
+ * Гібрид (default): пропорційно ділимо `amount` між проєктами за часткою боргу,
+ * всередині кожного проєкту — FIFO по найстаріших накладних.
+ *
+ * Edge case: факти без projectId групуються в окрему "віртуальну" групу — отримують
+ * свою частку як окремий "проєкт".
+ */
+function planHybrid(
+  candidates: CandidateRow[],
+  amount: Decimal,
+): AllocationPlan {
+  const groups = new Map<string, CandidateRow[]>();
+  const groupKey = (c: CandidateRow) => c.projectId ?? "__no_project__";
+
+  for (const c of candidates) {
+    const k = groupKey(c);
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k)!.push(c);
+  }
+
+  type GroupInfo = { key: string; rows: CandidateRow[]; outstanding: Decimal };
+  const groupInfos: GroupInfo[] = [];
+  let grandTotal = ZERO;
+  for (const [k, rows] of groups) {
+    let total = ZERO;
+    for (const r of rows) {
+      const out = r.amount.minus(r.allocated);
+      if (out.greaterThan(0)) total = total.plus(out);
+    }
+    if (total.greaterThan(0)) {
+      groupInfos.push({ key: k, rows, outstanding: total });
+      grandTotal = grandTotal.plus(total);
+    }
+  }
+
+  if (grandTotal.equals(0)) {
+    return { lines: [], totalAllocated: ZERO, unallocated: amount };
+  }
+
+  const usable = Decimal.min(amount, grandTotal);
+
+  // Сортуємо групи по outstanding desc — найбільший проєкт прийме rounding-error.
+  groupInfos.sort((a, b) => b.outstanding.comparedTo(a.outstanding));
+
+  // Розподіл бюджету по проєктах.
+  const groupAllocations = new Map<string, Decimal>();
+  let assignedToGroups = ZERO;
+  for (let i = 0; i < groupInfos.length; i++) {
+    const g = groupInfos[i];
+    let alloc: Decimal;
+    if (i === groupInfos.length - 1) {
+      alloc = usable.minus(assignedToGroups);
+    } else {
+      const share = g.outstanding.dividedBy(grandTotal);
+      alloc = usable.times(share).toDecimalPlaces(2);
+    }
+    alloc = Decimal.min(alloc, g.outstanding);
+    groupAllocations.set(g.key, alloc);
+    assignedToGroups = assignedToGroups.plus(alloc);
+  }
+
+  // FIFO всередині кожного проєкту. Rows вже відсортовано по occurredAt при load.
+  const lines: AllocationLine[] = [];
+  let totalAssigned = ZERO;
+  for (const g of groupInfos) {
+    let remaining = groupAllocations.get(g.key) ?? ZERO;
+    for (const r of g.rows) {
+      if (remaining.lessThanOrEqualTo(0)) break;
+      const out = r.amount.minus(r.allocated);
+      if (out.lessThanOrEqualTo(0)) continue;
+      const take = Decimal.min(out, remaining);
+      lines.push(makeLine(r, out, take));
+      remaining = remaining.minus(take);
+      totalAssigned = totalAssigned.plus(take);
+    }
+  }
+
+  lines.sort(
+    (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime() ||
+      a.financeEntryId.localeCompare(b.financeEntryId),
+  );
+
+  return {
+    lines,
+    totalAllocated: totalAssigned,
+    unallocated: amount.minus(totalAssigned),
+  };
+}
+
+function planLines(
+  candidates: CandidateRow[],
+  amount: Decimal,
+  strategy: AllocationStrategy = DEFAULT_STRATEGY,
+): AllocationPlan {
+  switch (strategy) {
+    case "FIFO":
+      return planFifo(candidates, amount);
+    case "PROPORTIONAL":
+      return planProportional(candidates, amount);
+    case "HYBRID":
+    default:
+      return planHybrid(candidates, amount);
+  }
+}
+
+/**
+ * Read-only preview плану розподілу за обраною стратегією. UI кличе перед
+ * сабмітом форми, щоб показати "цей платіж покриє: цемент 40 → плитка 30 …".
  */
 export async function previewSupplierAllocation(args: {
   counterpartyId: string;
   firmId: string;
   amount: number | string | Decimal;
   projectId?: string | null;
+  strategy?: AllocationStrategy;
 }): Promise<AllocationPlan> {
   const candidates = await loadCandidates(prisma, args);
-  return planLines(candidates, new Decimal(args.amount));
+  return planLines(
+    candidates,
+    new Decimal(args.amount),
+    args.strategy ?? DEFAULT_STRATEGY,
+  );
 }
 
 export type CreateSupplierPaymentInput = {
@@ -168,6 +359,8 @@ export type CreateSupplierPaymentInput = {
   createdById: string;
   /** Header X-Idempotency-Key. Повторний submit з тим самим ключем поверне вже створений платіж. */
   idempotencyKey?: string | null;
+  /** За замовчуванням HYBRID. */
+  strategy?: AllocationStrategy;
 };
 
 export type CreatedSupplierPayment = {
@@ -256,7 +449,7 @@ export async function createSupplierPaymentWithAllocation(
       firmId: input.firmId,
       projectId: input.projectId ?? null,
     });
-    const plan = planLines(candidates, amount);
+    const plan = planLines(candidates, amount, input.strategy ?? DEFAULT_STRATEGY);
 
     const payment = await tx.supplierPayment.create({
       data: {

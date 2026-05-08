@@ -35,6 +35,7 @@ const createSchema = z.object({
   method: z.enum(["CASH", "BANK_TRANSFER", "CARD"]).default("BANK_TRANSFER"),
   reference: z.string().trim().nullable().optional(),
   notes: z.string().trim().nullable().optional(),
+  strategy: z.enum(["HYBRID", "FIFO", "PROPORTIONAL"]).default("HYBRID"),
 });
 
 export async function GET(request: NextRequest) {
@@ -159,6 +160,7 @@ export async function POST(request: NextRequest) {
       notes: data.notes ?? null,
       createdById: session.user.id,
       idempotencyKey,
+      strategy: data.strategy,
     });
     return NextResponse.json(
       {
