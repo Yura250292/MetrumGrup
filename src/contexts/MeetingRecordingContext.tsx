@@ -20,7 +20,10 @@ export type RecordedAudio = {
 };
 
 export const MAX_RECORD_MS = 90 * 60 * 1000;
-const AUDIO_BITS_PER_SECOND = 32_000;
+// 96 kbps Opus mono — широко вважається "transparent" для мовлення.
+// Раніше було 32 kbps під ліміт OpenAI Whisper (25MB / файл). У AssemblyAI
+// ліміт 5GB / 10h, тож можна не економити. На 60 хв ≈ 43 MB.
+const AUDIO_BITS_PER_SECOND = 96_000;
 
 type ContextValue = {
   state: RecState;
@@ -125,7 +128,21 @@ export function MeetingRecordingProvider({ children }: { children: ReactNode }) 
     pausedOffsetRef.current = 0;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Чітка специфікація аудіо-потоку для максимальної якості розпізнавання:
+      // - 48 kHz: нативна частота Opus, без зайвих ресемплів
+      // - mono: голосу досить, ½ файлу
+      // - echoCancellation/noiseSuppression/autoGainControl: підвищують
+      //   точність ASR, особливо в шумних офісах. Браузер сам зробить
+      //   найкраще доступне (WebRTC AEC3, RNNoise тощо).
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 48000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       streamRef.current = stream;
 
       const candidates = [
