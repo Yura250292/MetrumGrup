@@ -10,7 +10,6 @@ import {
   Plus,
   Search,
   Truck,
-  Wallet,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
@@ -196,17 +195,6 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
           Включно з деактивованими
         </label>
         <div className="flex-1" />
-        <Link
-          href="/admin-v2/financing/supplier-payments"
-          className="rounded-xl px-3 py-2 text-[12px] font-semibold"
-          style={{
-            backgroundColor: T.panelSoft,
-            color: T.accentPrimary,
-            border: `1px solid ${T.borderStrong}`,
-          }}
-        >
-          <Wallet size={12} className="inline mr-1" /> Журнал платежів
-        </Link>
         {canCreate && (
           <button
             onClick={() => {

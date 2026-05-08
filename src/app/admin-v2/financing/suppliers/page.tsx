@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { Truck } from "lucide-react";
+import Link from "next/link";
+import { Truck, Wallet } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -8,10 +9,17 @@ import {
 } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { SuppliersLedger } from "./_components/suppliers-ledger";
+import { SupplierPaymentsList } from "../supplier-payments/_components/supplier-payments-list";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminSuppliersPage() {
+type Tab = "list" | "payments";
+
+export default async function AdminSuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -21,6 +29,9 @@ export default async function AdminSuppliersPage() {
   const allowed = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
   const role = getActiveRoleFromSession(session, firmId);
   if (!role || !allowed.includes(role)) redirect("/admin-v2");
+
+  const sp = await searchParams;
+  const tab: Tab = sp.tab === "payments" ? "payments" : "list";
 
   return (
     <div className="flex flex-col gap-4">
@@ -36,7 +47,46 @@ export default async function AdminSuppliersPage() {
           — борги, платежі, ціни матеріалів
         </span>
       </header>
-      <SuppliersLedger currentUserRole={role} />
+
+      {/* Tabs */}
+      <div className="flex items-center gap-1 flex-wrap">
+        <TabLink href="/admin-v2/financing/suppliers" active={tab === "list"}>
+          <Truck size={13} className="inline mr-1" /> Список
+        </TabLink>
+        <TabLink
+          href="/admin-v2/financing/suppliers?tab=payments"
+          active={tab === "payments"}
+        >
+          <Wallet size={13} className="inline mr-1" /> Журнал платежів
+        </TabLink>
+      </div>
+
+      {tab === "list" && <SuppliersLedger currentUserRole={role} />}
+      {tab === "payments" && <SupplierPaymentsList currentUserRole={role} />}
     </div>
+  );
+}
+
+function TabLink({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      className="rounded-xl px-3 py-1.5 text-[12px] font-semibold transition"
+      style={{
+        backgroundColor: active ? T.accentPrimary : T.panel,
+        color: active ? "#fff" : T.textSecondary,
+        border: `1px solid ${active ? T.accentPrimary : T.borderSoft}`,
+      }}
+    >
+      {children}
+    </Link>
   );
 }
