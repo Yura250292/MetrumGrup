@@ -1,8 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Building2 } from "lucide-react";
+import { Building2, Wallet } from "lucide-react";
 import { DataTable, type Column } from "@/components/shared/DataTable";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
@@ -10,8 +11,40 @@ import { STAGE_LABELS } from "@/lib/constants";
 import { StatusBadge } from "./projects-cards";
 import type { ProjectRow } from "./projects-types";
 
+type DebtSummary = { outstanding: number; supplierCount: number };
+
+function useSupplierDebtsSummary(projectIds: string[]): Map<string, DebtSummary> {
+  const [data, setData] = useState<Map<string, DebtSummary>>(new Map());
+
+  useEffect(() => {
+    if (projectIds.length === 0) return;
+    const ids = projectIds.join(",");
+    const ctrl = new AbortController();
+    fetch(`/api/admin/projects/supplier-debts-summary?ids=${ids}`, {
+      cache: "no-store",
+      signal: ctrl.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (!j?.data) return;
+        const m = new Map<string, DebtSummary>();
+        for (const [k, v] of Object.entries(j.data as Record<string, DebtSummary>)) {
+          m.set(k, v);
+        }
+        setData(m);
+      })
+      .catch(() => {});
+    return () => ctrl.abort();
+    // join, бо порівняння Array<string> через === завжди false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectIds.join(",")]);
+
+  return data;
+}
+
 export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   const router = useRouter();
+  const debtMap = useSupplierDebtsSummary(projects.map((p) => p.id));
 
   const columns: Column<ProjectRow>[] = [
     {
@@ -128,6 +161,43 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
               {pct}%
             </span>
           </div>
+        );
+      },
+    },
+    {
+      key: "supplierDebt",
+      label: "Борг постач.",
+      sortable: true,
+      sortValue: (p) => debtMap.get(p.id)?.outstanding ?? 0,
+      hideOnMobile: true,
+      className: "text-right",
+      render: (p) => {
+        const d = debtMap.get(p.id);
+        const outstanding = d?.outstanding ?? 0;
+        if (outstanding <= 0) {
+          return (
+            <span className="text-[11px]" style={{ color: T.textMuted }}>
+              —
+            </span>
+          );
+        }
+        return (
+          <Link
+            href={`/admin-v2/projects/${p.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex flex-col items-end gap-0 hover:underline"
+            title={`${d?.supplierCount ?? 0} постачальник(и)`}
+          >
+            <span
+              className="tabular-nums text-[13px] font-semibold inline-flex items-center gap-1"
+              style={{ color: T.danger }}
+            >
+              <Wallet size={11} /> {formatCurrency(outstanding)}
+            </span>
+            <span className="text-[10px]" style={{ color: T.textMuted }}>
+              {d?.supplierCount ?? 0} постач.
+            </span>
+          </Link>
         );
       },
     },

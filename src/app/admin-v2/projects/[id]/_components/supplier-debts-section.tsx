@@ -120,9 +120,29 @@ export function SupplierDebtsSection({
   }
 
   if (!data || data.debts.length === 0) {
-    // Порожній стан рендеримо в стриманому вигляді — щоб не плодити шум на проєктах
-    // без боргів. Якщо постачальники зовсім не звʼязувались — нічого не показуємо.
-    return null;
+    return (
+      <div
+        className="rounded-2xl px-4 py-3 flex items-center gap-2"
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderSoft}`,
+        }}
+      >
+        <Wallet size={14} style={{ color: T.textMuted }} />
+        <span
+          className="text-[10.5px] font-bold uppercase tracking-wider"
+          style={{ color: T.textMuted }}
+        >
+          Борги перед постачальниками
+        </span>
+        <span
+          className="text-[12px]"
+          style={{ color: T.success, marginLeft: "auto" }}
+        >
+          ✓ Без боргу
+        </span>
+      </div>
+    );
   }
 
   const totalColor = data.totalOutstanding > 0 ? T.danger : T.success;
