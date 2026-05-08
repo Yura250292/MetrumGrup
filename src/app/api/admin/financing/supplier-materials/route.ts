@@ -12,14 +12,21 @@ export const runtime = "nodejs";
 const ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER", "HR"];
 
 const querySchema = z.object({
-  counterpartyId: z.string().trim().min(1),
+  /// Опційно — обмежити одним постачальником. Якщо не задано — вертає всі матеріали
+  /// у scope активної фірми (для каталогу).
+  counterpartyId: z.string().trim().min(1).optional(),
   /// Якщо true — також тягне priceHistory (до 50 останніх) для побудови mini-chart.
   withHistory: z.coerce.boolean().default(false),
+  /// Пошук по назві матеріалу (case-insensitive).
+  q: z.string().trim().optional(),
+  take: z.coerce.number().int().positive().max(1000).default(500),
 });
 
 /**
- * Довідник матеріалів конкретного постачальника + опційна price-history.
- * Доступ — той самий що для counterparties (READ_ROLES).
+ * Довідник матеріалів. Дві типові форми використання:
+ *   - `counterpartyId=X` — у дос'є постачальника (тільки його матеріали)
+ *   - без counterpartyId — у каталозі /admin-v2/catalogs/suppliers
+ *     (всі матеріали від усіх постачальників фірми)
  */
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -38,33 +45,49 @@ export async function GET(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { counterpartyId, withHistory } = parsed.data;
+  const { counterpartyId, withHistory, q, take } = parsed.data;
 
-  // Скоуп через counterparty.firmId — counterparty-dossier гарантує isHomeFirm.
-  const cp = await prisma.counterparty.findUnique({
-    where: { id: counterpartyId },
-    select: { id: true, firmId: true },
-  });
-  if (!cp) {
-    return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
-  }
-  if (cp.firmId && firmId && cp.firmId !== firmId) {
-    return forbiddenResponse();
+  if (counterpartyId) {
+    // Скоуп через counterparty.firmId.
+    const cp = await prisma.counterparty.findUnique({
+      where: { id: counterpartyId },
+      select: { id: true, firmId: true },
+    });
+    if (!cp) {
+      return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+    }
+    if (cp.firmId && firmId && cp.firmId !== firmId) {
+      return forbiddenResponse();
+    }
   }
 
   const materials = await prisma.supplierMaterial.findMany({
-    where: { counterpartyId },
+    where: {
+      ...(counterpartyId ? { counterpartyId } : {}),
+      ...(firmId ? { firmId } : {}),
+      ...(q
+        ? {
+            OR: [
+              { name: { contains: q, mode: "insensitive" } },
+              { nameKey: { contains: q.toLowerCase(), mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    },
     orderBy: [{ lastSeenAt: "desc" }, { name: "asc" }],
-    take: 200,
-    include: withHistory
-      ? {
-          priceHistory: {
+    take,
+    include: {
+      counterparty: counterpartyId
+        ? false
+        : { select: { id: true, name: true } },
+      priceHistory: withHistory
+        ? {
             orderBy: { observedAt: "desc" },
             take: 50,
             select: { id: true, price: true, unit: true, observedAt: true },
-          },
-        }
-      : undefined,
+          }
+        : false,
+    },
   });
 
   return NextResponse.json({ data: materials });

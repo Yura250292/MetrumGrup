@@ -19,6 +19,7 @@ import {
   Mic,
   ScanLine,
   TrendingUp,
+  Library,
   type LucideIcon,
 } from "lucide-react";
 
@@ -86,6 +87,13 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
       { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine },
       { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat, hrAllowed: true },
+    ],
+  },
+  {
+    label: "Довідники",
+    items: [
+      { href: "/admin-v2/catalogs", label: "Усі довідники", icon: Library, exact: true, pillBadge: { text: "NEW", color: "accent" } },
+      { href: "/admin-v2/catalogs/suppliers", label: "Постачальники: ціни", icon: Truck },
     ],
   },
   {
@@ -161,6 +169,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/foreman-reports": "Звіти виконробів",
   "/admin-v2/counterparties": "Контрагенти",
   "/admin-v2/financing/suppliers": "Постачальники",
+  "/admin-v2/catalogs": "Довідники",
+  "/admin-v2/catalogs/suppliers": "Постачальники: ціни",
   "/admin-v2/receipts": "Накладні (скан)",
   "/admin-v2/receipts/scan": "Сканувати накладну",
   "/admin-v2/meetings": "Наради",
