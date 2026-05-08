@@ -35,7 +35,6 @@ export async function POST(
   const { id } = await params;
   const meeting = await prisma.meeting.findUnique({
     where: { id },
-    include: { project: { select: { title: true, address: true } } },
   });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
@@ -66,8 +65,6 @@ export async function POST(
     const whisperPrompt = buildWhisperHint({
       meetingTitle: meeting.title,
       meetingDescription: meeting.description,
-      projectTitle: meeting.project?.title,
-      projectAddress: meeting.project?.address,
       names: namePool,
     });
 
@@ -122,8 +119,6 @@ async function collectNameHints(): Promise<string[]> {
 function buildWhisperHint(opts: {
   meetingTitle: string;
   meetingDescription?: string | null;
-  projectTitle?: string;
-  projectAddress?: string | null;
   names: string[];
 }): string {
   const GLOSSARY = [
@@ -142,8 +137,6 @@ function buildWhisperHint(opts: {
   ];
   const parts: string[] = [
     `Українська ділова нарада будівельної компанії Metrum Group.`,
-    opts.projectTitle ? `Проєкт: ${opts.projectTitle}.` : "",
-    opts.projectAddress ? `Адреса: ${opts.projectAddress}.` : "",
     opts.meetingTitle ? `Тема: ${opts.meetingTitle}.` : "",
     opts.meetingDescription ? `Контекст: ${opts.meetingDescription}.` : "",
     opts.names.length > 0

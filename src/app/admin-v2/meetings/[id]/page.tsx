@@ -11,7 +11,6 @@ import {
   FileText,
   Sparkles,
   Mic,
-  FolderOpen,
   Folder,
   FolderInput,
   RefreshCw,
@@ -71,7 +70,7 @@ export default function MeetingDetailPage() {
   function askAiAboutTask(task: MeetingTask) {
     if (!meeting) return;
     const lines = [
-      `Допоможи виконати цю задачу з наради «${meeting.title}» (проєкт «${meeting.project.title}»):`,
+      `Допоможи виконати цю задачу з наради «${meeting.title}»:`,
       "",
       `**${task.title}**`,
     ];
@@ -322,12 +321,6 @@ export default function MeetingDetailPage() {
             className="mt-1 flex items-center gap-3 text-sm"
             style={{ color: T.textMuted }}
           >
-            <Link
-              href={`/admin-v2/projects/${meeting.project.id}`}
-              className="flex items-center gap-1 hover:underline"
-            >
-              <FolderOpen size={14} /> {meeting.project.title}
-            </Link>
             {meeting.folder ? (
               <button
                 onClick={() => setMoveOpen(true)}
@@ -518,7 +511,6 @@ export default function MeetingDetailPage() {
       {delegating && (
         <DelegateTaskModal
           task={delegating.task}
-          projectId={meeting.project.id}
           meetingTitle={meeting.title}
           onClose={() => setDelegating(null)}
           onCreated={(taskId) => {

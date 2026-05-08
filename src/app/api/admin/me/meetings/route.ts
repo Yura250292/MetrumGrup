@@ -25,35 +25,15 @@ export async function GET() {
   const since = new Date();
   since.setDate(since.getDate() - 14);
 
-  // Firm-scope: meeting завжди має projectId (required), тож скоупимо через project.firmId.
-  const firmFilter: { project?: { firmId: string } } = firmId
-    ? { project: { firmId } }
-    : {};
+  // Скоуп через Meeting.firmId — наради тепер не привʼязуються до проєкту.
+  const firmFilter = firmId ? { firmId } : {};
 
   const meetings = await prisma.meeting.findMany({
     where: {
       recordedAt: { gte: since },
-      ...(isSuper
-        ? firmFilter
-        : {
-            AND: [
-              firmFilter,
-              {
-                OR: [
-                  { createdById: uid },
-                  {
-                    project: {
-                      OR: [
-                        { managerId: uid },
-                        { members: { some: { userId: uid, isActive: true } } },
-                        { isInternal: true },
-                      ],
-                    },
-                  },
-                ],
-              },
-            ],
-          }),
+      ...firmFilter,
+      // Не-SUPER_ADMIN бачить лише свої наради; firm-scope вже фільтрує по фірмі.
+      ...(isSuper ? {} : { createdById: uid }),
     },
     orderBy: { recordedAt: "desc" },
     take: 8,
@@ -63,8 +43,6 @@ export async function GET() {
       status: true,
       recordedAt: true,
       audioDurationMs: true,
-      projectId: true,
-      project: { select: { id: true, title: true } },
       summary: true,
     },
   });

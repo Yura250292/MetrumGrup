@@ -31,7 +31,6 @@ export async function GET(
   const meeting = await prisma.meeting.findUnique({
     where: { id },
     include: {
-      project: { select: { id: true, title: true, slug: true } },
       createdBy: { select: { id: true, name: true } },
       folder: { select: { id: true, name: true } },
     },

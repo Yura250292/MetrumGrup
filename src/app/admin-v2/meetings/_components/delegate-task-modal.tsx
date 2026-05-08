@@ -29,18 +29,21 @@ const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}/;
 
 export function DelegateTaskModal({
   task,
-  projectId,
   meetingTitle,
   onClose,
   onCreated,
 }: {
   task: MeetingTask;
-  projectId: string;
   meetingTitle: string;
   onClose: () => void;
   onCreated: (createdTaskId: string) => void;
 }) {
-  const [project, setProject] = useState<MyProject | null>(null);
+  const [projects, setProjects] = useState<MyProject[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const project = useMemo(
+    () => projects.find((p) => p.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId],
+  );
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -72,17 +75,11 @@ export function DelegateTaskModal({
         if (projRes.ok) {
           const j = await projRes.json();
           const items = (j.data ?? []) as MyProject[];
-          const match = items.find((p) => p.id === projectId);
-          if (!match) {
-            setLoadError(
-              "Проєкт наради недоступний для створення задач у вашому акаунті"
-            );
+          if (items.length === 0) {
+            setLoadError("Немає проєктів, де ви можете створювати задачі");
           } else {
-            setProject(match);
-            const current =
-              match.stages.find((s) => s.stage === match.currentStage) ??
-              match.stages[0];
-            if (current) setStageId(current.id);
+            setProjects(items);
+            setSelectedProjectId(items[0].id);
           }
         }
         if (usersRes.ok) {
@@ -102,7 +99,19 @@ export function DelegateTaskModal({
         setLoading(false);
       }
     })();
-  }, [projectId]);
+  }, []);
+
+  // Коли користувач змінює проєкт — підставляємо поточну стадію проєкту.
+  useEffect(() => {
+    if (!project) {
+      setStageId("");
+      return;
+    }
+    const current =
+      project.stages.find((s) => s.stage === project.currentStage) ??
+      project.stages[0];
+    setStageId(current?.id ?? "");
+  }, [project]);
 
   const suggestedAssignee = useMemo(() => {
     if (!task.assignee) return null;
@@ -182,16 +191,24 @@ export function DelegateTaskModal({
           <p className="py-6 text-sm" style={{ color: T.danger }}>
             {loadError}
           </p>
-        ) : project ? (
+        ) : projects.length > 0 ? (
           <>
-            <div
-              className="rounded-lg p-2 text-xs"
-              style={{ background: T.panelElevated, color: T.textMuted }}
-            >
-              Проєкт: <strong style={{ color: T.textPrimary }}>{project.title}</strong>
-            </div>
+            <Field label="ПРОЄКТ">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                className="rounded-lg px-3 py-2 text-sm outline-none"
+                style={inputStyle}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
 
-            {!project.isInternal && (
+            {project && !project.isInternal && (
               <Field label="СТАДІЯ">
                 <select
                   value={stageId}

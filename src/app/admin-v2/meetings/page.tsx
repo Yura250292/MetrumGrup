@@ -7,7 +7,6 @@ import {
   Plus,
   Loader2,
   AlertCircle,
-  FolderOpen,
   Folder,
   FolderPlus,
   ChevronRight,
@@ -474,9 +473,6 @@ export default function MeetingsListPage() {
                         className="mt-0.5 flex flex-wrap items-center gap-3 text-xs"
                         style={{ color: T.textMuted }}
                       >
-                        <span className="flex items-center gap-1">
-                          <FolderOpen size={12} /> {m.project.title}
-                        </span>
                         <span>
                           {new Date(m.recordedAt).toLocaleString("uk-UA")}
                         </span>

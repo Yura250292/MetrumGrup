@@ -12,12 +12,6 @@ import {
 import { AudioPreview } from "../_components/audio-preview";
 import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
-type Project = {
-  id: string;
-  title: string;
-  slug: string;
-};
-
 type FolderOption = {
   id: string;
   name: string;
@@ -37,17 +31,12 @@ type Stage = "form" | "creating" | "uploading" | "triggering";
 export default function NewMeetingPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialProject = searchParams.get("projectId") || "";
   const initialFolder = searchParams.get("folderId") || "";
-
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loadingProjects, setLoadingProjects] = useState(true);
 
   const [folderOptions, setFolderOptions] = useState<FolderOption[]>([]);
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [projectId, setProjectId] = useState(initialProject);
   const [folderId, setFolderId] = useState<string>(initialFolder);
 
   const [pending, setPending] = useState<PendingAudio | null>(null);
@@ -77,24 +66,6 @@ export default function NewMeetingPage() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch("/api/admin/projects");
-        if (!res.ok) throw new Error("Не вдалося завантажити проєкти");
-        const data = await res.json();
-        setProjects(data.data || []);
-        if (!initialProject && data.data?.[0]) {
-          setProjectId(data.data[0].id);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Помилка");
-      } finally {
-        setLoadingProjects(false);
-      }
-    })();
-  }, [initialProject]);
-
-  useEffect(() => {
-    (async () => {
-      try {
         const res = await fetch("/api/admin/folders/tree?domain=MEETING");
         if (!res.ok) return;
         const data = await res.json();
@@ -119,7 +90,6 @@ export default function NewMeetingPage() {
     if (!pending) return;
     setError(null);
     try {
-      if (!projectId) throw new Error("Оберіть проєкт");
       const finalTitle = title.trim() || autoDefaultTitle();
 
       setStage("creating");
@@ -129,7 +99,6 @@ export default function NewMeetingPage() {
         body: JSON.stringify({
           title: finalTitle,
           description: description.trim() || null,
-          projectId,
           folderId: folderId || null,
         }),
       });
@@ -197,7 +166,6 @@ export default function NewMeetingPage() {
     resetRecording();
   }
 
-  const formValid = !!projectId;
   const busy = stage !== "form";
   const titlePlaceholder = autoDefaultTitle();
 
@@ -225,7 +193,7 @@ export default function NewMeetingPage() {
           {recState === "idle" && (
             <>
               <div className="my-3" />
-              <MeetingUploader onFile={handleFile} disabled={!formValid} />
+              <MeetingUploader onFile={handleFile} disabled={false} />
             </>
           )}
         </>
@@ -245,8 +213,7 @@ export default function NewMeetingPage() {
             <span>
               Деталі (необов'язково)
               <span className="ml-2 text-xs" style={{ color: T.textMuted }}>
-                {projects.find((p) => p.id === projectId)?.title || "проєкт не обрано"}
-                {title.trim() ? ` · ${title.trim()}` : ""}
+                {title.trim() || "AI назве сам"}
               </span>
             </span>
             {detailsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
@@ -273,33 +240,6 @@ export default function NewMeetingPage() {
                     border: `1px solid ${T.borderSoft}`,
                   }}
                 />
-              </div>
-
-              <div className="mb-3">
-                <label
-                  className="mb-1 block text-xs font-medium"
-                  style={{ color: T.textSecondary }}
-                >
-                  Проєкт *
-                </label>
-                <select
-                  value={projectId}
-                  onChange={(e) => setProjectId(e.target.value)}
-                  disabled={busy || loadingProjects}
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                >
-                  <option value="">— Оберіть проєкт —</option>
-                  {projects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.title}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div className="mb-3">

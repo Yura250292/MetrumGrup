@@ -12,8 +12,6 @@ type MeetingItem = {
   status: string;
   recordedAt: string;
   audioDurationMs: number | null;
-  projectId: string;
-  project: { id: string; title: string } | null;
   summary: string | null;
 };
 
@@ -133,14 +131,6 @@ export function MeetingsWidget() {
                         >
                           <Clock size={10} />
                           {formatDuration(m.audioDurationMs)}
-                        </span>
-                      )}
-                      {m.project && (
-                        <span
-                          className="truncate font-medium"
-                          style={{ color: T.textMuted }}
-                        >
-                          · {m.project.title}
                         </span>
                       )}
                     </span>
