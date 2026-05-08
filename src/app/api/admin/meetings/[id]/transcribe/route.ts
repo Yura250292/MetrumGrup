@@ -108,19 +108,19 @@ async function transcribeWithAssemblyAI(meeting: NonNullable<MeetingRow>) {
   const namePool = await collectNameHints();
   const wordBoost = namePool.slice(0, 50); // ліміт ~1000 boost-токенів сумарно
 
+  // AssemblyAI у 2026 депрекейтнули `speech_model` (single) — тепер `speech_models`
+  // як масив. SDK типи ще не оновлені, тож кастимо до Record.
   const transcript = await client.transcripts.transcribe({
     audio: audioInput,
-    speech_model: "universal",
+    speech_models: ["universal"],
     speaker_labels: true,
     language_detection: true,
     entity_detection: true,
     auto_chapters: true,
     auto_highlights: true,
-    // wordBoost зберігає правильне написання імен (Любовь Николаевна не
-    // ламається у «Кривом Ніколаєв»). До 1000 елементів сумарно.
     word_boost: wordBoost.length > 0 ? wordBoost : undefined,
     boost_param: "high",
-  });
+  } as unknown as Parameters<typeof client.transcripts.transcribe>[0]);
 
   if (transcript.status === "error") {
     throw new Error(transcript.error || "AssemblyAI повернув помилку");
