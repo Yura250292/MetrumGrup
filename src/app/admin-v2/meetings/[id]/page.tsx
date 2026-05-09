@@ -614,7 +614,13 @@ export default function MeetingDetailPage() {
       )}
 
       {activeTab === "transcript" && meeting.transcript && (
-        <TranscriptView transcript={meeting.transcript} />
+        <TranscriptView
+          transcript={meeting.transcript}
+          meetingId={id}
+          onSaved={async () => {
+            await refresh();
+          }}
+        />
       )}
 
       <MoveToFolderDialog
@@ -676,7 +682,154 @@ const SPEAKER_PALETTE = [
   "#14B8A6",
 ];
 
-function TranscriptView({ transcript }: { transcript: string }) {
+// Розбиває довгий блок тексту репліки на речення для гарного читання.
+// Розпізнає `.`, `!`, `?`, `…` як кінець речення. Зберігає пунктуацію.
+// Не ріже на абревіатурах (т.д., тис., грн. — не закінчуються на крапку
+// з пробілом + великою літерою у спікерських репліках).
+function splitIntoSentences(text: string): string[] {
+  if (!text) return [];
+  const sentences: string[] = [];
+  let buf = "";
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    buf += ch;
+    if (ch === "." || ch === "!" || ch === "?" || ch === "…") {
+      const next = text[i + 1];
+      // Кінець речення: за пунктуацією йде пробіл (далі — нове речення)
+      // або кінець рядка. Послідовність "..." або "?!" — захоплюємо повністю.
+      while (
+        i + 1 < text.length &&
+        (text[i + 1] === "." ||
+          text[i + 1] === "!" ||
+          text[i + 1] === "?" ||
+          text[i + 1] === "…")
+      ) {
+        i++;
+        buf += text[i];
+      }
+      if (!next || /\s/.test(text[i + 1] ?? "")) {
+        const trimmed = buf.trim();
+        if (trimmed) sentences.push(trimmed);
+        buf = "";
+      }
+    }
+  }
+  const tail = buf.trim();
+  if (tail) sentences.push(tail);
+  return sentences.length > 0 ? sentences : [text];
+}
+
+function TranscriptView({
+  transcript,
+  meetingId,
+  onSaved,
+}: {
+  transcript: string;
+  meetingId: string;
+  onSaved?: () => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(transcript);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Якщо транскрипт оновився ззовні (refresh) — синхронізуємо чернетку.
+  useEffect(() => {
+    if (!editing) setDraft(transcript);
+  }, [transcript, editing]);
+
+  async function save() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`/api/admin/meetings/${meetingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: draft }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося зберегти");
+      }
+      setEditing(false);
+      if (onSaved) await onSaved();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Помилка");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancel() {
+    setDraft(transcript);
+    setEditing(false);
+    setSaveError(null);
+  }
+
+  // Edit mode — суцільний textarea зі збереженням структури "Speaker X [time]: …"
+  if (editing) {
+    return (
+      <div
+        className="rounded-xl p-5"
+        style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
+      >
+        <div className="mb-3 flex items-center gap-2">
+          <span className="text-xs" style={{ color: T.textMuted }}>
+            Збережи лейбли спікерів («Speaker A [00:00]: …») — від цього
+            залежить розбивка по людях.
+          </span>
+        </div>
+        <textarea
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          className="w-full rounded-lg p-3 text-sm leading-relaxed outline-none"
+          style={{
+            background: T.panelElevated,
+            color: T.textPrimary,
+            border: `1px solid ${T.borderSoft}`,
+            minHeight: 400,
+            fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+          }}
+        />
+        {saveError && (
+          <div
+            className="mt-2 rounded-lg px-3 py-2 text-xs"
+            style={{ background: T.dangerSoft, color: T.danger }}
+          >
+            {saveError}
+          </div>
+        )}
+        <div className="mt-3 flex items-center gap-2">
+          <button
+            onClick={() => void save()}
+            disabled={saving}
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            style={{ background: T.success, color: "#fff" }}
+          >
+            {saving ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Check size={14} />
+            )}
+            Зберегти
+          </button>
+          <button
+            onClick={cancel}
+            disabled={saving}
+            className="rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+            style={{
+              background: T.panelElevated,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            Скасувати
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const blocks = transcript
     .split(/\n\s*\n/)
     .map((b) => b.trim())
@@ -693,24 +846,7 @@ function TranscriptView({ transcript }: { transcript: string }) {
     };
   });
 
-  // Якщо жодна репліка не розпізналась як спікер — рендеримо plain.
   const hasSpeakers = parsed.some((p) => p.kind === "speaker");
-  if (!hasSpeakers) {
-    return (
-      <div
-        className="whitespace-pre-wrap rounded-xl p-5 text-sm leading-relaxed"
-        style={{
-          background: T.panel,
-          border: `1px solid ${T.borderSoft}`,
-          color: T.textPrimary,
-        }}
-      >
-        {transcript}
-      </div>
-    );
-  }
-
-  // Стабільний колір на спікера.
   const speakerOrder = new Map<string, number>();
   for (const p of parsed) {
     if (p.kind === "speaker" && !speakerOrder.has(p.speaker)) {
@@ -727,45 +863,79 @@ function TranscriptView({ transcript }: { transcript: string }) {
         color: T.textPrimary,
       }}
     >
-      <div className="flex flex-col gap-3">
-        {parsed.map((p, idx) => {
-          if (p.kind === "raw") {
-            return (
-              <p key={idx} className="whitespace-pre-wrap">
-                {p.text}
-              </p>
-            );
-          }
-          const colorIdx = speakerOrder.get(p.speaker) ?? 0;
-          const color = SPEAKER_PALETTE[colorIdx % SPEAKER_PALETTE.length];
-          return (
-            <div key={idx} className="flex flex-col gap-1">
-              <div
-                className="flex items-center gap-2 text-[11px] font-bold tracking-wider"
-                style={{ color }}
-              >
-                <span
-                  className="inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5"
-                  style={{ background: color + "22", color }}
-                >
-                  Speaker {p.speaker}
-                </span>
-                {p.timestamp && (
-                  <span style={{ color: T.textMuted, fontWeight: 500 }}>
-                    {p.timestamp}
-                  </span>
-                )}
-              </div>
-              <p
-                className="whitespace-pre-wrap"
-                style={{ color: T.textPrimary }}
-              >
-                {p.text}
-              </p>
-            </div>
-          );
-        })}
+      <div className="mb-4 flex items-center justify-between">
+        <span className="text-xs" style={{ color: T.textMuted }}>
+          {hasSpeakers
+            ? `${speakerOrder.size} спікер${speakerOrder.size === 1 ? "" : speakerOrder.size < 5 ? "и" : "ів"} · ${parsed.length} реплік`
+            : "Транскрипт"}
+        </span>
+        <button
+          onClick={() => setEditing(true)}
+          className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition hover:brightness-105"
+          style={{
+            background: T.panelElevated,
+            color: T.textSecondary,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+          title="Відредагувати транскрипт — виправити імена, помилки, розставити розділові знаки"
+        >
+          <Pencil size={12} /> Редагувати
+        </button>
       </div>
+
+      {!hasSpeakers ? (
+        <p className="whitespace-pre-wrap leading-relaxed">{transcript}</p>
+      ) : (
+        <div className="flex flex-col gap-5">
+          {parsed.map((p, idx) => {
+            if (p.kind === "raw") {
+              return (
+                <p key={idx} className="whitespace-pre-wrap leading-relaxed">
+                  {p.text}
+                </p>
+              );
+            }
+            const colorIdx = speakerOrder.get(p.speaker) ?? 0;
+            const color = SPEAKER_PALETTE[colorIdx % SPEAKER_PALETTE.length];
+            const sentences = splitIntoSentences(p.text);
+            return (
+              <div key={idx} className="flex flex-col gap-1.5">
+                <div
+                  className="flex items-center gap-2 text-[11px] font-bold tracking-wider"
+                  style={{ color }}
+                >
+                  <span
+                    className="inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5"
+                    style={{ background: color + "22", color }}
+                  >
+                    Speaker {p.speaker}
+                  </span>
+                  {p.timestamp && (
+                    <span style={{ color: T.textMuted, fontWeight: 500 }}>
+                      {p.timestamp}
+                    </span>
+                  )}
+                </div>
+                <div
+                  className="flex flex-col gap-1 leading-relaxed"
+                  style={{
+                    color: T.textPrimary,
+                    paddingLeft: 8,
+                    borderLeft: `2px solid ${color}33`,
+                    marginLeft: 4,
+                  }}
+                >
+                  {sentences.map((s, si) => (
+                    <p key={si} className="leading-relaxed">
+                      {s}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
