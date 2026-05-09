@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  ChevronDown,
+  ChevronRight,
   ExternalLink,
   Loader2,
   Mail,
@@ -25,6 +27,27 @@ type Supplier = {
   outstanding: number;
 };
 
+type DebtByProject = {
+  projectId: string | null;
+  projectTitle: string | null;
+  projectSlug: string | null;
+  outstanding: number;
+  entryCount: number;
+};
+
+type DebtByMaterial = {
+  name: string;
+  outstanding: number;
+  count: number;
+};
+
+type SupplierDetail = {
+  outstandingByProject: DebtByProject[];
+  outstandingByMaterial: DebtByMaterial[];
+  /// Кількість зачеплених фактів (для info-плашки).
+  factsCount: number;
+};
+
 const PAY_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "FINANCIER"]);
 const CREATE_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"]);
 
@@ -45,6 +68,10 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Lazy-load drill-down: тримаємо кеш деталей по counterpartyId.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [details, setDetails] = useState<Map<string, SupplierDetail>>(new Map());
+  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -96,6 +123,35 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
     () => filtered.filter((c) => c.outstanding > 0).length,
     [filtered],
   );
+
+  async function toggleExpand(id: string) {
+    if (expandedId === id) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(id);
+    if (details.has(id)) return;
+    setLoadingDetailId(id);
+    try {
+      const res = await fetch(`/api/admin/financing/counterparties/${id}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      const j = await res.json();
+      const detail: SupplierDetail = {
+        outstandingByProject: j.outstandingByProject ?? [],
+        outstandingByMaterial: j.outstandingByMaterial ?? [],
+        factsCount: j.stats?.count ?? 0,
+      };
+      setDetails((prev) => {
+        const next = new Map(prev);
+        next.set(id, detail);
+        return next;
+      });
+    } finally {
+      setLoadingDetailId(null);
+    }
+  }
 
   async function submitCreate() {
     const name = newName.trim();
@@ -321,6 +377,7 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
                 className="text-[10px] font-bold uppercase tracking-wider"
                 style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
               >
+                <th className="w-8"></th>
                 <th className="px-4 py-3 text-left">Постачальник</th>
                 <th className="px-3 py-3 text-left">ЄДРПОУ</th>
                 <th className="px-3 py-3 text-left">Контакти</th>
@@ -331,88 +388,21 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
             <tbody>
               {filtered.map((c) => {
                 const hasDebt = c.outstanding > 0;
+                const isOpen = expandedId === c.id;
+                const detail = details.get(c.id);
+                const isLoadingDetail = loadingDetailId === c.id;
                 return (
-                  <tr
+                  <ExpandableRow
                     key={c.id}
-                    className="border-t"
-                    style={{
-                      borderColor: T.borderSoft,
-                      opacity: c.isActive ? 1 : 0.55,
-                    }}
-                  >
-                    <td className="px-4 py-2.5">
-                      <Link
-                        href={`/admin-v2/counterparties/${c.id}`}
-                        className="flex items-center gap-2 hover:underline"
-                        style={{ color: T.textPrimary }}
-                      >
-                        <Truck
-                          size={14}
-                          style={{
-                            color: hasDebt ? T.danger : T.textMuted,
-                          }}
-                        />
-                        <span className="font-medium">{c.name}</span>
-                      </Link>
-                    </td>
-                    <td
-                      className="px-3 py-2.5 text-[12px] tabular-nums"
-                      style={{ color: T.textSecondary }}
-                    >
-                      {c.edrpou || "—"}
-                    </td>
-                    <td
-                      className="px-3 py-2.5 text-[12px]"
-                      style={{ color: T.textSecondary }}
-                    >
-                      <div className="flex flex-col gap-0.5">
-                        {c.phone && (
-                          <span className="flex items-center gap-1">
-                            <Phone size={10} /> {c.phone}
-                          </span>
-                        )}
-                        {c.email && (
-                          <span className="flex items-center gap-1 truncate max-w-[180px]">
-                            <Mail size={10} /> {c.email}
-                          </span>
-                        )}
-                        {!c.phone && !c.email && "—"}
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-right tabular-nums">
-                      {hasDebt ? (
-                        <span
-                          className="font-bold"
-                          style={{ color: T.danger }}
-                        >
-                          {formatCurrency(c.outstanding)}
-                        </span>
-                      ) : (
-                        <span style={{ color: T.textMuted }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right whitespace-nowrap">
-                      {canPay && hasDebt && (
-                        <button
-                          onClick={() => setPayTarget(c)}
-                          className="rounded-md px-2.5 py-1 text-[11px] font-bold mr-1"
-                          style={{
-                            backgroundColor: T.accentPrimary,
-                            color: "#fff",
-                          }}
-                        >
-                          Оплатити
-                        </button>
-                      )}
-                      <Link
-                        href={`/admin-v2/counterparties/${c.id}`}
-                        className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
-                        title="Відкрити дос'є"
-                      >
-                        <ExternalLink size={13} style={{ color: T.accentPrimary }} />
-                      </Link>
-                    </td>
-                  </tr>
+                    supplier={c}
+                    hasDebt={hasDebt}
+                    isOpen={isOpen}
+                    detail={detail}
+                    isLoadingDetail={isLoadingDetail}
+                    canPay={canPay}
+                    onToggle={() => toggleExpand(c.id)}
+                    onPay={() => setPayTarget(c)}
+                  />
                 );
               })}
             </tbody>
@@ -434,6 +424,226 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
         />
       )}
     </div>
+  );
+}
+
+function ExpandableRow({
+  supplier,
+  hasDebt,
+  isOpen,
+  detail,
+  isLoadingDetail,
+  canPay,
+  onToggle,
+  onPay,
+}: {
+  supplier: Supplier;
+  hasDebt: boolean;
+  isOpen: boolean;
+  detail: SupplierDetail | undefined;
+  isLoadingDetail: boolean;
+  canPay: boolean;
+  onToggle: () => void;
+  onPay: () => void;
+}) {
+  const c = supplier;
+  return (
+    <>
+      <tr
+        className="border-t cursor-pointer transition hover:bg-black/[0.015]"
+        style={{
+          borderColor: T.borderSoft,
+          opacity: c.isActive ? 1 : 0.55,
+        }}
+        onClick={(e) => {
+          // не реагуємо на клік по ссилках/кнопках всередині рядка
+          const target = e.target as HTMLElement;
+          if (target.closest("a, button")) return;
+          onToggle();
+        }}
+      >
+        <td className="text-center align-middle">
+          {isOpen ? (
+            <ChevronDown size={14} style={{ color: T.textMuted, display: "inline" }} />
+          ) : (
+            <ChevronRight size={14} style={{ color: T.textMuted, display: "inline" }} />
+          )}
+        </td>
+        <td className="px-4 py-2.5">
+          <Link
+            href={`/admin-v2/counterparties/${c.id}`}
+            className="flex items-center gap-2 hover:underline"
+            style={{ color: T.textPrimary }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Truck size={14} style={{ color: hasDebt ? T.danger : T.textMuted }} />
+            <span className="font-medium">{c.name}</span>
+          </Link>
+        </td>
+        <td className="px-3 py-2.5 text-[12px] tabular-nums" style={{ color: T.textSecondary }}>
+          {c.edrpou || "—"}
+        </td>
+        <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+          <div className="flex flex-col gap-0.5">
+            {c.phone && (
+              <span className="flex items-center gap-1">
+                <Phone size={10} /> {c.phone}
+              </span>
+            )}
+            {c.email && (
+              <span className="flex items-center gap-1 truncate max-w-[180px]">
+                <Mail size={10} /> {c.email}
+              </span>
+            )}
+            {!c.phone && !c.email && "—"}
+          </div>
+        </td>
+        <td className="px-3 py-2.5 text-right tabular-nums">
+          {hasDebt ? (
+            <span className="font-bold" style={{ color: T.danger }}>
+              {formatCurrency(c.outstanding)}
+            </span>
+          ) : (
+            <span style={{ color: T.textMuted }}>—</span>
+          )}
+        </td>
+        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+          {canPay && hasDebt && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onPay();
+              }}
+              className="rounded-md px-2.5 py-1 text-[11px] font-bold mr-1"
+              style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+            >
+              Оплатити
+            </button>
+          )}
+          <Link
+            href={`/admin-v2/counterparties/${c.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
+            title="Відкрити повне дос'є"
+          >
+            <ExternalLink size={13} style={{ color: T.accentPrimary }} />
+          </Link>
+        </td>
+      </tr>
+      {isOpen && (
+        <tr style={{ borderColor: T.borderSoft }}>
+          <td colSpan={6} className="p-0">
+            <div
+              className="px-6 py-3 grid gap-3 sm:grid-cols-2"
+              style={{ backgroundColor: T.panelSoft }}
+            >
+              {/* Borg by project */}
+              <div>
+                <div
+                  className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
+                  style={{ color: T.textMuted }}
+                >
+                  Борг по проєктах
+                </div>
+                {isLoadingDetail ? (
+                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textMuted }}>
+                    <Loader2 size={12} className="animate-spin" /> Завантажуємо…
+                  </div>
+                ) : !detail ? (
+                  <div className="text-[11px]" style={{ color: T.textMuted }}>
+                    Немає даних
+                  </div>
+                ) : detail.outstandingByProject.length === 0 ? (
+                  <div className="text-[11px]" style={{ color: T.textMuted }}>
+                    Без активного боргу. Усі факти оплачені або заархівовані.
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {detail.outstandingByProject.map((d) => (
+                      <div
+                        key={d.projectId ?? "__none__"}
+                        className="flex items-center justify-between gap-2 px-2 py-1 rounded text-[12px]"
+                        style={{ backgroundColor: T.panel }}
+                      >
+                        {d.projectId && d.projectSlug ? (
+                          <Link
+                            href={`/admin-v2/projects/${d.projectSlug}`}
+                            className="truncate flex-1 hover:underline"
+                            style={{ color: T.accentPrimary }}
+                          >
+                            {d.projectTitle ?? "Проєкт"}
+                          </Link>
+                        ) : (
+                          <span className="truncate flex-1" style={{ color: T.textMuted }}>
+                            Без проєкту
+                          </span>
+                        )}
+                        <span className="text-[10px]" style={{ color: T.textMuted }}>
+                          {d.entryCount}×
+                        </span>
+                        <span
+                          className="tabular-nums font-semibold whitespace-nowrap"
+                          style={{ color: T.danger }}
+                        >
+                          {formatCurrency(d.outstanding)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Top materials */}
+              <div>
+                <div
+                  className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
+                  style={{ color: T.textMuted }}
+                >
+                  Топ матеріалів
+                </div>
+                {isLoadingDetail ? (
+                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textMuted }}>
+                    <Loader2 size={12} className="animate-spin" /> Завантажуємо…
+                  </div>
+                ) : !detail || detail.outstandingByMaterial.length === 0 ? (
+                  <div className="text-[11px]" style={{ color: T.textMuted }}>
+                    Немає даних
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {detail.outstandingByMaterial.slice(0, 8).map((m) => (
+                      <div
+                        key={m.name}
+                        className="flex items-center justify-between gap-2 px-2 py-1 rounded text-[12px]"
+                        style={{ backgroundColor: T.panel }}
+                      >
+                        <span className="truncate flex-1" style={{ color: T.textPrimary }}>
+                          {m.name}
+                        </span>
+                        <span className="text-[10px]" style={{ color: T.textMuted }}>
+                          {m.count}×
+                        </span>
+                        <span
+                          className="tabular-nums font-semibold whitespace-nowrap"
+                          style={{ color: T.danger }}
+                        >
+                          {formatCurrency(m.outstanding)}
+                        </span>
+                      </div>
+                    ))}
+                    {detail.outstandingByMaterial.length > 8 && (
+                      <div className="text-[10px] text-center" style={{ color: T.textMuted }}>
+                        + ще {detail.outstandingByMaterial.length - 8}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
