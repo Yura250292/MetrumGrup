@@ -92,8 +92,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Довідники",
     items: [
-      { href: "/admin-v2/catalogs", label: "Усі довідники", icon: Library, exact: true, pillBadge: { text: "NEW", color: "accent" } },
-      { href: "/admin-v2/catalogs/suppliers", label: "Постачальники: ціни", icon: Truck },
+      { href: "/admin-v2/catalogs", label: "Довідники", icon: Library, pillBadge: { text: "NEW", color: "accent" } },
     ],
   },
   {
