@@ -25,6 +25,7 @@ import {
   formatDuration,
   STATUS_LABELS,
   type Meeting,
+  type MeetingEntity,
   type MeetingTask,
 } from "../_components/types";
 import {
@@ -616,6 +617,7 @@ export default function MeetingDetailPage() {
       {activeTab === "transcript" && meeting.transcript && (
         <TranscriptView
           transcript={meeting.transcript}
+          entities={meeting.entities ?? []}
           meetingId={id}
           onSaved={async () => {
             await refresh();
@@ -719,12 +721,118 @@ function splitIntoSentences(text: string): string[] {
   return sentences.length > 0 ? sentences : [text];
 }
 
+// Підсвітка named entities в тексті. AssemblyAI повертає entities як
+// { entity_type, text, start, end }. Будуємо regex з текстів (longest-first)
+// і обертаємо матчі у span з кольоровим стилем за типом.
+type EntityStyle = { bg: string; fg: string; border?: string; label: string };
+
+function getEntityStyle(type: string): EntityStyle {
+  if (type === "person_name" || type === "person") {
+    return {
+      bg: "#3B5BFF15",
+      fg: "#3B5BFF",
+      border: "#3B5BFF",
+      label: "Особа",
+    };
+  }
+  if (
+    type === "organization" ||
+    type === "company" ||
+    type === "person_age"
+  ) {
+    return {
+      bg: "#A855F715",
+      fg: "#A855F7",
+      border: "#A855F7",
+      label: "Організація",
+    };
+  }
+  if (
+    type === "money_amount" ||
+    type === "monetary_value" ||
+    type === "money"
+  ) {
+    return { bg: "#16A34A20", fg: "#15803D", label: "Сума" };
+  }
+  if (type === "date" || type === "date_interval" || type === "time") {
+    return { bg: "#EA580C20", fg: "#C2410C", label: "Дата/час" };
+  }
+  if (type === "location" || type === "address" || type === "place") {
+    return { bg: "#0EA5E920", fg: "#0369A1", label: "Місце" };
+  }
+  if (type === "phone_number" || type === "email_address") {
+    return { bg: "#14B8A620", fg: "#0F766E", label: "Контакт" };
+  }
+  if (type === "number" || type === "percentage") {
+    return { bg: "#6B72801A", fg: "#374151", label: "Число" };
+  }
+  return { bg: "#6B72801A", fg: "#374151", label: type };
+}
+
+// Бере шматок тексту і повертає React-вузли з підсвіченими ентіті.
+function highlightEntities(
+  text: string,
+  entities: MeetingEntity[],
+): React.ReactNode {
+  if (!entities || entities.length === 0) return text;
+
+  // Унікальні (text, type) пари; longest-first щоб «Любовь Николаевна»
+  // матчилась раніше ніж «Любовь».
+  const dedup = new Map<string, string>();
+  for (const e of entities) {
+    const t = (e.text ?? "").trim();
+    const tp = (e.entity_type ?? "").trim();
+    if (!t || !tp) continue;
+    const key = t.toLowerCase();
+    if (!dedup.has(key)) dedup.set(key, tp);
+  }
+  if (dedup.size === 0) return text;
+
+  const sorted = Array.from(dedup.keys()).sort((a, b) => b.length - a.length);
+  const escaped = sorted.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const re = new RegExp(`(${escaped.join("|")})`, "gi");
+
+  const parts: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let match: RegExpExecArray | null;
+  re.lastIndex = 0;
+  while ((match = re.exec(text)) !== null) {
+    if (match.index > lastIdx) {
+      parts.push(text.slice(lastIdx, match.index));
+    }
+    const matched = match[0];
+    const type = dedup.get(matched.toLowerCase()) ?? "";
+    const style = getEntityStyle(type);
+    parts.push(
+      <mark
+        key={`${match.index}-${matched}`}
+        className="rounded-[3px] px-1 font-medium"
+        style={{
+          background: style.bg,
+          color: style.fg,
+          ...(style.border
+            ? { boxShadow: `inset 0 -1px 0 ${style.border}33` }
+            : {}),
+        }}
+        title={style.label}
+      >
+        {matched}
+      </mark>,
+    );
+    lastIdx = match.index + matched.length;
+  }
+  if (lastIdx < text.length) parts.push(text.slice(lastIdx));
+  return parts;
+}
+
 function TranscriptView({
   transcript,
+  entities,
   meetingId,
   onSaved,
 }: {
   transcript: string;
+  entities: MeetingEntity[];
   meetingId: string;
   onSaved?: () => void | Promise<void>;
 }) {
@@ -884,14 +992,16 @@ function TranscriptView({
       </div>
 
       {!hasSpeakers ? (
-        <p className="whitespace-pre-wrap leading-relaxed">{transcript}</p>
+        <p className="whitespace-pre-wrap leading-relaxed">
+          {highlightEntities(transcript, entities)}
+        </p>
       ) : (
         <div className="flex flex-col gap-5">
           {parsed.map((p, idx) => {
             if (p.kind === "raw") {
               return (
                 <p key={idx} className="whitespace-pre-wrap leading-relaxed">
-                  {p.text}
+                  {highlightEntities(p.text, entities)}
                 </p>
               );
             }
@@ -927,7 +1037,7 @@ function TranscriptView({
                 >
                   {sentences.map((s, si) => (
                     <p key={si} className="leading-relaxed">
-                      {s}
+                      {highlightEntities(s, entities)}
                     </p>
                   ))}
                 </div>
