@@ -26,6 +26,7 @@ import {
   STATUS_LABELS,
   type Meeting,
   type MeetingEntity,
+  type MeetingSpeaker,
   type MeetingTask,
 } from "../_components/types";
 import {
@@ -618,6 +619,7 @@ export default function MeetingDetailPage() {
         <TranscriptView
           transcript={meeting.transcript}
           entities={meeting.entities ?? []}
+          speakers={meeting.structured?.speakers ?? []}
           meetingId={id}
           onSaved={async () => {
             await refresh();
@@ -828,14 +830,23 @@ function highlightEntities(
 function TranscriptView({
   transcript,
   entities,
+  speakers,
   meetingId,
   onSaved,
 }: {
   transcript: string;
   entities: MeetingEntity[];
+  speakers: MeetingSpeaker[];
   meetingId: string;
   onSaved?: () => void | Promise<void>;
 }) {
+  // Мапа лейбл -> ідентифіковане імʼя/роль
+  const speakerNameByLabel = new Map<string, string>();
+  for (const s of speakers) {
+    if (s.label && s.guessedName) {
+      speakerNameByLabel.set(s.label, s.guessedName);
+    }
+  }
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(transcript);
   const [saving, setSaving] = useState(false);
@@ -1018,7 +1029,7 @@ function TranscriptView({
                     className="inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5"
                     style={{ background: color + "22", color }}
                   >
-                    Speaker {p.speaker}
+                    {speakerNameByLabel.get(p.speaker) ?? `Speaker ${p.speaker}`}
                   </span>
                   {p.timestamp && (
                     <span style={{ color: T.textMuted, fontWeight: 500 }}>

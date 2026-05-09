@@ -19,6 +19,8 @@ import {
   Pencil,
   Check,
   X,
+  ListOrdered,
+  BookOpenText,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type {
@@ -334,6 +336,65 @@ export function SummaryView({
         </Card>
       )}
 
+      {data.actionPlan && data.actionPlan.length > 0 && (
+        <Card
+          icon={<ListOrdered size={18} />}
+          title="Покроковий план"
+          color={T.indigo}
+          tint={T.indigoSoft}
+        >
+          <ol className="flex flex-col gap-3">
+            {data.actionPlan
+              .slice()
+              .sort((a, b) => (a.step ?? 0) - (b.step ?? 0))
+              .map((s, i) => (
+                <li
+                  key={i}
+                  className="rounded-lg p-3"
+                  style={{ background: T.panelElevated }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="flex h-6 min-w-6 flex-shrink-0 items-center justify-center rounded-md text-xs font-bold"
+                      style={{ background: T.indigoSoft, color: T.indigo }}
+                    >
+                      {s.step ?? i + 1}
+                    </span>
+                    <div className="flex flex-col gap-1">
+                      <p
+                        className="text-sm font-semibold leading-snug"
+                        style={{ color: T.textPrimary }}
+                      >
+                        {s.title}
+                      </p>
+                      {s.detail && (
+                        <p
+                          className="text-[12px] leading-relaxed"
+                          style={{ color: T.textSecondary }}
+                        >
+                          {s.detail}
+                        </p>
+                      )}
+                      {s.owner && (
+                        <span
+                          className="mt-0.5 inline-flex w-fit rounded-md px-1.5 py-0.5 text-[10px] font-bold tracking-wider"
+                          style={{
+                            background: T.panel,
+                            color: T.textMuted,
+                            border: `1px solid ${T.borderSoft}`,
+                          }}
+                        >
+                          {s.owner}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+          </ol>
+        </Card>
+      )}
+
       {data.nextSteps?.length > 0 && (
         <Card icon={<ArrowRight size={18} />} title="Наступні кроки" color={T.teal} tint={T.tealSoft}>
           <BulletList items={data.nextSteps} />
@@ -343,6 +404,46 @@ export function SummaryView({
       {data.openQuestions?.length > 0 && (
         <Card icon={<HelpCircle size={18} />} title="Невирішені питання" color={T.amber} tint={T.amberSoft}>
           <BulletList items={data.openQuestions} />
+        </Card>
+      )}
+
+      {data.glossary && data.glossary.length > 0 && (
+        <Card
+          icon={<BookOpenText size={18} />}
+          title="Глосарій термінів"
+          color={T.sky}
+          tint={T.skySoft}
+        >
+          <div className="flex flex-col gap-2.5">
+            {data.glossary.map((g, i) => (
+              <div
+                key={i}
+                className="rounded-lg p-3"
+                style={{ background: T.panelElevated }}
+              >
+                <p
+                  className="text-sm font-bold"
+                  style={{ color: T.sky }}
+                >
+                  {g.term}
+                </p>
+                <p
+                  className="mt-1 text-[12px] leading-relaxed"
+                  style={{ color: T.textPrimary }}
+                >
+                  {g.definition}
+                </p>
+                {g.contextInMeeting && (
+                  <p
+                    className="mt-1.5 text-[11px] italic leading-relaxed"
+                    style={{ color: T.textMuted }}
+                  >
+                    У цій нараді: {g.contextInMeeting}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         </Card>
       )}
     </div>

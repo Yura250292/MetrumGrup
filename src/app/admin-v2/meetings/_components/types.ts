@@ -38,6 +38,19 @@ export type MeetingProposedSolution = {
   relatedTo: string | null;
 };
 
+export type MeetingActionStep = {
+  step: number;
+  title: string;
+  detail: string;
+  owner: string | null;
+};
+
+export type MeetingGlossaryTerm = {
+  term: string;
+  definition: string;
+  contextInMeeting: string | null;
+};
+
 export type MeetingStructured = {
   suggestedTitle?: string;
   summary: string;
@@ -50,8 +63,10 @@ export type MeetingStructured = {
   tasks: MeetingTask[];
   risks?: string[];
   proposedSolutions?: MeetingProposedSolution[];
+  actionPlan?: MeetingActionStep[];
   nextSteps: string[];
   openQuestions: string[];
+  glossary?: MeetingGlossaryTerm[];
 };
 
 export type MeetingListItem = {
