@@ -4,8 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-import { ChevronLeft, Menu, LogOut, Settings } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ChevronDown, ChevronLeft, ChevronRight, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -29,11 +29,51 @@ type SidebarProps = {
   activeFirmId?: string | null;
 };
 
+const COLLAPSED_GROUPS_KEY = "admin-v2:sidebar:collapsed-groups";
+
+function loadCollapsedGroups(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_GROUPS_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? new Set(arr.filter((x) => typeof x === "string")) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function saveCollapsedGroups(set: Set<string>) {
+  try {
+    window.localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...set]));
+  } catch {
+    // ignore (private mode / quota)
+  }
+}
+
 export function Sidebar({ activeFirmId }: SidebarProps = {}) {
   const pathname = usePathname();
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const unreadCount = useUnreadChatCount();
+  const reduceMotion = useReducedMotion();
+
+  // Згорнуті групи — set їх labels. localStorage persisted.
+  // Hydration-safe: на SSR порожній set, на client — підвантажуємо в useEffect.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setCollapsedGroups(loadCollapsedGroups());
+  }, []);
+
+  function toggleGroup(label: string) {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      saveCollapsedGroups(next);
+      return next;
+    });
+  }
   // Активна роль = роль користувача з урахуванням контексту поточної фірми.
   // shymilo93 на Metrum Group → HR; на Metrum Studio → SUPER_ADMIN.
   // Меню фільтрується за активною роллю (а не базовою).
@@ -112,17 +152,66 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
         {NAV_GROUPS.map((group) => {
           const visible = group.items.filter((it) => isItemVisibleForRole(it, role));
           if (visible.length === 0) return null;
+          const hasActiveChild = visible.some((it) =>
+            isItemActive(it.href, it.exact, pathname),
+          );
+          // Group is open by default. Closed via user click → localStorage.
+          // Якщо в групі є active item — force-open щоб юзер бачив де він.
+          const isOpen =
+            collapsed || !collapsedGroups.has(group.label) || hasActiveChild;
           return (
             <div key={group.label} className="mb-3.5">
               {!collapsed && (
-                <p
-                  className="mb-0.5 px-3 text-[10.5px] font-semibold uppercase"
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.label)}
+                  className="w-full mb-0.5 px-3 py-1 flex items-center gap-1.5 text-[10.5px] font-semibold uppercase rounded transition-colors hover:bg-[var(--t-panel-el)]"
                   style={{ color: T.textMuted, letterSpacing: "0.10em" }}
+                  aria-expanded={isOpen}
+                  aria-controls={`nav-group-${group.label}`}
                 >
-                  {group.label}
-                </p>
+                  <motion.span
+                    initial={false}
+                    animate={{ rotate: isOpen ? 0 : -90 }}
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : { type: "spring", stiffness: 380, damping: 30 }
+                    }
+                    style={{ display: "inline-flex", originX: 0.5, originY: 0.5 }}
+                  >
+                    <ChevronDown size={10} style={{ color: T.textMuted }} />
+                  </motion.span>
+                  <span className="flex-1 text-left">{group.label}</span>
+                </button>
               )}
-              <div className="flex flex-col gap-px px-2">
+              <AnimatePresence initial={false}>
+                {isOpen && (
+                  <motion.div
+                    key="group-body"
+                    id={`nav-group-${group.label}`}
+                    initial={
+                      reduceMotion
+                        ? { height: "auto", opacity: 1 }
+                        : { height: 0, opacity: 0 }
+                    }
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={
+                      reduceMotion
+                        ? { height: 0, opacity: 0 }
+                        : { height: 0, opacity: 0 }
+                    }
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : {
+                            height: { type: "spring", stiffness: 380, damping: 32, mass: 0.6 },
+                            opacity: { duration: 0.15 },
+                          }
+                    }
+                    style={{ overflow: "hidden" }}
+                  >
+                    <div className="flex flex-col gap-px px-2">
                 {visible.map((item) => {
                   const active = isItemActive(item.href, item.exact, pathname);
                   const badge = item.showUnreadBadge ? unreadCount : 0;
@@ -190,7 +279,10 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
                     </Link>
                   );
                 })}
-              </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
