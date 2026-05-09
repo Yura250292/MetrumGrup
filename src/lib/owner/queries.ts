@@ -16,57 +16,202 @@ function firmWhere(firmId: string | null): FirmFilter {
 }
 
 export interface DashboardKpis {
-  /** Загальний бюджет = сума PLAN income (доходи). */
+  /** Плановий дохід — сума PLAN income. */
   planIncome: number;
-  /** Загальні планові витрати = сума PLAN expense. */
+  /** Планові витрати — сума PLAN expense. */
   planExpense: number;
-  /** Фактичні доходи = FACT income. */
+  /** Фактичні доходи — FACT income. */
   factIncome: number;
-  /** Фактичні витрати = FACT expense. */
+  /** Фактичні витрати — FACT expense. */
   factExpense: number;
-  /** Кількість активних проектів у firm scope. */
+  /** Заборгованість постачальникам — сума FACT EXPENSE WHERE status != PAID. */
+  totalDebt: number;
+  /** Кількість постачальників з боргом. */
+  debtorCount: number;
+  /** Кількість активних проектів. */
   activeProjects: number;
-  /** Кількість foreman звітів у статусі PENDING_APPROVAL. */
+  /** Кількість foreman звітів PENDING_APPROVAL. */
   pendingForemanReports: number;
 }
 
 export async function getDashboardKpis(firmId: string | null): Promise<DashboardKpis> {
   const where = firmWhere(firmId);
 
-  const [planIncome, planExpense, factIncome, factExpense, activeProjects, pendingForemanReports] =
-    await Promise.all([
-      prisma.financeEntry.aggregate({
-        where: { ...where, kind: "PLAN", type: "INCOME", isArchived: false },
-        _sum: { amount: true },
-      }),
-      prisma.financeEntry.aggregate({
-        where: { ...where, kind: "PLAN", type: "EXPENSE", isArchived: false },
-        _sum: { amount: true },
-      }),
-      prisma.financeEntry.aggregate({
-        where: { ...where, kind: "FACT", type: "INCOME", isArchived: false },
-        _sum: { amount: true },
-      }),
-      prisma.financeEntry.aggregate({
-        where: { ...where, kind: "FACT", type: "EXPENSE", isArchived: false },
-        _sum: { amount: true },
-      }),
-      prisma.project.count({
-        where: { ...where, status: "ACTIVE" },
-      }),
-      prisma.foremanReport.count({
-        where: { ...where, status: "PENDING_APPROVAL" },
-      }),
-    ]);
+  const [
+    planIncome,
+    planExpense,
+    factIncome,
+    factExpense,
+    debtAgg,
+    debtorIds,
+    activeProjects,
+    pendingForemanReports,
+  ] = await Promise.all([
+    prisma.financeEntry.aggregate({
+      where: { ...where, kind: "PLAN", type: "INCOME", isArchived: false },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.aggregate({
+      where: { ...where, kind: "PLAN", type: "EXPENSE", isArchived: false },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.aggregate({
+      where: { ...where, kind: "FACT", type: "INCOME", isArchived: false },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.aggregate({
+      where: { ...where, kind: "FACT", type: "EXPENSE", isArchived: false },
+      _sum: { amount: true },
+    }),
+    // Заборгованість: FACT EXPENSE з контрагентом, що НЕ позначено як PAID
+    prisma.financeEntry.aggregate({
+      where: {
+        ...where,
+        kind: "FACT",
+        type: "EXPENSE",
+        isArchived: false,
+        status: { not: "PAID" },
+        counterpartyId: { not: null },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.financeEntry.findMany({
+      where: {
+        ...where,
+        kind: "FACT",
+        type: "EXPENSE",
+        isArchived: false,
+        status: { not: "PAID" },
+        counterpartyId: { not: null },
+      },
+      select: { counterpartyId: true },
+      distinct: ["counterpartyId"],
+    }),
+    prisma.project.count({
+      where: { ...where, status: "ACTIVE" },
+    }),
+    prisma.foremanReport.count({
+      where: { ...where, status: "PENDING_APPROVAL" },
+    }),
+  ]);
 
   return {
     planIncome: Number(planIncome._sum.amount ?? 0),
     planExpense: Number(planExpense._sum.amount ?? 0),
     factIncome: Number(factIncome._sum.amount ?? 0),
     factExpense: Number(factExpense._sum.amount ?? 0),
+    totalDebt: Number(debtAgg._sum.amount ?? 0),
+    debtorCount: debtorIds.length,
     activeProjects,
     pendingForemanReports,
   };
+}
+
+export interface SupplierDebtRow {
+  counterpartyId: string;
+  name: string;
+  totalDebt: number;
+  unpaidEntriesCount: number;
+  oldestUnpaidAt: string | null;
+  lastPaidAt: string | null;
+  /** Останній проект де є борг — для контексту. */
+  lastProjectTitle: string | null;
+}
+
+/**
+ * Повертає список постачальників з заборгованістю, відсортовано за сумою боргу.
+ * Для кожного: загальна сума, кількість неоплачених записів, найдавніший
+ * неоплачений запис, остання оплата (PAID), останній проект з боргом.
+ */
+export async function getSupplierDebt(
+  firmId: string | null,
+  limit = 50,
+): Promise<SupplierDebtRow[]> {
+  const where = firmWhere(firmId);
+
+  // Aggregate unpaid debts grouped by counterparty
+  const grouped = await prisma.financeEntry.groupBy({
+    by: ["counterpartyId"],
+    where: {
+      ...where,
+      kind: "FACT",
+      type: "EXPENSE",
+      isArchived: false,
+      status: { not: "PAID" },
+      counterpartyId: { not: null },
+    },
+    _sum: { amount: true },
+    _count: { _all: true },
+    _min: { occurredAt: true },
+  });
+
+  if (grouped.length === 0) return [];
+
+  // Завантажуємо контрагентів + остання оплата + останній проект (паралельно)
+  const counterpartyIds = grouped
+    .map((g) => g.counterpartyId)
+    .filter((id): id is string => !!id);
+
+  const [counterparties, lastPayments, lastProjects] = await Promise.all([
+    prisma.counterparty.findMany({
+      where: { id: { in: counterpartyIds } },
+      select: { id: true, name: true, displayName: true },
+    }),
+    // Остання PAID операція по кожному counterparty
+    prisma.financeEntry.findMany({
+      where: {
+        ...where,
+        kind: "FACT",
+        type: "EXPENSE",
+        status: "PAID",
+        counterpartyId: { in: counterpartyIds },
+      },
+      orderBy: { paidAt: "desc" },
+      distinct: ["counterpartyId"],
+      select: { counterpartyId: true, paidAt: true },
+    }),
+    // Останній проект з неоплаченим записом по кожному counterparty
+    prisma.financeEntry.findMany({
+      where: {
+        ...where,
+        kind: "FACT",
+        type: "EXPENSE",
+        status: { not: "PAID" },
+        counterpartyId: { in: counterpartyIds },
+      },
+      orderBy: { occurredAt: "desc" },
+      distinct: ["counterpartyId"],
+      select: {
+        counterpartyId: true,
+        project: { select: { title: true } },
+      },
+    }),
+  ]);
+
+  const cpMap = new Map(
+    counterparties.map((c) => [c.id, c.displayName ?? c.name]),
+  );
+  const lastPaidMap = new Map(
+    lastPayments.map((p) => [p.counterpartyId, p.paidAt?.toISOString() ?? null]),
+  );
+  const lastProjectMap = new Map(
+    lastProjects.map((lp) => [lp.counterpartyId, lp.project?.title ?? null]),
+  );
+
+  const rows: SupplierDebtRow[] = grouped
+    .filter((g) => g.counterpartyId)
+    .map((g) => ({
+      counterpartyId: g.counterpartyId as string,
+      name: cpMap.get(g.counterpartyId as string) ?? "—",
+      totalDebt: Number(g._sum.amount ?? 0),
+      unpaidEntriesCount: g._count._all,
+      oldestUnpaidAt: g._min.occurredAt?.toISOString() ?? null,
+      lastPaidAt: lastPaidMap.get(g.counterpartyId) ?? null,
+      lastProjectTitle: lastProjectMap.get(g.counterpartyId) ?? null,
+    }));
+
+  rows.sort((a, b) => b.totalDebt - a.totalDebt);
+  return rows.slice(0, limit);
 }
 
 export interface ProjectFinanceRow {

@@ -2,7 +2,7 @@ import { auth } from "@/lib/auth";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getDashboardKpis, getProjectsFinanceOverview } from "@/lib/owner/queries";
 import { OwnerShell } from "./_components/owner-shell";
-import { KpiGrid } from "./_components/kpi-grid";
+import { KpiSection } from "./_components/kpi-section";
 import { ProjectsRows } from "./_components/projects-rows";
 import { OwnerHomeActions } from "./_components/home-actions";
 import { CollapsibleSection } from "./_components/collapsible-section";
@@ -31,7 +31,7 @@ export default async function OwnerHomePage() {
           <span className="text-xs text-zinc-500">· Дашборд директора</span>
         </div>
 
-        <KpiGrid kpis={kpis} />
+        <KpiSection kpis={kpis} />
 
         <OwnerHomeActions />
 
