@@ -34,6 +34,8 @@ const PROMPT = `Це зображення з робочої Telegram-групи 
   "type": "expense_table" | "expense_total_only" | "non_expense" | "unclear",
   "summary": string,        // короткий опис того що видно (для description запису)
   "totalAmount": число або null,  // якщо є фінальна сума ("Все разом", "Total", "Сума")
+  "merchantName": string або null, // ШАПКА ЧЕКА: "ТОВ Будхата", "Епіцентр", "ФОП Петренко"
+  "merchantTaxId": string або null, // ЄДРПОУ/РНОКПП якщо чітко вказано
   "items": [               // окремі позиції — лише для expense_table
     {
       "costType": "MATERIAL" | "LABOR",
@@ -49,6 +51,21 @@ const PROMPT = `Це зображення з робочої Telegram-групи 
     }
   ]
 }
+
+ПРАВИЛО merchantName / merchantTaxId (КРИТИЧНО для довідника постачальників):
+- Шапка чека/накладної містить назву магазину/фірми/ФОП — ВИТЯГНИ ТІЛЬКИ КОРОТКУ НАЗВУ в merchantName.
+- merchantName має бути ≤80 символів. БЕЗ адреси, телефону, ІПН, реквізитів.
+  Лише форма + ім'я: "ФОП Іваненко О.І.", "ТОВ Будхата", "Епіцентр".
+- Скорочуй форми:
+    "Фізична особа - підприємець" / "Фізичн особа - підприємець" → "ФОП"
+    "Товариство з обмеженою відповідальністю" → "ТОВ"
+    "Приватне підприємство" → "ПП"
+- merchantTaxId — ОКРЕМО, 8-10 цифр (ЄДРПОУ для юрособи / РНОКПП-ІПН для ФОП).
+  Шукай маркери: "ІПН", "РНОКПП", "ЄДРПОУ", "Код" + 8-10 цифр.
+- Якщо AI бачить "ФОП Іваненко, ІПН 1234567890, м.Львів" → merchantName="ФОП Іваненко", merchantTaxId="1234567890".
+- Не плутай назву постачальника з: брендами товарів, назвами проєкту, адресою.
+- Якщо це рукописний обрахунок без шапки → merchantName=null.
+- Якщо нечітко — null. Краще null, ніж вгадати неправильно.
 
 ПРАВИЛО apartmentNumber:
 - Якщо в чеку/обрахунку є явна згадка квартири ("192 кв", "Кв 154", "квартира 49") — це номер квартири на яку йде позиція. Зведені чеки на весь поверх — типовий випадок ("плитка: 154 кв — 3000, 159 кв — 3000").
@@ -80,6 +97,8 @@ const ResponseSchema = z.object({
   type: z.enum(["expense_table", "expense_total_only", "non_expense", "unclear"]),
   summary: z.string().default(""),
   totalAmount: z.number().nullable().optional(),
+  merchantName: z.string().trim().min(1).max(200).nullable().optional(),
+  merchantTaxId: z.string().trim().max(50).nullable().optional(),
   items: z.array(ItemSchema).default([]),
 });
 
@@ -91,6 +110,10 @@ export type ImageClassification = {
   /// Якщо AI помітив тільки фінальну суму без позицій — entries містить
   /// один summary item на цю суму (зручно для існуючого pipeline).
   totalAmount: number | null;
+  /// Назва постачальника з шапки чека (для resolveSupplier).
+  merchantName: string | null;
+  /// ЄДРПОУ/РНОКПП якщо чітко вказано (упевнений match).
+  merchantTaxId: string | null;
 };
 
 let cachedClient: GoogleGenerativeAI | null = null;
@@ -114,6 +137,15 @@ export async function classifyExpenseImage(
     generationConfig: { responseMimeType: "application/json", temperature: 0.1 },
   });
 
+  const fallback: ImageClassification = {
+    type: "unclear",
+    summary: "",
+    items: [],
+    totalAmount: null,
+    merchantName: null,
+    merchantTaxId: null,
+  };
+
   let raw: string;
   try {
     const result = await model.generateContent([
@@ -123,20 +155,23 @@ export async function classifyExpenseImage(
     raw = result.response.text();
   } catch (err) {
     console.warn("[classify-image] Gemini error:", err instanceof Error ? err.message : err);
-    return { type: "unclear", summary: "", items: [], totalAmount: null };
+    return fallback;
   }
 
   const parsed = safeParseJson<unknown>(raw);
   if (!parsed.ok) {
     console.warn("[classify-image] JSON parse failed:", parsed.error);
-    return { type: "unclear", summary: "", items: [], totalAmount: null };
+    return fallback;
   }
   const validated = ResponseSchema.safeParse(parsed.value);
   if (!validated.success) {
     console.warn("[classify-image] schema invalid:", validated.error.issues);
-    return { type: "unclear", summary: "", items: [], totalAmount: null };
+    return fallback;
   }
   const data = validated.data;
+
+  const merchantName = data.merchantName ?? null;
+  const merchantTaxId = data.merchantTaxId ?? null;
 
   // Build items[] for total-only case
   if (data.type === "expense_total_only" && data.totalAmount && data.totalAmount > 0) {
@@ -144,6 +179,8 @@ export async function classifyExpenseImage(
       type: data.type,
       summary: data.summary,
       totalAmount: data.totalAmount,
+      merchantName,
+      merchantTaxId,
       items: [
         {
           costType: "LABOR",
@@ -155,19 +192,26 @@ export async function classifyExpenseImage(
           currency: "UAH",
           confidence: 0.6,
           rawLine: data.summary,
+          supplier: merchantName,
         },
       ],
     };
   }
 
-  // Filter low-confidence items in expense_table mode
+  // Filter low-confidence items in expense_table mode + propagate supplier on each.
   const items =
-    data.type === "expense_table" ? data.items.filter((i) => i.confidence >= 0.5) : [];
+    data.type === "expense_table"
+      ? data.items
+          .filter((i) => i.confidence >= 0.5)
+          .map((i) => ({ ...i, supplier: merchantName }))
+      : [];
 
   return {
     type: data.type,
     summary: data.summary,
     totalAmount: data.totalAmount ?? null,
+    merchantName,
+    merchantTaxId,
     items,
   };
 }
