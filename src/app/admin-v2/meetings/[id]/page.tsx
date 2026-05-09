@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   Loader2,
@@ -827,6 +829,114 @@ function highlightEntities(
   return parts;
 }
 
+// Стилізація markdown-елементів узгоджена з токенами дизайну. Підтримує
+// заголовки, списки, bold/italic, code, hr, blockquote, links.
+const MD_COMPONENTS = {
+  h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h1
+      {...props}
+      className="mt-5 mb-3 text-xl font-bold"
+      style={{ color: T.textPrimary }}
+    />
+  ),
+  h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h2
+      {...props}
+      className="mt-5 mb-2 text-lg font-bold"
+      style={{ color: T.textPrimary }}
+    />
+  ),
+  h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h3
+      {...props}
+      className="mt-4 mb-2 text-base font-bold"
+      style={{ color: T.textPrimary }}
+    />
+  ),
+  h4: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
+    <h4
+      {...props}
+      className="mt-3 mb-2 text-sm font-bold"
+      style={{ color: T.textPrimary }}
+    />
+  ),
+  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
+    <p {...props} className="my-2 leading-relaxed" />
+  ),
+  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
+    <ul {...props} className="my-2 list-disc pl-6 space-y-1" />
+  ),
+  ol: (props: React.OlHTMLAttributes<HTMLOListElement>) => (
+    <ol {...props} className="my-2 list-decimal pl-6 space-y-1" />
+  ),
+  li: (props: React.HTMLAttributes<HTMLLIElement>) => (
+    <li {...props} className="leading-relaxed" />
+  ),
+  strong: (props: React.HTMLAttributes<HTMLElement>) => (
+    <strong
+      {...props}
+      style={{ color: T.textPrimary, fontWeight: 700 }}
+    />
+  ),
+  em: (props: React.HTMLAttributes<HTMLElement>) => (
+    <em {...props} style={{ color: T.textSecondary }} />
+  ),
+  hr: () => (
+    <hr
+      className="my-5 border-0"
+      style={{ borderTop: `1px solid ${T.borderSoft}` }}
+    />
+  ),
+  blockquote: (props: React.BlockquoteHTMLAttributes<HTMLQuoteElement>) => (
+    <blockquote
+      {...props}
+      className="my-3 pl-4 italic"
+      style={{
+        borderLeft: `3px solid ${T.borderStrong}`,
+        color: T.textSecondary,
+      }}
+    />
+  ),
+  code: (props: React.HTMLAttributes<HTMLElement>) => (
+    <code
+      {...props}
+      className="rounded px-1 py-0.5 text-[12px]"
+      style={{
+        background: T.panelElevated,
+        color: T.textPrimary,
+        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      }}
+    />
+  ),
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a
+      {...props}
+      target="_blank"
+      rel="noreferrer noopener"
+      className="underline"
+      style={{ color: T.accentPrimary }}
+    />
+  ),
+};
+
+// Чи текст виглядає як markdown — просте евристичне виявлення:
+// - заголовки ## або ###
+// - горизонтальна лінія ---
+// - bold **текст**
+// - bullet/нумерований список з кількома елементами
+// Якщо так — рендеримо через ReactMarkdown (юзер свідомо склав текст).
+function looksLikeMarkdown(text: string): boolean {
+  if (!text) return false;
+  if (/^|\n\s*#{1,6}\s+/.test(text)) return true;
+  if (/\n\s*---\s*\n/.test(text)) return true;
+  if (/\*\*[^*\n]+\*\*/.test(text)) return true;
+  // 3+ markdown bullets/items
+  const bulletLines = (text.match(/^\s*[-*]\s+/gm) ?? []).length;
+  const numberedLines = (text.match(/^\s*\d+\.\s+/gm) ?? []).length;
+  if (bulletLines >= 3 || numberedLines >= 3) return true;
+  return false;
+}
+
 function TranscriptView({
   transcript,
   entities,
@@ -1002,7 +1112,16 @@ function TranscriptView({
         </button>
       </div>
 
-      {!hasSpeakers ? (
+      {looksLikeMarkdown(transcript) ? (
+        <div className="text-sm leading-relaxed">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            components={MD_COMPONENTS}
+          >
+            {transcript}
+          </ReactMarkdown>
+        </div>
+      ) : !hasSpeakers ? (
         <p className="whitespace-pre-wrap leading-relaxed">
           {highlightEntities(transcript, entities)}
         </p>
