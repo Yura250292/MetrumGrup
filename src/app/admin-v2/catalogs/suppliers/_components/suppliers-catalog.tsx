@@ -34,7 +34,10 @@ export function SuppliersCatalog() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("supplier");
+  // Усі групи розгорнуті за замовчуванням — щоб одразу бачити матеріали.
+  // Lazy-init: коли items завантажиться, useEffect нижче заповнить expanded.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [autoExpanded, setAutoExpanded] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -98,6 +101,28 @@ export function SuppliersCatalog() {
     }
   }, [items, groupBy]);
 
+  // Auto-expand усіх груп при першому завантаженні items — щоб одразу
+  // бачити матеріали, не клікаючи на кожну групу. Якщо груп забагато (>50)
+  // — лишаємо згорнутими (UX вибір: для невеликих довідників розгортаємо).
+  useEffect(() => {
+    if (autoExpanded || grouped.length === 0) return;
+    if (grouped.length > 50) {
+      setAutoExpanded(true);
+      return;
+    }
+    const allKeys = new Set<string>();
+    for (let i = 0; i < grouped.length; i++) {
+      const g = grouped[i];
+      const key =
+        groupBy === "supplier"
+          ? `cp:${g.counterpartyId}`
+          : `mat:${g.rows[0]?.nameKey ?? i}`;
+      allKeys.add(key);
+    }
+    setExpanded(allKeys);
+    setAutoExpanded(true);
+  }, [grouped, groupBy, autoExpanded]);
+
   function toggle(key: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -139,6 +164,7 @@ export function SuppliersCatalog() {
               onClick={() => {
                 setGroupBy(g);
                 setExpanded(new Set());
+                setAutoExpanded(false);
               }}
               className="rounded-lg px-3 py-1.5 text-[11px] font-semibold transition"
               style={{
@@ -151,6 +177,30 @@ export function SuppliersCatalog() {
             </button>
           ))}
         </div>
+        <button
+          onClick={() => {
+            const allKeys = new Set<string>();
+            for (let i = 0; i < grouped.length; i++) {
+              const gg = grouped[i];
+              const key =
+                groupBy === "supplier"
+                  ? `cp:${gg.counterpartyId}`
+                  : `mat:${gg.rows[0]?.nameKey ?? i}`;
+              allKeys.add(key);
+            }
+            setExpanded(expanded.size === grouped.length ? new Set() : allKeys);
+          }}
+          className="rounded-lg px-3 py-1.5 text-[11px] font-semibold transition"
+          style={{
+            backgroundColor: T.panelSoft,
+            color: T.textSecondary,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          {expanded.size === grouped.length && grouped.length > 0
+            ? "Згорнути все"
+            : "Розгорнути все"}
+        </button>
       </div>
 
       {error && (

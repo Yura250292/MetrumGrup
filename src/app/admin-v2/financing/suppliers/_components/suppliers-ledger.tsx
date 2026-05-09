@@ -36,7 +36,9 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [showOnlyDebt, setShowOnlyDebt] = useState(true);
+  // Дефолт: показуємо всіх постачальників. Toggle «Тільки з боргом» у toolbar
+  // лишається — для фокусованої роботи фінансиста з заборгованостями.
+  const [showOnlyDebt, setShowOnlyDebt] = useState(false);
   const [includeInactive, setIncludeInactive] = useState(false);
   const [payTarget, setPayTarget] = useState<Supplier | null>(null);
   const [showCreate, setShowCreate] = useState(false);
