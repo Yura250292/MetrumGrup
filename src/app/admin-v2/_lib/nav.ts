@@ -77,7 +77,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator, pillBadge: { text: "NEW", color: "violet" } },
       { href: "/admin-v2/estimates", label: "Усі кошториси", icon: FileText },
       { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
-      { href: "/admin-v2/materials", label: "Матеріали та ціни", icon: Package },
+      // «Матеріали та ціни» переїхали в «Довідники» (об'єднано з ціни-постачальників).
+      // Лінк лишаємо для звички — веде на ту ж нову сторінку.
+      { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
     ],
   },
   {
@@ -149,6 +151,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/reference-estimates": "Довідкові кошториси",
   // Dynamic [id] segments — handled by header fallback
   "/admin-v2/materials": "Матеріали та ціни",
+  "/admin-v2/catalogs/materials": "Матеріали та ціни",
   "/admin-v2/resources/equipment": "Техніка",
   "/admin-v2/resources/warehouse": "Склад",
   "/admin-v2/resources/workers": "Бригади",
@@ -169,7 +172,6 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/counterparties": "Контрагенти",
   "/admin-v2/financing/suppliers": "Постачальники",
   "/admin-v2/catalogs": "Довідники",
-  "/admin-v2/catalogs/suppliers": "Постачальники: ціни",
   "/admin-v2/receipts": "Накладні (скан)",
   "/admin-v2/receipts/scan": "Сканувати накладну",
   "/admin-v2/meetings": "Наради",

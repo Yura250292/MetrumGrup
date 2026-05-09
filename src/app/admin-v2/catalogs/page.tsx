@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Library, Truck } from "lucide-react";
+import { ArrowRight, Library, Package } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -15,16 +15,16 @@ type CatalogCard = {
   href: string;
   title: string;
   desc: string;
-  icon: typeof Truck;
+  icon: typeof Package;
   available: boolean;
 };
 
 const CATALOGS: CatalogCard[] = [
   {
-    href: "/admin-v2/catalogs/suppliers",
-    title: "Постачальники",
-    desc: "Матеріали та ціни кожного постачальника, історія цін, тренди подорожчання.",
-    icon: Truck,
+    href: "/admin-v2/catalogs/materials",
+    title: "Матеріали та ціни",
+    desc: "Глобальний каталог для кошторисів + фактичні ціни постачальників з історією і трендами ▲▼.",
+    icon: Package,
     available: true,
   },
   // Майбутні довідники додавати сюди — keep array short, без зайвих рендерів.
