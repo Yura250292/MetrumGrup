@@ -77,9 +77,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator, pillBadge: { text: "NEW", color: "violet" } },
       { href: "/admin-v2/estimates", label: "Усі кошториси", icon: FileText },
       { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
-      // «Матеріали та ціни» переїхали в «Довідники» (об'єднано з ціни-постачальників).
-      // Лінк лишаємо для звички — веде на ту ж нову сторінку.
-      { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
+      // «Матеріали та ціни» переїхали у групу «Довідники».
     ],
   },
   {
@@ -94,7 +92,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Довідники",
     items: [
-      { href: "/admin-v2/catalogs", label: "Довідники", icon: Library, pillBadge: { text: "NEW", color: "accent" } },
+      { href: "/admin-v2/catalogs", label: "Усі довідники", icon: Library, exact: true, pillBadge: { text: "NEW", color: "accent" } },
+      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
+      { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
     ],
   },
   {
@@ -102,7 +102,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2/hr/employees", label: "Співробітники та акаунти", icon: Users, hrAllowed: true },
       { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
-      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
     ],
   },

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, Library, Package } from "lucide-react";
+import { ArrowRight, Building2, Library, Package } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -20,6 +20,13 @@ type CatalogCard = {
 };
 
 const CATALOGS: CatalogCard[] = [
+  {
+    href: "/admin-v2/counterparties",
+    title: "Контрагенти",
+    desc: "Довідник реквізитів усіх юр/фіз осіб: ЄДРПОУ, IBAN, контакти, адреса. Клієнти, постачальники, підрядники в одній базі.",
+    icon: Building2,
+    available: true,
+  },
   {
     href: "/admin-v2/catalogs/materials",
     title: "Матеріали та ціни",
