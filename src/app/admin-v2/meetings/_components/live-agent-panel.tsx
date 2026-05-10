@@ -14,8 +14,12 @@ import {
   Sparkles,
   CircleDollarSign,
   AlertCircle,
+  Zap,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { useAssemblyRealtime } from "@/lib/meetings/use-assembly-realtime";
+
+type TranscribeMode = "browser" | "assemblyai";
 
 // ────────────────────────────────────────────────────────────────────────
 // Live AI Agent Panel
@@ -103,6 +107,7 @@ const CONTEXT_WINDOW_CHARS = 4000;
 
 export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const [enabled, setEnabled] = useState(false);
+  const [mode, setMode] = useState<TranscribeMode>("browser");
   const [supported, setSupported] = useState(true);
   const [statusMessage, setStatusMessage] = useState<string>("Вимкнено");
   const [busy, setBusy] = useState(false);
@@ -118,6 +123,22 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sendingRef = useRef(false);
   const startedAtRef = useRef<number>(0);
+
+  // AssemblyAI Realtime hook — підключається коли mode="assemblyai".
+  const realtime = useAssemblyRealtime({
+    meetingId,
+    onFinalText: (text) => {
+      bufferRef.current += " " + text;
+      if (bufferRef.current.length >= CHUNK_MIN_CHARS) void flush();
+    },
+    onError: (msg) => setError(`AssemblyAI Realtime: ${msg}`),
+    onStateChange: (s) => {
+      if (s === "connecting")
+        setStatusMessage("Підключення до AssemblyAI…");
+      else if (s === "active") setStatusMessage("Активний — AssemblyAI Realtime");
+      else if (s === "error") setStatusMessage("Помилка AssemblyAI");
+    },
+  });
 
   // Refresh insights from DB on mount + after each analyze.
   useEffect(() => {
@@ -149,8 +170,24 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     setSupported(!!Ctor);
   }, []);
 
-  function start() {
+  async function start() {
     setError(null);
+    bufferRef.current = "";
+    startedAtRef.current = Date.now();
+    enabledRef.current = true;
+    setEnabled(true);
+
+    // Спільний flush-таймер незалежно від режиму.
+    flushTimerRef.current = setInterval(() => {
+      if (bufferRef.current.trim().length >= 200) void flush();
+    }, CHUNK_FLUSH_INTERVAL_MS);
+
+    if (mode === "assemblyai") {
+      await realtime.start();
+      return;
+    }
+
+    // mode === "browser" — Web Speech API
     const w = window as unknown as {
       SpeechRecognition?: new () => SpeechRecognitionLike;
       webkitSpeechRecognition?: new () => SpeechRecognitionLike;
@@ -159,6 +196,8 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     if (!Ctor) {
       setError("Браузер не підтримує розпізнавання мовлення");
       setSupported(false);
+      enabledRef.current = false;
+      setEnabled(false);
       return;
     }
     const rec = new Ctor();
@@ -213,34 +252,31 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       setError(
         err instanceof Error ? err.message : "Не вдалось запустити мікрофон",
       );
+      enabledRef.current = false;
+      setEnabled(false);
       return;
     }
     recognitionRef.current = rec;
-    startedAtRef.current = Date.now();
-    bufferRef.current = "";
-    enabledRef.current = true;
-    setEnabled(true);
-    setStatusMessage("Активний — слухає");
-
-    // Тимер що флешить навіть якщо менше CHUNK_MIN_CHARS — щоб щось періодично летіло.
-    flushTimerRef.current = setInterval(() => {
-      if (bufferRef.current.trim().length >= 200) void flush();
-    }, CHUNK_FLUSH_INTERVAL_MS);
+    setStatusMessage("Активний — слухає (browser)");
   }
 
-  function stop() {
+  async function stop() {
     enabledRef.current = false;
     setEnabled(false);
     setStatusMessage("Вимкнено");
-    const rec = recognitionRef.current as
-      | { stop?: () => void }
-      | null;
-    try {
-      rec?.stop?.();
-    } catch {
-      /* ignore */
+    if (mode === "assemblyai") {
+      await realtime.stop();
+    } else {
+      const rec = recognitionRef.current as
+        | { stop?: () => void }
+        | null;
+      try {
+        rec?.stop?.();
+      } catch {
+        /* ignore */
+      }
+      recognitionRef.current = null;
     }
-    recognitionRef.current = null;
     if (flushTimerRef.current) {
       clearInterval(flushTimerRef.current);
       flushTimerRef.current = null;
@@ -399,8 +435,8 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         </div>
 
         <button
-          onClick={enabled ? stop : start}
-          disabled={!supported}
+          onClick={() => (enabled ? void stop() : void start())}
+          disabled={mode === "browser" && !supported}
           className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
           style={{
             background: enabled ? T.dangerSoft : T.accentPrimary,
@@ -409,7 +445,7 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
           title={
             enabled
               ? "Зупинити агента"
-              : !supported
+              : mode === "browser" && !supported
                 ? "Браузер не підтримує розпізнавання мовлення"
                 : "Запустити агента"
           }
@@ -419,16 +455,45 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         </button>
       </div>
 
-      {!supported && (
+      {/* Toggle режиму транскрипції */}
+      <div className="mt-3 flex items-center gap-1 rounded-lg p-1" style={{ background: T.panelElevated }}>
+        <button
+          onClick={() => !enabled && setMode("browser")}
+          disabled={enabled}
+          className="flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition disabled:opacity-60"
+          style={{
+            background: mode === "browser" ? T.panel : "transparent",
+            color: mode === "browser" ? T.textPrimary : T.textMuted,
+            boxShadow: mode === "browser" ? `0 1px 2px ${T.borderSoft}` : undefined,
+          }}
+          title="Браузерна SpeechRecognition — безкоштовно, on-device. Якість залежить від браузера."
+        >
+          Браузер · безкоштовно
+        </button>
+        <button
+          onClick={() => !enabled && setMode("assemblyai")}
+          disabled={enabled}
+          className="flex flex-1 items-center justify-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition disabled:opacity-60"
+          style={{
+            background: mode === "assemblyai" ? T.panel : "transparent",
+            color: mode === "assemblyai" ? T.accentPrimary : T.textMuted,
+            boxShadow: mode === "assemblyai" ? `0 1px 2px ${T.borderSoft}` : undefined,
+          }}
+          title="AssemblyAI Streaming — краща якість на UA/RU, ~$0.47/год."
+        >
+          <Zap size={11} /> AssemblyAI · ~$0.47/год
+        </button>
+      </div>
+
+      {mode === "browser" && !supported && (
         <div
           className="mt-3 flex items-start gap-2 rounded-lg p-2.5 text-[11px]"
           style={{ background: T.amberSoft, color: T.amber }}
         >
           <AlertTriangle size={14} className="mt-0.5 flex-shrink-0" />
           <span>
-            Браузер не підтримує SpeechRecognition. Працює в Chrome, Edge,
-            Safari (macOS / iOS). Відкрий нараду у Chrome щоб увімкнути
-            агента.
+            Браузер не підтримує SpeechRecognition. Перемкни на AssemblyAI
+            (працює всюди) або відкрий у Chrome / Edge / Safari.
           </span>
         </div>
       )}
