@@ -116,8 +116,12 @@ export function useAssemblyRealtime(opts: {
         try {
           msg = JSON.parse(ev.data) as V3Message;
         } catch {
+          console.log("[AssemblyAI v3] non-JSON msg:", ev.data);
           return;
         }
+        // ВСІ повідомлення — у консоль для дебагу. Не залишати в проді
+        // надовго але поки розбираємось з 3006-помилкою — корисно.
+        console.log("[AssemblyAI v3] msg:", msg);
         if (msg.type === "Turn") {
           // V3 за замовчуванням повертає Turn з end_of_turn boolean.
           const isFinal =
@@ -148,18 +152,9 @@ export function useAssemblyRealtime(opts: {
       };
       ws.onclose = (ev) => {
         if (ev.code !== 1000 && ev.code !== 1005) {
-          // 3006 — типовий код у AssemblyAI коли акаунт без платного плану /
-          // streaming не активований. Дамо конкретне пояснення.
-          let msg: string;
-          if (ev.code === 3006) {
-            msg =
-              "AssemblyAI Streaming потребує платний план (free $50 кредитів покриває лише Pre-recorded). Перемкни на «Браузер» або апгрейдь акаунт на assemblyai.com.";
-          } else {
-            const reason =
-              lastErrorReason ?? ev.reason ?? "(reason not provided)";
-            msg = `WS closed: code=${ev.code} ${reason}`;
-          }
-          opts.onError?.(msg);
+          const reason =
+            lastErrorReason ?? ev.reason ?? "(no reason — глянь у консолі)";
+          opts.onError?.(`WS closed: code=${ev.code} · ${reason}`);
         }
         if (state === "active") {
           updateState("idle");
