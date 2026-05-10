@@ -2642,6 +2642,13 @@ model Meeting {
   liveInsights LiveMeetingInsight[]
   /// Live AI Agent: лог витрат AI-токенів.
   liveAgentCostLogs LiveAgentCostLog[]
+  /// Live AI Agent: ключові терміни що зʼявились у розмові + 1-рядкові пояснення.
+  liveTerms LiveMeetingTerm[]
+
+  /// Live AI Agent: одноразово згенерований pre-meeting briefing (markdown).
+  /// Кешовано, не перегенеровується автоматом — користувач натискає «Оновити».
+  liveBriefing             String?   @db.Text
+  liveBriefingGeneratedAt  DateTime?
 
   @@index([projectId])
   @@index([createdById])
@@ -2673,6 +2680,9 @@ model LiveMeetingInsight {
   suggestedQuestion String? @db.Text
   /// Дія для занесення у список задач (опц.).
   actionItem        String? @db.Text
+  /// Варіанти відповіді користувачу (опц.). Структура:
+  /// [{ tone: "formal"|"neutral"|"firm", text: "..." }]. До 3 елементів.
+  suggestedResponses Json?
   /// 0..1 — впевненість моделі.
   confidence        Float?
 
@@ -2715,6 +2725,24 @@ model LiveAgentCostLog {
 
   @@index([meetingId, createdAt])
   @@map("live_agent_cost_logs")
+}
+
+/// Live AI Agent: терміни що зʼявляються в розмові разом з 1-рядковим
+/// поясненням. Дедуп per-meeting через unique([meetingId, term]).
+model LiveMeetingTerm {
+  id        String  @id @default(cuid())
+  meetingId String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  term             String
+  definition       String  @db.Text
+  contextInMeeting String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@unique([meetingId, term])
+  @@index([meetingId, createdAt])
+  @@map("live_meeting_terms")
 }
 
 enum MeetingStatus {

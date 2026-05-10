@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Bot,
   Pause,
@@ -15,11 +17,25 @@ import {
   CircleDollarSign,
   AlertCircle,
   Zap,
+  BookOpenText,
+  ChevronDown,
+  ChevronUp,
+  RefreshCw,
+  Copy,
+  Check,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useAssemblyRealtime } from "@/lib/meetings/use-assembly-realtime";
 
 type TranscribeMode = "browser" | "assemblyai";
+type ResponseTone = "formal" | "neutral" | "firm";
+type LiveTermDTO = {
+  id: string;
+  term: string;
+  definition: string;
+  contextInMeeting: string | null;
+  createdAt: string;
+};
 
 // ────────────────────────────────────────────────────────────────────────
 // Live AI Agent Panel
@@ -43,6 +59,7 @@ export type LiveInsightDTO = {
   summary: string;
   suggestedQuestion: string | null;
   actionItem: string | null;
+  suggestedResponses: Array<{ tone: ResponseTone; text: string }> | null;
   confidence: number | null;
   isPinned: boolean;
   isHidden: boolean;
@@ -112,10 +129,19 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const [statusMessage, setStatusMessage] = useState<string>("Вимкнено");
   const [busy, setBusy] = useState(false);
   const [insights, setInsights] = useState<LiveInsightDTO[]>([]);
+  const [terms, setTerms] = useState<LiveTermDTO[]>([]);
   const [cost, setCost] = useState<CostSummary | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
   const [filterPriority, setFilterPriority] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Briefing state
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [briefingGeneratedAt, setBriefingGeneratedAt] = useState<string | null>(
+    null,
+  );
+  const [briefingExpanded, setBriefingExpanded] = useState(false);
+  const [briefingLoading, setBriefingLoading] = useState(false);
 
   const recognitionRef = useRef<unknown>(null);
   const bufferRef = useRef<string>("");
@@ -140,9 +166,10 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     },
   });
 
-  // Refresh insights from DB on mount + after each analyze.
+  // Refresh insights + terms + briefing on mount.
   useEffect(() => {
     void refresh();
+    void loadBriefing();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [meetingId]);
 
@@ -154,9 +181,53 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       if (!res.ok) return;
       const data = await res.json();
       setInsights(data.insights ?? []);
+      setTerms(data.glossaryTerms ?? []);
       setCost(data.cost ?? null);
     } catch {
       /* ignore */
+    }
+  }
+
+  async function loadBriefing() {
+    try {
+      const res = await fetch(
+        `/api/admin/meetings/${meetingId}/live-agent/briefing`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      setBriefing(data.briefing ?? null);
+      setBriefingGeneratedAt(data.generatedAt ?? null);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function generateOrRegenBriefing() {
+    setBriefingLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(
+        `/api/admin/meetings/${meetingId}/live-agent/briefing`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      setBriefing(data.briefing ?? null);
+      setBriefingGeneratedAt(data.generatedAt ?? null);
+      setBriefingExpanded(true);
+      // Cost оновлюємо щоб у статі-блоку видно було що додалось
+      void refresh();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? `Briefing: ${err.message}`
+          : "Помилка briefing-у",
+      );
+    } finally {
+      setBriefingLoading(false);
     }
   }
 
@@ -485,6 +556,147 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         </button>
       </div>
 
+      {/* Pre-meeting briefing */}
+      <div
+        className="mt-3 rounded-lg p-3"
+        style={{ background: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <button
+            onClick={() => briefing && setBriefingExpanded((v) => !v)}
+            disabled={!briefing}
+            className="flex flex-1 items-center gap-2 text-left disabled:cursor-default"
+          >
+            <BookOpenText
+              size={14}
+              style={{ color: briefing ? T.indigo : T.textMuted }}
+            />
+            <span
+              className="text-[12px] font-bold"
+              style={{ color: T.textPrimary }}
+            >
+              Довідка перед нарадою
+            </span>
+            {briefingGeneratedAt && (
+              <span className="text-[10px]" style={{ color: T.textMuted }}>
+                {new Date(briefingGeneratedAt).toLocaleString("uk-UA")}
+              </span>
+            )}
+            {briefing && (
+              <span className="ml-auto" style={{ color: T.textMuted }}>
+                {briefingExpanded ? (
+                  <ChevronUp size={14} />
+                ) : (
+                  <ChevronDown size={14} />
+                )}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => void generateOrRegenBriefing()}
+            disabled={briefingLoading}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold disabled:opacity-50"
+            style={{
+              background: briefing ? T.panel : T.indigo,
+              color: briefing ? T.indigo : "#fff",
+              border: briefing ? `1px solid ${T.indigo}33` : "none",
+            }}
+            title={
+              briefing
+                ? "Перегенерувати довідку (нова версія перепише поточну)"
+                : "Згенерувати pre-meeting довідку — ключові факти про проєкт, на що звернути увагу, корисні питання, словник можливих термінів"
+            }
+          >
+            {briefingLoading ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : briefing ? (
+              <RefreshCw size={11} />
+            ) : (
+              <Sparkles size={11} />
+            )}
+            {briefing ? "Оновити" : "Згенерувати"}
+          </button>
+        </div>
+        {briefing && briefingExpanded && (
+          <div
+            className="mt-2 text-[12px] leading-relaxed"
+            style={{ color: T.textPrimary }}
+          >
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                h2: (props) => (
+                  <h2
+                    {...props}
+                    className="mt-3 mb-1 text-[12px] font-bold"
+                    style={{ color: T.indigo }}
+                  />
+                ),
+                h3: (props) => (
+                  <h3
+                    {...props}
+                    className="mt-2 mb-1 text-[11px] font-bold"
+                    style={{ color: T.textPrimary }}
+                  />
+                ),
+                ul: (props) => (
+                  <ul {...props} className="my-1 list-disc pl-5 space-y-0.5" />
+                ),
+                ol: (props) => (
+                  <ol
+                    {...props}
+                    className="my-1 list-decimal pl-5 space-y-0.5"
+                  />
+                ),
+                p: (props) => <p {...props} className="my-1" />,
+                strong: (props) => (
+                  <strong
+                    {...props}
+                    style={{ color: T.textPrimary, fontWeight: 700 }}
+                  />
+                ),
+              }}
+            >
+              {briefing}
+            </ReactMarkdown>
+          </div>
+        )}
+        {!briefing && !briefingLoading && (
+          <p className="mt-1 text-[10.5px]" style={{ color: T.textMuted }}>
+            AI прочитає метадані наради + останні наради по проєкту і складе
+            1-сторінкову шпаргалку до старту.
+          </p>
+        )}
+      </div>
+
+      {/* Live glossary strip */}
+      {terms.length > 0 && (
+        <div className="mt-3">
+          <div
+            className="mb-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted }}
+          >
+            <BookOpenText size={11} /> Терміни в розмові
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {terms.slice(0, 30).map((t) => (
+              <span
+                key={t.id}
+                className="rounded-md px-2 py-0.5 text-[10.5px] font-medium cursor-help"
+                style={{
+                  background: T.skySoft,
+                  color: T.sky,
+                  border: `1px solid ${T.sky}33`,
+                }}
+                title={`${t.term} — ${t.definition}${t.contextInMeeting ? "\n\nУ цій нараді: " + t.contextInMeeting : ""}`}
+              >
+                {t.term}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {mode === "browser" && !supported && (
         <div
           className="mt-3 flex items-start gap-2 rounded-lg p-2.5 text-[11px]"
@@ -692,6 +904,26 @@ function InsightCard({
               </p>
             </div>
           )}
+          {i.suggestedResponses && i.suggestedResponses.length > 0 && (
+            <div
+              className="mt-1 rounded-md p-2"
+              style={{
+                background: T.indigoSoft,
+              }}
+            >
+              <span
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.indigo }}
+              >
+                Як відповісти
+              </span>
+              <div className="mt-1.5 flex flex-col gap-1.5">
+                {i.suggestedResponses.map((r, ri) => (
+                  <SuggestedResponseRow key={ri} tone={r.tone} text={r.text} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <div className="flex flex-col gap-1">
           <button
@@ -712,6 +944,69 @@ function InsightCard({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+const TONE_LABEL: Record<ResponseTone, string> = {
+  formal: "Офіційно",
+  neutral: "Нейтрально",
+  firm: "Наполегливо",
+};
+
+function SuggestedResponseRow({
+  tone,
+  text,
+}: {
+  tone: ResponseTone;
+  text: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return (
+    <div
+      className="rounded-md p-2"
+      style={{
+        background: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <div className="flex items-center justify-between gap-2 mb-0.5">
+        <span
+          className="text-[9px] font-bold uppercase tracking-wider"
+          style={{ color: T.indigo }}
+        >
+          {TONE_LABEL[tone]}
+        </span>
+        <button
+          onClick={() => void copy()}
+          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px]"
+          style={{
+            background: copied ? T.successSoft : "transparent",
+            color: copied ? T.success : T.textMuted,
+          }}
+          title="Скопіювати у буфер"
+        >
+          {copied ? <Check size={10} /> : <Copy size={10} />}
+          {copied ? "Скопійовано" : "Копіювати"}
+        </button>
+      </div>
+      <p
+        className="text-[12px] leading-relaxed"
+        style={{ color: T.textPrimary }}
+      >
+        {text}
+      </p>
     </div>
   );
 }

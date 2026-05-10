@@ -21,28 +21,34 @@ export async function GET(
   const url = new URL(request.url);
   const includeHidden = url.searchParams.get("includeHidden") === "1";
 
-  const insights = await prisma.liveMeetingInsight.findMany({
-    where: {
-      meetingId: id,
-      ...(includeHidden ? {} : { isHidden: false }),
-    },
-    orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
-    take: 200,
-  });
-
-  // Простий cost-summary — корисно показати в UI «потрачено».
-  const costAgg = await prisma.liveAgentCostLog.aggregate({
-    where: { meetingId: id },
-    _count: { id: true },
-    _sum: {
-      inputTokens: true,
-      outputTokens: true,
-      estimatedCostUsd: true,
-    },
-  });
+  const [insights, terms, costAgg] = await Promise.all([
+    prisma.liveMeetingInsight.findMany({
+      where: {
+        meetingId: id,
+        ...(includeHidden ? {} : { isHidden: false }),
+      },
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+      take: 200,
+    }),
+    prisma.liveMeetingTerm.findMany({
+      where: { meetingId: id },
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    prisma.liveAgentCostLog.aggregate({
+      where: { meetingId: id },
+      _count: { id: true },
+      _sum: {
+        inputTokens: true,
+        outputTokens: true,
+        estimatedCostUsd: true,
+      },
+    }),
+  ]);
 
   return NextResponse.json({
     insights,
+    glossaryTerms: terms,
     cost: {
       calls: costAgg._count.id,
       inputTokens: costAgg._sum.inputTokens ?? 0,

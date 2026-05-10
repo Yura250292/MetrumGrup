@@ -161,6 +161,8 @@ export async function POST(
           summary: i.summary,
           suggestedQuestion: i.suggestedQuestion,
           actionItem: i.actionItem,
+          suggestedResponses:
+            (i.suggestedResponses as unknown as object) ?? undefined,
           confidence: i.confidence,
           sourceStartMs: data.sourceStartMs ?? null,
           sourceEndMs: data.sourceEndMs ?? null,
@@ -170,8 +172,38 @@ export async function POST(
     ),
   );
 
+  // Дедуп і збереження glossary-термінів. У БД unique([meetingId, term]),
+  // тож просто upsert. Це швидко і робота с бд.
+  const persistedTerms = [];
+  for (const t of result.glossaryTerms) {
+    const term = (t.term ?? "").trim();
+    const definition = (t.definition ?? "").trim();
+    if (!term || !definition) continue;
+    try {
+      const row = await prisma.liveMeetingTerm.upsert({
+        where: {
+          meetingId_term: { meetingId: id, term },
+        },
+        create: {
+          meetingId: id,
+          term,
+          definition,
+          contextInMeeting: t.contextInMeeting ?? null,
+        },
+        update: {
+          // Якщо вже є з тим самим терміном — лишаємо існуюче definition,
+          // не переписуємо щоб не «розхитувати» поясненням.
+        },
+      });
+      persistedTerms.push(row);
+    } catch {
+      /* ignore individual term failures */
+    }
+  }
+
   return NextResponse.json({
     insights: persisted,
+    glossaryTerms: persistedTerms,
     usage: result.usage,
   });
 }
