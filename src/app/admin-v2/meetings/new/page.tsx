@@ -10,6 +10,7 @@ import {
   MeetingUploader,
 } from "../_components/meeting-recorder";
 import { AudioPreview } from "../_components/audio-preview";
+import { LiveAgentPanel } from "../_components/live-agent-panel";
 import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
 type FolderOption = {
@@ -45,6 +46,12 @@ export default function NewMeetingPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [detailsOpen, setDetailsOpen] = useState(false);
 
+  // Створюємо meeting eagerly при старті запису — щоб Live AI Agent міг
+  // зберігати інсайти прямо під час розмови (а не лише на сторінці готової
+  // наради). При фінальному save використаємо вже існуючий meetingId.
+  const [meetingId, setMeetingId] = useState<string | null>(null);
+  const [creatingDraft, setCreatingDraft] = useState(false);
+
   const {
     state: recState,
     recorded,
@@ -62,6 +69,39 @@ export default function NewMeetingPage() {
       });
     }
   }, [recorded, pending]);
+
+  // Створення draft-meeting при старті запису — для Live AI Agent.
+  useEffect(() => {
+    if (
+      recState === "recording" &&
+      !meetingId &&
+      !creatingDraft &&
+      stage === "form"
+    ) {
+      void (async () => {
+        setCreatingDraft(true);
+        try {
+          const res = await fetch("/api/admin/meetings", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: title.trim() || autoDefaultTitle(),
+              description: description.trim() || null,
+              folderId: folderId || null,
+            }),
+          });
+          if (!res.ok) throw new Error("draft create failed");
+          const { meeting } = await res.json();
+          setMeetingId(meeting.id);
+        } catch (err) {
+          console.warn("[new-meeting] draft create failed:", err);
+          // Не блокуємо запис — Live Agent просто буде недоступний.
+        } finally {
+          setCreatingDraft(false);
+        }
+      })();
+    }
+  }, [recState, meetingId, creatingDraft, stage, title, description, folderId]);
 
   useEffect(() => {
     (async () => {
@@ -93,21 +133,40 @@ export default function NewMeetingPage() {
       const finalTitle = title.trim() || autoDefaultTitle();
 
       setStage("creating");
-      const createRes = await fetch("/api/admin/meetings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: finalTitle,
-          description: description.trim() || null,
-          folderId: folderId || null,
-        }),
-      });
-      if (!createRes.ok) {
-        const j = await createRes.json().catch(() => ({}));
-        throw new Error(j.error || "Не вдалося створити нараду");
+      let id: string;
+      if (meetingId) {
+        // Draft вже створено при старті запису — оновлюємо назву/опис.
+        const patchRes = await fetch(`/api/admin/meetings/${meetingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: finalTitle,
+            description: description.trim() || null,
+            folderId: folderId || null,
+          }),
+        });
+        if (!patchRes.ok) {
+          const j = await patchRes.json().catch(() => ({}));
+          throw new Error(j.error || "Не вдалося оновити нараду");
+        }
+        id = meetingId;
+      } else {
+        const createRes = await fetch("/api/admin/meetings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: finalTitle,
+            description: description.trim() || null,
+            folderId: folderId || null,
+          }),
+        });
+        if (!createRes.ok) {
+          const j = await createRes.json().catch(() => ({}));
+          throw new Error(j.error || "Не вдалося створити нараду");
+        }
+        const { meeting } = await createRes.json();
+        id = meeting.id;
       }
-      const { meeting } = await createRes.json();
-      const id = meeting.id;
 
       setStage("uploading");
       const urlRes = await fetch(`/api/admin/meetings/${id}/upload-url`, {
@@ -197,6 +256,14 @@ export default function NewMeetingPage() {
             </>
           )}
         </>
+      )}
+
+      {/* Live AI Agent — зʼявляється коли draft-meeting створено
+          (момент старту запису). Дає підказки в реальному часі. */}
+      {meetingId && (
+        <div className="mt-4">
+          <LiveAgentPanel meetingId={meetingId} />
+        </div>
       )}
 
       {!busy && (

@@ -126,8 +126,8 @@ export function MeetingRecorder() {
       )}
 
       <p className="mt-3 text-xs" style={{ color: T.textMuted }}>
-        Максимальна тривалість — 90 хв. Запис стиснуто у 32 кбіт/с opus
-        (оптимально для мовлення і Whisper).
+        Максимальна тривалість — 90 хв. Запис у 96 кбіт/с Opus mono 48 kHz
+        (transparent для мовлення, оптимально для AssemblyAI/Whisper).
       </p>
     </div>
   );
