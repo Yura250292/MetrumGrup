@@ -1273,14 +1273,21 @@ function SeekableAudio({
 
   function handleAudioError() {
     // Якщо ми граємо виправлений blob і він не зміг завантажитись —
-    // повертаємось до оригінального URL без перемотки. Краще щоб плеєр
-    // продовжував грати без seek, ніж показував «Помилка».
+    // повертаємось до оригінального URL без перемотки.
     if (playableSrc.startsWith("blob:") && playableSrc !== src) {
       URL.revokeObjectURL(playableSrc);
       setPlayableSrc(src);
       setFixed(false);
       setFixError(
-        "Виправлення не сумісне з цим записом (ймовірно, неправильна тривалість в БД). Перемотка недоступна.",
+        "Виправлення не сумісне з цим записом (ймовірно, файл частково пошкоджений). Спробуй «Завантажити оригінал» і слухай локально у VLC.",
+      );
+      return;
+    }
+    // Помилка на сирому URL — файл не може зіграти зовсім. Показуємо
+    // користувачу що варто завантажити і слухати локально.
+    if (!fixError) {
+      setFixError(
+        "Браузер не може відтворити цей файл. Скоріш за все запис був перерваний (мікрофон скинувся або вкладка закрилась). Завантаж оригінал — VLC покаже скільки реально звуку є у файлі.",
       );
     }
   }
@@ -1311,12 +1318,20 @@ function SeekableAudio({
             {fixing ? "Готую…" : "Підготувати перемотку"}
           </button>
           <button
+            onClick={() => void downloadOriginal(src, mimeType)}
+            className="rounded-md px-2 py-1 transition hover:underline"
+            style={{ color: T.textMuted }}
+            title="Завантажити сирий файл як він є на R2 (без конверсії). Слухай у VLC / QuickTime — там перемотка працює навіть для пошкоджених webm."
+          >
+            Завантажити оригінал
+          </button>
+          <button
             onClick={() => void downloadAudio(src, mimeType)}
             className="rounded-md px-2 py-1 transition hover:underline"
             style={{ color: T.textMuted }}
-            title="Завантажити як WAV — універсальний формат із нативною перемоткою у будь-якому плеєрі"
+            title="Перекодувати у WAV через Web Audio. Може не спрацювати якщо webm пошкоджений — тоді бери «Завантажити оригінал»."
           >
-            Завантажити як WAV
+            у WAV
           </button>
           {fixError && (
             <span style={{ color: T.warning }}>{fixError}</span>
@@ -1330,6 +1345,37 @@ function SeekableAudio({
       )}
     </div>
   );
+}
+
+// Тягне сирий файл і просто зберігає на диск через blob-URL.
+// БЕЗ Web Audio / decodeAudioData — працює навіть для частково
+// пошкоджених webm (VLC / QuickTime / ffmpeg відкриють що зможуть).
+async function downloadOriginal(src: string, mimeType: string | null) {
+  try {
+    const res = await fetch(src);
+    if (!res.ok) throw new Error("Не вдалося завантажити файл");
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const ext = mimeType?.includes("webm")
+      ? "webm"
+      : mimeType?.includes("mp4") || mimeType?.includes("m4a")
+        ? "m4a"
+        : mimeType?.includes("mpeg")
+          ? "mp3"
+          : mimeType?.includes("wav")
+            ? "wav"
+            : "audio";
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `meeting-${Date.now()}.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    console.error("[downloadOriginal] failed:", err);
+    alert("Не вдалося завантажити файл. Перевір консоль браузера.");
+  }
 }
 
 // Завантажує webm/opus, декодує через Web Audio API, кодує у WAV (PCM)

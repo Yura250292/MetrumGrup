@@ -178,8 +178,20 @@ export function MeetingRecordingProvider({ children }: { children: ReactNode }) 
         // тривалість, через що `<audio>` не вміє seek-ати назад. Файли що
         // юзер завантажує самостійно — мають хедер, тож для них пропускаємо.
         // Для не-webm форматів (mp4) це теж не потрібно.
+        //
+        // SAFETY: фіксимо тільки якщо finalMs реалістичний (1с..6год) і
+        // blob непустий. Якщо щось дивне (вкладка довго була неактивна,
+        // мікрофон скинувся) — лишаємо raw blob. Краще без перемотки ніж
+        // зламати декодування ін'єкцією неправильної тривалості.
+        const SANE_MIN_MS = 1_000;
+        const SANE_MAX_MS = 6 * 60 * 60 * 1000;
         let finalBlob = rawBlob;
-        if (rawBlob.type.includes("webm") && finalMs > 0) {
+        const canFix =
+          rawBlob.type.includes("webm") &&
+          rawBlob.size > 1024 &&
+          finalMs >= SANE_MIN_MS &&
+          finalMs <= SANE_MAX_MS;
+        if (canFix) {
           try {
             finalBlob = await fixWebmDuration(rawBlob, finalMs, {
               logger: false,
