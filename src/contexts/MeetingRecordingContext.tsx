@@ -145,11 +145,15 @@ export function MeetingRecordingProvider({ children }: { children: ReactNode }) 
       });
       streamRef.current = stream;
 
-      const candidates = [
-        "audio/webm;codecs=opus",
-        "audio/webm",
-        "audio/mp4",
-      ];
+      // Safari погано грає webm/opus — записувати у mp4 (AAC) щоб
+      // нарада потім нормально відтворювалась у самому ж Safari.
+      // Інші браузери (Chrome/Edge/Firefox) — лишаємо webm/opus як було.
+      const isSafari = /^((?!chrome|android).)*safari/i.test(
+        navigator.userAgent,
+      );
+      const candidates = isSafari
+        ? ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"]
+        : ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
       const mimeType =
         candidates.find((m) => MediaRecorder.isTypeSupported(m)) || "audio/webm";
       mimeRef.current = mimeType;

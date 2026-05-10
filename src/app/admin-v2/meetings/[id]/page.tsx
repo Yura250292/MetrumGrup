@@ -1276,6 +1276,44 @@ function SeekableAudio({
   // Якщо <audio> мовчить, варто спробувати <video>.
   const [useVideoPlayer, setUseVideoPlayer] = useState(false);
 
+  // Safari погано грає webm/opus — навіть коли файл цілий. Детектимо
+  // справжній Safari (не Chromium-Edge на маку) щоб показати спец-кнопку.
+  const isSafari =
+    typeof window !== "undefined"
+      ? /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+      : false;
+  const [convertingForSafari, setConvertingForSafari] = useState(false);
+
+  async function convertForSafari() {
+    setConvertingForSafari(true);
+    setFixError(null);
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error("fetch failed");
+      const arrayBuffer = await res.arrayBuffer();
+      const AudioCtor =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext?: typeof AudioContext })
+          .webkitAudioContext;
+      if (!AudioCtor) throw new Error("AudioContext недоступний");
+      const ctx = new AudioCtor();
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      await ctx.close();
+      const wavBlob = audioBufferToWav(audioBuffer);
+      const url = URL.createObjectURL(wavBlob);
+      setPlayableSrc(url);
+      setFixed(true);
+    } catch (err) {
+      setFixError(
+        err instanceof Error
+          ? `Конверсія не вдалась: ${err.message}. Файл або пошкоджений, або Safari не зміг розкодувати webm-codec.`
+          : "Конверсія не вдалась",
+      );
+    } finally {
+      setConvertingForSafari(false);
+    }
+  }
+
   // Діагностика файлу — щоб одразу бачити чи проблема в плеєрі чи в файлі.
   const [diagnostics, setDiagnostics] = useState<null | {
     size: number;
@@ -1384,6 +1422,36 @@ function SeekableAudio({
           preload="metadata"
           onError={handleAudioError}
         />
+      )}
+
+      {isSafari && isWebm && !fixed && (
+        <div
+          className="flex items-start gap-2 rounded-md p-2 text-[11px] leading-relaxed"
+          style={{
+            background: T.amberSoft,
+            color: T.textPrimary,
+            border: `1px solid ${T.warning}33`,
+          }}
+        >
+          <span style={{ color: T.warning }}>⚠️</span>
+          <div className="flex-1">
+            <strong style={{ color: T.warning }}>Safari не дружить з webm/opus.</strong>{" "}
+            Натисни «Конвертувати для Safari» (1 раз) щоб перекодувати у WAV
+            на льоту — після цього грається з повноцінною перемоткою. Альтернатива:
+            відкрий цю нараду в Chrome.
+            <button
+              onClick={() => void convertForSafari()}
+              disabled={convertingForSafari}
+              className="ml-2 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50"
+              style={{
+                background: T.warning,
+                color: "#fff",
+              }}
+            >
+              {convertingForSafari ? "Конвертую…" : "Конвертувати для Safari"}
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
