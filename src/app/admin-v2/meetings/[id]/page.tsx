@@ -36,6 +36,7 @@ import {
   type DelegationState,
 } from "../_components/summary-view";
 import { DelegateTaskModal } from "../_components/delegate-task-modal";
+import { LiveAgentPanel } from "../_components/live-agent-panel";
 import { useAiPanel } from "@/contexts/AiPanelContext";
 
 const POLL_INTERVAL_MS = 3000;
@@ -498,6 +499,10 @@ export default function MeetingDetailPage() {
           />
         </div>
       )}
+
+      <div className="mb-4">
+        <LiveAgentPanel meetingId={id} />
+      </div>
 
       {meeting.status === "FAILED" && (
         <div

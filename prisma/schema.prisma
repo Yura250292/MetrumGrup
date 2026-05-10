@@ -2638,12 +2638,83 @@ model Meeting {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /// Live AI Agent: інсайти що генеруються в режимі live під час запису.
+  liveInsights LiveMeetingInsight[]
+  /// Live AI Agent: лог витрат AI-токенів.
+  liveAgentCostLogs LiveAgentCostLog[]
+
   @@index([projectId])
   @@index([createdById])
   @@index([recordedAt])
   @@index([folderId])
   @@index([firmId])
   @@map("meetings")
+}
+
+/// Live AI Agent: інсайти що генеруються «на льоту» під час наради.
+/// На відміну від summary (один підсумок наприкінці), сюди падають
+/// підказки в реальному часі — ризики, питання, action items.
+/// Не плутати з Meeting.structured (фінальний AI-аналіз post-factum).
+model LiveMeetingInsight {
+  id        String  @id @default(cuid())
+  meetingId String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  /// Категорія інсайту: legal_risk, financial_risk, construction_risk,
+  /// deadline_risk, missing_information, suggested_question, action_item,
+  /// important_decision, contract_related, estimate_related.
+  category String
+  /// Пріоритет: low, medium, high, critical.
+  priority String
+  title    String
+  summary  String  @db.Text
+
+  /// Питання яке варто поставити співрозмовнику зараз (опц.).
+  suggestedQuestion String? @db.Text
+  /// Дія для занесення у список задач (опц.).
+  actionItem        String? @db.Text
+  /// 0..1 — впевненість моделі.
+  confidence        Float?
+
+  isPinned Boolean @default(false)
+  isHidden Boolean @default(false)
+
+  /// Який фрагмент транскрипту викликав інсайт (мс від початку наради).
+  sourceStartMs Int?
+  sourceEndMs   Int?
+
+  /// Сирий JSON-відповідь моделі — для дебагу і пере-аналізу.
+  rawAiResponse Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([meetingId, createdAt])
+  @@index([meetingId, isPinned])
+  @@map("live_meeting_insights")
+}
+
+/// Лог витрат токенів AI-моделі для Live Agent. Один рядок на виклик.
+model LiveAgentCostLog {
+  id        String  @id @default(cuid())
+  meetingId String
+  meeting   Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  provider String // 'openai' | 'anthropic' | 'gemini'
+  model    String
+
+  inputTokens  Int?
+  outputTokens Int?
+  /// Оцінка вартості в USD (input + output * model rates).
+  estimatedCostUsd Decimal? @db.Decimal(10, 6)
+
+  /// Тривалість виклику в мс (для моніторингу latency).
+  latencyMs Int?
+
+  createdAt DateTime @default(now())
+
+  @@index([meetingId, createdAt])
+  @@map("live_agent_cost_logs")
 }
 
 enum MeetingStatus {
