@@ -148,9 +148,18 @@ export function useAssemblyRealtime(opts: {
       };
       ws.onclose = (ev) => {
         if (ev.code !== 1000 && ev.code !== 1005) {
-          const reason =
-            lastErrorReason ?? ev.reason ?? "(reason not provided)";
-          opts.onError?.(`WS closed: code=${ev.code} ${reason}`);
+          // 3006 — типовий код у AssemblyAI коли акаунт без платного плану /
+          // streaming не активований. Дамо конкретне пояснення.
+          let msg: string;
+          if (ev.code === 3006) {
+            msg =
+              "AssemblyAI Streaming потребує платний план (free $50 кредитів покриває лише Pre-recorded). Перемкни на «Браузер» або апгрейдь акаунт на assemblyai.com.";
+          } else {
+            const reason =
+              lastErrorReason ?? ev.reason ?? "(reason not provided)";
+            msg = `WS closed: code=${ev.code} ${reason}`;
+          }
+          opts.onError?.(msg);
         }
         if (state === "active") {
           updateState("idle");
