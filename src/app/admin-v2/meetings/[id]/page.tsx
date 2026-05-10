@@ -1186,410 +1186,53 @@ function TranscriptView({
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// SeekableAudio: за замовчуванням стрімить аудіо як є (як завжди працювало).
-// Старі WebM-записи з MediaRecorder не мають duration в EBML-хедері — через
-// це браузер не може seek-ати. Кнопка «Підготувати перемотку» тягне файл,
-// інжектить duration через fix-webm-duration і свапає на blob-URL.
-// Кнопка показується ТІЛЬКИ для webm-нарад де ймовірно є проблема.
+// SeekableAudio: простий аудіо-плеєр + кнопка «Викачати у WAV» для
+// випадків коли вбудований <audio> не справляється (Safari + webm,
+// пошкоджені файли, etc). WAV грається в будь-якому плеєрі з seek.
 // ────────────────────────────────────────────────────────────────────────
 function SeekableAudio({
   src,
   mimeType,
-  durationMs,
+  durationMs: _durationMs,
 }: {
   src: string;
   mimeType: string | null;
   durationMs: number | null;
 }) {
-  const [playableSrc, setPlayableSrc] = useState<string>(src);
-  const [fixing, setFixing] = useState(false);
-  const [fixed, setFixed] = useState(false);
   const [fixError, setFixError] = useState<string | null>(null);
-
-  const isWebm = (mimeType?.includes("webm") ?? src.includes(".webm")) === true;
-  const canFix = isWebm && !!durationMs && durationMs > 0 && !fixed && !fixing;
-
-  useEffect(() => {
-    return () => {
-      if (playableSrc.startsWith("blob:")) URL.revokeObjectURL(playableSrc);
-    };
-  }, [playableSrc]);
-
-  async function prepareSeek() {
-    setFixing(true);
-    setFixError(null);
-    try {
-      const res = await fetch(src);
-      if (!res.ok) throw new Error("fetch failed: " + res.status);
-      const arrayBuffer = await res.arrayBuffer();
-
-      // Обчислюємо РЕАЛЬНУ тривалість через Web Audio API замість того щоб
-      // покладатись на audioDurationMs з БД (для старих записів він міг
-      // бути помилковим — наприклад, рахував і паузу). decodeAudioData
-      // декодує весь файл і повертає точну тривалість аудіо-даних.
-      let realDurationMs: number;
-      try {
-        const AudioCtor =
-          window.AudioContext ||
-          (window as unknown as { webkitAudioContext?: typeof AudioContext })
-            .webkitAudioContext;
-        if (!AudioCtor) throw new Error("AudioContext недоступний");
-        const ctx = new AudioCtor();
-        // slice(0) бо decodeAudioData забирає буфер собі
-        const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
-        realDurationMs = Math.round(audioBuffer.duration * 1000);
-        await ctx.close();
-      } catch (decodeErr) {
-        console.warn(
-          "[SeekableAudio] decodeAudioData failed, using DB durationMs:",
-          decodeErr,
-        );
-        if (!durationMs || durationMs <= 0) {
-          throw new Error(
-            "Не вдалося визначити тривалість файлу і нема значення в БД",
-          );
-        }
-        realDurationMs = durationMs;
-      }
-
-      const rawBlob = new Blob([arrayBuffer], {
-        type: mimeType ?? "audio/webm",
-      });
-      const { default: fixWebmDuration } = await import("fix-webm-duration");
-      const fixedBlob = await fixWebmDuration(rawBlob, realDurationMs, {
-        logger: false,
-      });
-      const blobUrl = URL.createObjectURL(fixedBlob);
-      setPlayableSrc(blobUrl);
-      setFixed(true);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Помилка підготовки";
-      console.warn("[SeekableAudio] fix failed:", err);
-      setFixError(msg);
-    } finally {
-      setFixing(false);
-    }
-  }
-
-  // Альтернативний плеєр через <video> — для webm-аудіо Chromium часто
-  // використовує різні внутрішні розкодери для <audio> vs <video>.
-  // Якщо <audio> мовчить, варто спробувати <video>.
-  const [useVideoPlayer, setUseVideoPlayer] = useState(false);
-
-  // Safari погано грає webm/opus — навіть коли файл цілий. Детектимо
-  // справжній Safari (не Chromium-Edge на маку) щоб показати спец-кнопку.
-  const isSafari =
-    typeof window !== "undefined"
-      ? /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
-      : false;
-  const [convertingForSafari, setConvertingForSafari] = useState(false);
-
-  async function convertForSafari() {
-    setConvertingForSafari(true);
-    setFixError(null);
-    try {
-      const res = await fetch(src);
-      if (!res.ok) throw new Error("fetch failed");
-      const arrayBuffer = await res.arrayBuffer();
-      const AudioCtor =
-        window.AudioContext ||
-        (window as unknown as { webkitAudioContext?: typeof AudioContext })
-          .webkitAudioContext;
-      if (!AudioCtor) throw new Error("AudioContext недоступний");
-      const ctx = new AudioCtor();
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
-      await ctx.close();
-      const wavBlob = audioBufferToWav(audioBuffer);
-      const url = URL.createObjectURL(wavBlob);
-      setPlayableSrc(url);
-      setFixed(true);
-    } catch (err) {
-      setFixError(
-        err instanceof Error
-          ? `Конверсія не вдалась: ${err.message}. Файл або пошкоджений, або Safari не зміг розкодувати webm-codec.`
-          : "Конверсія не вдалась",
-      );
-    } finally {
-      setConvertingForSafari(false);
-    }
-  }
-
-  // Діагностика файлу — щоб одразу бачити чи проблема в плеєрі чи в файлі.
-  const [diagnostics, setDiagnostics] = useState<null | {
-    size: number;
-    contentType: string | null;
-    hasEbmlMagic: boolean | null;
-    hint: string;
-  }>(null);
-  const [diagnosing, setDiagnosing] = useState(false);
-
-  async function runDiagnostics() {
-    setDiagnosing(true);
-    setFixError(null);
-    try {
-      const res = await fetch(src);
-      if (!res.ok) {
-        setDiagnostics({
-          size: 0,
-          contentType: null,
-          hasEbmlMagic: null,
-          hint: `HTTP ${res.status} — файл недоступний на R2`,
-        });
-        return;
-      }
-      const contentType = res.headers.get("content-type");
-      const buf = await res.arrayBuffer();
-      const view = new Uint8Array(buf);
-      // EBML magic bytes: 0x1A 0x45 0xDF 0xA3
-      const hasEbmlMagic =
-        view.length >= 4 &&
-        view[0] === 0x1a &&
-        view[1] === 0x45 &&
-        view[2] === 0xdf &&
-        view[3] === 0xa3;
-      let hint = "";
-      if (buf.byteLength === 0) {
-        hint = "Файл порожній — запис не дійшов до R2.";
-      } else if (buf.byteLength < 5_000) {
-        hint = `Файл дуже малий (${buf.byteLength} байт) — швидше за все запис обірвався одразу. У VLC теж нічого не буде.`;
-      } else if (!hasEbmlMagic) {
-        hint = "Немає EBML-сигнатури webm. Файл або не webm, або пошкоджений на початку.";
-      } else if (durationMs && durationMs > 60_000 && buf.byteLength < 50_000) {
-        hint = `Очікували ${Math.round(durationMs / 1000)}с запису, але файл лише ${buf.byteLength} байт. Запис обірвався — у файлі менше звуку ніж DB думає.`;
-      } else {
-        hint = "Структура виглядає нормальною. Можливо проблема в браузерному <audio>. Спробуй «Альтернативний плеєр».";
-      }
-      setDiagnostics({
-        size: buf.byteLength,
-        contentType,
-        hasEbmlMagic,
-        hint,
-      });
-    } catch (err) {
-      setDiagnostics({
-        size: 0,
-        contentType: null,
-        hasEbmlMagic: null,
-        hint:
-          err instanceof Error
-            ? `Помилка fetch: ${err.message}`
-            : "Помилка fetch",
-      });
-    } finally {
-      setDiagnosing(false);
-    }
-  }
+  const playableSrc = src;
 
   function handleAudioError() {
-    // Якщо ми граємо виправлений blob і він не зміг завантажитись —
-    // повертаємось до оригінального URL без перемотки.
-    if (playableSrc.startsWith("blob:") && playableSrc !== src) {
-      URL.revokeObjectURL(playableSrc);
-      setPlayableSrc(src);
-      setFixed(false);
-      setFixError(
-        "Виправлення не сумісне з цим записом (ймовірно, файл частково пошкоджений). Спробуй «Завантажити оригінал» і слухай локально у VLC.",
-      );
-      return;
-    }
-    // Помилка на сирому URL — файл не може зіграти зовсім. Показуємо
-    // користувачу що варто завантажити і слухати локально.
     if (!fixError) {
       setFixError(
-        "Браузер не може відтворити цей файл. Скоріш за все запис був перерваний (мікрофон скинувся або вкладка закрилась). Завантаж оригінал — VLC покаже скільки реально звуку є у файлі.",
+        "Браузер не зміг відтворити цей файл. Натисни «Викачати у WAV» і слухай локально (VLC, QuickTime тощо).",
       );
     }
   }
 
   return (
     <div className="flex flex-col gap-2">
-      {useVideoPlayer ? (
-        <video
-          key={`video-${playableSrc}`}
-          controls
-          src={playableSrc}
-          className="w-full"
-          preload="metadata"
-          onError={handleAudioError}
-          style={{ maxHeight: 80, background: T.panelElevated }}
-        />
-      ) : (
-        <audio
-          key={`audio-${playableSrc}`}
-          controls
-          src={playableSrc}
-          className="w-full"
-          preload="metadata"
-          onError={handleAudioError}
-        />
-      )}
-
-      {isSafari && isWebm && !fixed && (
-        <div
-          className="flex items-start gap-2 rounded-md p-2 text-[11px] leading-relaxed"
-          style={{
-            background: T.amberSoft,
-            color: T.textPrimary,
-            border: `1px solid ${T.warning}33`,
-          }}
-        >
-          <span style={{ color: T.warning }}>⚠️</span>
-          <div className="flex-1">
-            <strong style={{ color: T.warning }}>Safari не дружить з webm/opus.</strong>{" "}
-            Натисни «Конвертувати для Safari» (1 раз) щоб перекодувати у WAV
-            на льоту — після цього грається з повноцінною перемоткою. Альтернатива:
-            відкрий цю нараду в Chrome.
-            <button
-              onClick={() => void convertForSafari()}
-              disabled={convertingForSafari}
-              className="ml-2 rounded-md px-2 py-1 text-[11px] font-semibold disabled:opacity-50"
-              style={{
-                background: T.warning,
-                color: "#fff",
-              }}
-            >
-              {convertingForSafari ? "Конвертую…" : "Конвертувати для Safari"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+      <audio
+        key={playableSrc}
+        controls
+        src={playableSrc}
+        className="w-full"
+        preload="metadata"
+        onError={handleAudioError}
+      />
+      <div className="flex items-center gap-3 text-[11px]">
         <button
-          onClick={() => setUseVideoPlayer((v) => !v)}
+          onClick={() => void downloadAudio(src, mimeType)}
           className="rounded-md px-2 py-1 transition hover:underline"
-          style={{
-            background: T.panelElevated,
-            color: T.textMuted,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-          title={
-            useVideoPlayer
-              ? "Повернутись до звичайного audio-плеєра"
-              : "Спробувати <video>-плеєр — він використовує інший розкодер у Chromium і часто грає там де <audio> мовчить"
-          }
-        >
-          {useVideoPlayer ? "Audio-плеєр" : "Альтернативний плеєр"}
-        </button>
-        <button
-          onClick={() => void runDiagnostics()}
-          disabled={diagnosing}
-          className="rounded-md px-2 py-1 transition hover:underline disabled:opacity-50"
           style={{ color: T.textMuted }}
-          title="Перевірити чи файл цілий на R2 і чи має валідний webm-хедер"
+          title="Завантажити аудіо у форматі WAV (універсальний, з повноцінною перемоткою у будь-якому плеєрі)"
         >
-          {diagnosing ? "Перевіряю…" : "Діагностика файлу"}
+          Викачати у WAV
         </button>
+        {fixError && <span style={{ color: T.warning }}>{fixError}</span>}
       </div>
-
-      {diagnostics && (
-        <div
-          className="rounded-md p-2 text-[11px] leading-relaxed"
-          style={{
-            background:
-              diagnostics.hasEbmlMagic && diagnostics.size > 5000
-                ? T.successSoft
-                : T.amberSoft,
-            color: T.textPrimary,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          <div className="flex items-center gap-3 font-mono">
-            <span>📦 {(diagnostics.size / 1024).toFixed(1)} KB</span>
-            <span>
-              📋 {diagnostics.contentType ?? "—"}
-            </span>
-            <span>
-              {diagnostics.hasEbmlMagic === null
-                ? ""
-                : diagnostics.hasEbmlMagic
-                  ? "✓ EBML"
-                  : "✗ no EBML"}
-            </span>
-            {durationMs && (
-              <span>
-                ⏱ DB: {Math.round(durationMs / 1000)}с
-              </span>
-            )}
-          </div>
-          <p className="mt-1">{diagnostics.hint}</p>
-        </div>
-      )}
-
-      {canFix && (
-        <div className="flex items-center gap-2 text-[11px]">
-          <button
-            onClick={prepareSeek}
-            disabled={fixing}
-            className="rounded-md px-2 py-1 transition disabled:opacity-50"
-            style={{
-              background: T.panelElevated,
-              color: T.textSecondary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-            title="Завантажити файл і додати duration в EBML-хедер — після цього плеєр зможе перемотувати назад/вперед"
-          >
-            {fixing ? "Готую…" : "Підготувати перемотку"}
-          </button>
-          <button
-            onClick={() => void downloadOriginal(src, mimeType)}
-            className="rounded-md px-2 py-1 transition hover:underline"
-            style={{ color: T.textMuted }}
-            title="Завантажити сирий файл як він є на R2 (без конверсії). Слухай у VLC / QuickTime — там перемотка працює навіть для пошкоджених webm."
-          >
-            Завантажити оригінал
-          </button>
-          <button
-            onClick={() => void downloadAudio(src, mimeType)}
-            className="rounded-md px-2 py-1 transition hover:underline"
-            style={{ color: T.textMuted }}
-            title="Перекодувати у WAV через Web Audio. Може не спрацювати якщо webm пошкоджений — тоді бери «Завантажити оригінал»."
-          >
-            у WAV
-          </button>
-          {fixError && (
-            <span style={{ color: T.warning }}>{fixError}</span>
-          )}
-        </div>
-      )}
-      {fixed && (
-        <span className="text-[11px]" style={{ color: T.success }}>
-          Перемотка готова — стрілка тепер працює
-        </span>
-      )}
     </div>
   );
-}
-
-// Тягне сирий файл і просто зберігає на диск через blob-URL.
-// БЕЗ Web Audio / decodeAudioData — працює навіть для частково
-// пошкоджених webm (VLC / QuickTime / ffmpeg відкриють що зможуть).
-async function downloadOriginal(src: string, mimeType: string | null) {
-  try {
-    const res = await fetch(src);
-    if (!res.ok) throw new Error("Не вдалося завантажити файл");
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const ext = mimeType?.includes("webm")
-      ? "webm"
-      : mimeType?.includes("mp4") || mimeType?.includes("m4a")
-        ? "m4a"
-        : mimeType?.includes("mpeg")
-          ? "mp3"
-          : mimeType?.includes("wav")
-            ? "wav"
-            : "audio";
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `meeting-${Date.now()}.${ext}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (err) {
-    console.error("[downloadOriginal] failed:", err);
-    alert("Не вдалося завантажити файл. Перевір консоль браузера.");
-  }
 }
 
 // Завантажує webm/opus, декодує через Web Audio API, кодує у WAV (PCM)

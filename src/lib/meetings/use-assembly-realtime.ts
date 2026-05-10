@@ -3,26 +3,34 @@
 import { useCallback, useRef, useState } from "react";
 
 /**
- * Підключає браузер напряму до AssemblyAI Streaming Speech-to-Text.
+ * Підключає браузер напряму до AssemblyAI Universal-Streaming v3.
  *
- * Використання:
- *   const r = useAssemblyRealtime({ meetingId, onFinalText });
- *   r.start(); // => запитує мікрофон + token
- *   r.stop();  // => закриває WS і AudioContext
+ * V2 SDK (RealtimeTranscriber) deprecated, тому юзаємо raw WebSocket
+ * до wss://streaming.assemblyai.com/v3/ws. Token беремо з нашого
+ * /realtime-token endpoint (він робить GET v3/token на сервері).
  *
- * onFinalText викликається лише на FINAL-сегментах (після паузи в мовленні),
- * partial-результати пропускаємо щоб не флудити /analyze.
+ * Audio формат: 16kHz mono, 16-bit PCM little-endian.
  *
- * AssemblyAI Streaming чекає аудіо: 16kHz, mono, 16-bit PCM.
- * Перетворюємо у браузері через AudioContext + ScriptProcessor.
+ * V3 message types:
+ *  - Begin   — сесія відкрилась
+ *  - Turn    — фрагмент розпізнаного тексту з end_of_turn boolean
+ *  - Termination — сесія закрилась
+ *
+ * onFinalText викликається лише на end_of_turn=true (готова репліка).
  */
 
-type State =
-  | "idle"
-  | "connecting"
-  | "active"
-  | "error"
-  | "stopping";
+type State = "idle" | "connecting" | "active" | "error" | "stopping";
+
+type V3Message =
+  | { type: "Begin"; id?: string }
+  | {
+      type: "Turn";
+      transcript?: string;
+      end_of_turn?: boolean;
+      turn_is_formatted?: boolean;
+    }
+  | { type: "Termination"; audio_duration_seconds?: number }
+  | { type: string; [k: string]: unknown };
 
 export function useAssemblyRealtime(opts: {
   meetingId: string;
@@ -32,10 +40,7 @@ export function useAssemblyRealtime(opts: {
 }) {
   const [state, setState] = useState<State>("idle");
 
-  const transcriberRef = useRef<{
-    close: () => Promise<void>;
-    sendAudio: (buf: ArrayBufferLike) => void;
-  } | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -56,7 +61,16 @@ export function useAssemblyRealtime(opts: {
       sourceRef.current?.disconnect();
       streamRef.current?.getTracks().forEach((t) => t.stop());
       await audioCtxRef.current?.close().catch(() => {});
-      await transcriberRef.current?.close().catch(() => {});
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          // V3 graceful close — спецповідомлення "Terminate".
+          ws.send(JSON.stringify({ type: "Terminate" }));
+        } catch {
+          /* ignore */
+        }
+        ws.close();
+      }
     } catch {
       /* ignore */
     }
@@ -64,45 +78,89 @@ export function useAssemblyRealtime(opts: {
     sourceRef.current = null;
     streamRef.current = null;
     audioCtxRef.current = null;
-    transcriberRef.current = null;
+    wsRef.current = null;
     updateState("idle");
   }, [updateState]);
 
   const start = useCallback(async () => {
     updateState("connecting");
     try {
-      // 1. Беремо короткоживучий токен.
+      // 1. Беремо короткоживучий токен з нашого backend (він робить v3/token).
       const tokRes = await fetch(
         `/api/admin/meetings/${opts.meetingId}/live-agent/realtime-token`,
         { method: "POST" },
       );
       if (!tokRes.ok) {
         const j = await tokRes.json().catch(() => ({}));
-        throw new Error(j.error || "Не вдалось отримати токен");
+        throw new Error(j.error || `token HTTP ${tokRes.status}`);
       }
       const { token } = await tokRes.json();
+      if (!token) throw new Error("Сервер повернув порожній токен");
 
-      // 2. Динамічно імпортуємо SDK (browser entry — без node modules).
-      const { RealtimeTranscriber } = await import("assemblyai");
-      const transcriber = new RealtimeTranscriber({
+      // 2. Відкриваємо WebSocket до v3/ws.
+      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&token=${encodeURIComponent(
         token,
-        sampleRate: 16000,
-      });
+      )}`;
+      const ws = new WebSocket(wsUrl);
+      ws.binaryType = "arraybuffer";
 
-      transcriber.on("transcript.final", (t) => {
-        const text = (t.text ?? "").trim();
-        if (text) opts.onFinalText(text);
-      });
-      transcriber.on("error", (err) => {
-        console.warn("[Realtime] error:", err);
-        opts.onError?.(err.message ?? "Realtime error");
-      });
-      transcriber.on("close", (code, reason) => {
-        console.warn("[Realtime] closed:", code, reason);
-      });
+      // На отримання повідомлень — парсимо JSON-events.
+      ws.onmessage = (ev) => {
+        if (typeof ev.data !== "string") return;
+        let msg: V3Message;
+        try {
+          msg = JSON.parse(ev.data) as V3Message;
+        } catch {
+          return;
+        }
+        if (msg.type === "Turn") {
+          // V3: відправляємо у callback ТІЛЬКИ end_of_turn-фінали з
+          // відформатованим текстом (turn_is_formatted=true) — щоб не
+          // дублювати інтерміди в /analyze.
+          const isFinal =
+            (msg as { end_of_turn?: boolean }).end_of_turn === true;
+          const isFormatted =
+            (msg as { turn_is_formatted?: boolean }).turn_is_formatted ===
+            true;
+          if (!isFinal || !isFormatted) return;
+          const text = ((msg as { transcript?: string }).transcript ?? "")
+            .trim();
+          if (text) opts.onFinalText(text);
+        } else if (msg.type === "Termination") {
+          // Сесія завершилась з боку AssemblyAI — нічого не робимо,
+          // далі піде ws.onclose.
+        }
+        // Begin / інші — ігноруємо.
+      };
+      ws.onerror = () => {
+        opts.onError?.("WebSocket error");
+      };
+      ws.onclose = (ev) => {
+        if (ev.code !== 1000 && ev.code !== 1005) {
+          // Не-graceful close — повідомляємо.
+          opts.onError?.(`WS closed: ${ev.code} ${ev.reason || ""}`.trim());
+        }
+        if (state === "active") {
+          updateState("idle");
+        }
+      };
 
-      await transcriber.connect();
-      transcriberRef.current = transcriber as unknown as typeof transcriberRef.current;
+      // Чекаємо open перед запуском мікрофона.
+      await new Promise<void>((resolve, reject) => {
+        const onOpen = () => {
+          ws.removeEventListener("open", onOpen);
+          ws.removeEventListener("error", onErr);
+          resolve();
+        };
+        const onErr = () => {
+          ws.removeEventListener("open", onOpen);
+          ws.removeEventListener("error", onErr);
+          reject(new Error("WS не зміг відкритись"));
+        };
+        ws.addEventListener("open", onOpen);
+        ws.addEventListener("error", onErr);
+      });
+      wsRef.current = ws;
 
       // 3. Запускаємо мікрофон з 16kHz mono.
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -127,29 +185,28 @@ export function useAssemblyRealtime(opts: {
       const source = ctx.createMediaStreamSource(stream);
       sourceRef.current = source;
 
-      // ScriptProcessor депрекейтнутий, але достатній для MVP. Розмір 4096
-      // балансує latency (256ms) і CPU.
+      // ScriptProcessor депрекейтнутий, але достатній для MVP.
       const processor = ctx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
       processor.onaudioprocess = (ev) => {
         const float32 = ev.inputBuffer.getChannelData(0);
-        // Float32 [-1..1] → Int16 PCM
         const int16 = new Int16Array(float32.length);
         for (let i = 0; i < float32.length; i++) {
           const s = Math.max(-1, Math.min(1, float32[i]));
           int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
         }
-        try {
-          transcriberRef.current?.sendAudio(int16.buffer);
-        } catch {
-          /* ignore — connection might be closing */
+        const w = wsRef.current;
+        if (w && w.readyState === WebSocket.OPEN) {
+          try {
+            w.send(int16.buffer);
+          } catch {
+            /* ignore */
+          }
         }
       };
 
       source.connect(processor);
-      // Без connect-у на destination ScriptProcessor не отримує onaudioprocess.
-      // Робимо silent gain 0 щоб не лунало в колонках.
       const silent = ctx.createGain();
       silent.gain.value = 0;
       processor.connect(silent);
@@ -162,7 +219,7 @@ export function useAssemblyRealtime(opts: {
       updateState("error");
       await stop();
     }
-  }, [opts, stop, updateState]);
+  }, [opts, stop, updateState, state]);
 
   return { state, start, stop };
 }
