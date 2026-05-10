@@ -1271,6 +1271,77 @@ function SeekableAudio({
     }
   }
 
+  // Альтернативний плеєр через <video> — для webm-аудіо Chromium часто
+  // використовує різні внутрішні розкодери для <audio> vs <video>.
+  // Якщо <audio> мовчить, варто спробувати <video>.
+  const [useVideoPlayer, setUseVideoPlayer] = useState(false);
+
+  // Діагностика файлу — щоб одразу бачити чи проблема в плеєрі чи в файлі.
+  const [diagnostics, setDiagnostics] = useState<null | {
+    size: number;
+    contentType: string | null;
+    hasEbmlMagic: boolean | null;
+    hint: string;
+  }>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+
+  async function runDiagnostics() {
+    setDiagnosing(true);
+    setFixError(null);
+    try {
+      const res = await fetch(src);
+      if (!res.ok) {
+        setDiagnostics({
+          size: 0,
+          contentType: null,
+          hasEbmlMagic: null,
+          hint: `HTTP ${res.status} — файл недоступний на R2`,
+        });
+        return;
+      }
+      const contentType = res.headers.get("content-type");
+      const buf = await res.arrayBuffer();
+      const view = new Uint8Array(buf);
+      // EBML magic bytes: 0x1A 0x45 0xDF 0xA3
+      const hasEbmlMagic =
+        view.length >= 4 &&
+        view[0] === 0x1a &&
+        view[1] === 0x45 &&
+        view[2] === 0xdf &&
+        view[3] === 0xa3;
+      let hint = "";
+      if (buf.byteLength === 0) {
+        hint = "Файл порожній — запис не дійшов до R2.";
+      } else if (buf.byteLength < 5_000) {
+        hint = `Файл дуже малий (${buf.byteLength} байт) — швидше за все запис обірвався одразу. У VLC теж нічого не буде.`;
+      } else if (!hasEbmlMagic) {
+        hint = "Немає EBML-сигнатури webm. Файл або не webm, або пошкоджений на початку.";
+      } else if (durationMs && durationMs > 60_000 && buf.byteLength < 50_000) {
+        hint = `Очікували ${Math.round(durationMs / 1000)}с запису, але файл лише ${buf.byteLength} байт. Запис обірвався — у файлі менше звуку ніж DB думає.`;
+      } else {
+        hint = "Структура виглядає нормальною. Можливо проблема в браузерному <audio>. Спробуй «Альтернативний плеєр».";
+      }
+      setDiagnostics({
+        size: buf.byteLength,
+        contentType,
+        hasEbmlMagic,
+        hint,
+      });
+    } catch (err) {
+      setDiagnostics({
+        size: 0,
+        contentType: null,
+        hasEbmlMagic: null,
+        hint:
+          err instanceof Error
+            ? `Помилка fetch: ${err.message}`
+            : "Помилка fetch",
+      });
+    } finally {
+      setDiagnosing(false);
+    }
+  }
+
   function handleAudioError() {
     // Якщо ми граємо виправлений blob і він не зміг завантажитись —
     // повертаємось до оригінального URL без перемотки.
@@ -1294,14 +1365,89 @@ function SeekableAudio({
 
   return (
     <div className="flex flex-col gap-2">
-      <audio
-        key={playableSrc}
-        controls
-        src={playableSrc}
-        className="w-full"
-        preload="metadata"
-        onError={handleAudioError}
-      />
+      {useVideoPlayer ? (
+        <video
+          key={`video-${playableSrc}`}
+          controls
+          src={playableSrc}
+          className="w-full"
+          preload="metadata"
+          onError={handleAudioError}
+          style={{ maxHeight: 80, background: T.panelElevated }}
+        />
+      ) : (
+        <audio
+          key={`audio-${playableSrc}`}
+          controls
+          src={playableSrc}
+          className="w-full"
+          preload="metadata"
+          onError={handleAudioError}
+        />
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <button
+          onClick={() => setUseVideoPlayer((v) => !v)}
+          className="rounded-md px-2 py-1 transition hover:underline"
+          style={{
+            background: T.panelElevated,
+            color: T.textMuted,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+          title={
+            useVideoPlayer
+              ? "Повернутись до звичайного audio-плеєра"
+              : "Спробувати <video>-плеєр — він використовує інший розкодер у Chromium і часто грає там де <audio> мовчить"
+          }
+        >
+          {useVideoPlayer ? "Audio-плеєр" : "Альтернативний плеєр"}
+        </button>
+        <button
+          onClick={() => void runDiagnostics()}
+          disabled={diagnosing}
+          className="rounded-md px-2 py-1 transition hover:underline disabled:opacity-50"
+          style={{ color: T.textMuted }}
+          title="Перевірити чи файл цілий на R2 і чи має валідний webm-хедер"
+        >
+          {diagnosing ? "Перевіряю…" : "Діагностика файлу"}
+        </button>
+      </div>
+
+      {diagnostics && (
+        <div
+          className="rounded-md p-2 text-[11px] leading-relaxed"
+          style={{
+            background:
+              diagnostics.hasEbmlMagic && diagnostics.size > 5000
+                ? T.successSoft
+                : T.amberSoft,
+            color: T.textPrimary,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <div className="flex items-center gap-3 font-mono">
+            <span>📦 {(diagnostics.size / 1024).toFixed(1)} KB</span>
+            <span>
+              📋 {diagnostics.contentType ?? "—"}
+            </span>
+            <span>
+              {diagnostics.hasEbmlMagic === null
+                ? ""
+                : diagnostics.hasEbmlMagic
+                  ? "✓ EBML"
+                  : "✗ no EBML"}
+            </span>
+            {durationMs && (
+              <span>
+                ⏱ DB: {Math.round(durationMs / 1000)}с
+              </span>
+            )}
+          </div>
+          <p className="mt-1">{diagnostics.hint}</p>
+        </div>
+      )}
+
       {canFix && (
         <div className="flex items-center gap-2 text-[11px]">
           <button
