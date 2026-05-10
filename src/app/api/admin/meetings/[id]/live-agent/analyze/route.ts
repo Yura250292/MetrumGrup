@@ -204,6 +204,7 @@ export async function POST(
   return NextResponse.json({
     insights: persisted,
     glossaryTerms: persistedTerms,
+    entitiesToLookup: result.entitiesToLookup,
     usage: result.usage,
   });
 }

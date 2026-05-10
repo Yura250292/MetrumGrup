@@ -23,6 +23,12 @@ import {
   RefreshCw,
   Copy,
   Check,
+  Search,
+  ExternalLink,
+  Briefcase,
+  UserSquare,
+  CalendarRange,
+  ClipboardList,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useAssemblyRealtime } from "@/lib/meetings/use-assembly-realtime";
@@ -35,6 +41,32 @@ type LiveTermDTO = {
   definition: string;
   contextInMeeting: string | null;
   createdAt: string;
+};
+
+type LookupKind =
+  | "project"
+  | "counterparty"
+  | "meeting"
+  | "foreman_report"
+  | "task"
+  | "material";
+
+type LookupMatch = {
+  kind: LookupKind;
+  id: string;
+  title: string;
+  snippet: string;
+  url: string;
+};
+
+type KnownEntityCard = {
+  /** Унікальний ключ (text+type) — щоб не запитувати двічі. */
+  key: string;
+  query: string;
+  type: string;
+  matches: LookupMatch[];
+  /** «not_found» якщо нічого не знайшли. */
+  status: "found" | "not_found";
 };
 
 // ────────────────────────────────────────────────────────────────────────
@@ -143,6 +175,10 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const [briefingExpanded, setBriefingExpanded] = useState(false);
   const [briefingLoading, setBriefingLoading] = useState(false);
 
+  // Live lookup state — "Я знаю про X" cards.
+  const [knownCards, setKnownCards] = useState<KnownEntityCard[]>([]);
+  const lookedUpKeysRef = useRef<Set<string>>(new Set());
+
   const recognitionRef = useRef<unknown>(null);
   const bufferRef = useRef<string>("");
   const recentContextRef = useRef<string>("");
@@ -197,6 +233,42 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       const data = await res.json();
       setBriefing(data.briefing ?? null);
       setBriefingGeneratedAt(data.generatedAt ?? null);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function runLookup(text: string, type: string, key: string) {
+    try {
+      const res = await fetch(
+        `/api/admin/meetings/${meetingId}/live-agent/lookup`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        },
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      const matches: LookupMatch[] = data.matches ?? [];
+      // Не показуємо «not_found» картки для типів які навмисно широкі
+      // (other / person), щоб не флудити панель.
+      if (matches.length === 0) {
+        if (type === "other" || type === "person") return;
+      }
+      setKnownCards((prev) => {
+        if (prev.find((c) => c.key === key)) return prev;
+        return [
+          ...prev,
+          {
+            key,
+            query: text,
+            type,
+            matches,
+            status: matches.length > 0 ? "found" : "not_found",
+          },
+        ];
+      });
     } catch {
       /* ignore */
     }
@@ -395,12 +467,26 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
+      const responseBody = await res.json().catch(() => ({}));
       // Зрушуємо контекст: тримаємо вікно з останнього chunk + попередніх.
       recentContextRef.current = (
         recentContext +
         "\n" +
         chunk
       ).slice(-CONTEXT_WINDOW_CHARS);
+
+      // Запускаємо lookup-и для нових ентіті — в фоні, не блокуючи refresh.
+      const ents: Array<{ type: string; text: string }> =
+        responseBody?.entitiesToLookup ?? [];
+      for (const ent of ents) {
+        const text = (ent.text ?? "").trim();
+        if (!text || text.length < 3) continue;
+        const key = `${ent.type}:${text.toLowerCase()}`;
+        if (lookedUpKeysRef.current.has(key)) continue;
+        lookedUpKeysRef.current.add(key);
+        void runLookup(text, ent.type, key);
+      }
+
       await refresh();
       setStatusMessage(enabledRef.current ? "Активний — слухає" : "Вимкнено");
     } catch (err) {
@@ -697,6 +783,23 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         </div>
       )}
 
+      {/* «Я знаю про…» — live RAG картки */}
+      {knownCards.length > 0 && (
+        <div className="mt-3">
+          <div
+            className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted }}
+          >
+            <Search size={11} /> Я знаю про…
+          </div>
+          <div className="flex flex-col gap-2">
+            {knownCards.slice(-8).map((c) => (
+              <KnownCardView key={c.key} card={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {mode === "browser" && !supported && (
         <div
           className="mt-3 flex items-start gap-2 rounded-lg p-2.5 text-[11px]"
@@ -953,6 +1056,130 @@ const TONE_LABEL: Record<ResponseTone, string> = {
   neutral: "Нейтрально",
   firm: "Наполегливо",
 };
+
+const KIND_META: Record<
+  LookupKind,
+  { label: string; color: string; bg: string; icon: React.ReactNode }
+> = {
+  project: {
+    label: "Проєкт",
+    color: T.indigo,
+    bg: T.indigoSoft,
+    icon: <Briefcase size={11} />,
+  },
+  counterparty: {
+    label: "Контрагент",
+    color: T.accentSecondary,
+    bg: T.panelElevated,
+    icon: <UserSquare size={11} />,
+  },
+  meeting: {
+    label: "Нарада",
+    color: T.accentPrimary,
+    bg: T.accentPrimarySoft,
+    icon: <CalendarRange size={11} />,
+  },
+  foreman_report: {
+    label: "Звіт виконроба",
+    color: T.warning,
+    bg: T.amberSoft,
+    icon: <ClipboardList size={11} />,
+  },
+  task: {
+    label: "Задача",
+    color: T.success,
+    bg: T.successSoft,
+    icon: <ClipboardList size={11} />,
+  },
+  material: {
+    label: "Матеріал",
+    color: T.textSecondary,
+    bg: T.panelElevated,
+    icon: <ClipboardList size={11} />,
+  },
+};
+
+function KnownCardView({ card }: { card: KnownEntityCard }) {
+  return (
+    <div
+      className="rounded-lg p-2.5"
+      style={{
+        background: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <Search size={12} style={{ color: T.textMuted }} />
+        <span
+          className="text-[12px] font-bold"
+          style={{ color: T.textPrimary }}
+        >
+          {card.query}
+        </span>
+        <span
+          className="rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+          style={{
+            background: T.panelElevated,
+            color: T.textMuted,
+          }}
+        >
+          {card.type}
+        </span>
+      </div>
+      {card.status === "not_found" ? (
+        <p
+          className="mt-1 text-[11px] italic"
+          style={{ color: T.textMuted }}
+        >
+          У базі нічого не знайшов — перепитай у співрозмовника.
+        </p>
+      ) : (
+        <div className="mt-1.5 flex flex-col gap-1">
+          {card.matches.map((m) => {
+            const meta = KIND_META[m.kind];
+            return (
+              <a
+                key={m.kind + m.id}
+                href={m.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-md p-2 transition hover:brightness-105"
+                style={{
+                  background: meta.bg,
+                  textDecoration: "none",
+                }}
+              >
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                    style={{ background: T.panel, color: meta.color }}
+                  >
+                    {meta.icon} {meta.label}
+                  </span>
+                  <span
+                    className="text-[12px] font-semibold flex-1 truncate"
+                    style={{ color: T.textPrimary }}
+                  >
+                    {m.title}
+                  </span>
+                  <ExternalLink size={10} style={{ color: T.textMuted }} />
+                </div>
+                {m.snippet && (
+                  <p
+                    className="mt-1 text-[11px] leading-relaxed"
+                    style={{ color: T.textSecondary }}
+                  >
+                    {m.snippet}
+                  </p>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function SuggestedResponseRow({
   tone,

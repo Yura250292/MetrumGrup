@@ -69,10 +69,27 @@ export type AnalyzeInput = {
   }>;
 };
 
+export type LookupEntityType =
+  | "project"
+  | "counterparty"
+  | "person"
+  | "object"
+  | "document"
+  | "material"
+  | "location"
+  | "other";
+
+export type EntityToLookup = {
+  type: LookupEntityType;
+  text: string;
+};
+
 export type AnalyzeResult = {
   insights: LiveInsight[];
   /** Нові терміни / абревіатури з пояснень — для live-глосарію. */
   glossaryTerms: LiveTerm[];
+  /** Іменовані сутності з chunk-у, які варто пошукати у власній базі. */
+  entitiesToLookup: EntityToLookup[];
   /** Метадані для cost-логу. */
   usage: {
     provider: string;
@@ -119,7 +136,13 @@ const SYSTEM_PROMPT = `Ти — Live AI Agent для будівельної ко
 - кожен 1-3 речення, готовий до зачитування
 - ТІЛЬКИ якщо очевидно що звертаються до користувача. Інакше null.
 
-Формат відповіді: ВИКЛЮЧНО JSON виду {"insights": [...], "glossaryTerms": [...]}. Без markdown, без пояснень поза JSON.`;
+3) entitiesToLookup — ВЛАСНІ ІМЕНА що зʼявились у chunk-у і які варто пошукати у БАЗІ КОРИСТУВАЧА (попередні наради, проєкти, контрагенти, обʼєкти, документи). Це дасть агенту показати «Я знаю про це» — карточку з фактами з історії.
+- type: один з "project" (назва проєкту), "counterparty" (контрагент/постачальник/замовник), "person" (людина), "object" (обʼєкт/будівля/обладнання), "document" (договір/наказ/акт/витяг), "material" (матеріал), "location" (адреса/обʼєкт), "other"
+- text: ТОЧНО як прозвучало у chunk-у (не виправляй, не перекладай)
+- Виводь те ЩО ВАРТО ШУКАТИ. Не дублюй terms (МУО, КЕП — це абревіатури, не lookup). Імена людей — тільки якщо це хтось зовнішній або контрагент.
+- 0-5 елементів. Краще менше але точно.
+
+Формат відповіді: ВИКЛЮЧНО JSON виду {"insights": [...], "glossaryTerms": [...], "entitiesToLookup": [...]}. Без markdown, без пояснень поза JSON.`;
 
 const RESPONSE_SCHEMA = {
   type: "object",
@@ -196,8 +219,32 @@ const RESPONSE_SCHEMA = {
         required: ["term", "definition", "contextInMeeting"],
       },
     },
+    entitiesToLookup: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          type: {
+            type: "string",
+            enum: [
+              "project",
+              "counterparty",
+              "person",
+              "object",
+              "document",
+              "material",
+              "location",
+              "other",
+            ],
+          },
+          text: { type: "string" },
+        },
+        required: ["type", "text"],
+      },
+    },
   },
-  required: ["insights", "glossaryTerms"],
+  required: ["insights", "glossaryTerms", "entitiesToLookup"],
 } as const;
 
 // Дуже груба оцінка вартості GPT-4o-mini ($0.15 / 1M input, $0.60 / 1M output).
@@ -260,16 +307,24 @@ export async function analyzeChunk(
   const latencyMs = Date.now() - start;
 
   const raw =
-    res.choices[0]?.message?.content ?? '{"insights":[],"glossaryTerms":[]}';
-  let parsed: { insights?: LiveInsight[]; glossaryTerms?: LiveTerm[] } = {};
+    res.choices[0]?.message?.content ??
+    '{"insights":[],"glossaryTerms":[],"entitiesToLookup":[]}';
+  let parsed: {
+    insights?: LiveInsight[];
+    glossaryTerms?: LiveTerm[];
+    entitiesToLookup?: EntityToLookup[];
+  } = {};
   try {
     parsed = JSON.parse(raw);
   } catch {
-    parsed = { insights: [], glossaryTerms: [] };
+    parsed = { insights: [], glossaryTerms: [], entitiesToLookup: [] };
   }
   const insights = Array.isArray(parsed.insights) ? parsed.insights : [];
   const glossaryTerms = Array.isArray(parsed.glossaryTerms)
     ? parsed.glossaryTerms
+    : [];
+  const entitiesToLookup = Array.isArray(parsed.entitiesToLookup)
+    ? parsed.entitiesToLookup
     : [];
 
   const inputTokens = res.usage?.prompt_tokens ?? null;
@@ -279,6 +334,7 @@ export async function analyzeChunk(
   return {
     insights,
     glossaryTerms,
+    entitiesToLookup,
     usage: {
       provider,
       model,
