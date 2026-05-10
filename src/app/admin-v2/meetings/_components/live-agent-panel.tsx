@@ -361,7 +361,10 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     };
     rec.onerror = (ev: SpeechRecognitionErrorLike) => {
       console.warn("[LiveAgent] SpeechRecognition error:", ev.error);
-      // Не вимикаємо повністю — тимчасова помилка, спробуємо переавтостарт.
+      // «aborted» — це нормальна реакція на наш .stop() / зміну mode.
+      // Не показуємо як помилку, не перезапускаємо.
+      if (ev.error === "aborted") return;
+      // Транзиентні помилки — мовчки переспроба через onend.
       if (
         ev.error === "no-speech" ||
         ev.error === "audio-capture" ||

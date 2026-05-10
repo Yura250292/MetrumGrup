@@ -98,13 +98,18 @@ export function useAssemblyRealtime(opts: {
       if (!token) throw new Error("Сервер повернув порожній токен");
 
       // 2. Відкриваємо WebSocket до v3/ws.
-      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&format_turns=true&token=${encodeURIComponent(
+      // Мінімум обовʼязкових параметрів: sample_rate + token. Решта (encoding,
+      // turn detection) має дефолти. Раніше передавали format_turns=true —
+      // не валідний для v3, через що сервер закривав WS з кодом 3006.
+      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&token=${encodeURIComponent(
         token,
       )}`;
       const ws = new WebSocket(wsUrl);
       ws.binaryType = "arraybuffer";
 
-      // На отримання повідомлень — парсимо JSON-events.
+      // Тримаємо останнє server-side error-повідомлення щоб віддати у onclose.
+      let lastErrorReason: string | null = null;
+
       ws.onmessage = (ev) => {
         if (typeof ev.data !== "string") return;
         let msg: V3Message;
@@ -114,31 +119,38 @@ export function useAssemblyRealtime(opts: {
           return;
         }
         if (msg.type === "Turn") {
-          // V3: відправляємо у callback ТІЛЬКИ end_of_turn-фінали з
-          // відформатованим текстом (turn_is_formatted=true) — щоб не
-          // дублювати інтерміди в /analyze.
+          // V3 за замовчуванням повертає Turn з end_of_turn boolean.
           const isFinal =
             (msg as { end_of_turn?: boolean }).end_of_turn === true;
-          const isFormatted =
-            (msg as { turn_is_formatted?: boolean }).turn_is_formatted ===
-            true;
-          if (!isFinal || !isFormatted) return;
+          if (!isFinal) return;
           const text = ((msg as { transcript?: string }).transcript ?? "")
             .trim();
           if (text) opts.onFinalText(text);
+        } else if (msg.type === "Begin") {
+          console.log("[AssemblyAI v3] session started:", msg);
         } else if (msg.type === "Termination") {
-          // Сесія завершилась з боку AssemblyAI — нічого не робимо,
-          // далі піде ws.onclose.
+          console.log("[AssemblyAI v3] terminated:", msg);
+        } else if (msg.type === "Error" || (msg as { error?: string }).error) {
+          // Сервер прислав помилку — зберігаємо текст для onclose.
+          const errMsg =
+            (msg as { message?: string; error?: string }).message ??
+            (msg as { error?: string }).error ??
+            JSON.stringify(msg);
+          console.warn("[AssemblyAI v3] server error:", errMsg);
+          lastErrorReason = errMsg;
+          opts.onError?.(`AssemblyAI: ${errMsg}`);
+        } else {
+          console.log("[AssemblyAI v3] unknown msg:", msg);
         }
-        // Begin / інші — ігноруємо.
       };
       ws.onerror = () => {
         opts.onError?.("WebSocket error");
       };
       ws.onclose = (ev) => {
         if (ev.code !== 1000 && ev.code !== 1005) {
-          // Не-graceful close — повідомляємо.
-          opts.onError?.(`WS closed: ${ev.code} ${ev.reason || ""}`.trim());
+          const reason =
+            lastErrorReason ?? ev.reason ?? "(reason not provided)";
+          opts.onError?.(`WS closed: code=${ev.code} ${reason}`);
         }
         if (state === "active") {
           updateState("idle");
