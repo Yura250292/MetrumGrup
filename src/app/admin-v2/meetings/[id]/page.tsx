@@ -37,6 +37,7 @@ import {
 } from "../_components/summary-view";
 import { DelegateTaskModal } from "../_components/delegate-task-modal";
 import { LiveAgentPanel } from "../_components/live-agent-panel";
+import { MeetingsNavSidebar } from "../_components/meetings-nav-sidebar";
 import { useAiPanel } from "@/contexts/AiPanelContext";
 
 const POLL_INTERVAL_MS = 3000;
@@ -295,7 +296,10 @@ export default function MeetingDetailPage() {
   const processing = POLLING_STATES.has(meeting.status);
 
   return (
-    <div className="mx-auto max-w-5xl">
+    <div className="mx-auto max-w-7xl">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
+        <MeetingsNavSidebar highlightFolderId={meeting?.folder?.id ?? null} />
+        <div className="min-w-0">
       <Link
         href="/admin-v2/meetings"
         className="mb-4 inline-flex items-center gap-1 text-sm"
@@ -643,6 +647,8 @@ export default function MeetingDetailPage() {
         loading={movingFolder}
         itemCount={1}
       />
+        </div>
+      </div>
     </div>
   );
 }

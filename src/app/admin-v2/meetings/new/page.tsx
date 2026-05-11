@@ -11,6 +11,7 @@ import {
 } from "../_components/meeting-recorder";
 import { AudioPreview } from "../_components/audio-preview";
 import { LiveAgentPanel } from "../_components/live-agent-panel";
+import { MeetingsNavSidebar } from "../_components/meetings-nav-sidebar";
 import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
 type FolderOption = {
@@ -229,7 +230,10 @@ export default function NewMeetingPage() {
   const titlePlaceholder = autoDefaultTitle();
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div className="mx-auto max-w-7xl">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
+        <MeetingsNavSidebar highlightFolderId={folderId || null} />
+        <div className="min-w-0">
       <Link
         href="/admin-v2/meetings"
         className="mb-4 inline-flex items-center gap-1 text-sm"
@@ -397,6 +401,8 @@ export default function NewMeetingPage() {
           </span>
         </div>
       )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Mic,
   Plus,
@@ -50,7 +51,16 @@ export default function MeetingsListPage() {
   const [loadingMeetings, setLoadingMeetings] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  const folderFromUrl = searchParams.get("folder");
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(
+    folderFromUrl,
+  );
+
+  // Якщо URL змінився (зайшли з sidebar з /new або /[id]) — синхронізуємось.
+  useEffect(() => {
+    setCurrentFolderId(folderFromUrl);
+  }, [folderFromUrl]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const [creatingFolder, setCreatingFolder] = useState(false);
@@ -289,6 +299,12 @@ export default function MeetingsListPage() {
               expanded={expanded}
               setExpanded={setExpanded}
               onSelect={setCurrentFolderId}
+              onAddSubfolder={(parentId) => {
+                // Перемикаємось у цю папку щоб createFolder використав її як parent.
+                setCurrentFolderId(parentId);
+                setCreatingFolder(true);
+                setNewFolderName("");
+              }}
               onRename={(id, name) => {
                 setRenamingId(id);
                 setRenameValue(name);
@@ -575,6 +591,7 @@ type TreeProps = {
   expanded: Record<string, boolean>;
   setExpanded: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
   onSelect: (id: string | null) => void;
+  onAddSubfolder: (parentId: string) => void;
   onRename: (id: string, name: string) => void;
   onDelete: (id: string) => void;
   renamingId: string | null;
@@ -591,6 +608,7 @@ function FolderTree({
   expanded,
   setExpanded,
   onSelect,
+  onAddSubfolder,
   onRename,
   onDelete,
   renamingId,
@@ -677,6 +695,18 @@ function FolderTree({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      setExpanded((p) => ({ ...p, [n.id]: true }));
+                      onAddSubfolder(n.id);
+                    }}
+                    title="Додати підпапку"
+                    className="rounded p-1 opacity-0 transition group-hover:opacity-100"
+                    style={{ color: T.textMuted }}
+                  >
+                    <Plus size={12} />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
                       onRename(n.id, n.name);
                     }}
                     title="Перейменувати"
@@ -706,6 +736,7 @@ function FolderTree({
                 expanded={expanded}
                 setExpanded={setExpanded}
                 onSelect={onSelect}
+                onAddSubfolder={onAddSubfolder}
                 onRename={onRename}
                 onDelete={onDelete}
                 renamingId={renamingId}
