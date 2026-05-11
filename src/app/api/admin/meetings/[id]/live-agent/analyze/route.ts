@@ -13,8 +13,9 @@ export const maxDuration = 60;
 
 // Throttling: не приймаємо нові виклики для одного meeting частіше ніж раз
 // на N мс (на стороні сервера, як другий рубіж — клієнт теж дроселить).
-const MIN_INTERVAL_MS = 15_000;
-const MIN_CHUNK_CHARS = 100;
+// Знижено з 15с до 8с щоб юзер швидше бачив реакцію агента.
+const MIN_INTERVAL_MS = 8_000;
+const MIN_CHUNK_CHARS = 80;
 
 const bodySchema = z.object({
   currentChunk: z.string().min(1),

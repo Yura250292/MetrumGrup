@@ -154,7 +154,11 @@ function priorityStyle(p: string): { bg: string; fg: string } {
   return { bg: T.panelElevated, fg: T.textMuted };
 }
 
+// Швидкий перший виклик (200 chars / 12 сек) — щоб юзер ОДРАЗУ побачив
+// що агент щось аналізує. Подальші виклики — більш стабільний поріг.
+const CHUNK_MIN_CHARS_FIRST = 200;
 const CHUNK_MIN_CHARS = 500;
+const CHUNK_FLUSH_INTERVAL_MS_FIRST = 12_000;
 const CHUNK_FLUSH_INTERVAL_MS = 30_000;
 const CONTEXT_WINDOW_CHARS = 4000;
 
@@ -207,6 +211,31 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const [chatBusy, setChatBusy] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
+  // Live-видимість: останнє що почуто + розмір буфера. Оновлюється з
+  // інтервалом щоб UI не лагало (refs змінюються поза React).
+  const [bufferDisplay, setBufferDisplay] = useState<string>("");
+  const [analyzeCount, setAnalyzeCount] = useState(0);
+  useEffect(() => {
+    if (!enabled) return;
+    const t = setInterval(() => {
+      const buf = bufferRef.current.trim();
+      // Останні ~200 chars щоб показати юзеру що чується.
+      setBufferDisplay(buf.length > 200 ? "…" + buf.slice(-200) : buf);
+    }, 800);
+    return () => clearInterval(t);
+  }, [enabled]);
+
+  // Після першого аналізу — переключаємо таймер на повільніший інтервал
+  // (30с замість 12с) щоб не флудити токенами в steady-state.
+  useEffect(() => {
+    if (analyzeCount !== 1 || !enabled || !flushTimerRef.current) return;
+    clearInterval(flushTimerRef.current);
+    flushTimerRef.current = setInterval(() => {
+      if (bufferRef.current.trim().length >= 200) void flush();
+    }, CHUNK_FLUSH_INTERVAL_MS);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analyzeCount, enabled]);
+
   const recognitionRef = useRef<unknown>(null);
   const bufferRef = useRef<string>("");
   const recentContextRef = useRef<string>("");
@@ -219,7 +248,9 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     meetingId,
     onFinalText: (text) => {
       bufferRef.current += " " + text;
-      if (bufferRef.current.length >= CHUNK_MIN_CHARS) void flush();
+      const threshold =
+        analyzeCount === 0 ? CHUNK_MIN_CHARS_FIRST : CHUNK_MIN_CHARS;
+      if (bufferRef.current.length >= threshold) void flush();
     },
     onError: (msg) => setError(`AssemblyAI Realtime: ${msg}`),
     onStateChange: (s) => {
@@ -389,10 +420,11 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     enabledRef.current = true;
     setEnabled(true);
 
-    // Спільний flush-таймер незалежно від режиму.
+    // Flush-таймер: 12с до першого аналізу, 30с після (швидкий перший
+    // відгук без флуду далі).
     flushTimerRef.current = setInterval(() => {
-      if (bufferRef.current.trim().length >= 200) void flush();
-    }, CHUNK_FLUSH_INTERVAL_MS);
+      if (bufferRef.current.trim().length >= 80) void flush();
+    }, CHUNK_FLUSH_INTERVAL_MS_FIRST);
 
     if (mode === "assemblyai") {
       await realtime.start();
@@ -422,7 +454,9 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         const r = event.results[i];
         if (r.isFinal && r[0]?.transcript) {
           bufferRef.current += " " + r[0].transcript.trim();
-          if (bufferRef.current.length >= CHUNK_MIN_CHARS) {
+          const threshold =
+            analyzeCount === 0 ? CHUNK_MIN_CHARS_FIRST : CHUNK_MIN_CHARS;
+          if (bufferRef.current.length >= threshold) {
             void flush();
           }
         }
@@ -593,6 +627,7 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       }
 
       await refresh();
+      setAnalyzeCount((n) => n + 1);
       setStatusMessage(enabledRef.current ? "Активний — слухає" : "Вимкнено");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Помилка аналізу");
@@ -993,6 +1028,48 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
           <CircleDollarSign size={11} />
           {cost.calls} запитів · ~$
           {Number(cost.estimatedCostUsd ?? 0).toFixed(4)}
+        </div>
+      )}
+
+      {/* LIVE BUFFER — показує що мікрофон чує + кнопка форсувати аналіз */}
+      {enabled && (
+        <div
+          className="mt-3 rounded-lg p-2.5"
+          style={{
+            background: T.panelElevated,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted }}
+            >
+              🎤 Чую зараз ({bufferDisplay.length} / {analyzeCount === 0 ? CHUNK_MIN_CHARS_FIRST : CHUNK_MIN_CHARS} chars · {analyzeCount} аналізів)
+            </span>
+            <button
+              onClick={() => void flush()}
+              disabled={bufferDisplay.length < 30 || busy}
+              className="rounded-md px-2 py-0.5 text-[10px] font-semibold disabled:opacity-40"
+              style={{
+                background: T.accentPrimarySoft,
+                color: T.accentPrimary,
+                border: `1px solid ${T.accentPrimary}33`,
+              }}
+              title="Не чекати буфер — проаналізувати зараз"
+            >
+              Аналізувати
+            </button>
+          </div>
+          <p
+            className="mt-1.5 text-[11px] italic leading-relaxed"
+            style={{
+              color: bufferDisplay ? T.textSecondary : T.textMuted,
+              minHeight: "2.5em",
+            }}
+          >
+            {bufferDisplay || "(тиша — переконайся що мікрофон вмикнено і чує звук)"}
+          </p>
         </div>
       )}
 
