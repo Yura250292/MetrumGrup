@@ -57,7 +57,9 @@ export async function resolveSupplier(args: {
   const candidates = await prisma.counterparty.findMany({
     where: {
       isActive: true,
-      ...(args.firmId ? { firmId: args.firmId } : {}),
+      ...(args.firmId
+        ? { OR: [{ firmId: args.firmId }, { firmId: null }] }
+        : {}),
       // Не обмежуємось `roles has SUPPLIER` — counterparty може бути ще не позначений
       // через backfill, але вже використовується. Match по імені все одно знайде.
     },
@@ -163,7 +165,9 @@ export async function resolveSuppliersBulk(args: {
   const candidates = await prisma.counterparty.findMany({
     where: {
       isActive: true,
-      ...(args.firmId ? { firmId: args.firmId } : {}),
+      ...(args.firmId
+        ? { OR: [{ firmId: args.firmId }, { firmId: null }] }
+        : {}),
     },
     select: { id: true, name: true, edrpou: true, taxId: true },
   });

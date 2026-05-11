@@ -29,7 +29,8 @@ export async function matchCounterparties(
   const all = await prisma.counterparty.findMany({
     where: {
       isActive: true,
-      ...(firmId ? { firmId } : {}),
+      // SUPPLIER (firmId=null) видимий з обох фірм.
+      ...(firmId ? { OR: [{ firmId }, { firmId: null }] } : {}),
     },
     select: { id: true, name: true },
   });

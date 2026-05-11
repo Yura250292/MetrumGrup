@@ -49,23 +49,30 @@ export async function GET(request: NextRequest) {
 
   const items = await prisma.counterparty.findMany({
     where: {
-      isActive: true,
-      ...(firmId ? { firmId } : {}),
-      // SUPPLIER та CONTRACTOR — типові ролі для foreman кейсів. CLIENT приховуємо
-      // (foreman не вибирає клієнта проєкту як постачальника).
-      OR: [{ roles: { has: "SUPPLIER" } }, { roles: { has: "CONTRACTOR" } }, { roles: { isEmpty: true } }],
-      ...(q
-        ? {
-            AND: [
-              {
-                OR: [
-                  { name: { contains: q, mode: "insensitive" } },
-                  { edrpou: { contains: q, mode: "insensitive" } },
-                ],
-              },
-            ],
-          }
-        : {}),
+      AND: [
+        { isActive: true },
+        // firmId=null = shared SUPPLIER (доступний з обох фірм).
+        firmId
+          ? { OR: [{ firmId }, { firmId: null }] }
+          : {},
+        // SUPPLIER та CONTRACTOR — типові ролі для foreman кейсів. CLIENT
+        // приховуємо (foreman не вибирає клієнта проєкту як постачальника).
+        {
+          OR: [
+            { roles: { has: "SUPPLIER" } },
+            { roles: { has: "CONTRACTOR" } },
+            { roles: { isEmpty: true } },
+          ],
+        },
+        q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { edrpou: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {},
+      ],
     },
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     take,
@@ -113,10 +120,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Постачальники тепер спільні між Group і Studio (firmId=null), тому
+  // dup-check шукає shared і власні-фірмові записи з такою назвою.
   const existing = await prisma.counterparty.findFirst({
     where: {
-      name: { equals: name, mode: "insensitive" },
-      firmId,
+      AND: [
+        { name: { equals: name, mode: "insensitive" } },
+        { OR: [{ firmId }, { firmId: null }] },
+      ],
     },
   });
   if (existing) {
@@ -138,7 +149,8 @@ export async function POST(request: NextRequest) {
       type: "LEGAL",
       roles: ["SUPPLIER"],
       isActive: true,
-      firmId,
+      // SUPPLIER = shared cross-firm.
+      firmId: null,
     },
   });
   return NextResponse.json({ data: created, reused: false }, { status: 201 });

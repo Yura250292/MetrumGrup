@@ -10,6 +10,7 @@ import {
   firmIdForNewEntity,
   DEFAULT_FIRM_ID,
 } from "@/lib/firm/scope";
+import { counterpartyFirmWhere } from "@/lib/firm/counterparty-scope";
 
 export const runtime = "nodejs";
 
@@ -66,21 +67,27 @@ export async function GET(request: NextRequest) {
 
   const { q, type, role, hasDebt, withOutstanding, includeInactive, take } = parsed.data;
 
+  // Counterparty filter: firmId=null records (shared SUPPLIERS) are visible
+  // to both Group і Studio. Інші ролі лишаються firm-ізольовані.
+  const firmScope = counterpartyFirmWhere(firmId);
+
   const items = await prisma.counterparty.findMany({
     where: {
-      ...(firmId ? { firmId } : {}),
-      ...(includeInactive ? {} : { isActive: true }),
-      ...(type ? { type } : {}),
-      ...(role ? { roles: { has: role } } : {}),
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { edrpou: { contains: q, mode: "insensitive" } },
-              { taxId: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+      AND: [
+        firmScope,
+        includeInactive ? {} : { isActive: true },
+        type ? { type } : {},
+        role ? { roles: { has: role } } : {},
+        q
+          ? {
+              OR: [
+                { name: { contains: q, mode: "insensitive" } },
+                { edrpou: { contains: q, mode: "insensitive" } },
+                { taxId: { contains: q, mode: "insensitive" } },
+              ],
+            }
+          : {},
+      ],
     },
     orderBy: [{ isActive: "desc" }, { name: "asc" }],
     take,
@@ -164,12 +171,14 @@ export async function POST(request: NextRequest) {
   const name = normaliseName(data.name);
   const entryFirmId = firmId ?? firmIdForNewEntity(session, DEFAULT_FIRM_ID);
 
-  // Idempotent autocreate — case-insensitive lookup, scoped to active firm
-  // (один SUPPLIER може існувати окремо в Group та Studio).
+  // Idempotent autocreate — case-insensitive lookup. SUPPLIER (firmId=null)
+  // спільні між фірмами, тому шукаємо і shared, і власні-фірмові записи.
   const existing = await prisma.counterparty.findFirst({
     where: {
-      name: { equals: name, mode: "insensitive" },
-      ...(entryFirmId ? { firmId: entryFirmId } : {}),
+      AND: [
+        { name: { equals: name, mode: "insensitive" } },
+        counterpartyFirmWhere(entryFirmId),
+      ],
     },
     orderBy: { isActive: "desc" },
   });

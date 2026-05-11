@@ -8,8 +8,8 @@ import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import {
   isHomeFirmFor,
   getActiveRoleFromSession,
-  assertCanAccessFirm,
 } from "@/lib/firm/scope";
+import { canAccessCounterparty } from "@/lib/firm/counterparty-scope";
 
 export const runtime = "nodejs";
 
@@ -46,8 +46,17 @@ export async function GET(
   if (!isHomeFirmFor(session, firmId)) return forbiddenResponse();
   const activeRole = getActiveRoleFromSession(session, firmId);
   if (!activeRole || !READ_ROLES.includes(activeRole)) return forbiddenResponse();
-  // 403 якщо контрагент чужої фірми (Studio юзер не бачить Group-контрагента і навпаки).
-  assertCanAccessFirm(session, cp.firmId);
+  // 403 якщо контрагент чужої фірми (Studio юзер не бачить Group-контрагента
+  // і навпаки). firmId=null = спільний (SUPPLIER) — доступний з будь-якої фірми.
+  if (
+    !canAccessCounterparty({
+      userFirmId: session.user.firmId ?? null,
+      userIsSuperAdmin: session.user.role === "SUPER_ADMIN",
+      counterpartyFirmId: cp.firmId,
+    })
+  ) {
+    return forbiddenResponse();
+  }
   const firmFilter: { firmId?: string } = firmId ? { firmId } : {};
   const hideSalary = activeRole === "HR";
   const salaryFilter = hideSalary ? { NOT: { category: "salary" } } : {};
@@ -235,7 +244,15 @@ export async function PATCH(
   const { id } = await ctx.params;
   const existing = await prisma.counterparty.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
-  assertCanAccessFirm(session, existing.firmId);
+  if (
+    !canAccessCounterparty({
+      userFirmId: session.user.firmId ?? null,
+      userIsSuperAdmin: session.user.role === "SUPER_ADMIN",
+      counterpartyFirmId: existing.firmId,
+    })
+  ) {
+    return forbiddenResponse();
+  }
 
   const body = await request.json();
   const parsed = updateSchema.safeParse(body);
@@ -286,7 +303,15 @@ export async function DELETE(
     },
   });
   if (!existing) return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
-  assertCanAccessFirm(session, existing.firmId);
+  if (
+    !canAccessCounterparty({
+      userFirmId: session.user.firmId ?? null,
+      userIsSuperAdmin: session.user.role === "SUPER_ADMIN",
+      counterpartyFirmId: existing.firmId,
+    })
+  ) {
+    return forbiddenResponse();
+  }
 
   if (existing._count.financeEntries > 0 || existing._count.financeTemplates > 0) {
     // Soft-delete instead — don't break audit trail.

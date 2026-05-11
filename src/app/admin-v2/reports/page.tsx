@@ -32,7 +32,11 @@ export default async function ReportsPage() {
       orderBy: { title: "asc" },
     }),
     prisma.counterparty.findMany({
-      where: { isActive: true, ...(firmId ? { firmId } : {}) },
+      where: {
+        isActive: true,
+        // SUPPLIER (firmId=null) спільні між Group і Studio.
+        ...(firmId ? { OR: [{ firmId }, { firmId: null }] } : {}),
+      },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
