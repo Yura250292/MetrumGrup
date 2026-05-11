@@ -98,10 +98,10 @@ export function useAssemblyRealtime(opts: {
       if (!token) throw new Error("Сервер повернув порожній токен");
 
       // 2. Відкриваємо WebSocket до v3/ws.
-      // Мінімум обовʼязкових параметрів: sample_rate + token. Решта (encoding,
-      // turn detection) має дефолти. Раніше передавали format_turns=true —
-      // не валідний для v3, через що сервер закривав WS з кодом 3006.
-      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&token=${encodeURIComponent(
+      // Обовʼязкові v3-параметри: sample_rate, encoding, speech_model, token.
+      // speech_model=universal — Universal-Streaming v3 (топова якість UA/RU).
+      // Попередня помилка 3006 була через відсутній speech_model.
+      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&speech_model=universal&token=${encodeURIComponent(
         token,
       )}`;
       const ws = new WebSocket(wsUrl);
