@@ -566,14 +566,30 @@ function SectionTable({
           border: `1px solid ${variant === "creditors" ? T.danger + "40" : T.borderStrong}`,
         }}
       >
-        <table className="w-full text-[12.5px]" style={{ color: T.textPrimary }}>
+        <table
+          className="w-full text-[12.5px] table-fixed"
+          style={{ color: T.textPrimary, minWidth: 1200 }}
+        >
+          <colgroup>
+            <col style={{ width: 28 }} />
+            <col style={{ width: 38 }} />
+            <col style={{ width: 280 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 130 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 110 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 130 }} />
+          </colgroup>
           <thead>
             <tr
               className="text-[10px] font-bold uppercase tracking-wider"
               style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
             >
-              <th className="w-8"></th>
-              <th className="px-3 py-2.5 text-left">#</th>
+              <th></th>
+              <th className="px-2 py-2.5 text-left">#</th>
               <SortableTh
                 label="Постачальник"
                 k="name"
@@ -761,7 +777,7 @@ function Row({
           )}
         </td>
         <td
-          className="px-3 py-2.5 text-[11px] tabular-nums"
+          className="px-2 py-2.5 text-[11px] tabular-nums"
           style={{ color: T.textMuted }}
         >
           {rank}
@@ -769,32 +785,41 @@ function Row({
         <td className="px-3 py-2.5">
           <Link
             href={`/admin-v2/counterparties/${c.id}`}
-            className="flex items-center gap-2 hover:underline"
+            className="flex items-center gap-2 hover:underline min-w-0"
             style={{ color: T.textPrimary }}
             onClick={(e) => e.stopPropagation()}
+            title={c.name}
           >
-            <Truck size={13} style={{ color: hasDebt ? T.danger : T.textMuted }} />
-            <span className="font-semibold">{c.name}</span>
-            {c.edrpou && (
-              <span
-                className="text-[10px] tabular-nums"
-                style={{ color: T.textMuted }}
-              >
-                {c.edrpou}
-              </span>
-            )}
+            <Truck
+              size={13}
+              style={{ color: hasDebt ? T.danger : T.textMuted, flexShrink: 0 }}
+            />
+            <span className="flex flex-col min-w-0 flex-1">
+              <span className="font-semibold truncate">{c.name}</span>
+              {c.edrpou && (
+                <span
+                  className="text-[10px] tabular-nums truncate"
+                  style={{ color: T.textMuted }}
+                >
+                  {c.edrpou}
+                </span>
+              )}
+            </span>
           </Link>
         </td>
         <td
-          className="px-3 py-2.5 text-right tabular-nums"
+          className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap"
           style={{ color: T.textSecondary }}
         >
           {c.invoiceCount > 0 ? (
             <span>
               {c.invoiceCount}
               {c.debtCount > 0 && (
-                <span className="ml-1 text-[10px]" style={{ color: T.danger }}>
-                  ({c.debtCount} борг)
+                <span
+                  className="ml-1 text-[10px] font-bold"
+                  style={{ color: T.danger }}
+                >
+                  · {c.debtCount}
                 </span>
               )}
             </span>
@@ -803,12 +828,12 @@ function Row({
           )}
         </td>
         <td
-          className="px-3 py-2.5 text-right tabular-nums"
+          className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap"
           style={{ color: T.textPrimary }}
         >
           {c.totalInvoiced > 0 ? formatCurrency(c.totalInvoiced) : "—"}
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums">
+        <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
           {c.totalPaid > 0 ? (
             <div className="flex flex-col items-end gap-0.5">
               <span style={{ color: T.success }}>
@@ -816,7 +841,7 @@ function Row({
               </span>
               {c.totalInvoiced > 0 && (
                 <div
-                  className="h-[3px] w-16 rounded-full overflow-hidden"
+                  className="h-[3px] w-14 rounded-full overflow-hidden"
                   style={{ backgroundColor: T.panelSoft }}
                   title={`${paidPct.toFixed(0)}% оплачено`}
                 >
@@ -834,7 +859,7 @@ function Row({
             <span style={{ color: T.textMuted }}>—</span>
           )}
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums">
+        <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
           {hasDebt ? (
             <span className="font-bold" style={{ color: T.danger }}>
               {formatCurrency(c.outstanding)}
@@ -844,35 +869,42 @@ function Row({
           )}
         </td>
         <td
-          className="px-3 py-2.5 text-right text-[11px] whitespace-nowrap"
+          className="px-3 py-2.5 text-right text-[11px] whitespace-nowrap tabular-nums"
           style={{ color: overdueColor }}
         >
           {overdueDays === null
             ? "—"
             : overdueDays >= 30
-              ? `${overdueDays} дн · ${dateFmt(c.oldestDebtDate)}`
+              ? (
+                <div className="flex flex-col items-end leading-tight">
+                  <span className="font-semibold">{overdueDays} дн</span>
+                  <span className="text-[9.5px]" style={{ color: T.textMuted }}>
+                    з {dateFmt(c.oldestDebtDate)}
+                  </span>
+                </div>
+              )
               : `${overdueDays} дн`}
         </td>
         <td
-          className="px-3 py-2.5 text-right text-[11px] tabular-nums"
+          className="px-3 py-2.5 text-right text-[11px] tabular-nums whitespace-nowrap"
           style={{ color: T.textSecondary }}
         >
           {dateFmt(c.lastInvoiceDate)}
         </td>
         <td
-          className="px-3 py-2.5 text-right text-[11px] tabular-nums"
+          className="px-3 py-2.5 text-right text-[11px] tabular-nums whitespace-nowrap"
           style={{ color: c.lastPaymentDate ? T.textSecondary : T.textMuted }}
         >
           {dateFmt(c.lastPaymentDate)}
         </td>
-        <td className="px-3 py-2.5 text-right whitespace-nowrap">
+        <td className="px-2 py-2.5 text-right whitespace-nowrap">
           {canPay && hasDebt && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 onPay();
               }}
-              className="rounded-md px-2.5 py-1 text-[11px] font-bold mr-1"
+              className="rounded-md px-2 py-1 text-[10.5px] font-bold mr-1"
               style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
             >
               Оплатити
@@ -881,7 +913,7 @@ function Row({
           <Link
             href={`/admin-v2/counterparties/${c.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
+            className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10 align-middle"
             title="Відкрити повне досʼє"
           >
             <ExternalLink size={12} style={{ color: T.accentPrimary }} />
