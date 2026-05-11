@@ -93,12 +93,36 @@ export type EntityToLookup = {
   text: string;
 };
 
+export type CoachTone =
+  | "neutral"
+  | "constructive"
+  | "tense"
+  | "evasive"
+  | "pressuring"
+  | "friendly"
+  | "hostile";
+
+export type CoachHints = {
+  /** Як зараз йде розмова (загальна оцінка). */
+  tone: CoachTone;
+  /** Знайдені маніпуляції / переговорні прийоми (порожній масив якщо немає). */
+  manipulations: Array<{
+    type: string; // "штучна терміновість" | "anchoring" | "false dilemma" | ...
+    evidence: string; // цитата або переказ що саме сказали
+    counter: string; // як відповідати щоб не вестись
+  }>;
+  /** Короткі тактичні поради — як вести діалог далі (1-3 шт). */
+  tips: string[];
+};
+
 export type AnalyzeResult = {
   insights: LiveInsight[];
   /** Нові терміни / абревіатури з пояснень — для live-глосарію. */
   glossaryTerms: LiveTerm[];
   /** Іменовані сутності з chunk-у, які варто пошукати у власній базі. */
   entitiesToLookup: EntityToLookup[];
+  /** Психологічно-тактичний аналіз для вкладки «Психолог». */
+  coachHints: CoachHints;
   /** Метадані для cost-логу. */
   usage: {
     provider: string;
@@ -146,13 +170,29 @@ const SYSTEM_PROMPT = `Ти — Live AI Agent для будівельної ко
 - кожен 1-3 речення, готовий до зачитування
 - ТІЛЬКИ якщо очевидно що звертаються до користувача. Інакше null.
 
-3) entitiesToLookup — ВЛАСНІ ІМЕНА що зʼявились у chunk-у і які варто пошукати у БАЗІ КОРИСТУВАЧА (попередні наради, проєкти, контрагенти, обʼєкти, документи). Це дасть агенту показати «Я знаю про це» — карточку з фактами з історії.
-- type: один з "project" (назва проєкту), "counterparty" (контрагент/постачальник/замовник), "person" (людина), "object" (обʼєкт/будівля/обладнання), "document" (договір/наказ/акт/витяг), "material" (матеріал), "location" (адреса/обʼєкт), "other"
-- text: ТОЧНО як прозвучало у chunk-у (не виправляй, не перекладай)
-- Виводь те ЩО ВАРТО ШУКАТИ. Не дублюй terms (МУО, КЕП — це абревіатури, не lookup). Імена людей — тільки якщо це хтось зовнішній або контрагент.
-- 0-5 елементів. Краще менше але точно.
+3) entitiesToLookup — ВЛАСНІ ІМЕНА що зʼявились у chunk-у і які варто пошукати у БАЗІ КОРИСТУВАЧА (попередні наради, проєкти, контрагенти, обʼєкти, документи).
+- type: "project"|"counterparty"|"person"|"object"|"document"|"material"|"location"|"other"
+- text: ТОЧНО як прозвучало (не виправляй, не перекладай)
+- Не дублюй terms. Імена людей — тільки якщо хтось зовнішній/контрагент.
+- 0-5 елементів.
 
-Формат відповіді: ВИКЛЮЧНО JSON виду {"insights": [...], "glossaryTerms": [...], "entitiesToLookup": [...]}. Без markdown, без пояснень поза JSON.`;
+4) coachHints — ПСИХОЛОГІЧНО-ТАКТИЧНИЙ АНАЛІЗ розмови (це для окремої вкладки «Психолог»):
+- tone: одне з "neutral"|"constructive"|"tense"|"evasive"|"pressuring"|"friendly"|"hostile" — як йде розмова ЗАГАЛОМ
+- manipulations: список ВИЯВЛЕНИХ переговорних прийомів від співрозмовника (НЕ нашого користувача):
+   * штучна терміновість («вирішуйте сьогодні», «це єдиний шанс»)
+   * anchoring (підкидання нереалістичної першої цифри щоб «згладити» реальну)
+   * false dilemma («або X або нічого»)
+   * appeal to authority / sunk cost / foot-in-door / FOMO / guilt-tripping / gaslighting
+   * нечіткі формулювання що звʼяжуть зобовʼязаннями
+   * Для кожної: {type, evidence (цитата/переказ), counter (як відповідати щоб не вестись, 1-2 речення)}
+   * Якщо нічого не виявлено — порожній масив
+- tips: 1-3 короткі тактичні поради як ВЕСТИ ДІАЛОГ ДАЛІ. Приклади:
+   * «Не давай прямих обіцянок поки не маєш всіх цифр — пиши «перевірю і дам відповідь»»
+   * «Тон співрозмовника напружений — знизь темп, повернись до спільних інтересів»
+   * «Час пере-перевести розмову на конкретні строки і відповідальних»
+   * «Перепитай ціну явно — нечіткість грає проти тебе»
+
+Формат відповіді: ВИКЛЮЧНО JSON {"insights": [...], "glossaryTerms": [...], "entitiesToLookup": [...], "coachHints": {tone, manipulations, tips}}. Без markdown, без пояснень поза JSON.`;
 
 const RESPONSE_SCHEMA = {
   type: "object",
@@ -253,8 +293,49 @@ const RESPONSE_SCHEMA = {
         required: ["type", "text"],
       },
     },
+    coachHints: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        tone: {
+          type: "string",
+          enum: [
+            "neutral",
+            "constructive",
+            "tense",
+            "evasive",
+            "pressuring",
+            "friendly",
+            "hostile",
+          ],
+        },
+        manipulations: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              type: { type: "string" },
+              evidence: { type: "string" },
+              counter: { type: "string" },
+            },
+            required: ["type", "evidence", "counter"],
+          },
+        },
+        tips: {
+          type: "array",
+          items: { type: "string" },
+        },
+      },
+      required: ["tone", "manipulations", "tips"],
+    },
   },
-  required: ["insights", "glossaryTerms", "entitiesToLookup"],
+  required: [
+    "insights",
+    "glossaryTerms",
+    "entitiesToLookup",
+    "coachHints",
+  ],
 } as const;
 
 // Дуже груба оцінка вартості GPT-4o-mini ($0.15 / 1M input, $0.60 / 1M output).
@@ -318,16 +399,17 @@ export async function analyzeChunk(
 
   const raw =
     res.choices[0]?.message?.content ??
-    '{"insights":[],"glossaryTerms":[],"entitiesToLookup":[]}';
+    '{"insights":[],"glossaryTerms":[],"entitiesToLookup":[],"coachHints":{"tone":"neutral","manipulations":[],"tips":[]}}';
   let parsed: {
     insights?: LiveInsight[];
     glossaryTerms?: LiveTerm[];
     entitiesToLookup?: EntityToLookup[];
+    coachHints?: CoachHints;
   } = {};
   try {
     parsed = JSON.parse(raw);
   } catch {
-    parsed = { insights: [], glossaryTerms: [], entitiesToLookup: [] };
+    parsed = {};
   }
   const insights = Array.isArray(parsed.insights) ? parsed.insights : [];
   const glossaryTerms = Array.isArray(parsed.glossaryTerms)
@@ -336,6 +418,11 @@ export async function analyzeChunk(
   const entitiesToLookup = Array.isArray(parsed.entitiesToLookup)
     ? parsed.entitiesToLookup
     : [];
+  const coachHints: CoachHints = parsed.coachHints ?? {
+    tone: "neutral",
+    manipulations: [],
+    tips: [],
+  };
 
   const inputTokens = res.usage?.prompt_tokens ?? null;
   const outputTokens = res.usage?.completion_tokens ?? null;
@@ -345,6 +432,7 @@ export async function analyzeChunk(
     insights,
     glossaryTerms,
     entitiesToLookup,
+    coachHints,
     usage: {
       provider,
       model,
@@ -542,4 +630,138 @@ export function dedupeInsight(
     }
   }
   return candidate;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Free-form чат з агентом — окрема вкладка «Чат». Юзер питає текстом,
+// агент має повний контекст наради: транскрипт, останні інсайти, RAG-
+// фрагменти з проєктних файлів. Відповідає коротко і по справі.
+// ────────────────────────────────────────────────────────────────────────
+
+const CHAT_SYSTEM_PROMPT = `Ти — Live AI Agent у будівельній компанії METRUM, асистент керівника під час ділової наради. У цьому режимі ти не аналізуєш кожен chunk автоматично — ти відповідаєш на КОНКРЕТНИЙ запит юзера від першої особи.
+
+Контекст який маєш:
+- транскрипт розмови що йде ЗАРАЗ (до моменту запиту)
+- останні інсайти/ризики які ти ж і витяг
+- фрагменти з проєктних файлів (RAG: геодезія, специфікації, договори)
+- історія чату користувача з тобою у межах цієї наради
+
+Відповідай:
+- Українською (імена/ПІБ — в оригінальному написанні як у транскрипті)
+- Коротко, по справі (3-8 речень як правило, без води)
+- Конкретно: якщо є дані у файлах — цитуй, якщо ні — чесно скажи що не знаєш
+- НЕ вигадуй фактів. Якщо інформації недостатньо — «у відомих мені даних цього немає, варто уточнити в [...]»
+- Без markdown-обгортки, без префіксів типу «Відповідь:»`;
+
+export type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export type ChatInput = {
+  userMessage: string;
+  /** Поточна історія чату (не включаючи нове userMessage). */
+  history?: ChatMessage[];
+  meetingMetadata?: {
+    title?: string | null;
+    description?: string | null;
+    projectTitle?: string | null;
+  };
+  /** Останні N speakers/turns транскрипту (стиснуто). */
+  transcriptSnippet?: string | null;
+  /** Останні інсайти що агент уже витяг. */
+  recentInsights?: Array<{
+    category: string;
+    priority: string;
+    title: string;
+    summary: string;
+  }>;
+  /** RAG-фрагменти з проєктних файлів по семантичному пошуку з userMessage. */
+  projectFiles?: ProjectFileExcerpt[];
+};
+
+export async function chatWithAgent(
+  input: ChatInput,
+): Promise<{ reply: string; usage: AnalyzeResult["usage"] }> {
+  const model = process.env.LIVE_AGENT_MODEL || "gpt-4o-mini";
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY не налаштовано");
+  }
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const ctxParts: string[] = [];
+  const m = input.meetingMetadata;
+  if (m?.title) ctxParts.push(`Нарада: ${m.title}`);
+  if (m?.projectTitle) ctxParts.push(`Проєкт: ${m.projectTitle}`);
+  if (m?.description) ctxParts.push(`Контекст організатора: ${m.description}`);
+  if (input.transcriptSnippet) {
+    ctxParts.push(
+      `Останній транскрипт розмови:\n${input.transcriptSnippet.slice(-4000)}`,
+    );
+  }
+  if (input.recentInsights && input.recentInsights.length > 0) {
+    const lines = input.recentInsights
+      .slice(-10)
+      .map(
+        (i) =>
+          `  - [${i.priority}/${i.category}] ${i.title} — ${i.summary.slice(0, 200)}`,
+      )
+      .join("\n");
+    ctxParts.push(`Останні інсайти що ти витяг:\n${lines}`);
+  }
+  if (input.projectFiles && input.projectFiles.length > 0) {
+    const lines = input.projectFiles
+      .map(
+        (f, i) =>
+          `  [${i + 1}] (${f.fileName}, similarity ${f.similarity.toFixed(2)}):\n${f.content
+            .replace(/\s+/g, " ")
+            .slice(0, 800)}`,
+      )
+      .join("\n\n");
+    ctxParts.push(
+      `Фрагменти з проєктних файлів (RAG):\n${lines}`,
+    );
+  }
+
+  const contextMessage = ctxParts.length > 0 ? ctxParts.join("\n\n") : "";
+
+  const messages: Array<{
+    role: "system" | "user" | "assistant";
+    content: string;
+  }> = [{ role: "system", content: CHAT_SYSTEM_PROMPT }];
+  if (contextMessage) {
+    messages.push({
+      role: "system",
+      content: `КОНТЕКСТ НАРАДИ:\n${contextMessage}`,
+    });
+  }
+  for (const m of input.history ?? []) {
+    messages.push({ role: m.role, content: m.content });
+  }
+  messages.push({ role: "user", content: input.userMessage });
+
+  const start = Date.now();
+  const res = await openai.chat.completions.create({
+    model,
+    messages,
+    temperature: 0.4,
+    max_tokens: 600,
+  });
+  const latencyMs = Date.now() - start;
+
+  const reply = res.choices[0]?.message?.content?.trim() ?? "";
+  const inputTokens = res.usage?.prompt_tokens ?? null;
+  const outputTokens = res.usage?.completion_tokens ?? null;
+
+  return {
+    reply,
+    usage: {
+      provider: "openai",
+      model,
+      inputTokens,
+      outputTokens,
+      estimatedCostUsd: estimateCost(model, inputTokens, outputTokens),
+      latencyMs,
+    },
+  };
 }

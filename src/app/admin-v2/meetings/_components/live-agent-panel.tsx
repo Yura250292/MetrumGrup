@@ -29,6 +29,10 @@ import {
   UserSquare,
   CalendarRange,
   ClipboardList,
+  MessageSquare,
+  Brain,
+  ListChecks,
+  Send,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useAssemblyRealtime } from "@/lib/meetings/use-assembly-realtime";
@@ -184,6 +188,25 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
     Array<{ fileName: string; content: string; similarity: number }>
   >([]);
 
+  // Активна вкладка: Факти / Психолог / Чат
+  type Tab = "facts" | "coach" | "chat";
+  const [activeTab, setActiveTab] = useState<Tab>("facts");
+
+  // Психолог: останні coachHints з /analyze.
+  type CoachHintsDTO = {
+    tone: string;
+    manipulations: Array<{ type: string; evidence: string; counter: string }>;
+    tips: string[];
+  };
+  const [coachHints, setCoachHints] = useState<CoachHintsDTO | null>(null);
+
+  // Чат: історія повідомлень + ввід + стан надсилання.
+  type ChatMsg = { role: "user" | "assistant"; content: string };
+  const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+
   const recognitionRef = useRef<unknown>(null);
   const bufferRef = useRef<string>("");
   const recentContextRef = useRef<string>("");
@@ -240,6 +263,47 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       setBriefingGeneratedAt(data.generatedAt ?? null);
     } catch {
       /* ignore */
+    }
+  }
+
+  async function sendChat() {
+    const message = chatInput.trim();
+    if (!message || chatBusy) return;
+    setChatBusy(true);
+    setChatError(null);
+    const nextHistory: ChatMsg[] = [
+      ...chatMessages,
+      { role: "user", content: message },
+    ];
+    setChatMessages(nextHistory);
+    setChatInput("");
+    try {
+      const res = await fetch(
+        `/api/admin/meetings/${meetingId}/live-agent/chat`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message,
+            // не шлемо щойно додане user-повідомлення двічі — лише ПОПЕРЕДНЮ історію.
+            history: chatMessages.slice(-20),
+          }),
+        },
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const reply = (data.reply ?? "").trim() || "(порожня відповідь)";
+      setChatMessages([
+        ...nextHistory,
+        { role: "assistant", content: reply },
+      ]);
+    } catch (err) {
+      setChatError(err instanceof Error ? err.message : "Помилка чату");
+    } finally {
+      setChatBusy(false);
     }
   }
 
@@ -493,6 +557,11 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         if (lookedUpKeysRef.current.has(key)) continue;
         lookedUpKeysRef.current.add(key);
         void runLookup(text, ent.type, key);
+      }
+
+      // CoachHints — оновлюємо вкладку «Психолог».
+      if (responseBody?.coachHints) {
+        setCoachHints(responseBody.coachHints as CoachHintsDTO);
       }
 
       // RAG — фрагменти з проєктних файлів. Зберігаємо у стейт щоб показати
@@ -820,7 +889,7 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       )}
 
       {/* «Я знаю про…» — live RAG картки */}
-      {knownCards.length > 0 && (
+      {activeTab === "facts" && knownCards.length > 0 && (
         <div className="mt-3">
           <div
             className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
@@ -837,7 +906,7 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
       )}
 
       {/* RAG: фрагменти з проєктних файлів (геодезія, специфікації) */}
-      {projectFileHits.length > 0 && (
+      {activeTab === "facts" && projectFileHits.length > 0 && (
         <div className="mt-3">
           <div
             className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
@@ -927,7 +996,50 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         </div>
       )}
 
-      {(allCategories.length > 0 || allPriorities.length > 0) && (
+      {/* TABS */}
+      <div
+        className="mt-3 flex items-center gap-1 rounded-lg p-1"
+        style={{ background: T.panelElevated }}
+      >
+        <TabBtnSmall
+          active={activeTab === "facts"}
+          onClick={() => setActiveTab("facts")}
+          icon={<ListChecks size={13} />}
+          label="Факти"
+        />
+        <TabBtnSmall
+          active={activeTab === "coach"}
+          onClick={() => setActiveTab("coach")}
+          icon={<Brain size={13} />}
+          label="Психолог"
+        />
+        <TabBtnSmall
+          active={activeTab === "chat"}
+          onClick={() => setActiveTab("chat")}
+          icon={<MessageSquare size={13} />}
+          label="Чат"
+        />
+      </div>
+
+      {/* COACH TAB */}
+      {activeTab === "coach" && (
+        <CoachTabView hints={coachHints} enabled={enabled} />
+      )}
+
+      {/* CHAT TAB */}
+      {activeTab === "chat" && (
+        <ChatTabView
+          messages={chatMessages}
+          input={chatInput}
+          setInput={setChatInput}
+          onSend={() => void sendChat()}
+          busy={chatBusy}
+          error={chatError}
+        />
+      )}
+
+      {/* FACTS TAB — все існуюче рендериться лише на цій вкладці */}
+      {activeTab === "facts" && (allCategories.length > 0 || allPriorities.length > 0) && (
         <div className="mt-4 flex flex-wrap gap-2">
           <FilterIcon size={12} style={{ color: T.textMuted }} />
           {allCategories.map((c) => (
@@ -972,23 +1084,25 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         </div>
       )}
 
-      <div className="mt-3 flex flex-col gap-2">
-        {visibleInsights.length === 0 && (
-          <p className="text-[12px]" style={{ color: T.textMuted }}>
-            {enabled
-              ? "Чекаю на достатньо контексту для аналізу…"
-              : "Підказки зʼявляться тут після увімкнення агента."}
-          </p>
-        )}
-        {visibleInsights.map((i) => (
-          <InsightCard
-            key={i.id}
-            insight={i}
-            onPin={() => void togglePin(i)}
-            onHide={() => void hide(i)}
-          />
-        ))}
-      </div>
+      {activeTab === "facts" && (
+        <div className="mt-3 flex flex-col gap-2">
+          {visibleInsights.length === 0 && (
+            <p className="text-[12px]" style={{ color: T.textMuted }}>
+              {enabled
+                ? "Чекаю на достатньо контексту для аналізу…"
+                : "Підказки зʼявляться тут після увімкнення агента."}
+            </p>
+          )}
+          {visibleInsights.map((i) => (
+            <InsightCard
+              key={i.id}
+              insight={i}
+              onPin={() => void togglePin(i)}
+              onHide={() => void hide(i)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1351,4 +1465,289 @@ interface SpeechRecognitionResultLike {
 
 interface SpeechRecognitionErrorLike {
   error: string;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Tabs / Coach / Chat — компоненти для відповідних вкладок.
+// ────────────────────────────────────────────────────────────────────────
+
+function TabBtnSmall({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-[12px] font-semibold transition"
+      style={{
+        background: active ? T.panel : "transparent",
+        color: active ? T.accentPrimary : T.textMuted,
+        boxShadow: active ? `0 1px 2px ${T.borderSoft}` : undefined,
+      }}
+    >
+      {icon} {label}
+    </button>
+  );
+}
+
+const TONE_LABELS: Record<string, string> = {
+  neutral: "Нейтрально",
+  constructive: "Конструктивно",
+  tense: "Напружено",
+  evasive: "Ухиляється",
+  pressuring: "Тиск",
+  friendly: "Дружньо",
+  hostile: "Ворожо",
+};
+
+function toneStyle(tone: string): { bg: string; fg: string } {
+  if (tone === "hostile" || tone === "pressuring")
+    return { bg: T.dangerSoft, fg: T.danger };
+  if (tone === "tense" || tone === "evasive")
+    return { bg: T.amberSoft, fg: T.amber };
+  if (tone === "constructive" || tone === "friendly")
+    return { bg: T.successSoft, fg: T.success };
+  return { bg: T.panelElevated, fg: T.textMuted };
+}
+
+function CoachTabView({
+  hints,
+  enabled,
+}: {
+  hints: {
+    tone: string;
+    manipulations: Array<{ type: string; evidence: string; counter: string }>;
+    tips: string[];
+  } | null;
+  enabled: boolean;
+}) {
+  if (!hints) {
+    return (
+      <p className="mt-3 text-[12px]" style={{ color: T.textMuted }}>
+        {enabled
+          ? "Психолог-аналіз ще не готовий — слухаю розмову…"
+          : "Увімкни агента — буде аналіз тону розмови і виявлення маніпуляцій."}
+      </p>
+    );
+  }
+  const ts = toneStyle(hints.tone);
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <div
+        className="rounded-lg p-2.5"
+        style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
+      >
+        <div
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: T.textMuted }}
+        >
+          Тон розмови
+        </div>
+        <span
+          className="mt-1 inline-flex rounded-md px-2 py-0.5 text-[12px] font-bold"
+          style={{ background: ts.bg, color: ts.fg }}
+        >
+          {TONE_LABELS[hints.tone] ?? hints.tone}
+        </span>
+      </div>
+
+      {hints.manipulations.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <div
+            className="text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: T.danger }}
+          >
+            ⚠️ Виявлено маніпуляції
+          </div>
+          {hints.manipulations.map((m, i) => (
+            <div
+              key={i}
+              className="rounded-lg p-2.5"
+              style={{
+                background: T.dangerSoft,
+                border: `1px solid ${T.danger}33`,
+              }}
+            >
+              <p
+                className="text-[12px] font-bold"
+                style={{ color: T.danger }}
+              >
+                {m.type}
+              </p>
+              <p
+                className="mt-1 text-[11px] italic"
+                style={{ color: T.textSecondary }}
+              >
+                «{m.evidence}»
+              </p>
+              <div
+                className="mt-2 text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.accentPrimary }}
+              >
+                Як відповісти
+              </div>
+              <p
+                className="text-[12px] leading-relaxed"
+                style={{ color: T.textPrimary }}
+              >
+                {m.counter}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {hints.tips.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <div
+            className="text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted }}
+          >
+            Тактичні поради
+          </div>
+          {hints.tips.map((t, i) => (
+            <div
+              key={i}
+              className="rounded-lg p-2"
+              style={{ background: T.panelElevated }}
+            >
+              <p
+                className="text-[12px] leading-relaxed"
+                style={{ color: T.textPrimary }}
+              >
+                {t}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {hints.manipulations.length === 0 && hints.tips.length === 0 && (
+        <p className="text-[12px]" style={{ color: T.textMuted }}>
+          Поки що нічого підозрілого. Розмова йде нормально.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ChatTabView({
+  messages,
+  input,
+  setInput,
+  onSend,
+  busy,
+  error,
+}: {
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  input: string;
+  setInput: (v: string) => void;
+  onSend: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <div
+        className="flex flex-col gap-2 overflow-y-auto rounded-lg p-2"
+        style={{
+          background: T.panelElevated,
+          maxHeight: 360,
+          minHeight: 100,
+        }}
+      >
+        {messages.length === 0 && !busy && (
+          <p className="text-[12px]" style={{ color: T.textMuted }}>
+            Запитай агента про що завгодно. Він бачить транскрипт розмови,
+            знайдені інсайти і файли проєкту (якщо нарада привʼязана до
+            проєкту і файли проіндексовані).
+          </p>
+        )}
+        {messages.map((m, i) => (
+          <div
+            key={i}
+            className="rounded-lg p-2"
+            style={{
+              background:
+                m.role === "user" ? T.accentPrimarySoft : T.panel,
+              border:
+                m.role === "user"
+                  ? `1px solid ${T.accentPrimary}33`
+                  : `1px solid ${T.borderSoft}`,
+              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+              maxWidth: "92%",
+            }}
+          >
+            <div
+              className="text-[9px] font-bold uppercase tracking-wider"
+              style={{
+                color:
+                  m.role === "user" ? T.accentPrimary : T.textMuted,
+              }}
+            >
+              {m.role === "user" ? "Ти" : "Агент"}
+            </div>
+            <p
+              className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed"
+              style={{ color: T.textPrimary }}
+            >
+              {m.content}
+            </p>
+          </div>
+        ))}
+        {busy && (
+          <div
+            className="flex items-center gap-2 text-[11px]"
+            style={{ color: T.textMuted }}
+          >
+            <Loader2 size={12} className="animate-spin" /> Агент думає…
+          </div>
+        )}
+      </div>
+      {error && (
+        <div
+          className="rounded-md px-2 py-1.5 text-[11px]"
+          style={{ background: T.dangerSoft, color: T.danger }}
+        >
+          {error}
+        </div>
+      )}
+      <div className="flex items-end gap-2">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+              e.preventDefault();
+              onSend();
+            }
+          }}
+          placeholder="Запитай агента…  ⌘+Enter — надіслати"
+          rows={2}
+          className="flex-1 resize-none rounded-lg p-2 text-[12px] leading-relaxed outline-none"
+          style={{
+            background: T.panel,
+            color: T.textPrimary,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        />
+        <button
+          onClick={onSend}
+          disabled={busy || !input.trim()}
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg disabled:opacity-50"
+          style={{ background: T.accentPrimary, color: "#fff" }}
+          title="Надіслати (⌘+Enter)"
+        >
+          <Send size={14} />
+        </button>
+      </div>
+    </div>
+  );
 }

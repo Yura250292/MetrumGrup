@@ -246,6 +246,7 @@ export async function POST(
     insights: persisted,
     glossaryTerms: persistedTerms,
     entitiesToLookup: result.entitiesToLookup,
+    coachHints: result.coachHints,
     projectFiles,
     usage: result.usage,
   });
