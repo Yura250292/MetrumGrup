@@ -11,7 +11,7 @@ import {
   ChevronRight,
   Copy,
   Mail,
-  Phone,
+  MoreHorizontal,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
@@ -133,23 +133,23 @@ export function EmployeesTable({
 
   const columns = useMemo<Column[]>(() => {
     const cols: Column[] = [
-      { key: "name", label: "ПІБ скорочено", sortable: true, width: "minmax(160px, 1.2fr)" },
-      { key: "position", label: "Посада", sortable: true, width: "minmax(140px, 1.1fr)" },
+      { key: "name", label: "ПІБ скорочено", sortable: true, width: "minmax(150px, 1.3fr)" },
+      { key: "position", label: "Посада", sortable: true, width: "minmax(130px, 1.2fr)" },
     ];
     if (mode === "list") {
       cols.push({
         key: "department",
         label: "Підрозділ",
         sortable: true,
-        width: "minmax(140px, 1fr)",
+        width: "minmax(120px, 1fr)",
       });
     }
     cols.push(
-      { key: "phone", label: "Телефон", width: "minmax(120px, 0.8fr)" },
-      { key: "email", label: "Електронна пошта", width: "minmax(180px, 1.2fr)" },
-      { key: "user", label: "Користувач", width: "minmax(110px, 0.7fr)", align: "center" },
-      { key: "role", label: "Роль", width: "minmax(120px, 0.7fr)" },
-      { key: "deferral", label: "Відстрочка", width: "minmax(120px, 0.8fr)" },
+      { key: "phone", label: "Телефон", width: "minmax(90px, 0.8fr)" },
+      { key: "email", label: "Електронна пошта", width: "minmax(160px, 1.4fr)" },
+      { key: "user", label: "Користувач", width: "minmax(80px, 0.5fr)" },
+      { key: "role", label: "Роль", width: "minmax(110px, 0.7fr)" },
+      { key: "deferral", label: "Відстрочка", width: "minmax(100px, 0.8fr)" },
     );
     if (canSeeSalary) {
       cols.push({
@@ -157,10 +157,10 @@ export function EmployeesTable({
         label: "Зарплата",
         sortable: true,
         align: "right",
-        width: "minmax(110px, 0.7fr)",
+        width: "minmax(90px, 0.7fr)",
       });
     }
-    cols.push({ key: "notes", label: "Додатково", width: "minmax(140px, 1.2fr)" });
+    cols.push({ key: "notes", label: "Додатково", width: "minmax(120px, 1.3fr)" });
     return cols.filter((c) => !hiddenCols.has(c.key));
   }, [mode, canSeeSalary, hiddenCols]);
 
@@ -208,8 +208,12 @@ export function EmployeesTable({
 
   return (
     <div
-      className="overflow-hidden rounded-2xl"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+      className="overflow-hidden rounded-2xl text-[12.5px]"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderStrong}`,
+        fontVariantNumeric: "tabular-nums",
+      }}
     >
       <TableHeader
         columns={columns}
@@ -324,12 +328,12 @@ function TableHeader({
 
   return (
     <div
-      className="relative grid items-center gap-2 px-3 py-2.5 text-[10px] font-bold uppercase tracking-wider"
+      className="sticky top-0 z-[1] grid items-center gap-2 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider"
       style={{
-        gridTemplateColumns: `${gridTemplate} 28px`,
+        gridTemplateColumns: `${gridTemplate} 24px`,
         backgroundColor: T.panelSoft,
         color: T.textMuted,
-        borderBottom: `1px solid ${T.borderSoft}`,
+        borderBottom: `1px solid ${T.borderStrong}`,
       }}
     >
       {columns.map((c) => {
@@ -347,7 +351,7 @@ function TableHeader({
             type="button"
             disabled={!c.sortable}
             onClick={() => c.sortable && onSort(c.key)}
-            className="flex min-w-0 items-center gap-1 truncate text-left"
+            className="flex min-w-0 items-center gap-1 truncate text-left transition-colors duration-150"
             style={{
               justifyContent: c.align === "right" ? "flex-end" : c.align === "center" ? "center" : "flex-start",
               color: isSorted ? T.textPrimary : T.textMuted,
@@ -364,12 +368,12 @@ function TableHeader({
         <button
           type="button"
           onClick={() => setMenuOpen((v) => !v)}
-          className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-black/5"
+          className="flex h-5 w-5 items-center justify-center rounded transition-colors duration-150 hover:bg-black/5"
           style={{ color: T.textMuted }}
           aria-label="Колонки"
           title="Налаштування колонок"
         >
-          …
+          <MoreHorizontal size={12} />
         </button>
         {menuOpen && (
           <>
@@ -430,19 +434,21 @@ function DepartmentGroup({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-bold"
+        className="flex w-full items-center gap-1.5 px-3 py-1 text-left text-[10px] font-bold uppercase tracking-wider transition-colors duration-150 hover:bg-black/[0.02]"
         style={{
-          backgroundColor: T.panelSoft,
-          color: T.textPrimary,
+          color: T.textSecondary,
           borderBottom: `1px solid ${T.borderSoft}`,
-          borderTop: `1px solid ${T.borderSoft}`,
         }}
       >
-        {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+        {open ? (
+          <ChevronDown size={11} style={{ color: T.textMuted }} />
+        ) : (
+          <ChevronRight size={11} style={{ color: T.textMuted }} />
+        )}
         <span>{name}</span>
         <span
-          className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-          style={{ backgroundColor: T.panel, color: T.textMuted }}
+          className="ml-1 rounded-full px-1.5 text-[9px] font-bold normal-case tracking-normal"
+          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
         >
           {items.length}
         </span>
@@ -476,12 +482,12 @@ function EmployeeRowView({
 
   return (
     <div
-      className="group grid items-center gap-2 px-3 py-2 text-[12.5px] transition"
+      className="row group grid items-center gap-2 px-3 py-1.5 transition-colors duration-150 hover:bg-black/[0.025]"
       style={{
-        gridTemplateColumns: `${gridTemplate} 28px`,
+        gridTemplateColumns: `${gridTemplate} 24px`,
         borderBottom: `1px solid ${T.borderSoft}`,
         color: T.textPrimary,
-        opacity: employee.isActive ? 1 : 0.55,
+        opacity: employee.isActive ? 1 : 0.5,
       }}
     >
       {columns.map((c) => (
@@ -521,19 +527,11 @@ function Cell({
       return (
         <Link
           href={href}
-          className={`flex min-w-0 items-center gap-2 truncate font-semibold hover:underline ${align}`}
+          className={`flex min-w-0 items-center truncate font-medium transition-colors duration-150 hover:underline ${align}`}
           style={{ color: T.textPrimary }}
           title={employee.fullName}
         >
           <span className="truncate">{shortName(employee)}</span>
-          {!employee.isActive && (
-            <span
-              className="shrink-0 rounded px-1 py-0.5 text-[9px] font-bold uppercase"
-              style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
-            >
-              неактивний
-            </span>
-          )}
         </Link>
       );
 
@@ -553,15 +551,14 @@ function Cell({
 
     case "phone":
       return (
-        <div className={`flex min-w-0 items-center gap-1 truncate ${align}`}>
+        <div className={`flex min-w-0 items-center truncate ${align}`}>
           {employee.phone ? (
             <a
               href={`tel:${employee.phone}`}
-              className="inline-flex items-center gap-1 truncate hover:underline"
+              className="truncate tabular-nums transition-colors duration-150 hover:underline"
               style={{ color: T.textSecondary }}
             >
-              <Phone size={11} className="shrink-0 opacity-60" />
-              <span className="truncate tabular-nums">{employee.phone}</span>
+              {employee.phone}
             </a>
           ) : (
             dash()
@@ -577,16 +574,19 @@ function Cell({
         <div className={`flex min-w-0 items-center ${align}`}>
           {employee.user ? (
             <span
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase"
-              style={{
-                backgroundColor: employee.user.isActive ? T.successSoft : T.dangerSoft,
-                color: employee.user.isActive ? T.success : T.danger,
-              }}
+              className="inline-flex items-center gap-1 text-[11px] font-medium"
+              style={{ color: employee.user.isActive ? T.success : T.danger }}
             >
-              {employee.user.isActive ? "Активний" : "Заблокований"}
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{
+                  backgroundColor: employee.user.isActive ? T.success : T.danger,
+                }}
+              />
+              {employee.user.isActive ? "активний" : "блок."}
             </span>
           ) : (
-            <span style={{ color: T.textMuted }}>—</span>
+            dash()
           )}
         </div>
       );
@@ -596,7 +596,7 @@ function Cell({
         <div className={`flex min-w-0 ${align}`}>
           {employee.user ? (
             <span
-              className="rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase"
+              className="rounded px-1.5 py-0.5 text-[10px] font-semibold"
               style={{
                 backgroundColor: ROLE_COLORS[employee.user.role]?.bg ?? T.panelSoft,
                 color: ROLE_COLORS[employee.user.role]?.fg ?? T.textMuted,
@@ -622,12 +622,14 @@ function Cell({
       const sal = activeSalary(employee);
       if (!sal) return <div className={align}>{dash()}</div>;
       const total = Number(sal.baseSalary) + Number(sal.coefficient ?? 0);
+      const symbol = sal.currency === "USD" ? "$" : sal.currency === "EUR" ? "€" : "₴";
       return (
         <div
-          className={`min-w-0 truncate tabular-nums font-semibold ${align}`}
+          className={`flex min-w-0 items-baseline justify-end gap-0.5 tabular-nums ${align}`}
           style={{ color: T.textPrimary }}
         >
-          {formatCurrency(total)} <span className="font-normal" style={{ color: T.textMuted }}>{sal.currency}</span>
+          <span className="font-semibold">{formatCurrency(total)}</span>
+          <span className="text-[10px]" style={{ color: T.textMuted }}>{symbol}</span>
         </div>
       );
     }
@@ -665,11 +667,10 @@ function EmailCell({ email }: { email: string | null }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex min-w-0 max-w-full items-center gap-1 truncate text-left hover:underline"
-        style={{ color: T.accentPrimary }}
+        className="inline-flex min-w-0 max-w-full items-center truncate text-left transition-colors duration-150 hover:underline"
+        style={{ color: T.textSecondary }}
         title={email}
       >
-        <Mail size={11} className="shrink-0 opacity-70" />
         <span className="truncate">{email}</span>
       </button>
       {open && (
@@ -713,7 +714,11 @@ function EmailCell({ email }: { email: string | null }) {
 }
 
 function dash() {
-  return <span style={{ color: T.textMuted }}>—</span>;
+  return (
+    <span className="select-none opacity-40" style={{ color: T.textMuted }}>
+      —
+    </span>
+  );
 }
 
 function compare(a: EmployeeRow, b: EmployeeRow, key: ColumnKey): number {
