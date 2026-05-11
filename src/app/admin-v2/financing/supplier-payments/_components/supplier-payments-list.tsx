@@ -38,7 +38,8 @@ const STATUS_FILTERS = [
 ] as const;
 
 export function SupplierPaymentsList({ currentUserRole }: { currentUserRole: string }) {
-  const canVoid = ["SUPER_ADMIN", "FINANCIER"].includes(currentUserRole);
+  // MANAGER веде облік постачальників разом з Адміном → дозволено void платежів.
+  const canVoid = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
 
   const [items, setItems] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);

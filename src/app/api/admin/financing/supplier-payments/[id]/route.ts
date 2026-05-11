@@ -10,7 +10,8 @@ import { voidSupplierPayment } from "@/lib/finance/supplier-allocation";
 export const runtime = "nodejs";
 
 const READ_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER", "HR"];
-const VOID_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
+// MANAGER веде облік постачальників разом з Адміном → дозволено void.
+const VOID_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];
 
 interface Ctx {
   params: Promise<{ id: string }>;

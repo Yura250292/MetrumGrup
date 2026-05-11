@@ -45,6 +45,9 @@ export type NavItem = {
 const FINANCE_VIEW_ROLES = ["SUPER_ADMIN"] as const;
 // Чергу звітів виконробів (суми витрат) — теж лише SUPER_ADMIN.
 const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN"] as const;
+// Виняток для постачальників: MANAGER веде облік постачальників разом з Адміном
+// (рішення власника 2026-05-11). Решта ролей все ще не бачать.
+const SUPPLIERS_ACCESS_ROLES = ["SUPER_ADMIN", "MANAGER"] as const;
 
 export type NavGroup = {
   label: string;
@@ -75,7 +78,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, pillBadge: { text: "NEW", color: "violet" }, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/reports", label: "Звіти", icon: FileText, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/foreman-reports", label: "Звіти виконробів", icon: HardHat, pillBadge: { text: "NEW", color: "accent" }, roles: FOREMAN_REVIEW_ROLES },
-      { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, pillBadge: { text: "NEW", color: "accent" }, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, pillBadge: { text: "NEW", color: "accent" }, roles: SUPPLIERS_ACCESS_ROLES },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator, roles: FINANCE_VIEW_ROLES },
     ],
   },
