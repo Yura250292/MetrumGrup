@@ -20,7 +20,6 @@ import {
   ScanLine,
   TrendingUp,
   Library,
-  FileSpreadsheet,
   type LucideIcon,
 } from "lucide-react";
 
@@ -69,7 +68,6 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/reports", label: "Звіти", icon: FileText },
       { href: "/admin-v2/foreman-reports", label: "Звіти виконробів", icon: HardHat, pillBadge: { text: "NEW", color: "accent" } },
       { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, pillBadge: { text: "NEW", color: "accent" } },
-      { href: "/admin-v2/financing/import-invoices", label: "Імпорт рахунків (xlsx)", icon: FileSpreadsheet, pillBadge: { text: "NEW", color: "accent" } },
       { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
     ],
   },
@@ -172,7 +170,6 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/foreman-reports": "Звіти виконробів",
   "/admin-v2/counterparties": "Контрагенти",
   "/admin-v2/financing/suppliers": "Постачальники",
-  "/admin-v2/financing/import-invoices": "Імпорт рахунків (xlsx)",
   "/admin-v2/catalogs": "Довідники",
   "/admin-v2/receipts": "Накладні (скан)",
   "/admin-v2/receipts/scan": "Сканувати накладну",

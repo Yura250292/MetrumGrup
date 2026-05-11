@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Truck, Wallet } from "lucide-react";
+import { Truck, Wallet, FileSpreadsheet } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -10,10 +10,13 @@ import {
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { SuppliersLedger } from "./_components/suppliers-ledger";
 import { SupplierPaymentsList } from "../supplier-payments/_components/supplier-payments-list";
+import { ImportInvoicesClient } from "./_components/import-invoices-client";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "list" | "payments";
+type Tab = "list" | "payments" | "import";
+
+const WRITE_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "FINANCIER"]);
 
 export default async function AdminSuppliersPage({
   searchParams,
@@ -31,7 +34,14 @@ export default async function AdminSuppliersPage({
   if (!role || !allowed.includes(role)) redirect("/admin-v2");
 
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "payments" ? "payments" : "list";
+  const canImport = WRITE_ROLES.has(role);
+  const requestedTab = sp.tab;
+  const tab: Tab =
+    requestedTab === "payments"
+      ? "payments"
+      : requestedTab === "import" && canImport
+        ? "import"
+        : "list";
 
   return (
     <div className="flex flex-col gap-4">
@@ -59,10 +69,19 @@ export default async function AdminSuppliersPage({
         >
           <Wallet size={13} className="inline mr-1" /> Журнал платежів
         </TabLink>
+        {canImport && (
+          <TabLink
+            href="/admin-v2/financing/suppliers?tab=import"
+            active={tab === "import"}
+          >
+            <FileSpreadsheet size={13} className="inline mr-1" /> Імпорт з xlsx
+          </TabLink>
+        )}
       </div>
 
       {tab === "list" && <SuppliersLedger currentUserRole={role} />}
       {tab === "payments" && <SupplierPaymentsList currentUserRole={role} />}
+      {tab === "import" && canImport && <ImportInvoicesClient />}
     </div>
   );
 }
