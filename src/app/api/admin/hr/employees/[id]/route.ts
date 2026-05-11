@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { unauthorizedResponse, forbiddenResponse, canViewFinance } from "@/lib/auth-utils";
 import {
   type EmployeeRecord,
   redactSalaryForHr,
@@ -27,7 +27,8 @@ export async function GET(
 
   const { id } = await ctx.params;
   const role = g.session.user.role;
-  const isHr = role === "HR";
+  // Salaries — лише фінансові ролі (SUPER_ADMIN + FINANCIER). MANAGER/HR — ні.
+  const canSeeSalary = canViewFinance(role);
   const employee = await prisma.employee.findUnique({
     where: { id },
     include: {
@@ -35,10 +36,9 @@ export async function GET(
       user: {
         select: { id: true, email: true, role: true, isActive: true },
       },
-      // HR не повинен бачити історію ЗП взагалі.
-      salaries: isHr
-        ? false
-        : { orderBy: [{ effectiveFrom: "desc" }] },
+      salaries: canSeeSalary
+        ? { orderBy: [{ effectiveFrom: "desc" }] }
+        : false,
     },
   });
   if (!employee) {

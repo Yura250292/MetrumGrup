@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { unauthorizedResponse, forbiddenResponse, canViewFinance } from "@/lib/auth-utils";
 import {
   type EmployeeRecord,
   redactSalaryForHr,
@@ -101,7 +101,8 @@ export async function GET() {
   if (g.error) return g.error;
 
   const role = g.session.user.role;
-  const isHr = role === "HR";
+  // Salaries — лише фінансові ролі (SUPER_ADMIN + FINANCIER). MANAGER/HR — ні.
+  const canSeeSalary = canViewFinance(role);
 
   const employees = await prisma.employee.findMany({
     orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
@@ -111,13 +112,13 @@ export async function GET() {
         select: { id: true, email: true, role: true, isActive: true },
       },
       // Активний ЗП-період (один) — для зведеної індикації у картці.
-      // HR не бачить — повертаємо порожньо.
-      salaries: isHr
-        ? false
-        : {
+      // Не-фінансові ролі не бачать → query skip + redact.
+      salaries: canSeeSalary
+        ? {
             orderBy: [{ effectiveFrom: "desc" }],
             take: 1,
-          },
+          }
+        : false,
     },
   });
   const data = employees.map((e) => redactSalaryForHr(e as EmployeeRecord, role));

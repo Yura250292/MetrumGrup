@@ -12,7 +12,8 @@ import { Calculator } from "./_components/calculator";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "FINANCIER"]);
+// Strategic planning будує forecast на основі ЗП — лише SUPER_ADMIN.
+const ALLOWED_ROLES = new Set(["SUPER_ADMIN"]);
 
 export default async function StrategicPlanningPage() {
   const session = await auth();

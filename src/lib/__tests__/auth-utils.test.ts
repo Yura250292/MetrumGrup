@@ -227,9 +227,10 @@ describe('auth-utils', () => {
       expect(ESTIMATE_ROLES).toHaveLength(4)
     })
 
-    it('should define FINANCE_ROLES correctly', () => {
-      expect(FINANCE_ROLES).toEqual(['SUPER_ADMIN', 'FINANCIER'])
-      expect(FINANCE_ROLES).toHaveLength(2)
+    it('should define FINANCE_ROLES correctly (ONLY SUPER_ADMIN per owner rule)', () => {
+      // Правило власника: цифри і ЗП бачить тільки Адмін (SUPER_ADMIN).
+      expect(FINANCE_ROLES).toEqual(['SUPER_ADMIN'])
+      expect(FINANCE_ROLES).toHaveLength(1)
     })
 
     it('should have SUPER_ADMIN in all role groups', () => {

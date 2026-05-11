@@ -112,8 +112,8 @@ export function EmployeesList({
 }) {
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canSeeExternal = currentUserRole === "SUPER_ADMIN";
-  const canSeeSalary =
-    currentUserRole === "SUPER_ADMIN" || currentUserRole === "FINANCIER";
+  // ЗП — лише SUPER_ADMIN (правило: цифри бачить тільки Адмін).
+  const canSeeSalary = currentUserRole === "SUPER_ADMIN";
 
   const [tab, setTab] = useState<Tab>(
     initialTab === "external" && canSeeExternal ? "external" : "employees",

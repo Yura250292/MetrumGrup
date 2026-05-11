@@ -283,8 +283,8 @@ export function EmployeeDossier({
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canDelete = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
-  const canSeeSalary =
-    currentUserRole === "SUPER_ADMIN" || currentUserRole === "FINANCIER";
+  // ЗП — лише SUPER_ADMIN (правило: цифри бачить тільки Адмін).
+  const canSeeSalary = currentUserRole === "SUPER_ADMIN";
 
   async function load() {
     setLoading(true);

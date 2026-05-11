@@ -9,8 +9,8 @@ import { log } from "@/lib/logger";
 
 export const runtime = "nodejs";
 
-// Payroll run створює FinanceEntry із сумами ЗП → лише фінансові ролі.
-const WRITE_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
+// Payroll run створює FinanceEntry із сумами ЗП → лише SUPER_ADMIN.
+const WRITE_ROLES: Role[] = ["SUPER_ADMIN"];
 
 const itemSchema = z.object({
   employeeId: z.string().min(1),

@@ -41,9 +41,10 @@ export type NavItem = {
 };
 
 // Хто бачить фінансові пункти меню. Має збігатися з FINANCE_ROLES у auth-utils.
-const FINANCE_VIEW_ROLES = ["SUPER_ADMIN", "FINANCIER"] as const;
-// Хто бачить чергу звітів виконробів (= FOREMAN_REPORT_REVIEWERS).
-const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN", "MANAGER", "FINANCIER"] as const;
+// Правило: цифри бачить ТІЛЬКИ SUPER_ADMIN.
+const FINANCE_VIEW_ROLES = ["SUPER_ADMIN"] as const;
+// Чергу звітів виконробів (суми витрат) — теж лише SUPER_ADMIN.
+const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN"] as const;
 
 export type NavGroup = {
   label: string;

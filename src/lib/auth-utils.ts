@@ -81,12 +81,13 @@ export function forbiddenResponse() {
 export const ADMIN_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];
 export const ESTIMATE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"];
 // Хто бачить фінансові цифри (ЗП, витрати, доходи, бюджети, ставки, виплати).
-// MANAGER/HR/ENGINEER/FOREMAN/CLIENT — НЕ бачать. Єдина точка істини для UI+API.
-export const FINANCE_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
+// Правило власника: ТІЛЬКИ SUPER_ADMIN. Усі решта — MANAGER/HR/ENGINEER/
+// FINANCIER/FOREMAN/CLIENT — НЕ бачать. Єдина точка істини для UI+API.
+export const FINANCE_ROLES: Role[] = ["SUPER_ADMIN"];
 
 /** True iff this role may see any financial numbers. Use everywhere — UI, API, AI context. */
 export function canViewFinance(role: Role | string | null | undefined): boolean {
-  return role === "SUPER_ADMIN" || role === "FINANCIER";
+  return role === "SUPER_ADMIN";
 }
 export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
 // HR has read+write access to employees/counterparties/subcontractors/clients and read to
@@ -94,8 +95,9 @@ export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
 export const HR_ACCESSIBLE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "HR"];
 // Foreman: kiosk PWA users (виконроб). Submit expense reports → manager approves.
 export const FOREMAN_ROLES: Role[] = ["FOREMAN"];
-// Хто бачить queue звітів виконробів і може approve/reject.
-export const FOREMAN_REPORT_REVIEWERS: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
+// Хто бачить queue звітів виконробів і може approve/reject. Звіти містять
+// суми витрат → ТІЛЬКИ SUPER_ADMIN (правило: цифри бачить тільки Адмін).
+export const FOREMAN_REPORT_REVIEWERS: Role[] = ["SUPER_ADMIN"];
 // Owner: директор/засновник — мінімалістичний read-only аналітичний дашборд.
 // SUPER_ADMIN теж пропускається у /owner (може дивитись overview якщо хоче).
 export const OWNER_ROLES: Role[] = ["OWNER", "SUPER_ADMIN"];

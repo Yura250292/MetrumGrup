@@ -36,9 +36,9 @@ export default async function AdminV2FinancingPage({
     redirect("/admin-v2");
   }
 
-  // Фінансування — фінансові цифри (бюджети, виплати, cashflow). Бачать лише
-  // SUPER_ADMIN + FINANCIER (`FINANCE_ROLES`). MANAGER/HR/ENGINEER — ні.
-  const allowedRoles = ["SUPER_ADMIN", "FINANCIER"];
+  // Фінансування (бюджети, виплати, cashflow) — лише SUPER_ADMIN.
+  // Усі інші ролі редіректяться. Правило власника: цифри бачить тільки Адмін.
+  const allowedRoles = ["SUPER_ADMIN"];
   const activeRole = getActiveRoleFromSession(session, firmId);
   if (!activeRole || !allowedRoles.includes(activeRole)) {
     redirect("/admin-v2");

@@ -706,11 +706,10 @@ export default async function AdminV2Dashboard({
   // Видимість блоків — за активною роллю (з урахуванням firm-context).
   const role = activeRole;
   const isAdmin = role === "SUPER_ADMIN" || role === "MANAGER";
-  const isFinancier = role === "FINANCIER";
   const isEngineer = role === "ENGINEER";
-  // Фінансові цифри (KPI/cashflow/виплати) — лише SUPER_ADMIN + FINANCIER.
-  // MANAGER цифр не бачить per RBAC-правило власника.
-  const canSeeFinance = role === "SUPER_ADMIN" || role === "FINANCIER";
+  // Фінансові цифри (KPI/cashflow/виплати) — лише SUPER_ADMIN.
+  // Правило власника: цифри і ЗП бачить тільки Адмін.
+  const canSeeFinance = role === "SUPER_ADMIN";
   const showBusinessKpis = canSeeFinance;
   const showTaskKpis = isAdmin || isEngineer;
   const showFinance = canSeeFinance;
