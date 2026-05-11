@@ -614,6 +614,12 @@ model FinanceEntry {
   /// approve. Унікальність гарантує, що повторний approve не створить дубль.
   foremanReportItemId String? @unique
 
+  /// Номер рахунку постачальника як у первинному документі ("314 від 08.01.25",
+  /// "ЛВ 000000170 14.01.25"). Без нормалізації — зберігається raw-форма з
+  /// файлу/паперу. Використовується для dedup при імпорті ledger-файлів і
+  /// для відображення в UI кредиторської заборгованості.
+  invoiceNumber String?
+
   project            Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   firm               Firm?                    @relation(fields: [firmId], references: [id])
   stageRecord        ProjectStageRecord?      @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
@@ -652,6 +658,8 @@ model FinanceEntry {
   @@index([counterpartyId])
   @@index([firmId])
   @@index([stageRecordId])
+  @@index([invoiceNumber])
+  @@index([firmId, counterpartyId, invoiceNumber])
   @@map("finance_entries")
 }
 
