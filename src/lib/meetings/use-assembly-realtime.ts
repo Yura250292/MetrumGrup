@@ -98,10 +98,11 @@ export function useAssemblyRealtime(opts: {
       if (!token) throw new Error("Сервер повернув порожній токен");
 
       // 2. Відкриваємо WebSocket до v3/ws.
-      // Обовʼязкові v3-параметри: sample_rate, encoding, speech_model, token.
-      // speech_model=universal — Universal-Streaming v3 (топова якість UA/RU).
-      // Попередня помилка 3006 була через відсутній speech_model.
-      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&speech_model=universal&token=${encodeURIComponent(
+      // Валідні speech_model у v3 (per server error):
+      //   universal-streaming-english | universal-streaming-multilingual |
+      //   whisper-rt | alpha-english | u3-rt-pro | u3-rt-agent
+      // Для UA/RU беремо `universal-streaming-multilingual`.
+      const wsUrl = `wss://streaming.assemblyai.com/v3/ws?sample_rate=16000&encoding=pcm_s16le&speech_model=universal-streaming-multilingual&token=${encodeURIComponent(
         token,
       )}`;
       const ws = new WebSocket(wsUrl);
