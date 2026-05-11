@@ -80,7 +80,14 @@ export function forbiddenResponse() {
 // Common role groups for consistent authorization
 export const ADMIN_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];
 export const ESTIMATE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"];
+// Хто бачить фінансові цифри (ЗП, витрати, доходи, бюджети, ставки, виплати).
+// MANAGER/HR/ENGINEER/FOREMAN/CLIENT — НЕ бачать. Єдина точка істини для UI+API.
 export const FINANCE_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
+
+/** True iff this role may see any financial numbers. Use everywhere — UI, API, AI context. */
+export function canViewFinance(role: Role | string | null | undefined): boolean {
+  return role === "SUPER_ADMIN" || role === "FINANCIER";
+}
 export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
 // HR has read+write access to employees/counterparties/subcontractors/clients and read to
 // equipment/warehouse/workers/meetings/chat. Treated as an admin peer for its allowlist only.

@@ -2,17 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { unauthorizedResponse, forbiddenResponse, canViewFinance } from "@/lib/auth-utils";
 import { syncEmployeeSalaryCache } from "@/lib/hr/employee-salary";
-import { isHrRole } from "@/lib/hr/employee-privacy";
 
 export const runtime = "nodejs";
 
 async function guard() {
   const session = await auth();
   if (!session?.user) return { error: unauthorizedResponse() };
-  // HR не має доступу до ЗП. Тільки SUPER_ADMIN/MANAGER читають і редагують.
-  if (!["SUPER_ADMIN", "MANAGER"].includes(session.user.role)) {
+  // ЗП — лише фінансові ролі (SUPER_ADMIN + FINANCIER). MANAGER/HR не пропускаються.
+  if (!canViewFinance(session.user.role)) {
     return { error: forbiddenResponse() };
   }
   return { session };
@@ -43,13 +42,9 @@ export async function GET(
   _request: NextRequest,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  // Окремий guard: HR не повинен навіть читати історію.
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
-  if (isHrRole(session.user.role)) return forbiddenResponse();
-  if (!["SUPER_ADMIN", "MANAGER"].includes(session.user.role)) {
-    return forbiddenResponse();
-  }
+  if (!canViewFinance(session.user.role)) return forbiddenResponse();
 
   const { id } = await ctx.params;
   const salaries = await prisma.employeeSalary.findMany({

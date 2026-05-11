@@ -36,9 +36,9 @@ export default async function AdminV2FinancingPage({
     redirect("/admin-v2");
   }
 
-  // Per-firm role check: для shymilo93 на Group роль — HR (без доступу до Фінансування),
-  // а на Studio — SUPER_ADMIN (повний доступ).
-  const allowedRoles = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
+  // Фінансування — фінансові цифри (бюджети, виплати, cashflow). Бачать лише
+  // SUPER_ADMIN + FINANCIER (`FINANCE_ROLES`). MANAGER/HR/ENGINEER — ні.
+  const allowedRoles = ["SUPER_ADMIN", "FINANCIER"];
   const activeRole = getActiveRoleFromSession(session, firmId);
   if (!activeRole || !allowedRoles.includes(activeRole)) {
     redirect("/admin-v2");

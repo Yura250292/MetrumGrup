@@ -708,9 +708,12 @@ export default async function AdminV2Dashboard({
   const isAdmin = role === "SUPER_ADMIN" || role === "MANAGER";
   const isFinancier = role === "FINANCIER";
   const isEngineer = role === "ENGINEER";
-  const showBusinessKpis = isAdmin || isFinancier;
+  // Фінансові цифри (KPI/cashflow/виплати) — лише SUPER_ADMIN + FINANCIER.
+  // MANAGER цифр не бачить per RBAC-правило власника.
+  const canSeeFinance = role === "SUPER_ADMIN" || role === "FINANCIER";
+  const showBusinessKpis = canSeeFinance;
   const showTaskKpis = isAdmin || isEngineer;
-  const showFinance = isAdmin || isFinancier;
+  const showFinance = canSeeFinance;
   const showTeam = isAdmin;
   const showStages = isAdmin || isEngineer;
 

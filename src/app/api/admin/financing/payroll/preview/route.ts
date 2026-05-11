@@ -7,7 +7,8 @@ import { computeMonthlyTotal } from "@/lib/hr/employee-salary";
 
 export const runtime = "nodejs";
 
-const READ_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"];
+// Preview включає ЗП-суми → лише фінансові ролі (FINANCE_ROLES).
+const READ_ROLES: Role[] = ["SUPER_ADMIN", "FINANCIER"];
 
 /**
  * GET /api/admin/financing/payroll/preview?year=2026&month=4&mode=cash|taxes

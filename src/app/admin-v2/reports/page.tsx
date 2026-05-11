@@ -11,7 +11,8 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "ENGINEER"];
+// Фінансові звіти — лише SUPER_ADMIN + FINANCIER (FINANCE_ROLES).
+const ALLOWED = ["SUPER_ADMIN", "FINANCIER"];
 
 export default async function ReportsPage() {
   const session = await auth();

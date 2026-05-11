@@ -112,7 +112,8 @@ export function EmployeesList({
 }) {
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canSeeExternal = currentUserRole === "SUPER_ADMIN";
-  const canSeeSalary = currentUserRole !== "HR";
+  const canSeeSalary =
+    currentUserRole === "SUPER_ADMIN" || currentUserRole === "FINANCIER";
 
   const [tab, setTab] = useState<Tab>(
     initialTab === "external" && canSeeExternal ? "external" : "employees",

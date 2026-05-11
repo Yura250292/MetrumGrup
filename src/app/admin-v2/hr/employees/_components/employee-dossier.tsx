@@ -283,7 +283,8 @@ export function EmployeeDossier({
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canDelete = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
-  const canSeeSalary = currentUserRole !== "HR";
+  const canSeeSalary =
+    currentUserRole === "SUPER_ADMIN" || currentUserRole === "FINANCIER";
 
   async function load() {
     setLoading(true);

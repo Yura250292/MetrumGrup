@@ -30,6 +30,8 @@ export type NavItem = {
   exact?: boolean;
   superAdminOnly?: boolean;
   hrAllowed?: boolean;
+  /** Allowlist of roles. If set, ONLY listed roles see the item; other flags ignored. */
+  roles?: readonly string[];
   showUnreadBadge?: boolean;
   /** Static pill badge — e.g. "NEW", "BETA". `color` picks the soft palette. */
   pillBadge?: {
@@ -37,6 +39,11 @@ export type NavItem = {
     color: "accent" | "violet" | "amber" | "success" | "danger" | "teal";
   };
 };
+
+// Хто бачить фінансові пункти меню. Має збігатися з FINANCE_ROLES у auth-utils.
+const FINANCE_VIEW_ROLES = ["SUPER_ADMIN", "FINANCIER"] as const;
+// Хто бачить чергу звітів виконробів (= FOREMAN_REPORT_REVIEWERS).
+const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN", "MANAGER", "FINANCIER"] as const;
 
 export type NavGroup = {
   label: string;
@@ -63,12 +70,12 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Фінанси",
     items: [
-      { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet },
-      { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, pillBadge: { text: "NEW", color: "violet" } },
-      { href: "/admin-v2/reports", label: "Звіти", icon: FileText },
-      { href: "/admin-v2/foreman-reports", label: "Звіти виконробів", icon: HardHat, pillBadge: { text: "NEW", color: "accent" } },
-      { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, pillBadge: { text: "NEW", color: "accent" } },
-      { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator },
+      { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, pillBadge: { text: "NEW", color: "violet" }, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/reports", label: "Звіти", icon: FileText, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/foreman-reports", label: "Звіти виконробів", icon: HardHat, pillBadge: { text: "NEW", color: "accent" }, roles: FOREMAN_REVIEW_ROLES },
+      { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, pillBadge: { text: "NEW", color: "accent" }, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator, roles: FINANCE_VIEW_ROLES },
     ],
   },
   {
@@ -201,6 +208,8 @@ export function isItemActive(href: string, exact: boolean | undefined, pathname:
 }
 
 export function isItemVisibleForRole(item: NavItem, role: string | undefined): boolean {
+  // Explicit allowlist wins — if `roles` set, role MUST be in it.
+  if (item.roles && (!role || !item.roles.includes(role))) return false;
   if (item.superAdminOnly && role !== "SUPER_ADMIN") return false;
   if (role === "HR" && !item.hrAllowed) return false;
   return true;

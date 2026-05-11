@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
+import { unauthorizedResponse, forbiddenResponse, canViewFinance } from "@/lib/auth-utils";
 import { syncEmployeeSalaryCache } from "@/lib/hr/employee-salary";
 
 export const runtime = "nodejs";
@@ -10,7 +10,8 @@ export const runtime = "nodejs";
 async function guard() {
   const session = await auth();
   if (!session?.user) return { error: unauthorizedResponse() };
-  if (!["SUPER_ADMIN", "MANAGER"].includes(session.user.role)) {
+  // ЗП — лише фінансові ролі (SUPER_ADMIN + FINANCIER).
+  if (!canViewFinance(session.user.role)) {
     return { error: forbiddenResponse() };
   }
   return { session };
