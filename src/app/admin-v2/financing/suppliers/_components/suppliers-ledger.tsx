@@ -3,15 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   Loader2,
-  Mail,
-  Phone,
   Plus,
   Search,
   Truck,
+  AlertTriangle,
+  CheckCircle2,
+  X,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
@@ -24,32 +28,59 @@ type Supplier = {
   phone: string | null;
   email: string | null;
   isActive: boolean;
+  // From withOutstanding:
   outstanding: number;
+  oldestDebtDate: string | null;
+  // From withStats:
+  invoiceCount: number;
+  paidCount: number;
+  debtCount: number;
+  totalInvoiced: number;
+  totalPaid: number;
+  firstInvoiceDate: string | null;
+  lastInvoiceDate: string | null;
+  lastPaymentDate: string | null;
 };
 
-type DebtByProject = {
-  projectId: string | null;
-  projectTitle: string | null;
-  projectSlug: string | null;
+type Invoice = {
+  id: string;
+  occurredAt: string;
+  title: string;
+  description: string | null;
+  invoiceNumber: string | null;
+  amount: number;
+  paidAmount: number;
   outstanding: number;
-  entryCount: number;
+  status: "DRAFT" | "PENDING" | "APPROVED" | "PAID";
+  paidAt: string | null;
+  remindAt: string | null;
+  project: { id: string; title: string; slug: string } | null;
 };
 
-type DebtByMaterial = {
-  name: string;
-  outstanding: number;
-  count: number;
-};
-
-type SupplierDetail = {
-  outstandingByProject: DebtByProject[];
-  outstandingByMaterial: DebtByMaterial[];
-  /// Кількість зачеплених фактів (для info-плашки).
-  factsCount: number;
-};
+type SortKey =
+  | "outstanding"
+  | "name"
+  | "totalInvoiced"
+  | "totalPaid"
+  | "lastInvoiceDate"
+  | "lastPaymentDate"
+  | "invoiceCount"
+  | "oldestDebt";
 
 const PAY_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "FINANCIER"]);
 const CREATE_ROLES = new Set(["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"]);
+
+const dateFmt = (iso: string | null | undefined) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getFullYear()).slice(-2)}`;
+};
+
+const daysSince = (iso: string | null | undefined): number | null => {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  return Math.floor(ms / (1000 * 60 * 60 * 24));
+};
 
 export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }) {
   const canPay = PAY_ROLES.has(currentUserRole);
@@ -59,19 +90,27 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  // Дефолт: показуємо всіх постачальників. Toggle «Тільки з боргом» у toolbar
-  // лишається — для фокусованої роботи фінансиста з заборгованостями.
   const [showOnlyDebt, setShowOnlyDebt] = useState(false);
   const [includeInactive, setIncludeInactive] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  const [sortKey, setSortKey] = useState<SortKey>("outstanding");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
   const [payTarget, setPayTarget] = useState<Supplier | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  // Lazy-load drill-down: тримаємо кеш деталей по counterpartyId.
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [details, setDetails] = useState<Map<string, SupplierDetail>>(new Map());
-  const [loadingDetailId, setLoadingDetailId] = useState<string | null>(null);
+  const [invoicesByCp, setInvoicesByCp] = useState<Map<string, Invoice[]>>(
+    new Map(),
+  );
+  const [loadingInvoicesId, setLoadingInvoicesId] = useState<string | null>(
+    null,
+  );
 
   async function load() {
     setLoading(true);
@@ -80,9 +119,12 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
       const params = new URLSearchParams();
       params.set("role", "SUPPLIER");
       params.set("withOutstanding", "true");
+      params.set("withStats", "true");
       params.set("take", "500");
       if (showOnlyDebt) params.set("hasDebt", "true");
       if (includeInactive) params.set("includeInactive", "true");
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
       const res = await fetch(`/api/admin/financing/counterparties?${params}`, {
         cache: "no-store",
       });
@@ -102,27 +144,69 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showOnlyDebt, includeInactive]);
+  }, [showOnlyDebt, includeInactive, dateFrom, dateTo]);
 
-  const filtered = useMemo(() => {
+  const { creditors, others } = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const sorted = [...items].sort((a, b) => b.outstanding - a.outstanding);
-    if (!q) return sorted;
-    return sorted.filter(
-      (c) =>
-        c.name.toLowerCase().includes(q) ||
-        (c.edrpou ?? "").toLowerCase().includes(q),
-    );
-  }, [items, search]);
+    const filtered = !q
+      ? items
+      : items.filter(
+          (c) =>
+            c.name.toLowerCase().includes(q) ||
+            (c.edrpou ?? "").toLowerCase().includes(q),
+        );
+    const cr = filtered.filter((c) => c.outstanding > 0);
+    const ot = filtered.filter((c) => c.outstanding === 0);
+    const sortFn = (a: Supplier, b: Supplier) => {
+      const dir = sortDir === "desc" ? -1 : 1;
+      switch (sortKey) {
+        case "name":
+          return a.name.localeCompare(b.name, "uk") * dir;
+        case "totalInvoiced":
+          return (a.totalInvoiced - b.totalInvoiced) * dir;
+        case "totalPaid":
+          return (a.totalPaid - b.totalPaid) * dir;
+        case "invoiceCount":
+          return (a.invoiceCount - b.invoiceCount) * dir;
+        case "lastInvoiceDate": {
+          const av = a.lastInvoiceDate ? new Date(a.lastInvoiceDate).getTime() : 0;
+          const bv = b.lastInvoiceDate ? new Date(b.lastInvoiceDate).getTime() : 0;
+          return (av - bv) * dir;
+        }
+        case "lastPaymentDate": {
+          const av = a.lastPaymentDate ? new Date(a.lastPaymentDate).getTime() : 0;
+          const bv = b.lastPaymentDate ? new Date(b.lastPaymentDate).getTime() : 0;
+          return (av - bv) * dir;
+        }
+        case "oldestDebt": {
+          const av = a.oldestDebtDate ? new Date(a.oldestDebtDate).getTime() : 0;
+          const bv = b.oldestDebtDate ? new Date(b.oldestDebtDate).getTime() : 0;
+          return (av - bv) * dir;
+        }
+        case "outstanding":
+        default:
+          return (a.outstanding - b.outstanding) * dir;
+      }
+    };
+    return { creditors: [...cr].sort(sortFn), others: [...ot].sort(sortFn) };
+  }, [items, search, sortKey, sortDir]);
 
-  const totalDebt = useMemo(
-    () => filtered.reduce((s, c) => s + c.outstanding, 0),
-    [filtered],
-  );
-  const debtorCount = useMemo(
-    () => filtered.filter((c) => c.outstanding > 0).length,
-    [filtered],
-  );
+  const totals = useMemo(() => {
+    const totalDebt = creditors.reduce((s, c) => s + c.outstanding, 0);
+    const totalInvoiced = items.reduce((s, c) => s + c.totalInvoiced, 0);
+    const totalPaid = items.reduce((s, c) => s + c.totalPaid, 0);
+    const overdue30 = creditors.filter((c) => {
+      const days = daysSince(c.oldestDebtDate);
+      return days !== null && days >= 30;
+    }).length;
+    return {
+      totalDebt,
+      totalInvoiced,
+      totalPaid,
+      debtorCount: creditors.length,
+      overdue30,
+    };
+  }, [items, creditors]);
 
   async function toggleExpand(id: string) {
     if (expandedId === id) {
@@ -130,26 +214,22 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
       return;
     }
     setExpandedId(id);
-    if (details.has(id)) return;
-    setLoadingDetailId(id);
+    if (invoicesByCp.has(id)) return;
+    setLoadingInvoicesId(id);
     try {
-      const res = await fetch(`/api/admin/financing/counterparties/${id}`, {
-        cache: "no-store",
-      });
+      const res = await fetch(
+        `/api/admin/financing/counterparties/${id}/invoices?take=200`,
+        { cache: "no-store" },
+      );
       if (!res.ok) return;
       const j = await res.json();
-      const detail: SupplierDetail = {
-        outstandingByProject: j.outstandingByProject ?? [],
-        outstandingByMaterial: j.outstandingByMaterial ?? [],
-        factsCount: j.stats?.count ?? 0,
-      };
-      setDetails((prev) => {
+      setInvoicesByCp((prev) => {
         const next = new Map(prev);
-        next.set(id, detail);
+        next.set(id, j.data ?? []);
         return next;
       });
     } finally {
-      setLoadingDetailId(null);
+      setLoadingInvoicesId(null);
     }
   }
 
@@ -162,8 +242,6 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
     setCreating(true);
     setCreateError(null);
     try {
-      // Створюємо через звичайний counterparties endpoint, потім додаємо
-      // SUPPLIER через PATCH (бо POST не приймає roles).
       const createRes = await fetch(`/api/admin/financing/counterparties`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,12 +252,6 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
         setCreateError(createJson.error ?? "Помилка створення");
         return;
       }
-      // PATCH ролі — endpoint не приймає roles напряму, тому скрипт backfill
-      // підхопить при наступному запуску. Але краще одразу: у DB немає API
-      // для оновлення ролей, тож Postgres SUPPLIER додається через
-      // counterparties update схему майбутньою фазою. Поки залишимо як є —
-      // counterparty з'явиться у списку коли матиме хоча б одну витрату
-      // через FACT EXPENSE (resolveSupplier поставить роль автоматично).
       setShowCreate(false);
       setNewName("");
       await load();
@@ -188,31 +260,58 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
     }
   }
 
+  function clickSort(key: SortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    } else {
+      setSortKey(key);
+      setSortDir("desc");
+    }
+  }
+
+  function clearDates() {
+    setDateFrom("");
+    setDateTo("");
+  }
+
   return (
     <div className="flex flex-col gap-4">
-      {/* Toolbar + summary */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Tile label="Постачальників" value={filtered.length} kind="count" />
-        <Tile label="З боргом" value={debtorCount} kind="count" tone="warn" />
+      {/* KPI tiles */}
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <Tile
-          label="Загальний борг"
-          value={totalDebt}
-          kind="money"
-          tone={totalDebt > 0 ? "bad" : "muted"}
+          label="Кредиторів"
+          value={totals.debtorCount}
+          sub={`з ${items.length} постач.`}
+          kind="count"
+          tone={totals.debtorCount > 0 ? "bad" : "good"}
         />
         <Tile
-          label="Середній борг"
-          value={debtorCount > 0 ? totalDebt / debtorCount : 0}
+          label="Загальний борг"
+          value={totals.totalDebt}
+          kind="money"
+          tone={totals.totalDebt > 0 ? "bad" : "good"}
+        />
+        <Tile
+          label="Просрочка >30 днів"
+          value={totals.overdue30}
+          kind="count"
+          tone={totals.overdue30 > 0 ? "warn" : "muted"}
+        />
+        <Tile label="Оплачено" value={totals.totalPaid} kind="money" tone="good" />
+        <Tile
+          label="Оборот"
+          value={totals.totalInvoiced}
           kind="money"
           tone="muted"
         />
       </div>
 
+      {/* Toolbar */}
       <div
         className="flex flex-wrap items-center gap-2 rounded-2xl p-3"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative flex-1 min-w-[200px]">
           <Search
             size={14}
             className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -230,6 +329,45 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
             }}
           />
         </div>
+
+        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textSecondary }}>
+          <span style={{ color: T.textMuted }}>Дата рахунку:</span>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="rounded-md px-2 py-1 outline-none text-[12px]"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px solid ${T.borderSoft}`,
+              color: T.textPrimary,
+              colorScheme: "light",
+            }}
+          />
+          <span>—</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="rounded-md px-2 py-1 outline-none text-[12px]"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px solid ${T.borderSoft}`,
+              color: T.textPrimary,
+              colorScheme: "light",
+            }}
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={clearDates}
+              className="rounded p-1 hover:bg-black/10"
+              title="Скинути дати"
+            >
+              <X size={12} style={{ color: T.textMuted }} />
+            </button>
+          )}
+        </div>
+
         <label
           className="flex items-center gap-1.5 text-[12px] cursor-pointer"
           style={{ color: T.textSecondary }}
@@ -250,7 +388,7 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
             checked={includeInactive}
             onChange={(e) => setIncludeInactive(e.target.checked)}
           />
-          Включно з деактивованими
+          Деактивовані
         </label>
         <div className="flex-1" />
         {canCreate && (
@@ -269,68 +407,14 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
       </div>
 
       {showCreate && (
-        <div
-          className="rounded-2xl p-3 flex flex-col gap-2"
-          style={{
-            backgroundColor: T.accentPrimarySoft,
-            border: `1px solid ${T.accentPrimary}40`,
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <input
-              autoFocus
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void submitCreate();
-                if (e.key === "Escape") setShowCreate(false);
-              }}
-              placeholder="Назва постачальника, напр. Будхата"
-              className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
-              style={{
-                backgroundColor: T.panel,
-                border: `1px solid ${T.borderStrong}`,
-                color: T.textPrimary,
-              }}
-            />
-            <button
-              onClick={submitCreate}
-              disabled={creating}
-              className="rounded-xl px-3 py-2 text-[12px] font-semibold disabled:opacity-50"
-              style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-            >
-              {creating ? "Створення…" : "Створити"}
-            </button>
-            <button
-              onClick={() => setShowCreate(false)}
-              disabled={creating}
-              className="rounded-xl px-3 py-2 text-[12px] font-semibold"
-              style={{
-                backgroundColor: T.panel,
-                color: T.textSecondary,
-                border: `1px solid ${T.borderSoft}`,
-              }}
-            >
-              Скасувати
-            </button>
-          </div>
-          {createError && (
-            <div className="text-[11px]" style={{ color: T.danger }}>
-              {createError}
-            </div>
-          )}
-          <div className="text-[11px]" style={{ color: T.textSecondary }}>
-            Деталі (ЄДРПОУ, IBAN, контакти) можна заповнити у{" "}
-            <Link
-              href="/admin-v2/counterparties"
-              className="underline"
-              style={{ color: T.accentPrimary }}
-            >
-              Контрагентах
-            </Link>
-            .
-          </div>
-        </div>
+        <CreateForm
+          name={newName}
+          setName={setNewName}
+          onSubmit={submitCreate}
+          onCancel={() => setShowCreate(false)}
+          busy={creating}
+          error={createError}
+        />
       )}
 
       {error && (
@@ -351,63 +435,71 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
           className="flex items-center justify-center gap-2 py-12 text-sm"
           style={{ color: T.textMuted }}
         >
-          <Loader2 size={14} className="animate-spin" /> Завантажуємо постачальників…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div
-          className="rounded-2xl p-8 text-center text-sm"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px dashed ${T.borderSoft}`,
-            color: T.textMuted,
-          }}
-        >
-          {showOnlyDebt
-            ? "Немає постачальників з активним боргом."
-            : "Постачальників не знайдено. Створіть першого вгорі ↑"}
+          <Loader2 size={14} className="animate-spin" /> Завантажуємо…
         </div>
       ) : (
-        <div
-          className="overflow-x-auto rounded-2xl"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
-        >
-          <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
-            <thead>
-              <tr
-                className="text-[10px] font-bold uppercase tracking-wider"
-                style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
-              >
-                <th className="w-8"></th>
-                <th className="px-4 py-3 text-left">Постачальник</th>
-                <th className="px-3 py-3 text-left">ЄДРПОУ</th>
-                <th className="px-3 py-3 text-left">Контакти</th>
-                <th className="px-3 py-3 text-right">Загальний борг</th>
-                <th className="px-3 py-3 text-right">Дії</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => {
-                const hasDebt = c.outstanding > 0;
-                const isOpen = expandedId === c.id;
-                const detail = details.get(c.id);
-                const isLoadingDetail = loadingDetailId === c.id;
-                return (
-                  <ExpandableRow
-                    key={c.id}
-                    supplier={c}
-                    hasDebt={hasDebt}
-                    isOpen={isOpen}
-                    detail={detail}
-                    isLoadingDetail={isLoadingDetail}
-                    canPay={canPay}
-                    onToggle={() => toggleExpand(c.id)}
-                    onPay={() => setPayTarget(c)}
-                  />
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <>
+          {creditors.length > 0 && (
+            <SectionTable
+              title={
+                <>
+                  <AlertTriangle size={14} style={{ color: T.danger }} />
+                  <span style={{ color: T.danger }}>
+                    Кредитори ({creditors.length}) — {formatCurrency(totals.totalDebt)}
+                  </span>
+                </>
+              }
+              rows={creditors}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={clickSort}
+              expandedId={expandedId}
+              onToggle={toggleExpand}
+              invoicesByCp={invoicesByCp}
+              loadingInvoicesId={loadingInvoicesId}
+              canPay={canPay}
+              onPay={setPayTarget}
+              variant="creditors"
+            />
+          )}
+
+          {others.length > 0 && !showOnlyDebt && (
+            <SectionTable
+              title={
+                <>
+                  <CheckCircle2 size={14} style={{ color: T.success }} />
+                  <span style={{ color: T.textSecondary }}>
+                    Без поточного боргу ({others.length})
+                  </span>
+                </>
+              }
+              rows={others}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={clickSort}
+              expandedId={expandedId}
+              onToggle={toggleExpand}
+              invoicesByCp={invoicesByCp}
+              loadingInvoicesId={loadingInvoicesId}
+              canPay={canPay}
+              onPay={setPayTarget}
+              variant="others"
+            />
+          )}
+
+          {creditors.length === 0 && others.length === 0 && (
+            <div
+              className="rounded-2xl p-8 text-center text-sm"
+              style={{
+                backgroundColor: T.panel,
+                border: `1px dashed ${T.borderSoft}`,
+                color: T.textMuted,
+              }}
+            >
+              Постачальників не знайдено.
+            </div>
+          )}
+        </>
       )}
 
       {payTarget && (
@@ -419,6 +511,12 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
           onClose={() => setPayTarget(null)}
           onCreated={async () => {
             setPayTarget(null);
+            // Сбросити кеш рахунків цього постачальника, бо outstanding змінився.
+            setInvoicesByCp((prev) => {
+              const next = new Map(prev);
+              next.delete(payTarget.id);
+              return next;
+            });
             await load();
           }}
         />
@@ -427,36 +525,229 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
   );
 }
 
-function ExpandableRow({
+function SectionTable({
+  title,
+  rows,
+  sortKey,
+  sortDir,
+  onSort,
+  expandedId,
+  onToggle,
+  invoicesByCp,
+  loadingInvoicesId,
+  canPay,
+  onPay,
+  variant,
+}: {
+  title: React.ReactNode;
+  rows: Supplier[];
+  sortKey: SortKey;
+  sortDir: "asc" | "desc";
+  onSort: (k: SortKey) => void;
+  expandedId: string | null;
+  onToggle: (id: string) => void;
+  invoicesByCp: Map<string, Invoice[]>;
+  loadingInvoicesId: string | null;
+  canPay: boolean;
+  onPay: (s: Supplier) => void;
+  variant: "creditors" | "others";
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div
+        className="flex items-center gap-1.5 px-1 text-[12px] font-bold"
+      >
+        {title}
+      </div>
+      <div
+        className="overflow-x-auto rounded-2xl"
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${variant === "creditors" ? T.danger + "40" : T.borderStrong}`,
+        }}
+      >
+        <table className="w-full text-[12.5px]" style={{ color: T.textPrimary }}>
+          <thead>
+            <tr
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+            >
+              <th className="w-8"></th>
+              <th className="px-3 py-2.5 text-left">#</th>
+              <SortableTh
+                label="Постачальник"
+                k="name"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="left"
+              />
+              <SortableTh
+                label="Рах."
+                k="invoiceCount"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <SortableTh
+                label="Оборот"
+                k="totalInvoiced"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <SortableTh
+                label="Оплачено"
+                k="totalPaid"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <SortableTh
+                label="Борг"
+                k="outstanding"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <SortableTh
+                label="Прострочка"
+                k="oldestDebt"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <SortableTh
+                label="Ост. рахунок"
+                k="lastInvoiceDate"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <SortableTh
+                label="Ост. платіж"
+                k="lastPaymentDate"
+                active={sortKey}
+                dir={sortDir}
+                onClick={onSort}
+                align="right"
+              />
+              <th className="px-3 py-2.5 text-right">Дії</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((c, i) => {
+              const isOpen = expandedId === c.id;
+              const invoices = invoicesByCp.get(c.id);
+              return (
+                <Row
+                  key={c.id}
+                  supplier={c}
+                  rank={i + 1}
+                  isOpen={isOpen}
+                  invoices={invoices}
+                  loadingInvoices={loadingInvoicesId === c.id}
+                  canPay={canPay}
+                  onToggle={() => onToggle(c.id)}
+                  onPay={() => onPay(c)}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SortableTh({
+  label,
+  k,
+  active,
+  dir,
+  onClick,
+  align,
+}: {
+  label: string;
+  k: SortKey;
+  active: SortKey;
+  dir: "asc" | "desc";
+  onClick: (k: SortKey) => void;
+  align: "left" | "right";
+}) {
+  const isActive = active === k;
+  return (
+    <th className={`px-3 py-2.5 text-${align} whitespace-nowrap`}>
+      <button
+        onClick={() => onClick(k)}
+        className="inline-flex items-center gap-1 hover:underline"
+        style={{
+          color: isActive ? T.accentPrimary : T.textMuted,
+          fontWeight: isActive ? 700 : 600,
+        }}
+      >
+        {label}
+        {isActive ? (
+          dir === "desc" ? (
+            <ArrowDown size={10} />
+          ) : (
+            <ArrowUp size={10} />
+          )
+        ) : (
+          <ArrowUpDown size={10} style={{ opacity: 0.4 }} />
+        )}
+      </button>
+    </th>
+  );
+}
+
+function Row({
   supplier,
-  hasDebt,
+  rank,
   isOpen,
-  detail,
-  isLoadingDetail,
+  invoices,
+  loadingInvoices,
   canPay,
   onToggle,
   onPay,
 }: {
   supplier: Supplier;
-  hasDebt: boolean;
+  rank: number;
   isOpen: boolean;
-  detail: SupplierDetail | undefined;
-  isLoadingDetail: boolean;
+  invoices: Invoice[] | undefined;
+  loadingInvoices: boolean;
   canPay: boolean;
   onToggle: () => void;
   onPay: () => void;
 }) {
   const c = supplier;
+  const hasDebt = c.outstanding > 0;
+  const overdueDays = daysSince(c.oldestDebtDate);
+  const overdueColor =
+    overdueDays === null
+      ? T.textMuted
+      : overdueDays >= 60
+        ? T.danger
+        : overdueDays >= 30
+          ? T.warning
+          : T.textSecondary;
+  const paidPct =
+    c.totalInvoiced > 0 ? (c.totalPaid / c.totalInvoiced) * 100 : 0;
   return (
     <>
       <tr
-        className="border-t cursor-pointer transition hover:bg-black/[0.015]"
+        className="border-t cursor-pointer transition hover:bg-black/[0.02]"
         style={{
           borderColor: T.borderSoft,
           opacity: c.isActive ? 1 : 0.55,
         }}
         onClick={(e) => {
-          // не реагуємо на клік по ссилках/кнопках всередині рядка
           const target = e.target as HTMLElement;
           if (target.closest("a, button")) return;
           onToggle();
@@ -469,34 +760,79 @@ function ExpandableRow({
             <ChevronRight size={14} style={{ color: T.textMuted, display: "inline" }} />
           )}
         </td>
-        <td className="px-4 py-2.5">
+        <td
+          className="px-3 py-2.5 text-[11px] tabular-nums"
+          style={{ color: T.textMuted }}
+        >
+          {rank}
+        </td>
+        <td className="px-3 py-2.5">
           <Link
             href={`/admin-v2/counterparties/${c.id}`}
             className="flex items-center gap-2 hover:underline"
             style={{ color: T.textPrimary }}
             onClick={(e) => e.stopPropagation()}
           >
-            <Truck size={14} style={{ color: hasDebt ? T.danger : T.textMuted }} />
-            <span className="font-medium">{c.name}</span>
+            <Truck size={13} style={{ color: hasDebt ? T.danger : T.textMuted }} />
+            <span className="font-semibold">{c.name}</span>
+            {c.edrpou && (
+              <span
+                className="text-[10px] tabular-nums"
+                style={{ color: T.textMuted }}
+              >
+                {c.edrpou}
+              </span>
+            )}
           </Link>
         </td>
-        <td className="px-3 py-2.5 text-[12px] tabular-nums" style={{ color: T.textSecondary }}>
-          {c.edrpou || "—"}
+        <td
+          className="px-3 py-2.5 text-right tabular-nums"
+          style={{ color: T.textSecondary }}
+        >
+          {c.invoiceCount > 0 ? (
+            <span>
+              {c.invoiceCount}
+              {c.debtCount > 0 && (
+                <span className="ml-1 text-[10px]" style={{ color: T.danger }}>
+                  ({c.debtCount} борг)
+                </span>
+              )}
+            </span>
+          ) : (
+            "—"
+          )}
         </td>
-        <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
-          <div className="flex flex-col gap-0.5">
-            {c.phone && (
-              <span className="flex items-center gap-1">
-                <Phone size={10} /> {c.phone}
+        <td
+          className="px-3 py-2.5 text-right tabular-nums"
+          style={{ color: T.textPrimary }}
+        >
+          {c.totalInvoiced > 0 ? formatCurrency(c.totalInvoiced) : "—"}
+        </td>
+        <td className="px-3 py-2.5 text-right tabular-nums">
+          {c.totalPaid > 0 ? (
+            <div className="flex flex-col items-end gap-0.5">
+              <span style={{ color: T.success }}>
+                {formatCurrency(c.totalPaid)}
               </span>
-            )}
-            {c.email && (
-              <span className="flex items-center gap-1 truncate max-w-[180px]">
-                <Mail size={10} /> {c.email}
-              </span>
-            )}
-            {!c.phone && !c.email && "—"}
-          </div>
+              {c.totalInvoiced > 0 && (
+                <div
+                  className="h-[3px] w-16 rounded-full overflow-hidden"
+                  style={{ backgroundColor: T.panelSoft }}
+                  title={`${paidPct.toFixed(0)}% оплачено`}
+                >
+                  <div
+                    className="h-full rounded-full"
+                    style={{
+                      width: `${paidPct}%`,
+                      backgroundColor: T.success,
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: T.textMuted }}>—</span>
+          )}
         </td>
         <td className="px-3 py-2.5 text-right tabular-nums">
           {hasDebt ? (
@@ -506,6 +842,28 @@ function ExpandableRow({
           ) : (
             <span style={{ color: T.textMuted }}>—</span>
           )}
+        </td>
+        <td
+          className="px-3 py-2.5 text-right text-[11px] whitespace-nowrap"
+          style={{ color: overdueColor }}
+        >
+          {overdueDays === null
+            ? "—"
+            : overdueDays >= 30
+              ? `${overdueDays} дн · ${dateFmt(c.oldestDebtDate)}`
+              : `${overdueDays} дн`}
+        </td>
+        <td
+          className="px-3 py-2.5 text-right text-[11px] tabular-nums"
+          style={{ color: T.textSecondary }}
+        >
+          {dateFmt(c.lastInvoiceDate)}
+        </td>
+        <td
+          className="px-3 py-2.5 text-right text-[11px] tabular-nums"
+          style={{ color: c.lastPaymentDate ? T.textSecondary : T.textMuted }}
+        >
+          {dateFmt(c.lastPaymentDate)}
         </td>
         <td className="px-3 py-2.5 text-right whitespace-nowrap">
           {canPay && hasDebt && (
@@ -524,122 +882,19 @@ function ExpandableRow({
             href={`/admin-v2/counterparties/${c.id}`}
             onClick={(e) => e.stopPropagation()}
             className="inline-flex items-center justify-center rounded-md p-1.5 hover:bg-black/10"
-            title="Відкрити повне дос'є"
+            title="Відкрити повне досʼє"
           >
-            <ExternalLink size={13} style={{ color: T.accentPrimary }} />
+            <ExternalLink size={12} style={{ color: T.accentPrimary }} />
           </Link>
         </td>
       </tr>
       {isOpen && (
         <tr style={{ borderColor: T.borderSoft }}>
-          <td colSpan={6} className="p-0">
-            <div
-              className="px-6 py-3 grid gap-3 sm:grid-cols-2"
-              style={{ backgroundColor: T.panelSoft }}
-            >
-              {/* Borg by project */}
-              <div>
-                <div
-                  className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                  style={{ color: T.textMuted }}
-                >
-                  Борг по проєктах
-                </div>
-                {isLoadingDetail ? (
-                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textMuted }}>
-                    <Loader2 size={12} className="animate-spin" /> Завантажуємо…
-                  </div>
-                ) : !detail ? (
-                  <div className="text-[11px]" style={{ color: T.textMuted }}>
-                    Немає даних
-                  </div>
-                ) : detail.outstandingByProject.length === 0 ? (
-                  <div className="text-[11px]" style={{ color: T.textMuted }}>
-                    Без активного боргу. Усі факти оплачені або заархівовані.
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {detail.outstandingByProject.map((d) => (
-                      <div
-                        key={d.projectId ?? "__none__"}
-                        className="flex items-center justify-between gap-2 px-2 py-1 rounded text-[12px]"
-                        style={{ backgroundColor: T.panel }}
-                      >
-                        {d.projectId && d.projectSlug ? (
-                          <Link
-                            href={`/admin-v2/projects/${d.projectSlug}`}
-                            className="truncate flex-1 hover:underline"
-                            style={{ color: T.accentPrimary }}
-                          >
-                            {d.projectTitle ?? "Проєкт"}
-                          </Link>
-                        ) : (
-                          <span className="truncate flex-1" style={{ color: T.textMuted }}>
-                            Без проєкту
-                          </span>
-                        )}
-                        <span className="text-[10px]" style={{ color: T.textMuted }}>
-                          {d.entryCount}×
-                        </span>
-                        <span
-                          className="tabular-nums font-semibold whitespace-nowrap"
-                          style={{ color: T.danger }}
-                        >
-                          {formatCurrency(d.outstanding)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Top materials */}
-              <div>
-                <div
-                  className="text-[10.5px] font-bold uppercase tracking-wider mb-1.5"
-                  style={{ color: T.textMuted }}
-                >
-                  Топ матеріалів
-                </div>
-                {isLoadingDetail ? (
-                  <div className="flex items-center gap-1.5 text-[11px]" style={{ color: T.textMuted }}>
-                    <Loader2 size={12} className="animate-spin" /> Завантажуємо…
-                  </div>
-                ) : !detail || detail.outstandingByMaterial.length === 0 ? (
-                  <div className="text-[11px]" style={{ color: T.textMuted }}>
-                    Немає даних
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {detail.outstandingByMaterial.slice(0, 8).map((m) => (
-                      <div
-                        key={m.name}
-                        className="flex items-center justify-between gap-2 px-2 py-1 rounded text-[12px]"
-                        style={{ backgroundColor: T.panel }}
-                      >
-                        <span className="truncate flex-1" style={{ color: T.textPrimary }}>
-                          {m.name}
-                        </span>
-                        <span className="text-[10px]" style={{ color: T.textMuted }}>
-                          {m.count}×
-                        </span>
-                        <span
-                          className="tabular-nums font-semibold whitespace-nowrap"
-                          style={{ color: T.danger }}
-                        >
-                          {formatCurrency(m.outstanding)}
-                        </span>
-                      </div>
-                    ))}
-                    {detail.outstandingByMaterial.length > 8 && (
-                      <div className="text-[10px] text-center" style={{ color: T.textMuted }}>
-                        + ще {detail.outstandingByMaterial.length - 8}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
+          <td colSpan={11} className="p-0">
+            <InvoicesDrawer
+              invoices={invoices}
+              loading={loadingInvoices}
+            />
           </td>
         </tr>
       )}
@@ -647,14 +902,240 @@ function ExpandableRow({
   );
 }
 
+function InvoicesDrawer({
+  invoices,
+  loading,
+}: {
+  invoices: Invoice[] | undefined;
+  loading: boolean;
+}) {
+  if (loading || !invoices) {
+    return (
+      <div
+        className="px-6 py-4 text-[12px]"
+        style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+      >
+        <Loader2 size={12} className="inline animate-spin mr-1" />
+        Завантажуємо рахунки…
+      </div>
+    );
+  }
+  if (invoices.length === 0) {
+    return (
+      <div
+        className="px-6 py-4 text-[12px]"
+        style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+      >
+        Рахунків не знайдено.
+      </div>
+    );
+  }
+  const debtCount = invoices.filter((i) => i.outstanding > 0).length;
+  return (
+    <div className="px-6 py-3" style={{ backgroundColor: T.panelSoft }}>
+      <div
+        className="text-[10px] font-bold uppercase tracking-wider mb-2"
+        style={{ color: T.textMuted }}
+      >
+        Рахунки ({invoices.length} · {debtCount} з боргом)
+      </div>
+      <div
+        className="rounded-xl overflow-hidden"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      >
+        <table className="w-full text-[11.5px]">
+          <thead>
+            <tr style={{ color: T.textMuted }}>
+              <th className="px-2 py-1.5 text-left font-semibold">Дата</th>
+              <th className="px-2 py-1.5 text-left font-semibold">№ рахунку</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Куди / опис</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Проєкт</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Сума</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Оплачено</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Залишок</th>
+              <th className="px-2 py-1.5 text-left font-semibold">Статус</th>
+              <th className="px-2 py-1.5 text-right font-semibold">Дата опл.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.map((inv) => {
+              const debt = inv.outstanding > 0;
+              const cleanDesc = inv.description
+                ?.replace(/^Куди везли:\s*/, "")
+                .trim();
+              return (
+                <tr
+                  key={inv.id}
+                  style={{ borderTop: `1px solid ${T.borderSoft}` }}
+                >
+                  <td
+                    className="px-2 py-1 tabular-nums whitespace-nowrap"
+                    style={{ color: T.textSecondary }}
+                  >
+                    {dateFmt(inv.occurredAt)}
+                  </td>
+                  <td
+                    className="px-2 py-1 whitespace-nowrap truncate max-w-[120px]"
+                    style={{ color: T.textPrimary }}
+                    title={inv.invoiceNumber ?? ""}
+                  >
+                    {inv.invoiceNumber ?? "—"}
+                  </td>
+                  <td
+                    className="px-2 py-1 truncate max-w-[260px]"
+                    style={{ color: T.textSecondary }}
+                    title={cleanDesc ?? ""}
+                  >
+                    {cleanDesc || "—"}
+                  </td>
+                  <td className="px-2 py-1 whitespace-nowrap">
+                    {inv.project ? (
+                      <Link
+                        href={`/admin-v2/projects/${inv.project.slug}`}
+                        className="hover:underline"
+                        style={{ color: T.accentPrimary }}
+                      >
+                        {inv.project.title}
+                      </Link>
+                    ) : (
+                      <span style={{ color: T.textMuted }}>—</span>
+                    )}
+                  </td>
+                  <td
+                    className="px-2 py-1 text-right tabular-nums"
+                    style={{ color: T.textPrimary }}
+                  >
+                    {formatCurrency(inv.amount)}
+                  </td>
+                  <td
+                    className="px-2 py-1 text-right tabular-nums"
+                    style={{
+                      color: inv.paidAmount > 0 ? T.success : T.textMuted,
+                    }}
+                  >
+                    {inv.paidAmount > 0
+                      ? formatCurrency(inv.paidAmount)
+                      : "—"}
+                  </td>
+                  <td
+                    className="px-2 py-1 text-right tabular-nums font-semibold"
+                    style={{ color: debt ? T.danger : T.textMuted }}
+                  >
+                    {debt ? formatCurrency(inv.outstanding) : "—"}
+                  </td>
+                  <td className="px-2 py-1">
+                    <span
+                      className="rounded px-1.5 py-0.5 text-[9.5px] font-bold"
+                      style={{
+                        backgroundColor: debt
+                          ? T.warningSoft
+                          : T.successSoft,
+                        color: debt ? T.warning : T.success,
+                      }}
+                    >
+                      {debt ? "БОРГ" : "ОПЛАЧЕНО"}
+                    </span>
+                  </td>
+                  <td
+                    className="px-2 py-1 text-right tabular-nums whitespace-nowrap"
+                    style={{ color: T.textSecondary }}
+                  >
+                    {inv.status === "PAID"
+                      ? dateFmt(inv.paidAt)
+                      : inv.remindAt
+                        ? `до ${dateFmt(inv.remindAt)}`
+                        : "—"}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function CreateForm({
+  name,
+  setName,
+  onSubmit,
+  onCancel,
+  busy,
+  error,
+}: {
+  name: string;
+  setName: (v: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  busy: boolean;
+  error: string | null;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-3 flex flex-col gap-2"
+      style={{
+        backgroundColor: T.accentPrimarySoft,
+        border: `1px solid ${T.accentPrimary}40`,
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSubmit();
+            if (e.key === "Escape") onCancel();
+          }}
+          placeholder="Назва постачальника, напр. Будхата"
+          className="flex-1 rounded-xl px-3 py-2 text-sm outline-none"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderStrong}`,
+            color: T.textPrimary,
+          }}
+        />
+        <button
+          onClick={onSubmit}
+          disabled={busy}
+          className="rounded-xl px-3 py-2 text-[12px] font-semibold disabled:opacity-50"
+          style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+        >
+          {busy ? "Створення…" : "Створити"}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={busy}
+          className="rounded-xl px-3 py-2 text-[12px] font-semibold"
+          style={{
+            backgroundColor: T.panel,
+            color: T.textSecondary,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          Скасувати
+        </button>
+      </div>
+      {error && (
+        <div className="text-[11px]" style={{ color: T.danger }}>
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Tile({
   label,
   value,
+  sub,
   kind,
   tone = "muted",
 }: {
   label: string;
   value: number;
+  sub?: string;
   kind: "money" | "count";
   tone?: "good" | "bad" | "warn" | "muted";
 }) {
@@ -662,10 +1143,10 @@ function Tile({
     tone === "good"
       ? T.success
       : tone === "bad"
-      ? T.danger
-      : tone === "warn"
-      ? T.warning
-      : T.textPrimary;
+        ? T.danger
+        : tone === "warn"
+          ? T.warning
+          : T.textPrimary;
   return (
     <div
       className="rounded-2xl px-4 py-3"
@@ -686,6 +1167,14 @@ function Tile({
       >
         {kind === "money" ? formatCurrency(value) : value}
       </div>
+      {sub && (
+        <div
+          className="mt-0.5 text-[10px]"
+          style={{ color: T.textMuted }}
+        >
+          {sub}
+        </div>
+      )}
     </div>
   );
 }

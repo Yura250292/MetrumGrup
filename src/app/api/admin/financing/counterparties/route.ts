@@ -28,6 +28,15 @@ const querySchema = z.object({
   /// Якщо true — додає поле `outstanding` (sum unpaid expenses) у відповідь.
   /// hasDebt автоматично активує цей розрахунок.
   withOutstanding: z.coerce.boolean().default(false),
+  /// Якщо true — додає розширену статистику: totalInvoiced, totalPaid,
+  /// invoiceCount, paidCount, debtCount, firstInvoiceDate, lastInvoiceDate,
+  /// lastPaymentDate. Дорожче за withOutstanding (3 групувальні запити),
+  /// тому окремий прапор.
+  withStats: z.coerce.boolean().default(false),
+  /// Фільтр по даті останнього рахунку (occurredAt). Поза діапазоном —
+  /// постачальник усе одно повертається, але без активності за період.
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
   includeInactive: z.coerce.boolean().default(false),
   take: z.coerce.number().int().positive().max(500).default(50),
 });
@@ -65,7 +74,33 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const { q, type, role, hasDebt, withOutstanding, includeInactive, take } = parsed.data;
+  const {
+    q,
+    type,
+    role,
+    hasDebt,
+    withOutstanding,
+    withStats,
+    dateFrom,
+    dateTo,
+    includeInactive,
+    take,
+  } = parsed.data;
+
+  const dateFilter: { gte?: Date; lte?: Date } = {};
+  if (dateFrom) {
+    const d = new Date(dateFrom);
+    if (!isNaN(d.getTime())) dateFilter.gte = d;
+  }
+  if (dateTo) {
+    const d = new Date(dateTo);
+    if (!isNaN(d.getTime())) {
+      // include the whole day
+      d.setHours(23, 59, 59, 999);
+      dateFilter.lte = d;
+    }
+  }
+  const hasDateFilter = dateFilter.gte || dateFilter.lte;
 
   // Counterparty filter: firmId=null records (shared SUPPLIERS) are visible
   // to both Group і Studio. Інші ролі лишаються firm-ізольовані.
@@ -93,27 +128,34 @@ export async function GET(request: NextRequest) {
     take,
   });
 
-  // outstanding agregation. hasDebt автоматично активує розрахунок (інакше нема як фільтрувати).
-  if (!withOutstanding && !hasDebt) {
+  // outstanding agregation. hasDebt автоматично активує розрахунок.
+  if (!withOutstanding && !hasDebt && !withStats) {
     return NextResponse.json({ data: items });
   }
 
   const ids = items.map((c) => c.id);
   if (ids.length === 0) {
-    return NextResponse.json({ data: items.map((c) => ({ ...c, outstanding: 0 })) });
+    return NextResponse.json({ data: [] });
   }
 
-  // Несплачені факти цих контрагентів (FACT/EXPENSE/APPROVED|PENDING).
+  // Усі факти EXPENSE цих постачальників — основа для outstanding + stats.
+  const allFactsWhere = {
+    counterpartyId: { in: ids },
+    type: "EXPENSE" as const,
+    kind: "FACT" as const,
+    isArchived: false,
+    ...(firmId ? { firmId } : {}),
+    ...(hasDateFilter ? { occurredAt: dateFilter } : {}),
+  };
+
   const unpaidEntries = await prisma.financeEntry.findMany({
-    where: {
-      counterpartyId: { in: ids },
-      type: "EXPENSE",
-      kind: "FACT",
-      isArchived: false,
-      status: { in: ["APPROVED", "PENDING"] },
-      ...(firmId ? { firmId } : {}),
+    where: { ...allFactsWhere, status: { in: ["APPROVED", "PENDING"] } },
+    select: {
+      id: true,
+      counterpartyId: true,
+      amount: true,
+      occurredAt: true,
     },
-    select: { id: true, counterpartyId: true, amount: true },
   });
 
   const allocByEntry = new Map<string, number>();
@@ -129,6 +171,7 @@ export async function GET(request: NextRequest) {
   }
 
   const outstandingByCp = new Map<string, number>();
+  const oldestDebtDateByCp = new Map<string, Date>();
   for (const e of unpaidEntries) {
     if (!e.counterpartyId) continue;
     const left = Number(e.amount) - (allocByEntry.get(e.id) ?? 0);
@@ -137,12 +180,112 @@ export async function GET(request: NextRequest) {
       e.counterpartyId,
       (outstandingByCp.get(e.counterpartyId) ?? 0) + left,
     );
+    const prev = oldestDebtDateByCp.get(e.counterpartyId);
+    if (!prev || e.occurredAt < prev) {
+      oldestDebtDateByCp.set(e.counterpartyId, e.occurredAt);
+    }
   }
 
-  let result = items.map((c) => ({
-    ...c,
-    outstanding: outstandingByCp.get(c.id) ?? 0,
-  }));
+  // Stats: total invoiced, paid sum, count by status, first/last dates,
+  // last payment date.
+  type Stats = {
+    invoiceCount: number;
+    paidCount: number;
+    debtCount: number;
+    totalInvoiced: number;
+    totalPaid: number;
+    firstInvoiceDate: Date | null;
+    lastInvoiceDate: Date | null;
+    lastPaymentDate: Date | null;
+  };
+  const statsByCp = new Map<string, Stats>();
+
+  if (withStats) {
+    // groupBy для invoice count + sum по статусу.
+    const grouped = await prisma.financeEntry.groupBy({
+      by: ["counterpartyId", "status"],
+      where: allFactsWhere,
+      _sum: { amount: true },
+      _count: { _all: true },
+    });
+    for (const g of grouped) {
+      if (!g.counterpartyId) continue;
+      const s = statsByCp.get(g.counterpartyId) ?? {
+        invoiceCount: 0,
+        paidCount: 0,
+        debtCount: 0,
+        totalInvoiced: 0,
+        totalPaid: 0,
+        firstInvoiceDate: null,
+        lastInvoiceDate: null,
+        lastPaymentDate: null,
+      };
+      const cnt = g._count._all;
+      const sum = Number(g._sum.amount ?? 0);
+      s.invoiceCount += cnt;
+      s.totalInvoiced += sum;
+      if (g.status === "PAID") {
+        s.paidCount += cnt;
+        s.totalPaid += sum;
+      } else if (g.status === "APPROVED" || g.status === "PENDING") {
+        s.debtCount += cnt;
+      }
+      statsByCp.set(g.counterpartyId, s);
+    }
+
+    // min/max occurredAt per counterparty.
+    const datesAgg = await prisma.financeEntry.groupBy({
+      by: ["counterpartyId"],
+      where: allFactsWhere,
+      _min: { occurredAt: true },
+      _max: { occurredAt: true },
+    });
+    for (const d of datesAgg) {
+      if (!d.counterpartyId) continue;
+      const s = statsByCp.get(d.counterpartyId);
+      if (!s) continue;
+      s.firstInvoiceDate = d._min.occurredAt;
+      s.lastInvoiceDate = d._max.occurredAt;
+    }
+
+    // Last payment date per counterparty.
+    const lastPay = await prisma.supplierPayment.groupBy({
+      by: ["counterpartyId"],
+      where: {
+        counterpartyId: { in: ids },
+        status: "POSTED",
+        ...(firmId ? { firmId } : {}),
+      },
+      _max: { occurredAt: true },
+    });
+    for (const lp of lastPay) {
+      const s = statsByCp.get(lp.counterpartyId) ?? null;
+      if (!s) continue;
+      s.lastPaymentDate = lp._max.occurredAt;
+    }
+  }
+
+  let result = items.map((c) => {
+    const s = statsByCp.get(c.id);
+    const outstanding = outstandingByCp.get(c.id) ?? 0;
+    return {
+      ...c,
+      outstanding,
+      oldestDebtDate: oldestDebtDateByCp.get(c.id) ?? null,
+      ...(withStats
+        ? {
+            invoiceCount: s?.invoiceCount ?? 0,
+            paidCount: s?.paidCount ?? 0,
+            debtCount: s?.debtCount ?? 0,
+            totalInvoiced: s?.totalInvoiced ?? 0,
+            totalPaid: s?.totalPaid ?? 0,
+            firstInvoiceDate: s?.firstInvoiceDate ?? null,
+            lastInvoiceDate: s?.lastInvoiceDate ?? null,
+            lastPaymentDate: s?.lastPaymentDate ?? null,
+          }
+        : {}),
+    };
+  });
   if (hasDebt) {
     result = result.filter((c) => c.outstanding > 0);
   }
