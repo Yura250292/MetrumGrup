@@ -16,8 +16,6 @@ import {
   Link2Off,
   ListChecks,
   Loader2,
-  Maximize2,
-  Minimize2,
   Pencil,
   Plus,
   ShieldCheck,
@@ -25,7 +23,6 @@ import {
   Trash2,
   User,
   UserPlus,
-  Users,
   Wallet,
   X,
 } from "lucide-react";
@@ -260,16 +257,12 @@ function toDateInput(iso: string | null): string {
   return iso.slice(0, 10);
 }
 
-type DossierTab = "basic" | "account" | "salary";
-
 export function EmployeeDossier({
   id,
   currentUserRole,
-  defaultExpanded = false,
 }: {
   id: string;
   currentUserRole: string;
-  defaultExpanded?: boolean;
 }) {
   const router = useRouter();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -278,8 +271,6 @@ export function EmployeeDossier({
   const [error, setError] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<FieldKey | null>(null);
   const [savingField, setSavingField] = useState<FieldKey | null>(null);
-  const [activeTab, setActiveTab] = useState<DossierTab>("basic");
-  const [expanded, setExpanded] = useState<boolean>(defaultExpanded);
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canDelete = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
@@ -345,16 +336,6 @@ export function EmployeeDossier({
     }
   }
 
-  const initials = useMemo(() => {
-    if (!employee) return "";
-    return employee.fullName
-      .split(" ")
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((p) => p[0]?.toUpperCase())
-      .join("");
-  }, [employee]);
-
   if (loading) {
     return (
       <div
@@ -395,16 +376,7 @@ export function EmployeeDossier({
       </div>
 
       {/* Slim header */}
-      <div
-        className="flex flex-wrap items-center gap-3 rounded-2xl p-4"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
-      >
-        <div
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-[14px] font-bold"
-          style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-        >
-          {initials || <Users size={20} />}
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-lg font-bold" style={{ color: T.textPrimary }}>
@@ -435,19 +407,6 @@ export function EmployeeDossier({
             {tenure && <span>· стаж {tenure}</span>}
           </div>
         </div>
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
-          style={{
-            backgroundColor: T.panelSoft,
-            color: T.textSecondary,
-            border: `1px solid ${T.borderStrong}`,
-          }}
-          title={expanded ? "Згорнути" : "Розгорнути всі секції"}
-        >
-          {expanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-          <span className="hidden sm:inline">{expanded ? "Згорнути" : "Розгорнути"}</span>
-        </button>
         {canDelete && (
           <button
             onClick={handleDelete}
@@ -460,54 +419,25 @@ export function EmployeeDossier({
         )}
       </div>
 
-      {/* Tabs nav (приховуємо в expanded режимі) */}
-      {!expanded && (
-        <div
-          className="inline-flex w-fit gap-1 rounded-xl p-1"
-          style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
-        >
-          {(
-            [
-              { id: "basic" as const, label: "Основне", icon: <User size={12} /> },
-              { id: "account" as const, label: "Користувач системи", icon: <ShieldCheck size={12} /> },
-              ...(canSeeSalary
-                ? [{ id: "salary" as const, label: "Зарплата", icon: <Wallet size={12} /> }]
-                : []),
-            ]
-          ).map((t) => {
-            const active = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition"
-                style={{
-                  backgroundColor: active ? T.panel : "transparent",
-                  color: active ? T.textPrimary : T.textMuted,
-                  border: active ? `1px solid ${T.borderStrong}` : "1px solid transparent",
-                }}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Sections — у expanded режимі рендериться side-by-side, у табовому — лише активна */}
+      {/* Three-column layout: Основне / Користувач / Зарплата */}
       <div
-        className={
-          expanded
-            ? "grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3"
-            : "flex flex-col gap-4"
-        }
+        className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${canSeeSalary ? "xl:grid-cols-3" : ""}`}
       >
-        {(expanded || activeTab === "basic") && (
       <div
         className="overflow-hidden rounded-2xl"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
       >
+        <div
+          className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+          style={{
+            color: T.textSecondary,
+            backgroundColor: T.panelSoft,
+            borderBottom: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <User size={12} />
+          <span>Основне</span>
+        </div>
         <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
           <tbody>
             <PropertyRow
@@ -897,24 +827,21 @@ export function EmployeeDossier({
           </tbody>
         </table>
       </div>
-        )}
 
-        {(expanded || activeTab === "account") && (
-          <AccountSection
-            employee={employee}
-            currentUserRole={currentUserRole}
-            onChanged={() => void load()}
-          />
-        )}
+      <AccountSection
+        employee={employee}
+        currentUserRole={currentUserRole}
+        onChanged={() => void load()}
+      />
 
-        {canSeeSalary && (expanded || activeTab === "salary") && (
-          <SalarySection
-            employeeId={id}
-            salaries={employee.salaries}
-            canEdit={canEdit}
-            onChanged={() => void load()}
-          />
-        )}
+      {canSeeSalary && (
+        <SalarySection
+          employeeId={id}
+          salaries={employee.salaries}
+          canEdit={canEdit}
+          onChanged={() => void load()}
+        />
+      )}
       </div>
 
       {engagement && <EngagementPanel data={engagement} />}
@@ -2279,7 +2206,7 @@ function AccountSection({
         style={{ color: T.textSecondary, backgroundColor: T.panelSoft, borderBottom: `1px solid ${T.borderSoft}` }}
       >
         <ShieldCheck size={12} />
-        <span>Акаунт користувача</span>
+        <span>Користувач</span>
       </div>
 
       <div className="p-4 flex flex-col gap-3">

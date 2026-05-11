@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  LayoutList,
+  ListTree,
   Loader2,
   Plus,
   Search,
@@ -14,7 +16,7 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "../../_components/excel-import-modal";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
-import { EmployeeCard } from "./employee-card";
+import { EmployeesTable, type DisplayMode } from "./employees-table";
 
 type LinkedUser = {
   id: string;
@@ -124,6 +126,7 @@ export function EmployeesList({
   const [search, setSearch] = useState("");
   const [showInactive, setShowInactive] = useState(false);
   const [accountFilter, setAccountFilter] = useState<AccountFilter>("all");
+  const [displayMode, setDisplayMode] = useState<DisplayMode>("grouped");
   const [showImport, setShowImport] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
@@ -345,6 +348,47 @@ export function EmployeesList({
             <option value="unlinked">Без акаунта</option>
           </select>
         )}
+        {tab === "employees" && (
+          <div
+            className="flex items-center gap-1 text-[11px]"
+            style={{ color: T.textMuted }}
+          >
+            <span>Відображення:</span>
+            <div
+              className="inline-flex gap-0.5 rounded-lg p-0.5"
+              style={{
+                backgroundColor: T.panelSoft,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+            >
+              {(
+                [
+                  { id: "grouped" as const, label: "по підрозділах", icon: ListTree },
+                  { id: "list" as const, label: "список", icon: LayoutList },
+                ]
+              ).map((m) => {
+                const active = displayMode === m.id;
+                const Icon = m.icon;
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setDisplayMode(m.id)}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition"
+                    style={{
+                      backgroundColor: active ? T.panel : "transparent",
+                      color: active ? T.textPrimary : T.textMuted,
+                      border: active ? `1px solid ${T.borderStrong}` : "1px solid transparent",
+                    }}
+                  >
+                    <Icon size={11} />
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <label
           className="flex items-center gap-1.5 text-[12px] cursor-pointer"
           style={{ color: T.textSecondary }}
@@ -402,17 +446,11 @@ export function EmployeesList({
               : "Список порожній. Додайте через кнопку «Додати співробітника» або імпорт з Excel."}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filtered.map((e, idx) => (
-              <div
-                key={e.id}
-                className={idx < 20 ? "data-table-row-enter" : ""}
-                style={idx < 20 ? { animationDelay: `${idx * 30}ms` } : undefined}
-              >
-                <EmployeeCard employee={e} canSeeSalary={canSeeSalary} />
-              </div>
-            ))}
-          </div>
+          <EmployeesTable
+            items={filtered}
+            mode={displayMode}
+            canSeeSalary={canSeeSalary}
+          />
         )
       )}
 
