@@ -7,6 +7,7 @@ import {
   forbiddenResponse,
 } from "@/lib/auth-utils";
 import { analyzeChunk, dedupeInsight } from "@/lib/meetings/live-agent";
+import { ragSearch, isProjectVectorized } from "@/lib/rag/vectorizer";
 
 export const maxDuration = 60;
 
@@ -57,7 +58,13 @@ export async function POST(
   const { id } = await params;
   const meeting = await prisma.meeting.findUnique({
     where: { id },
-    select: { id: true, title: true, description: true },
+    select: {
+      id: true,
+      title: true,
+      description: true,
+      projectId: true,
+      project: { select: { id: true, title: true } },
+    },
   });
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
@@ -94,6 +101,38 @@ export async function POST(
     }
   }
 
+  // RAG: семантичний пошук релевантних фрагментів з проєктних файлів.
+  // Працює тільки якщо нарада привʼязана до проєкту І проєкт уже
+  // векторизований (через /ai-estimate-v2 існуючий flow). Інакше — skip.
+  let projectFiles: Array<{
+    fileName: string;
+    content: string;
+    similarity: number;
+  }> = [];
+  if (meeting.projectId) {
+    try {
+      const vectorized = await isProjectVectorized(meeting.projectId);
+      if (vectorized) {
+        // Беремо top-3 з similarity ≥ 0.55. Тут низький поріг бо chunk
+        // транскрипту — це усне мовлення, далеко від формальної мови
+        // у документах. text-embedding-3-small все одно знаходить смисл.
+        const matches = await ragSearch(
+          data.currentChunk,
+          meeting.projectId,
+          3,
+          0.55,
+        );
+        projectFiles = matches.map((m) => ({
+          fileName: m.fileName,
+          content: m.content,
+          similarity: m.similarity,
+        }));
+      }
+    } catch (err) {
+      console.warn("[live-agent] RAG search failed (non-blocking):", err);
+    }
+  }
+
   let result;
   try {
     result = await analyzeChunk({
@@ -102,9 +141,11 @@ export async function POST(
       meetingMetadata: {
         title: data.meetingMetadata?.title ?? meeting.title,
         description: data.meetingMetadata?.description ?? meeting.description,
-        projectTitle: data.meetingMetadata?.projectTitle ?? null,
+        projectTitle:
+          data.meetingMetadata?.projectTitle ?? meeting.project?.title ?? null,
       },
       previousInsights: data.previousInsights ?? [],
+      projectFiles,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "AI failed";
@@ -205,6 +246,7 @@ export async function POST(
     insights: persisted,
     glossaryTerms: persistedTerms,
     entitiesToLookup: result.entitiesToLookup,
+    projectFiles,
     usage: result.usage,
   });
 }

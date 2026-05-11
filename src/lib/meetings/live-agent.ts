@@ -50,6 +50,12 @@ export type LiveInsight = {
   confidence: number;
 };
 
+export type ProjectFileExcerpt = {
+  fileName: string;
+  content: string;
+  similarity: number;
+};
+
 export type AnalyzeInput = {
   /** Свіжий шматок транскрипту що щойно зʼявився. */
   currentChunk: string;
@@ -67,6 +73,9 @@ export type AnalyzeInput = {
     category: string;
     priority: string;
   }>;
+  /** RAG: релевантні фрагменти з проєктних файлів (геодезія, специфікації,
+   * контракти, фото-описи). Витягуються через ragSearch у роуті /analyze. */
+  projectFiles?: ProjectFileExcerpt[];
 };
 
 export type LookupEntityType =
@@ -122,6 +131,7 @@ const SYSTEM_PROMPT = `Ти — Live AI Agent для будівельної ко
 - Не дублюй попередні інсайти (тобі дається список останніх). Якщо те саме обговорюють далі — НЕ повторюй.
 - Видавай 0-3 інсайти за виклик. Краще менше але точніше. Якщо нічого нового важливого — порожній масив.
 - Імена/ПІБ зберігай у тому написанні як у транскрипті. Не перекладай.
+- Якщо тобі надано блок «ФРАГМЕНТИ З ПРОЄКТНИХ ФАЙЛІВ» — використовуй його як ЗОЛОТУ ПРАВДУ. Цитуй з нього у summary/suggestedQuestion коли інсайт спирається на щось із файлу. Якщо в розмові звучить твердження що суперечить документу — це critical insight з category "missing_information" або відповідною ризик-категорією, з посиланням «у документі <fileName> вказано: ...».
 
 ДОДАТКОВІ ОБОВ'ЯЗКОВІ ПОЛЯ:
 
@@ -468,6 +478,23 @@ function buildUserPrompt(input: AnalyzeInput): string {
 
   if (input.recentContext) {
     parts.push(`КОНТЕКСТ ОСТАННІХ ХВИЛИН (для розуміння):\n${input.recentContext}`);
+  }
+
+  // RAG: проєктні файли (геодезія, специфікації, договори, фото-описи).
+  // Це ЗОЛОТА правда для проєкту — цитуй дослівно якщо інсайт спирається
+  // на щось із файлу. Не вигадуй те чого там нема.
+  if (input.projectFiles && input.projectFiles.length > 0) {
+    const lines = input.projectFiles
+      .map(
+        (f, i) =>
+          `  [${i + 1}] (${f.fileName}, similarity ${f.similarity.toFixed(2)}):\n${f.content
+            .replace(/\s+/g, " ")
+            .slice(0, 800)}`,
+      )
+      .join("\n\n");
+    parts.push(
+      `ФРАГМЕНТИ З ПРОЄКТНИХ ФАЙЛІВ (RAG — semantic search по геодезії, специфікації, договорах):\n${lines}`,
+    );
   }
 
   parts.push(

@@ -179,6 +179,11 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const [knownCards, setKnownCards] = useState<KnownEntityCard[]>([]);
   const lookedUpKeysRef = useRef<Set<string>>(new Set());
 
+  // RAG: фрагменти з проєктних файлів які знайшов /analyze.
+  const [projectFileHits, setProjectFileHits] = useState<
+    Array<{ fileName: string; content: string; similarity: number }>
+  >([]);
+
   const recognitionRef = useRef<unknown>(null);
   const bufferRef = useRef<string>("");
   const recentContextRef = useRef<string>("");
@@ -490,6 +495,34 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
         void runLookup(text, ent.type, key);
       }
 
+      // RAG — фрагменти з проєктних файлів. Зберігаємо у стейт щоб показати
+      // юзеру (з якого файлу що знайшли).
+      const projFiles: Array<{
+        fileName: string;
+        content: string;
+        similarity: number;
+      }> = responseBody?.projectFiles ?? [];
+      if (projFiles.length > 0) {
+        setProjectFileHits((prev) => {
+          // Дедуп по (fileName + first 100 chars контенту) — не повторюємо одне.
+          const seen = new Set(
+            prev.map(
+              (h) =>
+                `${h.fileName}:${h.content.slice(0, 100).toLowerCase()}`,
+            ),
+          );
+          const next = [...prev];
+          for (const f of projFiles) {
+            const key = `${f.fileName}:${f.content.slice(0, 100).toLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            next.push(f);
+          }
+          // Тримаємо не більше 12 останніх щоб не флудити панель.
+          return next.slice(-12);
+        });
+      }
+
       await refresh();
       setStatusMessage(enabledRef.current ? "Активний — слухає" : "Вимкнено");
     } catch (err) {
@@ -798,6 +831,52 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
           <div className="flex flex-col gap-2">
             {knownCards.slice(-8).map((c) => (
               <KnownCardView key={c.key} card={c} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* RAG: фрагменти з проєктних файлів (геодезія, специфікації) */}
+      {projectFileHits.length > 0 && (
+        <div className="mt-3">
+          <div
+            className="mb-1.5 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted }}
+          >
+            📂 З файлів проєкту
+          </div>
+          <div className="flex flex-col gap-2">
+            {projectFileHits.slice(-8).map((h, i) => (
+              <div
+                key={`${h.fileName}-${i}`}
+                className="rounded-lg p-2.5"
+                style={{
+                  background: T.panel,
+                  border: `1px solid ${T.borderSoft}`,
+                }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className="text-[11px] font-bold"
+                    style={{ color: T.accentPrimary }}
+                  >
+                    {h.fileName}
+                  </span>
+                  <span
+                    className="text-[10px]"
+                    style={{ color: T.textMuted }}
+                  >
+                    {Math.round(h.similarity * 100)}% збіг
+                  </span>
+                </div>
+                <p
+                  className="mt-1 text-[11px] leading-relaxed"
+                  style={{ color: T.textSecondary }}
+                >
+                  {h.content.slice(0, 400)}
+                  {h.content.length > 400 ? "…" : ""}
+                </p>
+              </div>
             ))}
           </div>
         </div>
