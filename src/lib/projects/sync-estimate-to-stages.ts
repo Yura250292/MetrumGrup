@@ -4,6 +4,7 @@ import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 import { recomputeProjectPlanSource } from "@/lib/projects/plan-source";
 import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { copyDraftToPublishedForStages } from "@/lib/projects/publish-stages";
+import { isFinanceAutopublishEnabled } from "@/lib/financing/feature-flags";
 
 export type EstimateToStagesResult = {
   estimateId: string;
@@ -229,7 +230,15 @@ export async function syncEstimateToStages(
     select: { publicationVersion: true },
   });
   const writtenStageIds = Array.from(result.writeSet);
-  if (project && project.publicationVersion === 0 && writtenStageIds.length > 0) {
+  // Safe Finance Migration Phase 1: first-time auto-publish gated by flag.
+  // OFF: stage tree оновлюється у draft, але STAGE_AUTO FinanceEntry не
+  // створюються — потрібна явна публікація через окремий ендпойнт.
+  if (
+    isFinanceAutopublishEnabled()
+    && project
+    && project.publicationVersion === 0
+    && writtenStageIds.length > 0
+  ) {
     await copyDraftToPublishedForStages(writtenStageIds);
     for (const stageId of writtenStageIds) {
       await syncStageAutoFinanceEntries(stageId, userId);

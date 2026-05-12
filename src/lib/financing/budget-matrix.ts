@@ -55,7 +55,13 @@ export type BudgetMatrix = {
 const UNCLASSIFIED_KEY = "__unclassified__";
 
 export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatrix> {
-  const [allCodes, planRows, actualRows, approvedEstimateCount] = await Promise.all([
+  const [
+    allCodes,
+    planRows,
+    actualRows,
+    committedEntries,
+    approvedEstimateCount,
+  ] = await Promise.all([
     prisma.costCode.findMany({
       where: { isActive: true },
       orderBy: [{ code: "asc" }],
@@ -87,18 +93,41 @@ export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatr
       },
       _sum: { amount: true },
     }),
+    // Committed (Safe Finance Migration Phase 4.3): outstanding obligations.
+    // FE з financeNature=COMMITTED_EXPENSE, які ще не закриті повністю
+    // (status != PAID). Беремо amount + paid (SUM allocations) на entry рівні,
+    // щоб відняти часткові виплати. Раніше тут було committed=0.
+    //
+    // FE без financeNature (legacy / null) не входять — Phase 3 backfill
+    // класифікує їх у наступних ітераціях.
+    prisma.financeEntry.findMany({
+      where: {
+        projectId,
+        isArchived: false,
+        financeNature: "COMMITTED_EXPENSE",
+        status: { not: "PAID" },
+      },
+      select: {
+        id: true,
+        amount: true,
+        costCodeId: true,
+        allocations: { select: { amount: true } },
+      },
+    }),
     prisma.estimate.count({ where: { projectId, status: "APPROVED" } }),
   ]);
 
   // Build leaf-level totals by costCodeId.
-  const leaf: Record<string, { plan: number; actual: number }> = {};
-  function bump(map: typeof leaf, key: string, field: "plan" | "actual", v: number) {
-    if (!map[key]) map[key] = { plan: 0, actual: 0 };
+  type LeafBucket = { plan: number; actual: number; committed: number };
+  const leaf: Record<string, LeafBucket> = {};
+  function bump(map: typeof leaf, key: string, field: keyof LeafBucket, v: number) {
+    if (!map[key]) map[key] = { plan: 0, actual: 0, committed: 0 };
     map[key][field] += v;
   }
 
   let unclassifiedPlan = 0;
   let unclassifiedActual = 0;
+  let unclassifiedCommitted = 0;
 
   for (const r of planRows) {
     const v = Number(r._sum.amount ?? 0);
@@ -109,6 +138,14 @@ export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatr
     const v = Number(r._sum.amount ?? 0);
     if (!r.costCodeId) unclassifiedActual += v;
     else bump(leaf, r.costCodeId, "actual", v);
+  }
+  for (const e of committedEntries) {
+    const amount = Number(e.amount);
+    const paid = e.allocations.reduce((s, a) => s + Number(a.amount), 0);
+    const outstanding = amount - paid;
+    if (outstanding <= 0) continue;
+    if (!e.costCodeId) unclassifiedCommitted += outstanding;
+    else bump(leaf, e.costCodeId, "committed", outstanding);
   }
 
   // Roll up to ancestors. depth(codeId) computed on the fly.
@@ -128,12 +165,15 @@ export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatr
 
   // Total per code = its own + sum of all descendants. Easiest: for each leaf
   // entry, add to every ancestor.
-  const total: Record<string, { plan: number; actual: number }> = {};
+  const total: Record<string, LeafBucket> = {};
   for (const [codeId, vals] of Object.entries(leaf)) {
     for (const ancestorId of ancestorChain(codeId)) {
-      if (!total[ancestorId]) total[ancestorId] = { plan: 0, actual: 0 };
+      if (!total[ancestorId]) {
+        total[ancestorId] = { plan: 0, actual: 0, committed: 0 };
+      }
       total[ancestorId].plan += vals.plan;
       total[ancestorId].actual += vals.actual;
+      total[ancestorId].committed += vals.committed;
     }
   }
 
@@ -150,7 +190,9 @@ export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatr
     if (!t) continue; // skip cost-codes that have no plan and no actual
     const plan = t.plan;
     const revised = plan; // until ChangeOrder ships
-    const committed = 0; // until Commitment ships
+    // Safe Finance Migration Phase 4.3: committed = outstanding obligations
+    // (COMMITTED_EXPENSE FE minus their allocations). Раніше — hardcoded 0.
+    const committed = t.committed;
     const actual = t.actual;
     const forecast = Math.max(revised, committed + actual);
     const variance = revised - forecast;
@@ -175,10 +217,15 @@ export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatr
   rows.sort((a, b) => (a.code ?? "").localeCompare(b.code ?? "", "uk"));
 
   // Append synthetic unclassified bucket if there's anything in it.
-  if (unclassifiedPlan > 0 || unclassifiedActual > 0) {
+  if (
+    unclassifiedPlan > 0
+    || unclassifiedActual > 0
+    || unclassifiedCommitted > 0
+  ) {
     const plan = unclassifiedPlan;
     const actual = unclassifiedActual;
-    const forecast = Math.max(plan, actual);
+    const committed = unclassifiedCommitted;
+    const forecast = Math.max(plan, committed + actual);
     rows.push({
       costCodeId: null,
       code: UNCLASSIFIED_KEY,
@@ -189,7 +236,7 @@ export async function computeBudgetMatrix(projectId: string): Promise<BudgetMatr
       defaultCostType: null,
       plan,
       revised: plan,
-      committed: 0,
+      committed,
       actual,
       forecast,
       variance: plan - forecast,

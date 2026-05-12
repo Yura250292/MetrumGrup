@@ -239,7 +239,19 @@ export type FinanceQuadrantStats = {
 export type FinanceSummary = {
   plan: { income: FinanceQuadrantStats; expense: FinanceQuadrantStats };
   fact: { income: FinanceQuadrantStats; expense: FinanceQuadrantStats };
+  /**
+   * Phase 4.4 (Safe Finance Migration): зрізи за фінансовою природою. Дають
+   * чисту картину BUDGET / COMMITMENT / ACTUAL поза старим PLAN/FACT
+   * перемішуванням. `null`-shelf — все що ще не класифіковано (legacy писи
+   * або STAGE_AUTO FACT). v1-читачі ігнорують ці поля.
+   */
+  budget: { income: FinanceQuadrantStats; expense: FinanceQuadrantStats };
+  commitments: { income: FinanceQuadrantStats; expense: FinanceQuadrantStats };
+  actualCash: { income: FinanceQuadrantStats; expense: FinanceQuadrantStats };
+  unclassified: { income: FinanceQuadrantStats; expense: FinanceQuadrantStats };
   balance: number;
+  /** Phase 4.4: balance ТІЛЬКИ з ACTUAL_* — real cash position. */
+  actualCashBalance: number;
   count: number;
 };
 
@@ -281,12 +293,22 @@ export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Prom
     AND: [where, { NOT: { OR: projectBudgetExclusions } }],
   };
 
-  const grouped = await prisma.financeEntry.groupBy({
-    by: ["kind", "type"],
-    where: effectiveWhere,
-    _sum: { amount: true },
-    _count: { _all: true },
-  });
+  const [grouped, groupedByNature] = await Promise.all([
+    prisma.financeEntry.groupBy({
+      by: ["kind", "type"],
+      where: effectiveWhere,
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    // Phase 4.4: окремий groupBy за financeNature × type. PROJECT_BUDGET
+    // виключаємо так само як у v1 — щоб v2-shelf'и були звірянні з v1.
+    prisma.financeEntry.groupBy({
+      by: ["financeNature", "type"],
+      where: effectiveWhere,
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+  ]);
 
   const quadrants: Record<string, FinanceQuadrantStats> = {};
   let total = 0;
@@ -305,10 +327,43 @@ export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Prom
     expense: quadrants["FACT:EXPENSE"] ?? EMPTY_STATS,
   };
 
+  // Phase 4.4: shelf-агрегації за фінансовою природою.
+  const natureShelf: Record<string, FinanceQuadrantStats> = {};
+  for (const g of groupedByNature) {
+    const key = `${g.financeNature ?? "NULL"}:${g.type}`;
+    natureShelf[key] = {
+      sum: Number(g._sum.amount ?? 0),
+      count: g._count._all,
+    };
+  }
+  const pick = (k: string) => natureShelf[k] ?? EMPTY_STATS;
+
+  const budget = {
+    income: pick("BUDGET_INCOME:INCOME"),
+    expense: pick("BUDGET_EXPENSE:EXPENSE"),
+  };
+  const commitments = {
+    income: pick("COMMITTED_INCOME:INCOME"),
+    expense: pick("COMMITTED_EXPENSE:EXPENSE"),
+  };
+  const actualCash = {
+    income: pick("ACTUAL_INCOME:INCOME"),
+    expense: pick("ACTUAL_EXPENSE:EXPENSE"),
+  };
+  const unclassified = {
+    income: pick("NULL:INCOME"),
+    expense: pick("NULL:EXPENSE"),
+  };
+
   return {
     plan,
     fact,
+    budget,
+    commitments,
+    actualCash,
+    unclassified,
     balance: fact.income.sum - fact.expense.sum,
+    actualCashBalance: actualCash.income.sum - actualCash.expense.sum,
     count: total,
   };
 }
@@ -342,6 +397,7 @@ export const FINANCE_ENTRY_SELECT = {
   updatedAt: true,
   source: true,
   isDerived: true,
+  financeNature: true,
   estimateId: true,
   estimateItemId: true,
   project: { select: { id: true, title: true, slug: true } },

@@ -29,6 +29,16 @@ export type CashflowBucket = {
   to: string; // ISO date (exclusive)
   plan: { incoming: number; outgoing: number };
   fact: { incoming: number; outgoing: number };
+  /**
+   * Safe Finance Migration Phase 4.2: суми по семантичному шару.
+   * `commitments` — обовʼязання (COMMITTED_INCOME / COMMITTED_EXPENSE).
+   * `actualCash` — реальний рух грошей (ACTUAL_INCOME / ACTUAL_EXPENSE).
+   *
+   * Старі UI читають plan/fact як раніше. Нові v2-читачі мають брати
+   * actualCash для runningBalance і commitments для liability-картки.
+   */
+  commitments: { incoming: number; outgoing: number };
+  actualCash: { incoming: number; outgoing: number };
   net: number;
   runningBalance: number;
   hasGap: boolean;
@@ -38,6 +48,12 @@ export type CashflowResponse = {
   granularity: CashflowGranularity;
   range: { from: string; to: string };
   openingBalance: number;
+  /**
+   * Phase 4.2: opening на основі ТІЛЬКИ ACTUAL_* записів — без STAGE_AUTO
+   * FACT (progress) і без COMMITTED_* (liability). Узгоджений з runningBalance
+   * у новій моделі. Старе поле `openingBalance` лишається для backward compat.
+   */
+  openingBalanceActualCash: number;
   buckets: CashflowBucket[];
   totals: {
     incoming: number;
@@ -125,19 +141,36 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
   };
 
   // 1. Opening balance — fact entries before `from`.
-  const openingAgg = await prisma.financeEntry.groupBy({
-    by: ["type"],
-    where: {
-      ...baseWhere,
-      kind: "FACT",
-      occurredAt: { lt: from },
-    },
-    _sum: { amount: true },
-  });
+  const [openingAgg, openingActualAgg] = await Promise.all([
+    prisma.financeEntry.groupBy({
+      by: ["type"],
+      where: {
+        ...baseWhere,
+        kind: "FACT",
+        occurredAt: { lt: from },
+      },
+      _sum: { amount: true },
+    }),
+    // Phase 4.2 opening на основі лише ACTUAL_* — accurate cash position.
+    prisma.financeEntry.groupBy({
+      by: ["type"],
+      where: {
+        ...baseWhere,
+        financeNature: { in: ["ACTUAL_INCOME", "ACTUAL_EXPENSE"] },
+        occurredAt: { lt: from },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
   let openingBalance = 0;
   for (const r of openingAgg) {
     const v = Number(r._sum.amount ?? 0);
     openingBalance += r.type === "INCOME" ? v : -v;
+  }
+  let openingBalanceActualCash = 0;
+  for (const r of openingActualAgg) {
+    const v = Number(r._sum.amount ?? 0);
+    openingBalanceActualCash += r.type === "INCOME" ? v : -v;
   }
 
   // 2. Entries inside the window — group by (kind, type, day) for fast bucketing.
@@ -148,7 +181,13 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
       ...baseWhere,
       occurredAt: { gte: from, lt: to },
     },
-    select: { kind: true, type: true, amount: true, occurredAt: true },
+    select: {
+      kind: true,
+      type: true,
+      amount: true,
+      occurredAt: true,
+      financeNature: true,
+    },
   });
 
   // 3. Build empty bucket scaffold.
@@ -162,6 +201,8 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
       to: next.toISOString(),
       plan: { incoming: 0, outgoing: 0 },
       fact: { incoming: 0, outgoing: 0 },
+      commitments: { incoming: 0, outgoing: 0 },
+      actualCash: { incoming: 0, outgoing: 0 },
       net: 0,
       runningBalance: 0,
       hasGap: false,
@@ -178,6 +219,23 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
     const target = e.kind === "PLAN" ? b.plan : b.fact;
     if (e.type === "INCOME") target.incoming += amt;
     else target.outgoing += amt;
+
+    // Phase 4.2: paralel-allocate за семантичним шаром (доки v1-readers
+    // продовжують читати plan/fact). Не подвійний рахунок: ці поля — окремий
+    // зріз, не сумуються у totals/runningBalance.
+    if (
+      e.financeNature === "COMMITTED_INCOME"
+      || e.financeNature === "COMMITTED_EXPENSE"
+    ) {
+      if (e.type === "INCOME") b.commitments.incoming += amt;
+      else b.commitments.outgoing += amt;
+    } else if (
+      e.financeNature === "ACTUAL_INCOME"
+      || e.financeNature === "ACTUAL_EXPENSE"
+    ) {
+      if (e.type === "INCOME") b.actualCash.incoming += amt;
+      else b.actualCash.outgoing += amt;
+    }
   }
 
   // 5. Compute net + running balance + gaps.
@@ -225,6 +283,7 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
     granularity,
     range: { from: from.toISOString(), to: to.toISOString() },
     openingBalance,
+    openingBalanceActualCash,
     buckets,
     totals,
     gaps,

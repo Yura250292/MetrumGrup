@@ -119,6 +119,18 @@ function numOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Safe Finance Migration Phase 5.6: stage PLAN → BUDGET layer. STAGE_AUTO FACT
+// — це progress/earned-value, не cash actual. Заборона у плані (Principle 4):
+// "STAGE_AUTO FACT should not be treated as cash actual after migration" —
+// тому FACT-рядки лишаємо з financeNature=null.
+function stagePlanNature(
+  kind: "PLAN" | "FACT",
+  type: "EXPENSE" | "INCOME",
+): "BUDGET_EXPENSE" | "BUDGET_INCOME" | null {
+  if (kind !== "PLAN") return null;
+  return type === "EXPENSE" ? "BUDGET_EXPENSE" : "BUDGET_INCOME";
+}
+
 async function upsertOne(args: {
   stageId: string;
   stageEnum: import("@prisma/client").ProjectStage | null;
@@ -159,6 +171,8 @@ async function upsertOne(args: {
   const title = `${args.label} · ${kindLabel} ${typeLabel}`;
   const description = `Автозапис з етапу: ${args.volume} × ${args.unitPrice} ₴`;
 
+  const nature = stagePlanNature(args.kind, args.type);
+
   if (existing) {
     await prisma.financeEntry.update({
       where: { id: existing.id },
@@ -167,6 +181,9 @@ async function upsertOne(args: {
         title,
         description,
         updatedById: args.actorUserId,
+        // Touch-on-update: PLAN rows отримують BUDGET_*. FACT — не чіпаємо
+        // (null означає "не належить до cash-accounting шару").
+        ...(nature ? { financeNature: nature } : {}),
       },
     });
     return;
@@ -195,6 +212,7 @@ async function upsertOne(args: {
       description,
       createdById: args.actorUserId,
       status: "DRAFT",
+      ...(nature ? { financeNature: nature } : {}),
     },
   });
 }

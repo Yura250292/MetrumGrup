@@ -97,6 +97,12 @@ export async function syncEstimateToFinancing(
         ? `${titlePrefix} ${est.number} • ${item.section.title}`
         : `${titlePrefix} ${est.number}`;
 
+      // Safe Finance Migration Phase 5.4: estimate publication → BUDGET layer.
+      // Auto-sync вже gated через isFinanceAutopublishEnabled() — sync викликають
+      // тільки коли є явна бізнес-дія, що означає approval/publish-to-budget.
+      const nature: "BUDGET_INCOME" | "BUDGET_EXPENSE" =
+        type === "INCOME" ? "BUDGET_INCOME" : "BUDGET_EXPENSE";
+
       const prev = itemEntryByItemId.get(item.id);
       if (prev) {
         seenItemIds.add(item.id);
@@ -114,6 +120,7 @@ export async function syncEstimateToFinancing(
             folderId,
             isArchived: false, // un-archive if it was a previously orphaned row that's back
             updatedById: userId,
+            financeNature: nature,
           },
         });
         itemsUpdated++;
@@ -142,6 +149,7 @@ export async function syncEstimateToFinancing(
             estimateItemId: item.id,
             costCodeId: item.costCodeId,
             costType: item.costType,
+            financeNature: nature,
           },
         });
         itemsCreated++;
@@ -179,6 +187,7 @@ export async function syncEstimateToFinancing(
                 occurredAt,
                 isArchived: false,
                 updatedById: userId,
+                financeNature: "BUDGET_INCOME",
               },
             });
             itemsUpdated++;
@@ -200,6 +209,7 @@ export async function syncEstimateToFinancing(
                 status: "DRAFT",
                 createdById: userId,
                 estimateId,
+                financeNature: "BUDGET_INCOME",
               },
             });
             itemsCreated++;

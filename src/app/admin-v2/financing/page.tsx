@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ListTodo, AlertCircle, FlaskConical, Plus, FolderKanban } from "lucide-react";
+import { ArrowRight, ListTodo, AlertCircle, FlaskConical, Plus, FolderKanban, ClipboardList } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FinancingView } from "./_components/financing-view";
@@ -112,16 +112,32 @@ export default async function AdminV2FinancingPage({
             — одна база з Проєктами
           </span>
         </div>
-        {canCreateProject && (
-          <Link
-            href="/admin-v2/projects/new"
-            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.97]"
-            style={{ backgroundColor: T.accentPrimary }}
-            title="Створити новий проєкт (з'явиться і тут, і у Проєктах)"
-          >
-            <Plus size={14} /> Новий проєкт
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {session.user.role === "SUPER_ADMIN" && (
+            <Link
+              href="/admin-v2/financing/migration-audit"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition hover:brightness-95"
+              style={{
+                backgroundColor: T.panel,
+                color: T.textSecondary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+              title="Safe Finance Migration · Phase 0 audit — інвентаризація ledger перед backfill"
+            >
+              <ClipboardList size={14} /> Migration audit
+            </Link>
+          )}
+          {canCreateProject && (
+            <Link
+              href="/admin-v2/projects/new"
+              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.97]"
+              style={{ backgroundColor: T.accentPrimary }}
+              title="Створити новий проєкт (з'явиться і тут, і у Проєктах)"
+            >
+              <Plus size={14} /> Новий проєкт
+            </Link>
+          )}
+        </div>
       </header>
       {activeProject && (
         <section

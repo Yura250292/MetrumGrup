@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { CostType } from "@prisma/client";
+import { computeSupplierOutstanding } from "@/lib/finance/supplier-allocation";
 
 /**
  * Owner-side агрегатори. Усі запити firm-aware: якщо firmId=null —
@@ -24,9 +25,13 @@ export interface DashboardKpis {
   factIncome: number;
   /** Фактичні витрати — FACT expense. */
   factExpense: number;
-  /** Заборгованість постачальникам — сума FACT EXPENSE WHERE status != PAID. */
+  /**
+   * Заборгованість постачальникам — сума outstanding (amount − allocations)
+   * по FE зі статусом APPROVED|PENDING. Узгоджено з канонічним розрахунком
+   * /api/admin/projects/[id]/supplier-debts.
+   */
   totalDebt: number;
-  /** Кількість постачальників з боргом. */
+  /** Кількість постачальників з ненульовим боргом (після allocations). */
   debtorCount: number;
   /** Кількість активних проектів. */
   activeProjects: number;
@@ -42,8 +47,7 @@ export async function getDashboardKpis(firmId: string | null): Promise<Dashboard
     planExpense,
     factIncome,
     factExpense,
-    debtAgg,
-    debtorIds,
+    outstandingByCp,
     activeProjects,
     pendingForemanReports,
   ] = await Promise.all([
@@ -63,30 +67,7 @@ export async function getDashboardKpis(firmId: string | null): Promise<Dashboard
       where: { ...where, kind: "FACT", type: "EXPENSE", isArchived: false },
       _sum: { amount: true },
     }),
-    // Заборгованість: FACT EXPENSE з контрагентом, що НЕ позначено як PAID
-    prisma.financeEntry.aggregate({
-      where: {
-        ...where,
-        kind: "FACT",
-        type: "EXPENSE",
-        isArchived: false,
-        status: { not: "PAID" },
-        counterpartyId: { not: null },
-      },
-      _sum: { amount: true },
-    }),
-    prisma.financeEntry.findMany({
-      where: {
-        ...where,
-        kind: "FACT",
-        type: "EXPENSE",
-        isArchived: false,
-        status: { not: "PAID" },
-        counterpartyId: { not: null },
-      },
-      select: { counterpartyId: true },
-      distinct: ["counterpartyId"],
-    }),
+    computeSupplierOutstanding({ firmId }),
     prisma.project.count({
       where: { ...where, status: "ACTIVE" },
     }),
@@ -95,13 +76,18 @@ export async function getDashboardKpis(firmId: string | null): Promise<Dashboard
     }),
   ]);
 
+  let totalDebt = 0;
+  for (const row of outstandingByCp.values()) {
+    totalDebt += row.outstanding;
+  }
+
   return {
     planIncome: Number(planIncome._sum.amount ?? 0),
     planExpense: Number(planExpense._sum.amount ?? 0),
     factIncome: Number(factIncome._sum.amount ?? 0),
     factExpense: Number(factExpense._sum.amount ?? 0),
-    totalDebt: Number(debtAgg._sum.amount ?? 0),
-    debtorCount: debtorIds.length,
+    totalDebt,
+    debtorCount: outstandingByCp.size,
     activeProjects,
     pendingForemanReports,
   };
@@ -120,8 +106,13 @@ export interface SupplierDebtRow {
 
 /**
  * Повертає список постачальників з заборгованістю, відсортовано за сумою боргу.
- * Для кожного: загальна сума, кількість неоплачених записів, найдавніший
- * неоплачений запис, остання оплата (PAID), останній проект з боргом.
+ * Для кожного: загальна сума outstanding (amount − allocations), кількість
+ * не повністю покритих записів, найдавніший такий запис, остання оплата
+ * (PAID), останній проект з боргом.
+ *
+ * Канонічна формула боргу: amount − SUM(SupplierPaymentAllocation). FE з
+ * outstanding ≤ 0 (повністю покриті частковими виплатами, але ще не позначені
+ * PAID) у борг не входять. DRAFT не вважається боргом (статус APPROVED|PENDING).
  */
 export async function getSupplierDebt(
   firmId: string | null,
@@ -129,28 +120,10 @@ export async function getSupplierDebt(
 ): Promise<SupplierDebtRow[]> {
   const where = firmWhere(firmId);
 
-  // Aggregate unpaid debts grouped by counterparty
-  const grouped = await prisma.financeEntry.groupBy({
-    by: ["counterpartyId"],
-    where: {
-      ...where,
-      kind: "FACT",
-      type: "EXPENSE",
-      isArchived: false,
-      status: { not: "PAID" },
-      counterpartyId: { not: null },
-    },
-    _sum: { amount: true },
-    _count: { _all: true },
-    _min: { occurredAt: true },
-  });
+  const outstandingByCp = await computeSupplierOutstanding({ firmId });
+  if (outstandingByCp.size === 0) return [];
 
-  if (grouped.length === 0) return [];
-
-  // Завантажуємо контрагентів + остання оплата + останній проект (паралельно)
-  const counterpartyIds = grouped
-    .map((g) => g.counterpartyId)
-    .filter((id): id is string => !!id);
+  const counterpartyIds = Array.from(outstandingByCp.keys());
 
   const [counterparties, lastPayments, lastProjects] = await Promise.all([
     prisma.counterparty.findMany({
@@ -176,7 +149,7 @@ export async function getSupplierDebt(
         ...where,
         kind: "FACT",
         type: "EXPENSE",
-        status: { not: "PAID" },
+        status: { in: ["APPROVED", "PENDING"] },
         counterpartyId: { in: counterpartyIds },
       },
       orderBy: { occurredAt: "desc" },
@@ -198,17 +171,17 @@ export async function getSupplierDebt(
     lastProjects.map((lp) => [lp.counterpartyId, lp.project?.title ?? null]),
   );
 
-  const rows: SupplierDebtRow[] = grouped
-    .filter((g) => g.counterpartyId)
-    .map((g) => ({
-      counterpartyId: g.counterpartyId as string,
-      name: cpMap.get(g.counterpartyId as string) ?? "—",
-      totalDebt: Number(g._sum.amount ?? 0),
-      unpaidEntriesCount: g._count._all,
-      oldestUnpaidAt: g._min.occurredAt?.toISOString() ?? null,
-      lastPaidAt: lastPaidMap.get(g.counterpartyId) ?? null,
-      lastProjectTitle: lastProjectMap.get(g.counterpartyId) ?? null,
-    }));
+  const rows: SupplierDebtRow[] = Array.from(outstandingByCp.values()).map(
+    (row) => ({
+      counterpartyId: row.counterpartyId,
+      name: cpMap.get(row.counterpartyId) ?? "—",
+      totalDebt: row.outstanding,
+      unpaidEntriesCount: row.unpaidEntriesCount,
+      oldestUnpaidAt: row.oldestUnpaidAt?.toISOString() ?? null,
+      lastPaidAt: lastPaidMap.get(row.counterpartyId) ?? null,
+      lastProjectTitle: lastProjectMap.get(row.counterpartyId) ?? null,
+    }),
+  );
 
   rows.sort((a, b) => b.totalDebt - a.totalDebt);
   return rows.slice(0, limit);

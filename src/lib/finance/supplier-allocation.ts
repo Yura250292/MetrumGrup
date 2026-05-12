@@ -62,6 +62,82 @@ export async function getAllocatedAmount(
   return new Decimal(row._sum.amount ?? 0);
 }
 
+export type CounterpartyOutstanding = {
+  counterpartyId: string;
+  outstanding: number;
+  unpaidEntriesCount: number;
+  oldestUnpaidAt: Date | null;
+};
+
+/**
+ * Канонічна формула боргу постачальнику: outstanding = amount − SUM(allocations)
+ * для несплачених FE (kind=FACT, type=EXPENSE, status APPROVED|PENDING).
+ *
+ * Замінник для прямих `aggregate({ status: { not: "PAID" } })` запитів,
+ * які не субтрагують часткові оплати. Канонічна семантика з
+ * /api/admin/projects/[id]/supplier-debts, винесена у спільний хелпер для
+ * firm-wide агрегацій (owner KPI, supplier list).
+ *
+ * DRAFT не вважається боргом — не ввімкнено у статуси.
+ *
+ * Повертає Map<counterpartyId, ...>. Контрагенти, де outstanding ≤ 0 після
+ * subtracting allocations, у мапу не потрапляють.
+ */
+export async function computeSupplierOutstanding(args: {
+  firmId?: string | null;
+}): Promise<Map<string, CounterpartyOutstanding>> {
+  const entries = await prisma.financeEntry.findMany({
+    where: {
+      type: "EXPENSE",
+      kind: "FACT",
+      isArchived: false,
+      status: { in: ["APPROVED", "PENDING"] },
+      counterpartyId: { not: null },
+      ...(args.firmId ? { firmId: args.firmId } : {}),
+    },
+    select: {
+      id: true,
+      amount: true,
+      occurredAt: true,
+      counterpartyId: true,
+    },
+  });
+
+  if (entries.length === 0) return new Map();
+
+  const allocs = await prisma.supplierPaymentAllocation.groupBy({
+    by: ["financeEntryId"],
+    where: { financeEntryId: { in: entries.map((e) => e.id) } },
+    _sum: { amount: true },
+  });
+  const paidByEntry = new Map<string, number>();
+  for (const a of allocs) {
+    paidByEntry.set(a.financeEntryId, Number(a._sum.amount ?? 0));
+  }
+
+  const byCp = new Map<string, CounterpartyOutstanding>();
+  for (const e of entries) {
+    if (!e.counterpartyId) continue;
+    const amount = Number(e.amount);
+    const paid = paidByEntry.get(e.id) ?? 0;
+    const outstanding = amount - paid;
+    if (outstanding <= 0) continue;
+    const cur = byCp.get(e.counterpartyId) ?? {
+      counterpartyId: e.counterpartyId,
+      outstanding: 0,
+      unpaidEntriesCount: 0,
+      oldestUnpaidAt: null as Date | null,
+    };
+    cur.outstanding += outstanding;
+    cur.unpaidEntriesCount += 1;
+    if (!cur.oldestUnpaidAt || e.occurredAt < cur.oldestUnpaidAt) {
+      cur.oldestUnpaidAt = e.occurredAt;
+    }
+    byCp.set(e.counterpartyId, cur);
+  }
+  return byCp;
+}
+
 /**
  * Бере несплачені FinanceEntry постачальника у FIFO-порядку (occurredAt ASC, id ASC),
  * рахує allocated на кожному. Використовується і для preview, і для actual allocation.

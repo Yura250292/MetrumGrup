@@ -125,6 +125,10 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
             // Phase 2: переносимо постачальника на FinanceEntry — це критично для
             // агрегацій боргу (counterparty-dossier рахує SUM unpaid expenses).
             counterpartyId: item.counterpartyId,
+            // Safe Finance Migration Phase 5.5: foreman report = incurred
+            // liability у полях, не cash. Перевести у ACTUAL_EXPENSE можна
+            // лише коли є явний reimbursement-flow (поки відсутній).
+            financeNature: "COMMITTED_EXPENSE",
           },
           select: { id: true },
         });

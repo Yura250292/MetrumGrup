@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { syncEstimateToFinancing } from "@/lib/financing/sync-from-estimate";
+import { isFinanceAutopublishEnabled } from "@/lib/financing/feature-flags";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -238,17 +239,20 @@ export async function POST(request: NextRequest) {
       return { clientEst, internalEst };
     });
 
-    // Sync to financing (outside transaction — uses own transactions)
+    // Sync to financing (outside transaction — uses own transactions).
+    // Gated by FINANCE_AUTOPUBLISH_ENABLED (Safe Finance Migration, Phase 1).
+    // OFF: створення пари не матеріалізує бюджет — потрібна окрема явна дія.
+    const autopublish = isFinanceAutopublishEnabled();
     let clientSync = null;
     let internalSync = null;
-    if (result.clientEst) {
+    if (autopublish && result.clientEst) {
       try {
         clientSync = await syncEstimateToFinancing(result.clientEst.id, session.user.id);
       } catch (err) {
         console.error("[create-pair] client sync failed:", err);
       }
     }
-    if (result.internalEst) {
+    if (autopublish && result.internalEst) {
       try {
         internalSync = await syncEstimateToFinancing(result.internalEst.id, session.user.id);
       } catch (err) {
@@ -283,6 +287,7 @@ export async function POST(request: NextRequest) {
         client: clientSync,
         internal: internalSync,
       },
+      autopublishedToFinance: autopublish,
     }, { status: 201 });
   } catch (error) {
     console.error("[estimates/create-pair] error:", error);

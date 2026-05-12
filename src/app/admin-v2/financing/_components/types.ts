@@ -1,5 +1,17 @@
 export type FinanceEntryStatus = "DRAFT" | "PENDING" | "APPROVED" | "PAID";
-export type FinanceEntrySource = "MANUAL" | "ESTIMATE_AUTO";
+export type FinanceEntrySource =
+  | "MANUAL"
+  | "ESTIMATE_AUTO"
+  | "PROJECT_BUDGET"
+  | "STAGE_AUTO"
+  | "FOREMAN_REPORT";
+export type FinanceNature =
+  | "BUDGET_INCOME"
+  | "BUDGET_EXPENSE"
+  | "COMMITTED_INCOME"
+  | "COMMITTED_EXPENSE"
+  | "ACTUAL_INCOME"
+  | "ACTUAL_EXPENSE";
 export type CostType = "MATERIAL" | "LABOR" | "SUBCONTRACT" | "EQUIPMENT" | "OVERHEAD" | "OTHER";
 
 export type CounterpartyOption = {
@@ -36,6 +48,7 @@ export type FinanceEntryDTO = {
   isArchived: boolean;
   status: FinanceEntryStatus;
   source: FinanceEntrySource;
+  financeNature: FinanceNature | null;
   estimateId: string | null;
   estimateItemId: string | null;
   estimate: { id: string; number: string; title: string } | null;
@@ -112,6 +125,33 @@ export const FINANCE_STATUS_LABELS: Record<FinanceEntryStatus, string> = {
   PENDING: "На погодженні",
   APPROVED: "Підтверджено",
   PAID: "Оплачено",
+};
+
+export const FINANCE_NATURE_LABELS: Record<FinanceNature, string> = {
+  BUDGET_INCOME: "Бюджет (дохід)",
+  BUDGET_EXPENSE: "Бюджет (витрата)",
+  COMMITTED_INCOME: "Очікувана оплата",
+  COMMITTED_EXPENSE: "Обовʼязання",
+  ACTUAL_INCOME: "Факт.надходження",
+  ACTUAL_EXPENSE: "Факт.виплата",
+};
+
+export const FINANCE_NATURE_SHORT_LABELS: Record<FinanceNature, string> = {
+  BUDGET_INCOME: "БЮД",
+  BUDGET_EXPENSE: "БЮД",
+  COMMITTED_INCOME: "ЗОБ",
+  COMMITTED_EXPENSE: "ЗОБ",
+  ACTUAL_INCOME: "КЕШ",
+  ACTUAL_EXPENSE: "КЕШ",
+};
+
+export const FINANCE_NATURE_COLORS: Record<FinanceNature, string> = {
+  BUDGET_INCOME: "bg-sky-100 text-sky-800",
+  BUDGET_EXPENSE: "bg-sky-100 text-sky-800",
+  COMMITTED_INCOME: "bg-amber-100 text-amber-800",
+  COMMITTED_EXPENSE: "bg-amber-100 text-amber-800",
+  ACTUAL_INCOME: "bg-emerald-100 text-emerald-800",
+  ACTUAL_EXPENSE: "bg-emerald-100 text-emerald-800",
 };
 
 export const FINANCE_STATUS_COLORS: Record<FinanceEntryStatus, string> = {

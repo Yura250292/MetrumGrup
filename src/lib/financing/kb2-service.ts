@@ -198,6 +198,9 @@ export async function signKB2Form(
 
   return prisma.$transaction(async (tx) => {
     // Income FinanceEntry — net amount payable to us.
+    // Safe Finance Migration Phase 5.3: signed KB2 = receivable, not budget.
+    // Стане ACTUAL_INCOME коли клієнт фактично заплатить (окремий cash-flow,
+    // який поки не моделюється у writers — деферимо до Phase 5.3+).
     const entry = await tx.financeEntry.create({
       data: {
         kind: "PLAN",
@@ -216,6 +219,7 @@ export async function signKB2Form(
         approvedById: userId,
         approvedAt: signedAt,
         source: "MANUAL",
+        financeNature: "COMMITTED_INCOME",
       },
       select: { id: true },
     });

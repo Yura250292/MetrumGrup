@@ -212,9 +212,14 @@ export async function POST(request: NextRequest) {
         if (inv.isPaid) {
           baseData.status = "PAID";
           baseData.paidAt = paymentDate ?? occurredAt;
+          // Safe Finance Migration Phase 5.1: paid invoice = actual cash out.
+          baseData.financeNature = "ACTUAL_EXPENSE";
         } else {
           baseData.status = "APPROVED";
           if (paymentDate) baseData.remindAt = paymentDate;
+          // Safe Finance Migration Phase 5.1: unpaid invoice = liability,
+          // not actual cash. Стане ACTUAL_EXPENSE коли буде SupplierPayment.
+          baseData.financeNature = "COMMITTED_EXPENSE";
         }
 
         const entry = await tx.financeEntry.create({

@@ -620,6 +620,11 @@ model FinanceEntry {
   /// для відображення в UI кредиторської заборгованості.
   invoiceNumber String?
 
+  /// Safe Finance Migration Phase 2. Nullable semantic accounting layer.
+  /// Не використовується writer/reader-логікою у цій ітерації — лише читається
+  /// сторінкою діагностики. Backfill і міграція читачів — окремі фази.
+  financeNature FinanceNature?
+
   project            Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
   firm               Firm?                    @relation(fields: [firmId], references: [id])
   stageRecord        ProjectStageRecord?      @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
@@ -1644,6 +1649,19 @@ enum FinanceEntrySource {
   PROJECT_BUDGET
   STAGE_AUTO
   FOREMAN_REPORT
+}
+
+/// Semantic accounting layer (Safe Finance Migration, Phase 2). Nullable
+/// during the introduction phase; no writer populates it yet and no reader
+/// branches on it outside diagnostics. Future iterations migrate readers
+/// (Phase 4) and writers (Phase 5) onto this classification.
+enum FinanceNature {
+  BUDGET_INCOME
+  BUDGET_EXPENSE
+  COMMITTED_INCOME
+  COMMITTED_EXPENSE
+  ACTUAL_INCOME
+  ACTUAL_EXPENSE
 }
 
 /// Lifecycle звіту виконроба:

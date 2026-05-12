@@ -19,6 +19,11 @@ import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import { RadialProgress } from "@/components/ui/RadialProgress";
 import { Collapsible } from "@/components/ui/Collapsible";
 import type { FinanceEntryDTO, QuadrantStats } from "./types";
+import {
+  FINANCE_NATURE_LABELS,
+  FINANCE_NATURE_SHORT_LABELS,
+  FINANCE_NATURE_COLORS,
+} from "./types";
 
 /** Track viewport once at mount — collapsed by default on <md */
 function useIsMobile() {
@@ -333,6 +338,14 @@ function EntryRow({
           >
             {entry.title}
           </span>
+          {entry.financeNature && (
+            <span
+              className={`flex-shrink-0 rounded px-1 text-[9px] font-semibold tracking-wide ${FINANCE_NATURE_COLORS[entry.financeNature]}`}
+              title={FINANCE_NATURE_LABELS[entry.financeNature]}
+            >
+              {FINANCE_NATURE_SHORT_LABELS[entry.financeNature]}
+            </span>
+          )}
         </div>
         <div
           className="flex items-center gap-1.5 text-[10.5px] truncate"
