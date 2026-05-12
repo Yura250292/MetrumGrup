@@ -25,6 +25,7 @@ const DEFAULT_FILTERS: FinancingFilters = {
   type: "",
   status: "",
   source: "",
+  financeNature: "",
   subcategory: "",
   responsibleId: "",
   hasAttachments: "",
@@ -70,6 +71,7 @@ export function useFinancingData({
     if (filters.type) p.set("type", filters.type);
     if (filters.status) p.set("status", filters.status);
     if (filters.source) p.set("source", filters.source);
+    if (filters.financeNature) p.set("financeNature", filters.financeNature);
 
     // Category
     if (filters.category) p.set("category", filters.category);

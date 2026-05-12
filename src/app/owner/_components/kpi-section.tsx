@@ -13,6 +13,12 @@ interface Kpis {
   debtorCount: number;
   activeProjects: number;
   pendingForemanReports: number;
+  budgetIncome: number;
+  budgetExpense: number;
+  committedIncome: number;
+  committedExpense: number;
+  actualCashIncome: number;
+  actualCashExpense: number;
 }
 
 export function KpiSection({ kpis }: { kpis: Kpis }) {

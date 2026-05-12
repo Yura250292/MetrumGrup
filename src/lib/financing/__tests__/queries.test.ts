@@ -102,10 +102,21 @@ describe("computeSummary — PROJECT_BUDGET exclusion", () => {
 });
 
 describe("computeSummary — Phase 4.4 financeNature shelves", () => {
+  let payAggregateMock: Stub;
+
   beforeEach(() => {
     projectFindManyMock = setStub((prisma as any).project, "findMany");
     groupByMock = setStub((prisma as any).financeEntry, "groupBy");
     projectFindManyMock.mockResolvedValue([] as never);
+    (prisma as any).supplierPayment = (prisma as any).supplierPayment ?? {};
+    payAggregateMock = setStub(
+      (prisma as any).supplierPayment,
+      "aggregate",
+    );
+    payAggregateMock.mockResolvedValue({
+      _sum: { amount: 0 },
+      _count: { _all: 0 },
+    } as never);
   });
 
   function mockGroupBy(natureRows: any[]) {
@@ -117,15 +128,21 @@ describe("computeSummary — Phase 4.4 financeNature shelves", () => {
     }) as never);
   }
 
-  it("BUDGET/COMMITMENT/ACTUAL shelves заповнюються з groupBy за financeNature", async () => {
+  it("BUDGET/COMMITMENT shelves з financeNature, actualCash.expense з SupplierPayment", async () => {
     mockGroupBy([
       { financeNature: "BUDGET_EXPENSE", type: "EXPENSE", _sum: { amount: 100 }, _count: { _all: 1 } },
       { financeNature: "BUDGET_INCOME", type: "INCOME", _sum: { amount: 200 }, _count: { _all: 1 } },
       { financeNature: "COMMITTED_EXPENSE", type: "EXPENSE", _sum: { amount: 50 }, _count: { _all: 1 } },
       { financeNature: "COMMITTED_INCOME", type: "INCOME", _sum: { amount: 75 }, _count: { _all: 1 } },
+      // FE.ACTUAL_EXPENSE — мав би іти у actualCash, але після iter 12 його
+      // НЕ беремо (anti-double-count, бо є дзеркальний SupplierPayment).
       { financeNature: "ACTUAL_EXPENSE", type: "EXPENSE", _sum: { amount: 30 }, _count: { _all: 1 } },
       { financeNature: "ACTUAL_INCOME", type: "INCOME", _sum: { amount: 45 }, _count: { _all: 1 } },
     ]);
+    payAggregateMock.mockResolvedValue({
+      _sum: { amount: 28 },
+      _count: { _all: 1 },
+    } as never);
 
     const s = await computeSummary({ isArchived: false });
 
@@ -133,9 +150,10 @@ describe("computeSummary — Phase 4.4 financeNature shelves", () => {
     expect(s.budget.income.sum).toBe(200);
     expect(s.commitments.expense.sum).toBe(50);
     expect(s.commitments.income.sum).toBe(75);
-    expect(s.actualCash.expense.sum).toBe(30);
+    // actualCash.expense — НЕ FE.ACTUAL_EXPENSE (30), а SupplierPayment (28).
+    expect(s.actualCash.expense.sum).toBe(28);
     expect(s.actualCash.income.sum).toBe(45);
-    expect(s.actualCashBalance).toBe(15);
+    expect(s.actualCashBalance).toBe(45 - 28);
   });
 
   it("financeNature=null → unclassified shelf", async () => {

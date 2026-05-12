@@ -97,6 +97,23 @@ export function ActiveFilterChips({
     });
   }
 
+  if (filters.financeNature) {
+    const natureLabels: Record<string, string> = {
+      BUDGET_INCOME: "Бюджет (дохід)",
+      BUDGET_EXPENSE: "Бюджет (витрата)",
+      COMMITTED_INCOME: "Очікувана оплата",
+      COMMITTED_EXPENSE: "Обовʼязання",
+      ACTUAL_INCOME: "Факт.надходження",
+      ACTUAL_EXPENSE: "Факт.виплата",
+      NULL: "Не класифіковано",
+    };
+    chips.push({
+      key: "financeNature",
+      label: natureLabels[filters.financeNature] ?? filters.financeNature,
+      clear: () => setFilters((p) => ({ ...p, financeNature: "" })),
+    });
+  }
+
   if (filters.category) {
     chips.push({
       key: "category",

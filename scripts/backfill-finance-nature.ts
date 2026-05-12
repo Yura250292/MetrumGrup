@@ -97,6 +97,17 @@ const RULES: Rule[] = [
     },
   },
   {
+    id: "F.client_payment_received",
+    label: "MANUAL FACT INCOME (всі категорії крім client_advance) → ACTUAL_INCOME",
+    nature: "ACTUAL_INCOME",
+    where: {
+      source: "MANUAL",
+      kind: "FACT",
+      type: "INCOME",
+      financeNature: null,
+    },
+  },
+  {
     id: "C.invoice_paid",
     label: "MANUAL FACT EXPENSE invoice + PAID → ACTUAL_EXPENSE",
     nature: "ACTUAL_EXPENSE",
@@ -166,21 +177,37 @@ function parseArgs() {
   };
 }
 
+type RuleResult = {
+  ruleId: string;
+  candidates: number;
+  updated: number;
+  /** Rollback marker — ID списки оновлених записів, по batch. */
+  updatedIds: string[];
+};
+
 async function processRule(
   rule: Rule,
   opts: { apply: boolean; batch: number },
-) {
+): Promise<RuleResult> {
   const candidateCount = await prisma.financeEntry.count({ where: rule.where });
   console.log(
     `\n📋 ${rule.id} · ${rule.label}\n   candidates: ${candidateCount}`,
   );
-  if (candidateCount === 0) return { ruleId: rule.id, candidates: 0, updated: 0 };
+  if (candidateCount === 0) {
+    return { ruleId: rule.id, candidates: 0, updated: 0, updatedIds: [] };
+  }
 
   if (!opts.apply) {
-    return { ruleId: rule.id, candidates: candidateCount, updated: 0 };
+    return {
+      ruleId: rule.id,
+      candidates: candidateCount,
+      updated: 0,
+      updatedIds: [],
+    };
   }
 
   let totalUpdated = 0;
+  const updatedIds: string[] = [];
   while (true) {
     // Беремо batch ID, оновлюємо, повторюємо. updateMany() обмеження по
     // ID-set гарантує що не зачепимо нові записи, що зайдуть під час бекфіл.
@@ -191,16 +218,23 @@ async function processRule(
     });
     if (batchIds.length === 0) break;
 
+    const ids = batchIds.map((r) => r.id);
     const res = await prisma.financeEntry.updateMany({
-      where: { id: { in: batchIds.map((r) => r.id) } },
+      where: { id: { in: ids } },
       data: { financeNature: rule.nature },
     });
     totalUpdated += res.count;
+    updatedIds.push(...ids);
     console.log(
       `   batch ${batchIds.length} → updated ${res.count} (running ${totalUpdated})`,
     );
   }
-  return { ruleId: rule.id, candidates: candidateCount, updated: totalUpdated };
+  return {
+    ruleId: rule.id,
+    candidates: candidateCount,
+    updated: totalUpdated,
+    updatedIds,
+  };
 }
 
 async function main() {
@@ -219,11 +253,7 @@ async function main() {
     `Baseline before: ${startNull} / ${totalEntries} entries with financeNature=null`,
   );
 
-  const results: Array<{
-    ruleId: string;
-    candidates: number;
-    updated: number;
-  }> = [];
+  const results: RuleResult[] = [];
   for (const r of RULES) {
     results.push(await processRule(r, opts));
   }
@@ -251,23 +281,49 @@ async function main() {
     logsDir,
     `backfill-finance-nature-${opts.apply ? "apply" : "dryrun"}-${stamp}.json`,
   );
-  fs.writeFileSync(
-    logPath,
-    JSON.stringify(
-      {
-        capturedAt: new Date().toISOString(),
-        mode: opts.apply ? "apply" : "dry-run",
-        batchSize: opts.batch,
-        totalEntries,
-        nullBefore: startNull,
-        nullAfter: endNull,
-        results,
-      },
-      null,
-      2,
-    ),
-  );
+  // Stripped log — agregати без ID для швидкого review.
+  const summaryLog = {
+    capturedAt: new Date().toISOString(),
+    mode: opts.apply ? "apply" : "dry-run",
+    batchSize: opts.batch,
+    totalEntries,
+    nullBefore: startNull,
+    nullAfter: endNull,
+    results: results.map((r) => ({
+      ruleId: r.ruleId,
+      candidates: r.candidates,
+      updated: r.updated,
+    })),
+  };
+  fs.writeFileSync(logPath, JSON.stringify(summaryLog, null, 2));
   console.log(`\n📝 Log saved: ${logPath}`);
+
+  // Rollback marker — для apply режиму зберігаємо повний ID-list на кожне
+  // правило. Якщо щось пішло не так:
+  //   prisma.financeEntry.updateMany({
+  //     where: { id: { in: marker.results[i].updatedIds } },
+  //     data: { financeNature: null }
+  //   });
+  if (opts.apply) {
+    const markerPath = path.join(
+      logsDir,
+      `backfill-finance-nature-rollback-${stamp}.json`,
+    );
+    fs.writeFileSync(
+      markerPath,
+      JSON.stringify(
+        {
+          capturedAt: new Date().toISOString(),
+          mode: "apply",
+          totalUpdated,
+          results,
+        },
+        null,
+        2,
+      ),
+    );
+    console.log(`🧯 Rollback marker saved: ${markerPath}`);
+  }
 
   if (!opts.apply && totalCandidates > 0) {
     console.log(

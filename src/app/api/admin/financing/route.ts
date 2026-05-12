@@ -250,6 +250,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Safe Finance Migration Phase 5.3 (client payments): manual FACT INCOME =
+    // оплата клієнта = cash actual. Інші манульні записи лишаються
+    // незакласифікованими (ambiguous: можуть бути зарплата, оренда, тощо).
+    const inferredNature: "ACTUAL_INCOME" | null =
+      kind === "FACT" && type === "INCOME" ? "ACTUAL_INCOME" : null;
+
     const entry = await prisma.financeEntry.create({
       data: {
         type,
@@ -272,6 +278,7 @@ export async function POST(request: NextRequest) {
         createdById: session.user.id,
         folderId,
         status,
+        ...(inferredNature ? { financeNature: inferredNature } : {}),
       },
       select: FINANCE_ENTRY_SELECT,
     });

@@ -12,6 +12,12 @@ interface Kpis {
   debtorCount: number;
   activeProjects: number;
   pendingForemanReports: number;
+  budgetIncome: number;
+  budgetExpense: number;
+  committedIncome: number;
+  committedExpense: number;
+  actualCashIncome: number;
+  actualCashExpense: number;
 }
 
 interface Props {
@@ -34,47 +40,57 @@ const formatUah = (n: number): string => {
 export function KpiGrid({ kpis, onOpenDebt, debtExpanded }: Props) {
   return (
     <div className="space-y-3">
-      {/* Доходи: світло-зелений (план) | насичений зелений (факт) */}
+      {/* Phase 4.4 v2: Бюджет (узгоджений план) | Каса (реальні гроші).
+          Семантично точніше за стару пару PLAN/FACT, яка змішувала layers. */}
       <div className="grid grid-cols-2 gap-3">
         <KpiCard
           delay={0}
-          label="План дохід"
-          value={formatUah(kpis.planIncome)}
+          label="Бюджет дохід"
+          value={formatUah(kpis.budgetIncome)}
           unit="грн"
           accent="incomePlan"
+          subtitle={
+            kpis.committedIncome > 0
+              ? `+ підписано: ${formatUah(kpis.committedIncome)}`
+              : undefined
+          }
         />
         <KpiCard
           delay={0.04}
-          label="Факт дохід"
-          value={formatUah(kpis.factIncome)}
+          label="Каса надходжень"
+          value={formatUah(kpis.actualCashIncome)}
           unit="грн"
           accent="incomeFact"
           subtitle={
-            kpis.planIncome > 0
-              ? `${((kpis.factIncome / kpis.planIncome) * 100).toFixed(0)}% від плану`
+            kpis.budgetIncome > 0
+              ? `${((kpis.actualCashIncome / kpis.budgetIncome) * 100).toFixed(0)}% від бюджету`
               : undefined
           }
         />
       </div>
 
-      {/* Витрати: світло-червоний (план) | насичений червоний (факт) */}
       <div className="grid grid-cols-2 gap-3">
         <KpiCard
           delay={0.08}
-          label="План витрати"
-          value={formatUah(kpis.planExpense)}
+          label="Бюджет витрат"
+          value={formatUah(kpis.budgetExpense)}
           unit="грн"
           accent="expensePlan"
+          subtitle={
+            kpis.committedExpense > 0
+              ? `+ обовʼязання: ${formatUah(kpis.committedExpense)}`
+              : undefined
+          }
         />
         <KpiCard
           delay={0.12}
-          label="Факт витрати"
-          value={formatUah(kpis.factExpense)}
+          label="Каса виплат"
+          value={formatUah(kpis.actualCashExpense)}
           unit="грн"
           accent="expenseFact"
           subtitle={
-            kpis.planExpense > 0
-              ? `${((kpis.factExpense / kpis.planExpense) * 100).toFixed(0)}% від плану`
+            kpis.budgetExpense > 0
+              ? `${((kpis.actualCashExpense / kpis.budgetExpense) * 100).toFixed(0)}% від бюджету`
               : undefined
           }
         />

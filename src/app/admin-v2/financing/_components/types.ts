@@ -78,7 +78,22 @@ export type QuadrantStats = { sum: number; count: number };
 export type FinanceSummaryDTO = {
   plan: { income: QuadrantStats; expense: QuadrantStats };
   fact: { income: QuadrantStats; expense: QuadrantStats };
+  /**
+   * Safe Finance Migration Phase 4.4: семантичні полиці.
+   *   budget       — узгоджений бюджет (BUDGET_INCOME / BUDGET_EXPENSE).
+   *   commitments  — обовʼязання (COMMITTED_*).
+   *   actualCash   — реальні грошові рухи (ACTUAL_INCOME з FE + SupplierPayment).
+   *   unclassified — записи зі financeNature=null (legacy / STAGE_AUTO FACT).
+   * Поточні UI можуть продовжувати читати plan/fact; нові — переходять
+   * сюди.
+   */
+  budget: { income: QuadrantStats; expense: QuadrantStats };
+  commitments: { income: QuadrantStats; expense: QuadrantStats };
+  actualCash: { income: QuadrantStats; expense: QuadrantStats };
+  unclassified: { income: QuadrantStats; expense: QuadrantStats };
   balance: number;
+  /** Cash position з ACTUAL_INCOME − SupplierPayment. */
+  actualCashBalance: number;
   count: number;
 };
 
@@ -93,10 +108,18 @@ export type QuadrantPreset = {
   folderName?: string;
 };
 
+const EMPTY_STATS: QuadrantStats = { sum: 0, count: 0 };
+const EMPTY_PAIR = { income: EMPTY_STATS, expense: EMPTY_STATS };
+
 export const EMPTY_SUMMARY: FinanceSummaryDTO = {
-  plan: { income: { sum: 0, count: 0 }, expense: { sum: 0, count: 0 } },
-  fact: { income: { sum: 0, count: 0 }, expense: { sum: 0, count: 0 } },
+  plan: EMPTY_PAIR,
+  fact: EMPTY_PAIR,
+  budget: EMPTY_PAIR,
+  commitments: EMPTY_PAIR,
+  actualCash: EMPTY_PAIR,
+  unclassified: EMPTY_PAIR,
   balance: 0,
+  actualCashBalance: 0,
   count: 0,
 };
 
@@ -114,6 +137,7 @@ export type FinancingFilters = {
   type: string;
   status: string;
   source: string;
+  financeNature: string;
   subcategory: string;
   responsibleId: string;
   hasAttachments: string;

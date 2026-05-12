@@ -107,6 +107,15 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
   const planBalance = pi - pe;
   const delta = factBalance - planBalance;
 
+  // Safe Finance Migration Phase 4.4 v2: BUDGET / COMMITMENT / ACTUAL CASH
+  // strip. Точніша картина за тим самим даним:
+  //   budget   = узгоджений бюджет (BUDGET_INCOME − BUDGET_EXPENSE)
+  //   commit   = обовʼязання (COMMITTED_INCOME − COMMITTED_EXPENSE)
+  //   actual$ = реальний кеш (ACTUAL_INCOME клієнт − SupplierPayment)
+  const bud = summary.budget.income.sum - summary.budget.expense.sum;
+  const com = summary.commitments.income.sum - summary.commitments.expense.sum;
+  const cash = summary.actualCashBalance;
+
   // Ring scaling: each ring pair sized relative to its own max (so larger side = 100%, smaller shows proportion)
   const factMax = Math.max(fi, fe, 1);
   const planMax = Math.max(pi, pe, 1);
@@ -160,19 +169,19 @@ export function HeroBalance({ summary }: { summary: FinanceSummaryDTO }) {
           style={{ borderColor: T.borderSoft }}
         >
           <CompactStat
-            label="Факт"
-            value={formatCurrencyCompact(factBalance)}
-            tone={factPositive ? T.success : T.danger}
+            label="Каса"
+            value={formatCurrencyCompact(cash)}
+            tone={cash >= 0 ? T.success : T.danger}
           />
           <CompactStat
-            label="План"
-            value={formatCurrencyCompact(planBalance)}
-            tone={planPositive ? T.accentPrimary : T.danger}
+            label="Бюджет"
+            value={formatCurrencyCompact(bud)}
+            tone={bud >= 0 ? T.accentPrimary : T.danger}
           />
           <CompactStat
-            label="Δ"
-            value={(delta >= 0 ? "+" : "") + formatCurrencyCompact(delta)}
-            tone={deltaPositive ? T.success : T.danger}
+            label="Обовʼязання"
+            value={formatCurrencyCompact(com)}
+            tone={com >= 0 ? T.warning : T.danger}
           />
         </div>
         <ChevronDown

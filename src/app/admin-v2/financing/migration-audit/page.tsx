@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Loader2, RefreshCcw, Download, Presentation } from "lucide-react";
+import { ArrowLeft, Loader2, RefreshCcw, Download, Presentation, FileUp, X } from "lucide-react";
 
 type CountSum = { count: number; sum: number };
 type ByGroup<K extends string> = (CountSum & { [P in K]: string | null })[];
@@ -48,8 +48,25 @@ const fmtNumber = (n: number) =>
 
 export default function MigrationAuditPage() {
   const [data, setData] = useState<AuditResponse | null>(null);
+  const [baseline, setBaseline] = useState<AuditResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function uploadBaseline(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result)) as AuditResponse;
+        setBaseline(parsed);
+      } catch {
+        setError("Файл baseline не парситься як JSON");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = ""; // дозволити повторне завантаження того самого файлу
+  }
 
   async function load() {
     setLoading(true);
@@ -137,8 +154,34 @@ export default function MigrationAuditPage() {
               <Download className="size-4" />
               Завантажити baseline JSON
             </button>
+            <label
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
+              title="Завантажити попередній baseline JSON для diff-порівняння"
+            >
+              <FileUp className="size-4" />
+              {baseline ? "Замінити baseline" : "Порівняти з baseline"}
+              <input
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={uploadBaseline}
+              />
+            </label>
+            {baseline && (
+              <button
+                onClick={() => setBaseline(null)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                title="Прибрати baseline"
+              >
+                <X className="size-4" />
+              </button>
+            )}
           </div>
         </div>
+
+        {baseline && data && (
+          <DiffSection current={data} baseline={baseline} />
+        )}
 
         {error && (
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -279,6 +322,193 @@ export default function MigrationAuditPage() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function DiffSection({
+  current,
+  baseline,
+}: {
+  current: AuditResponse;
+  baseline: AuditResponse;
+}) {
+  const deltaNature = diffByKey(
+    baseline.byFinanceNature,
+    current.byFinanceNature,
+    (r) => r.financeNature ?? "—(null)",
+  );
+  const deltaSource = diffByKey(
+    baseline.bySource,
+    current.bySource,
+    (r) => r.source ?? "—",
+  );
+
+  return (
+    <section className="mb-6 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
+      <header className="mb-3 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-slate-900">
+          Diff vs baseline
+        </h3>
+        <span className="text-xs text-slate-600">
+          baseline: {new Date(baseline.capturedAt).toLocaleString("uk-UA")} →
+          поточний: {new Date(current.capturedAt).toLocaleString("uk-UA")}
+        </span>
+      </header>
+
+      <div className="mb-3 grid grid-cols-2 gap-3 text-sm">
+        <DiffStat
+          label="Всього записів"
+          before={baseline.totals.totalEntries}
+          after={current.totals.totalEntries}
+        />
+        <DiffStat
+          label="financeNature IS NULL"
+          before={baseline.totals.nullFinanceNature}
+          after={current.totals.nullFinanceNature}
+          invert
+        />
+        <DiffStat
+          label="Supplier debt (raw)"
+          before={baseline.supplierDebt.debtRaw}
+          after={current.supplierDebt.debtRaw}
+          invert
+        />
+        <DiffStat
+          label="Supplier debt (after allocations)"
+          before={baseline.supplierDebt.debtAfterAllocations}
+          after={current.supplierDebt.debtAfterAllocations}
+          invert
+        />
+      </div>
+
+      <DiffTable title="financeNature розподіл" rows={deltaNature} />
+      <DiffTable title="Source розподіл" rows={deltaSource} />
+    </section>
+  );
+}
+
+type DiffRow = {
+  key: string;
+  before: number;
+  after: number;
+  delta: number;
+};
+
+function diffByKey<T extends { count: number; sum: number }>(
+  base: T[],
+  cur: T[],
+  keyFn: (r: T) => string,
+): DiffRow[] {
+  const map = new Map<string, { before: number; after: number }>();
+  for (const r of base) {
+    map.set(keyFn(r), {
+      before: r.count,
+      after: 0,
+    });
+  }
+  for (const r of cur) {
+    const k = keyFn(r);
+    const e = map.get(k) ?? { before: 0, after: 0 };
+    e.after = r.count;
+    map.set(k, e);
+  }
+  return Array.from(map.entries())
+    .map(([key, { before, after }]) => ({
+      key,
+      before,
+      after,
+      delta: after - before,
+    }))
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+}
+
+function DiffStat({
+  label,
+  before,
+  after,
+  invert,
+}: {
+  label: string;
+  before: number;
+  after: number;
+  invert?: boolean;
+}) {
+  const delta = after - before;
+  const positive = delta > 0;
+  const color =
+    delta === 0
+      ? "text-slate-500"
+      : invert
+        ? positive
+          ? "text-red-600"
+          : "text-emerald-600"
+        : positive
+          ? "text-emerald-600"
+          : "text-red-600";
+  return (
+    <div className="rounded border border-slate-200 bg-white px-3 py-2">
+      <div className="text-xs text-slate-500">{label}</div>
+      <div className="mt-1 flex items-baseline gap-2">
+        <span className="text-base font-semibold">{fmtNumber(after)}</span>
+        <span className="text-xs text-slate-400">← {fmtNumber(before)}</span>
+        <span className={`ml-auto text-sm font-semibold ${color}`}>
+          {delta > 0 ? "+" : ""}
+          {fmtNumber(delta)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function DiffTable({ title, rows }: { title: string; rows: DiffRow[] }) {
+  return (
+    <div className="mt-3 overflow-x-auto rounded border border-slate-200 bg-white">
+      <header className="border-b border-slate-100 px-3 py-2">
+        <h4 className="text-sm font-semibold text-slate-800">{title}</h4>
+      </header>
+      <table className="w-full text-xs">
+        <thead className="bg-slate-50 text-left uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-3 py-1.5">key</th>
+            <th className="px-3 py-1.5 text-right">before</th>
+            <th className="px-3 py-1.5 text-right">after</th>
+            <th className="px-3 py-1.5 text-right">Δ</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-3 py-2 text-center text-slate-400">
+                нема даних
+              </td>
+            </tr>
+          )}
+          {rows.map((r) => (
+            <tr key={r.key} className="border-t border-slate-100">
+              <td className="px-3 py-1.5 font-medium">{r.key}</td>
+              <td className="px-3 py-1.5 text-right tabular-nums">
+                {fmtNumber(r.before)}
+              </td>
+              <td className="px-3 py-1.5 text-right tabular-nums">
+                {fmtNumber(r.after)}
+              </td>
+              <td
+                className={`px-3 py-1.5 text-right tabular-nums font-semibold ${
+                  r.delta === 0
+                    ? "text-slate-400"
+                    : r.delta > 0
+                      ? "text-emerald-600"
+                      : "text-red-600"
+                }`}
+              >
+                {r.delta > 0 ? "+" : ""}
+                {fmtNumber(r.delta)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

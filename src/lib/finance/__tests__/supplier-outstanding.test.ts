@@ -175,4 +175,25 @@ describe("computeSupplierOutstanding", () => {
     const arg = findManyMock.mock.calls[0][0] as { where: any };
     expect(arg.where.firmId).toBeUndefined();
   });
+
+  it("default — includeLegacyNullNature=true: OR з COMMITTED_EXPENSE і null", async () => {
+    findManyMock.mockResolvedValue([] as never);
+    await computeSupplierOutstanding({ firmId: null });
+    const arg = findManyMock.mock.calls[0][0] as { where: any };
+    expect(arg.where.OR).toEqual([
+      { financeNature: "COMMITTED_EXPENSE" },
+      { financeNature: null },
+    ]);
+  });
+
+  it("includeLegacyNullNature=false: тільки COMMITTED_EXPENSE", async () => {
+    findManyMock.mockResolvedValue([] as never);
+    await computeSupplierOutstanding({
+      firmId: null,
+      includeLegacyNullNature: false,
+    });
+    const arg = findManyMock.mock.calls[0][0] as { where: any };
+    expect(arg.where.financeNature).toBe("COMMITTED_EXPENSE");
+    expect(arg.where.OR).toBeUndefined();
+  });
 });

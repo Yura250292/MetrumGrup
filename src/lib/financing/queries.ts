@@ -8,7 +8,15 @@ export type FinanceListFilters = {
   type?: "INCOME" | "EXPENSE";
   kind?: "PLAN" | "FACT";
   status?: "DRAFT" | "PENDING" | "APPROVED" | "PAID";
-  source?: "MANUAL" | "ESTIMATE_AUTO";
+  source?: "MANUAL" | "ESTIMATE_AUTO" | "PROJECT_BUDGET" | "STAGE_AUTO" | "FOREMAN_REPORT";
+  financeNature?:
+    | "BUDGET_INCOME"
+    | "BUDGET_EXPENSE"
+    | "COMMITTED_INCOME"
+    | "COMMITTED_EXPENSE"
+    | "ACTUAL_INCOME"
+    | "ACTUAL_EXPENSE"
+    | "NULL";
   category?: string;
   subcategory?: string;
   costCodeId?: string;
@@ -79,7 +87,29 @@ export function parseListParams(
         ? statusRaw
         : undefined,
     source:
-      sourceRaw === "MANUAL" || sourceRaw === "ESTIMATE_AUTO" ? sourceRaw : undefined,
+      sourceRaw === "MANUAL"
+        || sourceRaw === "ESTIMATE_AUTO"
+        || sourceRaw === "PROJECT_BUDGET"
+        || sourceRaw === "STAGE_AUTO"
+        || sourceRaw === "FOREMAN_REPORT"
+        ? sourceRaw
+        : undefined,
+    financeNature: (() => {
+      const v = searchParams.get("financeNature");
+      if (!v) return undefined;
+      const valid = [
+        "BUDGET_INCOME",
+        "BUDGET_EXPENSE",
+        "COMMITTED_INCOME",
+        "COMMITTED_EXPENSE",
+        "ACTUAL_INCOME",
+        "ACTUAL_EXPENSE",
+        "NULL",
+      ] as const;
+      return (valid as readonly string[]).includes(v)
+        ? (v as FinanceListFilters["financeNature"])
+        : undefined;
+    })(),
     costCodeId: costCodeIdRaw,
     costType,
     counterpartyId: counterpartyIdRaw,
@@ -194,6 +224,10 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
   if (filters.kind) where.kind = filters.kind;
   if (filters.status) where.status = filters.status;
   if (filters.source) where.source = filters.source;
+  if (filters.financeNature) {
+    where.financeNature =
+      filters.financeNature === "NULL" ? null : filters.financeNature;
+  }
   if (filters.category) where.category = filters.category;
   if (filters.subcategory) where.subcategory = filters.subcategory;
   if (filters.costCodeId) where.costCodeId = filters.costCodeId;
@@ -293,7 +327,23 @@ export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Prom
     AND: [where, { NOT: { OR: projectBudgetExclusions } }],
   };
 
-  const [grouped, groupedByNature] = await Promise.all([
+  // SupplierPayment scope — переймаємо обмеження projectId/firmId з `where`
+  // якщо вони задані, ігноруємо інші FE-специфічні фільтри (status/kind/etc).
+  const whereScope = where as Prisma.FinanceEntryWhereInput & {
+    projectId?: string | { in?: string[] } | null;
+    firmId?: string | null;
+  };
+  const paymentWhere: Prisma.SupplierPaymentWhereInput = {
+    status: "POSTED",
+    ...(typeof whereScope.projectId === "string"
+      ? { projectId: whereScope.projectId }
+      : {}),
+    ...(typeof whereScope.firmId === "string"
+      ? { firmId: whereScope.firmId }
+      : {}),
+  };
+
+  const [grouped, groupedByNature, paymentsAgg] = await Promise.all([
     prisma.financeEntry.groupBy({
       by: ["kind", "type"],
       where: effectiveWhere,
@@ -305,6 +355,13 @@ export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Prom
     prisma.financeEntry.groupBy({
       by: ["financeNature", "type"],
       where: effectiveWhere,
+      _sum: { amount: true },
+      _count: { _all: true },
+    }),
+    // Phase 5.2 reader-derivation: SupplierPayment = справжній cash-out.
+    // FE.ACTUAL_EXPENSE для paid-on-import — дзеркало, в actualCash НЕ йде.
+    prisma.supplierPayment.aggregate({
+      where: paymentWhere,
       _sum: { amount: true },
       _count: { _all: true },
     }),
@@ -346,9 +403,15 @@ export async function computeSummary(where: Prisma.FinanceEntryWhereInput): Prom
     income: pick("COMMITTED_INCOME:INCOME"),
     expense: pick("COMMITTED_EXPENSE:EXPENSE"),
   };
+  // actualCash.expense — з SupplierPayment, НЕ з FE.ACTUAL_EXPENSE
+  // (щоб уникнути double-count з paid-on-import дзеркальних записів).
+  // actualCash.income — з FE.ACTUAL_INCOME (iter 13 додасть writer).
   const actualCash = {
     income: pick("ACTUAL_INCOME:INCOME"),
-    expense: pick("ACTUAL_EXPENSE:EXPENSE"),
+    expense: {
+      sum: Number(paymentsAgg._sum.amount ?? 0),
+      count: paymentsAgg._count._all,
+    },
   };
   const unclassified = {
     income: pick("NULL:INCOME"),

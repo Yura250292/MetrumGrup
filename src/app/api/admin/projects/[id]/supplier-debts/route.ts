@@ -46,6 +46,10 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
   assertCanAccessFirm(session, project.firmId);
 
   // Несплачені факти цього проєкту, привʼязані до постачальника.
+  // Safe Finance Migration Phase 4.1: основний фільтр — financeNature=
+  // COMMITTED_EXPENSE. Для legacy записів (null до Phase 3 backfill) лишаємо
+  // fallback через kind=FACT, status APPROVED|PENDING — щоб не зникли борги
+  // на період міграції. Після повного backfill цей fallback можна прибрати.
   const unpaid = await prisma.financeEntry.findMany({
     where: {
       projectId,
@@ -54,6 +58,10 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
       isArchived: false,
       status: { in: ["APPROVED", "PENDING"] },
       counterpartyId: { not: null },
+      OR: [
+        { financeNature: "COMMITTED_EXPENSE" },
+        { financeNature: null },
+      ],
       ...(firmId ? { firmId } : {}),
     },
     select: {

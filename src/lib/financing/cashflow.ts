@@ -140,8 +140,19 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
     ...(p.firmId ? { firmId: p.firmId } : {}),
   };
 
+  // Окремий filter для SupplierPayment (status POSTED тільки, не VOIDED).
+  const paymentBaseWhere = {
+    status: "POSTED" as const,
+    ...(p.projectId ? { projectId: p.projectId } : {}),
+    ...(p.firmId ? { firmId: p.firmId } : {}),
+  };
+
   // 1. Opening balance — fact entries before `from`.
-  const [openingAgg, openingActualAgg] = await Promise.all([
+  // Phase 4.2 + 5.2: actualCash opening — це FE.ACTUAL_INCOME (поки що оплати
+  // клієнта писатимуть це поле, iter 13) ПЛЮС SupplierPayment status=POSTED
+  // як cash-out. FE.ACTUAL_EXPENSE з статусом PAID — це дзеркальний запис
+  // для paid-on-import інвойсів, який уже покривається SupplierPayment.
+  const [openingAgg, openingActualIncomeAgg, openingPaymentsAgg] = await Promise.all([
     prisma.financeEntry.groupBy({
       by: ["type"],
       where: {
@@ -151,12 +162,17 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
       },
       _sum: { amount: true },
     }),
-    // Phase 4.2 opening на основі лише ACTUAL_* — accurate cash position.
-    prisma.financeEntry.groupBy({
-      by: ["type"],
+    prisma.financeEntry.aggregate({
       where: {
         ...baseWhere,
-        financeNature: { in: ["ACTUAL_INCOME", "ACTUAL_EXPENSE"] },
+        financeNature: "ACTUAL_INCOME",
+        occurredAt: { lt: from },
+      },
+      _sum: { amount: true },
+    }),
+    prisma.supplierPayment.aggregate({
+      where: {
+        ...paymentBaseWhere,
         occurredAt: { lt: from },
       },
       _sum: { amount: true },
@@ -167,28 +183,38 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
     const v = Number(r._sum.amount ?? 0);
     openingBalance += r.type === "INCOME" ? v : -v;
   }
-  let openingBalanceActualCash = 0;
-  for (const r of openingActualAgg) {
-    const v = Number(r._sum.amount ?? 0);
-    openingBalanceActualCash += r.type === "INCOME" ? v : -v;
-  }
+  const openingActualIncome = Number(openingActualIncomeAgg._sum.amount ?? 0);
+  const openingPayments = Number(openingPaymentsAgg._sum.amount ?? 0);
+  const openingBalanceActualCash = openingActualIncome - openingPayments;
 
   // 2. Entries inside the window — group by (kind, type, day) for fast bucketing.
   // We fetch raw entries (id, kind, type, amount, occurredAt) — this is OK because
   // even on a busy account a 90-day window is on the order of a few thousand rows.
-  const entries = await prisma.financeEntry.findMany({
-    where: {
-      ...baseWhere,
-      occurredAt: { gte: from, lt: to },
-    },
-    select: {
-      kind: true,
-      type: true,
-      amount: true,
-      occurredAt: true,
-      financeNature: true,
-    },
-  });
+  const [entries, payments] = await Promise.all([
+    prisma.financeEntry.findMany({
+      where: {
+        ...baseWhere,
+        occurredAt: { gte: from, lt: to },
+      },
+      select: {
+        kind: true,
+        type: true,
+        amount: true,
+        occurredAt: true,
+        financeNature: true,
+      },
+    }),
+    // Phase 5.2 reader-derivation: SupplierPayments — це справжні cash-out
+    // події. У cashflow.actualCash.outgoing йде ТІЛЬКИ цей джерело, щоб
+    // уникнути подвійного рахування з FE.ACTUAL_EXPENSE (paid-on-import).
+    prisma.supplierPayment.findMany({
+      where: {
+        ...paymentBaseWhere,
+        occurredAt: { gte: from, lt: to },
+      },
+      select: { amount: true, occurredAt: true },
+    }),
+  ]);
 
   // 3. Build empty bucket scaffold.
   const buckets: CashflowBucket[] = [];
@@ -229,13 +255,20 @@ export async function computeCashflow(p: CashflowParams): Promise<CashflowRespon
     ) {
       if (e.type === "INCOME") b.commitments.incoming += amt;
       else b.commitments.outgoing += amt;
-    } else if (
-      e.financeNature === "ACTUAL_INCOME"
-      || e.financeNature === "ACTUAL_EXPENSE"
-    ) {
-      if (e.type === "INCOME") b.actualCash.incoming += amt;
-      else b.actualCash.outgoing += amt;
+    } else if (e.financeNature === "ACTUAL_INCOME") {
+      // actualCash.incoming — поки що тільки з FE. У iter 13 додамо writer
+      // окремий для оплат клієнта (зараз сюди не пише ніхто).
+      b.actualCash.incoming += amt;
     }
+    // FE.ACTUAL_EXPENSE НЕ йде в actualCash.outgoing — їх покриває
+    // SupplierPayment-loop нижче, щоб уникнути double-count.
+  }
+
+  // Phase 5.2 reader-derivation: SupplierPayment → actualCash.outgoing.
+  for (const pay of payments) {
+    const idx = findBucketIdx(buckets, new Date(pay.occurredAt));
+    if (idx === -1) continue;
+    buckets[idx].actualCash.outgoing += Number(pay.amount);
   }
 
   // 5. Compute net + running balance + gaps.

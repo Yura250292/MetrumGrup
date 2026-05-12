@@ -141,6 +141,7 @@ export function FilterBar({
     filters.kind,
     filters.type,
     filters.status,
+    filters.financeNature,
     filters.category,
     filters.costCodeId,
     filters.costType,
@@ -240,6 +241,25 @@ export function FilterBar({
               shortLabel: STATUS_SHORT[s],
             }),
           )}
+        />
+
+        {/* Phase 4.4 v2: financeNature segmented filter */}
+        <SegmentedControl
+          size="sm"
+          ariaLabel="Фінансова природа"
+          value={filters.financeNature}
+          onChange={(v) =>
+            setFilters((p) => ({ ...p, financeNature: v as string }))
+          }
+          options={[
+            { value: "BUDGET_INCOME", label: "БЮД дохід", shortLabel: "БЮД↑", color: T.accentPrimary },
+            { value: "BUDGET_EXPENSE", label: "БЮД витрата", shortLabel: "БЮД↓", color: T.accentPrimary },
+            { value: "COMMITTED_INCOME", label: "ЗОБ дохід", shortLabel: "ЗОБ↑", color: T.warning },
+            { value: "COMMITTED_EXPENSE", label: "ЗОБ витрата", shortLabel: "ЗОБ↓", color: T.warning },
+            { value: "ACTUAL_INCOME", label: "КЕШ дохід", shortLabel: "КЕШ↑", color: T.success },
+            { value: "ACTUAL_EXPENSE", label: "КЕШ витрата", shortLabel: "КЕШ↓", color: T.success },
+            { value: "NULL", label: "Не класифіковано", shortLabel: "—", color: T.textMuted },
+          ]}
         />
 
         {/* Advanced toggle */}

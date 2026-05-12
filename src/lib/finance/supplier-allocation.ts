@@ -71,12 +71,13 @@ export type CounterpartyOutstanding = {
 
 /**
  * Канонічна формула боргу постачальнику: outstanding = amount − SUM(allocations)
- * для несплачених FE (kind=FACT, type=EXPENSE, status APPROVED|PENDING).
+ * для несплачених COMMITTED_EXPENSE FE.
  *
- * Замінник для прямих `aggregate({ status: { not: "PAID" } })` запитів,
- * які не субтрагують часткові оплати. Канонічна семантика з
- * /api/admin/projects/[id]/supplier-debts, винесена у спільний хелпер для
- * firm-wide агрегацій (owner KPI, supplier list).
+ * Після Phase 3 backfill основний фільтр — financeNature=COMMITTED_EXPENSE.
+ * Це чітке семантичне визначення "обовʼязання" (на відміну від kind=FACT
+ * який також ловив progress і ручні витрати). Для зворотної сумісності з
+ * legacy записами які ще лишилися null — за замовч. включаємо їх теж, через
+ * додатковий OR fallback. По завершенні backfill можна прибрати fallback.
  *
  * DRAFT не вважається боргом — не ввімкнено у статуси.
  *
@@ -85,16 +86,32 @@ export type CounterpartyOutstanding = {
  */
 export async function computeSupplierOutstanding(args: {
   firmId?: string | null;
+  /**
+   * Якщо true — включає legacy FE з financeNature=null поряд з COMMITTED_EXPENSE
+   * (типовий fallback під час перехідного періоду до повного backfill).
+   * Default true для безпеки на період міграції.
+   */
+  includeLegacyNullNature?: boolean;
 }): Promise<Map<string, CounterpartyOutstanding>> {
+  const includeLegacy = args.includeLegacyNullNature ?? true;
+  const baseWhere: Prisma.FinanceEntryWhereInput = {
+    type: "EXPENSE",
+    kind: "FACT",
+    isArchived: false,
+    status: { in: ["APPROVED", "PENDING"] },
+    counterpartyId: { not: null },
+    ...(args.firmId ? { firmId: args.firmId } : {}),
+  };
   const entries = await prisma.financeEntry.findMany({
-    where: {
-      type: "EXPENSE",
-      kind: "FACT",
-      isArchived: false,
-      status: { in: ["APPROVED", "PENDING"] },
-      counterpartyId: { not: null },
-      ...(args.firmId ? { firmId: args.firmId } : {}),
-    },
+    where: includeLegacy
+      ? {
+          ...baseWhere,
+          OR: [
+            { financeNature: "COMMITTED_EXPENSE" },
+            { financeNature: null },
+          ],
+        }
+      : { ...baseWhere, financeNature: "COMMITTED_EXPENSE" },
     select: {
       id: true,
       amount: true,

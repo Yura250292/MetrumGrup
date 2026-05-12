@@ -17,13 +17,13 @@ function firmWhere(firmId: string | null): FirmFilter {
 }
 
 export interface DashboardKpis {
-  /** Плановий дохід — сума PLAN income. */
+  /** Плановий дохід — сума PLAN income (legacy v1). */
   planIncome: number;
-  /** Планові витрати — сума PLAN expense. */
+  /** Планові витрати — сума PLAN expense (legacy v1). */
   planExpense: number;
-  /** Фактичні доходи — FACT income. */
+  /** Фактичні доходи — FACT income (legacy v1, мікс ACTUAL+null). */
   factIncome: number;
-  /** Фактичні витрати — FACT expense. */
+  /** Фактичні витрати — FACT expense (legacy v1, мікс ACTUAL+COMMITTED+null). */
   factExpense: number;
   /**
    * Заборгованість постачальникам — сума outstanding (amount − allocations)
@@ -37,16 +37,29 @@ export interface DashboardKpis {
   activeProjects: number;
   /** Кількість foreman звітів PENDING_APPROVAL. */
   pendingForemanReports: number;
+
+  /** Safe Finance Migration v2 shelves. */
+  budgetIncome: number;
+  budgetExpense: number;
+  committedIncome: number;
+  committedExpense: number;
+  /** Реальні надходження від клієнтів (FE.ACTUAL_INCOME). */
+  actualCashIncome: number;
+  /** Реальні виплати постачальникам (SupplierPayment status=POSTED). */
+  actualCashExpense: number;
 }
 
 export async function getDashboardKpis(firmId: string | null): Promise<DashboardKpis> {
   const where = firmWhere(firmId);
+  const paymentWhere = firmId ? { firmId, status: "POSTED" as const } : { status: "POSTED" as const };
 
   const [
     planIncome,
     planExpense,
     factIncome,
     factExpense,
+    natureRows,
+    paymentsAgg,
     outstandingByCp,
     activeProjects,
     pendingForemanReports,
@@ -67,6 +80,16 @@ export async function getDashboardKpis(firmId: string | null): Promise<Dashboard
       where: { ...where, kind: "FACT", type: "EXPENSE", isArchived: false },
       _sum: { amount: true },
     }),
+    // v2 shelves — групуємо за financeNature.
+    prisma.financeEntry.groupBy({
+      by: ["financeNature"],
+      where: { ...where, isArchived: false },
+      _sum: { amount: true },
+    }),
+    prisma.supplierPayment.aggregate({
+      where: paymentWhere,
+      _sum: { amount: true },
+    }),
     computeSupplierOutstanding({ firmId }),
     prisma.project.count({
       where: { ...where, status: "ACTIVE" },
@@ -81,6 +104,13 @@ export async function getDashboardKpis(firmId: string | null): Promise<Dashboard
     totalDebt += row.outstanding;
   }
 
+  const byNature: Record<string, number> = {};
+  for (const r of natureRows) {
+    if (r.financeNature) {
+      byNature[r.financeNature] = Number(r._sum.amount ?? 0);
+    }
+  }
+
   return {
     planIncome: Number(planIncome._sum.amount ?? 0),
     planExpense: Number(planExpense._sum.amount ?? 0),
@@ -90,6 +120,12 @@ export async function getDashboardKpis(firmId: string | null): Promise<Dashboard
     debtorCount: outstandingByCp.size,
     activeProjects,
     pendingForemanReports,
+    budgetIncome: byNature["BUDGET_INCOME"] ?? 0,
+    budgetExpense: byNature["BUDGET_EXPENSE"] ?? 0,
+    committedIncome: byNature["COMMITTED_INCOME"] ?? 0,
+    committedExpense: byNature["COMMITTED_EXPENSE"] ?? 0,
+    actualCashIncome: byNature["ACTUAL_INCOME"] ?? 0,
+    actualCashExpense: Number(paymentsAgg._sum.amount ?? 0),
   };
 }
 
