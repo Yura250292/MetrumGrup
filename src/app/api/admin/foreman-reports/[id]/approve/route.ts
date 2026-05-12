@@ -163,9 +163,39 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             counterpartyId: item.counterpartyId,
             financeNature: itemNature,
           },
-          select: { id: true },
+          select: { id: true, amount: true },
         });
         financeEntryIds.push(entry.id);
+
+        // Safe Finance Migration Phase 5.5: для ACTUAL_EXPENSE створюємо
+        // дзеркальний SupplierPayment + 1:1 Allocation. Це гарантує що
+        // cashflow.actualCash.outgoing (reader-derivation з SupplierPayment)
+        // побачить ці гроші. Без цього кроку foreman-ACTUAL був би "orphan":
+        // FE був би з status=PAID, але cash-out на дашборді не зʼявлявся.
+        //
+        // Тільки якщо є counterpartyId (MATERIAL/SUBCONTRACT з постачальником
+        // — для LABOR без контрагента готівковий cash-record відкладаємо).
+        if (itemNature === "ACTUAL_EXPENSE" && item.counterpartyId && report.firmId) {
+          await tx.supplierPayment.create({
+            data: {
+              counterpartyId: item.counterpartyId,
+              firmId: report.firmId,
+              projectId: report.projectId,
+              amount: entry.amount,
+              currency: item.currency,
+              occurredAt,
+              method: "CASH",
+              reference: null,
+              notes: `Foreman оплатив готівкою на місці (${report.id})`,
+              status: "POSTED",
+              createdById: reviewerId,
+              allocations: {
+                create: { financeEntryId: entry.id, amount: entry.amount },
+              },
+            },
+            select: { id: true },
+          });
+        }
 
         // Phase 3: оновлюємо довідник матеріалів цього постачальника +
         // детектимо подорожчання. Лише для MATERIAL items з прив'язаним постачальником

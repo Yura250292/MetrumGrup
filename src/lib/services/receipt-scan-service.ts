@@ -330,11 +330,15 @@ export async function approveScan(
       }
     }
 
+    const feNature = opts.financeNature ?? "COMMITTED_EXPENSE";
+    const feStatus: "APPROVED" | "PAID" =
+      feNature === "ACTUAL_EXPENSE" ? "PAID" : "APPROVED";
+
     const fe = await tx.financeEntry.create({
       data: {
         type: "EXPENSE",
         kind: "FACT",
-        status: "APPROVED",
+        status: feStatus,
         amount: scan.totalAmount ?? 0,
         currency: scan.currency,
         projectId: scan.projectId,
@@ -348,13 +352,45 @@ export async function approveScan(
         createdById: scan.createdById,
         approvedById: approverId,
         approvedAt: new Date(),
+        ...(feStatus === "PAID" ? { paidAt: new Date() } : {}),
         source: "MANUAL",
         // Safe Finance Migration: default — накладна/чек = матеріал отримано,
         // зобовʼязання постачальнику. Якщо approver обрав "оплачено на місці" —
-        // переходить у ACTUAL_EXPENSE (буде ще створено SupplierPayment окремо).
-        financeNature: opts.financeNature ?? "COMMITTED_EXPENSE",
+        // переходить у ACTUAL_EXPENSE + дзеркальний SupplierPayment.
+        financeNature: feNature,
       },
     });
+
+    // Phase 5.5: для ACTUAL_EXPENSE — дзеркальний SupplierPayment з 1:1
+    // allocation, щоб cashflow.actualCash побачив реальний cash-out.
+    // Потребує counterpartyId і firmId (з project).
+    if (feNature === "ACTUAL_EXPENSE" && counterpartyId) {
+      const project = await tx.project.findUnique({
+        where: { id: scan.projectId },
+        select: { firmId: true },
+      });
+      if (project?.firmId) {
+        await tx.supplierPayment.create({
+          data: {
+            counterpartyId,
+            firmId: project.firmId,
+            projectId: scan.projectId,
+            amount: scan.totalAmount ?? 0,
+            currency: scan.currency,
+            occurredAt,
+            method: "CASH",
+            reference: null,
+            notes: `Оплачено готівкою з чека/накладної (scan ${scan.id})`,
+            status: "POSTED",
+            createdById: approverId,
+            allocations: {
+              create: { financeEntryId: fe.id, amount: scan.totalAmount ?? 0 },
+            },
+          },
+          select: { id: true },
+        });
+      }
+    }
 
     if (scan.fileR2Key) {
       await tx.financeEntryAttachment.create({
