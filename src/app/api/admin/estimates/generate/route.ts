@@ -11,6 +11,7 @@ import { generateMaterialsContext } from "@/lib/materials-database";
 import { generateWorkItemsContext } from "@/lib/work-items-database";
 import { parseSpecificationText, generateSpecificationContext } from "@/lib/specification-parser";
 import { parsePDF } from "@/lib/pdf-helper";
+import { extractDocxText } from "@/lib/parsers/docx-parser";
 import { shouldUseR2, downloadFileFromR2 } from "@/lib/r2-client";
 import { cachedSystem, type AnthropicContentBlock } from "@/lib/ai/anthropic-cache";
 import { safeParseJson } from "@/lib/ai/json-parse";
@@ -108,8 +109,12 @@ async function extractFileContent(file: File): Promise<string | { text: string; 
     return `[${file.name}]\n${buffer.toString("utf-8")}`;
   }
 
-  if (fileName.endsWith(".doc") || fileName.endsWith(".docx")) {
-    return `[Word: ${file.name}]\n${buffer.toString("utf-8").replace(/[^\x20-\x7E\u0400-\u04FF\n\t ]/g, " ")}`;
+  if (fileName.endsWith(".doc") || fileName.endsWith(".docx") || fileName.endsWith(".odt")) {
+    const result = await extractDocxText(buffer, file.name);
+    if (result.ok) {
+      return `[Word: ${file.name}]\n${result.text}`;
+    }
+    return `[Word: ${file.name}] \u2014 ${result.message}`;
   }
 
   // For images - send as base64 to Gemini vision

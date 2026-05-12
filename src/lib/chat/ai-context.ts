@@ -1,10 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { downloadFileFromR2 } from "@/lib/r2-client";
 import { parsePDF } from "@/lib/pdf-helper";
+import { extractDocxText } from "@/lib/parsers/docx-parser";
 
 const MAX_TEXT_BYTES = 50_000; // 50 KB of extracted text total
 const MAX_PDF_BYTES = 4 * 1024 * 1024; // parse PDFs up to 4 MB
-const MAX_DOC_BYTES = 8 * 1024 * 1024; // parse DOC/DOCX up to 8 MB
 const MAX_TEXT_ATTACHMENT_BYTES = 200 * 1024; // text/* up to 200 KB
 const MAX_IMAGES = 5;
 
@@ -96,26 +96,13 @@ async function safeReadAttachmentText(
 
   // DOCX / DOC / ODT
   if (isDocxAttachment(att.name, att.mimeType)) {
-    if (att.size > MAX_DOC_BYTES) {
-      return {
-        block: null,
-        bytesUsed: 0,
-        note: `⚠ ${att.name}: пропущено документ (>8 MB)`,
-      };
-    }
     try {
       const buf = await downloadFileFromR2(att.r2Key);
-      const mammoth = await import("mammoth");
-      const { value: rawText } = await mammoth.extractRawText({ buffer: buf });
-      const cleaned = rawText.trim();
-      if (!cleaned) {
-        return {
-          block: null,
-          bytesUsed: 0,
-          note: `⚠ ${att.name}: документ без тексту`,
-        };
+      const result = await extractDocxText(buf, att.name);
+      if (!result.ok) {
+        return { block: null, bytesUsed: 0, note: `⚠ ${result.message}` };
       }
-      const { text, truncated } = truncate(cleaned, remainingBudget);
+      const { text, truncated } = truncate(result.text, remainingBudget);
       const header = `=== ДОКУМЕНТ: ${att.name} ===`;
       const block = `${header}\n${text}${truncated ? "\n…[обрізано]" : ""}\n=== /ДОКУМЕНТ ===`;
       return { block, bytesUsed: Buffer.byteLength(block, "utf-8") };

@@ -158,6 +158,23 @@ export default async function AdminV2Dashboard({
   }
   const activePeriod = (sp.period || "month") as PeriodId;
 
+  // Tabs `projects` and `team` are placeholders — render Hero + tabs only.
+  // Skip the heavy 40-query analytics fetch the overview tab needs.
+  if (activeTab === "projects" || activeTab === "team") {
+    return (
+      <PlaceholderDashboardTab
+        activeTab={activeTab}
+        firstName={firstName}
+        today={today}
+        role={activeRole}
+        firmId={firmId}
+        homeFirmId={homeFirmId}
+        isHome={isHome}
+        sessionRole={session.user.role as Role}
+      />
+    );
+  }
+
   const now = new Date();
   const { start: periodStart, end: periodEnd, label: periodLabel } = getPeriodRange(activePeriod, now);
   const { start: prevStart, end: prevEnd } = getPrevPeriodRange(activePeriod, now);
@@ -944,31 +961,178 @@ export default async function AdminV2Dashboard({
         </Suspense>
       )}
 
-      {/* Projects tab - placeholder */}
-      {activeTab === "projects" && (
-        <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+      {/* Financing tab — redirects via dashboard-tabs.tsx (client-side) */}
+    </div>
+  );
+}
+
+/**
+ * Render the Hero + tabs for placeholder tabs (projects / team) without firing
+ * the heavy overview-only Promise.all (~40 Prisma queries). Loads only the 5
+ * counts the HeroBlock actually displays.
+ */
+async function PlaceholderDashboardTab({
+  activeTab,
+  firstName,
+  today,
+  role,
+  firmId,
+  homeFirmId,
+  isHome,
+  sessionRole,
+}: {
+  activeTab: DashboardTabId;
+  firstName: string;
+  today: string;
+  role: Role;
+  firmId: string | null;
+  homeFirmId: string | null;
+  isHome: boolean;
+  sessionRole: Role;
+}) {
+  const PROJECT_SCOPE = projectNotTestByFirm(firmId);
+  const FINANCE_SCOPE = financeEntryNotTestByFirm(firmId);
+  const PAYMENT_SCOPE = paymentNotTestByFirm(firmId);
+  const TASK_SCOPE = taskNotTestByFirm(firmId);
+
+  const canSeeFinance = role === "SUPER_ADMIN";
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+
+  const [
+    activeProjectsCount,
+    overdueTasksCount,
+    overduePaymentsCount,
+    dueTodayTasksCount,
+    monthIncome,
+    monthExpense,
+  ] = await Promise.all([
+    prisma.project.count({ where: { status: "ACTIVE", ...PROJECT_SCOPE } }),
+    prisma.task.count({
+      where: {
+        isArchived: false,
+        status: { isDone: false },
+        dueDate: { lt: now },
+        ...TASK_SCOPE,
+      },
+    }),
+    prisma.payment.count({
+      where: {
+        status: { in: ["PENDING", "PARTIAL"] },
+        scheduledDate: { lt: now },
+        ...PAYMENT_SCOPE,
+      },
+    }),
+    prisma.task.count({
+      where: {
+        isArchived: false,
+        status: { isDone: false },
+        dueDate: { gte: startOfToday, lte: endOfToday },
+        ...TASK_SCOPE,
+      },
+    }),
+    canSeeFinance
+      ? prisma.financeEntry.aggregate({
+          where: {
+            type: "INCOME",
+            isArchived: false,
+            occurredAt: { gte: monthStart, lte: monthEnd },
+            ...FINANCE_SCOPE,
+          },
+          _sum: { amount: true },
+        })
+      : Promise.resolve({ _sum: { amount: 0 } } as { _sum: { amount: unknown } }),
+    canSeeFinance
+      ? prisma.financeEntry.aggregate({
+          where: {
+            type: "EXPENSE",
+            isArchived: false,
+            occurredAt: { gte: monthStart, lte: monthEnd },
+            ...FINANCE_SCOPE,
+          },
+          _sum: { amount: true },
+        })
+      : Promise.resolve({ _sum: { amount: 0 } } as { _sum: { amount: unknown } }),
+  ]);
+
+  const netProfit =
+    Number(monthIncome._sum.amount || 0) - Number(monthExpense._sum.amount || 0);
+
+  const activeFirmName =
+    (firmId && KNOWN_FIRMS[firmId]?.name) ?? "Усі фірми";
+  const homeFirmName =
+    (homeFirmId && KNOWN_FIRMS[homeFirmId]?.name) ?? "вашу фірму";
+  const showNonHomeBanner =
+    !isHome && sessionRole !== "SUPER_ADMIN" && homeFirmId;
+
+  return (
+    <div className="flex flex-col gap-4 sm:gap-6">
+      {showNonHomeBanner && (
+        <NonHomeFirmBanner
+          activeFirmName={activeFirmName}
+          homeFirmId={homeFirmId as string}
+          homeFirmName={homeFirmName}
+        />
+      )}
+      <HeroBlock
+        firstName={firstName}
+        today={today}
+        activeProjectsCount={activeProjectsCount}
+        overdueTasksCount={overdueTasksCount}
+        overduePaymentsCount={overduePaymentsCount}
+        netProfit={netProfit}
+        role={role}
+        dueTodayCount={dueTodayTasksCount}
+      />
+      <Suspense>
+        <DashboardTabs active={activeTab} />
+      </Suspense>
+      {activeTab === "projects" ? (
+        <div
+          className="rounded-2xl p-8 text-center"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
           <FolderKanban size={40} style={{ color: T.accentPrimary }} className="mx-auto mb-3" />
-          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>Огляд проєктів</h2>
-          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>Розширений вигляд проєктів скоро буде доступний</p>
-          <Link href="/admin-v2/projects" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white" style={{ backgroundColor: T.accentPrimary }}>
+          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>
+            Огляд проєктів
+          </h2>
+          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>
+            Розширений вигляд проєктів скоро буде доступний
+          </p>
+          <Link
+            href="/admin-v2/projects"
+            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
             Перейти до проєктів
           </Link>
         </div>
-      )}
-
-      {/* Team tab - placeholder */}
-      {activeTab === "team" && (
-        <div className="rounded-2xl p-8 text-center" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+      ) : (
+        <div
+          className="rounded-2xl p-8 text-center"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
           <Users size={40} style={{ color: T.teal }} className="mx-auto mb-3" />
-          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>Огляд команди</h2>
-          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>Розширений Team Pulse скоро буде доступний</p>
-          <Link href="/admin-v2/me?scope=all" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white" style={{ backgroundColor: T.teal }}>
+          <h2 className="text-lg font-bold mb-2" style={{ color: T.textPrimary }}>
+            Огляд команди
+          </h2>
+          <p className="text-[13px] mb-4" style={{ color: T.textSecondary }}>
+            Розширений Team Pulse скоро буде доступний
+          </p>
+          <Link
+            href="/admin-v2/me?scope=all"
+            className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-bold text-white"
+            style={{ backgroundColor: T.teal }}
+          >
             Переглянути команду
           </Link>
         </div>
       )}
-
-      {/* Financing tab — redirects via dashboard-tabs.tsx */}
     </div>
   );
 }

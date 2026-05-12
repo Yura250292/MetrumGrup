@@ -112,6 +112,8 @@ export function TabTasks({
     criticalIds: string[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [truncated, setTruncated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [quickTitle, setQuickTitle] = useState("");
   const [quickStageId, setQuickStageId] = useState(stages[0]?.id ?? "");
@@ -129,25 +131,47 @@ export function TabTasks({
 
   const loadAll = useCallback(async () => {
     setLoading(true);
+    setLoadedCount(0);
+    setTruncated(false);
     setError(null);
+    const PAGE_SIZE = 200;
+    const MAX_PAGES = 50; // hard safety cap = 10 000 tasks
     try {
-      const [tasksRes, statusesRes, labelsRes] = await Promise.all([
-        fetch(`/api/admin/projects/${projectId}/tasks?take=200`),
+      const [firstTasksRes, statusesRes, labelsRes] = await Promise.all([
+        fetch(`/api/admin/projects/${projectId}/tasks?take=${PAGE_SIZE}`),
         fetch(`/api/admin/projects/${projectId}/statuses`),
         fetch(`/api/admin/projects/${projectId}/labels`),
       ]);
-      if (tasksRes.status === 404) {
+      if (firstTasksRes.status === 404) {
         setError("Модуль задач вимкнений для цього проєкту");
         setTasks([]);
         return;
       }
-      if (!tasksRes.ok || !statusesRes.ok || !labelsRes.ok) {
+      if (!firstTasksRes.ok || !statusesRes.ok || !labelsRes.ok) {
         throw new Error("Не вдалось завантажити дані");
       }
-      const tasksJson = await tasksRes.json();
+
+      const firstJson = await firstTasksRes.json();
+      const collected: TaskListItem[] = firstJson.data?.items ?? [];
+      let nextCursor: string | null = firstJson.data?.nextCursor ?? null;
+      setLoadedCount(collected.length);
+
+      for (let page = 1; page < MAX_PAGES && nextCursor; page++) {
+        const res = await fetch(
+          `/api/admin/projects/${projectId}/tasks?take=${PAGE_SIZE}&cursor=${encodeURIComponent(nextCursor)}`,
+        );
+        if (!res.ok) break;
+        const json = await res.json();
+        const items: TaskListItem[] = json.data?.items ?? [];
+        collected.push(...items);
+        nextCursor = json.data?.nextCursor ?? null;
+        setLoadedCount(collected.length);
+      }
+      if (nextCursor) setTruncated(true);
+
       const statusesJson = await statusesRes.json();
       const labelsJson = await labelsRes.json();
-      setTasks(tasksJson.data?.items ?? []);
+      setTasks(collected);
       setStatuses(statusesJson.data ?? []);
       setLabels(labelsJson.data ?? []);
     } catch (e) {
@@ -374,10 +398,27 @@ export function TabTasks({
         </button>
       </div>
 
+      {/* Task count / truncation banner */}
+      {!loading && tasks.length > 0 && (
+        <div
+          className="flex items-center justify-between gap-2 px-3 py-1.5 text-[12px]"
+          style={{ color: T.textMuted }}
+        >
+          <span>Задач: {tasks.length}</span>
+          {truncated && (
+            <span style={{ color: T.danger ?? "#ef4444" }}>
+              Показано перші {tasks.length}. Звузьте фільтр статусом, щоб побачити решту.
+            </span>
+          )}
+        </div>
+      )}
+
       {/* View body */}
       {loading ? (
         <div className="rounded-2xl p-8 text-center text-sm" style={{ color: T.textMuted }}>
-          Завантаження…
+          {loadedCount > 0
+            ? `Завантажено ${loadedCount} задач…`
+            : "Завантаження…"}
         </div>
       ) : view === "kanban" ? (
         <TaskKanban

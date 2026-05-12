@@ -9,6 +9,7 @@ import {
   type QuadrantPreset,
   EMPTY_SUMMARY,
 } from "./types";
+import { startOfLocalDayISO, endOfLocalDayISO } from "@/lib/dates/local-day-range";
 
 const DEFAULT_FILTERS: FinancingFilters = {
   projectId: "",
@@ -79,13 +80,12 @@ export function useFinancingData({
     if (filters.costType) p.set("costType", filters.costType);
     if (filters.counterpartyId) p.set("counterpartyId", filters.counterpartyId);
 
-    // Date range
-    if (filters.from) p.set("from", new Date(filters.from).toISOString());
-    if (filters.to) {
-      const d = new Date(filters.to);
-      d.setHours(23, 59, 59, 999);
-      p.set("to", d.toISOString());
-    }
+    // Date range — interpret <input type="date"> as a calendar day in the
+    // browser's local timezone (Europe/Kiev for most users), then send UTC
+    // bounds. Using new Date(YYYY-MM-DD).toISOString() shifts by the local
+    // offset and drops entries around midnight from the result.
+    if (filters.from) p.set("from", startOfLocalDayISO(filters.from));
+    if (filters.to) p.set("to", endOfLocalDayISO(filters.to));
 
     // Search
     if (filters.search.trim()) p.set("search", filters.search.trim());

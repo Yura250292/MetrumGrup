@@ -8,6 +8,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import type { FinancingFilters } from "./types";
+import { startOfLocalDayISO, endOfLocalDayISO } from "@/lib/dates/local-day-range";
 
 type Bucket = "PROJECTS" | "SALARY" | "ADMIN";
 type Granularity = "TOTAL" | "DAY" | "WEEK" | "MONTH" | "YEAR";
@@ -218,12 +219,8 @@ export function TabPivot({
 
     p.set("granularity", granularity);
 
-    if (filters.from) p.set("from", new Date(filters.from).toISOString());
-    if (filters.to) {
-      const d = new Date(filters.to);
-      d.setHours(23, 59, 59, 999);
-      p.set("to", d.toISOString());
-    }
+    if (filters.from) p.set("from", startOfLocalDayISO(filters.from));
+    if (filters.to) p.set("to", endOfLocalDayISO(filters.to));
 
     if (filters.archived) p.set("archived", "true");
 
@@ -339,8 +336,8 @@ export function TabPivot({
   }
 
   const showScopeFilter = !scope;
-  const fromIso = filters.from ? new Date(filters.from).toISOString() : undefined;
-  const toIso = filters.to ? new Date(filters.to).toISOString() : undefined;
+  const fromIso = filters.from ? startOfLocalDayISO(filters.from) : undefined;
+  const toIso = filters.to ? endOfLocalDayISO(filters.to) : undefined;
 
   return (
     <div className="flex flex-col gap-3">
