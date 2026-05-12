@@ -50,6 +50,7 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
   // COMMITTED_EXPENSE. Для legacy записів (null до Phase 3 backfill) лишаємо
   // fallback через kind=FACT, status APPROVED|PENDING — щоб не зникли борги
   // на період міграції. Після повного backfill цей fallback можна прибрати.
+  // Phase 6 хардгард: explicit ACTUAL_* виключаємо навіть якщо status підходить.
   const unpaid = await prisma.financeEntry.findMany({
     where: {
       projectId,
@@ -58,6 +59,7 @@ export async function GET(_request: NextRequest, ctx: Ctx) {
       isArchived: false,
       status: { in: ["APPROVED", "PENDING"] },
       counterpartyId: { not: null },
+      NOT: { financeNature: { in: ["ACTUAL_EXPENSE", "ACTUAL_INCOME"] } },
       OR: [
         { financeNature: "COMMITTED_EXPENSE" },
         { financeNature: null },

@@ -785,13 +785,35 @@ model ForemanReportItem {
   /// Snapshot для UI tooltip ("було 200, стало 250").
   previousUnitPrice Decimal? @db.Decimal(12, 2)
 
+  /// Safe Finance Migration Phase 5.5: стаття витрат бюджету (для коректної
+  /// агрегації у budget-matrix). Менеджер обирає під час review. Якщо null —
+  /// FE.costCodeId теж null і запис лягає у "(без статті)" bucket.
+  costCodeId String?
+  /// Намір menager-а при approve: COMMITTED = борг постачальнику (ще не оплачено),
+  /// ACTUAL = вже оплачено (готівка на місці / попередня оплата). Якщо null —
+  /// approve route fallback до body.financeNature або default COMMITTED.
+  /// Зберігається на item-рівні щоб менеджер міг частково підготувати рішення
+  /// до повного approve.
+  financeIntent ForemanFinanceIntent?
+  /// Опційна нотатка менеджера по позиції (буде в FinanceEntry.description).
+  managerNote String?
+
   report       ForemanReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
   counterparty Counterparty?  @relation("ForemanItemSupplier", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  costCode     CostCode?      @relation("ForemanItemCostCode", fields: [costCodeId], references: [id], onDelete: SetNull)
   financeEntry FinanceEntry?  @relation("ForemanReportItemToFinanceEntry")
 
   @@index([reportId])
   @@index([counterpartyId])
+  @@index([costCodeId])
   @@map("foreman_report_items")
+}
+
+/// Намір menager-а на approve foreman-звіту (per-item).
+/// Мапиться на FinanceEntry.financeNature при approve.
+enum ForemanFinanceIntent {
+  COMMITTED
+  ACTUAL
 }
 
 /// Довідник матеріалів конкретного постачальника. Накопичується автоматично
@@ -3245,12 +3267,13 @@ model CostCode {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  parent         CostCode?      @relation("CostCodeTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children       CostCode[]     @relation("CostCodeTree")
-  financeEntries FinanceEntry[]
-  estimateItems  EstimateItem[]
-  timesheets     Timesheet[]    @relation("CostCodeTimesheets")
-  kb2Items       KB2FormItem[]  @relation("CostCodeKB2")
+  parent             CostCode?            @relation("CostCodeTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children           CostCode[]           @relation("CostCodeTree")
+  financeEntries     FinanceEntry[]
+  estimateItems      EstimateItem[]
+  timesheets         Timesheet[]          @relation("CostCodeTimesheets")
+  kb2Items           KB2FormItem[]        @relation("CostCodeKB2")
+  foremanReportItems ForemanReportItem[]  @relation("ForemanItemCostCode")
 
   @@index([parentId, sortOrder])
   @@index([isActive])

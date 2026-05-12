@@ -107,12 +107,30 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
       for (const item of report.items) {
         const category = item.costType === "LABOR" ? "Робота" : "Матеріали";
-        const description = [
+        const baseDescription = [
           item.unit && item.quantity ? `${item.quantity} ${item.unit}` : null,
           item.unitPrice ? `${item.unitPrice} грн/${item.unit ?? "од"}` : null,
         ]
           .filter(Boolean)
           .join(" × ");
+        const description = [baseDescription || null, item.managerNote || null]
+          .filter(Boolean)
+          .join(" · ");
+
+        // Safe Finance Migration Phase 5.5: per-item rule:
+        //   1) item.financeIntent (явне рішення менеджера у UI) — пріоритет.
+        //   2) body-level intent (approveNature) — fallback для bulk-approve.
+        //   3) default COMMITTED_EXPENSE.
+        // ACTUAL_EXPENSE → status=PAID (запис не має лежати у боргах
+        // постачальника). COMMITTED_EXPENSE → status=APPROVED.
+        const itemNature: "COMMITTED_EXPENSE" | "ACTUAL_EXPENSE" =
+          item.financeIntent === "ACTUAL"
+            ? "ACTUAL_EXPENSE"
+            : item.financeIntent === "COMMITTED"
+              ? "COMMITTED_EXPENSE"
+              : approveNature;
+        const itemStatus: "APPROVED" | "PAID" =
+          itemNature === "ACTUAL_EXPENSE" ? "PAID" : "APPROVED";
 
         const entry = await tx.financeEntry.create({
           data: {
@@ -128,21 +146,22 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             title: item.title,
             description: description || null,
             costType: item.costType,
+            // Safe Finance Migration Phase 5.5: copy costCode з item у FE —
+            // менеджер вибирає при review, budget-matrix агрегує по статті.
+            costCodeId: item.costCodeId,
             source: "FOREMAN_REPORT",
             isDerived: false,
-            status: "APPROVED",
+            status: itemStatus,
             approvedAt: new Date(),
             approvedById: reviewerId,
+            ...(itemStatus === "PAID" ? { paidAt: new Date() } : {}),
             createdById: report.createdById,
             updatedById: reviewerId,
             foremanReportItemId: item.id,
             // Phase 2: переносимо постачальника на FinanceEntry — це критично для
             // агрегацій боргу (counterparty-dossier рахує SUM unpaid expenses).
             counterpartyId: item.counterpartyId,
-            // Safe Finance Migration Phase 5.5: за замовч. — incurred liability.
-            // Якщо approver передав intent ACTUAL_EXPENSE (виконроб уже оплатив
-            // готівкою на місці) — пишемо ACTUAL_EXPENSE. Default COMMITTED.
-            financeNature: approveNature,
+            financeNature: itemNature,
           },
           select: { id: true },
         });

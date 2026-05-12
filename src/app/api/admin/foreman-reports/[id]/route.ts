@@ -31,6 +31,7 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         orderBy: { sortOrder: "asc" },
         include: {
           counterparty: { select: { id: true, name: true } },
+          costCode: { select: { id: true, code: true, name: true } },
         },
       },
       attachments: true,

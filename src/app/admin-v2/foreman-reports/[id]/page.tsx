@@ -23,6 +23,18 @@ type Item = {
   counterparty: { id: string; name: string } | null;
   priceIncreaseFlag: boolean;
   previousUnitPrice: string | null;
+  // Safe Finance Migration Phase 5.5: per-item рішення менеджера.
+  costCodeId: string | null;
+  costCode: { id: string; code: string; name: string } | null;
+  financeIntent: "COMMITTED" | "ACTUAL" | null;
+  managerNote: string | null;
+};
+
+type CostCodeOption = {
+  id: string;
+  code: string;
+  name: string;
+  defaultCostType: string | null;
 };
 
 type SupplierSearchResult = {
@@ -82,6 +94,8 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
   const [rejectReason, setRejectReason] = useState("");
   const [pendingSuppliers, setPendingSuppliers] = useState<PendingSupplier[] | null>(null);
   const [pickerForItem, setPickerForItem] = useState<string | null>(null);
+  const [costCodes, setCostCodes] = useState<CostCodeOption[]>([]);
+  const [codePickerForItem, setCodePickerForItem] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/admin/foreman-reports/${id}`)
@@ -93,6 +107,67 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
       .catch(() => setError("Не вдалось завантажити звіт"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Завантажуємо довідник cost-codes один раз.
+  useEffect(() => {
+    fetch("/api/admin/financing/cost-codes", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => setCostCodes(d.data ?? []))
+      .catch(() => {});
+  }, []);
+
+  async function patchItem(itemId: string, body: Record<string, unknown>) {
+    const res = await fetch(`/api/admin/foreman-reports/${id}/items/${itemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      alert(j.error ?? "Не вдалось зберегти");
+      return false;
+    }
+    return true;
+  }
+
+  async function setItemIntent(itemId: string, intent: "COMMITTED" | "ACTUAL") {
+    const ok = await patchItem(itemId, { financeIntent: intent });
+    if (!ok) return;
+    setReport((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: prev.items.map((it) =>
+              it.id === itemId ? { ...it, financeIntent: intent } : it,
+            ),
+          }
+        : prev,
+    );
+  }
+
+  async function setItemCostCode(itemId: string, code: CostCodeOption | null) {
+    const ok = await patchItem(itemId, { costCodeId: code?.id ?? null });
+    if (!ok) return;
+    setReport((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: prev.items.map((it) =>
+              it.id === itemId
+                ? {
+                    ...it,
+                    costCodeId: code?.id ?? null,
+                    costCode: code
+                      ? { id: code.id, code: code.code, name: code.name }
+                      : null,
+                  }
+                : it,
+            ),
+          }
+        : prev,
+    );
+    setCodePickerForItem(null);
+  }
 
   if (loading) return <div className="p-6 text-zinc-500">Завантаження…</div>;
   if (error || !report) return <div className="p-6 text-rose-400">{error ?? "Звіт не знайдено"}</div>;
@@ -291,6 +366,8 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
               <th className="text-left px-4 py-2">Тип</th>
               <th className="text-left px-4 py-2">Назва</th>
               <th className="text-left px-4 py-2 min-w-[180px]">Постачальник</th>
+              <th className="text-left px-4 py-2 min-w-[160px]">Стаття</th>
+              <th className="text-left px-4 py-2 min-w-[140px]">Запис</th>
               <th className="text-right px-4 py-2">К-сть</th>
               <th className="text-left px-4 py-2">Од.</th>
               <th className="text-right px-4 py-2">Ціна</th>
@@ -350,6 +427,62 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
                       <span className="text-xs text-zinc-600">—</span>
                     )}
                   </td>
+
+                  {/* Phase 5.5: cost-code picker per item */}
+                  <td className="px-4 py-2">
+                    {codePickerForItem === it.id ? (
+                      <CostCodePicker
+                        options={costCodes}
+                        currentCostType={it.costType}
+                        onPick={(opt) => setItemCostCode(it.id, opt)}
+                        onClose={() => setCodePickerForItem(null)}
+                      />
+                    ) : it.costCode ? (
+                      <button
+                        onClick={() => setCodePickerForItem(it.id)}
+                        className="text-xs text-sky-300 bg-sky-500/10 rounded px-2 py-1 hover:bg-sky-500/20"
+                        title={it.costCode.name}
+                      >
+                        ✓ {it.costCode.code}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setCodePickerForItem(it.id)}
+                        className="text-xs text-zinc-500 bg-zinc-800/40 rounded px-2 py-1 hover:bg-zinc-700/50"
+                      >
+                        + стаття
+                      </button>
+                    )}
+                  </td>
+
+                  {/* Phase 5.5: per-item intent toggle (Борг / Оплачено) */}
+                  <td className="px-4 py-2">
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setItemIntent(it.id, "COMMITTED")}
+                        className={`text-[10px] font-bold px-2 py-1 rounded transition ${
+                          it.financeIntent === "COMMITTED"
+                            ? "bg-amber-500/30 text-amber-200 border border-amber-500/60"
+                            : "bg-zinc-800/50 text-zinc-400 border border-transparent hover:bg-zinc-800"
+                        }`}
+                        title="Зобовʼязання: матеріал отримано, постачальнику ще не оплачено"
+                      >
+                        Борг
+                      </button>
+                      <button
+                        onClick={() => setItemIntent(it.id, "ACTUAL")}
+                        className={`text-[10px] font-bold px-2 py-1 rounded transition ${
+                          it.financeIntent === "ACTUAL"
+                            ? "bg-emerald-500/30 text-emerald-200 border border-emerald-500/60"
+                            : "bg-zinc-800/50 text-zinc-400 border border-transparent hover:bg-zinc-800"
+                        }`}
+                        title="Реально оплачено готівкою / з картки на місці"
+                      >
+                        Оплачено
+                      </button>
+                    </div>
+                  </td>
+
                   <td className="px-4 py-2 text-right">{it.quantity ?? "—"}</td>
                   <td className="px-4 py-2">{it.unit ?? "—"}</td>
                   <td className="px-4 py-2 text-right">
@@ -380,24 +513,67 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
       </div>
 
       {canDecide && !showReject && (
-        <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-6 py-4">
-          <div className="max-w-4xl mx-auto flex gap-3">
-            <button
-              onClick={() => setShowReject(true)}
-              disabled={submitting}
-              className="flex-1 px-6 py-3 rounded-xl bg-rose-600/20 text-rose-300 border border-rose-600/40 hover:bg-rose-600/30 font-semibold disabled:opacity-50"
-            >
-              Відхилити
-            </button>
-            <button
-              onClick={handleApprove}
-              disabled={submitting}
-              className="flex-[2] px-6 py-3 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-400 disabled:opacity-50"
-            >
-              {submitting ? "Затвердження…" : "Підтвердити та записати у витрати"}
-            </button>
+        <>
+          {/* Phase 5.5: preview перед approve — який запис створиться */}
+          <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4 mb-4">
+            <div className="text-xs font-semibold uppercase text-zinc-500 mb-2">
+              Що зʼявиться у фінансуванні після підтвердження
+            </div>
+            <div className="space-y-1.5 text-xs">
+              {(() => {
+                const commitItems = report.items.filter(
+                  (i) => i.financeIntent !== "ACTUAL",
+                );
+                const actualItems = report.items.filter(
+                  (i) => i.financeIntent === "ACTUAL",
+                );
+                const noCodeCount = report.items.filter((i) => !i.costCodeId).length;
+                return (
+                  <>
+                    <div className="flex justify-between text-amber-200">
+                      <span>
+                        🟡 Зобовʼязання (борг постачальникам): {commitItems.length}
+                      </span>
+                      <span className="font-bold">
+                        {commitItems.reduce((s, i) => s + Number(i.amount), 0).toFixed(2)} грн
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-emerald-200">
+                      <span>🟢 Реальна оплата (готівка/картка на місці): {actualItems.length}</span>
+                      <span className="font-bold">
+                        {actualItems.reduce((s, i) => s + Number(i.amount), 0).toFixed(2)} грн
+                      </span>
+                    </div>
+                    {noCodeCount > 0 && (
+                      <div className="text-zinc-500 pt-1 border-t border-zinc-800">
+                        ⚠ {noCodeCount} позиц(ій) без статті — попадуть у "(без статті)"
+                        у budget-vs-actual
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
           </div>
-        </div>
+          <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-6 py-4">
+            <div className="max-w-4xl mx-auto flex gap-3">
+              <button
+                onClick={() => setShowReject(true)}
+                disabled={submitting}
+                className="flex-1 px-6 py-3 rounded-xl bg-rose-600/20 text-rose-300 border border-rose-600/40 hover:bg-rose-600/30 font-semibold disabled:opacity-50"
+              >
+                Відхилити
+              </button>
+              <button
+                onClick={handleApprove}
+                disabled={submitting}
+                className="flex-[2] px-6 py-3 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-400 disabled:opacity-50"
+              >
+                {submitting ? "Затвердження…" : "Підтвердити та записати у витрати"}
+              </button>
+            </div>
+          </div>
+        </>
       )}
 
       {showReject && (
@@ -553,6 +729,83 @@ function AdminSupplierPicker({
             {creating ? "Створення…" : `+ Створити: «${search.trim()}»`}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CostCodePicker({
+  options,
+  currentCostType,
+  onPick,
+  onClose,
+}: {
+  options: CostCodeOption[];
+  currentCostType: string;
+  onPick: (opt: CostCodeOption | null) => void;
+  onClose: () => void;
+}) {
+  const [search, setSearch] = useState("");
+  // Підказка: спочатку показуємо статті які матчать поточний costType.
+  const filtered = options
+    .filter(
+      (o) =>
+        !search ||
+        o.name.toLowerCase().includes(search.toLowerCase()) ||
+        o.code.toLowerCase().includes(search.toLowerCase()),
+    )
+    .sort((a, b) => {
+      const aMatch = a.defaultCostType === currentCostType ? 0 : 1;
+      const bMatch = b.defaultCostType === currentCostType ? 0 : 1;
+      if (aMatch !== bMatch) return aMatch - bMatch;
+      return a.code.localeCompare(b.code, "uk");
+    });
+
+  return (
+    <div className="rounded-lg bg-zinc-950 border border-sky-500/40 p-2 space-y-1.5 min-w-[260px]">
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Стаття витрат…"
+          className="flex-1 px-2 py-1 rounded bg-zinc-900 border border-zinc-800 text-white text-xs focus:border-sky-500 focus:outline-none"
+        />
+        <button
+          onClick={() => onPick(null)}
+          className="text-[10px] text-zinc-500 px-1.5 py-1 rounded hover:bg-zinc-800"
+          title="Прибрати статтю"
+        >
+          ×
+        </button>
+        <button
+          onClick={onClose}
+          className="text-[10px] text-zinc-500 px-1.5 py-1 rounded"
+        >
+          ✕
+        </button>
+      </div>
+      <div className="max-h-40 overflow-y-auto -mx-1 px-1 space-y-0.5">
+        {filtered.length === 0 && (
+          <div className="text-[11px] text-zinc-500 px-1 py-0.5">
+            Нічого не знайдено
+          </div>
+        )}
+        {filtered.slice(0, 30).map((o) => (
+          <button
+            key={o.id}
+            onClick={() => onPick(o)}
+            className="w-full flex items-center justify-between gap-2 text-left px-2 py-1 rounded text-xs bg-zinc-900 hover:bg-sky-500/15"
+          >
+            <span className="truncate">
+              <span className="text-zinc-500 mr-1.5">{o.code}</span>
+              {o.name}
+            </span>
+            {o.defaultCostType === currentCostType && (
+              <span className="text-[9px] text-emerald-400">match</span>
+            )}
+          </button>
+        ))}
       </div>
     </div>
   );

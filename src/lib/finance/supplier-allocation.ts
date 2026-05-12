@@ -100,6 +100,10 @@ export async function computeSupplierOutstanding(args: {
     isArchived: false,
     status: { in: ["APPROVED", "PENDING"] },
     counterpartyId: { not: null },
+    // Phase 6 хардгард: explicit ACTUAL_EXPENSE НЕ потрапляє у борг навіть
+    // якщо випадково має status APPROVED (foreman ACTUAL з status=PAID
+    // уже виключений status-фільтром, але цей NOT — захист на майбутнє).
+    NOT: { financeNature: { in: ["ACTUAL_EXPENSE", "ACTUAL_INCOME"] } },
     ...(args.firmId ? { firmId: args.firmId } : {}),
   };
   const entries = await prisma.financeEntry.findMany({

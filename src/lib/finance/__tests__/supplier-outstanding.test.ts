@@ -196,4 +196,13 @@ describe("computeSupplierOutstanding", () => {
     expect(arg.where.financeNature).toBe("COMMITTED_EXPENSE");
     expect(arg.where.OR).toBeUndefined();
   });
+
+  it("Phase 6 hardguard: NOT { financeNature IN [ACTUAL_*] } у where", async () => {
+    findManyMock.mockResolvedValue([] as never);
+    await computeSupplierOutstanding({ firmId: null });
+    const arg = findManyMock.mock.calls[0][0] as { where: any };
+    expect(arg.where.NOT).toEqual({
+      financeNature: { in: ["ACTUAL_EXPENSE", "ACTUAL_INCOME"] },
+    });
+  });
 });
