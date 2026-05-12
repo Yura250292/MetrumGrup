@@ -357,23 +357,69 @@ async function resolveLinkedContext(ctx: BotContext): Promise<
     };
   }
 
+  // Group is closed and trusted — accept expenses from ANY participant.
+  // If the sender has linked their Metrum account, use it as the author;
+  // otherwise fall back to a system SUPER_ADMIN. The original Telegram
+  // handle is preserved in the entry's description for audit.
   const botUser = await prisma.telegramBotUser.findUnique({
     where: { telegramId: BigInt(fromId) },
     select: { user: { select: { id: true, isActive: true, firmId: true } } },
   });
-  const author = botUser?.user;
-  if (!author || !author.isActive) {
-    const handle = ctx.from?.username ? '@' + ctx.from.username : ctx.from?.first_name || '';
-    return {
-      ok: false,
-      replyToUser: `${handle ? handle + ', ' : ''}спочатку прив\'яжи Metrum-акаунт — напиши боту в особисті: /start`,
-    };
-  }
-  if (author.firmId && project.firmId && author.firmId !== project.firmId) {
-    return { ok: false, silent: true };
+  const linked = botUser?.user;
+
+  if (linked?.isActive) {
+    // If linked user is from a different firm than the project — silently
+    // ignore (they're writing in a forum that doesn't belong to their firm).
+    if (linked.firmId && project.firmId && linked.firmId !== project.firmId) {
+      return { ok: false, silent: true };
+    }
+    return { ok: true, ctx: { project, author: { id: linked.id, firmId: linked.firmId }, threadId } };
   }
 
-  return { ok: true, ctx: { project, author: { id: author.id, firmId: author.firmId }, threadId } };
+  // Not linked — fallback to a system admin. Closed-group flow.
+  const fallbackId = await resolveFallbackAdmin(project.firmId);
+  if (!fallbackId) {
+    return {
+      ok: false,
+      replyToUser: '⚠️ У системі немає SUPER_ADMIN — додайте його через адмін-панель.',
+    };
+  }
+  return { ok: true, ctx: { project, author: { id: fallbackId, firmId: project.firmId }, threadId } };
+}
+
+/**
+ * Cache mapping firmId → SUPER_ADMIN user.id used when the original sender
+ * isn't linked to Metrum. Cleared at process restart.
+ */
+const fallbackAdminCache = new Map<string, string>();
+async function resolveFallbackAdmin(firmId: string | null): Promise<string | null> {
+  const key = firmId ?? '_global';
+  const cached = fallbackAdminCache.get(key);
+  if (cached) return cached;
+
+  const { prisma } = await import('../../src/lib/prisma');
+  // Prefer same-firm admin → global (no firm) admin → any admin.
+  let admin =
+    firmId &&
+    (await prisma.user.findFirst({
+      where: { role: 'SUPER_ADMIN', isActive: true, firmId },
+      select: { id: true },
+    }));
+  if (!admin) {
+    admin = await prisma.user.findFirst({
+      where: { role: 'SUPER_ADMIN', isActive: true, firmId: null },
+      select: { id: true },
+    });
+  }
+  if (!admin) {
+    admin = await prisma.user.findFirst({
+      where: { role: 'SUPER_ADMIN', isActive: true },
+      select: { id: true },
+    });
+  }
+  if (!admin) return null;
+  fallbackAdminCache.set(key, admin.id);
+  return admin.id;
 }
 
 async function uploadBufferToR2(
@@ -748,6 +794,9 @@ export async function handleExpenseSendCallback(ctx: BotContext, draftId: string
         description: `Telegram (${username}): ${item.rawLine || draft.rawText.slice(0, 200)}${target.isRouted ? `\n[auto-routed from ${project.title} → Кв ${item.apartmentNumber}]` : ''}`,
         createdById: draft.authorUserId,
         source: 'MANUAL',
+        // Safe Finance Migration: Telegram-витрата = понесене зобовʼязання у полях,
+        // не cash. Реальна оплата постачальнику йде окремим SupplierPayment.
+        financeNature: 'COMMITTED_EXPENSE',
       },
       select: { id: true, title: true, amount: true },
     });

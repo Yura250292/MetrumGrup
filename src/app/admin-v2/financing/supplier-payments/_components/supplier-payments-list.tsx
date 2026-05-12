@@ -4,9 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { uk } from "date-fns/locale";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2, Plus } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+import { CreatePaymentModal } from "./create-payment-modal";
 
 type Payment = {
   id: string;
@@ -40,6 +41,7 @@ const STATUS_FILTERS = [
 export function SupplierPaymentsList({ currentUserRole }: { currentUserRole: string }) {
   // MANAGER веде облік постачальників разом з Адміном → дозволено void платежів.
   const canVoid = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
+  const canCreate = ["SUPER_ADMIN", "MANAGER", "FINANCIER"].includes(currentUserRole);
 
   const [items, setItems] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +51,7 @@ export function SupplierPaymentsList({ currentUserRole }: { currentUserRole: str
   const [to, setTo] = useState("");
   const [search, setSearch] = useState("");
   const [voidingId, setVoidingId] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -181,7 +184,28 @@ export function SupplierPaymentsList({ currentUserRole }: { currentUserRole: str
           }}
           title="До дати"
         />
+        {canCreate && (
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="ml-auto flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.97]"
+            style={{ backgroundColor: T.accentPrimary }}
+            title="Записати реальну оплату постачальнику. FIFO-розкидка по неоплачених рахунках."
+          >
+            <Plus size={14} /> Записати оплату
+          </button>
+        )}
       </div>
+
+      {createOpen && (
+        <CreatePaymentModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={() => {
+            setCreateOpen(false);
+            void load();
+          }}
+        />
+      )}
 
       {/* Summary */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

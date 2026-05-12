@@ -13,7 +13,7 @@ interface RouteContext {
   params: Promise<{ id: string }>;
 }
 
-export async function POST(_req: NextRequest, { params }: RouteContext) {
+export async function POST(req: NextRequest, { params }: RouteContext) {
   const { id } = await params;
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
@@ -21,6 +21,20 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
   const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
   const role = getActiveRoleFromSession(session, activeFirmId);
   if (!role || !FOREMAN_REPORT_REVIEWERS.includes(role)) return forbiddenResponse();
+
+  // Safe Finance Migration: дозволяємо approver-у обрати "було оплачено
+  // на місці" → ACTUAL_EXPENSE. За замовч. COMMITTED_EXPENSE.
+  let approveNature: "COMMITTED_EXPENSE" | "ACTUAL_EXPENSE" = "COMMITTED_EXPENSE";
+  try {
+    const body = await req.json().catch(() => ({}));
+    if (body?.financeNature === "ACTUAL_EXPENSE") {
+      approveNature = "ACTUAL_EXPENSE";
+    } else if (body?.entryIntent === "ACTUAL") {
+      approveNature = "ACTUAL_EXPENSE";
+    }
+  } catch {
+    // empty body OK
+  }
 
   const report = await prisma.foremanReport.findFirst({
     where: { id, firmId: activeFirmId ?? undefined },
@@ -125,10 +139,10 @@ export async function POST(_req: NextRequest, { params }: RouteContext) {
             // Phase 2: переносимо постачальника на FinanceEntry — це критично для
             // агрегацій боргу (counterparty-dossier рахує SUM unpaid expenses).
             counterpartyId: item.counterpartyId,
-            // Safe Finance Migration Phase 5.5: foreman report = incurred
-            // liability у полях, не cash. Перевести у ACTUAL_EXPENSE можна
-            // лише коли є явний reimbursement-flow (поки відсутній).
-            financeNature: "COMMITTED_EXPENSE",
+            // Safe Finance Migration Phase 5.5: за замовч. — incurred liability.
+            // Якщо approver передав intent ACTUAL_EXPENSE (виконроб уже оплатив
+            // готівкою на місці) — пишемо ACTUAL_EXPENSE. Default COMMITTED.
+            financeNature: approveNature,
           },
           select: { id: true },
         });

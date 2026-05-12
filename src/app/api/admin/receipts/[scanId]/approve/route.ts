@@ -7,7 +7,7 @@ import { approveScan, ReceiptScanError } from "@/lib/services/receipt-scan-servi
 const APPROVER_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
 
 export async function POST(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: { params: Promise<{ scanId: string }> },
 ) {
   const session = await auth();
@@ -15,8 +15,27 @@ export async function POST(
   if (!APPROVER_ROLES.includes(session.user.role)) return forbiddenResponse();
 
   const { scanId } = await ctx.params;
+  // Safe Finance Migration: дозволяємо approver-у вибрати намір.
+  // За замовч. COMMITTED_EXPENSE (стандарт: накладну отримали, ще не платили).
+  let financeNature: "COMMITTED_EXPENSE" | "ACTUAL_EXPENSE" | undefined;
   try {
-    const result = await approveScan(scanId, session.user.id);
+    const body = await request.json().catch(() => ({}));
+    if (
+      body?.financeNature === "COMMITTED_EXPENSE"
+      || body?.financeNature === "ACTUAL_EXPENSE"
+    ) {
+      financeNature = body.financeNature;
+    } else if (body?.entryIntent === "ACTUAL") {
+      financeNature = "ACTUAL_EXPENSE";
+    } else if (body?.entryIntent === "COMMITTED") {
+      financeNature = "COMMITTED_EXPENSE";
+    }
+  } catch {
+    // empty body OK
+  }
+
+  try {
+    const result = await approveScan(scanId, session.user.id, { financeNature });
     return NextResponse.json({ data: result });
   } catch (err) {
     if (err instanceof ReceiptScanError) {

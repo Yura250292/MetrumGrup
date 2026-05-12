@@ -264,7 +264,18 @@ export interface ApprovedScanSummary {
  * Approve a scan atomically. Race-protected via where: { status: PENDING }
  * inside the transaction — concurrent approvals roll back on P2025.
  */
-export async function approveScan(scanId: string, approverId: string): Promise<ApprovedScanSummary> {
+export async function approveScan(
+  scanId: string,
+  approverId: string,
+  opts: {
+    /**
+     * Safe Finance Migration: явний намір. За замовч. COMMITTED_EXPENSE
+     * (накладна = матеріал отримано, ще не оплачено). Якщо користувач
+     * вибрав "оплачено готівкою на місці" — передає ACTUAL_EXPENSE.
+     */
+    financeNature?: "COMMITTED_EXPENSE" | "ACTUAL_EXPENSE";
+  } = {},
+): Promise<ApprovedScanSummary> {
   const preflight = await prisma.receiptScan.findUnique({
     where: { id: scanId },
     include: { lineItems: true },
@@ -338,9 +349,10 @@ export async function approveScan(scanId: string, approverId: string): Promise<A
         approvedById: approverId,
         approvedAt: new Date(),
         source: "MANUAL",
-        // Safe Finance Migration: накладна / чек = матеріал отримано, зобовʼязання
-        // постачальнику. Реальна оплата йде окремим SupplierPayment пізніше.
-        financeNature: "COMMITTED_EXPENSE",
+        // Safe Finance Migration: default — накладна/чек = матеріал отримано,
+        // зобовʼязання постачальнику. Якщо approver обрав "оплачено на місці" —
+        // переходить у ACTUAL_EXPENSE (буде ще створено SupplierPayment окремо).
+        financeNature: opts.financeNature ?? "COMMITTED_EXPENSE",
       },
     });
 
