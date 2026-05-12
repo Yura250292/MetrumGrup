@@ -13,22 +13,34 @@ async function guard() {
   return { session };
 }
 
+// undefined → undefined (не передане → не торкаємо БД), null/"" → null
+// (явна очистка). Старий transform конвертував undefined у null — це баг
+// у partial-PATCH сценарії (див. employees/route.ts).
 const nullableString = z
   .string()
   .trim()
   .optional()
   .nullable()
-  .transform((v) => (v === "" || v === undefined ? null : v));
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
+    return v;
+  });
 
 const emailField = z
   .string()
   .trim()
   .optional()
   .nullable()
-  .transform((v) => (v === "" || v === undefined ? null : v))
-  .refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
-    message: "Невірний email",
-  });
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
+    return v;
+  })
+  .refine(
+    (v) => v === undefined || v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+    { message: "Невірний email" },
+  );
 
 const rateTypeEnum = z.enum(["PER_HOUR", "PER_DAY", "PER_MONTH", "PER_SQM", "PER_PIECE"]);
 
@@ -44,7 +56,12 @@ const createSchema = z.object({
     .string()
     .optional()
     .nullable()
-    .transform((v) => (v ? new Date(v) : null)),
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      if (v === "" || v === null) return null;
+      const d = new Date(v);
+      return isNaN(d.getTime()) ? null : d;
+    }),
   notes: nullableString,
   isActive: z.boolean().default(true),
 });

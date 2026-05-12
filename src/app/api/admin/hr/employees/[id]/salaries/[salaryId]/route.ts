@@ -17,12 +17,22 @@ async function guard() {
   return { session };
 }
 
+// undefined → undefined (поле не передане → не торкаємо), null/"" → null.
+// Старий transform конвертував undefined у null — баг для partial-PATCH.
 const dateField = z
   .string()
   .optional()
   .nullable()
-  .transform((v) => (v ? new Date(v) : null))
-  .refine((d) => d === null || !Number.isNaN(d.getTime()), { message: "Невірна дата" });
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d;
+  })
+  .refine(
+    (d) => d === undefined || d === null || !Number.isNaN(d.getTime()),
+    { message: "Невірна дата" },
+  );
 
 const updateSchema = z.object({
   baseSalary: z.number().nonnegative().optional(),

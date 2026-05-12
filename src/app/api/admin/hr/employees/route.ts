@@ -23,29 +23,49 @@ async function guard() {
   return { session };
 }
 
+// КРИТИЧНО: undefined → undefined (поле не передане → не торкаємо), null/"" → null
+// (явна очистка). Старий transform конвертував undefined у null, через що PATCH
+// з одним полем стирав усі інші nullable-поля у БД. Регресія була виявлена
+// 2026-05-12 на Стецькому після створення підрозділу.
 const nullableString = z
   .string()
   .trim()
   .optional()
   .nullable()
-  .transform((v) => (v === "" || v === undefined ? null : v));
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
+    return v;
+  });
 
 const emailField = z
   .string()
   .trim()
   .optional()
   .nullable()
-  .transform((v) => (v === "" || v === undefined ? null : v))
-  .refine((v) => v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v), {
-    message: "Невірний email",
-  });
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
+    return v;
+  })
+  .refine(
+    (v) => v === undefined || v === null || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+    { message: "Невірний email" },
+  );
 
 const dateField = z
   .string()
   .optional()
   .nullable()
-  .transform((v) => (v ? new Date(v) : null))
-  .refine((d) => d === null || !isNaN(d.getTime()), { message: "Невірна дата" });
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  })
+  .refine((d) => d === undefined || d === null || !isNaN(d.getTime()), {
+    message: "Невірна дата",
+  });
 
 const createSchema = z.object({
   fullName: z.string().trim().min(1, "ПІБ обовʼязкове").optional(),
@@ -171,9 +191,12 @@ export async function PATCH(request: NextRequest) {
   const { id, ...data } = parsed.data;
   // Якщо змінилася будь-яка з частин імені — пересчитуємо fullName, щоб
   // legacy пошук/displays не розʼїхалися. Беремо актуальні дані з БД для
-  // не-перевизначених полів.
+  // не-перевизначених полів. ВАЖЛИВО: перевіряємо за значенням
+  // (не `key in data`), бо після zod-parse усі ключі присутні з undefined.
   const namePartTouched =
-    "lastName" in data || "firstName" in data || "middleName" in data;
+    data.lastName !== undefined ||
+    data.firstName !== undefined ||
+    data.middleName !== undefined;
   let fullNameOverride: string | undefined;
   if (namePartTouched && data.fullName === undefined) {
     const cur = await prisma.employee.findUnique({
@@ -181,9 +204,9 @@ export async function PATCH(request: NextRequest) {
       select: { lastName: true, firstName: true, middleName: true, fullName: true },
     });
     if (cur) {
-      const lastName = "lastName" in data ? data.lastName : cur.lastName;
-      const firstName = "firstName" in data ? data.firstName : cur.firstName;
-      const middleName = "middleName" in data ? data.middleName : cur.middleName;
+      const lastName = data.lastName !== undefined ? data.lastName : cur.lastName;
+      const firstName = data.firstName !== undefined ? data.firstName : cur.firstName;
+      const middleName = data.middleName !== undefined ? data.middleName : cur.middleName;
       const composed = composeFullName(lastName, firstName, middleName);
       if (composed) fullNameOverride = composed;
     }
@@ -194,12 +217,12 @@ export async function PATCH(request: NextRequest) {
   // Якщо до Employee привʼязаний User І зачеплено sync-поля — оновлюємо обидва
   // рядки в одній транзакції (Employee — джерело правди для name/email/phone).
   const syncTriggered =
-    "lastName" in data ||
-    "firstName" in data ||
-    "middleName" in data ||
-    "email" in data ||
-    "phone" in data ||
-    "isActive" in data;
+    data.lastName !== undefined ||
+    data.firstName !== undefined ||
+    data.middleName !== undefined ||
+    data.email !== undefined ||
+    data.phone !== undefined ||
+    data.isActive !== undefined;
 
   try {
     const employee = await prisma.$transaction(async (tx) => {
