@@ -1,0 +1,155 @@
+{
+  "capturedAt": "2026-05-12T15:20:33.464Z",
+  "totals": {
+    "totalEntries": 5331,
+    "nullFinanceNature": 4541
+  },
+  "bySource": [
+    {
+      "source": "ESTIMATE_AUTO",
+      "count": 324,
+      "sum": 11484447.48
+    },
+    {
+      "source": "MANUAL",
+      "count": 1723,
+      "sum": 168031085.24
+    }
+  ],
+  "byKindType": [
+    {
+      "kind": "FACT",
+      "type": "EXPENSE",
+      "count": 1087,
+      "sum": 22655223.46
+    },
+    {
+      "kind": "FACT",
+      "type": "INCOME",
+      "count": 2,
+      "sum": 65600
+    },
+    {
+      "kind": "PLAN",
+      "type": "EXPENSE",
+      "count": 735,
+      "sum": 20739270.7
+    },
+    {
+      "kind": "PLAN",
+      "type": "INCOME",
+      "count": 223,
+      "sum": 136055438.56
+    }
+  ],
+  "byStatus": [
+    {
+      "status": "DRAFT",
+      "count": 362,
+      "sum": 119739872.48
+    },
+    {
+      "status": "PAID",
+      "count": 414,
+      "sum": 10494759.01
+    },
+    {
+      "status": "PENDING",
+      "count": 1,
+      "sum": 88000
+    },
+    {
+      "status": "APPROVED",
+      "count": 1270,
+      "sum": 49192901.23
+    }
+  ],
+  "factBySource": [
+    {
+      "source": "MANUAL",
+      "count": 1089,
+      "sum": 22720823.46
+    }
+  ],
+  "byFinanceNature": [
+    {
+      "financeNature": null,
+      "count": 1258,
+      "sum": 30125242.03
+    },
+    {
+      "financeNature": "ACTUAL_INCOME",
+      "count": 2,
+      "sum": 65600
+    },
+    {
+      "financeNature": "BUDGET_INCOME",
+      "count": 208,
+      "sum": 9421680.56
+    },
+    {
+      "financeNature": "ACTUAL_EXPENSE",
+      "count": 400,
+      "sum": 10278679.89
+    },
+    {
+      "financeNature": "BUDGET_EXPENSE",
+      "count": 116,
+      "sum": 2062766.92
+    },
+    {
+      "financeNature": "COMMITTED_INCOME",
+      "count": 15,
+      "sum": 126633758
+    },
+    {
+      "financeNature": "COMMITTED_EXPENSE",
+      "count": 48,
+      "sum": 927805.32
+    }
+  ],
+  "bySourceFinanceNature": [
+    {
+      "source": "ESTIMATE_AUTO",
+      "financeNature": "BUDGET_INCOME",
+      "count": 208,
+      "sum": 9421680.56
+    },
+    {
+      "source": "MANUAL",
+      "financeNature": "ACTUAL_INCOME",
+      "count": 2,
+      "sum": 65600
+    },
+    {
+      "source": "MANUAL",
+      "financeNature": "COMMITTED_EXPENSE",
+      "count": 48,
+      "sum": 927805.32
+    },
+    {
+      "source": "MANUAL",
+      "financeNature": "COMMITTED_INCOME",
+      "count": 15,
+      "sum": 126633758
+    },
+    {
+      "source": "ESTIMATE_AUTO",
+      "financeNature": "BUDGET_EXPENSE",
+      "count": 116,
+      "sum": 2062766.92
+    },
+    {
+      "source": "MANUAL",
+      "financeNature": "ACTUAL_EXPENSE",
+      "count": 400,
+      "sum": 10278679.89
+    }
+  ],
+  "supplierDebt": {
+    "unpaidFactCount": 63,
+    "debtRaw": 1453878.24,
+    "allocationsTotal": 10494759.01,
+    "debtAfterAllocations": 0
+  }
+}
