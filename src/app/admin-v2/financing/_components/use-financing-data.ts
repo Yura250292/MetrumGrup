@@ -219,6 +219,8 @@ export function useFinancingData({
       costCodeId: values.costCodeId || null,
       costType: values.costType || null,
       currency: "UAH",
+      // Safe Finance Migration: бекенд мапить entryIntent → financeNature.
+      ...(values.entryIntent ? { entryIntent: values.entryIntent } : {}),
       ...((!isEdit && effectiveFolderId) ? { folderId: effectiveFolderId } : {}),
     };
 

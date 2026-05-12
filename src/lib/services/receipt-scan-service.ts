@@ -338,6 +338,9 @@ export async function approveScan(scanId: string, approverId: string): Promise<A
         approvedById: approverId,
         approvedAt: new Date(),
         source: "MANUAL",
+        // Safe Finance Migration: накладна / чек = матеріал отримано, зобовʼязання
+        // постачальнику. Реальна оплата йде окремим SupplierPayment пізніше.
+        financeNature: "COMMITTED_EXPENSE",
       },
     });
 

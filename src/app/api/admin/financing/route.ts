@@ -250,11 +250,60 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Safe Finance Migration Phase 5.3 (client payments): manual FACT INCOME =
-    // оплата клієнта = cash actual. Інші манульні записи лишаються
-    // незакласифікованими (ambiguous: можуть бути зарплата, оренда, тощо).
-    const inferredNature: "ACTUAL_INCOME" | null =
-      kind === "FACT" && type === "INCOME" ? "ACTUAL_INCOME" : null;
+    // Safe Finance Migration: entryIntent — намір користувача замість сирого
+    // kind/type. Мапиться на конкретний financeNature. Приймаємо також явне
+    // financeNature для backwards-compat і автоматизації.
+    //
+    // Поточні значення intent:
+    //   BUDGET    — це плановий запис (kind=PLAN буде виставлено автоматично
+    //               вище у формі; у нас лише фіксуємо BUDGET_*)
+    //   COMMITTED — це вже понесене зобовʼязання (нарахували/отримали але
+    //               ще не оплатили): COMMITTED_*
+    //   ACTUAL    — це реальний рух грошей (оплатили/отримали гроші): ACTUAL_*
+    //
+    // Якщо intent не передано — fallback на legacy логіку:
+    //   FACT INCOME → ACTUAL_INCOME (клієнтська оплата),
+    //   усе інше → null.
+    type Intent = "BUDGET" | "COMMITTED" | "ACTUAL";
+    type Nature =
+      | "BUDGET_INCOME"
+      | "BUDGET_EXPENSE"
+      | "COMMITTED_INCOME"
+      | "COMMITTED_EXPENSE"
+      | "ACTUAL_INCOME"
+      | "ACTUAL_EXPENSE";
+
+    const validNatures: Nature[] = [
+      "BUDGET_INCOME",
+      "BUDGET_EXPENSE",
+      "COMMITTED_INCOME",
+      "COMMITTED_EXPENSE",
+      "ACTUAL_INCOME",
+      "ACTUAL_EXPENSE",
+    ];
+
+    const intentRaw =
+      typeof body.entryIntent === "string" ? body.entryIntent.toUpperCase() : null;
+    const intent: Intent | null =
+      intentRaw === "BUDGET" || intentRaw === "COMMITTED" || intentRaw === "ACTUAL"
+        ? intentRaw
+        : null;
+
+    const explicitNature =
+      typeof body.financeNature === "string"
+        && validNatures.includes(body.financeNature as Nature)
+        ? (body.financeNature as Nature)
+        : null;
+
+    let inferredNature: Nature | null = null;
+    if (explicitNature) {
+      inferredNature = explicitNature;
+    } else if (intent) {
+      inferredNature = `${intent}_${type}` as Nature;
+    } else if (kind === "FACT" && type === "INCOME") {
+      // Legacy fallback: безініціативна manual FACT INCOME = клієнтська оплата.
+      inferredNature = "ACTUAL_INCOME";
+    }
 
     const entry = await prisma.financeEntry.create({
       data: {

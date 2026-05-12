@@ -108,6 +108,18 @@ const RULES: Rule[] = [
     },
   },
   {
+    id: "G.receipt_scan_derived",
+    label: "MANUAL FACT EXPENSE з ReceiptScan (накладна/чек) → COMMITTED_EXPENSE",
+    nature: "COMMITTED_EXPENSE",
+    where: {
+      source: "MANUAL",
+      kind: "FACT",
+      type: "EXPENSE",
+      receiptScan: { isNot: null },
+      financeNature: null,
+    },
+  },
+  {
     id: "C.invoice_paid",
     label: "MANUAL FACT EXPENSE invoice + PAID → ACTUAL_EXPENSE",
     nature: "ACTUAL_EXPENSE",

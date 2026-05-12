@@ -38,6 +38,14 @@ const COST_TYPE_LABELS: Record<CostType, string> = {
 export type EntryFormValues = {
   kind: "PLAN" | "FACT";
   type: "INCOME" | "EXPENSE";
+  /**
+   * Намір користувача — мапиться у financeNature на бекенді:
+   *   BUDGET    → BUDGET_{type}    (плановий бюджет)
+   *   COMMITTED → COMMITTED_{type} (зобовʼязання / нараховано)
+   *   ACTUAL    → ACTUAL_{type}    (реально оплачено / надійшло)
+   * "" = старий потік без класифікації (back-compat для edit існуючих).
+   */
+  entryIntent: "" | "BUDGET" | "COMMITTED" | "ACTUAL";
   amount: string;
   occurredAt: string;
   projectId: string;
@@ -52,6 +60,24 @@ export type EntryFormValues = {
   costType: CostType | "";
   pendingFiles: File[];
 };
+
+/** Мапа фінансової природи → intent (для defaulting на edit). */
+function natureToIntent(
+  nature: string | null | undefined,
+): EntryFormValues["entryIntent"] {
+  if (!nature) return "";
+  if (nature.startsWith("BUDGET_")) return "BUDGET";
+  if (nature.startsWith("COMMITTED_")) return "COMMITTED";
+  if (nature.startsWith("ACTUAL_")) return "ACTUAL";
+  return "";
+}
+
+/** Дефолт intent на створення з kind. PLAN → BUDGET, FACT → COMMITTED. */
+function defaultIntentForKind(
+  kind: "PLAN" | "FACT",
+): EntryFormValues["entryIntent"] {
+  return kind === "PLAN" ? "BUDGET" : "COMMITTED";
+}
 
 export function EntryFormModal({
   mode,
@@ -88,6 +114,7 @@ export function EntryFormModal({
       return {
         kind: initial.kind,
         type: initial.type,
+        entryIntent: natureToIntent(initial.financeNature),
         amount: String(Number(initial.amount)),
         occurredAt: initial.occurredAt.slice(0, 10),
         projectId: initial.projectId ?? "",
@@ -103,9 +130,11 @@ export function EntryFormModal({
         pendingFiles: [],
       };
     }
+    const presetKind = preset?.kind ?? "FACT";
     return {
-      kind: preset?.kind ?? "FACT",
+      kind: presetKind,
       type: preset?.type ?? "EXPENSE",
+      entryIntent: defaultIntentForKind(presetKind),
       amount: "",
       occurredAt: new Date().toISOString().slice(0, 10),
       projectId: scope ? scope.id : "",
@@ -464,7 +493,16 @@ export function EntryFormModal({
                     <button
                       key={k}
                       type="button"
-                      onClick={() => setValues((p) => ({ ...p, kind: k }))}
+                      onClick={() =>
+                        setValues((p) => ({
+                          ...p,
+                          kind: k,
+                          // Auto-syn intent: PLAN→BUDGET, FACT→COMMITTED (за замовч.)
+                          entryIntent: p.entryIntent
+                          ? p.entryIntent
+                          : defaultIntentForKind(k),
+                        }))
+                      }
                       className="rounded-lg px-3 py-2 text-sm font-bold transition"
                       style={{
                         backgroundColor: active
@@ -526,6 +564,92 @@ export function EntryFormModal({
                   );
                 })}
               </div>
+            </div>
+          </div>
+
+          {/* Phase 4.4 Safe Finance Migration: намір замість сирого kind/type.
+              3 явні бізнес-інтенти, які мапляться на financeNature. */}
+          <div className="flex flex-col gap-1.5">
+            <span
+              className="text-[10px] font-bold tracking-wider"
+              style={{ color: T.textMuted }}
+            >
+              ЩО САМЕ ВІДБУЛОСЯ? *
+            </span>
+            <div
+              className="grid grid-cols-3 gap-1 rounded-xl p-1"
+              style={{ backgroundColor: T.panelSoft }}
+            >
+              {(
+                [
+                  {
+                    v: "BUDGET",
+                    label:
+                      values.type === "INCOME"
+                        ? "Плановий дохід"
+                        : "Планова витрата",
+                    hint: "узгоджений бюджет",
+                    color: T.accentPrimary,
+                    soft: T.accentPrimarySoft,
+                  },
+                  {
+                    v: "COMMITTED",
+                    label:
+                      values.type === "INCOME"
+                        ? "Нам мають заплатити"
+                        : "Нарахували / отримали",
+                    hint:
+                      values.type === "INCOME"
+                        ? "підписано, очікуємо гроші"
+                        : "ще не оплатили",
+                    color: T.warning,
+                    soft: T.warningSoft,
+                  },
+                  {
+                    v: "ACTUAL",
+                    label:
+                      values.type === "INCOME"
+                        ? "Гроші вже надійшли"
+                        : "Реально оплатили",
+                    hint: "реальний рух грошей",
+                    color: T.success,
+                    soft: T.successSoft,
+                  },
+                ] as const
+              ).map((opt) => {
+                const active = values.entryIntent === opt.v;
+                return (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() =>
+                      setValues((p) => ({
+                        ...p,
+                        entryIntent: opt.v,
+                        // ACTUAL передбачає що це cash → status PAID для витрат,
+                        // APPROVED для доходів. COMMITTED — APPROVED. BUDGET — DRAFT.
+                        // Користувач може override у statusField нижче.
+                        kind: opt.v === "BUDGET" ? "PLAN" : "FACT",
+                      }))
+                    }
+                    className="rounded-lg px-2 py-2 text-[11px] font-bold transition text-left"
+                    style={{
+                      backgroundColor: active ? opt.soft : "transparent",
+                      color: active ? opt.color : T.textMuted,
+                      border: `1px solid ${active ? opt.color : "transparent"}`,
+                    }}
+                    title={opt.hint}
+                  >
+                    {opt.label}
+                    <span
+                      className="block text-[9px] font-medium mt-0.5"
+                      style={{ color: active ? opt.color : T.textMuted }}
+                    >
+                      {opt.hint}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

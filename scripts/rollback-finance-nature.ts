@@ -87,6 +87,7 @@ function inferNatureFromRuleId(
   if (ruleId === "E.stage_auto_plan_expense") return "BUDGET_EXPENSE";
   if (ruleId === "E.stage_auto_plan_income") return "BUDGET_INCOME";
   if (ruleId === "F.client_payment_received") return "ACTUAL_INCOME";
+  if (ruleId === "G.receipt_scan_derived") return "COMMITTED_EXPENSE";
   throw new Error(`unknown ruleId: ${ruleId}`);
 }
 

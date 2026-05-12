@@ -108,6 +108,39 @@ export async function PATCH(
 
     if (body.type === "INCOME" || body.type === "EXPENSE") data.type = body.type;
     if (body.kind === "PLAN" || body.kind === "FACT") data.kind = body.kind;
+
+    // Safe Finance Migration: entryIntent → financeNature на update.
+    // Якщо передано explicit financeNature — пріоритет; інакше мапимо intent.
+    const intentRaw =
+      typeof body.entryIntent === "string" ? body.entryIntent.toUpperCase() : null;
+    const effectiveType =
+      data.type ?? existing.type;
+    if (
+      typeof body.financeNature === "string"
+      && [
+        "BUDGET_INCOME",
+        "BUDGET_EXPENSE",
+        "COMMITTED_INCOME",
+        "COMMITTED_EXPENSE",
+        "ACTUAL_INCOME",
+        "ACTUAL_EXPENSE",
+      ].includes(body.financeNature)
+    ) {
+      data.financeNature = body.financeNature;
+    } else if (
+      intentRaw === "BUDGET"
+      || intentRaw === "COMMITTED"
+      || intentRaw === "ACTUAL"
+    ) {
+      const computed = `${intentRaw}_${effectiveType}` as
+        | "BUDGET_INCOME"
+        | "BUDGET_EXPENSE"
+        | "COMMITTED_INCOME"
+        | "COMMITTED_EXPENSE"
+        | "ACTUAL_INCOME"
+        | "ACTUAL_EXPENSE";
+      data.financeNature = computed;
+    }
     if (body.amount !== undefined) {
       const n = Number(body.amount);
       if (!Number.isFinite(n) || n <= 0) {
