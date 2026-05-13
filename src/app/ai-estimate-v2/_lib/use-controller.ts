@@ -111,6 +111,9 @@ export function useAiEstimateController() {
   const [estimate, setEstimate] = useState<EstimateData | null>(null);
   const [scalingInfo, setScalingInfo] = useState<ScalingInfo | null>(null);
   const [expandedSections, setExpandedSections] = useState<Set<number>>(new Set());
+  // Фільтр і вибрана секція для UI таблиці + панелі деталізації.
+  const [itemFilter, setItemFilter] = useState<"all" | "work" | "material">("all");
+  const [selectedSectionIdx, setSelectedSectionIdx] = useState<number | null>(null);
 
   // ── Verification ──
   const [verificationResult, setVerificationResult] = useState<VerificationResult>(null);
@@ -632,6 +635,45 @@ export function useAiEstimateController() {
     });
   }, []);
 
+  // Перемикання типу позиції: work ↔ material. Локальна зміна стейту
+  // (до збереження кошторису він живе лише в пам'яті). Після збереження
+  // подальші правки робляться на /admin-v2/estimates/[id] через PATCH.
+  // Якщо ставимо material — і у цієї позиції були діти, вони стають
+  // standalone (parentItemId/parentSortOrder обнуляються).
+  const toggleItemType = useCallback((sIdx: number, iIdx: number) => {
+    setEstimate((prev) => {
+      if (!prev) return prev;
+      const sections = [...prev.sections];
+      const items = [...sections[sIdx].items];
+      const current = items[iIdx];
+      const currentType = current.itemType === "material" ? "material" : "work";
+      const nextType = currentType === "work" ? "material" : "work";
+
+      const updated: EstimateItem = { ...current, itemType: nextType };
+      if (nextType === "work") updated.parentSortOrder = null;
+
+      items[iIdx] = updated;
+
+      // Якщо стало material — діти, що посилались на цей індекс через
+      // parentSortOrder (1-based), стають standalone.
+      if (nextType === "material") {
+        const oneBased = iIdx + 1;
+        for (let j = 0; j < items.length; j++) {
+          if (items[j].parentSortOrder === oneBased) {
+            items[j] = { ...items[j], parentSortOrder: null };
+          }
+        }
+      }
+
+      sections[sIdx] = { ...sections[sIdx], items };
+      return { ...prev, sections };
+    });
+  }, []);
+
+  const selectSection = useCallback((sIdx: number | null) => {
+    setSelectedSectionIdx((prev) => (prev === sIdx ? null : sIdx));
+  }, []);
+
   const deleteItem = useCallback((sIdx: number, iIdx: number) => {
     setEstimate((prev) => {
       if (!prev) return prev;
@@ -749,6 +791,7 @@ export function useAiEstimateController() {
           laborCost: item.laborCost,
           totalCost: item.totalCost,
           itemType: item.itemType,
+          parentSortOrder: item.parentSortOrder ?? null,
           engineKey: item.engineKey,
           quantityFormula: item.quantityFormula,
           priceSource: item.priceSource,
@@ -986,6 +1029,12 @@ export function useAiEstimateController() {
     updateSectionTitle,
     addSection,
     deleteSection,
+    // work/material UI
+    itemFilter,
+    setItemFilter,
+    selectedSectionIdx,
+    selectSection,
+    toggleItemType,
 
     // verification
     verificationResult,

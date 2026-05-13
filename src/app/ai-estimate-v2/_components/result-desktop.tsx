@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   ArrowLeft,
   Wand,
@@ -19,12 +19,47 @@ import {
   Check,
   X,
   FileText,
+  Hammer,
+  Package,
 } from "lucide-react";
 import { T } from "./tokens";
 import { ConfidenceBadge, ScoreDial } from "./primitives";
 import { formatUAH } from "../_lib/format";
 import type { AiEstimateController } from "../_lib/use-controller";
 import type { EstimateData, EstimateSection, EstimateItem, VerificationIssue, VerificationImprovement } from "../_lib/types";
+
+// Нормалізація типу позиції: legacy 'labor'/'equipment'/'composite' → 'work'.
+function resolveItemKind(it: EstimateItem): "work" | "material" {
+  return it.itemType === "material" ? "material" : "work";
+}
+
+// Розкласти items[] секції у порядок [work, ...children, work, ...children, standalone-materials]
+// з прапором isChild для UI-відступу.
+function arrangeSectionItems(
+  items: EstimateItem[]
+): Array<{ item: EstimateItem; origIdx: number; isChild: boolean }> {
+  const out: Array<{ item: EstimateItem; origIdx: number; isChild: boolean }> = [];
+  const placed = new Set<number>();
+  for (let i = 0; i < items.length; i++) {
+    if (placed.has(i)) continue;
+    if (resolveItemKind(items[i]) !== "work") continue;
+    out.push({ item: items[i], origIdx: i, isChild: false });
+    placed.add(i);
+    const parentOneBased = i + 1;
+    for (let j = 0; j < items.length; j++) {
+      if (placed.has(j)) continue;
+      if (items[j].parentSortOrder === parentOneBased) {
+        out.push({ item: items[j], origIdx: j, isChild: true });
+        placed.add(j);
+      }
+    }
+  }
+  // Standalone позиції (часто матеріали без парента) — у кінці.
+  for (let i = 0; i < items.length; i++) {
+    if (!placed.has(i)) out.push({ item: items[i], origIdx: i, isChild: false });
+  }
+  return out;
+}
 
 export function ResultDesktop({ controller }: { controller: AiEstimateController }) {
   const estimate = controller.estimate as EstimateData;
@@ -136,6 +171,8 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
       <section className="flex flex-col xl:flex-row items-start gap-8 px-12 pb-14">
         {/* Sections column */}
         <div className="flex flex-1 flex-col gap-4 min-w-0 w-full" style={{ gap: 18 }}>
+          <FilterToolbar controller={controller} />
+
           {estimate.sections.map((section, sIdx) => (
             <SectionBlock
               key={`section-${sIdx}`}
@@ -159,6 +196,8 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
           >
             + Додати секцію
           </button>
+
+          <DetailsPanel controller={controller} />
         </div>
 
         {/* Insights sidebar */}
@@ -293,19 +332,31 @@ function SectionBlock({
     setEditingTitle(false);
   };
 
+  const isSelected = controller.selectedSectionIdx === idx;
+
   return (
-    <div className="flex flex-col rounded-2xl" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
+    <div
+      className="flex flex-col rounded-2xl"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${isSelected ? T.borderAccent : T.borderSoft}`,
+        boxShadow: isSelected ? `0 0 0 2px ${T.accentPrimarySoft}` : undefined,
+      }}
+    >
       <div
         className="flex items-center justify-between gap-4 rounded-t-2xl border-b px-6 py-4"
         style={{ backgroundColor: T.panelElevated, borderColor: T.borderSoft }}
       >
         <div className="flex items-center gap-3.5 min-w-0 flex-1">
-          <div
+          <button
+            type="button"
+            onClick={() => controller.selectSection(idx)}
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg"
             style={{ backgroundColor: T.accentPrimarySoft }}
+            title={isSelected ? "Скинути виділення (Деталізація показує все)" : "Відкрити в Деталізації"}
           >
             <Layers size={18} style={{ color: T.accentPrimary }} />
-          </div>
+          </button>
           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
             {editingTitle ? (
               <div className="flex items-center gap-2">
@@ -405,16 +456,37 @@ function SectionBlock({
             <Th>СУМА</Th>
             <Th>ДІЇ</Th>
           </div>
-          {section.items.map((item, iIdx) => (
-            <Row
-              key={`item-${idx}-${iIdx}`}
-              idx={iIdx + 1}
-              item={item}
-              striped={iIdx % 2 === 1}
-              onChange={(patch) => controller.updateItem(idx, iIdx, patch)}
-              onDelete={() => controller.deleteItem(idx, iIdx)}
-            />
-          ))}
+          {(() => {
+            const arranged = arrangeSectionItems(section.items);
+            const filter = controller.itemFilter;
+            const visible = arranged.filter(({ item }) => {
+              if (filter === "all") return true;
+              return resolveItemKind(item) === filter;
+            });
+            if (visible.length === 0) {
+              return (
+                <div className="px-3 py-6 text-center text-xs" style={{ color: T.textMuted }}>
+                  Немає позицій під поточний фільтр
+                </div>
+              );
+            }
+            let displayIdx = 0;
+            return visible.map(({ item, origIdx, isChild }) => {
+              displayIdx++;
+              return (
+                <Row
+                  key={`item-${idx}-${origIdx}`}
+                  idx={displayIdx}
+                  item={item}
+                  isChild={isChild}
+                  striped={displayIdx % 2 === 0}
+                  onChange={(patch) => controller.updateItem(idx, origIdx, patch)}
+                  onDelete={() => controller.deleteItem(idx, origIdx)}
+                  onToggleType={() => controller.toggleItemType(idx, origIdx)}
+                />
+              );
+            });
+          })()}
 
           <button
             onClick={() => controller.addItem(idx)}
@@ -444,15 +516,19 @@ function Th({ children }: { children: React.ReactNode }) {
 function Row({
   idx,
   item,
+  isChild,
   striped,
   onChange,
   onDelete,
+  onToggleType,
 }: {
   idx: number;
   item: EstimateItem;
+  isChild: boolean;
   striped: boolean;
   onChange: (patch: Partial<EstimateItem>) => void;
   onDelete: () => void;
+  onToggleType: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({
@@ -536,21 +612,28 @@ function Row({
     );
   }
 
+  const kind = resolveItemKind(item);
+
   return (
     <div
       className="grid grid-cols-[32px_1fr_70px_70px_110px_130px_40px] items-center gap-3 border-b px-3 py-3.5 min-w-[800px] group"
       style={{
         backgroundColor: striped ? T.panelSoft : "transparent",
         borderColor: T.borderSoft,
+        borderLeft: kind === "work" ? `2px solid ${T.indigo}` : "2px solid transparent",
+        paddingLeft: isChild ? 28 : 12,
       }}
     >
       <span className="text-xs font-medium" style={{ color: T.textMuted }}>
         {String(idx).padStart(2, "0")}
       </span>
       <div className="flex flex-col gap-0.5 min-w-0">
-        <span className="text-[13px] font-medium truncate" style={{ color: T.textPrimary }}>
-          {item.description}
-        </span>
+        <div className="flex items-center gap-2 min-w-0">
+          <TypeChip kind={kind} onClick={onToggleType} />
+          <span className="text-[13px] font-medium truncate" style={{ color: T.textPrimary }}>
+            {item.description}
+          </span>
+        </div>
         {(item.priceSource || item.priceNote) && (
           <span className="text-[11px] truncate" style={{ color: T.textMuted }}>
             {[item.priceSource, item.priceNote].filter(Boolean).join(" · ")}
@@ -591,6 +674,246 @@ function BreakdownRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
+  );
+}
+
+// ============================================================
+// Type chip + work/material UI
+// ============================================================
+
+function TypeChip({
+  kind,
+  onClick,
+}: {
+  kind: "work" | "material";
+  onClick?: () => void;
+}) {
+  const isWork = kind === "work";
+  const bg = isWork ? T.indigoSoft : T.amberSoft;
+  const color = isWork ? T.indigo : T.amber;
+  const label = isWork ? "Робота" : "Матеріал";
+  const Icon = isWork ? Hammer : Package;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={onClick ? `Перемкнути на ${isWork ? "матеріал" : "роботу"}` : undefined}
+      className="inline-flex flex-shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+      style={{ backgroundColor: bg, color }}
+    >
+      <Icon size={10} />
+      {label}
+    </button>
+  );
+}
+
+function FilterToolbar({ controller }: { controller: AiEstimateController }) {
+  const { itemFilter, setItemFilter, selectedSectionIdx, selectSection, estimate } = controller;
+  const options: Array<{ value: "all" | "work" | "material"; label: string }> = [
+    { value: "all", label: "Все" },
+    { value: "work", label: "Роботи" },
+    { value: "material", label: "Матеріали" },
+  ];
+  const selectedTitle =
+    selectedSectionIdx != null ? estimate?.sections[selectedSectionIdx]?.title : null;
+  return (
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <div className="flex items-center gap-2 text-xs" style={{ color: T.textMuted }}>
+        <span className="font-semibold">Фільтр:</span>
+        <div className="flex items-center gap-1 rounded-lg p-1" style={{ backgroundColor: T.panelSoft }}>
+          {options.map((opt) => {
+            const active = itemFilter === opt.value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setItemFilter(opt.value)}
+                className="rounded-md px-3 py-1 text-xs font-semibold transition"
+                style={{
+                  backgroundColor: active ? T.accentPrimarySoft : "transparent",
+                  color: active ? T.accentPrimary : T.textSecondary,
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {selectedTitle && (
+        <button
+          type="button"
+          onClick={() => selectSection(null)}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-medium"
+          style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+          title="Скинути виділення секції"
+        >
+          Секція: {selectedTitle}
+          <X size={12} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DetailsPanel({ controller }: { controller: AiEstimateController }) {
+  const { estimate, selectedSectionIdx, selectSection } = controller;
+  const [tab, setTab] = useState<"work" | "material">("work");
+
+  const { works, materials, scopeLabel } = useMemo(() => {
+    const all: Array<{ item: EstimateItem; sectionTitle: string }> = [];
+    if (estimate) {
+      const sections =
+        selectedSectionIdx != null
+          ? [estimate.sections[selectedSectionIdx]].filter(Boolean)
+          : estimate.sections;
+      for (const s of sections) {
+        if (!s) continue;
+        for (const it of s.items) all.push({ item: it, sectionTitle: s.title });
+      }
+    }
+    return {
+      works: all.filter(({ item }) => resolveItemKind(item) === "work"),
+      materials: all.filter(({ item }) => resolveItemKind(item) === "material"),
+      scopeLabel:
+        selectedSectionIdx != null
+          ? estimate?.sections[selectedSectionIdx]?.title ?? "Секція"
+          : "усі секції",
+    };
+  }, [estimate, selectedSectionIdx]);
+
+  const rows = tab === "work" ? works : materials;
+  const totalAmount = rows.reduce((sum, r) => sum + (r.item.totalCost || 0), 0);
+
+  return (
+    <div
+      className="flex flex-col rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl border-b px-6 py-4"
+        style={{ backgroundColor: T.panelElevated, borderColor: T.borderSoft }}
+      >
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
+            ДЕТАЛІЗАЦІЯ
+          </span>
+          <span className="text-sm font-semibold" style={{ color: T.textPrimary }}>
+            {scopeLabel}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-lg p-1" style={{ backgroundColor: T.panelSoft }}>
+            <TabButton
+              active={tab === "work"}
+              onClick={() => setTab("work")}
+              icon={<Hammer size={12} />}
+              label={`Роботи · ${works.length}`}
+            />
+            <TabButton
+              active={tab === "material"}
+              onClick={() => setTab("material")}
+              icon={<Package size={12} />}
+              label={`Матеріали · ${materials.length}`}
+            />
+          </div>
+          {selectedSectionIdx != null && (
+            <button
+              type="button"
+              onClick={() => selectSection(null)}
+              className="rounded-md p-1"
+              title="Показати по всіх секціях"
+            >
+              <X size={14} style={{ color: T.textMuted }} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="px-6 py-8 text-center text-xs" style={{ color: T.textMuted }}>
+          {tab === "work" ? "Немає робіт у вибраному скоупі" : "Немає матеріалів у вибраному скоупі"}
+        </div>
+      ) : (
+        <div className="flex flex-col">
+          {rows.map(({ item, sectionTitle }, i) => (
+            <div
+              key={`d-${i}`}
+              className="grid grid-cols-[1fr_70px_80px_120px_140px] items-center gap-3 border-b px-6 py-2.5"
+              style={{
+                borderColor: T.borderSoft,
+                backgroundColor: i % 2 ? T.panelSoft : "transparent",
+              }}
+            >
+              <div className="flex flex-col gap-0.5 min-w-0">
+                <span className="text-[13px] font-medium truncate" style={{ color: T.textPrimary }}>
+                  {item.description}
+                </span>
+                {selectedSectionIdx == null && (
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>
+                    {sectionTitle}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs" style={{ color: T.textSecondary }}>
+                {item.unit}
+              </span>
+              <span className="text-xs font-medium" style={{ color: T.textSecondary }}>
+                {item.quantity}
+              </span>
+              <span className="text-xs" style={{ color: T.textSecondary }}>
+                {formatUAH(item.unitPrice)}
+              </span>
+              <span className="text-[13px] font-semibold text-right" style={{ color: T.textPrimary }}>
+                {formatUAH(item.totalCost)}
+              </span>
+            </div>
+          ))}
+          <div
+            className="flex items-center justify-between px-6 py-3 rounded-b-2xl"
+            style={{ backgroundColor: T.panelElevated }}
+          >
+            <span className="text-xs font-semibold" style={{ color: T.textSecondary }}>
+              Всього {tab === "work" ? "робіт" : "матеріалів"}
+            </span>
+            <span className="text-sm font-bold" style={{ color: T.textPrimary }}>
+              {formatUAH(totalAmount)}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition"
+      style={{
+        backgroundColor: active ? T.panel : "transparent",
+        color: active ? T.textPrimary : T.textMuted,
+        boxShadow: active ? T.shadow1 : undefined,
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

@@ -482,10 +482,15 @@ model EstimateItem {
   // Cost-code axis (Phase 1.A1). Nullable; backfill from itemType + section title.
   costCodeId          String?
   costType            CostType?
+  // Ієрархія: матеріал може мати парент-роботу у тій же секції.
+  // SetNull щоб при видаленні роботи матеріали не зникали.
+  parentItemId        String?
   estimate            Estimate             @relation(fields: [estimateId], references: [id], onDelete: Cascade)
   material            Material?            @relation(fields: [materialId], references: [id])
   section             EstimateSection?     @relation(fields: [sectionId], references: [id])
   costCode            CostCode?            @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  parent              EstimateItem?        @relation("ItemHierarchy", fields: [parentItemId], references: [id], onDelete: SetNull)
+  children            EstimateItem[]       @relation("ItemHierarchy")
   financeEntries      FinanceEntry[]
   kb2Items            KB2FormItem[]        @relation("EstimateItemKB2")
   stageRecords        ProjectStageRecord[] @relation("EstimateItemToStage")
@@ -494,6 +499,7 @@ model EstimateItem {
   @@index([confidence])
   @@index([costCodeId])
   @@index([costType])
+  @@index([parentItemId])
   @@map("estimate_items")
 }
 

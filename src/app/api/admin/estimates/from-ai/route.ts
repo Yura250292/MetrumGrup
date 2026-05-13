@@ -113,17 +113,55 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // Pass 1: створюємо всі items без parentItemId (createMany не повертає id).
+      // Pass 2: резолвимо parentSortOrder → parentItemId через findMany + update.
       for (let sIdx = 0; sIdx < normalizedSections.length; sIdx++) {
         const section = normalizedSections[sIdx];
         const createdSection = estimate.sections[sIdx];
+
         await tx.estimateItem.createMany({
-          data: section.items.map((item, iIdx) => ({
-            ...item,
-            sortOrder: iIdx,
-            estimateId: estimate.id,
-            sectionId: createdSection.id,
-          })),
+          data: section.items.map((item, iIdx) => {
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const { parentSortOrder: _ps, ...rest } = item;
+            return {
+              ...rest,
+              sortOrder: iIdx,
+              estimateId: estimate.id,
+              sectionId: createdSection.id,
+            };
+          }),
         });
+
+        const hasParents = section.items.some(
+          (it) => typeof it.parentSortOrder === "number" && it.parentSortOrder > 0
+        );
+        if (!hasParents) continue;
+
+        const created = await tx.estimateItem.findMany({
+          where: { sectionId: createdSection.id },
+          select: { id: true, sortOrder: true },
+        });
+        const idBySort = new Map<number, string>();
+        for (const c of created) idBySort.set(c.sortOrder, c.id);
+
+        for (let iIdx = 0; iIdx < section.items.length; iIdx++) {
+          const item = section.items[iIdx];
+          const ps = item.parentSortOrder;
+          if (typeof ps !== "number" || ps <= 0) continue;
+          // ps — 1-based індекс у вихідному items[]; sortOrder ми ставили = iIdx.
+          const parentSort = ps - 1;
+          if (parentSort === iIdx) continue;
+          // Парент має бути роботою — інакше AI помилився і скіпаємо.
+          const parentSrc = section.items[parentSort];
+          if (!parentSrc || parentSrc.itemType === "material") continue;
+          const parentId = idBySort.get(parentSort);
+          const childId = idBySort.get(iIdx);
+          if (!parentId || !childId) continue;
+          await tx.estimateItem.update({
+            where: { id: childId },
+            data: { parentItemId: parentId },
+          });
+        }
       }
 
       return await tx.estimate.findUnique({

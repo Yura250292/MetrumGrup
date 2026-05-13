@@ -66,6 +66,18 @@ export async function POST(
       }
       opts.costType = ct;
     }
+    if ("itemType" in json) {
+      if (json.itemType !== null && json.itemType !== "work" && json.itemType !== "material") {
+        return NextResponse.json({ error: "itemType: 'work' | 'material' | null" }, { status: 400 });
+      }
+      opts.itemType = json.itemType;
+    }
+    if ("parentItemId" in json) {
+      if (json.parentItemId !== null && typeof json.parentItemId !== "string") {
+        return NextResponse.json({ error: "Невірний parentItemId" }, { status: 400 });
+      }
+      opts.parentItemId = json.parentItemId;
+    }
 
     const item = await addEstimateItem(opts);
 

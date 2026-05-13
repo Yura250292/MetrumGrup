@@ -2,6 +2,9 @@
 // Local copy so v2 doesn't import from a 5800-line "use client" file.
 
 export type EstimateItem = {
+  // Опційний — заповнюється для збережених кошторисів; AI-output до збереження
+  // не має id, але UI-методи toggleItemType/PATCH працюють тільки з id.
+  id?: string;
   description: string;
   unit: string;
   quantity: number;
@@ -11,9 +14,14 @@ export type EstimateItem = {
   priceSource?: string | null;
   priceNote?: string | null;
   // Quantity engine metadata (Phase 3.2 — pass-through)
+  // 'work' / 'material' — нові канонічні значення; решта — legacy.
   itemType?: string;
   engineKey?: string;
   quantityFormula?: string;
+  // Ієрархія: матеріал може належати конкретній роботі у тій же секції.
+  parentItemId?: string | null;
+  // Тільки у AI-output до збереження: 1-based індекс батьківської роботи у items[].
+  parentSortOrder?: number | null;
   // Price engine metadata (pass-through)
   priceSourceType?: string;
   confidence?: number;

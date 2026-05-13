@@ -50,9 +50,14 @@ export interface EstimateItem {
   notes?: string;
   prozorroReferences?: PriceReference[]; // 🆕 Посилання на схожі позиції з Prozorro
   // 🆕 Quantity engine metadata (Phase 3.2). Persisted to DB.
-  itemType?: 'material' | 'labor' | 'equipment' | 'composite';
+  // 'work'/'material' — нові канонічні значення для UI (чіпи, ієрархія).
+  // 'labor'/'equipment'/'composite' — legacy (зберігаються у БД, UI трактує як work).
+  itemType?: 'work' | 'material' | 'labor' | 'equipment' | 'composite';
   engineKey?: string;
   quantityFormula?: string;
+  // 🆕 Ієрархія: 1-based індекс батьківської роботи у items[] тієї ж секції.
+  // Резолвиться у parentItemId після збереження у БД (from-ai route).
+  parentSortOrder?: number | null;
   // 🆕 Price engine metadata (Stage 8 backend prep). Persisted to DB.
   priceSourceType?: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual';
 }

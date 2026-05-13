@@ -40,6 +40,8 @@ export async function PATCH(
       unitPrice?: number;
       costCodeId?: string | null;
       costType?: CostType | null;
+      itemType?: string | null;
+      parentItemId?: string | null;
     } = {};
 
     if (typeof json.description === "string") patch.description = json.description;
@@ -73,6 +75,18 @@ export async function PATCH(
         return NextResponse.json({ error: "Невірний costType" }, { status: 400 });
       }
       patch.costType = ct;
+    }
+    if ("itemType" in json) {
+      if (json.itemType !== null && json.itemType !== "work" && json.itemType !== "material") {
+        return NextResponse.json({ error: "itemType: 'work' | 'material' | null" }, { status: 400 });
+      }
+      patch.itemType = json.itemType;
+    }
+    if ("parentItemId" in json) {
+      if (json.parentItemId !== null && typeof json.parentItemId !== "string") {
+        return NextResponse.json({ error: "Невірний parentItemId" }, { status: 400 });
+      }
+      patch.parentItemId = json.parentItemId;
     }
 
     const item = await updateEstimateItem({ itemId, patch, userId: session.user.id });

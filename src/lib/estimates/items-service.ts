@@ -70,6 +70,8 @@ export type EstimateItemDTO = {
   costCodeId: string | null;
   costType: CostType | null;
   costCode: EstimateItemCostCodeDTO | null;
+  itemType: string | null;
+  parentItemId: string | null;
 };
 
 function toDTO(row: {
@@ -84,6 +86,8 @@ function toDTO(row: {
   costCodeId: string | null;
   costType: CostType | null;
   costCode?: { id: string; code: string; name: string } | null;
+  itemType?: string | null;
+  parentItemId?: string | null;
 }): EstimateItemDTO {
   return {
     id: row.id,
@@ -99,6 +103,8 @@ function toDTO(row: {
     costCode: row.costCode
       ? { id: row.costCode.id, code: row.costCode.code, name: row.costCode.name }
       : null,
+    itemType: row.itemType ?? null,
+    parentItemId: row.parentItemId ?? null,
   };
 }
 
@@ -141,6 +147,8 @@ export async function addEstimateItem(opts: {
   unitPrice: number;
   costCodeId?: string | null;
   costType?: CostType | null;
+  itemType?: string | null;
+  parentItemId?: string | null;
   userId: string;
 }): Promise<EstimateItemDTO> {
   const section = await prisma.estimateSection.findUnique({
@@ -165,6 +173,25 @@ export async function addEstimateItem(opts: {
     ...("costType" in opts ? { costType: opts.costType } : {}),
   });
 
+  // Робота ніколи не має парента. Якщо клієнт випадково передав parentItemId
+  // для itemType="work" — занулюємо.
+  let parentItemId: string | null | undefined =
+    "parentItemId" in opts ? opts.parentItemId ?? null : undefined;
+  if (opts.itemType === "work") parentItemId = null;
+
+  if (parentItemId) {
+    const parent = await prisma.estimateItem.findUnique({
+      where: { id: parentItemId },
+      select: { sectionId: true, itemType: true },
+    });
+    if (!parent || parent.sectionId !== opts.sectionId) {
+      throw new Error("Парент має бути в тій же секції");
+    }
+    if (parent.itemType === "material") {
+      throw new Error("Парент має бути роботою");
+    }
+  }
+
   const item = await prisma.estimateItem.create({
     data: {
       estimateId: opts.estimateId,
@@ -176,6 +203,8 @@ export async function addEstimateItem(opts: {
       amount,
       sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
       ...costFields,
+      ...("itemType" in opts ? { itemType: opts.itemType ?? null } : {}),
+      ...(parentItemId !== undefined ? { parentItemId } : {}),
     },
     include: { costCode: { select: { id: true, code: true, name: true } } },
   });
@@ -213,6 +242,8 @@ export async function updateEstimateItem(opts: {
     unitPrice?: number;
     costCodeId?: string | null;
     costType?: CostType | null;
+    itemType?: string | null;
+    parentItemId?: string | null;
   };
   userId: string;
 }): Promise<EstimateItemDTO> {
@@ -221,12 +252,15 @@ export async function updateEstimateItem(opts: {
     select: {
       id: true,
       estimateId: true,
+      sectionId: true,
       description: true,
       unit: true,
       quantity: true,
       unitPrice: true,
       costCodeId: true,
       costType: true,
+      itemType: true,
+      parentItemId: true,
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
@@ -237,6 +271,8 @@ export async function updateEstimateItem(opts: {
   const oldUnitPrice = Number(existing.unitPrice);
   const oldCostCodeId = existing.costCodeId;
   const oldCostType = existing.costType;
+  const oldItemType = existing.itemType;
+  const oldParentItemId = existing.parentItemId;
 
   const newDescription =
     opts.patch.description !== undefined ? opts.patch.description.trim() : oldDescription;
@@ -252,6 +288,30 @@ export async function updateEstimateItem(opts: {
     ...("costType" in opts.patch ? { costType: opts.patch.costType } : {}),
   });
 
+  // Резолвимо нові значення для itemType / parentItemId з врахуванням інваріантів:
+  // - work не може мати парента (занулюємо)
+  // - parentItemId має бути в тій же секції і вказувати на work
+  const newItemType =
+    "itemType" in opts.patch ? opts.patch.itemType ?? null : oldItemType;
+  let newParentItemId =
+    "parentItemId" in opts.patch ? opts.patch.parentItemId ?? null : oldParentItemId;
+  if (newItemType === "work") newParentItemId = null;
+  if (newParentItemId && newParentItemId !== oldParentItemId) {
+    if (newParentItemId === opts.itemId) {
+      throw new Error("Парент не може посилатись на саму позицію");
+    }
+    const parent = await prisma.estimateItem.findUnique({
+      where: { id: newParentItemId },
+      select: { sectionId: true, itemType: true },
+    });
+    if (!parent || parent.sectionId !== existing.sectionId) {
+      throw new Error("Парент має бути в тій же секції");
+    }
+    if (parent.itemType === "material") {
+      throw new Error("Парент має бути роботою");
+    }
+  }
+
   const updated = await prisma.estimateItem.update({
     where: { id: opts.itemId },
     data: {
@@ -261,9 +321,27 @@ export async function updateEstimateItem(opts: {
       unitPrice: newUnitPrice,
       amount: newAmount,
       ...costFields,
+      ...("itemType" in opts.patch ? { itemType: newItemType } : {}),
+      ...("itemType" in opts.patch || "parentItemId" in opts.patch
+        ? { parentItemId: newParentItemId }
+        : {}),
     },
     include: { costCode: { select: { id: true, code: true, name: true } } },
   });
+
+  // Якщо позицію перетворили на матеріал — її колишні діти втрачають парента.
+  // Onclick onDelete: SetNull у схемі вже подбає при видаленні; тут робимо
+  // явний detach при зміні типу, щоб не залишити "матеріал має дітей-матеріалів".
+  if (
+    "itemType" in opts.patch &&
+    oldItemType !== "material" &&
+    newItemType === "material"
+  ) {
+    await prisma.estimateItem.updateMany({
+      where: { parentItemId: opts.itemId },
+      data: { parentItemId: null },
+    });
+  }
 
   await recomputeEstimateTotals(existing.estimateId);
 
@@ -300,6 +378,19 @@ export async function updateEstimateItem(opts: {
       field: "costType",
       oldValue: oldCostType,
       newValue: costFields.costType ?? null,
+    });
+  }
+  if ("itemType" in opts.patch && newItemType !== oldItemType) {
+    changes.push({ field: "itemType", oldValue: oldItemType, newValue: newItemType });
+  }
+  if (
+    ("parentItemId" in opts.patch || "itemType" in opts.patch) &&
+    newParentItemId !== oldParentItemId
+  ) {
+    changes.push({
+      field: "parentItemId",
+      oldValue: oldParentItemId,
+      newValue: newParentItemId,
     });
   }
 

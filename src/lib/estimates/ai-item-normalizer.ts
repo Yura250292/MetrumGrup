@@ -21,9 +21,13 @@ export type AiItem = {
   laborCost?: number | string;
   totalCost?: number | string;
   // Quantity engine metadata (optional). When present, persisted to DB.
-  itemType?: 'material' | 'labor' | 'equipment' | 'composite' | string;
+  // 'work'/'material' — нові канонічні; решта — legacy.
+  itemType?: 'work' | 'material' | 'labor' | 'equipment' | 'composite' | string;
   engineKey?: string;
   quantityFormula?: string;
+  // Ієрархія: 1-based індекс батьківської роботи у items[] тієї ж секції.
+  // Резолвиться у parentItemId після createMany у from-ai route.
+  parentSortOrder?: number | string | null;
   // Price engine metadata (Stage 8 backend prep). When present, persisted to DB.
   priceSource?: string;
   priceSourceType?: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual' | string;
@@ -44,6 +48,7 @@ export type NormalizedItem = {
   priceSource?: string | null;
   priceSourceType?: string | null;
   confidence?: number | null;
+  parentSortOrder?: number | null;
 };
 
 export class InvalidAiItemError extends Error {
@@ -115,6 +120,12 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     ? Math.max(0, Math.min(1, Number(item.confidence)))
     : null;
 
+  let parentSortOrder: number | null = null;
+  if (item.parentSortOrder !== undefined && item.parentSortOrder !== null && item.parentSortOrder !== '') {
+    const n = Number(item.parentSortOrder);
+    if (Number.isFinite(n) && n > 0) parentSortOrder = Math.trunc(n);
+  }
+
   return {
     description,
     quantity,
@@ -129,6 +140,7 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     priceSource: item.priceSource ? String(item.priceSource) : null,
     priceSourceType: item.priceSourceType ? String(item.priceSourceType) : null,
     confidence: confidence !== null && Number.isFinite(confidence) ? confidence : null,
+    parentSortOrder,
   };
 }
 
