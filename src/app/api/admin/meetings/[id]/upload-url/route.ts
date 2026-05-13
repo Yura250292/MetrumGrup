@@ -8,7 +8,11 @@ import {
 import { createPresignedUploadUrl } from "@/lib/r2-client";
 import { z } from "zod";
 
-const MAX_AUDIO_BYTES = 25 * 1024 * 1024;
+// AssemblyAI (наш дефолтний провайдер) приймає до 5 GB / 10 годин.
+// Whisper fallback має ліміт 25 MB, але у такому випадку розпізнавання
+// просто завершиться помилкою на /transcribe — а сам запис ми обовʼязково
+// маємо зберегти в R2, інакше користувач втрачає нараду цілком.
+const MAX_AUDIO_BYTES = 500 * 1024 * 1024;
 
 const AUDIO_EXTENSIONS = new Set([
   "mp3",
@@ -71,7 +75,7 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "Файл завеликий. Максимум 25 MB (≈ 30-40 хв аудіо). Розбийте на частини.",
+          "Файл завеликий. Максимум 500 MB (≈ 10 годин аудіо у 96 кбіт/с).",
       },
       { status: 413 }
     );

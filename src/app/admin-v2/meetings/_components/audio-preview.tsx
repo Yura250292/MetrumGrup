@@ -4,7 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Upload, Trash2, AlertCircle } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
-const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+// Серверний ліміт upload-url. AssemblyAI приймає до 5 GB; ми тримаємо
+// з запасом 500 MB щоб уникнути зловживань і таймаутів Vercel.
+const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;
+// Whisper fallback ріже на 25 MB. Якщо в проді не налаштовано AssemblyAI,
+// файли понад це не розпізнаються — але зберегти запис у R2 ми мусимо завжди.
+const WHISPER_SOFT_LIMIT = 25 * 1024 * 1024;
 
 type Props = {
   blob: Blob;
@@ -35,6 +40,7 @@ export function AudioPreview({
 
   const sizeMB = blob.size / 1024 / 1024;
   const tooLarge = blob.size > MAX_UPLOAD_BYTES;
+  const overWhisper = blob.size > WHISPER_SOFT_LIMIT;
 
   const durationText = useMemo(() => {
     if (!durationMs) return null;
@@ -82,11 +88,25 @@ export function AudioPreview({
         >
           <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
           <div>
-            <p className="font-medium">Файл завеликий для AI-розпізнавання</p>
+            <p className="font-medium">Файл завеликий для завантаження</p>
             <p className="mt-0.5 text-xs" style={{ color: T.textSecondary }}>
-              Ліміт Whisper — 25 MB. Збережіть файл локально і пере-експортуйте
-              у нижчому бітрейті (наприклад, 32-64 кбіт/с opus/mp3) — для мовлення
-              цього більш ніж достатньо.
+              Максимум 500 MB. Збережіть локально і пере-експортуйте у нижчому
+              бітрейті (32-64 кбіт/с opus/mp3).
+            </p>
+          </div>
+        </div>
+      )}
+
+      {!tooLarge && overWhisper && (
+        <div
+          className="mb-3 flex items-start gap-2 rounded-lg p-3 text-sm"
+          style={{ background: T.warningSoft, color: T.textSecondary }}
+        >
+          <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-xs">
+              Файл понад 25 MB. Розпізнавання потребує AssemblyAI (Whisper не
+              приймає такі файли). Запис буде збережено у будь-якому разі.
             </p>
           </div>
         </div>
