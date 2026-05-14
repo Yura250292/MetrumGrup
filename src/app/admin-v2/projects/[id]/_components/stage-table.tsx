@@ -33,6 +33,7 @@ export type StageRow = {
   endDate: Date | string | null;
   notes: string | null;
   responsibleUserId: string | null;
+  responsibleEmployeeId: string | null;
   responsibleName: string | null;
   allocatedBudget: number | null;
   unit: string | null;
@@ -51,6 +52,11 @@ export type StageRow = {
 
 export type StageInlineUpdate = Partial<{
   status: StageStatus;
+  /** Polymorphic responsible — backend парсить kind/id/name. */
+  responsible:
+    | { kind: "user" | "employee"; id: string }
+    | { name: string }
+    | null;
   responsibleUserId: string | null;
   responsibleName: string | null;
   customName: string | null;

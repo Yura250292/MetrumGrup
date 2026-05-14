@@ -55,7 +55,7 @@ function isSameDay(a: Date, b: Date): boolean {
 export function classifyTask(task: TaskItem, userId: string): Set<SectionKey> {
   const sections = new Set<SectionKey>();
   const isDone = task.status.isDone;
-  const isAssignee = (task.assignees ?? []).some((a) => a.user.id === userId);
+  const isAssignee = (task.assignees ?? []).some((a) => a.user?.id === userId);
   const isWatcher = (task.watchers ?? []).some((w) => w.userId === userId);
   const isCreator = task.createdById === userId;
   const incoming = task.incomingDepsCount ?? 0;

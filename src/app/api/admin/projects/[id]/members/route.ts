@@ -60,19 +60,29 @@ export async function POST(
 
     const body = await request.json();
     const userId = typeof body.userId === "string" ? body.userId : null;
+    const employeeId =
+      typeof body.employeeId === "string" ? body.employeeId : null;
     const roleInProject =
-      typeof body.roleInProject === "string" ? (body.roleInProject as ProjectRole) : null;
+      typeof body.roleInProject === "string"
+        ? (body.roleInProject as ProjectRole)
+        : null;
 
-    if (!userId || !roleInProject || !VALID_ROLES.includes(roleInProject)) {
+    if ((!userId && !employeeId) || !roleInProject || !VALID_ROLES.includes(roleInProject)) {
       return NextResponse.json(
-        { error: "Поля 'userId' та 'roleInProject' обов'язкові" },
+        { error: "Поля 'userId' або 'employeeId' та 'roleInProject' обов'язкові" },
+        { status: 400 },
+      );
+    }
+    if (userId && employeeId) {
+      return NextResponse.json(
+        { error: "Можна передати лише одне з userId / employeeId" },
         { status: 400 },
       );
     }
 
     const member = await addProjectMember({
       projectId: id,
-      userId,
+      ...(userId ? { userId } : { employeeId: employeeId! }),
       roleInProject,
       invitedById: session.user.id,
     });
@@ -83,20 +93,22 @@ export async function POST(
       entity: "ProjectMember",
       entityId: member.id,
       projectId: id,
-      newData: { userId, roleInProject },
+      newData: { userId, employeeId, roleInProject },
     });
 
     // Notify: personal "you were added" for the new member, and broadcast
-    // "X joined" to other active members. Best-effort.
+    // "X joined" to other active members. Employee-без-User notifications skip.
     try {
       const project = await prisma.project.findUnique({
         where: { id },
         select: { title: true },
       });
       const projectTitle = project?.title ?? "";
+      const memberName =
+        member.user?.name ?? member.employee?.fullName ?? "Учасник";
 
-      // Personal notification for the new member.
-      if (userId !== session.user.id) {
+      // Personal notification — лише для User.
+      if (userId && userId !== session.user.id) {
         await prisma.notification.create({
           data: {
             userId,
@@ -109,16 +121,16 @@ export async function POST(
         });
       }
 
-      // Broadcast to other active members (excluding actor and the new member).
+      // Broadcast — exclude actor + new member (якщо User).
       await notifyProjectMembers({
         projectId: id,
         actorId: session.user.id,
         type: "PROJECT_MEMBER_ADDED",
         title: `Новий учасник у проєкті «${projectTitle}»`,
-        body: `${member.user.name} (${roleInProject})`,
+        body: `${memberName} (${roleInProject})`,
         relatedEntity: "Project",
         relatedId: id,
-        excludeUserIds: [userId],
+        excludeUserIds: userId ? [userId] : [],
       });
     } catch (err) {
       console.error("[projects/members] notifyProjectMembers failed:", err);

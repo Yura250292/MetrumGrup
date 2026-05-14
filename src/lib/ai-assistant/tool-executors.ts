@@ -236,7 +236,10 @@ async function getProjectSummary(input: ToolInput, ctx: AiUserContext) {
       stages: { orderBy: { sortOrder: "asc" } },
       members: {
         where: { isActive: true },
-        include: { user: { select: { name: true, email: true } } },
+        include: {
+          user: { select: { name: true, email: true } },
+          employee: { select: { fullName: true, email: true } },
+        },
       },
       _count: { select: { tasks: true, estimates: true, payments: true, files: true, photoReports: true } },
     },
@@ -261,7 +264,7 @@ async function getProjectSummary(input: ToolInput, ctx: AiUserContext) {
     client: project.client,
     manager: project.manager,
     teamMembers: project.members.map((m) => ({
-      name: m.user.name,
+      name: m.user?.name ?? m.employee?.fullName ?? "—",
       role: m.roleInProject,
     })),
     stages: project.stages.map((s) => ({
@@ -399,7 +402,10 @@ async function getTaskList(input: ToolInput, ctx: AiUserContext) {
       createdAt: true,
       status: { select: { name: true, color: true } },
       assignees: {
-        include: { user: { select: { name: true } } },
+        include: {
+          user: { select: { name: true } },
+          employee: { select: { fullName: true } },
+        },
       },
       labels: {
         include: { label: { select: { name: true, color: true } } },
@@ -436,7 +442,11 @@ async function getTaskList(input: ToolInput, ctx: AiUserContext) {
         прострочено: t.dueDate ? t.dueDate < now : false,
         годинПлан: t.estimatedHours ? Number(t.estimatedHours) : null,
         годинФакт: Number(t.actualHours ?? 0),
-        виконавці: t.assignees.map((a) => a.user.name).join(", ") || "не призначено",
+        виконавці:
+          t.assignees
+            .map((a) => a.user?.name ?? a.employee?.fullName ?? "")
+            .filter(Boolean)
+            .join(", ") || "не призначено",
         мітки: t.labels.map((l) => l.label.name).join(", "),
         чеклістПунктів: t._count.checklist,
         коментарів: commentCountByTaskId.get(t.id) ?? 0,
@@ -776,7 +786,10 @@ async function getOverdueItems(input: ToolInput, ctx: AiUserContext) {
             status: { select: { name: true } },
             project: { select: { id: true, title: true } },
             assignees: {
-              include: { user: { select: { name: true } } },
+              include: {
+                user: { select: { name: true } },
+                employee: { select: { fullName: true } },
+              },
             },
           },
         })
@@ -800,7 +813,9 @@ async function getOverdueItems(input: ToolInput, ctx: AiUserContext) {
           priority: t.priority,
           dueDate: t.dueDate?.toISOString().split("T")[0],
           status: t.status?.name,
-          assignees: t.assignees.map((a) => a.user.name),
+          assignees: t.assignees
+            .map((a) => a.user?.name ?? a.employee?.fullName ?? "")
+            .filter(Boolean),
         }))
       : [],
   };
@@ -1487,14 +1502,19 @@ async function sendUserNotification(input: ToolInput, ctx: AiUserContext) {
   }
 
   if (projectId) {
+    // Employee-без-User члени не отримують сповіщень (нема User для зв'язку).
     const members = await prisma.projectMember.findMany({
-      where: { projectId, isActive: true },
+      where: { projectId, isActive: true, userId: { not: null } },
       select: { userId: true },
     });
-    await prisma.notification.createMany({
-      data: members.map((m) => ({ userId: m.userId, title, message, type: "SYSTEM" as const })),
-    });
-    return { success: true, message: `Сповіщення надіслано ${members.length} учасникам проєкту` };
+    const data = members
+      .map((m) => m.userId)
+      .filter((id): id is string => !!id)
+      .map((userId) => ({ userId, title, message, type: "SYSTEM" as const }));
+    if (data.length > 0) {
+      await prisma.notification.createMany({ data });
+    }
+    return { success: true, message: `Сповіщення надіслано ${data.length} учасникам проєкту` };
   }
 
   throw new Error("Вкажіть userId або projectId");
@@ -1791,8 +1811,10 @@ const ROLE_UA: Record<string, string> = {
 async function getGlobalTeamOverview(ctx: AiUserContext) {
   const now = new Date();
 
+  // Тут агрегуємо лише User-членів (інфо про роль/email/phone). Employee-
+  // без-User у global-team overview не показуємо (нема User для дашборду).
   const members = await prisma.projectMember.findMany({
-    where: { isActive: true },
+    where: { isActive: true, userId: { not: null } },
     include: {
       user: { select: { id: true, name: true, role: true, email: true, phone: true } },
       project: { select: { id: true, title: true, status: true, currentStage: true } },
@@ -1806,6 +1828,7 @@ async function getGlobalTeamOverview(ctx: AiUserContext) {
   }>();
 
   for (const m of members) {
+    if (!m.userId || !m.user) continue;
     const existing = byUser.get(m.userId);
     const proj = { title: m.project.title, role: ROLE_UA[m.roleInProject] || m.roleInProject, stage: m.project.currentStage };
     if (existing) { existing.projects.push(proj); }
@@ -1828,6 +1851,7 @@ async function getGlobalTeamOverview(ctx: AiUserContext) {
   const tasksByUser = new Map<string, typeof tasks>();
   for (const t of tasks) {
     for (const a of t.assignees) {
+      if (!a.userId) continue;
       const list = tasksByUser.get(a.userId) || [];
       list.push(t);
       tasksByUser.set(a.userId, list);

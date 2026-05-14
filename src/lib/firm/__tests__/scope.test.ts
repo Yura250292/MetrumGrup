@@ -4,6 +4,7 @@ import {
   firmWhereForFinance,
   firmWhereForPayment,
   firmWhereForTask,
+  firmWhereForEmployee,
   assertCanAccessFirm,
   firmIdForNewEntity,
   isHomeFirmFor,
@@ -202,6 +203,7 @@ describe("firmWhere builders", () => {
     expect(firmWhereForFinance(null)).toEqual({});
     expect(firmWhereForPayment(null)).toEqual({});
     expect(firmWhereForTask(null)).toEqual({});
+    expect(firmWhereForEmployee(null)).toEqual({});
   });
 
   it("Project та FinanceEntry — direct firmId (мають своє поле)", () => {
@@ -215,6 +217,12 @@ describe("firmWhere builders", () => {
     });
     expect(firmWhereForTask("metrum-studio")).toEqual({
       project: { firmId: "metrum-studio" },
+    });
+  });
+
+  it("Employee — direct firmId (NOT NULL поле після міграції)", () => {
+    expect(firmWhereForEmployee("metrum-studio")).toEqual({
+      firmId: "metrum-studio",
     });
   });
 });

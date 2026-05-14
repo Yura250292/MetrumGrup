@@ -6,6 +6,8 @@ import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
 import type { ProjectStage } from "@prisma/client";
+import { AssigneeSelect } from "@/components/forms/AssigneeSelect";
+import type { AssigneeRef } from "@/lib/assignees/types";
 
 type StageNode = {
   id: string;
@@ -99,8 +101,7 @@ export function NewTaskModal({
   const [dueDate, setDueDate] = useState("");
   const [estimatedHours, setEstimatedHours] = useState("");
   const [assignToMe, setAssignToMe] = useState(true);
-  const [assigneeId, setAssigneeId] = useState("");
-  const [teamUsers, setTeamUsers] = useState<{ id: string; name: string }[]>([]);
+  const [assignee, setAssignee] = useState<AssigneeRef | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,10 +121,7 @@ export function NewTaskModal({
   useEffect(() => {
     (async () => {
       try {
-        const [projRes, usersRes] = await Promise.all([
-          fetch("/api/admin/me/projects"),
-          fetch("/api/admin/users?role=SUPER_ADMIN,MANAGER,ENGINEER,FINANCIER"),
-        ]);
+        const projRes = await fetch("/api/admin/me/projects");
         if (projRes.ok) {
           const j = await projRes.json();
           const items = (j.data ?? []) as MyProject[];
@@ -138,14 +136,6 @@ export function NewTaskModal({
             const fallback = topLevelCurrent ?? firstTopLevel ?? first.stages[0];
             if (fallback) setStageId(fallback.id);
           }
-        }
-        if (usersRes.ok) {
-          const j = await usersRes.json();
-          setTeamUsers(
-            (j.data ?? [])
-              .filter((u: any) => u.isActive)
-              .map((u: any) => ({ id: u.id, name: u.name })),
-          );
         }
       } finally {
         setLoadingProjects(false);
@@ -222,10 +212,18 @@ export function NewTaskModal({
     setSaving(true);
     setError(null);
     try {
-      const ids = new Set<string>();
-      if (assignToMe && currentUserId) ids.add(currentUserId);
-      if (assigneeId) ids.add(assigneeId);
-      const assigneeIds = [...ids];
+      // Polymorphic assignees: збираємо AssigneeRef[] із "себе" (User) та
+      // обраного відповідального (User або Employee).
+      const refs: AssigneeRef[] = [];
+      const seen = new Set<string>();
+      const push = (r: AssigneeRef) => {
+        const k = `${r.kind}:${r.id}`;
+        if (seen.has(k)) return;
+        seen.add(k);
+        refs.push(r);
+      };
+      if (assignToMe && currentUserId) push({ kind: "user", id: currentUserId });
+      if (assignee) push(assignee);
 
       const checklist =
         applyChecklist && specJson
@@ -242,7 +240,7 @@ export function NewTaskModal({
           priority,
           dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
           estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
-          assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
+          assignees: refs.length > 0 ? refs : undefined,
           checklist: checklist && checklist.length > 0 ? checklist : undefined,
         }),
       });
@@ -518,19 +516,12 @@ export function NewTaskModal({
               )}
 
               <Field label="ВИКОНАВЕЦЬ">
-                <select
-                  value={assigneeId}
-                  onChange={(e) => setAssigneeId(e.target.value)}
-                  className="rounded-lg px-3 py-2 text-sm outline-none"
-                  style={inputStyle}
-                >
-                  <option value="">— без виконавця —</option>
-                  {teamUsers.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name}{u.id === currentUserId ? " (ви)" : ""}
-                    </option>
-                  ))}
-                </select>
+                <AssigneeSelect
+                  value={assignee}
+                  onChange={setAssignee}
+                  roles={["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"]}
+                  placeholder="— без виконавця —"
+                />
               </Field>
 
               <label

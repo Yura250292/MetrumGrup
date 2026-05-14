@@ -32,7 +32,10 @@ export async function GET() {
     },
     include: {
       assignees: {
-        include: { user: { select: { id: true, name: true, avatar: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          employee: { select: { id: true, fullName: true } },
+        },
       },
       project: { select: { id: true, title: true } },
       status: true,
@@ -56,9 +59,27 @@ export async function GET() {
   const now = new Date();
 
   for (const t of tasks) {
-    const assignees = t.assignees.length > 0
-      ? t.assignees
-      : [{ user: { id: "__unassigned__", name: "Без виконавця", avatar: null } }];
+    // Сторінка "Люди" агрегує задачі по User-виконавцях. Employee-без-User
+    // assignees (без облікового запису) додаємо як псевдо-користувача
+    // з префіксом employee:.
+    const assignees: { user: { id: string; name: string; avatar: string | null } }[] =
+      t.assignees.length > 0
+        ? t.assignees.map((a) =>
+            a.user
+              ? { user: a.user }
+              : {
+                  user: {
+                    id: `employee:${a.employee?.id ?? "?"}`,
+                    name: a.employee?.fullName ?? "Співробітник",
+                    avatar: null,
+                  },
+                },
+          )
+        : [
+            {
+              user: { id: "__unassigned__", name: "Без виконавця", avatar: null },
+            },
+          ];
 
     for (const a of assignees) {
       if (!peopleMap.has(a.user.id)) {

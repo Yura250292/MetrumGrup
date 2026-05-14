@@ -87,6 +87,20 @@ export async function POST(
             ? undefined
             : Number(body.estimatedHours),
         isPrivate: Boolean(body.isPrivate),
+        // Polymorphic assignees: новий формат `assignees: AssigneeRef[]`.
+        // Підтримуємо також legacy `assigneeIds: string[]` (User-id).
+        assignees: Array.isArray(body.assignees)
+          ? ((body.assignees as unknown[])
+              .map((v) => {
+                if (!v || typeof v !== "object") return null;
+                const o = v as { kind?: unknown; id?: unknown };
+                if ((o.kind === "user" || o.kind === "employee") && typeof o.id === "string" && o.id) {
+                  return { kind: o.kind, id: o.id };
+                }
+                return null;
+              })
+              .filter(Boolean) as { kind: "user" | "employee"; id: string }[])
+          : undefined,
         assigneeIds: Array.isArray(body.assigneeIds)
           ? (body.assigneeIds as unknown[]).map((v) => String(v))
           : undefined,

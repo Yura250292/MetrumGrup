@@ -11,6 +11,12 @@ import { isTasksEnabledForProject } from "./feature-flag";
 import { buildTaskOrderBy, buildTaskWhere, type FilterSpec, type SortSpec } from "./search";
 import { dispatchEvent } from "@/lib/automations/engine";
 import { emit as emitRealtime } from "@/lib/realtime/sse-hub";
+import type { AssigneeRef } from "@/lib/assignees/types";
+import {
+  splitAssignees,
+  fromLegacyUserIds,
+  assertAssigneesInFirm,
+} from "@/lib/assignees/normalize";
 
 /**
  * Core business logic for tasks. All mutations go through here so we can
@@ -75,6 +81,9 @@ const TASK_DETAIL_INCLUDE = {
   assignees: {
     include: {
       user: { select: { id: true, name: true, avatar: true, email: true } },
+      employee: {
+        select: { id: true, fullName: true, email: true, position: true },
+      },
     },
   },
   watchers: {
@@ -169,7 +178,13 @@ export async function listTasks(filter: ListFilter, currentUserId: string) {
   if (filter.parentTaskId === null) where.parentTaskId = null;
   if (typeof filter.parentTaskId === "string") where.parentTaskId = filter.parentTaskId;
   if (filter.assigneeId) {
-    where.assignees = { some: { userId: filter.assigneeId } };
+    // Підтримуємо як User-id, так і Employee-id (polymorphic). Точний тип
+    // визначаємо по тому, де знайдеться assignment.
+    where.assignees = {
+      some: {
+        OR: [{ userId: filter.assigneeId }, { employeeId: filter.assigneeId }],
+      },
+    };
   }
   if (filter.labelId) {
     where.labels = { some: { labelId: filter.labelId } };
@@ -193,7 +208,10 @@ export async function listTasks(filter: ListFilter, currentUserId: string) {
     include: {
       status: true,
       assignees: {
-        include: { user: { select: { id: true, name: true, avatar: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          employee: { select: { id: true, fullName: true, position: true } },
+        },
       },
       labels: { include: { label: true } },
       _count: { select: { subtasks: true, checklist: true } },
@@ -255,6 +273,10 @@ export type CreateInput = {
   dueDate?: Date | null;
   estimatedHours?: number | null;
   isPrivate?: boolean;
+  /** Polymorphic список призначених. Підтримує User + Employee. */
+  assignees?: AssigneeRef[];
+  /** Legacy: інтерпретується як список User-id. Якщо передано і assignees, і
+   *  assigneeIds — використовується assignees. */
   assigneeIds?: string[];
   labelIds?: string[];
 };
@@ -294,14 +316,34 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
   });
   const position = (lastPos._max.position ?? -1) + 1;
 
-  // Validate assigneeIds: each must have task access on this project
-  if (input.assigneeIds && input.assigneeIds.length > 0) {
-    for (const uid of input.assigneeIds) {
+  // Polymorphic assignees: prefer `assignees`, fallback на legacy `assigneeIds`.
+  const assigneeRefs: AssigneeRef[] =
+    input.assignees && input.assignees.length > 0
+      ? input.assignees
+      : fromLegacyUserIds(input.assigneeIds);
+  const { userIds: assigneeUserIds, employeeIds: assigneeEmployeeIds } =
+    splitAssignees(assigneeRefs);
+
+  // User-кандидати: перевірка доступу до tasks у цьому проекті (legacy логіка).
+  if (assigneeUserIds.length > 0) {
+    for (const uid of assigneeUserIds) {
       const targetCtx = await getProjectAccessContext(input.projectId, uid);
       if (!targetCtx?.canViewTasks) {
         bad(`Assignee ${uid} does not have task access on this project`);
       }
     }
+  }
+  // Employee-кандидати: перевірка firm-приналежності + isActive.
+  if (assigneeEmployeeIds.length > 0) {
+    const project = await prisma.project.findUnique({
+      where: { id: input.projectId },
+      select: { firmId: true },
+    });
+    if (!project) bad("Project not found");
+    await assertAssigneesInFirm(
+      assigneeEmployeeIds.map((id) => ({ kind: "employee" as const, id })),
+      project!.firmId ?? "metrum-group",
+    );
   }
 
   // Validate labelIds: each must belong to this project
@@ -337,13 +379,22 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
       },
     });
 
-    if (input.assigneeIds && input.assigneeIds.length > 0) {
+    if (assigneeUserIds.length > 0 || assigneeEmployeeIds.length > 0) {
       await tx.taskAssignee.createMany({
-        data: input.assigneeIds.map((userId) => ({
-          taskId: created.id,
-          userId,
-          assignedById: actorId,
-        })),
+        data: [
+          ...assigneeUserIds.map((userId) => ({
+            taskId: created.id,
+            userId,
+            employeeId: null,
+            assignedById: actorId,
+          })),
+          ...assigneeEmployeeIds.map((employeeId) => ({
+            taskId: created.id,
+            userId: null,
+            employeeId,
+            assignedById: actorId,
+          })),
+        ],
         skipDuplicates: true,
       });
     }
@@ -381,7 +432,8 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         select: { name: true },
       }),
     ]);
-    if (input.assigneeIds && input.assigneeIds.length > 0) {
+    // Employee-без-User не отримує сповіщень (informative-only assignment).
+    if (assigneeUserIds.length > 0) {
       const dueLabel = task.dueDate
         ? new Date(task.dueDate).toLocaleDateString("uk-UA", {
             day: "2-digit",
@@ -393,7 +445,7 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         ? `Нова задача: «${task.title}» — до ${dueLabel}`
         : `Нова задача: «${task.title}»`;
       await notifyUsers({
-        userIds: input.assigneeIds,
+        userIds: assigneeUserIds,
         actorId,
         type: "TASK_ASSIGNED",
         title: `Вас призначено на задачу «${task.title}»`,
@@ -567,8 +619,11 @@ export async function updateTask(
         },
       });
       if (stakeholders) {
+        // Employee-без-User assignees мають userId=null — фільтруємо їх.
         const userIds = [
-          ...stakeholders.assignees.map((a) => a.userId),
+          ...stakeholders.assignees
+            .map((a) => a.userId)
+            .filter((id): id is string => !!id),
           ...stakeholders.watchers.map((w) => w.userId),
         ];
         await notifyUsers({
@@ -654,7 +709,7 @@ export async function unarchiveTask(taskId: string, actorId: string): Promise<vo
 
 export async function addAssignee(
   taskId: string,
-  userId: string,
+  ref: AssigneeRef,
   actorId: string,
 ): Promise<void> {
   const existing = await loadTaskWithProject(taskId);
@@ -662,15 +717,32 @@ export async function addAssignee(
   const ctx = await getProjectAccessContext(existing.projectId, actorId);
   if (!ctx?.canAssignTasks) forbid();
 
-  // Target user must have access to the project
-  const targetCtx = await getProjectAccessContext(existing.projectId, userId);
-  if (!targetCtx?.canViewTasks) bad("User does not have task access on this project");
+  if (ref.kind === "user") {
+    // Target user must have access to the project
+    const targetCtx = await getProjectAccessContext(existing.projectId, ref.id);
+    if (!targetCtx?.canViewTasks)
+      bad("User does not have task access on this project");
 
-  await prisma.taskAssignee.upsert({
-    where: { taskId_userId: { taskId, userId } },
-    update: {},
-    create: { taskId, userId, assignedById: actorId },
-  });
+    await prisma.taskAssignee.upsert({
+      where: { taskId_userId: { taskId, userId: ref.id } },
+      update: {},
+      create: { taskId, userId: ref.id, assignedById: actorId },
+    });
+  } else {
+    // Employee-без-User: перевірка firm-приналежності з проектом.
+    const project = await prisma.project.findUnique({
+      where: { id: existing.projectId },
+      select: { firmId: true },
+    });
+    if (!project) bad("Project not found");
+    await assertAssigneesInFirm([ref], project!.firmId ?? "metrum-group");
+
+    await prisma.taskAssignee.upsert({
+      where: { taskId_employeeId: { taskId, employeeId: ref.id } },
+      update: {},
+      create: { taskId, employeeId: ref.id, assignedById: actorId },
+    });
+  }
 
   try {
     await auditLog({
@@ -679,10 +751,12 @@ export async function addAssignee(
       entity: "Task",
       entityId: taskId,
       projectId: existing.projectId,
-      newData: { assigneeAdded: userId },
+      newData: { assigneeAdded: ref },
     });
   } catch {}
 
+  // Сповіщаємо лише User-кандидатів (Employee без User отримує informative-only).
+  if (ref.kind !== "user") return;
   try {
     const [full, actor] = await Promise.all([
       prisma.task.findUnique({
@@ -712,7 +786,7 @@ export async function addAssignee(
         ? `Задача «${full.title}» — до ${dueLabel}`
         : `Вас призначено на задачу «${full.title}»`;
       await notifyUsers({
-        userIds: [userId],
+        userIds: [ref.id],
         actorId,
         type: "TASK_ASSIGNED",
         title: `Вас призначено на задачу «${full.title}»`,
@@ -737,7 +811,7 @@ export async function addAssignee(
 
 export async function removeAssignee(
   taskId: string,
-  userId: string,
+  ref: AssigneeRef,
   actorId: string,
 ): Promise<void> {
   const existing = await loadTaskWithProject(taskId);
@@ -747,11 +821,18 @@ export async function removeAssignee(
 
   // Self-unassign: allowed for any project member who is currently assigned.
   // Removing someone else: requires canAssignTasks.
-  const isSelfUnassign = userId === actorId;
+  const isSelfUnassign = ref.kind === "user" && ref.id === actorId;
   if (!isSelfUnassign && !ctx.canAssignTasks) forbid();
-  await prisma.taskAssignee
-    .delete({ where: { taskId_userId: { taskId, userId } } })
-    .catch(() => {});
+
+  if (ref.kind === "user") {
+    await prisma.taskAssignee
+      .delete({ where: { taskId_userId: { taskId, userId: ref.id } } })
+      .catch(() => {});
+  } else {
+    await prisma.taskAssignee
+      .delete({ where: { taskId_employeeId: { taskId, employeeId: ref.id } } })
+      .catch(() => {});
+  }
 
   try {
     await auditLog({
@@ -760,7 +841,7 @@ export async function removeAssignee(
       entity: "Task",
       entityId: taskId,
       projectId: existing.projectId,
-      oldData: { assigneeRemoved: userId },
+      oldData: { assigneeRemoved: ref },
     });
   } catch {}
 }
@@ -976,7 +1057,10 @@ export async function searchTasks(
       status: true,
       stage: { select: { id: true, stage: true } },
       assignees: {
-        include: { user: { select: { id: true, name: true, avatar: true } } },
+        include: {
+          user: { select: { id: true, name: true, avatar: true } },
+          employee: { select: { id: true, fullName: true, position: true } },
+        },
       },
       labels: { include: { label: true } },
       _count: { select: { subtasks: true, checklist: true } },
@@ -1031,28 +1115,47 @@ export async function bulkArchive(
 export async function bulkAssign(
   projectId: string,
   taskIds: string[],
-  userId: string,
+  ref: AssigneeRef,
   actorId: string,
 ) {
   await requireTasksEnabled(projectId);
   const ctx = await getProjectAccessContext(projectId, actorId);
   if (!ctx?.canAssignTasks) forbid();
 
-  // Ensure target user has task access on this project
-  const targetCtx = await getProjectAccessContext(projectId, userId);
-  if (!targetCtx?.canViewTasks) bad("User does not have task access");
+  if (ref.kind === "user") {
+    const targetCtx = await getProjectAccessContext(projectId, ref.id);
+    if (!targetCtx?.canViewTasks) bad("User does not have task access");
 
-  const existing = await prisma.taskAssignee.findMany({
-    where: { taskId: { in: taskIds }, userId },
-    select: { taskId: true },
-  });
-  const existingIds = new Set(existing.map((e) => e.taskId));
-  const newRows = taskIds
-    .filter((id) => !existingIds.has(id))
-    .map((taskId) => ({ taskId, userId, assignedById: actorId }));
+    const existing = await prisma.taskAssignee.findMany({
+      where: { taskId: { in: taskIds }, userId: ref.id },
+      select: { taskId: true },
+    });
+    const existingIds = new Set(existing.map((e) => e.taskId));
+    const newRows = taskIds
+      .filter((id) => !existingIds.has(id))
+      .map((taskId) => ({ taskId, userId: ref.id, assignedById: actorId }));
+    if (newRows.length > 0) {
+      await prisma.taskAssignee.createMany({ data: newRows, skipDuplicates: true });
+    }
+  } else {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { firmId: true },
+    });
+    if (!project) bad("Project not found");
+    await assertAssigneesInFirm([ref], project!.firmId ?? "metrum-group");
 
-  if (newRows.length > 0) {
-    await prisma.taskAssignee.createMany({ data: newRows, skipDuplicates: true });
+    const existing = await prisma.taskAssignee.findMany({
+      where: { taskId: { in: taskIds }, employeeId: ref.id },
+      select: { taskId: true },
+    });
+    const existingIds = new Set(existing.map((e) => e.taskId));
+    const newRows = taskIds
+      .filter((id) => !existingIds.has(id))
+      .map((taskId) => ({ taskId, employeeId: ref.id, assignedById: actorId }));
+    if (newRows.length > 0) {
+      await prisma.taskAssignee.createMany({ data: newRows, skipDuplicates: true });
+    }
   }
 }
 

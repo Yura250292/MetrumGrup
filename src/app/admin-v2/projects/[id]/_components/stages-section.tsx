@@ -285,6 +285,8 @@ export function StagesSection({
           endDate: (s.endDate as Date | string | null) ?? null,
           notes: (s.notes as string | null) ?? null,
           responsibleUserId: (s.responsibleUserId as string | null) ?? null,
+          responsibleEmployeeId:
+            (s.responsibleEmployeeId as string | null) ?? null,
           responsibleName:
             (s as { responsibleUser?: { name?: string } }).responsibleUser?.name ??
             (s.responsibleName as string | null) ??

@@ -6,8 +6,8 @@ import {
 } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import {
-  changeMemberRole,
-  deactivateMember,
+  changeMemberRoleById,
+  deactivateMemberById,
 } from "@/lib/projects/members-service";
 import { canManageProjectMembers } from "@/lib/projects/access";
 import { auditLog } from "@/lib/audit";
@@ -34,7 +34,13 @@ function handleError(err: unknown) {
 async function loadMember(memberId: string) {
   return prisma.projectMember.findUnique({
     where: { id: memberId },
-    select: { id: true, projectId: true, userId: true, roleInProject: true },
+    select: {
+      id: true,
+      projectId: true,
+      userId: true,
+      employeeId: true,
+      roleInProject: true,
+    },
   });
 }
 
@@ -60,7 +66,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Невірна роль" }, { status: 400 });
     }
 
-    const updated = await changeMemberRole(id, member.userId, roleInProject);
+    const updated = await changeMemberRoleById(memberId, roleInProject);
 
     await auditLog({
       userId: session.user.id,
@@ -93,7 +99,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Учасника не знайдено" }, { status: 404 });
     }
 
-    await deactivateMember(id, member.userId);
+    await deactivateMemberById(memberId);
 
     await auditLog({
       userId: session.user.id,
@@ -101,7 +107,11 @@ export async function DELETE(
       entity: "ProjectMember",
       entityId: memberId,
       projectId: id,
-      oldData: { userId: member.userId, roleInProject: member.roleInProject },
+      oldData: {
+        userId: member.userId,
+        employeeId: member.employeeId,
+        roleInProject: member.roleInProject,
+      },
     });
 
     return NextResponse.json({ ok: true });

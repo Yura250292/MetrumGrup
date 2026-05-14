@@ -12,6 +12,7 @@ import {
 } from "@/lib/import/hr-import";
 import { inferColumnMapping } from "@/lib/import/ai-mapper";
 import { syncEmployeeSalaryCache } from "@/lib/hr/employee-salary";
+import { firmIdForNewEntity } from "@/lib/firm/scope";
 
 async function parseWithAi(buffer: Buffer): Promise<ImportResult<EmployeeImportRow>> {
   const rows = await readSheetAsRows(buffer);
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
     // Створюємо співробітників разом з першим записом історії ЗП.
     // У новій моделі salaryAmount/salaryType — лише deprecated кеш, який
     // підтягне syncEmployeeSalaryCache() після створення EmployeeSalary.
+    const firmId = firmIdForNewEntity(session);
     let created = 0;
     await prisma.$transaction(async (tx) => {
       for (const row of parsed.data) {
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
           .filter((v): v is string => Boolean(v && v.trim()))
           .join("\n\n") || null;
         const emp = await tx.employee.create({
-          data: { ...employeeData, notes: mergedNotes },
+          data: { ...employeeData, notes: mergedNotes, firmId },
         });
         if (salaryAmount != null && salaryAmount > 0) {
           // Якщо в Excel була ставка погодинна — переводимо в місячну з

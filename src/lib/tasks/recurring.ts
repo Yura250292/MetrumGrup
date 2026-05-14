@@ -57,7 +57,7 @@ export async function spawnRecurringOccurrences(opts?: {
       isArchived: false,
     },
     include: {
-      assignees: { select: { userId: true } },
+      assignees: { select: { userId: true, employeeId: true } },
       labels: { select: { labelId: true } },
     },
   });
@@ -112,12 +112,13 @@ export async function spawnRecurringOccurrences(opts?: {
           },
         });
 
-        // Copy assignees
+        // Copy assignees — обидва типи (User та Employee). Зберігаємо XOR.
         if (tpl.assignees.length > 0) {
           await prisma.taskAssignee.createMany({
             data: tpl.assignees.map((a) => ({
               taskId: child.id,
               userId: a.userId,
+              employeeId: a.employeeId,
               assignedById: tpl.createdById,
             })),
             skipDuplicates: true,

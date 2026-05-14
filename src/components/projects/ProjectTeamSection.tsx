@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Plus, Trash2, UserPlus, Loader2, Mail } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
 import type { ProjectRole } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -12,6 +11,8 @@ import {
   useRemoveMember,
   type ProjectMemberDTO,
 } from "@/hooks/useProjectMembers";
+import { useAssigneeCandidates } from "@/hooks/useAssigneeCandidates";
+import type { AssigneeCandidate, AssigneeRef } from "@/lib/assignees/types";
 
 const ROLE_LABELS: Record<ProjectRole, string> = {
   PROJECT_ADMIN: "Адмін проєкту",
@@ -33,16 +34,9 @@ const ROLE_OPTIONS: ProjectRole[] = [
   "VIEWER",
 ];
 
-type StaffUser = {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  avatar: string | null;
-};
-
-// Staff roles that can be added to a project team. Includes FOREMAN — the
-// kiosk-PWA role for site supervisors (виконроби) submitting expense reports.
+// Ролі User, які можна додавати у команду проєкту. Включає FOREMAN —
+// kiosk-PWA роль для виконробів. Employee-без-User додаються незалежно
+// від ролей (вони не мають Role).
 const PROJECT_MEMBER_CANDIDATE_ROLES = [
   "SUPER_ADMIN",
   "MANAGER",
@@ -50,20 +44,7 @@ const PROJECT_MEMBER_CANDIDATE_ROLES = [
   "FINANCIER",
   "HR",
   "FOREMAN",
-].join(",");
-
-function useStaffUsers() {
-  return useQuery({
-    queryKey: ["projects", "memberCandidates", PROJECT_MEMBER_CANDIDATE_ROLES],
-    queryFn: async () => {
-      const res = await fetch(`/api/admin/users?role=${PROJECT_MEMBER_CANDIDATE_ROLES}`);
-      if (!res.ok) throw new Error("Не вдалося завантажити список співробітників");
-      const data = await res.json();
-      const list = (data.data ?? data.users ?? []) as StaffUser[];
-      return list;
-    },
-  });
-}
+];
 
 export function ProjectTeamSection({ projectId }: { projectId: string }) {
   const membersQ = useProjectMembers(projectId);
@@ -147,7 +128,8 @@ export function ProjectTeamSection({ projectId }: { projectId: string }) {
             {inactive.map((m) => (
               <div key={m.id} className="flex items-center justify-between text-[12px]">
                 <span style={{ color: T.textSecondary }}>
-                  {m.user.name} · {ROLE_LABELS[m.roleInProject]}
+                  {m.user?.name ?? m.employee?.fullName ?? "—"} ·{" "}
+                  {ROLE_LABELS[m.roleInProject]}
                 </span>
                 <span style={{ color: T.textMuted }}>
                   {m.leftAt ? new Date(m.leftAt).toLocaleDateString("uk-UA") : ""}
@@ -161,10 +143,16 @@ export function ProjectTeamSection({ projectId }: { projectId: string }) {
       {pickerOpen && (
         <AddMemberPicker
           projectId={projectId}
-          existingUserIds={new Set(active.map((m) => m.userId))}
+          existingKeys={
+            new Set(
+              active.map((m) =>
+                m.userId ? `user:${m.userId}` : `employee:${m.employeeId}`,
+              ),
+            )
+          }
           onClose={() => setPickerOpen(false)}
-          onAdd={async (userId, role) => {
-            await addMutation.mutateAsync({ userId, roleInProject: role });
+          onAdd={async (assignee, role) => {
+            await addMutation.mutateAsync({ assignee, roleInProject: role });
             setPickerOpen(false);
           }}
           busy={addMutation.isPending}
@@ -185,6 +173,9 @@ function MemberCard({
   onRemove: () => void;
   busy: boolean;
 }) {
+  const name = member.user?.name ?? member.employee?.fullName ?? "—";
+  const email = member.user?.email ?? member.employee?.email ?? "";
+  const isEmployeeOnly = !member.user && !!member.employee;
   return (
     <div
       className="flex flex-col gap-4 rounded-2xl p-5"
@@ -196,21 +187,35 @@ function MemberCard({
             className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-[13px] font-bold"
             style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
           >
-            {member.user.name.slice(0, 2).toUpperCase()}
+            {name.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex flex-col gap-0.5 min-w-0 flex-1">
             <span
-              className="text-[14px] font-bold truncate"
+              className="text-[14px] font-bold truncate flex items-center gap-1.5"
               style={{ color: T.textPrimary }}
             >
-              {member.user.name}
+              {name}
+              {isEmployeeOnly && (
+                <span
+                  className="rounded-md px-1.5 py-0.5 text-[9px] font-medium"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    color: T.textMuted,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  без акаунту
+                </span>
+              )}
             </span>
-            <span
-              className="flex items-center gap-1 text-[11px] truncate"
-              style={{ color: T.textMuted }}
-            >
-              <Mail size={11} /> {member.user.email}
-            </span>
+            {email && (
+              <span
+                className="flex items-center gap-1 text-[11px] truncate"
+                style={{ color: T.textMuted }}
+              >
+                <Mail size={11} /> {email}
+              </span>
+            )}
           </div>
         </div>
         <button
@@ -251,22 +256,26 @@ function MemberCard({
 }
 
 function AddMemberPicker({
-  existingUserIds,
+  existingKeys,
   onClose,
   onAdd,
   busy,
 }: {
   projectId: string;
-  existingUserIds: Set<string>;
+  existingKeys: Set<string>;
   onClose: () => void;
-  onAdd: (userId: string, role: ProjectRole) => void;
+  onAdd: (assignee: AssigneeRef, role: ProjectRole) => void;
   busy: boolean;
 }) {
-  const staffQ = useStaffUsers();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const { data: allCandidates, isLoading } = useAssigneeCandidates({
+    roles: PROJECT_MEMBER_CANDIDATE_ROLES,
+  });
+  const [selected, setSelected] = useState<AssigneeRef | null>(null);
   const [role, setRole] = useState<ProjectRole>("ENGINEER");
 
-  const candidates = (staffQ.data ?? []).filter((u) => !existingUserIds.has(u.id));
+  const candidates: AssigneeCandidate[] = (allCandidates ?? []).filter(
+    (c) => !existingKeys.has(`${c.kind}:${c.id}`),
+  );
 
   return (
     <div
@@ -284,17 +293,17 @@ function AddMemberPicker({
             Додати учасника
           </span>
           <span className="text-[11px]" style={{ color: T.textMuted }}>
-            Виберіть співробітника та роль у межах проєкту
+            Користувачі CRM або співробітники без облікового запису
           </span>
         </div>
 
-        {staffQ.isLoading && (
+        {isLoading && (
           <div className="flex items-center justify-center py-6 text-xs" style={{ color: T.textMuted }}>
             <Loader2 size={14} className="animate-spin" />
           </div>
         )}
 
-        {candidates.length === 0 && !staffQ.isLoading && (
+        {candidates.length === 0 && !isLoading && (
           <div className="text-[12px]" style={{ color: T.textMuted }}>
             Усі співробітники вже у команді.
           </div>
@@ -302,32 +311,37 @@ function AddMemberPicker({
 
         {candidates.length > 0 && (
           <div className="flex max-h-60 flex-col gap-1 overflow-y-auto">
-            {candidates.map((u) => (
-              <button
-                key={u.id}
-                onClick={() => setSelectedId(u.id)}
-                className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-[12px] transition"
-                style={{
-                  backgroundColor: selectedId === u.id ? T.accentPrimarySoft : "transparent",
-                  border: `1px solid ${selectedId === u.id ? T.accentPrimary : T.borderSoft}`,
-                  color: T.textPrimary,
-                }}
-              >
-                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                  <span className="font-semibold truncate">{u.name}</span>
-                  <span className="truncate text-[10px]" style={{ color: T.textMuted }}>
-                    {u.email}
+            {candidates.map((c) => {
+              const key = `${c.kind}:${c.id}`;
+              const isSelected =
+                selected?.kind === c.kind && selected?.id === c.id;
+              return (
+                <button
+                  key={key}
+                  onClick={() => setSelected({ kind: c.kind, id: c.id })}
+                  className="flex items-center justify-between gap-3 rounded-xl px-3 py-2 text-left text-[12px] transition"
+                  style={{
+                    backgroundColor: isSelected ? T.accentPrimarySoft : "transparent",
+                    border: `1px solid ${isSelected ? T.accentPrimary : T.borderSoft}`,
+                    color: T.textPrimary,
+                  }}
+                >
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <span className="font-semibold truncate">{c.name}</span>
+                    <span className="truncate text-[10px]" style={{ color: T.textMuted }}>
+                      {c.email ?? c.phone ?? c.position ?? ""}
+                    </span>
+                  </div>
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>
+                    {c.hasAccount ? c.role : "без акаунту"}
                   </span>
-                </div>
-                <span className="text-[10px]" style={{ color: T.textMuted }}>
-                  {u.role}
-                </span>
-              </button>
-            ))}
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {selectedId && (
+        {selected && (
           <div className="flex flex-col gap-1.5">
             <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
               РОЛЬ У ПРОЄКТІ
@@ -364,8 +378,8 @@ function AddMemberPicker({
             Скасувати
           </button>
           <button
-            disabled={!selectedId || busy}
-            onClick={() => selectedId && onAdd(selectedId, role)}
+            disabled={!selected || busy}
+            onClick={() => selected && onAdd(selected, role)}
             className="flex items-center gap-2 rounded-xl px-4 py-2 text-[12px] font-semibold disabled:opacity-50"
             style={{ backgroundColor: T.accentPrimary, color: T.background }}
           >

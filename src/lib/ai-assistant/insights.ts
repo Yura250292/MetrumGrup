@@ -102,7 +102,7 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
     const sorted = [...taskWorkload].sort((a, b) => b._count - a._count);
     const max = sorted[0];
     const min = sorted[sorted.length - 1];
-    if (max._count > min._count * 3 && max._count >= 8) {
+    if (max._count > min._count * 3 && max._count >= 8 && max.userId && min.userId) {
       const maxUser = await prisma.user.findUnique({ where: { id: max.userId }, select: { name: true } });
       const minUser = await prisma.user.findUnique({ where: { id: min.userId }, select: { name: true } });
       insights.push({
