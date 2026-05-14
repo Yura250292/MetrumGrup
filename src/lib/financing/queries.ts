@@ -17,6 +17,22 @@ export type FinanceListFilters = {
     | "ACTUAL_INCOME"
     | "ACTUAL_EXPENSE"
     | "NULL";
+  /**
+   * Multi-value варіант фільтра по фінансовій природі (Phase: LensBar restructure).
+   * Якщо переданий — мапиться у Prisma `financeNature: { in: [...] }`.
+   * Перевага: за один запит віддає всі записи з 2+ значеннями (наприклад,
+   * lens «Бюджет» = BUDGET_INCOME + BUDGET_EXPENSE).
+   * Single-value `financeNature` лишається для back-compat і має пріоритет
+   * якщо обидва передані.
+   */
+  financeNatures?: Array<
+    | "BUDGET_INCOME"
+    | "BUDGET_EXPENSE"
+    | "COMMITTED_INCOME"
+    | "COMMITTED_EXPENSE"
+    | "ACTUAL_INCOME"
+    | "ACTUAL_EXPENSE"
+  >;
   category?: string;
   subcategory?: string;
   costCodeId?: string;
@@ -109,6 +125,23 @@ export function parseListParams(
       return (valid as readonly string[]).includes(v)
         ? (v as FinanceListFilters["financeNature"])
         : undefined;
+    })(),
+    financeNatures: (() => {
+      const raw = searchParams.get("financeNatures");
+      if (!raw) return undefined;
+      const validConcrete = [
+        "BUDGET_INCOME",
+        "BUDGET_EXPENSE",
+        "COMMITTED_INCOME",
+        "COMMITTED_EXPENSE",
+        "ACTUAL_INCOME",
+        "ACTUAL_EXPENSE",
+      ] as const;
+      const parsed = raw
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => (validConcrete as readonly string[]).includes(s)) as FinanceListFilters["financeNatures"];
+      return parsed && parsed.length > 0 ? parsed : undefined;
     })(),
     costCodeId: costCodeIdRaw,
     costType,
@@ -225,8 +258,12 @@ export function buildWhere(filters: FinanceListFilters): Prisma.FinanceEntryWher
   if (filters.status) where.status = filters.status;
   if (filters.source) where.source = filters.source;
   if (filters.financeNature) {
+    // Single-value: пріоритетніший за multi (back-compat).
     where.financeNature =
       filters.financeNature === "NULL" ? null : filters.financeNature;
+  } else if (filters.financeNatures && filters.financeNatures.length > 0) {
+    // Multi-value: Prisma `in` приймає лише non-null значення.
+    where.financeNature = { in: filters.financeNatures };
   }
   if (filters.category) where.category = filters.category;
   if (filters.subcategory) where.subcategory = filters.subcategory;

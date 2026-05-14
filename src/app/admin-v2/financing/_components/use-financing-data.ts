@@ -26,6 +26,7 @@ const DEFAULT_FILTERS: FinancingFilters = {
   status: "",
   source: "",
   financeNature: "",
+  financeNatures: [],
   subcategory: "",
   responsibleId: "",
   hasAttachments: "",
@@ -71,7 +72,12 @@ export function useFinancingData({
     if (filters.type) p.set("type", filters.type);
     if (filters.status) p.set("status", filters.status);
     if (filters.source) p.set("source", filters.source);
-    if (filters.financeNature) p.set("financeNature", filters.financeNature);
+    // single-value має пріоритет; multi-value лише якщо single порожній.
+    if (filters.financeNature) {
+      p.set("financeNature", filters.financeNature);
+    } else if (filters.financeNatures && filters.financeNatures.length > 0) {
+      p.set("financeNatures", filters.financeNatures.join(","));
+    }
 
     // Category
     if (filters.category) p.set("category", filters.category);

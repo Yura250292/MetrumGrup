@@ -95,7 +95,14 @@ export function EntryFormModal({
 }: {
   mode: "create" | "edit";
   initial: FinanceEntryDTO | null;
-  preset?: { kind: "PLAN" | "FACT"; type: "INCOME" | "EXPENSE"; folderId?: string; folderName?: string };
+  preset?: {
+    kind: "PLAN" | "FACT";
+    type: "INCOME" | "EXPENSE";
+    folderId?: string;
+    folderName?: string;
+    /** Intent hint from intent-first picker — overrides defaultIntentForKind. */
+    intent?: "BUDGET" | "COMMITTED" | "ACTUAL";
+  };
   projects: ProjectOption[];
   scope?: { id: string; title: string };
   folderContext?: { id: string; name: string } | null;
@@ -134,7 +141,7 @@ export function EntryFormModal({
     return {
       kind: presetKind,
       type: preset?.type ?? "EXPENSE",
-      entryIntent: defaultIntentForKind(presetKind),
+      entryIntent: preset?.intent ?? defaultIntentForKind(presetKind),
       amount: "",
       occurredAt: new Date().toISOString().slice(0, 10),
       projectId: scope ? scope.id : "",

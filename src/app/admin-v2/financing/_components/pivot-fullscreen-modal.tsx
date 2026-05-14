@@ -17,17 +17,24 @@ export function PivotFullscreenModal({
   scope?: { id: string; title: string };
   filters: FinancingFilters;
 }) {
-  // Block body scroll when open + close on Esc
+  // Block page scroll when open + close on Esc.
+  // Глобальний CSS залишає <html> основним scroll-контейнером (globals.css), тому
+  // блокуємо overflow і на html, і на body — інакше задня сторінка прокручується.
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = "hidden";
+    body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => {
-      document.body.style.overflow = prev;
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
       window.removeEventListener("keydown", onKey);
     };
   }, [open, onClose]);
@@ -66,8 +73,10 @@ export function PivotFullscreenModal({
         </button>
       </div>
 
-      {/* Body — own scroll, sticky toolbar/headers/first-col live inside TabPivot */}
-      <div className="flex-1 overflow-auto px-4 py-4 sm:px-6">
+      {/* Body — own scroll, sticky toolbar/headers/first-col live inside TabPivot.
+          `min-h-0` ОБОВ'ЯЗКОВЕ: без нього flex-item має min-height:auto і не дає
+          overflow-auto активуватися (контейнер просто росте). */}
+      <div className="flex-1 min-h-0 overflow-auto px-4 py-4 sm:px-6">
         <TabPivot scope={scope} filters={filters} />
       </div>
     </div>

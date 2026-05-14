@@ -1,58 +1,95 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Plus, TrendingUp, TrendingDown } from "lucide-react";
+import {
+  ChevronDown,
+  Plus,
+  Wallet,
+  Coins,
+  ArrowDownToLine,
+  Hourglass,
+  Scale,
+} from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { QuadrantPreset } from "./types";
 
-type Preset = {
+/**
+ * Phase 4 — intent-first picker. Замість технічних PLAN/FACT × INCOME/EXPENSE
+ * показуємо 5 бізнес-сценаріїв з планом ADMIN_V2_UX_UI_SIMPLIFICATION_PLAN:
+ *  1. Витрата вже оплачена         → FACT + EXPENSE + ACTUAL
+ *  2. Є борг постачальнику         → FACT + EXPENSE + COMMITTED
+ *  3. Надійшли гроші від клієнта   → FACT + INCOME  + ACTUAL
+ *  4. Нам мають заплатити          → FACT + INCOME  + COMMITTED
+ *  5. Планова сума бюджету         → PLAN + EXPENSE + BUDGET (за замовч.)
+ *
+ * Для випадку 5 модалка показує наступний крок «витрата чи дохід» — або юзер
+ * перевизначить type у формі. За дефолтом стартуємо з EXPENSE як найчастіший.
+ */
+type Scenario = {
   key: string;
   label: string;
   hint: string;
   kind: "PLAN" | "FACT";
   type: "INCOME" | "EXPENSE";
-  color: string;
-  icon: React.ComponentType<{ size?: number }>;
+  intent: "BUDGET" | "COMMITTED" | "ACTUAL";
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
+  accent: string;
 };
 
-const PRESETS: Preset[] = [
+const SCENARIOS: Scenario[] = [
   {
-    key: "fact-expense",
-    label: "Факт. витрата",
-    hint: "Реальна оплата вже відбулась",
+    key: "expense-paid",
+    label: "Витрата вже оплачена",
+    hint: "Оплата картою / готівкою / переказом",
     kind: "FACT",
     type: "EXPENSE",
-    color: T.success,
-    icon: TrendingDown,
+    intent: "ACTUAL",
+    icon: Wallet,
+    accent: T.success,
   },
   {
-    key: "fact-income",
-    label: "Факт. дохід",
-    hint: "Гроші зайшли на рахунок",
+    key: "supplier-debt",
+    label: "Є борг постачальнику",
+    hint: "Матеріал отримано, оплати ще не було",
+    kind: "FACT",
+    type: "EXPENSE",
+    intent: "COMMITTED",
+    icon: Coins,
+    accent: T.warning,
+  },
+  {
+    key: "income-received",
+    label: "Надійшли гроші від клієнта",
+    hint: "Передплата / транш на рахунок",
     kind: "FACT",
     type: "INCOME",
-    color: T.success,
-    icon: TrendingUp,
+    intent: "ACTUAL",
+    icon: ArrowDownToLine,
+    accent: T.success,
   },
   {
-    key: "plan-expense",
-    label: "План витрата",
-    hint: "Майбутній платіж",
+    key: "income-expected",
+    label: "Нам мають заплатити",
+    hint: "Виставлений рахунок / акт",
+    kind: "FACT",
+    type: "INCOME",
+    intent: "COMMITTED",
+    icon: Hourglass,
+    accent: T.accentPrimary,
+  },
+  {
+    key: "budget-plan",
+    label: "Планова сума бюджету",
+    hint: "Запланувати витрату або надходження",
     kind: "PLAN",
     type: "EXPENSE",
-    color: T.warning,
-    icon: TrendingDown,
-  },
-  {
-    key: "plan-income",
-    label: "План дохід",
-    hint: "Очікуване надходження",
-    kind: "PLAN",
-    type: "INCOME",
-    color: T.warning,
-    icon: TrendingUp,
+    intent: "BUDGET",
+    icon: Scale,
+    accent: T.violet,
   },
 ];
+
+const DEFAULT_SCENARIO = SCENARIOS[0]; // «Витрата вже оплачена» — найчастіше
 
 export function QuickAddSplit({
   onPick,
@@ -80,27 +117,30 @@ export function QuickAddSplit({
     };
   }, [open]);
 
-  // Default action — most common: "Факт. витрата"
-  const def = PRESETS[0];
-  const DefIcon = def.icon;
+  const pick = (s: Scenario) => {
+    onPick({ kind: s.kind, type: s.type, intent: s.intent });
+    setOpen(false);
+  };
 
   return (
     <div ref={ref} className="relative inline-flex">
       <button
-        onClick={() => onPick({ kind: def.kind, type: def.type })}
+        onClick={() => pick(DEFAULT_SCENARIO)}
+        title={DEFAULT_SCENARIO.hint}
         className={`flex items-center gap-1.5 rounded-l-xl ${
           compact ? "px-3 py-2" : "px-4 py-2.5"
         } text-[12px] sm:text-xs font-bold text-white transition hover:brightness-110`}
         style={{ backgroundColor: T.accentPrimary }}
       >
         <Plus size={13} />
-        <span>Швидкий запис</span>
+        <span>Додати</span>
       </button>
       <button
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="menu"
         aria-expanded={open}
-        title="Інші типи запису"
+        aria-label="Інші сценарії"
+        title="Інші сценарії додавання"
         className={`flex items-center justify-center rounded-r-xl ${
           compact ? "px-2 py-2" : "px-2.5 py-2.5"
         } border-l border-white/20 text-white transition hover:brightness-110`}
@@ -118,24 +158,27 @@ export function QuickAddSplit({
       {open && (
         <div
           role="menu"
-          className="absolute right-0 top-full mt-2 w-[280px] rounded-2xl p-1.5 z-50"
+          className="absolute right-0 top-full mt-2 w-[320px] rounded-2xl p-1.5 z-50"
           style={{
             backgroundColor: T.panelElevated,
             border: `1px solid ${T.borderStrong}`,
             boxShadow: "0 12px 32px -8px rgba(0,0,0,0.20), 0 2px 8px rgba(0,0,0,0.08)",
           }}
         >
-          {PRESETS.map((p) => {
-            const Icon = p.icon;
+          <div
+            className="px-3 pt-2 pb-1.5 text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: T.textMuted, letterSpacing: "0.08em" }}
+          >
+            Що ви хочете внести?
+          </div>
+          {SCENARIOS.map((s) => {
+            const Icon = s.icon;
             return (
               <button
-                key={p.key}
+                key={s.key}
                 role="menuitem"
-                onClick={() => {
-                  onPick({ kind: p.kind, type: p.type });
-                  setOpen(false);
-                }}
-                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:opacity-90"
+                onClick={() => pick(s)}
+                className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition"
                 style={{ backgroundColor: "transparent" }}
                 onMouseEnter={(e) =>
                   (e.currentTarget.style.backgroundColor = T.panelSoft)
@@ -145,20 +188,20 @@ export function QuickAddSplit({
                 }
               >
                 <span
-                  className="flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0"
-                  style={{ backgroundColor: `${p.color}1f`, color: p.color }}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0"
+                  style={{ backgroundColor: `${s.accent}1f`, color: s.accent }}
                 >
-                  <Icon size={14} />
+                  <Icon size={15} strokeWidth={2} />
                 </span>
                 <span className="flex flex-col min-w-0">
                   <span
                     className="text-[12.5px] font-semibold"
                     style={{ color: T.textPrimary }}
                   >
-                    {p.label}
+                    {s.label}
                   </span>
                   <span className="text-[11px]" style={{ color: T.textMuted }}>
-                    {p.hint}
+                    {s.hint}
                   </span>
                 </span>
               </button>

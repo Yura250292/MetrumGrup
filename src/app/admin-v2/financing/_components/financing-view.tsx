@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Download,
@@ -17,6 +18,8 @@ import {
   Scale,
   Clock,
   Table as TableIcon,
+  MoreHorizontal,
+  ChevronDown,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrencyCompact } from "@/lib/utils";
@@ -37,12 +40,12 @@ import { TabScans } from "./tab-scans";
 import { TabApprovals } from "./tab-approvals";
 import { TabBudgetActual } from "./tab-budget-actual";
 import { TabPivot } from "./tab-pivot";
-import { PivotFullscreenModal } from "./pivot-fullscreen-modal";
 import { ExportMenu } from "./export-menu";
 import { TabTimesheets } from "./tab-timesheets";
 import { FolderEstimateCard } from "./folder-estimate-card";
 import { TemplateConstructor } from "./template-constructor";
 import { FilterBar } from "./filter-bar";
+import { LensBar } from "./lens-bar";
 import { ProjectsFoldersSection } from "./projects-folders-section";
 import type { ProjectOption, UserOption } from "./types";
 import { FolderBreadcrumb } from "@/components/folders/FolderBreadcrumb";
@@ -60,17 +63,25 @@ import {
 
 export type { FinanceEntryDTO, FinanceSummaryDTO, ProjectOption } from "./types";
 
-const TABS = [
+// Tab IA per ADMIN_V2_UX_UI_SIMPLIFICATION_PLAN (Phase 3): 3 primary + secondary menu.
+// Primary — daily flow: огляд / операції / погодження. Решта — secondary tools.
+const PRIMARY_TABS = [
   { key: "overview", label: "Огляд", shortLabel: "Огляд", icon: LayoutDashboard },
+  { key: "operations", label: "Операції", shortLabel: "Операції", icon: List },
+  { key: "approvals", label: "Погодження", shortLabel: "Погодж.", icon: CircleDot },
+] as const;
+
+const SECONDARY_TABS = [
   { key: "budget", label: "План vs Факт", shortLabel: "План/Факт", icon: Scale },
   { key: "timesheets", label: "ЗП і табелі", shortLabel: "Табелі", icon: Clock },
-  { key: "approvals", label: "На погодженні", shortLabel: "Погодж.", icon: CircleDot },
-  { key: "operations", label: "Операції", shortLabel: "Операції", icon: List },
-  { key: "scans", label: "Скани чеків", shortLabel: "Скани", icon: Sparkles },
   { key: "calendar", label: "Платіжний календар", shortLabel: "Календар", icon: CalendarDays },
+  { key: "scans", label: "Скани чеків", shortLabel: "Скани", icon: Sparkles },
   { key: "archive", label: "Архів", shortLabel: "Архів", icon: Archive },
   { key: "pivot", label: "Зведена таблиця", shortLabel: "Зведена", icon: TableIcon },
 ] as const;
+
+const TABS = [...PRIMARY_TABS, ...SECONDARY_TABS] as const;
+const PRIMARY_KEYS: ReadonlySet<string> = new Set(PRIMARY_TABS.map((t) => t.key));
 
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -105,7 +116,6 @@ export function FinancingView({
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [showOcrScan, setShowOcrScan] = useState(false);
   const [showEstimateUpload, setShowEstimateUpload] = useState(false);
-  const [showPivotFullscreen, setShowPivotFullscreen] = useState(false);
 
   const { data: folders = [] } = useFolders("FINANCE", folderId);
   const { data: detailData } = useFolderDetail(folderId);
@@ -287,6 +297,8 @@ export function FinancingView({
                 Журнал планових і фактичних грошових операцій
               </p>
             </div>
+            {/* Phase 7: hero має ОДНУ primary — «Кошторис».
+                Scan AI стає secondary (ghost), Export — tertiary меню. */}
             <div className="flex gap-2 flex-shrink-0 items-center">
               <button
                 onClick={() => setShowEstimateUpload(true)}
@@ -300,10 +312,14 @@ export function FinancingView({
               <button
                 onClick={() => setShowOcrScan(true)}
                 title="Сканувати чек"
-                className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
-                style={{ backgroundColor: T.accentPrimary }}
+                className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-[0.97]"
+                style={{
+                  backgroundColor: T.panelElevated,
+                  color: T.textPrimary,
+                  border: `1px solid ${T.borderStrong}`,
+                }}
               >
-                <Sparkles size={13} />
+                <Sparkles size={13} style={{ color: T.accentPrimary }} />
                 Scan AI
               </button>
               {folderId && (
@@ -315,37 +331,24 @@ export function FinancingView({
             </div>
           </div>
 
-          {/* Pivot fullscreen entry — primary action */}
-          <button
-            onClick={() => setShowPivotFullscreen(true)}
-            className="group flex w-full items-center gap-4 rounded-2xl border p-4 sm:p-5 text-left transition hover:brightness-105"
+          {/* Phase 7: pivot CTA — окрема сторінка (раніше була overlay-модалка).
+              Рендериться лише на глобальному view, тому scope тут завжди undefined. */}
+          <Link
+            href="/admin-v2/financing/pivot"
+            className="group inline-flex items-center gap-2 self-start rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition hover:brightness-[0.97]"
             style={{
               borderColor: T.borderSoft,
-              background: `linear-gradient(135deg, ${T.accentPrimarySoft}, ${T.panel})`,
-              boxShadow: T.shadow1,
+              backgroundColor: T.panel,
+              color: T.textPrimary,
             }}
+            title="Фінансовий результат по проєктах, ЗП, адміністративних · окрема сторінка"
           >
-            <div
-              className="flex h-12 w-12 sm:h-14 sm:w-14 flex-shrink-0 items-center justify-center rounded-xl"
-              style={{ background: T.accentPrimary, color: "#fff" }}
-            >
-              <TableIcon size={24} />
-            </div>
-            <div className="flex flex-1 flex-col min-w-0">
-              <div className="text-base sm:text-lg font-bold" style={{ color: T.textPrimary }}>
-                Зведена таблиця
-              </div>
-              <div className="text-[12px] sm:text-[13px] truncate" style={{ color: T.textSecondary }}>
-                Фінансовий результат по проєктах, ЗП, адміністративних · повний екран
-              </div>
-            </div>
-            <div
-              className="hidden sm:flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-semibold transition group-hover:brightness-110"
-              style={{ background: T.accentPrimary, color: "#fff" }}
-            >
-              Відкрити
-            </div>
-          </button>
+            <TableIcon size={14} style={{ color: T.accentPrimary }} />
+            Зведена таблиця
+            <span className="text-[11px] font-medium" style={{ color: T.textMuted }}>
+              · повний екран
+            </span>
+          </Link>
 
           {/* Hero balance with dual radial */}
           <HeroBalance summary={summary} />
@@ -362,10 +365,14 @@ export function FinancingView({
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
-              className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold text-white transition hover:brightness-110"
-              style={{ backgroundColor: T.accentPrimary }}
+              className="flex-1 min-w-[120px] flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition hover:brightness-[0.97]"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderStrong}`,
+              }}
             >
-              <Sparkles size={13} />
+              <Sparkles size={13} style={{ color: T.accentPrimary }} />
               Scan AI
             </button>
             {folderId && (
@@ -527,42 +534,12 @@ export function FinancingView({
         </section>
       )}
 
-      {/* Tabs — underline indicator, horizontal scroll on mobile */}
-      <nav
-        className="flex gap-0 overflow-x-auto -mx-1 px-1 scrollbar-none border-b"
-        style={{ borderColor: T.borderSoft }}
-      >
-        {TABS.map((tab) => {
-          const active = activeTab === tab.key;
-          const Icon = tab.icon;
-          const pendingCount =
-            tab.key === "approvals"
-              ? entries.filter((e) => e.status === "PENDING" && !e.isArchived).length
-              : 0;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className="relative flex items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 text-[12.5px] sm:text-[13px] font-semibold transition-colors flex-shrink-0 -mb-px"
-              style={{
-                color: active ? T.accentPrimary : T.textMuted,
-                borderBottom: `2px solid ${active ? T.accentPrimary : "transparent"}`,
-              }}
-            >
-              <Icon size={14} />
-              <span>{tab.shortLabel}</span>
-              {pendingCount > 0 && (
-                <span
-                  className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1.5 rounded-full text-[10px] font-bold text-white"
-                  style={{ backgroundColor: T.warning }}
-                >
-                  {pendingCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
+      {/* Tabs — 3 primary + «Більше» dropdown for secondary tools */}
+      <FinancingTabsBar
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        pendingCount={entries.filter((e) => e.status === "PENDING" && !e.isArchived).length}
+      />
 
       {/* Summary KPIs */}
       {activeTab === "operations" && (
@@ -603,8 +580,17 @@ export function FinancingView({
         </section>
       )}
 
-      {/* Filters */}
-      {(activeTab === "overview" || activeTab === "operations") && (
+      {/* Filters: на Огляді — спрощений LensBar; на Операціях — повний FilterBar */}
+      {activeTab === "overview" && (
+        <LensBar
+          filters={filters}
+          setFilters={setFilters}
+          projects={projects}
+          users={users}
+          scope={scope}
+        />
+      )}
+      {activeTab === "operations" && (
         <FilterBar
           filters={filters}
           setFilters={setFilters}
@@ -625,6 +611,7 @@ export function FinancingView({
             error={error}
             quadrantEntries={quadrantEntries}
             scope={scope}
+            filters={filters}
             onAdd={(preset) => setCreatePreset(preset)}
             onImport={(preset) =>
               setImportPreset({ kind: preset.kind, type: preset.type })
@@ -749,14 +736,6 @@ export function FinancingView({
         />
       )}
 
-      {/* Pivot fullscreen modal */}
-      <PivotFullscreenModal
-        open={showPivotFullscreen}
-        onClose={() => setShowPivotFullscreen(false)}
-        scope={scope}
-        filters={filters}
-      />
-
       {/* Estimate upload modal */}
       {showEstimateUpload && (
         <EstimateUploadModal
@@ -820,6 +799,138 @@ export function FinancingView({
           onStatusChange={handleStatusChange}
         />
       )}
+    </div>
+  );
+}
+
+function FinancingTabsBar({
+  activeTab,
+  onChange,
+  pendingCount,
+}: {
+  activeTab: TabKey;
+  onChange: (k: TabKey) => void;
+  pendingCount: number;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onClick);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [menuOpen]);
+
+  const isSecondaryActive = !PRIMARY_KEYS.has(activeTab);
+  const activeSecondary = SECONDARY_TABS.find((t) => t.key === activeTab);
+  const moreLabel = activeSecondary ? activeSecondary.shortLabel : "Більше";
+  const MoreIcon = activeSecondary?.icon ?? MoreHorizontal;
+
+  return (
+    // Зовнішній flex з border-b — щоб «Більше» сидів НА тій самій лінії, але
+    // ПОЗА overflow-контейнером primary tabs (інакше dropdown обрізається).
+    <div
+      className="flex items-stretch gap-0 border-b"
+      style={{ borderColor: T.borderSoft }}
+    >
+      <nav
+        className="flex items-center gap-0 flex-1 min-w-0 overflow-x-auto scrollbar-none -mb-px"
+      >
+        {PRIMARY_TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          const Icon = tab.icon;
+          const showPending = tab.key === "approvals" && pendingCount > 0;
+          return (
+            <button
+              key={tab.key}
+              onClick={() => onChange(tab.key)}
+              className="relative flex items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 text-[12.5px] sm:text-[13px] font-semibold transition-colors flex-shrink-0 -mb-px"
+              style={{
+                color: active ? T.accentPrimary : T.textMuted,
+                borderBottom: `2px solid ${active ? T.accentPrimary : "transparent"}`,
+              }}
+            >
+              <Icon size={14} />
+              <span>{tab.shortLabel}</span>
+              {showPending && (
+                <span
+                  className="inline-flex items-center justify-center h-[18px] min-w-[18px] px-1.5 rounded-full text-[10px] font-bold text-white"
+                  style={{ backgroundColor: T.warning }}
+                >
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* «Більше» — secondary tools dropdown.
+          Винесений у sibling від <nav>, щоб overflow-x-auto не обрізав
+          absolute-позиційований dropdown panel. */}
+      <div className="relative flex-shrink-0 -mb-px" ref={menuRef}>
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          className="relative flex items-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2.5 text-[12.5px] sm:text-[13px] font-semibold transition-colors flex-shrink-0 -mb-px"
+          style={{
+            color: isSecondaryActive ? T.accentPrimary : T.textMuted,
+            borderBottom: `2px solid ${isSecondaryActive ? T.accentPrimary : "transparent"}`,
+          }}
+        >
+          <MoreIcon size={14} />
+          <span>{moreLabel}</span>
+          <ChevronDown
+            size={12}
+            style={{
+              transition: "transform 150ms ease",
+              transform: menuOpen ? "rotate(180deg)" : "rotate(0deg)",
+            }}
+          />
+        </button>
+        {menuOpen && (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-30 mt-1 min-w-[220px] rounded-xl border p-1.5 shadow-lg"
+            style={{ backgroundColor: T.panel, borderColor: T.borderSoft, boxShadow: T.shadow1 }}
+          >
+            {SECONDARY_TABS.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  role="menuitem"
+                  onClick={() => {
+                    onChange(tab.key);
+                    setMenuOpen(false);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[12.5px] font-medium transition-colors hover:brightness-95"
+                  style={{
+                    color: active ? T.accentPrimary : T.textPrimary,
+                    backgroundColor: active ? T.accentPrimarySoft : "transparent",
+                  }}
+                >
+                  <Icon size={14} />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 jest.mock("@/lib/prisma");
 
 import { prisma } from "@/lib/prisma";
-import { computeSummary } from "../queries";
+import { computeSummary, parseListParams, buildWhere } from "../queries";
 
 type Stub = jest.Mock<(...args: any[]) => any>;
 
@@ -175,5 +175,46 @@ describe("computeSummary — Phase 4.4 financeNature shelves", () => {
     expect(s.actualCash.expense.sum).toBe(0);
     expect(s.unclassified.income.sum).toBe(0);
     expect(s.actualCashBalance).toBe(0);
+  });
+});
+
+describe("parseListParams / buildWhere — financeNatures (multi-value)", () => {
+  it("parse: CSV `financeNatures` → array з валідними значеннями", () => {
+    const sp = new URLSearchParams("financeNatures=BUDGET_INCOME,BUDGET_EXPENSE,BOGUS");
+    const f = parseListParams(sp);
+    expect(f.financeNatures).toEqual(["BUDGET_INCOME", "BUDGET_EXPENSE"]);
+  });
+
+  it("parse: порожній і відсутній параметр → undefined", () => {
+    expect(parseListParams(new URLSearchParams("")).financeNatures).toBeUndefined();
+    expect(parseListParams(new URLSearchParams("financeNatures=")).financeNatures).toBeUndefined();
+    expect(parseListParams(new URLSearchParams("financeNatures=BOGUS")).financeNatures).toBeUndefined();
+  });
+
+  it("buildWhere: financeNatures масив → Prisma `in`", () => {
+    const w = buildWhere({
+      archived: false,
+      financeNatures: ["BUDGET_INCOME", "BUDGET_EXPENSE"],
+    });
+    expect(w.financeNature).toEqual({ in: ["BUDGET_INCOME", "BUDGET_EXPENSE"] });
+  });
+
+  it("buildWhere: single-value financeNature має пріоритет над financeNatures", () => {
+    const w = buildWhere({
+      archived: false,
+      financeNature: "ACTUAL_INCOME",
+      financeNatures: ["BUDGET_INCOME", "BUDGET_EXPENSE"],
+    });
+    expect(w.financeNature).toBe("ACTUAL_INCOME");
+  });
+
+  it("buildWhere: financeNature='NULL' → financeNature: null (back-compat)", () => {
+    const w = buildWhere({ archived: false, financeNature: "NULL" });
+    expect(w.financeNature).toBeNull();
+  });
+
+  it("buildWhere: жоден з фільтрів не переданий → financeNature не у where", () => {
+    const w = buildWhere({ archived: false });
+    expect(w.financeNature).toBeUndefined();
   });
 });

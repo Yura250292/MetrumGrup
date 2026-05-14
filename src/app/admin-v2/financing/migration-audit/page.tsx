@@ -46,6 +46,63 @@ type AuditResponse = {
 const fmtNumber = (n: number) =>
   n.toLocaleString("uk-UA", { maximumFractionDigits: 2 });
 
+// === Локалізація для аудиту міграції ===
+// Ключі (`source`, `kind` тощо) залишаються англійською у JSON-відповіді бекенду —
+// вони відповідають полям Prisma. У UI показуємо людські назви.
+
+const HEADER_LABELS: Record<string, string> = {
+  source: "Джерело",
+  kind: "Тип запису",
+  type: "Напрямок",
+  status: "Статус",
+  count: "Кількість",
+  sum: "Сума",
+  financeNature: "Фінансова природа",
+  key: "Значення",
+  before: "Було",
+  after: "Стало",
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  MANUAL: "Вручну",
+  ESTIMATE_AUTO: "З кошторису",
+  STAGE_AUTO: "З етапу",
+  FOREMAN_REPORT: "Звіт виконроба",
+  OCR: "OCR-скан",
+};
+
+const KIND_LABELS: Record<string, string> = {
+  PLAN: "План",
+  FACT: "Факт",
+};
+
+const TYPE_LABELS: Record<string, string> = {
+  INCOME: "Дохід",
+  EXPENSE: "Витрата",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Чернетка",
+  PENDING: "На погодженні",
+  APPROVED: "Затверджено",
+  PAID: "Оплачено",
+};
+
+const NATURE_LABELS: Record<string, string> = {
+  BUDGET_INCOME: "Бюджет: дохід",
+  BUDGET_EXPENSE: "Бюджет: витрата",
+  COMMITTED_INCOME: "Очікуваний дохід",
+  COMMITTED_EXPENSE: "Борг постачальнику",
+  ACTUAL_INCOME: "Реальне надходження",
+  ACTUAL_EXPENSE: "Реальна оплата",
+};
+
+/** Перекладає enum-значення в людську назву, fallback на оригінал. */
+function tr(map: Record<string, string>, v: string | null | undefined): string {
+  if (v == null) return "—";
+  return map[v] ?? v;
+}
+
 export default function MigrationAuditPage() {
   const [data, setData] = useState<AuditResponse | null>(null);
   const [baseline, setBaseline] = useState<AuditResponse | null>(null);
@@ -118,12 +175,12 @@ export default function MigrationAuditPage() {
               До Фінансування
             </Link>
             <h1 className="mt-2 text-2xl font-semibold text-slate-900">
-              Migration audit (Safe Finance Migration · Phase 0)
+              Аудит фінансової міграції (Phase 0)
             </h1>
             <p className="mt-1 max-w-2xl text-sm text-slate-600">
               Інвентаризація фінансового ledger перед міграцією семантики
               (BUDGET / COMMITMENT / ACTUAL). Тільки для читання. Збережіть
-              JSON-знімок як baseline для подальшого порівняння.
+              JSON-знімок як базу (baseline) для подальшого порівняння.
             </p>
           </div>
           <div className="flex gap-2">
@@ -152,14 +209,14 @@ export default function MigrationAuditPage() {
               className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
             >
               <Download className="size-4" />
-              Завантажити baseline JSON
+              Завантажити знімок JSON
             </button>
             <label
               className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 cursor-pointer"
-              title="Завантажити попередній baseline JSON для diff-порівняння"
+              title="Завантажити попередній знімок JSON для порівняння"
             >
               <FileUp className="size-4" />
-              {baseline ? "Замінити baseline" : "Порівняти з baseline"}
+              {baseline ? "Замінити базовий знімок" : "Порівняти з базою"}
               <input
                 type="file"
                 accept="application/json"
@@ -171,7 +228,7 @@ export default function MigrationAuditPage() {
               <button
                 onClick={() => setBaseline(null)}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
-                title="Прибрати baseline"
+                title="Прибрати базовий знімок"
               >
                 <X className="size-4" />
               </button>
@@ -197,9 +254,9 @@ export default function MigrationAuditPage() {
                 value={fmtNumber(data.totals.totalEntries)}
               />
               <StatCard
-                label="financeNature IS NULL"
+                label="Без фінансової природи"
                 value={fmtNumber(data.totals.nullFinanceNature)}
-                hint="Очікувано: дорівнює всього записів — backfill ще не запускався."
+                hint="Очікувано: дорівнює всього записів — повторне заповнення (backfill) ще не запускалось."
               />
               <StatCard
                 label="Знімок зроблено"
@@ -208,76 +265,78 @@ export default function MigrationAuditPage() {
             </section>
 
             <GroupTable
-              title="За source"
+              title="Розподіл за джерелом"
               columns={["source", "count", "sum"]}
               rows={data.bySource.map((r) => ({
-                source: r.source ?? "—",
+                source: tr(SOURCE_LABELS, r.source),
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
             />
 
             <GroupTable
-              title="За kind × type"
+              title="Розподіл за типом × напрямком"
               columns={["kind", "type", "count", "sum"]}
               rows={data.byKindType.map((r) => ({
-                kind: r.kind ?? "—",
-                type: (r as unknown as { type: string }).type ?? "—",
+                kind: tr(KIND_LABELS, r.kind),
+                type: tr(TYPE_LABELS, (r as unknown as { type: string }).type),
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
             />
 
             <GroupTable
-              title="За status"
+              title="Розподіл за статусом"
               columns={["status", "count", "sum"]}
               rows={data.byStatus.map((r) => ({
-                status: r.status ?? "—",
+                status: tr(STATUS_LABELS, r.status),
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
             />
 
             <GroupTable
-              title="Семантичний дрейф: FACT за source"
-              hint="STAGE_AUTO FACT тут не є cash actual — це progress."
+              title="Семантичний дрейф: фактичні за джерелом"
+              hint="Записи з джерела «З етапу» тут не є реальною оплатою — це прогрес виконання."
               columns={["source", "count", "sum"]}
               rows={data.factBySource.map((r) => ({
-                source: r.source ?? "—",
+                source: tr(SOURCE_LABELS, r.source),
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
             />
 
             <GroupTable
-              title="За financeNature (Phase 2/5 progress)"
-              hint="Зростання не-null рядків після деплою Phase 5 writers = живий end-to-end."
+              title="Розподіл за фінансовою природою"
+              hint="Зростання класифікованих рядків після деплою писачів Phase 5 означає живий end-to-end-потік."
               columns={["financeNature", "count", "sum"]}
               rows={data.byFinanceNature.map((r) => ({
-                financeNature: r.financeNature ?? "—(null)",
+                financeNature: r.financeNature
+                  ? tr(NATURE_LABELS, r.financeNature)
+                  : "—(без класифікації)",
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
             />
 
             <GroupTable
-              title="financeNature за source (тільки класифіковані)"
+              title="Фінансова природа за джерелом (тільки класифіковані)"
               columns={["source", "financeNature", "count", "sum"]}
               rows={data.bySourceFinanceNature.map((r) => ({
-                source: r.source ?? "—",
-                financeNature: r.financeNature ?? "—",
+                source: tr(SOURCE_LABELS, r.source),
+                financeNature: tr(NATURE_LABELS, r.financeNature),
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
             />
 
             <GroupTable
-              title="Топ source × kind × status (50)"
+              title="Топ комбінацій: джерело × тип × статус (50)"
               columns={["source", "kind", "status", "count", "sum"]}
               rows={data.bySourceKindStatus.map((r) => ({
-                source: r.source ?? "—",
-                kind: r.kind ?? "—",
-                status: r.status ?? "—",
+                source: tr(SOURCE_LABELS, r.source),
+                kind: tr(KIND_LABELS, r.kind),
+                status: tr(STATUS_LABELS, r.status),
                 count: fmtNumber(r.count),
                 sum: fmtNumber(r.sum),
               }))}
@@ -285,17 +344,17 @@ export default function MigrationAuditPage() {
 
             <section className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
               <h3 className="mb-2 text-base font-semibold text-slate-900">
-                Supplier debt baseline
+                Базова інвентаризація боргу постачальникам
               </h3>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-                <dt className="text-slate-500">unpaid FACT EXPENSE count</dt>
+                <dt className="text-slate-500">Кількість неоплачених FACT EXPENSE</dt>
                 <dd>{fmtNumber(data.supplierDebt.unpaidFactCount)}</dd>
-                <dt className="text-slate-500">debtRaw (owner KPI logic)</dt>
+                <dt className="text-slate-500">Сирий борг (debtRaw, логіка KPI власника)</dt>
                 <dd>{fmtNumber(data.supplierDebt.debtRaw)}</dd>
-                <dt className="text-slate-500">SUM allocations</dt>
+                <dt className="text-slate-500">Сума allocations</dt>
                 <dd>{fmtNumber(data.supplierDebt.allocationsTotal)}</dd>
                 <dt className="text-slate-500">
-                  debtAfterAllocations (грубо)
+                  Борг після allocations (грубо)
                 </dt>
                 <dd>{fmtNumber(data.supplierDebt.debtAfterAllocations)}</dd>
               </dl>
@@ -310,11 +369,11 @@ export default function MigrationAuditPage() {
               </h3>
               <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
                 <dt className="text-slate-500">
-                  PLAN INCOME MANUAL · category=client_advance (proxy для KB2)
+                  Планові аванси від клієнтів (категорія «client_advance»)
                 </dt>
                 <dd>{fmtNumber(data.planFromKb2LikeCount)}</dd>
                 <dt className="text-slate-500">
-                  Проекти з обома планами (ESTIMATE_AUTO + STAGE_AUTO)
+                  Проєкти з двома планами (з кошторису + з етапу)
                 </dt>
                 <dd>{fmtNumber(data.projectsWithBothPlanSources)}</dd>
               </dl>
@@ -336,22 +395,22 @@ function DiffSection({
   const deltaNature = diffByKey(
     baseline.byFinanceNature,
     current.byFinanceNature,
-    (r) => r.financeNature ?? "—(null)",
+    (r) => (r.financeNature ? tr(NATURE_LABELS, r.financeNature) : "—(без класифікації)"),
   );
   const deltaSource = diffByKey(
     baseline.bySource,
     current.bySource,
-    (r) => r.source ?? "—",
+    (r) => tr(SOURCE_LABELS, r.source),
   );
 
   return (
     <section className="mb-6 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
       <header className="mb-3 flex items-center justify-between">
         <h3 className="text-base font-semibold text-slate-900">
-          Diff vs baseline
+          Порівняння зі знімком
         </h3>
         <span className="text-xs text-slate-600">
-          baseline: {new Date(baseline.capturedAt).toLocaleString("uk-UA")} →
+          знімок: {new Date(baseline.capturedAt).toLocaleString("uk-UA")} →
           поточний: {new Date(current.capturedAt).toLocaleString("uk-UA")}
         </span>
       </header>
@@ -382,8 +441,8 @@ function DiffSection({
         />
       </div>
 
-      <DiffTable title="financeNature розподіл" rows={deltaNature} />
-      <DiffTable title="Source розподіл" rows={deltaSource} />
+      <DiffTable title="Розподіл за financeNature" rows={deltaNature} />
+      <DiffTable title="Розподіл за джерелом (source)" rows={deltaSource} />
     </section>
   );
 }
@@ -470,9 +529,9 @@ function DiffTable({ title, rows }: { title: string; rows: DiffRow[] }) {
       <table className="w-full text-xs">
         <thead className="bg-slate-50 text-left uppercase tracking-wide text-slate-500">
           <tr>
-            <th className="px-3 py-1.5">key</th>
-            <th className="px-3 py-1.5 text-right">before</th>
-            <th className="px-3 py-1.5 text-right">after</th>
+            <th className="px-3 py-1.5">{HEADER_LABELS.key}</th>
+            <th className="px-3 py-1.5 text-right">{HEADER_LABELS.before}</th>
+            <th className="px-3 py-1.5 text-right">{HEADER_LABELS.after}</th>
             <th className="px-3 py-1.5 text-right">Δ</th>
           </tr>
         </thead>
@@ -556,7 +615,7 @@ function GroupTable({
             <tr>
               {columns.map((c) => (
                 <th key={c} className="px-4 py-2 font-medium">
-                  {c}
+                  {HEADER_LABELS[c] ?? c}
                 </th>
               ))}
             </tr>

@@ -1,16 +1,20 @@
 "use client";
 
-import { TrendingUp, TrendingDown, Loader2, AlertCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Loader2, AlertCircle, ChevronDown } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { QuadrantCard } from "./quadrant-card";
+import { AdaptiveQuadrants } from "./adaptive-quadrants";
 import { NeedsAttention } from "./needs-attention";
 import { CashflowChart } from "./cashflow-chart";
+import { detectLens } from "./lens-bar";
 import type {
   FinanceEntryDTO,
   FinanceSummaryDTO,
   QuadrantPreset,
   FinancingFilters,
 } from "./types";
+
+const CASHFLOW_OPEN_KEY = "fin-overview-cashflow-open";
 
 export function TabOverview({
   entries,
@@ -19,6 +23,7 @@ export function TabOverview({
   error,
   quadrantEntries,
   scope,
+  filters,
   onAdd,
   onImport,
   onEdit,
@@ -34,6 +39,7 @@ export function TabOverview({
   error: string | null;
   quadrantEntries: Record<string, FinanceEntryDTO[]>;
   scope?: { id: string; title: string };
+  filters: FinancingFilters;
   onAdd: (preset: QuadrantPreset) => void;
   onImport?: (preset: QuadrantPreset) => void;
   onEdit: (e: FinanceEntryDTO) => void;
@@ -43,6 +49,28 @@ export function TabOverview({
   onSwitchTab: (tab: "overview" | "operations" | "calendar" | "archive") => void;
   setFilters: React.Dispatch<React.SetStateAction<FinancingFilters>>;
 }) {
+  // Похідні від filters: активний lens і flow для AdaptiveQuadrants.
+  const lens = detectLens(filters);
+  const flow: "ALL" | "INCOME" | "EXPENSE" =
+    filters.type === "INCOME" ? "INCOME" : filters.type === "EXPENSE" ? "EXPENSE" : "ALL";
+
+  // Cashflow chart — згорнутий за замовчуванням, стан у localStorage (Phase 7 plan).
+  const [cashflowOpen, setCashflowOpen] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const stored = window.localStorage.getItem(CASHFLOW_OPEN_KEY);
+    if (stored === "true") setCashflowOpen(true);
+  }, []);
+  const toggleCashflow = () => {
+    setCashflowOpen((prev) => {
+      const next = !prev;
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CASHFLOW_OPEN_KEY, String(next));
+      }
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <div
@@ -74,7 +102,7 @@ export function TabOverview({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Needs attention */}
+      {/* 1. Needs attention (дія) */}
       <NeedsAttention
         entries={entries}
         summary={summary}
@@ -83,86 +111,58 @@ export function TabOverview({
         scope={scope}
       />
 
-      {/* Cashflow chart */}
-      <CashflowChart entries={entries} />
+      {/* 2. Adaptive quadrants (деталі) */}
+      <AdaptiveQuadrants
+        lens={lens}
+        flow={flow}
+        summary={summary}
+        quadrantEntries={quadrantEntries}
+        scope={scope}
+        onAdd={onAdd}
+        onImport={onImport}
+        onEdit={onEdit}
+        onArchive={onArchive}
+        onDelete={onDelete}
+        onMoveToFolder={onMoveToFolder}
+        onSwitchTab={onSwitchTab}
+        setFilters={setFilters}
+      />
 
-      {/* Quadrant grid (compact summary) */}
-      <div>
-        <span
-          className="text-[12px] font-semibold mb-3 block"
-          style={{ color: T.textSecondary }}
+      {/* 3. Collapsed cashflow (аналітика) */}
+      <section
+        className="rounded-2xl"
+        style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
+      >
+        <button
+          type="button"
+          onClick={toggleCashflow}
+          aria-expanded={cashflowOpen}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:brightness-[0.98]"
         >
-          План / факт по квадрантах
-        </span>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <QuadrantCard
-            title="Планові витрати"
-            icon={<TrendingDown size={16} />}
-            accent={T.warning}
-            stats={summary.plan.expense}
-            pairedSum={summary.fact.expense.sum}
-            pairedLabel="факт"
-            entries={quadrantEntries["PLAN:EXPENSE"]}
-            onAdd={() => onAdd({ kind: "PLAN", type: "EXPENSE" })}
-            onImport={onImport ? () => onImport({ kind: "PLAN", type: "EXPENSE" }) : undefined}
-            onEdit={onEdit}
-            onArchive={onArchive}
-            onDelete={onDelete}
-            onMoveToFolder={onMoveToFolder}
-            showProject={!scope}
-            planned
+          <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+            Грошовий потік
+          </span>
+          <span
+            className="text-[11px]"
+            style={{ color: T.textMuted }}
+          >
+            {cashflowOpen ? "приховати" : "розгорнути"}
+          </span>
+          <ChevronDown
+            size={16}
+            style={{
+              color: T.textMuted,
+              transition: "transform 200ms",
+              transform: cashflowOpen ? "rotate(180deg)" : "rotate(0deg)",
+            }}
           />
-          <QuadrantCard
-            title="Планові доходи"
-            icon={<TrendingUp size={16} />}
-            accent={T.accentPrimary}
-            stats={summary.plan.income}
-            pairedSum={summary.fact.income.sum}
-            pairedLabel="факт"
-            entries={quadrantEntries["PLAN:INCOME"]}
-            onAdd={() => onAdd({ kind: "PLAN", type: "INCOME" })}
-            onImport={onImport ? () => onImport({ kind: "PLAN", type: "INCOME" }) : undefined}
-            onEdit={onEdit}
-            onArchive={onArchive}
-            onDelete={onDelete}
-            onMoveToFolder={onMoveToFolder}
-            showProject={!scope}
-            planned
-          />
-          <QuadrantCard
-            title="Фактичні витрати"
-            icon={<TrendingDown size={16} />}
-            accent={T.danger}
-            stats={summary.fact.expense}
-            pairedSum={summary.plan.expense.sum}
-            pairedLabel="план"
-            entries={quadrantEntries["FACT:EXPENSE"]}
-            onAdd={() => onAdd({ kind: "FACT", type: "EXPENSE" })}
-            onImport={onImport ? () => onImport({ kind: "FACT", type: "EXPENSE" }) : undefined}
-            onEdit={onEdit}
-            onArchive={onArchive}
-            onDelete={onDelete}
-            onMoveToFolder={onMoveToFolder}
-            showProject={!scope}
-          />
-          <QuadrantCard
-            title="Фактичні доходи"
-            icon={<TrendingUp size={16} />}
-            accent={T.success}
-            stats={summary.fact.income}
-            pairedSum={summary.plan.income.sum}
-            pairedLabel="план"
-            entries={quadrantEntries["FACT:INCOME"]}
-            onAdd={() => onAdd({ kind: "FACT", type: "INCOME" })}
-            onImport={onImport ? () => onImport({ kind: "FACT", type: "INCOME" }) : undefined}
-            onEdit={onEdit}
-            onArchive={onArchive}
-            onDelete={onDelete}
-            onMoveToFolder={onMoveToFolder}
-            showProject={!scope}
-          />
-        </div>
-      </div>
+        </button>
+        {cashflowOpen && (
+          <div className="border-t px-4 py-4" style={{ borderColor: T.borderSoft }}>
+            <CashflowChart entries={entries} />
+          </div>
+        )}
+      </section>
     </div>
   );
 }

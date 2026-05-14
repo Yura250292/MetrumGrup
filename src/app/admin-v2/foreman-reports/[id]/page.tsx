@@ -3,6 +3,17 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+  Bot,
+  Check,
+  TriangleAlert,
+  TrendingUp,
+  FileText,
+  FileSpreadsheet,
+  Coins,
+  Wallet,
+  CircleAlert,
+} from "lucide-react";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -336,8 +347,12 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
                   // eslint-disable-next-line @next/next/no-img-element -- presigned R2 URL, не оптимізуємо через next/image
                   <img src={a.previewUrl} alt={a.originalName} className="w-full h-32 object-cover" />
                 ) : (
-                  <div className="h-32 flex items-center justify-center text-4xl">
-                    {a.mimeType.includes("pdf") ? "📄" : "📊"}
+                  <div className="h-32 flex items-center justify-center text-zinc-500">
+                    {a.mimeType.includes("pdf") ? (
+                      <FileText size={36} strokeWidth={1.5} />
+                    ) : (
+                      <FileSpreadsheet size={36} strokeWidth={1.5} />
+                    )}
                   </div>
                 )}
                 <div className="px-2 py-1.5 text-xs truncate">{a.originalName}</div>
@@ -405,23 +420,23 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
                     ) : it.counterparty ? (
                       <button
                         onClick={() => setPickerForItem(it.id)}
-                        className="text-xs text-emerald-300 bg-emerald-500/10 rounded px-2 py-1 hover:bg-emerald-500/20"
+                        className="inline-flex items-center gap-1 text-xs text-emerald-300 bg-emerald-500/10 rounded px-2 py-1 hover:bg-emerald-500/20"
                       >
-                        ✓ {it.counterparty.name}
+                        <Check size={11} strokeWidth={2.5} /> {it.counterparty.name}
                       </button>
                     ) : it.supplierGuess ? (
                       <button
                         onClick={() => setPickerForItem(it.id)}
-                        className="text-xs text-amber-300 bg-amber-500/10 rounded px-2 py-1 hover:bg-amber-500/20"
+                        className="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 rounded px-2 py-1 hover:bg-amber-500/20"
                       >
-                        🤖 AI: {it.supplierGuess}
+                        <Bot size={11} strokeWidth={2} /> AI: {it.supplierGuess}
                       </button>
                     ) : needsSupplier ? (
                       <button
                         onClick={() => setPickerForItem(it.id)}
-                        className="text-xs text-rose-300 bg-rose-500/10 rounded px-2 py-1 hover:bg-rose-500/20 font-semibold"
+                        className="inline-flex items-center gap-1 text-xs text-rose-300 bg-rose-500/10 rounded px-2 py-1 hover:bg-rose-500/20 font-semibold"
                       >
-                        ⚠ Вибрати постачальника
+                        <TriangleAlert size={11} strokeWidth={2.5} /> Вибрати постачальника
                       </button>
                     ) : (
                       <span className="text-xs text-zinc-600">—</span>
@@ -440,10 +455,10 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
                     ) : it.costCode ? (
                       <button
                         onClick={() => setCodePickerForItem(it.id)}
-                        className="text-xs text-sky-300 bg-sky-500/10 rounded px-2 py-1 hover:bg-sky-500/20"
+                        className="inline-flex items-center gap-1 text-xs text-sky-300 bg-sky-500/10 rounded px-2 py-1 hover:bg-sky-500/20"
                         title={it.costCode.name}
                       >
-                        ✓ {it.costCode.code}
+                        <Check size={11} strokeWidth={2.5} /> {it.costCode.code}
                       </button>
                     ) : (
                       <button
@@ -490,10 +505,10 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
                       <span className="inline-flex items-center gap-1">
                         {it.priceIncreaseFlag && it.previousUnitPrice && (
                           <span
-                            className="text-[10px] font-bold text-rose-300 bg-rose-500/15 px-1 rounded"
+                            className="inline-flex items-center text-[10px] font-bold text-rose-300 bg-rose-500/15 px-1 py-0.5 rounded"
                             title={`Подорожчання: було ${Number(it.previousUnitPrice).toFixed(2)} грн, стало ${Number(it.unitPrice).toFixed(2)} грн`}
                           >
-                            ▲
+                            <TrendingUp size={10} strokeWidth={2.5} />
                           </span>
                         )}
                         {Number(it.unitPrice).toFixed(2)}
@@ -514,47 +529,46 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
 
       {canDecide && !showReject && (
         <>
-          {/* Phase 5.5: preview перед approve — який запис створиться */}
-          <div className="rounded-xl bg-zinc-900 border border-zinc-800 p-4 mb-4">
-            <div className="text-xs font-semibold uppercase text-zinc-500 mb-2">
-              Що зʼявиться у фінансуванні після підтвердження
-            </div>
-            <div className="space-y-1.5 text-xs">
-              {(() => {
-                const commitItems = report.items.filter(
-                  (i) => i.financeIntent !== "ACTUAL",
-                );
-                const actualItems = report.items.filter(
-                  (i) => i.financeIntent === "ACTUAL",
-                );
-                const noCodeCount = report.items.filter((i) => !i.costCodeId).length;
-                return (
-                  <>
-                    <div className="flex justify-between text-amber-200">
-                      <span>
-                        🟡 Зобовʼязання (борг постачальникам): {commitItems.length}
-                      </span>
-                      <span className="font-bold">
-                        {commitItems.reduce((s, i) => s + Number(i.amount), 0).toFixed(2)} грн
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-emerald-200">
-                      <span>🟢 Реальна оплата (готівка/картка на місці): {actualItems.length}</span>
-                      <span className="font-bold">
-                        {actualItems.reduce((s, i) => s + Number(i.amount), 0).toFixed(2)} грн
-                      </span>
-                    </div>
-                    {noCodeCount > 0 && (
-                      <div className="text-zinc-500 pt-1 border-t border-zinc-800">
-                        ⚠ {noCodeCount} позиц(ій) без статті — попадуть у "(без статті)"
-                        у budget-vs-actual
-                      </div>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-          </div>
+          {/* Phase 6 polish: pre-approve summary — критичний блок довіри.
+              План: «що піде у борг», «що — у факт», «що без статті». */}
+          {(() => {
+            const commitItems = report.items.filter((i) => i.financeIntent !== "ACTUAL");
+            const actualItems = report.items.filter((i) => i.financeIntent === "ACTUAL");
+            const commitSum = commitItems.reduce((s, i) => s + Number(i.amount), 0);
+            const actualSum = actualItems.reduce((s, i) => s + Number(i.amount), 0);
+            const noCodeCount = report.items.filter((i) => !i.costCodeId).length;
+            return (
+              <div className="rounded-xl bg-zinc-900 border border-zinc-700 p-5 mb-4">
+                <div className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 mb-3">
+                  Перевірте перед підтвердженням
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <SummaryRow
+                    icon={<Coins size={16} strokeWidth={2} />}
+                    accent="amber"
+                    label={pluralPositions(commitItems.length, "піде у борг постачальникам")}
+                    sum={commitSum}
+                    muted={commitItems.length === 0}
+                  />
+                  <SummaryRow
+                    icon={<Wallet size={16} strokeWidth={2} />}
+                    accent="emerald"
+                    label={pluralPositions(actualItems.length, "піде у фактичні витрати")}
+                    sum={actualSum}
+                    muted={actualItems.length === 0}
+                  />
+                </div>
+                {noCodeCount > 0 && (
+                  <div className="mt-3 pt-3 border-t border-zinc-800 flex items-center gap-2 text-xs text-zinc-400">
+                    <CircleAlert size={14} strokeWidth={2} className="text-zinc-500 flex-shrink-0" />
+                    <span>
+                      {pluralPositions(noCodeCount, "без статті витрат")} — попадуть у «(без статті)» у budget vs actual
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
           <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-6 py-4">
             <div className="max-w-4xl mx-auto flex gap-3">
               <button
@@ -562,14 +576,14 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
                 disabled={submitting}
                 className="flex-1 px-6 py-3 rounded-xl bg-rose-600/20 text-rose-300 border border-rose-600/40 hover:bg-rose-600/30 font-semibold disabled:opacity-50"
               >
-                Відхилити
+                Повернути виконробу
               </button>
               <button
                 onClick={handleApprove}
                 disabled={submitting}
                 className="flex-[2] px-6 py-3 rounded-xl bg-emerald-500 text-white font-semibold hover:bg-emerald-400 disabled:opacity-50"
               >
-                {submitting ? "Затвердження…" : "Підтвердити та записати у витрати"}
+                {submitting ? "Підтвердження…" : "Підтвердити"}
               </button>
             </div>
           </div>
@@ -621,6 +635,56 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Український plural для «N позиція / позиції / позицій».
+function pluralPositions(n: number, suffix: string): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  let word: string;
+  if (mod100 >= 11 && mod100 <= 14) word = "позицій";
+  else if (mod10 === 1) word = "позиція";
+  else if (mod10 >= 2 && mod10 <= 4) word = "позиції";
+  else word = "позицій";
+  return `${n} ${word} ${suffix}`;
+}
+
+function SummaryRow({
+  icon,
+  accent,
+  label,
+  sum,
+  muted,
+}: {
+  icon: React.ReactNode;
+  accent: "amber" | "emerald";
+  label: string;
+  sum: number;
+  muted: boolean;
+}) {
+  const palette =
+    accent === "amber"
+      ? { ring: "border-amber-500/30", chip: "bg-amber-500/15 text-amber-300", text: "text-amber-100" }
+      : { ring: "border-emerald-500/30", chip: "bg-emerald-500/15 text-emerald-300", text: "text-emerald-100" };
+  return (
+    <div
+      className={`flex items-center gap-3 rounded-lg border ${muted ? "border-zinc-800 opacity-60" : palette.ring} bg-zinc-950 p-3`}
+    >
+      <span
+        className={`inline-flex h-8 w-8 items-center justify-center rounded-md flex-shrink-0 ${muted ? "bg-zinc-800 text-zinc-500" : palette.chip}`}
+      >
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className={`text-[13px] font-semibold truncate ${muted ? "text-zinc-500" : palette.text}`}>
+          {label}
+        </div>
+        <div className={`text-[12px] tabular-nums ${muted ? "text-zinc-600" : "text-zinc-400"}`}>
+          {sum.toFixed(2)} грн
+        </div>
+      </div>
     </div>
   );
 }

@@ -7,6 +7,14 @@ import { format } from "date-fns";
 import { uk } from "date-fns/locale";
 import type { FinancingFilters, ProjectOption, UserOption } from "./types";
 import { FINANCE_STATUS_LABELS, type FinanceEntryStatus } from "./types";
+import { detectLens } from "./lens-bar";
+
+const LENS_LABELS: Record<string, string> = {
+  BUDGET: "Бюджет",
+  COMMITTED: "Зобовʼязання",
+  ACTUAL: "Кеш",
+  UNCLASSIFIED: "Не класифіковано",
+};
 
 const KIND_LABELS: Record<string, string> = { PLAN: "План", FACT: "Факт" };
 const TYPE_LABELS: Record<string, string> = { INCOME: "Доходи", EXPENSE: "Витрати" };
@@ -97,7 +105,18 @@ export function ActiveFilterChips({
     });
   }
 
-  if (filters.financeNature) {
+  // Lens-aware chip: якщо активний lens (BUDGET/COMMITTED/ACTUAL/UNCLASSIFIED)
+  // — показуємо ОДНУ ємну плитку «Бюджет ×» замість двох natures.
+  // Якщо financeNature (single) — показуємо детальну плитку (legacy / Operations tab).
+  const activeLens = detectLens(filters);
+  if (activeLens !== "ALL") {
+    chips.push({
+      key: "financeNature",
+      label: LENS_LABELS[activeLens] ?? activeLens,
+      clear: () =>
+        setFilters((p) => ({ ...p, financeNature: "", financeNatures: [] })),
+    });
+  } else if (filters.financeNature) {
     const natureLabels: Record<string, string> = {
       BUDGET_INCOME: "Бюджет (дохід)",
       BUDGET_EXPENSE: "Бюджет (витрата)",

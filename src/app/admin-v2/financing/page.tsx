@@ -122,9 +122,9 @@ export default async function AdminV2FinancingPage({
                 color: T.textSecondary,
                 border: `1px solid ${T.borderSoft}`,
               }}
-              title="Safe Finance Migration · Phase 0 audit — інвентаризація ledger перед backfill"
+              title="Аудит фінансової міграції · Phase 0 — інвентаризація ledger перед backfill"
             >
-              <ClipboardList size={14} /> Migration audit
+              <ClipboardList size={14} /> Аудит міграції
             </Link>
           )}
           {canCreateProject && (

@@ -8,19 +8,27 @@ const QUERY_KEY = ["dashboard-layout"] as const;
 const LOCAL_CACHE_KEY = "dashboard-layout:v1";
 const LEGACY_CONFIG_KEY = "dashboard-widget-config";
 
+// Default layout per ADMIN_V2_UX_UI_SIMPLIFICATION_PLAN (Phase 2).
+// Story: «Потребує уваги → Мої дії → Стан бізнесу → Зміни → Аналітика».
+// Існуючі користувачі зберігають свій збережений layout; це впливає тільки на нових.
 const DEFAULT_DESKTOP: WidgetInstance[] = [
+  // 1. Needs attention today — dominant.
   { id: "w-attention", type: "attention", size: "4x1", order: 0 },
-  { id: "w-kpi-business", type: "kpi-business", size: "4x1", order: 1 },
-  { id: "w-my-tasks", type: "my-tasks", size: "2x2", order: 2 },
-  { id: "w-meetings", type: "meetings", size: "2x1", order: 3 },
-  { id: "w-chats", type: "chats", size: "2x1", order: 4 },
-  { id: "w-finance-quick", type: "finance-quick", size: "2x2", order: 5 },
-  { id: "w-kpi-tasks", type: "kpi-tasks", size: "4x1", order: 6 },
-  { id: "w-finance", type: "finance-pulse", size: "2x2", order: 7 },
-  { id: "w-team", type: "team", size: "2x1", order: 8 },
-  { id: "w-stages", type: "stages", size: "2x1", order: 9 },
-  { id: "w-projects-risk", type: "projects-risk", size: "4x2", order: 10 },
-  { id: "w-activity", type: "activity", size: "2x2", order: 11 },
+  // 2. My actions — tasks / meetings / chats.
+  { id: "w-my-tasks", type: "my-tasks", size: "2x2", order: 1 },
+  { id: "w-meetings", type: "meetings", size: "2x1", order: 2 },
+  { id: "w-chats", type: "chats", size: "2x1", order: 3 },
+  // 3. State of the business — KPIs + quick finance.
+  { id: "w-kpi-business", type: "kpi-business", size: "4x1", order: 4 },
+  { id: "w-kpi-tasks", type: "kpi-tasks", size: "4x1", order: 5 },
+  { id: "w-finance-quick", type: "finance-quick", size: "2x2", order: 6 },
+  // 4. What's changed — risks + activity.
+  { id: "w-projects-risk", type: "projects-risk", size: "4x2", order: 7 },
+  { id: "w-activity", type: "activity", size: "2x2", order: 8 },
+  // 5. Analytics — finance pulse / stages / team / AI assist.
+  { id: "w-finance", type: "finance-pulse", size: "2x2", order: 9 },
+  { id: "w-stages", type: "stages", size: "2x1", order: 10 },
+  { id: "w-team", type: "team", size: "2x1", order: 11 },
   { id: "w-ai-widget", type: "ai-widget", size: "2x2", order: 12 },
 ];
 

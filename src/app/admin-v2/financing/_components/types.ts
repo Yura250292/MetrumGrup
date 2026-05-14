@@ -106,6 +106,15 @@ export type QuadrantPreset = {
   type: "INCOME" | "EXPENSE";
   folderId?: string;
   folderName?: string;
+  /**
+   * Optional intent hint from intent-first picker (Phase 4).
+   * Якщо переданий — EntryFormModal використає його замість дефолту,
+   * мапленого з kind: PLAN→BUDGET, FACT→COMMITTED.
+   *  - BUDGET    → плановий бюджет
+   *  - COMMITTED → зобовʼязання (борг / нараховано / очікуване)
+   *  - ACTUAL    → реальна оплата / надходження готівкою/карткою
+   */
+  intent?: "BUDGET" | "COMMITTED" | "ACTUAL";
 };
 
 const EMPTY_STATS: QuadrantStats = { sum: 0, count: 0 };
@@ -138,11 +147,28 @@ export type FinancingFilters = {
   status: string;
   source: string;
   financeNature: string;
+  /**
+   * Multi-value варіант для LensBar (Phase: Огляд restructure).
+   * Якщо непорожній — серіалізується у CSV `financeNatures` query-параметр.
+   * single-value `financeNature` має пріоритет (back-compat для Operations/Pivot).
+   */
+  financeNatures: string[];
   subcategory: string;
   responsibleId: string;
   hasAttachments: string;
   archived: boolean;
 };
+
+/**
+ * UI-only тип для LensBar (НЕ персистимо, НЕ частина серверного контракту).
+ * Маппинг див. lens-bar.tsx → URL `financeNatures` через FinancingFilters.
+ */
+export type Lens =
+  | "ALL"
+  | "BUDGET"
+  | "COMMITTED"
+  | "ACTUAL"
+  | "UNCLASSIFIED";
 
 export const FINANCE_STATUS_LABELS: Record<FinanceEntryStatus, string> = {
   DRAFT: "Чернетка",

@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import { AlertTriangle } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 
@@ -123,16 +124,41 @@ export function NeedsAttention({
     }
   }, [activeTab, overdueTasks, overduePayments, dueTodayTasks, staleProjects]);
 
+  // Severity bar color: danger if there are overdue items/payments, else warn.
+  const accentColor = counts.overdue + counts.payments > 0 ? T.danger : T.warning;
+
   return (
     <section
-      className="premium-card rounded-2xl overflow-hidden"
+      className="premium-card rounded-2xl overflow-hidden relative"
+      aria-label="Потребує уваги сьогодні"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
+        boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 12px rgba(15, 23, 42, 0.06)",
       }}
     >
+      {/* Severity accent stripe — communicates priority at a glance */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-x-0 top-0 h-[3px]"
+        style={{ backgroundColor: accentColor }}
+      />
       <div className="section-head">
-        <h2>Потребує уваги</h2>
+        <span
+          className="inline-flex items-center justify-center rounded-lg flex-shrink-0"
+          aria-hidden="true"
+          style={{
+            width: 28,
+            height: 28,
+            backgroundColor: `${accentColor}1A`,
+            color: accentColor,
+          }}
+        >
+          <AlertTriangle size={16} strokeWidth={2.25} />
+        </span>
+        <h2 style={{ fontSize: 17, fontWeight: 700, letterSpacing: "-0.01em" }}>
+          Потребує уваги сьогодні
+        </h2>
         <span className="sub">{totalIssues} елементів</span>
         <Link href={TAB_HREF[activeTab]} className="action">
           Усе →

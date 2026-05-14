@@ -1,7 +1,6 @@
 import {
   LayoutDashboard,
   FolderKanban,
-  Calculator,
   Package,
   Users,
   Truck,
@@ -19,7 +18,6 @@ import {
   Mic,
   ScanLine,
   TrendingUp,
-  Library,
   type LucideIcon,
 } from "lucide-react";
 
@@ -48,14 +46,17 @@ const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN"] as const;
 // Виняток для постачальників: MANAGER веде облік постачальників разом з Адміном
 // (рішення власника 2026-05-11). Решта ролей все ще не бачать.
 const SUPPLIERS_ACCESS_ROLES = ["SUPER_ADMIN", "MANAGER"] as const;
+// Manager-only analytics overlays на проєктному списку (огляд по проєктах).
+const PROJECTS_MANAGER_ROLES = ["SUPER_ADMIN", "MANAGER"] as const;
 
 export type NavGroup = {
   label: string;
   items: NavItem[];
 };
 
-// Sidebar navigation — 8-group calm enterprise structure.
-// Головне / Проєкти / Фінанси / Кошторисна база / Ресурси / Комунікація / Контент / Адміністрування.
+// Sidebar navigation — 7-group intent-first structure.
+// Plan: ADMIN_V2_UX_UI_SIMPLIFICATION_PLAN.md (Phase 1 IA cleanup, 2026-05-14).
+// Принципи: сценарій > модуль; одна предметна область = одна група; рідкісне → «Ще».
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Головне",
@@ -68,52 +69,19 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Проєкти",
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
-      { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table },
+      // «Огляд проєктів» — manager-only analytics; ховаємо у звичайних користувачів,
+      // щоб не виглядало як дубль пункту «Проєкти».
+      { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table, roles: PROJECTS_MANAGER_ROLES },
     ],
   },
   {
     label: "Фінанси",
     items: [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
-      { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, pillBadge: { text: "NEW", color: "violet" }, roles: FINANCE_VIEW_ROLES },
-      { href: "/admin-v2/reports", label: "Звіти", icon: FileText, roles: FINANCE_VIEW_ROLES },
-      { href: "/admin-v2/foreman-reports", label: "Звіти виконробів", icon: HardHat, pillBadge: { text: "NEW", color: "accent" }, roles: FOREMAN_REVIEW_ROLES },
-      { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, pillBadge: { text: "NEW", color: "accent" }, roles: SUPPLIERS_ACCESS_ROLES },
-      { href: "/admin-v2/finance", label: "Фінансовий облік", icon: Calculator, roles: FINANCE_VIEW_ROLES },
-    ],
-  },
-  {
-    label: "Кошторисна база",
-    items: [
-      { href: "/ai-estimate-v2", label: "AI Кошторис", icon: Calculator, pillBadge: { text: "NEW", color: "violet" } },
-      { href: "/admin-v2/estimates", label: "Усі кошториси", icon: FileText },
-      { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
-      // «Матеріали та ціни» переїхали у групу «Довідники».
-    ],
-  },
-  {
-    label: "Ресурси",
-    items: [
-      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
-      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
-      { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine },
-      { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat, hrAllowed: true },
-    ],
-  },
-  {
-    label: "Довідники",
-    items: [
-      { href: "/admin-v2/catalogs", label: "Усі довідники", icon: Library, exact: true, pillBadge: { text: "NEW", color: "accent" } },
-      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
-      { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
-    ],
-  },
-  {
-    label: "HR",
-    items: [
-      { href: "/admin-v2/hr/employees", label: "Співробітники та акаунти", icon: Users, hrAllowed: true },
-      { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
-      { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES },
+      { href: "/admin-v2/financing/suppliers", label: "Облік постачальників", icon: Truck, roles: SUPPLIERS_ACCESS_ROLES },
+      // Кошториси: один пункт. Вхід «AI генератор» — primary CTA на самій сторінці.
+      { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
     ],
   },
   {
@@ -125,15 +93,32 @@ export const NAV_GROUPS: NavGroup[] = [
     ],
   },
   {
-    label: "Контент",
+    label: "Довідники",
     items: [
-      { href: "/admin-v2/cms/portfolio", label: "Портфоліо", icon: Globe },
-      { href: "/admin-v2/cms/news", label: "Новини", icon: Globe },
+      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
+      { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
+      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
+      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
+      { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat, hrAllowed: true },
     ],
   },
   {
-    label: "Адміністрування",
+    label: "HR",
     items: [
+      { href: "/admin-v2/hr/employees", label: "Співробітники та акаунти", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
+      { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
+    ],
+  },
+  {
+    label: "Ще",
+    items: [
+      { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/reports", label: "Звіти", icon: FileText, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine },
+      { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
+      { href: "/admin-v2/cms/portfolio", label: "Портфоліо", icon: Globe },
+      { href: "/admin-v2/cms/news", label: "Новини", icon: Globe },
       { href: "/admin-v2/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
     ],
   },

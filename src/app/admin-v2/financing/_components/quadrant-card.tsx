@@ -53,8 +53,11 @@ export function QuadrantCard({
   onArchive,
   onDelete,
   onMoveToFolder,
+  onViewAll,
   showProject,
   planned = false,
+  visibleLimit = 5,
+  defaultOpen,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -69,8 +72,14 @@ export function QuadrantCard({
   onArchive: (e: FinanceEntryDTO) => void;
   onDelete?: (e: FinanceEntryDTO) => void;
   onMoveToFolder?: (e: FinanceEntryDTO) => void;
+  /** Switch до Операцій з преднаставленими фільтрами для цієї картки. */
+  onViewAll?: () => void;
   showProject: boolean;
   planned?: boolean;
+  /** Скільки рядків показати у компактному вигляді (default 5, plan: Phase Огляд restructure). */
+  visibleLimit?: number;
+  /** Чи відкривати картку за замовчуванням. undefined → desktop=true, mobile=false. */
+  defaultOpen?: boolean;
 }) {
   // Ratio: how much of the "paired" side is realized through this card
   const ratioPct =
@@ -85,13 +94,14 @@ export function QuadrantCard({
         )
       : null;
 
-  // On mobile, quadrants start collapsed to reduce vertical scroll.
-  // Desktop shows them open.
+  // На mobile — завжди початково закрита. На desktop — за `defaultOpen`
+  // (AdaptiveQuadrants виставляє true тільки для single-card view).
   const isMobile = useIsMobile();
-  const [open, setOpen] = useState(true);
+  const desktopDefault = defaultOpen ?? true;
+  const [open, setOpen] = useState(desktopDefault);
   useEffect(() => {
-    setOpen(!isMobile);
-  }, [isMobile]);
+    setOpen(isMobile ? false : desktopDefault);
+  }, [isMobile, desktopDefault]);
 
   return (
     <section
@@ -246,20 +256,37 @@ export function QuadrantCard({
             </button>
           </div>
         ) : (
-          <div className="max-h-[360px] overflow-y-auto">
-            {entries.map((e) => (
-              <EntryRow
-                key={e.id}
-                entry={e}
-                accent={accent}
-                showProject={showProject}
-                onEdit={() => onEdit(e)}
-                onArchive={() => onArchive(e)}
-                onDelete={onDelete ? () => onDelete(e) : undefined}
-                onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(e) : undefined}
-              />
-            ))}
-          </div>
+          <>
+            <div>
+              {entries.slice(0, visibleLimit).map((e) => (
+                <EntryRow
+                  key={e.id}
+                  entry={e}
+                  accent={accent}
+                  showProject={showProject}
+                  onEdit={() => onEdit(e)}
+                  onArchive={() => onArchive(e)}
+                  onDelete={onDelete ? () => onDelete(e) : undefined}
+                  onMoveToFolder={onMoveToFolder ? () => onMoveToFolder(e) : undefined}
+                />
+              ))}
+            </div>
+            {entries.length > visibleLimit && (
+              <button
+                type="button"
+                onClick={onViewAll}
+                disabled={!onViewAll}
+                className="flex w-full items-center justify-center gap-1.5 border-t px-4 py-2.5 text-[12px] font-semibold transition hover:brightness-[0.97] disabled:opacity-60 disabled:cursor-default"
+                style={{
+                  borderColor: T.borderSoft,
+                  color: T.accentPrimary,
+                  background: T.panelSoft,
+                }}
+              >
+                Усі {entries.length} {pluralUk(entries.length)} →
+              </button>
+            )}
+          </>
         )}
       </Collapsible>
     </section>
@@ -469,4 +496,14 @@ function EntryRow({
       </div>
     </div>
   );
+}
+
+/** Plural «запис / записи / записів» для лічильника «Усі N …». */
+function pluralUk(n: number): string {
+  const mod100 = n % 100;
+  const mod10 = n % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "записів";
+  if (mod10 === 1) return "запис";
+  if (mod10 >= 2 && mod10 <= 4) return "записи";
+  return "записів";
 }
