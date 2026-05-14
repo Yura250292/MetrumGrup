@@ -163,16 +163,24 @@ export function TabKB2({
         </div>
       ) : (
         <div
-          className="overflow-x-auto rounded-2xl"
-          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+          className="-mx-4 overflow-x-auto border-y sm:mx-0 sm:rounded-2xl sm:border"
+          style={{ backgroundColor: T.panel, borderColor: T.borderStrong }}
         >
-          <table className="w-full text-[13px]" style={{ color: T.textPrimary }}>
+          <table
+            className="w-full text-[13px]"
+            style={{ color: T.textPrimary, borderCollapse: "separate", borderSpacing: 0 }}
+          >
             <thead>
               <tr
                 className="text-[10px] font-bold uppercase tracking-wider"
                 style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
               >
-                <th className="px-4 py-3 text-left">№</th>
+                <th
+                  className="sticky left-0 z-[1] px-4 py-3 text-left"
+                  style={{ backgroundColor: T.panelSoft }}
+                >
+                  №
+                </th>
                 <th className="px-3 py-3 text-left">Період</th>
                 <th className="px-3 py-3 text-left">Замовник</th>
                 <th className="px-3 py-3 text-right">Сума</th>
@@ -186,8 +194,17 @@ export function TabKB2({
               {forms.map((f) => {
                 const sc = STATUS_COLORS[f.status];
                 return (
-                  <tr key={f.id} className="border-t" style={{ borderColor: T.borderSoft }}>
-                    <td className="px-4 py-2.5">
+                  <tr
+                    key={f.id}
+                    style={{ borderTop: `1px solid ${T.borderSoft}` }}
+                  >
+                    <td
+                      className="sticky left-0 z-[1] px-4 py-2.5"
+                      style={{
+                        backgroundColor: T.panel,
+                        borderTop: `1px solid ${T.borderSoft}`,
+                      }}
+                    >
                       <span className="font-bold">{f.number}</span>
                       <div className="text-[10px]" style={{ color: T.textMuted }}>
                         {f._count.items} позицій
@@ -517,8 +534,8 @@ function CreateKB2Panel({
             </button>
           </div>
           <div
-            className="overflow-x-auto rounded-xl"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, maxHeight: 360 }}
+            className="-mx-4 overflow-x-auto border-y sm:mx-0 sm:rounded-xl sm:border"
+            style={{ backgroundColor: T.panel, borderColor: T.borderSoft, maxHeight: 360 }}
           >
             <table className="w-full text-[12.5px]">
               <thead>
@@ -542,7 +559,7 @@ function CreateKB2Panel({
                   const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
                   return (
                     <tr key={it.id} className="border-t" style={{ borderColor: T.borderSoft }}>
-                      <td className="px-2 py-1.5 truncate max-w-[280px]" title={it.description}>
+                      <td className="px-2 py-1.5 truncate max-w-[180px] sm:max-w-[280px]" title={it.description}>
                         {it.description}
                       </td>
                       <td className="px-2 py-1.5 text-right tabular-nums" style={{ color: T.textMuted }}>

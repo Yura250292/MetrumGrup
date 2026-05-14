@@ -94,15 +94,15 @@ type StageTableProps = {
   ) => Promise<void>;
 };
 
-const STATUS_STYLE: Record<StageStatus, { bg: string; fg: string; icon: typeof Check }> = {
+export const STATUS_STYLE: Record<StageStatus, { bg: string; fg: string; icon: typeof Check }> = {
   COMPLETED: { bg: T.successSoft, fg: T.success, icon: Check },
   IN_PROGRESS: { bg: T.accentPrimarySoft, fg: T.accentPrimary, icon: Clock },
   PENDING: { bg: T.panelElevated, fg: T.textMuted, icon: Circle },
 };
 
-type TreeNode = StageRow & { children: TreeNode[]; depth: number };
+export type TreeNode = StageRow & { children: TreeNode[]; depth: number };
 
-function buildTree(rows: StageRow[]): TreeNode[] {
+export function buildTree(rows: StageRow[]): TreeNode[] {
   const byId = new Map<string, TreeNode>();
   rows.forEach((r) => byId.set(r.id, { ...r, children: [], depth: 0 }));
   const roots: TreeNode[] = [];
@@ -126,7 +126,7 @@ function buildTree(rows: StageRow[]): TreeNode[] {
   return roots;
 }
 
-function flattenVisible(roots: TreeNode[], expanded: Set<string>): TreeNode[] {
+export function flattenVisible(roots: TreeNode[], expanded: Set<string>): TreeNode[] {
   const out: TreeNode[] = [];
   const walk = (nodes: TreeNode[]) => {
     for (const n of nodes) {

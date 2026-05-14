@@ -155,7 +155,7 @@ function StageDetailPanelBody({
               <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
               <Link
                 href={`/admin-v2/projects/${projectId}`}
-                className="max-w-[160px] truncate transition hover:underline"
+                className="max-w-[120px] sm:max-w-[160px] truncate transition hover:underline"
                 style={{ color: T.textSecondary, fontWeight: 500 }}
                 title={projectTitle}
               >
@@ -165,7 +165,7 @@ function StageDetailPanelBody({
                 <>
                   <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
                   <span
-                    className="max-w-[140px] truncate"
+                    className="max-w-[100px] sm:max-w-[140px] truncate"
                     style={{ color: T.textSecondary }}
                     title={parentStageName}
                   >
@@ -630,7 +630,7 @@ export function StageDetailDrawer(props: StageDetailDrawerProps) {
         aria-hidden
       />
       <aside
-        className="fixed right-0 top-0 z-50 flex h-screen w-full max-w-[340px] flex-col shadow-2xl"
+        className="fixed right-0 top-0 z-50 flex h-screen w-[min(92vw,360px)] flex-col shadow-2xl"
         style={{ backgroundColor: T.panel, borderLeft: `1px solid ${T.borderSoft}` }}
       >
         <StageDetailPanelBody {...props} />

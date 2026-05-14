@@ -27,6 +27,7 @@ import {
   type DropPosition,
 } from "./stage-table";
 import { StageDetailDrawer, StageDetailEmbedded } from "./stage-detail-drawer";
+import { StageMobileList } from "./stage-mobile-list";
 import {
   StageMaterialsPopup,
   StageMaterialsEmbedded,
@@ -542,6 +543,41 @@ export function StagesSection({
     </>
   );
 
+  const mobileBlock = (
+    <>
+      <StageMobileList
+        stages={
+          hideCompleted
+            ? stages.filter((s) => s.status !== "COMPLETED")
+            : stages
+        }
+        selectedStageId={selectedStageId}
+        onStageClick={(id) => {
+          setSelectedStageId(id);
+          setMaterialsHidden(false);
+        }}
+        onInlineUpdate={inlineUpdate}
+        onAddChild={addChild}
+        onDelete={deleteStage}
+        showHidden={showHidden}
+        dirtyStageIds={dirtyStageIds}
+      />
+      <button
+        type="button"
+        onClick={() => addChild(null)}
+        className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[12px] font-medium transition hover:brightness-95"
+        style={{
+          borderColor: T.borderSoft,
+          color: T.accentPrimary,
+          backgroundColor: T.panelSoft,
+        }}
+      >
+        <Plus size={14} />
+        Додати етап
+      </button>
+    </>
+  );
+
   const sharedModals = (
     <>
       {importOpen && (
@@ -569,8 +605,8 @@ export function StagesSection({
   );
 
   const toolbarBlock = (
-    <div className="flex items-center justify-between gap-3 flex-wrap">
-      <div className="flex items-center gap-3">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:flex-wrap">
+      <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
             Етапи виконання
           </h2>
@@ -592,16 +628,21 @@ export function StagesSection({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <ViewModeSwitch value={viewMode} onChange={setViewMode} />
+        <div className="flex items-center gap-2 flex-wrap sm:gap-3">
+          <div className="-mx-1 overflow-x-auto sm:mx-0 sm:overflow-visible">
+            <ViewModeSwitch value={viewMode} onChange={setViewMode} />
+          </div>
           <button
             type="button"
             onClick={() => setShowHidden((v) => !v)}
+            title={showHidden ? "Сховати приховані" : "Показати всі"}
             className="flex items-center gap-1 text-[11px] font-medium transition hover:brightness-95"
             style={{ color: T.textMuted }}
           >
             {showHidden ? <EyeOff size={12} /> : <Eye size={12} />}
-            {showHidden ? "Сховати приховані" : "Показати всі"}
+            <span className="hidden sm:inline">
+              {showHidden ? "Сховати приховані" : "Показати всі"}
+            </span>
           </button>
           <button
             type="button"
@@ -617,23 +658,29 @@ export function StagesSection({
             }
           >
             {hideCompleted ? <Eye size={12} /> : <EyeOff size={12} />}
-            {hideCompleted ? "Показ. завершені" : "Сховати завершені"}
+            <span className="hidden sm:inline">
+              {hideCompleted ? "Показ. завершені" : "Сховати завершені"}
+            </span>
           </button>
           <button
             type="button"
             onClick={() => setPasteOpen(true)}
+            title="Вставити з Excel"
             className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
             style={{ color: T.accentPrimary }}
           >
-            <ClipboardPaste size={12} /> Excel
+            <ClipboardPaste size={12} />
+            <span className="hidden sm:inline">Excel</span>
           </button>
           <button
             type="button"
             onClick={() => setImportOpen(true)}
+            title="Імпорт з кошторису"
             className="flex items-center gap-1 text-xs font-semibold transition hover:brightness-[0.97]"
             style={{ color: T.accentPrimary }}
           >
-            <FileDown size={12} /> Імпорт з кошторису
+            <FileDown size={12} />
+            <span className="hidden sm:inline">Імпорт з кошторису</span>
           </button>
           <button
             type="button"
@@ -656,7 +703,7 @@ export function StagesSection({
                   ? "Немає непублікованих змін"
                   : "Опублікувати draft-зміни у фінансовому журналі"
             }
-            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
+            className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
             style={{
               backgroundColor: T.success,
               color: "white",
@@ -763,9 +810,9 @@ export function StagesSection({
         )}
       </div>
 
-      {/* Mobile (<lg): floating drawer + slide-up popup (поточний UX) */}
+      {/* Mobile (<lg): card-list + floating drawer + slide-up popup */}
       <div className="lg:hidden">
-        {tableBlock}
+        {mobileBlock}
         {selected && (
           <StageDetailDrawer
             projectId={projectId}
