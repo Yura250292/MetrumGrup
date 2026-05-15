@@ -34,7 +34,7 @@ export async function GET(
     include: {
       department: { select: { id: true, name: true } },
       user: {
-        select: { id: true, email: true, role: true, isActive: true },
+        select: { id: true, email: true, role: true, isActive: true, avatar: true },
       },
       salaries: canSeeSalary
         ? { orderBy: [{ effectiveFrom: "desc" }] }

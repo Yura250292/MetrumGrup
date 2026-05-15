@@ -99,7 +99,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
       { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
       { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
-      { href: "/admin-v2/resources/workers", label: "Бригади", icon: HardHat, hrAllowed: true },
+      { href: "/admin-v2/resources/workers", label: "Робітники", icon: HardHat, hrAllowed: true },
     ],
   },
   {
@@ -149,7 +149,7 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/catalogs/materials": "Матеріали та ціни",
   "/admin-v2/resources/equipment": "Техніка",
   "/admin-v2/resources/warehouse": "Склад",
-  "/admin-v2/resources/workers": "Бригади",
+  "/admin-v2/resources/workers": "Робітники",
   "/admin-v2/hr/employees": "Співробітники та акаунти",
   "/admin-v2/hr/subcontractors": "Підрядники",
   "/admin-v2/cms/portfolio": "Портфоліо",

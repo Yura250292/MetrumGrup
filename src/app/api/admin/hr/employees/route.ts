@@ -129,7 +129,7 @@ export async function GET() {
     include: {
       department: { select: { id: true, name: true } },
       user: {
-        select: { id: true, email: true, role: true, isActive: true },
+        select: { id: true, email: true, role: true, isActive: true, avatar: true },
       },
       // Активний ЗП-період (один) — для зведеної індикації у картці.
       // Не-фінансові ролі не бачать → query skip + redact.

@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+import { EmployeeAvatar } from "./employee-avatar";
 import {
   ROLE_COLORS,
   ROLE_LABELS,
@@ -147,6 +148,7 @@ type LinkedUser = {
   email: string;
   role: string;
   isActive: boolean;
+  avatar: string | null;
 };
 
 type Employee = {
@@ -377,6 +379,14 @@ export function EmployeeDossier({
 
       {/* Slim header */}
       <div className="flex flex-wrap items-center gap-3">
+        <EmployeeAvatar
+          fullName={employee.fullName}
+          lastName={employee.lastName}
+          firstName={employee.firstName}
+          avatarUrl={employee.user?.avatar}
+          size={44}
+          dimmed={!employee.isActive}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-lg font-bold" style={{ color: T.textPrimary }}>

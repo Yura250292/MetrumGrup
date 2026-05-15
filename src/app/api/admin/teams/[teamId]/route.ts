@@ -4,7 +4,7 @@ import { forbiddenResponse, unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
 function canManage(role: string | undefined) {
-  return role === "SUPER_ADMIN" || role === "MANAGER";
+  return role === "SUPER_ADMIN" || role === "MANAGER" || role === "HR";
 }
 
 export async function GET(
@@ -44,6 +44,12 @@ export async function PATCH(
     where: { id: teamId },
     data: {
       name: typeof body.name === "string" ? body.name : undefined,
+      description:
+        body.description === undefined
+          ? undefined
+          : body.description
+            ? String(body.description).trim()
+            : null,
       departmentId: body.departmentId === undefined ? undefined : body.departmentId,
       leadUserId: body.leadUserId === undefined ? undefined : body.leadUserId,
       color: typeof body.color === "string" ? body.color : undefined,

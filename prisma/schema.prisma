@@ -2466,6 +2466,7 @@ model Department {
 model Team {
   id           String   @id @default(cuid())
   name         String
+  description  String?
   departmentId String?
   leadUserId   String?
   color        String   @default("#3b82f6")

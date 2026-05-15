@@ -17,12 +17,14 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
 import { formatCurrency } from "@/lib/utils";
+import { EmployeeAvatar } from "./employee-avatar";
 
 type LinkedUser = {
   id: string;
   email: string;
   role: string;
   isActive: boolean;
+  avatar: string | null;
 };
 
 type EmploymentType = "FULL" | "PART" | "CONTRACT";
@@ -813,11 +815,19 @@ function Cell({
       return (
         <Link
           href={href}
-          className="min-w-0 truncate font-medium transition-colors duration-150 hover:underline"
+          className="flex min-w-0 items-center gap-2 font-medium transition-colors duration-150 hover:underline"
           style={{ color: T.textPrimary }}
           title={employee.fullName}
         >
-          {shortName(employee)}
+          <EmployeeAvatar
+            fullName={employee.fullName}
+            lastName={employee.lastName}
+            firstName={employee.firstName}
+            avatarUrl={employee.user?.avatar}
+            size={26}
+            dimmed={!employee.isActive}
+          />
+          <span className="min-w-0 truncate">{shortName(employee)}</span>
         </Link>
       );
 

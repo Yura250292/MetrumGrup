@@ -17,12 +17,14 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "../../_components/excel-import-modal";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
 import { EmployeesTable, type DisplayMode } from "./employees-table";
+import { DepartmentsPanel } from "./departments-panel";
 
 type LinkedUser = {
   id: string;
   email: string;
   role: string;
   isActive: boolean;
+  avatar: string | null;
 };
 
 type EmploymentType = "FULL" | "PART" | "CONTRACT";
@@ -74,7 +76,7 @@ type ExternalUser = {
 };
 
 type AccountFilter = "all" | "linked" | "unlinked";
-type Tab = "employees" | "external";
+type Tab = "employees" | "external" | "departments";
 
 type CreateForm = {
   lastName: string;
@@ -133,8 +135,13 @@ export function EmployeesList({
   const [loadError, setLoadError] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
     setLoadError(null);
+    if (tab === "departments") {
+      // DepartmentsPanel завантажує власні дані.
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
     try {
       if (tab === "employees") {
         const res = await fetch("/api/admin/hr/employees", { cache: "no-store" });
@@ -211,16 +218,18 @@ export function EmployeesList({
         <h1 className="text-xl font-bold" style={{ color: T.textPrimary }}>
           Співробітники та акаунти
         </h1>
-        <span
-          className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
-          style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
-        >
-          {tab === "employees"
-            ? `${filtered.length}${
-                filtered.length !== items.length ? ` / ${items.length}` : ""
-              } · ${activeCount} активних`
-            : `${filteredExternal.length} зовнішніх акаунтів`}
-        </span>
+        {tab !== "departments" && (
+          <span
+            className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+            style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+          >
+            {tab === "employees"
+              ? `${filtered.length}${
+                  filtered.length !== items.length ? ` / ${items.length}` : ""
+                } · ${activeCount} активних`
+              : `${filteredExternal.length} зовнішніх акаунтів`}
+          </span>
+        )}
         <div className="flex-1" />
         {tab === "employees" && canEdit && (
           <>
@@ -246,17 +255,19 @@ export function EmployeesList({
         )}
       </div>
 
-      {canSeeExternal && (
-        <div
-          className="inline-flex w-fit gap-1 rounded-xl p-1"
-          style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
-        >
-          {(
-            [
-              { id: "employees" as const, label: "Співробітники" },
-              { id: "external" as const, label: "Зовнішні акаунти" },
-            ]
-          ).map((t) => {
+      <div
+        className="inline-flex w-fit gap-1 rounded-xl p-1"
+        style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+      >
+        {(
+          [
+            { id: "employees" as const, label: "Співробітники" },
+            { id: "departments" as const, label: "Підрозділи" },
+            ...(canSeeExternal
+              ? [{ id: "external" as const, label: "Зовнішні акаунти" }]
+              : []),
+          ]
+        ).map((t) => {
             const active = tab === t.id;
             return (
               <button
@@ -273,8 +284,7 @@ export function EmployeesList({
               </button>
             );
           })}
-        </div>
-      )}
+      </div>
 
       <ExcelImportModal
         open={showImport}
@@ -306,6 +316,7 @@ export function EmployeesList({
       )}
 
       {/* Toolbar */}
+      {tab !== "departments" && (
       <div
         className="flex flex-wrap items-center gap-2 rounded-2xl p-3"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
@@ -401,8 +412,11 @@ export function EmployeesList({
           Показати неактивних
         </label>
       </div>
+      )}
 
-      {loadError && (
+      {tab === "departments" && <DepartmentsPanel canEdit={canEdit} />}
+
+      {loadError && tab !== "departments" && (
         <div
           className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm"
           style={{

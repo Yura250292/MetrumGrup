@@ -4,7 +4,7 @@ import { forbiddenResponse, unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
 function canManage(role: string | undefined) {
-  return role === "SUPER_ADMIN" || role === "MANAGER";
+  return role === "SUPER_ADMIN" || role === "MANAGER" || role === "HR";
 }
 
 export async function GET() {
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
   const team = await prisma.team.create({
     data: {
       name,
+      description: body.description ? String(body.description).trim() : null,
       departmentId: body.departmentId ? String(body.departmentId) : null,
       leadUserId: body.leadUserId ? String(body.leadUserId) : null,
       color: body.color ? String(body.color) : "#3b82f6",

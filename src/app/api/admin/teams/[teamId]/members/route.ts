@@ -4,7 +4,7 @@ import { forbiddenResponse, unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 
 function canManage(role: string | undefined) {
-  return role === "SUPER_ADMIN" || role === "MANAGER";
+  return role === "SUPER_ADMIN" || role === "MANAGER" || role === "HR";
 }
 
 export async function POST(

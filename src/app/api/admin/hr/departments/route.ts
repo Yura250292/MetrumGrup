@@ -17,6 +17,8 @@ async function guard() {
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Назва обовʼязкова"),
+  description: z.string().trim().optional(),
+  headUserId: z.string().trim().optional(),
 });
 
 export async function GET() {
@@ -25,7 +27,13 @@ export async function GET() {
 
   const departments = await prisma.department.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      head: { select: { id: true, name: true } },
+      _count: { select: { employees: true, teams: true } },
+    },
   });
   return NextResponse.json({ data: departments });
 }
@@ -49,6 +57,12 @@ export async function POST(request: NextRequest) {
   if (existing) {
     return NextResponse.json({ data: existing });
   }
-  const created = await prisma.department.create({ data: { name } });
+  const created = await prisma.department.create({
+    data: {
+      name,
+      description: parsed.data.description?.trim() || null,
+      headUserId: parsed.data.headUserId || null,
+    },
+  });
   return NextResponse.json({ data: created }, { status: 201 });
 }
