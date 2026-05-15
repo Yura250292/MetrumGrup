@@ -193,17 +193,6 @@ export function firmWhereForTask(firmId: string | null): Prisma.TaskWhereInput {
 }
 
 /**
- * Employee where-фрагмент. Employee.firmId — обовʼязкове поле, тож
- * firm-фільтр прямий. При firmId=null повертаємо порожній обʼєкт (cross-firm
- * — лише для SUPER_ADMIN).
- */
-export function firmWhereForEmployee(
-  firmId: string | null,
-): Prisma.EmployeeWhereInput {
-  return firmId ? { firmId } : {};
-}
-
-/**
  * Перевіряє, чи поточний користувач має право бачити сутність конкретної фірми.
  * Кидає Error з властивістю `status=403` якщо ні — handler-и API повертають
  * NextResponse зі статусом 403 при цьому.

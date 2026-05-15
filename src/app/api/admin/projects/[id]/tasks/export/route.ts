@@ -122,10 +122,7 @@ export async function GET(
       stage: stageDisplayName({ stage: t.stage.stage, customName: (t.stage as any).customName ?? null }),
       startDate: t.startDate ? new Date(t.startDate).toISOString().slice(0, 10) : "",
       due: t.dueDate ? new Date(t.dueDate).toISOString().slice(0, 10) : "",
-      assignees: t.assignees
-        .map((a) => a.user?.name ?? a.employee?.fullName ?? "")
-        .filter(Boolean)
-        .join("; "),
+      assignees: t.assignees.map((a) => a.user.name).join("; "),
       labels: t.labels.map((l) => l.label.name).join("; "),
       checklist: cl ? `${cl.done}/${cl.total}` : "",
       blockedBy: (inDepsMap.get(t.id) ?? []).join("; "),

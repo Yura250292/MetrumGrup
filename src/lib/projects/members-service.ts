@@ -18,18 +18,12 @@ import {
 export type ProjectMemberWithUser = Prisma.ProjectMemberGetPayload<{
   include: {
     user: { select: { id: true; name: true; email: true; avatar: true; role: true } };
-    employee: {
-      select: { id: true; fullName: true; email: true; phone: true; position: true };
-    };
     invitedBy: { select: { id: true; name: true } };
   };
 }>;
 
 const memberInclude = {
   user: { select: { id: true, name: true, email: true, avatar: true, role: true } },
-  employee: {
-    select: { id: true, fullName: true, email: true, phone: true, position: true },
-  },
   invitedBy: { select: { id: true, name: true } },
 } satisfies Prisma.ProjectMemberInclude;
 
@@ -69,9 +63,7 @@ export async function isActiveMember(projectId: string, userId: string): Promise
 
 export type AddMemberInput = {
   projectId: string;
-  /** XOR: рівно одне з userId / employeeId. */
-  userId?: string;
-  employeeId?: string;
+  userId: string;
   roleInProject: ProjectRole;
   invitedById?: string | null;
   permissions?: Prisma.InputJsonValue | null;
@@ -82,89 +74,34 @@ export type AddMemberInput = {
  * та оновлює роль. Якщо ні — створює.
  *
  * Side effect: triggers syncProjectConversationParticipants so the chat
- * stays consistent with the team. Employee-без-User не отримує chat-participant
- * row (sync працює лише з User).
+ * stays consistent with the team. Estimates within the project are also
+ * re-synced because role changes affect estimate-channel visibility.
  */
 export async function addProjectMember(input: AddMemberInput): Promise<ProjectMemberWithUser> {
-  const { projectId, userId, employeeId, roleInProject, invitedById, permissions } = input;
-  if (!userId && !employeeId) {
-    throw new Error("userId або employeeId обовʼязкове");
-  }
-  if (userId && employeeId) {
-    throw new Error("userId та employeeId не можуть бути одночасно");
-  }
-  const member = userId
-    ? await prisma.projectMember.upsert({
-        where: { projectId_userId: { projectId, userId } },
-        create: {
-          projectId,
-          userId,
-          roleInProject,
-          invitedById: invitedById ?? null,
-          permissions: permissions ?? undefined,
-          isActive: true,
-        },
-        update: {
-          roleInProject,
-          isActive: true,
-          leftAt: null,
-          ...(permissions !== undefined
-            ? { permissions: permissions ?? Prisma.JsonNull }
-            : {}),
-        },
-        include: memberInclude,
-      })
-    : await prisma.projectMember.upsert({
-        where: { projectId_employeeId: { projectId, employeeId: employeeId! } },
-        create: {
-          projectId,
-          employeeId: employeeId!,
-          roleInProject,
-          invitedById: invitedById ?? null,
-          permissions: permissions ?? undefined,
-          isActive: true,
-        },
-        update: {
-          roleInProject,
-          isActive: true,
-          leftAt: null,
-          ...(permissions !== undefined
-            ? { permissions: permissions ?? Prisma.JsonNull }
-            : {}),
-        },
-        include: memberInclude,
-      });
+  const { projectId, userId, roleInProject, invitedById, permissions } = input;
+  const member = await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId } },
+    create: {
+      projectId,
+      userId,
+      roleInProject,
+      invitedById: invitedById ?? null,
+      permissions: permissions ?? undefined,
+      isActive: true,
+    },
+    update: {
+      roleInProject,
+      isActive: true,
+      leftAt: null,
+      ...(permissions !== undefined ? { permissions: permissions ?? Prisma.JsonNull } : {}),
+    },
+    include: memberInclude,
+  });
 
   await syncMemberDerivedChannels(projectId);
   return member;
 }
 
-export async function changeMemberRoleById(
-  memberId: string,
-  roleInProject: ProjectRole,
-): Promise<ProjectMemberWithUser> {
-  const updated = await prisma.projectMember.update({
-    where: { id: memberId },
-    data: { roleInProject },
-    include: memberInclude,
-  });
-  await syncMemberDerivedChannels(updated.projectId);
-  return updated;
-}
-
-export async function deactivateMemberById(
-  memberId: string,
-): Promise<ProjectMemberWithUser> {
-  const updated = await prisma.projectMember.update({
-    where: { id: memberId },
-    data: { isActive: false, leftAt: new Date() },
-    include: memberInclude,
-  });
-  await syncMemberDerivedChannels(updated.projectId);
-  return updated;
-}
-
-/** @deprecated використовуйте changeMemberRoleById — не працює для Employee-учасників. */
 export async function changeMemberRole(
   projectId: string,
   userId: string,
@@ -179,7 +116,6 @@ export async function changeMemberRole(
   return updated;
 }
 
-/** @deprecated використовуйте deactivateMemberById — не працює для Employee-учасників. */
 export async function deactivateMember(
   projectId: string,
   userId: string,

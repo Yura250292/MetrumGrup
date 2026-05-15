@@ -2,14 +2,11 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ProjectRole } from "@prisma/client";
-import type { AssigneeRef } from "@/lib/assignees/types";
 
 export type ProjectMemberDTO = {
   id: string;
   projectId: string;
-  /** XOR: рівно одне з userId/employeeId. */
-  userId: string | null;
-  employeeId: string | null;
+  userId: string;
   roleInProject: ProjectRole;
   isActive: boolean;
   joinedAt: string;
@@ -20,14 +17,7 @@ export type ProjectMemberDTO = {
     email: string;
     avatar: string | null;
     role: string;
-  } | null;
-  employee: {
-    id: string;
-    fullName: string;
-    email: string | null;
-    phone: string | null;
-    position: string | null;
-  } | null;
+  };
   invitedBy: { id: string; name: string } | null;
 };
 
@@ -56,20 +46,15 @@ export function useProjectMembers(projectId: string) {
 export function useAddProjectMember(projectId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { assignee: AssigneeRef; roleInProject: ProjectRole }) => {
-      const body =
-        input.assignee.kind === "user"
-          ? { userId: input.assignee.id, roleInProject: input.roleInProject }
-          : { employeeId: input.assignee.id, roleInProject: input.roleInProject };
-      return jsonFetch<{ member: ProjectMemberDTO }>(
+    mutationFn: (input: { userId: string; roleInProject: ProjectRole }) =>
+      jsonFetch<{ member: ProjectMemberDTO }>(
         `/api/admin/projects/${projectId}/members`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: JSON.stringify(input),
         },
-      ).then((d) => d.member);
-    },
+      ).then((d) => d.member),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: membersKey(projectId) });
     },

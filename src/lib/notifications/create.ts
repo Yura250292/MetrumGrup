@@ -264,10 +264,9 @@ export async function notifyProjectMembers(opts: {
 }): Promise<number> {
   const members = await listActiveMembers(opts.projectId);
   const exclude = new Set<string>([opts.actorId, ...(opts.excludeUserIds ?? [])]);
-  // Employee-без-User члени не отримують нотифікацій (немає User для зв'язку).
   const recipients = members
-    .map((m) => m.user?.id)
-    .filter((id): id is string => !!id && !exclude.has(id));
+    .map((m) => m.user.id)
+    .filter((id) => !exclude.has(id));
   if (recipients.length === 0) return 0;
 
   const preview = opts.body ? opts.body.replace(MENTION_REGEX, "@…").trim().slice(0, 160) : null;

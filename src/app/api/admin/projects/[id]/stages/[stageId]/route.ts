@@ -54,88 +54,9 @@ export async function PATCH(
     data.progress = Math.max(0, Math.min(100, Math.round(p)));
     needsRecalc = true;
   }
-  // Polymorphic responsible: підтримуємо новий формат `body.responsible` =
-  // { kind: "user"|"employee", id } | { name: string } | null. Зберігаємо
-  // legacy `responsibleUserId` та `responsibleName` для BC.
-  if (body.responsible !== undefined) {
-    const r = body.responsible;
-    if (r === null) {
-      data.responsibleUserId = null;
-      data.responsibleEmployeeId = null;
-      data.responsibleName = null;
-    } else if (r && typeof r === "object" && "kind" in r) {
-      if (r.kind === "user" && typeof r.id === "string" && r.id) {
-        data.responsibleUserId = r.id;
-        data.responsibleEmployeeId = null;
-        data.responsibleName = null;
-      } else if (r.kind === "employee" && typeof r.id === "string" && r.id) {
-        // Перевірка firm-приналежності Employee.
-        const emp = await prisma.employee.findUnique({
-          where: { id: r.id },
-          select: { firmId: true, isActive: true },
-        });
-        if (!emp || emp.firmId !== stage.project.firmId) {
-          return NextResponse.json(
-            { error: "Співробітник не належить до цієї фірми" },
-            { status: 400 },
-          );
-        }
-        if (!emp.isActive) {
-          return NextResponse.json(
-            { error: "Співробітник неактивний" },
-            { status: 400 },
-          );
-        }
-        data.responsibleEmployeeId = r.id;
-        data.responsibleUserId = null;
-        data.responsibleName = null;
-      }
-    } else if (r && typeof r === "object" && "name" in r) {
-      const v =
-        typeof r.name === "string" && r.name.trim() ? r.name.trim() : null;
-      if (!v) {
-        data.responsibleUserId = null;
-        data.responsibleEmployeeId = null;
-        data.responsibleName = null;
-      } else {
-        // Fuzzy: спершу Employee у цій фірмі, потім User, інакше — free-text.
-        const emp = await prisma.employee.findFirst({
-          where: {
-            firmId: stage.project.firmId ?? undefined,
-            isActive: true,
-            fullName: { equals: v, mode: "insensitive" },
-          },
-          select: { id: true },
-        });
-        if (emp) {
-          data.responsibleEmployeeId = emp.id;
-          data.responsibleUserId = null;
-          data.responsibleName = null;
-        } else {
-          const matched = await prisma.user.findFirst({
-            where: { name: { equals: v, mode: "insensitive" }, isActive: true },
-            select: { id: true },
-          });
-          if (matched) {
-            data.responsibleUserId = matched.id;
-            data.responsibleEmployeeId = null;
-            data.responsibleName = null;
-          } else {
-            data.responsibleUserId = null;
-            data.responsibleEmployeeId = null;
-            data.responsibleName = v;
-          }
-        }
-      }
-    }
-  }
-  // Legacy формати — лишаємо для BC.
   if (body.responsibleUserId !== undefined) {
     data.responsibleUserId = body.responsibleUserId || null;
-    if (data.responsibleUserId) {
-      data.responsibleEmployeeId = null;
-      data.responsibleName = null;
-    }
+    if (data.responsibleUserId) data.responsibleName = null;
   }
   if (body.responsibleName !== undefined) {
     const v =
@@ -144,34 +65,20 @@ export async function PATCH(
         : null;
     if (!v) {
       data.responsibleName = null;
+      // Не чіпаємо responsibleUserId якщо його не передали окремо.
     } else {
-      // Той самий fuzzy-резолв, що й вище.
-      const emp = await prisma.employee.findFirst({
-        where: {
-          firmId: stage.project.firmId ?? undefined,
-          isActive: true,
-          fullName: { equals: v, mode: "insensitive" },
-        },
+      // Спробуємо знайти існуючого юзера з таким імʼям (case-insensitive) —
+      // тоді FK має пріоритет і ми не дублюємо.
+      const matched = await prisma.user.findFirst({
+        where: { name: { equals: v, mode: "insensitive" }, isActive: true },
         select: { id: true },
       });
-      if (emp) {
-        data.responsibleEmployeeId = emp.id;
-        data.responsibleUserId = null;
+      if (matched) {
+        data.responsibleUserId = matched.id;
         data.responsibleName = null;
       } else {
-        const matched = await prisma.user.findFirst({
-          where: { name: { equals: v, mode: "insensitive" }, isActive: true },
-          select: { id: true },
-        });
-        if (matched) {
-          data.responsibleUserId = matched.id;
-          data.responsibleEmployeeId = null;
-          data.responsibleName = null;
-        } else {
-          data.responsibleUserId = null;
-          data.responsibleEmployeeId = null;
-          data.responsibleName = v;
-        }
+        data.responsibleUserId = null;
+        data.responsibleName = v;
       }
     }
   }

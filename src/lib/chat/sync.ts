@@ -24,9 +24,8 @@ export async function syncProjectConversationParticipants(projectId: string) {
   if (!conversation) return; // No project conversation yet — nothing to sync.
 
   const [members, participants] = await Promise.all([
-    // Employee-учасники без User не потрапляють у chat (немає User для приєднання).
     prisma.projectMember.findMany({
-      where: { projectId, isActive: true, userId: { not: null } },
+      where: { projectId, isActive: true },
       select: { userId: true },
     }),
     prisma.conversationParticipant.findMany({
@@ -35,9 +34,7 @@ export async function syncProjectConversationParticipants(projectId: string) {
     }),
   ]);
 
-  const memberUserIds = new Set(
-    members.map((m) => m.userId).filter((v): v is string => !!v),
-  );
+  const memberUserIds = new Set(members.map((m) => m.userId));
   const participantUserIds = new Set(participants.map((p) => p.userId));
 
   const toAdd: string[] = [];
@@ -96,7 +93,6 @@ export async function syncEstimateConversationParticipants(estimateId: string) {
         projectId: estimate.projectId,
         isActive: true,
         roleInProject: { in: ESTIMATE_CHAT_ROLES },
-        userId: { not: null },
       },
       select: { userId: true },
     }),
@@ -106,9 +102,7 @@ export async function syncEstimateConversationParticipants(estimateId: string) {
     }),
   ]);
 
-  const allowed = new Set(
-    members.map((m) => m.userId).filter((v): v is string => !!v),
-  );
+  const allowed = new Set(members.map((m) => m.userId));
   const present = new Set(participants.map((p) => p.userId));
 
   const toAdd: string[] = [];

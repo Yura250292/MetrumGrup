@@ -118,9 +118,7 @@ export async function workloadReport(projectId: string, range?: DateRange) {
     loggedMinutes: number;
   };
   const rows = new Map<string, Row>();
-  // Employee-без-User члени не мають time-logs → пропускаємо.
   for (const m of members) {
-    if (!m.userId || !m.user) continue;
     rows.set(m.userId, {
       userId: m.userId,
       name: m.user.name,
@@ -133,7 +131,6 @@ export async function workloadReport(projectId: string, range?: DateRange) {
 
   const now = new Date();
   for (const a of assignees) {
-    if (!a.userId) continue;
     const r = rows.get(a.userId);
     if (!r) continue;
     if (!a.task.status.isDone) r.assignedOpen += 1;

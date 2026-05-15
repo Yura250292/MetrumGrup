@@ -13,12 +13,6 @@ import {
   buildEmployeeNameSlice,
   syncUserFromEmployee,
 } from "@/lib/hr/account-sync";
-import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
-import {
-  assertCanAccessFirm,
-  firmIdForNewEntity,
-  firmWhereForEmployee,
-} from "@/lib/firm/scope";
 
 async function guard() {
   const session = await auth();
@@ -26,8 +20,7 @@ async function guard() {
   if (!["SUPER_ADMIN", "MANAGER", "HR"].includes(session.user.role)) {
     return { error: forbiddenResponse() };
   }
-  const { firmId } = await resolveFirmScopeForRequest(session);
-  return { session, firmId };
+  return { session };
 }
 
 // КРИТИЧНО: undefined → undefined (поле не передане → не торкаємо), null/"" → null
@@ -132,7 +125,6 @@ export async function GET() {
   const canSeeSalary = canViewFinance(role);
 
   const employees = await prisma.employee.findMany({
-    where: firmWhereForEmployee(g.firmId),
     orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
     include: {
       department: { select: { id: true, name: true } },
@@ -176,10 +168,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const firmId = firmIdForNewEntity(g.session);
-  const employee = await prisma.employee.create({
-    data: { ...data, fullName, firmId },
-  });
+  const employee = await prisma.employee.create({ data: { ...data, fullName } });
   return NextResponse.json(
     { data: redactSalaryForHr(employee as EmployeeRecord, g.session.user.role) },
     { status: 201 },
@@ -200,23 +189,6 @@ export async function PATCH(request: NextRequest) {
   }
 
   const { id, ...data } = parsed.data;
-  // Firm-isolation: перевіряємо, що Employee, який редагується, належить
-  // фірмі, до якої поточний користувач має доступ.
-  const target = await prisma.employee.findUnique({
-    where: { id },
-    select: { firmId: true },
-  });
-  if (!target) {
-    return NextResponse.json({ error: "Співробітника не знайдено" }, { status: 404 });
-  }
-  try {
-    assertCanAccessFirm(g.session, target.firmId);
-  } catch (e) {
-    return NextResponse.json(
-      { error: (e as Error).message },
-      { status: (e as Error & { status?: number }).status ?? 403 },
-    );
-  }
   // Якщо змінилася будь-яка з частин імені — пересчитуємо fullName, щоб
   // legacy пошук/displays не розʼїхалися. Беремо актуальні дані з БД для
   // не-перевизначених полів. ВАЖЛИВО: перевіряємо за значенням
@@ -291,22 +263,6 @@ export async function DELETE(request: NextRequest) {
   const id = new URL(request.url).searchParams.get("id");
   if (!id) {
     return NextResponse.json({ error: "Відсутній id" }, { status: 400 });
-  }
-
-  const target = await prisma.employee.findUnique({
-    where: { id },
-    select: { firmId: true },
-  });
-  if (!target) {
-    return NextResponse.json({ error: "Співробітника не знайдено" }, { status: 404 });
-  }
-  try {
-    assertCanAccessFirm(g.session, target.firmId);
-  } catch (e) {
-    return NextResponse.json(
-      { error: (e as Error).message },
-      { status: (e as Error & { status?: number }).status ?? 403 },
-    );
   }
 
   await prisma.employee.delete({ where: { id } });

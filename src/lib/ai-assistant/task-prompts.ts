@@ -9,20 +9,13 @@ export type TaskContextForAi = {
   priority: string;
   dueDate?: string | null;
   project?: { id: string; title: string } | null;
-  assignees?: {
-    user?: { name: string } | null;
-    employee?: { fullName: string } | null;
-  }[];
+  assignees?: { user: { name: string } }[];
   checklist?: { content: string; isDone: boolean }[];
   stage?: { stage: string };
 };
 
 function formatTaskContext(t: TaskContextForAi): string {
-  const assignees =
-    (t.assignees ?? [])
-      .map((a) => a.user?.name ?? a.employee?.fullName ?? "")
-      .filter(Boolean)
-      .join(", ") || "—";
+  const assignees = (t.assignees ?? []).map((a) => a.user.name).join(", ") || "—";
   const due = t.dueDate ? new Date(t.dueDate).toLocaleDateString("uk-UA") : "—";
   const checklistSummary =
     t.checklist && t.checklist.length > 0

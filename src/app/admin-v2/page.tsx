@@ -619,14 +619,10 @@ export default async function AdminV2Dashboard({
   const netDelta = calcDelta(netProfit, prevNetProfit);
 
   // Load user names for time logs
-  // TaskAssignee.userId тепер nullable (polymorphic) — фільтруємо null
-  // перед групуванням по User-id.
   const allUserIds = [
     ...weekTimeLogs.map((l) => l.userId),
-    ...activeTasksByUser.map((a) => a.userId).filter((v): v is string => !!v),
-    ...overdueTasksByUser
-      .map((a) => a.userId)
-      .filter((v): v is string => !!v),
+    ...activeTasksByUser.map((a) => a.userId),
+    ...overdueTasksByUser.map((a) => a.userId),
   ];
   const uniqueUserIds = [...new Set(allUserIds)];
   const users =

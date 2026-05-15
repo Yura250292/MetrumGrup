@@ -11,29 +11,18 @@ export async function POST(
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
-  let body: { userId?: unknown; employeeId?: unknown; kind?: unknown };
+  let body: { userId?: unknown };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
-
-  // Polymorphic ref: підтримуємо обидва формати — legacy `{ userId }` та
-  // новий `{ kind: "user"|"employee", id }` (передається як userId/employeeId).
-  let ref: { kind: "user" | "employee"; id: string };
-  if (typeof body.employeeId === "string" && body.employeeId) {
-    ref = { kind: "employee", id: body.employeeId };
-  } else if (typeof body.userId === "string" && body.userId) {
-    ref = { kind: "user", id: body.userId };
-  } else {
-    return NextResponse.json(
-      { error: "userId або employeeId є обовʼязковим" },
-      { status: 400 },
-    );
+  if (typeof body.userId !== "string" || !body.userId) {
+    return NextResponse.json({ error: "userId required" }, { status: 400 });
   }
 
   try {
-    await addAssignee(taskId, ref, session.user.id);
+    await addAssignee(taskId, body.userId, session.user.id);
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (e) {
     if (e instanceof TaskError) {

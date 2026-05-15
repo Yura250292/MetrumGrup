@@ -6,7 +6,6 @@ import {
   type EmployeeRecord,
   redactSalaryForHr,
 } from "@/lib/hr/employee-privacy";
-import { assertCanAccessFirm } from "@/lib/firm/scope";
 
 export const runtime = "nodejs";
 
@@ -44,14 +43,6 @@ export async function GET(
   });
   if (!employee) {
     return NextResponse.json({ error: "Співробітника не знайдено" }, { status: 404 });
-  }
-  try {
-    assertCanAccessFirm(g.session, employee.firmId);
-  } catch (e) {
-    return NextResponse.json(
-      { error: (e as Error).message },
-      { status: (e as Error & { status?: number }).status ?? 403 },
-    );
   }
 
   const engagement = await loadEngagement(id, employee.userId);
@@ -103,18 +94,23 @@ async function loadEngagement(employeeId: string, userId: string | null) {
     }
   }
 
-  // Polymorphic-фільтри: запити шукають assignments як через User (legacy),
-  // так і через Employee (нове). Employee без User отримує лише
-  // employee-based assignments.
-  const userPart = userId ? [{ userId }] : [];
+  // User-залежні агрегації — лише якщо Employee привʼязаний до User.
+  if (!userId) {
+    return {
+      projects: [],
+      tasks: [],
+      stages: [],
+      hoursByProject: Array.from(timesheetByProject.values()),
+    };
+  }
 
   const [memberships, tasks, stages] = await Promise.all([
     prisma.projectMember.findMany({
       where: {
+        userId,
         isActive: true,
         leftAt: null,
         project: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
-        OR: [...userPart, { employeeId }],
       },
       select: {
         roleInProject: true,
@@ -137,9 +133,7 @@ async function loadEngagement(employeeId: string, userId: string | null) {
       where: {
         isArchived: false,
         completedAt: null,
-        assignees: {
-          some: { OR: [...userPart, { employeeId }] },
-        },
+        assignees: { some: { userId } },
       },
       select: {
         id: true,
@@ -156,12 +150,9 @@ async function loadEngagement(employeeId: string, userId: string | null) {
     }),
     prisma.projectStageRecord.findMany({
       where: {
+        responsibleUserId: userId,
         status: { not: "COMPLETED" },
         project: { status: { notIn: ["COMPLETED", "CANCELLED"] } },
-        OR: [
-          ...(userId ? [{ responsibleUserId: userId }] : []),
-          { responsibleEmployeeId: employeeId },
-        ],
       },
       select: {
         id: true,

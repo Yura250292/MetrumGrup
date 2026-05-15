@@ -67,17 +67,7 @@ export function buildTaskWhere(
 
   const assigneeIds = toArray(spec.assigneeId);
   if (assigneeIds.length > 0) {
-    // Polymorphic match: id може бути або User-id, або Employee-id —
-    // дивимось у обидва поля. Дублікатів між User/Employee id не очікуємо
-    // (різні cuid таблиці).
-    where.assignees = {
-      some: {
-        OR: [
-          { userId: { in: assigneeIds } },
-          { employeeId: { in: assigneeIds } },
-        ],
-      },
-    };
+    where.assignees = { some: { userId: { in: assigneeIds } } };
   }
 
   const labelIds = toArray(spec.labelId);

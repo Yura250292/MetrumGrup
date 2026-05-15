@@ -8,109 +8,109 @@ datasource db {
 }
 
 model User {
-  id                      String                    @id @default(cuid())
-  email                   String                    @unique
-  password                String
-  name                    String
-  phone                   String?
-  avatar                  String?
-  firstName               String?
-  lastName                String?
-  bio                     String?                   @db.Text
-  jobTitle                String?
-  timezone                String                    @default("Europe/Kyiv")
-  locale                  String                    @default("uk")
-  dateFormat              String                    @default("DD.MM.YYYY")
-  weekStartsOn            Int                       @default(1)
-  defaultTaskView         String                    @default("list")
-  defaultLandingPage      String                    @default("dashboard")
-  notificationPrefsJson   Json?
-  workPrefsJson           Json?
-  productivityPrefsJson   Json?
-  dashboardLayoutJson     Json?
-  role                    Role                      @default(CLIENT)
-  firmId                  String?
-  firm                    Firm?                     @relation(fields: [firmId], references: [id])
-  isActive                Boolean                   @default(true)
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  auditLogs               AuditLog[]
-  createdEstimates        Estimate[]                @relation("EstimateCreator")
-  engineerReviews         Estimate[]                @relation("EngineerReviews")
-  financeReviews          Estimate[]                @relation("FinanceReviews")
-  financialTemplates      FinancialTemplate[]       @relation("TemplateCreator")
-  inventoryTx             InventoryTransaction[]
-  newsArticles            NewsArticle[]
-  notifications           Notification[]
-  pushSubscriptions       PushSubscription[]
-  payments                Payment[]
-  photoReports            PhotoReport[]
-  projectFiles            ProjectFile[]
-  clientProjects          Project[]                 @relation("ClientProjects")
-  managedProjects         Project[]                 @relation("ManagerProjects")
-  aiRenderJobs            AiRenderJob[]
-  estimateVersions        EstimateVersion[]
-  approvalSteps           EstimateApprovalStep[]
-  criticalChanges         EstimateCriticalChange[]
-  chatMessages            ChatMessage[]
-  chatParticipations      ConversationParticipant[]
-  authoredComments        Comment[]                 @relation("CommentAuthor")
-  reactions               Reaction[]
-  refineHistory           EstimateRefineHistory[]   @relation("RefineHistoryUser")
-  projectMemberships      ProjectMember[]           @relation("ProjectMemberUser")
-  invitedMembers          ProjectMember[]           @relation("ProjectMemberInviter")
-  referenceEstimates      ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
-  createdTasks            Task[]                    @relation("TaskCreator")
-  taskAssignments         TaskAssignee[]            @relation("TaskAssigneeUser")
-  taskAssignerOf          TaskAssignee[]            @relation("TaskAssigneeAssigner")
-  taskWatchers            TaskWatcher[]             @relation("TaskWatcherUser")
-  checklistItems          ChecklistItem[]           @relation("ChecklistAssignee")
-  checklistCompletions    ChecklistItem[]           @relation("ChecklistCompletedBy")
-  savedViews              SavedView[]               @relation("SavedViewUser")
-  timeLogs                TimeLog[]                 @relation("TimeLogUser")
-  timeLogsApproved        TimeLog[]                 @relation("TimeLogApprover")
-  hourlyRates             UserHourlyRate[]          @relation("UserHourlyRateUser")
-  workSchedule            UserWorkSchedule?         @relation("UserWorkScheduleUser")
-  timeOff                 TimeOff[]                 @relation("TimeOffUser")
-  timeOffApproved         TimeOff[]                 @relation("TimeOffApprover")
-  automations             Automation[]              @relation("AutomationCreator")
-  webhooks                Webhook[]                 @relation("WebhookCreator")
-  projectTemplates        ProjectTemplate[]         @relation("ProjectTemplateCreator")
-  taskTemplates           TaskTemplate[]            @relation("TaskTemplateCreator")
-  departmentsHead         Department[]              @relation("DepartmentHead")
-  teamsLead               Team[]                    @relation("TeamLead")
-  teamMemberships         TeamMember[]              @relation("TeamMemberUser")
-  integrations            UserIntegration[]         @relation("UserIntegrationUser")
-  financeEntriesCreated   FinanceEntry[]            @relation("FinanceEntryCreator")
-  financeEntriesUpdated   FinanceEntry[]            @relation("FinanceEntryUpdater")
-  financeEntriesApproved  FinanceEntry[]            @relation("FinanceEntryApprover")
-  financeAttachments      FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
-  financeTemplates        FinanceExpenseTemplate[]  @relation("FinanceTemplateCreator")
-  timesheetsCreated       Timesheet[]               @relation("TimesheetCreator")
-  timesheetsUpdated       Timesheet[]               @relation("TimesheetUpdater")
-  timesheetsApproved      Timesheet[]               @relation("TimesheetApprover")
-  kb2FormsCreated         KB2Form[]                 @relation("KB2FormCreator")
-  kb2FormsApproved        KB2Form[]                 @relation("KB2FormApprover")
-  kb3FormsCreated         KB3Form[]                 @relation("KB3FormCreator")
-  kb3FormsApproved        KB3Form[]                 @relation("KB3FormApprover")
-  estimateFinanceSyncs    Estimate[]                @relation("EstimateFinanceSyncer")
-  commentReadStates       CommentReadState[]
-  aiConversations         AiConversation[]          @relation("AiConversationUser")
-  meetings                Meeting[]                 @relation("MeetingCreator")
-  employeeProfile         Employee?                 @relation("EmployeeUser")
-  materialPriceSnapshots  MaterialPriceSnapshot[]   @relation("PriceSnapshotCreator")
-  receiptScansCreated     ReceiptScan[]             @relation("ReceiptScanCreator")
-  receiptScansApproved    ReceiptScan[]             @relation("ReceiptScanApprover")
-  telegramBotUser         TelegramBotUser?          @relation("TelegramBotUserLink")
-  stagesResponsible       ProjectStageRecord[]      @relation("ProjectStageResponsible")
-  firmAccess              UserFirmAccess[]
-  foremanReportsCreated   ForemanReport[]           @relation("ForemanReportCreator")
-  foremanReportsReviewed  ForemanReport[]           @relation("ForemanReportReviewer")
-  foremanReportFiles      ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
-  ownerConversations      OwnerConversation[]       @relation("OwnerConversationUser")
-  ownerChatFolders        OwnerChatFolder[]         @relation("OwnerChatFolderUser")
-  supplierPaymentsCreated SupplierPayment[]         @relation("SupplierPaymentCreator")
-  supplierPaymentsVoided  SupplierPayment[]         @relation("SupplierPaymentVoider")
+  id                     String                    @id @default(cuid())
+  email                  String                    @unique
+  password               String
+  name                   String
+  phone                  String?
+  avatar                 String?
+  firstName              String?
+  lastName               String?
+  bio                    String?                   @db.Text
+  jobTitle               String?
+  timezone               String                    @default("Europe/Kyiv")
+  locale                 String                    @default("uk")
+  dateFormat             String                    @default("DD.MM.YYYY")
+  weekStartsOn           Int                       @default(1)
+  defaultTaskView        String                    @default("list")
+  defaultLandingPage     String                    @default("dashboard")
+  notificationPrefsJson  Json?
+  workPrefsJson          Json?
+  productivityPrefsJson  Json?
+  dashboardLayoutJson    Json?
+  role                   Role                      @default(CLIENT)
+  firmId                 String?
+  firm                   Firm?                     @relation(fields: [firmId], references: [id])
+  isActive               Boolean                   @default(true)
+  createdAt              DateTime                  @default(now())
+  updatedAt              DateTime                  @updatedAt
+  auditLogs              AuditLog[]
+  createdEstimates       Estimate[]                @relation("EstimateCreator")
+  engineerReviews        Estimate[]                @relation("EngineerReviews")
+  financeReviews         Estimate[]                @relation("FinanceReviews")
+  financialTemplates     FinancialTemplate[]       @relation("TemplateCreator")
+  inventoryTx            InventoryTransaction[]
+  newsArticles           NewsArticle[]
+  notifications          Notification[]
+  pushSubscriptions      PushSubscription[]
+  payments               Payment[]
+  photoReports           PhotoReport[]
+  projectFiles           ProjectFile[]
+  clientProjects         Project[]                 @relation("ClientProjects")
+  managedProjects        Project[]                 @relation("ManagerProjects")
+  aiRenderJobs           AiRenderJob[]
+  estimateVersions       EstimateVersion[]
+  approvalSteps          EstimateApprovalStep[]
+  criticalChanges        EstimateCriticalChange[]
+  chatMessages           ChatMessage[]
+  chatParticipations     ConversationParticipant[]
+  authoredComments       Comment[]                 @relation("CommentAuthor")
+  reactions              Reaction[]
+  refineHistory          EstimateRefineHistory[]   @relation("RefineHistoryUser")
+  projectMemberships     ProjectMember[]           @relation("ProjectMemberUser")
+  invitedMembers         ProjectMember[]           @relation("ProjectMemberInviter")
+  referenceEstimates     ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
+  createdTasks           Task[]                    @relation("TaskCreator")
+  taskAssignments        TaskAssignee[]            @relation("TaskAssigneeUser")
+  taskAssignerOf         TaskAssignee[]            @relation("TaskAssigneeAssigner")
+  taskWatchers           TaskWatcher[]             @relation("TaskWatcherUser")
+  checklistItems         ChecklistItem[]           @relation("ChecklistAssignee")
+  checklistCompletions   ChecklistItem[]           @relation("ChecklistCompletedBy")
+  savedViews             SavedView[]               @relation("SavedViewUser")
+  timeLogs               TimeLog[]                 @relation("TimeLogUser")
+  timeLogsApproved       TimeLog[]                 @relation("TimeLogApprover")
+  hourlyRates            UserHourlyRate[]          @relation("UserHourlyRateUser")
+  workSchedule           UserWorkSchedule?         @relation("UserWorkScheduleUser")
+  timeOff                TimeOff[]                 @relation("TimeOffUser")
+  timeOffApproved        TimeOff[]                 @relation("TimeOffApprover")
+  automations            Automation[]              @relation("AutomationCreator")
+  webhooks               Webhook[]                 @relation("WebhookCreator")
+  projectTemplates       ProjectTemplate[]         @relation("ProjectTemplateCreator")
+  taskTemplates          TaskTemplate[]            @relation("TaskTemplateCreator")
+  departmentsHead        Department[]              @relation("DepartmentHead")
+  teamsLead              Team[]                    @relation("TeamLead")
+  teamMemberships        TeamMember[]              @relation("TeamMemberUser")
+  integrations           UserIntegration[]         @relation("UserIntegrationUser")
+  financeEntriesCreated  FinanceEntry[]            @relation("FinanceEntryCreator")
+  financeEntriesUpdated  FinanceEntry[]            @relation("FinanceEntryUpdater")
+  financeEntriesApproved FinanceEntry[]            @relation("FinanceEntryApprover")
+  financeAttachments     FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
+  financeTemplates       FinanceExpenseTemplate[]  @relation("FinanceTemplateCreator")
+  timesheetsCreated      Timesheet[]               @relation("TimesheetCreator")
+  timesheetsUpdated      Timesheet[]               @relation("TimesheetUpdater")
+  timesheetsApproved     Timesheet[]               @relation("TimesheetApprover")
+  kb2FormsCreated        KB2Form[]                 @relation("KB2FormCreator")
+  kb2FormsApproved       KB2Form[]                 @relation("KB2FormApprover")
+  kb3FormsCreated        KB3Form[]                 @relation("KB3FormCreator")
+  kb3FormsApproved       KB3Form[]                 @relation("KB3FormApprover")
+  estimateFinanceSyncs   Estimate[]                @relation("EstimateFinanceSyncer")
+  commentReadStates      CommentReadState[]
+  aiConversations        AiConversation[]          @relation("AiConversationUser")
+  meetings               Meeting[]                 @relation("MeetingCreator")
+  employeeProfile        Employee?                 @relation("EmployeeUser")
+  materialPriceSnapshots MaterialPriceSnapshot[]   @relation("PriceSnapshotCreator")
+  receiptScansCreated    ReceiptScan[]             @relation("ReceiptScanCreator")
+  receiptScansApproved   ReceiptScan[]             @relation("ReceiptScanApprover")
+  telegramBotUser        TelegramBotUser?          @relation("TelegramBotUserLink")
+  stagesResponsible      ProjectStageRecord[]      @relation("ProjectStageResponsible")
+  firmAccess             UserFirmAccess[]
+  foremanReportsCreated  ForemanReport[]           @relation("ForemanReportCreator")
+  foremanReportsReviewed ForemanReport[]           @relation("ForemanReportReviewer")
+  foremanReportFiles     ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
+  ownerConversations     OwnerConversation[]       @relation("OwnerConversationUser")
+  ownerChatFolders       OwnerChatFolder[]         @relation("OwnerChatFolderUser")
+  supplierPaymentsCreated SupplierPayment[]        @relation("SupplierPaymentCreator")
+  supplierPaymentsVoided  SupplierPayment[]        @relation("SupplierPaymentVoider")
 
   @@index([firmId])
   @@map("users")
@@ -224,9 +224,7 @@ model Project {
 model ProjectMember {
   id            String      @id @default(cuid())
   projectId     String
-  // XOR: рівно одне з userId/employeeId. Enforce SQL CHECK у міграції.
-  userId        String?
-  employeeId    String?
+  userId        String
   roleInProject ProjectRole
   permissions   Json?
   joinedAt      DateTime    @default(now())
@@ -234,15 +232,12 @@ model ProjectMember {
   invitedById   String?
   isActive      Boolean     @default(true)
 
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User?     @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
-  employee  Employee? @relation("ProjectMemberEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
-  invitedBy User?     @relation("ProjectMemberInviter", fields: [invitedById], references: [id])
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user      User    @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy User?   @relation("ProjectMemberInviter", fields: [invitedById], references: [id])
 
   @@unique([projectId, userId])
-  @@unique([projectId, employeeId])
   @@index([userId, isActive])
-  @@index([employeeId, isActive])
   @@index([projectId, roleInProject])
   @@map("project_members")
 }
@@ -293,13 +288,8 @@ model ProjectStageRecord {
   children                     ProjectStageRecord[] @relation("StageTree")
   responsibleUserId            String?
   responsibleUser              User?                @relation("ProjectStageResponsible", fields: [responsibleUserId], references: [id])
-  // Альтернатива до responsibleUserId — Employee без облікового запису у CRM.
-  // Контракт: серед {responsibleUserId, responsibleEmployeeId, responsibleName}
-  // одночасно не більше одного. Enforce у API, не SQL.
-  responsibleEmployeeId        String?
-  responsibleEmployee          Employee?            @relation("StageResponsibleEmployee", fields: [responsibleEmployeeId], references: [id], onDelete: SetNull)
   // Free-text fallback — коли відповідальний не зареєстрований у системі
-  // (підрядник, прізвище зі слів). Заповнюється лише якщо обидва FK null.
+  // (підрядник, прізвище зі слів). Заповнюється лише якщо responsibleUserId=null.
   responsibleName              String?
   tasks                        Task[]
   financeEntries               FinanceEntry[]       @relation("StageFinanceEntries")
@@ -319,7 +309,6 @@ model ProjectStageRecord {
   @@index([projectId, stage])
   @@index([projectId, parentStageId])
   @@index([responsibleUserId])
-  @@index([responsibleEmployeeId])
   @@index([sourceEstimateSectionId])
   @@index([sourceEstimateItemId])
   @@index([telegramThreadId])
@@ -515,18 +504,18 @@ model EstimateItem {
 }
 
 model Material {
-  id                String                  @id @default(cuid())
-  name              String
-  sku               String                  @unique
-  category          String
-  unit              String
-  basePrice         Decimal                 @db.Decimal(10, 2)
-  laborRate         Decimal                 @default(0) @db.Decimal(10, 2)
-  markup            Decimal                 @default(0) @db.Decimal(5, 2)
-  description       String?
-  isActive          Boolean                 @default(true)
-  createdAt         DateTime                @default(now())
-  updatedAt         DateTime                @updatedAt
+  id               String                  @id @default(cuid())
+  name             String
+  sku              String                  @unique
+  category         String
+  unit             String
+  basePrice        Decimal                 @db.Decimal(10, 2)
+  laborRate        Decimal                 @default(0) @db.Decimal(10, 2)
+  markup           Decimal                 @default(0) @db.Decimal(5, 2)
+  description      String?
+  isActive         Boolean                 @default(true)
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
   estimateItems     EstimateItem[]
   inventoryItems    InventoryItem[]
   priceSnapshots    MaterialPriceSnapshot[]
@@ -642,24 +631,24 @@ model FinanceEntry {
   /// сторінкою діагностики. Backfill і міграція читачів — окремі фази.
   financeNature FinanceNature?
 
-  project            Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  firm               Firm?                       @relation(fields: [firmId], references: [id])
-  stageRecord        ProjectStageRecord?         @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
-  createdBy          User                        @relation("FinanceEntryCreator", fields: [createdById], references: [id])
-  updatedBy          User?                       @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
-  approvedBy         User?                       @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
-  folder             Folder?                     @relation(fields: [folderId], references: [id], onDelete: SetNull)
-  estimate           Estimate?                   @relation("EstimateFinanceEntries", fields: [estimateId], references: [id], onDelete: SetNull)
-  estimateItem       EstimateItem?               @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
-  costCode           CostCode?                   @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
-  counterpartyEntity Counterparty?               @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  project            Project?                 @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  firm               Firm?                    @relation(fields: [firmId], references: [id])
+  stageRecord        ProjectStageRecord?      @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
+  createdBy          User                     @relation("FinanceEntryCreator", fields: [createdById], references: [id])
+  updatedBy          User?                    @relation("FinanceEntryUpdater", fields: [updatedById], references: [id])
+  approvedBy         User?                    @relation("FinanceEntryApprover", fields: [approvedById], references: [id])
+  folder             Folder?                  @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  estimate           Estimate?                @relation("EstimateFinanceEntries", fields: [estimateId], references: [id], onDelete: SetNull)
+  estimateItem       EstimateItem?            @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
+  costCode           CostCode?                @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
+  counterpartyEntity Counterparty?            @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
   attachments        FinanceEntryAttachment[]
-  receiptScan        ReceiptScan?                @relation("FinanceEntryReceiptScan")
+  receiptScan        ReceiptScan?             @relation("FinanceEntryReceiptScan")
   priceSnapshots     MaterialPriceSnapshot[]
-  timesheets         Timesheet[]                 @relation("FinanceEntryTimesheet")
-  kb2Form            KB2Form?                    @relation("FinanceEntryKB2")
-  retentionRecord    RetentionRecord?            @relation("FinanceEntryRetention")
-  foremanReportItem  ForemanReportItem?          @relation("ForemanReportItemToFinanceEntry", fields: [foremanReportItemId], references: [id], onDelete: SetNull)
+  timesheets         Timesheet[]              @relation("FinanceEntryTimesheet")
+  kb2Form            KB2Form?                 @relation("FinanceEntryKB2")
+  retentionRecord    RetentionRecord?         @relation("FinanceEntryRetention")
+  foremanReportItem  ForemanReportItem?       @relation("ForemanReportItemToFinanceEntry", fields: [foremanReportItemId], references: [id], onDelete: SetNull)
   /// Phase 1 (supplier-debt): allocations що покривають частину/всю суму
   /// цього факту. Outstanding = amount − SUM(allocations.amount). Коли
   /// outstanding = 0 → status переводиться в PAID транзакційно.
@@ -791,13 +780,13 @@ model ForemanReportItem {
   /// Phase 2 (supplier-debt): постачальник, з якого взято матеріал. Заповнюється
   /// AI-парсером (через resolveSupplier match по назві/ЄДРПОУ) або вручну
   /// foreman-ом / менеджером. На approve переноситься у FinanceEntry.counterpartyId.
-  counterpartyId    String?
+  counterpartyId String?
   /// Сирий текст постачальника, що AI запропонував, але не змаппив на існуючу
   /// Counterparty (UI показує chip "AI запропонував: Будхата" + кнопка "Створити").
-  supplierGuess     String?
+  supplierGuess  String?
   /// Phase 3: позначка "ціна зросла vs попередній чек цього постачальника".
   /// Виставляється на approve через upsertSupplierMaterial. UI показує "!" tooltip.
-  priceIncreaseFlag Boolean  @default(false)
+  priceIncreaseFlag Boolean @default(false)
   /// Попередня unitPrice цього матеріалу у цього постачальника на момент approve.
   /// Snapshot для UI tooltip ("було 200, стало 250").
   previousUnitPrice Decimal? @db.Decimal(12, 2)
@@ -805,7 +794,7 @@ model ForemanReportItem {
   /// Safe Finance Migration Phase 5.5: стаття витрат бюджету (для коректної
   /// агрегації у budget-matrix). Менеджер обирає під час review. Якщо null —
   /// FE.costCodeId теж null і запис лягає у "(без статті)" bucket.
-  costCodeId    String?
+  costCodeId String?
   /// Намір menager-а при approve: COMMITTED = борг постачальнику (ще не оплачено),
   /// ACTUAL = вже оплачено (готівка на місці / попередня оплата). Якщо null —
   /// approve route fallback до body.financeNature або default COMMITTED.
@@ -813,12 +802,12 @@ model ForemanReportItem {
   /// до повного approve.
   financeIntent ForemanFinanceIntent?
   /// Опційна нотатка менеджера по позиції (буде в FinanceEntry.description).
-  managerNote   String?
+  managerNote String?
 
-  report       ForemanReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  counterparty Counterparty? @relation("ForemanItemSupplier", fields: [counterpartyId], references: [id], onDelete: SetNull)
-  costCode     CostCode?     @relation("ForemanItemCostCode", fields: [costCodeId], references: [id], onDelete: SetNull)
-  financeEntry FinanceEntry? @relation("ForemanReportItemToFinanceEntry")
+  report       ForemanReport  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  counterparty Counterparty?  @relation("ForemanItemSupplier", fields: [counterpartyId], references: [id], onDelete: SetNull)
+  costCode     CostCode?      @relation("ForemanItemCostCode", fields: [costCodeId], references: [id], onDelete: SetNull)
+  financeEntry FinanceEntry?  @relation("ForemanReportItemToFinanceEntry")
 
   @@index([reportId])
   @@index([counterpartyId])
@@ -841,7 +830,7 @@ enum ForemanFinanceIntent {
 /// у scope (counterpartyId, firmId). На рівні UI/API завжди показуємо `name`
 /// (display) — оригінальний title з останнього звіту.
 model SupplierMaterial {
-  id             String    @id @default(cuid())
+  id             String   @id @default(cuid())
   counterpartyId String
   firmId         String
   /// Нормалізована назва (lower + trim + collapse). Ключ дедуплікації.
@@ -849,14 +838,14 @@ model SupplierMaterial {
   /// Display name (з найсвіжішого звіту).
   name           String
   unit           String?
-  lastPrice      Decimal?  @db.Decimal(12, 2)
+  lastPrice      Decimal? @db.Decimal(12, 2)
   lastSeenAt     DateTime?
   /// Опційний звʼязок з глобальним каталогом Material (якщо менеджер змаппив
   /// постачальницький матеріал на канонічний). Phase 3 не використовує — для
   /// Phase 4+ коли буде уніфіковане BoQ.
   materialId     String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   counterparty Counterparty                   @relation("CounterpartyMaterials", fields: [counterpartyId], references: [id], onDelete: Cascade)
   firm         Firm                           @relation(fields: [firmId], references: [id])
@@ -1748,7 +1737,6 @@ model Firm {
   supplierPayments  SupplierPayment[]
   supplierMaterials SupplierMaterial[]
   meetings          Meeting[]
-  employees         Employee[]         @relation("FirmEmployees")
 
   @@map("firms")
 }
@@ -2087,23 +2075,16 @@ model Task {
 model TaskAssignee {
   id           String   @id @default(cuid())
   taskId       String
-  // XOR: рівно одне з userId/employeeId. Enforce SQL CHECK у міграції.
-  // Employee без User-облікового запису отримує "інформативне" призначення —
-  // notify-pipeline для них skip-нутий (бо нема User для push/email/bot).
-  userId       String?
-  employeeId   String?
+  userId       String
   assignedAt   DateTime @default(now())
   assignedById String?
 
-  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user       User?     @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
-  employee   Employee? @relation("TaskAssigneeEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
-  assignedBy User?     @relation("TaskAssigneeAssigner", fields: [assignedById], references: [id])
+  task       Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User  @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("TaskAssigneeAssigner", fields: [assignedById], references: [id])
 
   @@unique([taskId, userId])
-  @@unique([taskId, employeeId])
   @@index([userId])
-  @@index([employeeId])
   @@map("task_assignees")
 }
 
@@ -2695,15 +2676,15 @@ model Meeting {
 
   /// AssemblyAI-збагачені сигнали з аудіо (etap 1 у синергії з GPT-4o):
   /// Скільки спікерів модель розпізнала.
-  speakerCount       Int?
+  speakerCount Int?
   /// Сирі utterance-и з лейблами (Speaker A/B/...) і таймстемпами.
   /// Структура: [{ speaker: "A", start: 1230, end: 4560, text: "..." }, ...]
-  utterances         Json?
+  utterances   Json?
   /// AssemblyAI entity_detection — імена, суми, дати, локації, організації.
   /// Структура: [{ entity_type: "person_name", text: "Любовь Николаевна", start, end }, ...]
-  entities           Json?
+  entities     Json?
   /// AssemblyAI auto_chapters — розбивка на тематичні розділи з summary.
-  chapters           Json?
+  chapters     Json?
   /// Який сервіс зробив транскрипт (для діагностики/міграції).
   transcribeProvider String? // 'assemblyai' | 'whisper'
 
@@ -2712,16 +2693,16 @@ model Meeting {
   updatedAt  DateTime @updatedAt
 
   /// Live AI Agent: інсайти що генеруються в режимі live під час запису.
-  liveInsights      LiveMeetingInsight[]
+  liveInsights LiveMeetingInsight[]
   /// Live AI Agent: лог витрат AI-токенів.
   liveAgentCostLogs LiveAgentCostLog[]
   /// Live AI Agent: ключові терміни що зʼявились у розмові + 1-рядкові пояснення.
-  liveTerms         LiveMeetingTerm[]
+  liveTerms LiveMeetingTerm[]
 
   /// Live AI Agent: одноразово згенерований pre-meeting briefing (markdown).
   /// Кешовано, не перегенеровується автоматом — користувач натискає «Оновити».
-  liveBriefing            String?   @db.Text
-  liveBriefingGeneratedAt DateTime?
+  liveBriefing             String?   @db.Text
+  liveBriefingGeneratedAt  DateTime?
 
   @@index([projectId])
   @@index([createdById])
@@ -2747,17 +2728,17 @@ model LiveMeetingInsight {
   /// Пріоритет: low, medium, high, critical.
   priority String
   title    String
-  summary  String @db.Text
+  summary  String  @db.Text
 
   /// Питання яке варто поставити співрозмовнику зараз (опц.).
-  suggestedQuestion  String? @db.Text
+  suggestedQuestion String? @db.Text
   /// Дія для занесення у список задач (опц.).
-  actionItem         String? @db.Text
+  actionItem        String? @db.Text
   /// Варіанти відповіді користувачу (опц.). Структура:
   /// [{ tone: "formal"|"neutral"|"firm", text: "..." }]. До 3 елементів.
   suggestedResponses Json?
   /// 0..1 — впевненість моделі.
-  confidence         Float?
+  confidence        Float?
 
   isPinned Boolean @default(false)
   isHidden Boolean @default(false)
@@ -2786,8 +2767,8 @@ model LiveAgentCostLog {
   provider String // 'openai' | 'anthropic' | 'gemini'
   model    String
 
-  inputTokens      Int?
-  outputTokens     Int?
+  inputTokens  Int?
+  outputTokens Int?
   /// Оцінка вартості в USD (input + output * model rates).
   estimatedCostUsd Decimal? @db.Decimal(10, 6)
 
@@ -2872,59 +2853,49 @@ model EmployeeSalary {
 }
 
 model Employee {
-  id                 String               @id @default(cuid())
+  id            String           @id @default(cuid())
   /// Збірне відображення (= "lastName firstName middleName"). Тримається
   /// синхронним з частинами імені на API-боці; лишилось для старого пошуку.
-  fullName           String
+  fullName      String
   /// Прізвище.
-  lastName           String?
+  lastName      String?
   /// Імʼя.
-  firstName          String?
+  firstName     String?
   /// По-батькові.
-  middleName         String?
-  phone              String?
-  email              String?
-  position           String?
-  birthDate          DateTime?
+  middleName    String?
+  phone         String?
+  email         String?
+  position      String?
+  birthDate     DateTime?
   /// Deprecated: видалено з UI; колонку лишили для історичних значень.
-  residence          String?
+  residence     String?
   /// Deprecated: видалено з UI; колонку лишили для історичних значень.
-  maritalStatus      String?
-  hiredAt            DateTime?
-  terminatedAt       DateTime?
-  notes              String?
-  isActive           Boolean              @default(true)
+  maritalStatus String?
+  hiredAt       DateTime?
+  terminatedAt  DateTime?
+  notes         String?
+  isActive      Boolean          @default(true)
   /// Тип зайнятості (Повна / Неповна / Договір).
-  employmentType     EmploymentType       @default(FULL)
+  employmentType EmploymentType  @default(FULL)
   /// Ставка зайнятості (1.0 = ставка, 0.5 = пів-ставки тощо).
-  employmentRate     Decimal              @default(1.0) @db.Decimal(4, 2)
+  employmentRate Decimal         @default(1.0) @db.Decimal(4, 2)
   /// Структурний підрозділ.
-  departmentId       String?
-  department         Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  departmentId  String?
+  department    Department?      @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   /// Тип відстрочки/бронювання.
-  deferralType       DeferralType         @default(NONE)
+  deferralType  DeferralType     @default(NONE)
   /// До коли діє відстрочка/бронювання.
-  deferralUntil      DateTime?
-  userId             String?              @unique
-  user               User?                @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
-  /// Фірма, до якої належить працівник. Обовʼязкова для multi-firm ізоляції
-  /// HR-списків і дропдаунів відповідальних. Backfill з User.firmId якщо є,
-  /// інакше — дефолт metrum-group (див. міграцію polymorphic_assignee).
-  firmId             String
-  firm               Firm                 @relation("FirmEmployees", fields: [firmId], references: [id])
-  timesheets         Timesheet[]          @relation("EmployeeTimesheets")
-  salaries           EmployeeSalary[]     @relation("EmployeeSalaryHistory")
-  taskAssignments    TaskAssignee[]       @relation("TaskAssigneeEmployee")
-  responsibleStages  ProjectStageRecord[] @relation("StageResponsibleEmployee")
-  projectMemberships ProjectMember[]      @relation("ProjectMemberEmployee")
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  deferralUntil DateTime?
+  userId        String?          @unique
+  user          User?            @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
+  timesheets    Timesheet[]      @relation("EmployeeTimesheets")
+  salaries      EmployeeSalary[] @relation("EmployeeSalaryHistory")
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@index([isActive])
   @@index([fullName])
   @@index([departmentId])
-  @@index([firmId])
-  @@index([firmId, isActive])
   @@map("employees")
 }
 
@@ -3001,24 +2972,24 @@ enum SupplierPaymentStatus {
 }
 
 model Counterparty {
-  id                      String             @id @default(cuid())
-  name                    String
-  type                    CounterpartyType   @default(LEGAL)
+  id        String           @id @default(cuid())
+  name      String
+  type      CounterpartyType @default(LEGAL)
   /// Ролі у системі. Порожній масив = OTHER (не використовується активно).
   /// Фільтрація списків постачальників відбувається через `roles has SUPPLIER`.
-  roles                   CounterpartyRole[] @default([])
-  taxId                   String?
+  roles     CounterpartyRole[] @default([])
+  taxId     String?
   /// EDRPOU (legal) / RNOKPP (FOP, individual) — Ukrainian tax identifier.
-  edrpou                  String?
+  edrpou    String?
   /// Bank account for outgoing payments (display-only, no validation).
-  iban                    String?
+  iban      String?
   /// Whether the counterparty is a VAT payer (платник ПДВ).
-  vatPayer                Boolean            @default(false)
-  phone                   String?
-  email                   String?
-  address                 String?
-  notes                   String?
-  isActive                Boolean            @default(true)
+  vatPayer  Boolean          @default(false)
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  isActive  Boolean          @default(true)
   /// Default payment terms (днів) для SUPPLIER. Використовується UI для прогнозу
   /// "коли треба заплатити". null — без терміну.
   defaultPaymentTermsDays Int?
@@ -3026,20 +2997,20 @@ model Counterparty {
   preferredPaymentMethod  PaymentMethod?
   /// Фірма-власник (Group / Studio). Контрагенти ізольовані між фірмами;
   /// один SUPPLIER може існувати окремо в Group і в Studio (різні рядки).
-  firmId                  String?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  firmId    String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
 
-  firm               Firm?                    @relation(fields: [firmId], references: [id])
-  financeEntries     FinanceEntry[]
-  financeTemplates   FinanceExpenseTemplate[]
-  kb2Forms           KB2Form[]                @relation("KB2FormCounterparty")
-  kb3Forms           KB3Form[]                @relation("KB3FormCounterparty")
+  firm             Firm?                    @relation(fields: [firmId], references: [id])
+  financeEntries   FinanceEntry[]
+  financeTemplates FinanceExpenseTemplate[]
+  kb2Forms         KB2Form[]                @relation("KB2FormCounterparty")
+  kb3Forms         KB3Form[]                @relation("KB3FormCounterparty")
   /// Проекти, де цей контрагент виступає клієнтом (Project.clientCounterpartyId).
-  clientProjects     Project[]                @relation("ProjectClientCounterparty")
+  clientProjects     Project[]              @relation("ProjectClientCounterparty")
   supplierPayments   SupplierPayment[]
-  foremanReportItems ForemanReportItem[]      @relation("ForemanItemSupplier")
-  supplierMaterials  SupplierMaterial[]       @relation("CounterpartyMaterials")
+  foremanReportItems ForemanReportItem[]    @relation("ForemanItemSupplier")
+  supplierMaterials  SupplierMaterial[]     @relation("CounterpartyMaterials")
 
   @@index([isActive])
   @@index([type])
@@ -3061,29 +3032,29 @@ model Counterparty {
 /// Multi-firm: counterpartyId.firmId має співпадати з SupplierPayment.firmId
 ///   (валідація в API).
 model SupplierPayment {
-  id             String                @id @default(cuid())
-  counterpartyId String
-  firmId         String
+  id              String                @id @default(cuid())
+  counterpartyId  String
+  firmId          String
   /// Опційно: якщо платіж зроблено в межах одного проєкту, FIFO обмежиться
   /// фактами цього проєкту. Null = розподіл по всіх фактах постачальника.
-  projectId      String?
-  amount         Decimal               @db.Decimal(14, 2)
-  currency       String                @default("UAH")
-  occurredAt     DateTime
-  method         PaymentMethod         @default(BANK_TRANSFER)
+  projectId       String?
+  amount          Decimal               @db.Decimal(14, 2)
+  currency        String                @default("UAH")
+  occurredAt      DateTime
+  method          PaymentMethod         @default(BANK_TRANSFER)
   /// Номер платіжки / чека / тощо (вільний текст для аудиту).
-  reference      String?
-  notes          String?
-  status         SupplierPaymentStatus @default(POSTED)
-  voidedAt       DateTime?
-  voidedById     String?
-  voidReason     String?
-  createdById    String
+  reference       String?
+  notes           String?
+  status          SupplierPaymentStatus @default(POSTED)
+  voidedAt        DateTime?
+  voidedById      String?
+  voidReason      String?
+  createdById     String
   /// Idempotency-Key з UI/API. Захищає від подвійного submit (ретрай за
   /// мережевих помилок створює один SupplierPayment, не два).
-  idempotencyKey String?               @unique
-  createdAt      DateTime              @default(now())
-  updatedAt      DateTime              @updatedAt
+  idempotencyKey  String?               @unique
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
 
   counterparty Counterparty                @relation(fields: [counterpartyId], references: [id])
   firm         Firm                        @relation(fields: [firmId], references: [id])
@@ -3302,13 +3273,13 @@ model CostCode {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  parent             CostCode?           @relation("CostCodeTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children           CostCode[]          @relation("CostCodeTree")
+  parent             CostCode?            @relation("CostCodeTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children           CostCode[]           @relation("CostCodeTree")
   financeEntries     FinanceEntry[]
   estimateItems      EstimateItem[]
-  timesheets         Timesheet[]         @relation("CostCodeTimesheets")
-  kb2Items           KB2FormItem[]       @relation("CostCodeKB2")
-  foremanReportItems ForemanReportItem[] @relation("ForemanItemCostCode")
+  timesheets         Timesheet[]          @relation("CostCodeTimesheets")
+  kb2Items           KB2FormItem[]        @relation("CostCodeKB2")
+  foremanReportItems ForemanReportItem[]  @relation("ForemanItemCostCode")
 
   @@index([parentId, sortOrder])
   @@index([isActive])

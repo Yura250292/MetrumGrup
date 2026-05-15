@@ -39,20 +39,9 @@ export async function POST(
     } else if (action === "archive") {
       await bulkArchive(projectId, taskIds, session.user.id);
     } else if (action === "assign") {
-      const userId = typeof body.userId === "string" ? body.userId : "";
-      const employeeId =
-        typeof body.employeeId === "string" ? body.employeeId : "";
-      const ref: { kind: "user" | "employee"; id: string } | null = employeeId
-        ? { kind: "employee", id: employeeId }
-        : userId
-          ? { kind: "user", id: userId }
-          : null;
-      if (!ref)
-        return NextResponse.json(
-          { error: "userId або employeeId є обовʼязковим" },
-          { status: 400 },
-        );
-      await bulkAssign(projectId, taskIds, ref, session.user.id);
+      const userId = String(body.userId ?? "");
+      if (!userId) return NextResponse.json({ error: "userId required" }, { status: 400 });
+      await bulkAssign(projectId, taskIds, userId, session.user.id);
     } else {
       return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }

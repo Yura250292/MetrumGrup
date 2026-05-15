@@ -41,7 +41,7 @@ export default async function AdminV2ProjectDetailPage({
   const sp = await searchParams;
   const activeTab = sp.tab || "overview";
 
-  const [project, factIncome, factExpense] = await Promise.all([
+  const [project, factIncome, factExpense, responsibleCandidates] = await Promise.all([
     prisma.project.findUnique({
       where: { id },
       include: {
@@ -50,10 +50,7 @@ export default async function AdminV2ProjectDetailPage({
         manager: { select: { id: true, name: true, email: true, phone: true } },
         stages: {
           orderBy: { sortOrder: "asc" },
-          include: {
-            responsibleUser: { select: { id: true, name: true } },
-            responsibleEmployee: { select: { id: true, fullName: true } },
-          },
+          include: { responsibleUser: { select: { id: true, name: true } } },
         },
         payments: { orderBy: { scheduledDate: "asc" } },
         photoReports: {
@@ -73,6 +70,14 @@ export default async function AdminV2ProjectDetailPage({
       where: { projectId: id, type: "EXPENSE", kind: "FACT", isArchived: false },
       _sum: { amount: true },
     }),
+    prisma.user.findMany({
+      where: {
+        role: { in: ["SUPER_ADMIN", "MANAGER", "ENGINEER"] },
+        isActive: true,
+      },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
 
   if (!project) notFound();
@@ -82,35 +87,6 @@ export default async function AdminV2ProjectDetailPage({
   } catch {
     notFound();
   }
-  // Кандидати на роль "відповідального" — User + Employee у фірмі проекту.
-  // Включаємо User з фірми проекту (+SUPER_ADMINів та per-firm access)
-  // та активних Employee цієї фірми. Project.firmId — String? (legacy
-  // projectless), тож fallback до DEFAULT_FIRM_ID.
-  const projectFirmId = project.firmId ?? "metrum-group";
-  const [responsibleUsers, responsibleEmployees] = await Promise.all([
-    prisma.user.findMany({
-      where: {
-        role: { in: ["SUPER_ADMIN", "MANAGER", "ENGINEER"] },
-        isActive: true,
-        OR: [
-          { role: "SUPER_ADMIN" },
-          { firmId: projectFirmId },
-          { firmAccess: { some: { firmId: projectFirmId } } },
-        ],
-      },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.employee.findMany({
-      where: { firmId: projectFirmId, isActive: true, userId: null },
-      select: { id: true, fullName: true },
-      orderBy: { fullName: "asc" },
-    }),
-  ]);
-  const responsibleCandidates = [
-    ...responsibleUsers.map((u) => ({ id: u.id, name: u.name })),
-    ...responsibleEmployees.map((e) => ({ id: e.id, name: e.fullName })),
-  ];
 
   // Convert Decimal to number once for client components
   const totalBudget = Number(project.totalBudget);
@@ -323,12 +299,8 @@ export default async function AdminV2ProjectDetailPage({
               endDate: s.endDate,
               notes: s.notes,
               responsibleUserId: s.responsibleUserId,
-              responsibleEmployeeId: s.responsibleEmployeeId,
               responsibleName:
-                s.responsibleUser?.name ??
-                s.responsibleEmployee?.fullName ??
-                s.responsibleName ??
-                null,
+                s.responsibleUser?.name ?? s.responsibleName ?? null,
               allocatedBudget:
                 s.allocatedBudget === null || s.allocatedBudget === undefined
                   ? null
