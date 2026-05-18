@@ -16,6 +16,29 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { AgentContext, EstimateSection, EstimateItem } from './base-agent';
 import { findSimilarPrices } from '../prozorro-price-reference';
 import { calculateLaborCost } from '../labor-cost-calculator';
+import { prisma } from '../prisma';
+
+/**
+ * Дієслова-маркери РОБОТИ. Якщо опис починається з такого кореня —
+ * позиція класифікується як 'work', інакше — 'material'.
+ * Використовується коли AI не передав itemType.
+ */
+const WORK_VERB_RE =
+  /(монтаж|демонтаж|прокладан|улаштуван|влаштуван|штукатур|фарбуван|шпаклюван|шпаклівк|облицюван|армуван|стяжк|гідроізоляц|укладан|зварюван|введен|нанесен|заливк|кладк|мурув|оздоблен|затирк|грунтуван|свердлін|різанн|підготовк|улаштування|обштукатур)/i;
+
+/** Класифікувати позицію як роботу чи матеріал за описом. */
+function classifyItemType(description: string): 'work' | 'material' {
+  return WORK_VERB_RE.test(description || '') ? 'work' : 'material';
+}
+
+/** Нормалізувати рядок для нечіткого матчингу матеріалів. */
+function normalizeForMatch(s: string): string[] {
+  return (s || '')
+    .toLowerCase()
+    .replace(/[^a-zа-яіїєґ0-9]+/gi, ' ')
+    .split(' ')
+    .filter((t) => t.length >= 3);
+}
 
 export interface MasterAgentOutput {
   sections: EstimateSection[];
@@ -478,17 +501,25 @@ export class MasterEstimateAgent {
       let laborCost = this.parseAiNumber(item.laborCost);
       const confidence = this.parseAiNumber(item.confidence) || 0.7;
 
-      // Нормалізувати тип позиції.
+      // Тип позиції: з AI, інакше — детермінована класифікація за описом.
       const rawType = String(item.itemType || '').toLowerCase();
       const itemType: 'work' | 'material' =
-        rawType === 'material' ? 'material' : rawType === 'work' ? 'work' : undefined as any;
+        rawType === 'material'
+          ? 'material'
+          : rawType === 'work'
+            ? 'work'
+            : classifyItemType(item.description || '');
 
-      // 🚨 Захист від подвійного рахунку (навіть якщо AI порушив правило):
-      //  - матеріал НЕ несе вартості роботи → laborCost = 0;
-      //  - чиста робота НЕ несе вартості матеріалу → unitPrice = 0.
+      // 🚨 Канонічна модель (захист від подвійного рахунку):
+      //  - material: уся вартість у unitPrice, laborCost = 0;
+      //  - work:     уся вартість у laborCost, unitPrice = 0.
+      //    Якщо AI поклав ставку роботи в unitPrice — конвертуємо в laborCost.
       if (itemType === 'material') {
         laborCost = 0;
-      } else if (itemType === 'work') {
+      } else {
+        if (laborCost <= 0 && unitPrice > 0) {
+          laborCost = quantity * unitPrice;
+        }
         unitPrice = 0;
       }
 
@@ -607,9 +638,12 @@ export class MasterEstimateAgent {
     console.log(`\n📚 Enriching labor costs through cascade (КНУ → KAPITEL → DB → AI)...`);
     const laborEnriched = this.enrichWithLaborSources(allSections);
 
-    // Збагатити всі секції цінами матеріалів з Prozorro.
-    // Для ВНУТРІШНІХ робіт Prozorro поки вимкнено — тендери нерелевантні
-    // для fit-out, ціни беремо з КНУ/KAPITEL/бази/AI.
+    // Ціни МАТЕРІАЛІВ — спершу з внутрішнього довідника Metrum.
+    console.log(`\n📦 Enriching material prices from Material DB...`);
+    const dbEnriched = await this.enrichWithMaterialDatabase(laborEnriched);
+
+    // Далі — Prozorro. Для ВНУТРІШНІХ робіт Prozorro вимкнено: тендери
+    // нерелевантні для fit-out, решта цін лишається з довідника/AI.
     const wdMaster = context.wizardData as any;
     const interiorOnlyMaster =
       typeof wdMaster?.interiorOnly === 'boolean'
@@ -622,10 +656,10 @@ export class MasterEstimateAgent {
     let enrichedSections: EstimateSection[];
     if (interiorOnlyMaster) {
       console.log(`\n💰 Prozorro-збагачення вимкнено (внутрішні роботи)`);
-      enrichedSections = laborEnriched;
+      enrichedSections = dbEnriched;
     } else {
       console.log(`\n💰 Enriching material prices with Prozorro...`);
-      enrichedSections = await this.enrichWithProzorroPrices(laborEnriched);
+      enrichedSections = await this.enrichWithProzorroPrices(dbEnriched);
     }
 
     // Розрахувати загальну суму
@@ -1521,6 +1555,90 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
         .map(([v, n]) => `Зб.${v}: ${n}`).join(', ');
       console.log(`      КНУ по томах: ${breakdown}`);
     }
+    return result;
+  }
+
+  /**
+   * Збагатити ціни МАТЕРІАЛІВ з внутрішнього довідника (таблиця Material).
+   * Пріоритетне джерело: якщо матеріал є в базі — беремо basePrice звідти.
+   * Матчинг нечіткий — за перетином токенів назви.
+   */
+  private async enrichWithMaterialDatabase(
+    sections: EstimateSection[]
+  ): Promise<EstimateSection[]> {
+    let materials: Array<{ name: string; category: string; unit: string; basePrice: any }> = [];
+    try {
+      materials = await prisma.material.findMany({
+        where: { isActive: true },
+        select: { name: true, category: true, unit: true, basePrice: true },
+      });
+    } catch (e) {
+      console.warn('⚠️ Material DB недоступна:', e instanceof Error ? e.message : e);
+      return sections;
+    }
+
+    const matIndex = materials
+      .map((m) => ({
+        name: m.name,
+        price: Number(m.basePrice) || 0,
+        tokens: new Set(normalizeForMatch(m.name)),
+      }))
+      .filter((m) => m.price > 0 && m.tokens.size > 0);
+
+    if (matIndex.length === 0) {
+      console.log('   ℹ️ Material DB: довідник матеріалів порожній — пропускаю');
+      return sections;
+    }
+
+    let matched = 0;
+    let totalMaterials = 0;
+
+    const result = sections.map((section) => {
+      const items = section.items.map((item) => {
+        if (item.itemType !== 'material') return item;
+        totalMaterials++;
+
+        const itemTokens = normalizeForMatch(item.description);
+        if (itemTokens.length === 0) return item;
+
+        let best: { name: string; price: number } | null = null;
+        let bestScore = 0;
+        for (const m of matIndex) {
+          let overlap = 0;
+          for (const t of itemTokens) if (m.tokens.has(t)) overlap++;
+          const score = overlap / Math.max(itemTokens.length, m.tokens.size);
+          if (score > bestScore) {
+            bestScore = score;
+            best = { name: m.name, price: m.price };
+          }
+        }
+
+        if (best && bestScore >= 0.45) {
+          matched++;
+          const unitPrice = best.price;
+          return {
+            ...item,
+            unitPrice,
+            laborCost: 0,
+            totalCost: item.quantity * unitPrice,
+            priceSource: 'База матеріалів Metrum',
+            confidence: Math.max(item.confidence ?? 0.7, 0.9),
+            notes: `[Довідник: ${best.name}] ${item.notes ?? ''}`.trim().substring(0, 500),
+          };
+        }
+        return item;
+      });
+      return {
+        ...section,
+        items,
+        sectionTotal: items.reduce((s, i) => s + i.totalCost, 0),
+      };
+    });
+
+    console.log(
+      `   ✅ Material DB: ${matched}/${totalMaterials} матеріалів зіставлено з довідником ` +
+      `(${matIndex.length} позицій у базі)`
+    );
     return result;
   }
 
