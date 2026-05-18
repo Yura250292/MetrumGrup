@@ -375,6 +375,69 @@ const INTERIOR_FINISHING_SECTION: SectionSpec = {
   ],
 };
 
+/**
+ * Толерантний парсер JSON-відповіді секції.
+ *
+ * Моделі час від часу обривають JSON (ліміт токенів) або повертають його
+ * у markdown-обгортці. Якщо звичайний parse не вдався — рятуємо завершені
+ * об'єкти з масиву "items" (останній, недописаний, відкидаємо), щоб не
+ * втрачати всю секцію через одну обірвану позицію.
+ */
+function parseEstimateJson(raw: string): any {
+  const cleaned = (raw || '')
+    .trim()
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/```\s*$/i, '')
+    .trim();
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    /* fall through to salvage */
+  }
+
+  // Salvage: витягнути завершені об'єкти з масиву items[].
+  const arrMatch = cleaned.match(/"items"\s*:\s*\[/);
+  if (arrMatch && arrMatch.index !== undefined) {
+    const start = arrMatch.index + arrMatch[0].length;
+    const objects: string[] = [];
+    let depth = 0;
+    let objStart = -1;
+    let inStr = false;
+    let esc = false;
+
+    for (let i = start; i < cleaned.length; i++) {
+      const c = cleaned[i];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') inStr = false;
+        continue;
+      }
+      if (c === '"') { inStr = true; continue; }
+      if (c === '{') { if (depth === 0) objStart = i; depth++; }
+      else if (c === '}') {
+        depth--;
+        if (depth === 0 && objStart >= 0) { objects.push(cleaned.slice(objStart, i + 1)); objStart = -1; }
+      } else if (c === ']' && depth === 0) {
+        break;
+      }
+    }
+
+    const items: any[] = [];
+    for (const o of objects) {
+      try { items.push(JSON.parse(o)); } catch { /* skip broken object */ }
+    }
+    if (items.length > 0) {
+      console.warn(`  ♻️ parseEstimateJson: врятовано ${items.length} позицій з обірваного JSON`);
+      return { items };
+    }
+  }
+
+  throw new Error('Не вдалось розпарсити JSON відповіді моделі');
+}
+
 export class MasterEstimateAgent {
   private openai: OpenAI;
   private gemini: GoogleGenerativeAI;
@@ -544,9 +607,26 @@ export class MasterEstimateAgent {
     console.log(`\n📚 Enriching labor costs through cascade (КНУ → KAPITEL → DB → AI)...`);
     const laborEnriched = this.enrichWithLaborSources(allSections);
 
-    // Збагатити всі секції цінами матеріалів з Prozorro
-    console.log(`\n💰 Enriching material prices with Prozorro...`);
-    const enrichedSections = await this.enrichWithProzorroPrices(laborEnriched);
+    // Збагатити всі секції цінами матеріалів з Prozorro.
+    // Для ВНУТРІШНІХ робіт Prozorro поки вимкнено — тендери нерелевантні
+    // для fit-out, ціни беремо з КНУ/KAPITEL/бази/AI.
+    const wdMaster = context.wizardData as any;
+    const interiorOnlyMaster =
+      typeof wdMaster?.interiorOnly === 'boolean'
+        ? wdMaster.interiorOnly
+        : wdMaster?.workScope === 'renovation' ||
+          wdMaster?.workScope === 'finishing' ||
+          wdMaster?.objectType === 'apartment' ||
+          wdMaster?.objectType === 'office';
+
+    let enrichedSections: EstimateSection[];
+    if (interiorOnlyMaster) {
+      console.log(`\n💰 Prozorro-збагачення вимкнено (внутрішні роботи)`);
+      enrichedSections = laborEnriched;
+    } else {
+      console.log(`\n💰 Enriching material prices with Prozorro...`);
+      enrichedSections = await this.enrichWithProzorroPrices(laborEnriched);
+    }
 
     // Розрахувати загальну суму
     const totalCost = enrichedSections.reduce((sum, section) => sum + section.sectionTotal, 0);
@@ -747,9 +827,9 @@ export class MasterEstimateAgent {
     const model = useMiniModel ? 'gpt-4o-mini' : 'gpt-4o';
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => {
-      console.warn(`⏱️ OpenAI [${sectionTitle}] timeout after 60s — aborting`);
+      console.warn(`⏱️ OpenAI [${sectionTitle}] timeout after 90s — aborting`);
       abortController.abort();
-    }, 60000);
+    }, 90000);
 
     try {
       const completion = await this.openai.chat.completions.create({
@@ -760,7 +840,7 @@ export class MasterEstimateAgent {
         ],
         response_format: { type: "json_object" },
         temperature: 0.1,
-        max_tokens: 8000,
+        max_tokens: 16000,
       }, {
         signal: abortController.signal,
       });
@@ -772,7 +852,7 @@ export class MasterEstimateAgent {
       }
 
       const responseText = completion.choices[0]?.message?.content || '{}';
-      return JSON.parse(responseText);
+      return parseEstimateJson(responseText);
     } finally {
       clearTimeout(timeoutId);
     }
@@ -796,7 +876,7 @@ export class MasterEstimateAgent {
       generationConfig: {
         responseMimeType: "application/json",
         temperature: 0.1,
-        maxOutputTokens: 8000,
+        maxOutputTokens: 16000,
       },
     });
 
@@ -810,11 +890,11 @@ export class MasterEstimateAgent {
         console.log(`  📊 [${sectionTitle}] gemini-3-flash: ${usage.promptTokenCount ?? '?'} in + ${usage.candidatesTokenCount ?? '?'} out = ${usage.totalTokenCount ?? '?'} tokens`);
       }
       const text = result.response.text();
-      return JSON.parse(text);
+      return parseEstimateJson(text);
     });
 
     const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`Gemini timeout after 60s [${sectionTitle}]`)), 60000)
+      setTimeout(() => reject(new Error(`Gemini timeout after 90s [${sectionTitle}]`)), 90000)
     );
 
     return Promise.race([geminiPromise, timeoutPromise]);

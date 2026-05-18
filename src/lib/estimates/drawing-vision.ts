@@ -252,9 +252,17 @@ export async function analyzeDrawingsVisually(
       return { report: '', analyzedCount: 0, error: 'Vision не повернув жодного звіту' };
     }
 
-    // Зібрати звіт.
+    // Зібрати звіт. Кожен прохід обмежуємо ~14000 символів, щоб обмір
+    // не роздув промпт секцій (він інжектиться у кожну секцію).
+    const PASS_CHAR_CAP = 14000;
     const body = ok
-      .map((r) => `### ${r.pass.title}\n${r.text}`)
+      .map((r) => {
+        const text =
+          r.text.length > PASS_CHAR_CAP
+            ? r.text.slice(0, PASS_CHAR_CAP) + '\n…(скорочено)'
+            : r.text;
+        return `### ${r.pass.title}\n${text}`;
+      })
       .join('\n\n');
     const report =
       `## ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ (Gemini Vision, ${ok.length} проходів)\n` +

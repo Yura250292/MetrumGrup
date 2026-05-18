@@ -130,14 +130,33 @@ export class PreAnalysisAgent {
     console.log('📄 Крок 2/4: Аналіз документів...');
     const documentsAnalysis = await this.analyzeDocuments(input);
 
-    // 3️⃣ Аналіз Prozorro тендерів через BidIntelligenceService
-    console.log('💰 Крок 3/4: Аналіз Prozorro тендерів (Bid Intelligence)...');
-    const { prozorroAnalysis, bidIntelligence } = await this.analyzeProzorroWithBidIntelligence(input);
+    // 3️⃣ Аналіз Prozorro тендерів через BidIntelligenceService.
+    //    Для ВНУТРІШНІХ робіт Prozorro поки вимкнено: тендери там — це
+    //    переважно будівництво/капремонти, ціни нерелевантні для fit-out.
+    const wd = input.wizardData as any;
+    const interiorOnly =
+      typeof wd?.interiorOnly === 'boolean'
+        ? wd.interiorOnly
+        : wd?.workScope === 'renovation' ||
+          wd?.workScope === 'finishing' ||
+          wd?.objectType === 'apartment' ||
+          wd?.objectType === 'office';
 
-    if (prozorroAnalysis.similarProjectsFound === 0) {
-      warnings.push('Не знайдено схожих проектів на Prozorro. Ціни базуватимуться на Google Search та базі даних.');
+    let prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'];
+    let bidIntelligence: BidIntelligenceResult | undefined;
+
+    if (interiorOnly) {
+      console.log('💰 Крок 3/4: Prozorro вимкнено для внутрішніх робіт');
+      prozorroAnalysis = this.getEmptyProzorroAnalysis();
     } else {
-      recommendations.push(`Знайдено ${prozorroAnalysis.similarProjectsFound} схожих тендерів з ${prozorroAnalysis.totalItemsParsed} позиціями для референсу цін.`);
+      console.log('💰 Крок 3/4: Аналіз Prozorro тендерів (Bid Intelligence)...');
+      ({ prozorroAnalysis, bidIntelligence } = await this.analyzeProzorroWithBidIntelligence(input));
+
+      if (prozorroAnalysis.similarProjectsFound === 0) {
+        warnings.push('Не знайдено схожих проектів на Prozorro. Ціни базуватимуться на Google Search та базі даних.');
+      } else {
+        recommendations.push(`Знайдено ${prozorroAnalysis.similarProjectsFound} схожих тендерів з ${prozorroAnalysis.totalItemsParsed} позиціями для референсу цін.`);
+      }
     }
 
     // 4️⃣ Створення Master Context
@@ -571,17 +590,12 @@ export class PreAnalysisAgent {
       context += `- ${key}: ${value}\n`;
     });
 
-    // Візуальний обмір креслень — ПРІОРИТЕТНЕ джерело розмірів/кількостей
-    if (input.documents.drawingsVisual) {
-      context += `\n## 2. ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ — ПРІОРИТЕТНІ ДАНІ\n`;
-      context += `⚠️ Розміри, площі та кількості нижче зчитані безпосередньо з креслень.\n`;
-      context += `Використовуй САМЕ ЦІ значення для quantity у позиціях кошторису.\n`;
-      context += `Дані з опитувальника — лише запасний варіант, якщо чогось немає в обмірі.\n\n`;
-      context += `${input.documents.drawingsVisual}\n`;
-    }
+    // Примітка: візуальний обмір креслень НЕ дублюється тут — він
+    // інжектиться окремо у промпт кожної секції (buildSectionPrompt),
+    // щоб не роздувати masterContext і не губитись при компактуванні.
 
     // Документи
-    context += `\n## 3. АНАЛІЗ ДОКУМЕНТІВ\n`;
+    context += `\n## 2. АНАЛІЗ ДОКУМЕНТІВ\n`;
     if (documentsAnalysis.hasDocuments) {
       context += `Знайдено:\n`;
       documentsAnalysis.keyFindings.forEach(finding => {
@@ -606,7 +620,7 @@ export class PreAnalysisAgent {
     }
 
     // Prozorro
-    context += `\n## 4. АНАЛІЗ PROZORRO ТЕНДЕРІВ\n`;
+    context += `\n## 3. АНАЛІЗ PROZORRO ТЕНДЕРІВ\n`;
     if (prozorroAnalysis.similarProjectsFound > 0) {
       context += `Знайдено ${prozorroAnalysis.similarProjectsFound} схожих проектів з ${prozorroAnalysis.totalItemsParsed} позиціями.\n`;
       context += `Рівень цін: ${prozorroAnalysis.averagePriceLevel}\n\n`;
@@ -632,7 +646,7 @@ export class PreAnalysisAgent {
 
     // Додаткова інформація
     if (input.projectNotes) {
-      context += `\n## 5. ДОДАТКОВА ІНФОРМАЦІЯ\n`;
+      context += `\n## 4. ДОДАТКОВА ІНФОРМАЦІЯ\n`;
       context += `${input.projectNotes}\n`;
     }
 
