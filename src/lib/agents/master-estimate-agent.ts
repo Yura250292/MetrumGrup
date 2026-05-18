@@ -735,6 +735,10 @@ export class MasterEstimateAgent {
       });
     });
 
+    // Перевірка балансу площ оздоблення (м'яке попередження).
+    const projectArea = Number(wdMaster?.totalArea) || Number(wdMaster?.area) || 0;
+    allWarnings.push(...this.checkFinishingAreaBalance(enrichedSections, projectArea));
+
     console.log(`\n✅ MasterAgent complete: ${enrichedSections.length} sections, ${totalItems} items, ${totalCost.toFixed(0)} ₴`);
     console.log(`   Prozorro prices: ${prozorroPricesUsed}, Other: ${googlePricesUsed}`);
     console.log(`   💰 Розбивка по секціях:`);
@@ -754,6 +758,49 @@ export class MasterEstimateAgent {
         googlePricesUsed,
       },
     };
+  }
+
+  /**
+   * М'яка перевірка балансу площ у секції "Оздоблення".
+   * Не змінює кошторис — лише повертає попередження для верифікації.
+   */
+  private checkFinishingAreaBalance(
+    sections: EstimateSection[],
+    projectArea: number
+  ): string[] {
+    const warnings: string[] = [];
+    if (!projectArea || projectArea <= 0) return warnings;
+
+    const finishing = sections.find(s => s.title === 'Оздоблення');
+    if (!finishing) return warnings;
+
+    const sumM2 = (kw: RegExp): number =>
+      finishing.items
+        .filter(i => /м²|m2|кв/i.test(i.unit) && kw.test((i.description || '').toLowerCase()))
+        .reduce((s, i) => s + (Number(i.quantity) || 0), 0);
+
+    const floorFinish = sumM2(/плитк|керамограніт|ламінат|паркет|наливна підлог|лінолеум|килим/);
+    const wallPlaster = sumM2(/штукатурк/);
+    const wallPaint = sumM2(/фарбуван|малярн/);
+
+    if (floorFinish > projectArea * 1.2) {
+      warnings.push(
+        `⚠️ Баланс підлоги: фінішні покриття ${floorFinish.toFixed(0)} м² > площі об'єкта ` +
+        `${projectArea.toFixed(0)} м² — можливе подвоєння покриттів.`
+      );
+    } else if (floorFinish > 0 && floorFinish < projectArea * 0.55) {
+      warnings.push(
+        `⚠️ Баланс підлоги: фінішні покриття покривають лише ${floorFinish.toFixed(0)} м² ` +
+        `з ~${projectArea.toFixed(0)} м² — частина приміщень може бути без покриття.`
+      );
+    }
+    if (wallPlaster > 0 && wallPaint > wallPlaster * 1.15) {
+      warnings.push(
+        `⚠️ Баланс стін: фарбування ${wallPaint.toFixed(0)} м² перевищує оштукатурену ` +
+        `площу ${wallPlaster.toFixed(0)} м² — перевір, чи не фарбуються ділянки під плиткою.`
+      );
+    }
+    return warnings;
   }
 
   /**
@@ -1005,6 +1052,24 @@ export class MasterEstimateAgent {
 - Не забудь механізовану техніку (екскаватори, автокрани, самоскиди).`
       : '';
 
+    // Для оздоблення — правило балансу площ (щоб не подвоювати покриття).
+    const finishingExtra = spec.title === 'Оздоблення'
+      ? `\n\n📐 БАЛАНС ПЛОЩ — ОБОВ'ЯЗКОВО:
+ПІДЛОГА:
+- Стяжка / самовирівнювальна суміш = площа підлоги, рахується ОДИН раз як основа.
+- Фінішні покриття підлоги (плитка/керамограніт, ламінат, паркет, наливна-фініш) —
+  СУМА їхніх площ має дорівнювати площі підлоги. Кожне приміщення — РІВНО одне покриття.
+- Наливна підлога — це або основа, або фінішне покриття конкретних приміщень;
+  НЕ додавай її на всю площу одночасно зі стяжкою і ще одним фінішем.
+СТІНИ:
+- Штукатурка / шпаклівка / грунтовка = площа стін під опорядження.
+- Фарбування стін = площа стін МІНУС площа облицювання плиткою
+  (ділянки з плиткою не фарбують — не подвоюй).
+СТЕЛЯ:
+- Сума площ усіх типів стель (ГКЛ, натяжна, акустична, Armstrong) = площа стелі.
+Якщо точних площ приміщень немає в обмірі — познач припущення в notes.`
+      : '';
+
     // КНУ РЕКНб — офіційні кошторисні норми України покривають усі секції
     const knuVolumeHints: Record<string, string> = {
       'Земляні роботи': 'Збірник 1 — 1030 норм',
@@ -1041,7 +1106,7 @@ export class MasterEstimateAgent {
 4. Система пост-обробки автоматично замінить laborCost на офіційну норму, якщо опис матчиться.`
       : '';
 
-    return `Ти - ДОСВІДЧЕНИЙ ІНЖЕНЕР-КОШТОРИСНИК з 20-річним стажем, спеціалізація: "${spec.title}".${demolitionExtra}${knuExtra}
+    return `Ти - ДОСВІДЧЕНИЙ ІНЖЕНЕР-КОШТОРИСНИК з 20-річним стажем, спеціалізація: "${spec.title}".${demolitionExtra}${finishingExtra}${knuExtra}
 
 ТВОЯ ЗАДАЧА:
 Згенерувати МАКСИМАЛЬНО ДЕТАЛЬНИЙ кошторис для секції "${spec.title}".
