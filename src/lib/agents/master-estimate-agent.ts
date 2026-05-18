@@ -411,10 +411,33 @@ export class MasterEstimateAgent {
   private parseItems(parsed: any, usedModel: string): EstimateItem[] {
     return (parsed.items || []).map((item: any) => {
       const quantity = this.parseAiNumber(item.quantity);
-      const unitPrice = this.parseAiNumber(item.unitPrice);
-      const laborCost = this.parseAiNumber(item.laborCost);
-      const totalCost = this.parseAiNumber(item.totalCost) || (quantity * unitPrice + laborCost);
+      let unitPrice = this.parseAiNumber(item.unitPrice);
+      let laborCost = this.parseAiNumber(item.laborCost);
       const confidence = this.parseAiNumber(item.confidence) || 0.7;
+
+      // Нормалізувати тип позиції.
+      const rawType = String(item.itemType || '').toLowerCase();
+      const itemType: 'work' | 'material' =
+        rawType === 'material' ? 'material' : rawType === 'work' ? 'work' : undefined as any;
+
+      // 🚨 Захист від подвійного рахунку (навіть якщо AI порушив правило):
+      //  - матеріал НЕ несе вартості роботи → laborCost = 0;
+      //  - чиста робота НЕ несе вартості матеріалу → unitPrice = 0.
+      if (itemType === 'material') {
+        laborCost = 0;
+      } else if (itemType === 'work') {
+        unitPrice = 0;
+      }
+
+      const parentRaw = item.parentSortOrder;
+      let parentSortOrder: number | null = null;
+      if (parentRaw !== undefined && parentRaw !== null && parentRaw !== '') {
+        const n = Number(parentRaw);
+        if (Number.isFinite(n) && n > 0) parentSortOrder = Math.trunc(n);
+      }
+
+      const totalCost = quantity * unitPrice + laborCost;
+
       return {
         description: item.description || '',
         quantity,
@@ -425,6 +448,8 @@ export class MasterEstimateAgent {
         priceSource: item.priceSource || `AI оцінка (${usedModel})`,
         confidence,
         notes: item.notes,
+        itemType,
+        parentSortOrder,
       };
     });
   }
@@ -879,8 +904,8 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
       "description": "Детальний опис (матеріал/марка/розмір)",
       "quantity": число,
       "unit": "м²|м³|м.п.|шт|т|кг|комп",
-      "unitPrice": число (ціна матеріалу за одиницю),
-      "laborCost": число (вартість роботи ЗА ВСЮ позицію),
+      "unitPrice": число,
+      "laborCost": число,
       "totalCost": число (quantity * unitPrice + laborCost),
       "itemType": "work" | "material",
       "parentSortOrder": число | null,
@@ -891,9 +916,22 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
   ]
 }
 
-ТИП ПОЗИЦІЇ (itemType) — ОБОВ'ЯЗКОВО:
+ТИП ПОЗИЦІЇ (itemType) — ОБОВ'ЯЗКОВО для КОЖНОЇ позиції:
 - "work" — фізичні роботи: монтаж, влаштування, демонтаж, обробка, фарбування, штукатурка, прокладання, укладання, зварювання, копання, бетонування і т.ін.
-- "material" — матеріали/вироби/комплектуючі: плитка, профнастил, кабель, кріплення, стовпці, лаги, саморізи, фарба, цемент, цегла, арматура, плити, дошки і т.ін.
+- "material" — матеріали/вироби/комплектуючі: плитка, профнастил, кабель, кріплення, гіпсокартон, профіль, скло, мінвата, фарба, цемент, цегла, арматура, плити, дошки і т.ін.
+
+🚨 ЦІНОУТВОРЕННЯ — СУВОРЕ ПРАВИЛО (інакше подвійний рахунок!):
+- itemType="material": unitPrice = ціна матеріалу за одиницю; laborCost = 0 (НУЛЬ!).
+  Матеріал НЕ містить вартості роботи — її несе окрема позиція "work".
+- itemType="work": unitPrice = 0; laborCost = ПОВНА вартість роботи за всю позицію.
+  Робота НЕ містить вартості матеріалу — його несе окрема позиція "material".
+- totalCost = quantity * unitPrice + laborCost (математично точно).
+- Ціни — РЕАЛЬНІ ринкові за одиницю (Україна 2026). НЕ завищуй і НЕ занижуй,
+  щоб «підігнати» суму секції. Сума = наслідок реальних цін × реальних обсягів.
+
+ПРИКЛАД правильної пари (перегородка ГКЛ):
+  {"description":"Монтаж перегородки ГКЛ 100мм","quantity":200,"unit":"м²","unitPrice":0,"laborCost":50000,"itemType":"work","parentSortOrder":null}
+  {"description":"Гіпсокартон Knauf 12.5мм","quantity":420,"unit":"м²","unitPrice":150,"laborCost":0,"itemType":"material","parentSortOrder":1}
 
 ІЄРАРХІЯ (parentSortOrder):
 - Якщо матеріал використовується ДЛЯ КОНКРЕТНОЇ роботи у ЦІЙ ЖЕ секції — заповни parentSortOrder номером тієї роботи (її позиція в items[], рахуючи від 1).

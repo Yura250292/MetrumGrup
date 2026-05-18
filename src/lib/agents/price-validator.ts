@@ -50,8 +50,37 @@ const PRICE_RANGES_PER_SQM = {
     min: 10000,  // Капітальний ремонт базовий ($250/м²)
     max: 25000,  // Ремонт під ключ преміум ($625/м²)
     typical: 15000 // Капітальний ремонт стандарт ($375/м²)
+  },
+  // Внутрішні / оздоблювальні роботи в уже збудованому об'єкті
+  // (офіс, квартира, комерційний інтер'єр). НЕ будівництво з нуля.
+  interior: {
+    min: 5000,   // Бюджетне оздоблення офісу/квартири
+    max: 22000,  // Преміум-інтер'єр під ключ
+    typical: 11000 // Стандартний офісний/житловий fit-out
   }
 };
+
+/**
+ * Визначити ціновий клас за даними опитувальника.
+ * Внутрішні роботи рахуються за діапазоном fit-out, а не будівництва з нуля.
+ */
+function resolveBuildingTypeKey(wizardData: any): keyof typeof PRICE_RANGES_PER_SQM {
+  const objectType = wizardData?.objectType;
+  const workScope = wizardData?.workScope;
+
+  const interiorOnly =
+    typeof wizardData?.interiorOnly === 'boolean'
+      ? wizardData.interiorOnly
+      : workScope === 'renovation' ||
+        workScope === 'finishing' ||
+        objectType === 'apartment' ||
+        objectType === 'office';
+
+  if (interiorOnly) return 'interior';
+  if (objectType === 'house' || objectType === 'townhouse') return 'residential';
+  if (objectType === 'commercial') return 'commercial';
+  return 'commercial';
+}
 
 /**
  * Валідація загальної вартості кошторису
@@ -62,10 +91,11 @@ export function validateTotalCost(
 ): ValidationResult {
   const totalCost = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
 
-  // Витягти параметри проекту
+  // Витягти параметри проекту. Ціновий клас визначаємо за типом об'єкта
+  // та режимом (внутрішні роботи vs будівництво з нуля), а НЕ хардкодом.
   const projectContext: ProjectContext = {
     totalArea: wizardData.totalArea || wizardData.area || 0,
-    buildingType: wizardData.buildingType || 'commercial',
+    buildingType: resolveBuildingTypeKey(wizardData),
     floors: wizardData.floors || 1
   };
 
@@ -179,41 +209,23 @@ export function validateTotalCost(
 }
 
 /**
- * Застосувати коефіцієнт масштабування якщо ціна занадто низька
+ * НЕ масштабує ціни.
+ *
+ * Раніше ця функція множила unitPrice/laborCost кожної позиції на
+ * коефіцієнт (targetTotal/currentTotal), щоб «дотягнути» кошторис до
+ * очікуваної суми. Це фабрикувало нереальні ціни за одиницю: гіпсокартон
+ * за 700 ₴/м², робота за 3000 ₴/м² тощо — кошторис виглядав детальним,
+ * але кожен рядок був хибним.
+ *
+ * Кошторис має містити РЕАЛЬНІ ціни за одиницю. Якщо сума виглядає
+ * заниженою — це сигнал додати пропущені позиції/обсяги (через refine),
+ * а не «розтягувати» наявні. Тому масштабування вимкнено; невідповідність
+ * лишається як попередження від validateTotalCost.
  */
 export function applyScalingIfNeeded(
   sections: EstimateSection[],
-  wizardData: any
+  _wizardData: any
 ): { sections: EstimateSection[]; scaled: boolean; factor: number } {
-  const validation = validateTotalCost(sections, wizardData);
-
-  if (!validation.isValid && validation.expectedRange) {
-    const currentTotal = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
-    const targetTotal = (validation.expectedRange.min + validation.expectedRange.max) / 2;
-    const scalingFactor = targetTotal / currentTotal;
-
-    console.log(`\n📊 Застосування коефіцієнту масштабування: ${scalingFactor.toFixed(2)}x`);
-    console.log(`   Було: ${currentTotal.toFixed(0)} ₴`);
-    console.log(`   Стало: ${targetTotal.toFixed(0)} ₴`);
-
-    const scaledSections = sections.map(section => ({
-      ...section,
-      items: section.items.map(item => ({
-        ...item,
-        unitPrice: item.unitPrice * scalingFactor,
-        laborCost: item.laborCost * scalingFactor,
-        totalCost: item.totalCost * scalingFactor
-      })),
-      sectionTotal: section.sectionTotal * scalingFactor
-    }));
-
-    return {
-      sections: scaledSections,
-      scaled: true,
-      factor: scalingFactor
-    };
-  }
-
   return {
     sections,
     scaled: false,
