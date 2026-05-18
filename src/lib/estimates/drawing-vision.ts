@@ -1,12 +1,14 @@
 /**
- * Візуальний аналіз будівельних креслень (Gemini Vision).
+ * Візуальний аналіз будівельних креслень (Gemini Vision) — багатопрохідний.
  *
  * Навіщо: текстовий витяг з CAD-PDF (pdf-parse) дає плоский потік цифр без
- * прив'язки до стін/приміщень — за ним неможливо порахувати кошторис.
- * Цей модуль подає PDF/зображення безпосередньо у Gemini Vision разом із
- * DRAWING_READING_GUIDE і повертає СТРУКТУРОВАНИЙ текстовий обмір
- * (площі приміщень, довжини перегородок, кількості дверей/вікон/приладів),
- * який далі вливається у masterContext генерації.
+ * прив'язки до стін/приміщень. Цей модуль подає PDF/зображення напряму у
+ * Gemini Vision разом із DRAWING_READING_GUIDE.
+ *
+ * Замість одного «все-в-одному» проходу робиться КІЛЬКА фокусованих проходів
+ * (приміщення/конструкції, інженерія, оздоблення, специфікації) — кожен має
+ * власний бюджет токенів, тож обмір детальний, а не резюме. Усі проходи
+ * читають той самий завантажений файл (Files API URI) паралельно.
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -56,56 +58,104 @@ async function loadDrawingGuide(): Promise<string> {
   }
 }
 
-const VISION_PROMPT = `# ЗАВДАННЯ: ВІЗУАЛЬНИЙ ОБМІР БУДІВЕЛЬНИХ КРЕСЛЕНЬ
+interface VisionPass {
+  key: string;
+  title: string;
+  prompt: string;
+}
 
-Ти — інженер-кошторисник. Перед тобою креслення проєкту (плани, специфікації).
-Твоя робота — ТОЧНО зчитати з креслень УСІ розміри та кількості, які потрібні
-для розрахунку кошторису. Використовуй гайд читання креслень нижче.
-
-## ЩО ОБОВ'ЯЗКОВО ЗЧИТАТИ І ПОРАХУВАТИ:
-
-1. **ПРИМІЩЕННЯ** — назва + площа (м²) кожного приміщення з усіх поверхів.
-   Якщо є таблиця "Специфікація приміщень" — бери дані з неї.
-2. **ПЕРЕГОРОДКИ** — сумарна довжина (м.п.) нових перегородок, окремо за типом
-   і товщиною (ГКЛ 75/100/110/125 мм, у 2 шари, з блоків, скляні). Зашивка
-   колон та інсталяцій — окремо.
-3. **ДВЕРІ** — кількість за типами (міжкімнатні, скляні, технічні, вхідні);
-   якщо є специфікація дверей — звідти.
-4. **ВІКНА / СКЛІННЯ** — кількість і габарити, скляні конструкції/перегородки.
-5. **ПІДЛОГА / СТЕЛЯ / СТІНИ** — площі оздоблення за типом покриття
-   (плитка, ламінат, фарбування, підвісна/акустична/натяжна стеля).
-6. **ЕЛЕКТРИКА** — кількість розеток, вимикачів, світильників (з планів).
-7. **САНТЕХНІКА** — унітази, умивальники, душі/ванни, мийки.
-8. **ОПАЛЕННЯ / ОВ** — радіатори, тепла підлога (площа), вентрешітки.
-
-## ПРАВИЛА:
-- Розміри на кресленнях у мм: "3500" = 3.5 м. Площі рахуй у м².
+const COMMON_RULES = `
+ПРАВИЛА:
+- Розміри на кресленнях у мм: "3500" = 3.5 м. Площі — у м².
 - Будь КОНКРЕТНИЙ: не "кілька кабінетів", а "Кабінет — 40,80 м²".
-- Якщо чогось не видно/нечітко — познач це у полі notes, не вигадуй.
-- Поверхи розділяй явно.
+- Розділяй поверхи явно.
+- Якщо чогось не видно/нечітко — познач у примітках, НЕ вигадуй.
+- Відповідай ТІЛЬКИ змістовним звітом, без вступних фраз.`;
 
-## ФОРМАТ ВІДПОВІДІ — Markdown (без code-fence):
+/** Прохід 1 — приміщення, перегородки, прорізи. */
+const PASS_ROOMS: VisionPass = {
+  key: 'rooms',
+  title: 'ПРИМІЩЕННЯ ТА КОНСТРУКЦІЇ',
+  prompt: `# ОБМІР: ПРИМІЩЕННЯ ТА КОНСТРУКЦІЇ
 
-### ОБМІР КРЕСЛЕНЬ
-**Будівля:** <тип, поверхів, загальна площа>
+Ти — інженер-кошторисник. Зчитай з креслень:
 
-**Приміщення:**
-- <Поверх 1> Назва — XX,XX м²
-...
+1. **Будівля:** тип, кількість поверхів, загальна площа.
+2. **ПРИМІЩЕННЯ** — повний перелік з УСІХ поверхів: назва + площа (м²).
+   Бери дані з таблиць "Специфікація приміщень", якщо вони є.
+3. **ПЕРЕГОРОДКИ** — сумарна довжина (м.п.) або площа (м²) нових перегородок,
+   ОКРЕМО за типом і товщиною (ГКЛ 75/100/110/125 мм, у 2 шари, з блоків).
+   Зашивка колон і зашивка інсталяцій/стояків — окремими рядками.
+   Нарощення/підсилення існуючих стін — окремо.
+4. **СКЛЯНІ КОНСТРУКЦІЇ** — скляні перегородки/огородження: к-сть, площа (м²).
+5. **ДВЕРІ та ВІКНА** — загальна кількість за типами (міжкімнатні, скляні,
+   технічні, вхідні; вікна — к-сть і габарити).
+${COMMON_RULES}
 
-**Перегородки:** <за типами, м.п.>
-**Двері:** <за типами, шт>
-**Вікна/скління:** <шт, особливості>
-**Оздоблення підлоги/стін/стелі:** <площі за типами>
-**Електрика:** розетки X, вимикачі Y, світильники Z
-**Сантехніка:** <прилади, шт>
-**Опалення/ОВ:** <радіатори, тепла підлога м²>
-**Примітки та невизначеності:** <що не вдалось зчитати точно>
+ОБОВ'ЯЗКОВО в кінці окремим рядком:
+ЗАГАЛЬНА_ПЛОЩА_М2: <сума площ приміщень з усіх поверхів — лише число>`,
+};
 
-ЗАГАЛЬНА_ПЛОЩА_М2: <сумарна площа всіх приміщень/поверхів — ЛИШЕ число, напр. 874.7>
+/** Прохід 2 — інженерні системи. */
+const PASS_ENGINEERING: VisionPass = {
+  key: 'engineering',
+  title: 'ІНЖЕНЕРНІ СИСТЕМИ',
+  prompt: `# ОБМІР: ІНЖЕНЕРНІ СИСТЕМИ
 
-Відповідай ТІЛЬКИ цим звітом, без вступних фраз.
-Рядок ЗАГАЛЬНА_ПЛОЩА_М2 обов'язковий — це сума площ приміщень з усіх поверхів.`;
+Ти — інженер-кошторисник. Зчитай з планів інженерних мереж:
+
+1. **ЕЛЕКТРИКА** — кількість розеток (за типами), вимикачів, виводів,
+   електрощитів. Рахуй символи на планах.
+2. **ОСВІТЛЕННЯ** — кількість світильників за типами (точкові, лінійні,
+   люстри, трекові). Якщо є "Специфікація освітлення" — бери звідти.
+3. **САНТЕХНІКА** — унітази, умивальники, душі/піддони, мийки, бойлери —
+   к-сть; орієнтовна довжина трас водопостачання/каналізації.
+4. **ОПАЛЕННЯ** — радіатори (к-сть), тепла підлога (площа м²), труби.
+5. **ВЕНТИЛЯЦІЯ** — решітки, дифузори, припливні/витяжні установки.
+${COMMON_RULES}`,
+};
+
+/** Прохід 3 — оздоблення. */
+const PASS_FINISHING: VisionPass = {
+  key: 'finishing',
+  title: 'ОЗДОБЛЕННЯ',
+  prompt: `# ОБМІР: ОЗДОБЛЕННЯ
+
+Ти — інженер-кошторисник. Зчитай з планів стелі, підлоги, оздоблення стін:
+
+1. **ПІДЛОГА** — площі (м²) ОКРЕМО за типом покриття для кожного приміщення
+   (плитка/керамограніт, ламінат, паркет, наливна). Стяжка — площа.
+2. **СТЕЛЯ** — площі за типом: підвісна ГКЛ, натяжна, Armstrong,
+   **акустичні панелі**, фарбування.
+3. **СТІНИ** — площі оздоблення за типом: фарбування, плитка, шпалери,
+   декоративна штукатурка, панелі.
+4. **ПЛІНТУС** — сумарна довжина (м.п.) за типом (МДФ, прихований).
+${COMMON_RULES}`,
+};
+
+/** Прохід 4 — дослівне перенесення таблиць-специфікацій. */
+const PASS_SPECS: VisionPass = {
+  key: 'specs',
+  title: 'СПЕЦИФІКАЦІЇ (дослівно з таблиць)',
+  prompt: `# ПЕРЕНЕСЕННЯ СПЕЦИФІКАЦІЙ
+
+На кресленнях можуть бути аркуші-ТАБЛИЦІ: "Специфікація дверей",
+"Специфікація освітлення", "Специфікація матеріалів", "Відомість оздоблення".
+
+Перепиши КОЖНУ таку таблицю МАКСИМАЛЬНО ТОЧНО, рядок за рядком:
+- позиція/марка, найменування, габарити, кількість, одиниця;
+- для матеріалів — конкретні марки/виробники, якщо вказані.
+
+Це джерело правди для матеріалів — НЕ узагальнюй, НЕ замінюй власними.
+Якщо специфікацій-таблиць у документі немає — напиши "Специфікацій-таблиць не виявлено".
+${COMMON_RULES}`,
+};
+
+const PASSES: VisionPass[] = [PASS_ROOMS, PASS_ENGINEERING, PASS_FINISHING, PASS_SPECS];
+
+type MediaPart =
+  | { inlineData: { data: string; mimeType: string } }
+  | { fileData: { fileUri: string; mimeType: string } };
 
 /**
  * Проаналізувати креслення візуально і повернути текстовий обмір.
@@ -122,27 +172,14 @@ export async function analyzeDrawingsVisually(
     return { report: '', analyzedCount: 0, error: 'GEMINI_API_KEY not configured' };
   }
 
+  const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
+  const uploadedNames: string[] = [];
+
   try {
     const guide = await loadDrawingGuide();
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
-      generationConfig: { temperature: 0.1, maxOutputTokens: 8000 },
-    });
-
-    const areaHint = opts?.wizardArea
-      ? `\n\n(Орієнтир із опитувальника: загальна площа ~${opts.wizardArea} м² — використовуй як перевірку, не як заміну виміру з креслень.)`
-      : '';
-
-    const promptParts: any[] = [VISION_PROMPT + areaHint];
-    if (guide) {
-      promptParts.push(`\n\n=== ГАЙД ЧИТАННЯ КРЕСЛЕНЬ ===\n${guide}`);
-    }
-
-    // Великі файли — через Files API, дрібні — inline.
-    const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
-    const uploadedNames: string[] = [];
-
+    // Підготувати медіа-частини ОДИН раз — переюзаються в усіх проходах.
+    const mediaParts: MediaPart[] = [];
     for (let i = 0; i < parts.length; i++) {
       const p = parts[i];
       if (base64Bytes(p.data) > FILES_API_THRESHOLD_BYTES) {
@@ -154,7 +191,6 @@ export async function analyzeDrawingsVisually(
           });
           uploadedNames.push(uploaded.file.name);
 
-          // Дочекатись, поки Gemini обробить файл (PDF → PROCESSING).
           let info = uploaded.file;
           let waited = 0;
           while (info.state === FileState.PROCESSING && waited < 120_000) {
@@ -163,7 +199,7 @@ export async function analyzeDrawingsVisually(
             info = await fileManager.getFile(uploaded.file.name);
           }
           if (info.state === FileState.ACTIVE) {
-            promptParts.push({ fileData: { fileUri: info.uri, mimeType: info.mimeType } });
+            mediaParts.push({ fileData: { fileUri: info.uri, mimeType: info.mimeType } });
           } else {
             console.warn(`⚠️ Files API: файл ${p.name} у стані ${info.state}, пропускаю`);
           }
@@ -174,30 +210,61 @@ export async function analyzeDrawingsVisually(
           );
         }
       } else {
-        promptParts.push({ inlineData: { data: p.data, mimeType: p.mimeType } });
+        mediaParts.push({ inlineData: { data: p.data, mimeType: p.mimeType } });
       }
     }
 
-    const result = await model.generateContent(promptParts);
-    const text = (result.response.text() || '').trim();
-
-    // Прибрати завантажені файли (best-effort, не блокує).
-    for (const name of uploadedNames) {
-      fileManager.deleteFile(name).catch(() => {});
+    if (mediaParts.length === 0) {
+      return { report: '', analyzedCount: 0, error: 'Не вдалось підготувати жоден файл' };
     }
 
-    if (text.length < 80) {
-      return { report: '', analyzedCount: 0, error: 'Vision повернув порожній звіт' };
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      generationConfig: { temperature: 0.1, maxOutputTokens: 12000 },
+    });
+
+    const areaHint = opts?.wizardArea
+      ? `\n(Орієнтир із опитувальника: загальна площа ~${opts.wizardArea} м² — для перевірки, не заміна виміру.)`
+      : '';
+    const guideBlock = guide ? `\n\n=== ГАЙД ЧИТАННЯ КРЕСЛЕНЬ ===\n${guide}` : '';
+
+    // Усі фокусовані проходи паралельно — кожен зі своїм бюджетом токенів.
+    const passResults = await Promise.all(
+      PASSES.map(async (pass): Promise<{ pass: VisionPass; text: string }> => {
+        try {
+          const result = await model.generateContent([
+            pass.prompt + areaHint + guideBlock,
+            ...(mediaParts as any[]),
+          ]);
+          return { pass, text: (result.response.text() || '').trim() };
+        } catch (e) {
+          console.warn(
+            `⚠️ Vision pass "${pass.key}" failed:`,
+            e instanceof Error ? e.message : e
+          );
+          return { pass, text: '' };
+        }
+      })
+    );
+
+    const ok = passResults.filter((r) => r.text.length > 40);
+    if (ok.length === 0) {
+      return { report: '', analyzedCount: 0, error: 'Vision не повернув жодного звіту' };
     }
 
+    // Зібрати звіт.
+    const body = ok
+      .map((r) => `### ${r.pass.title}\n${r.text}`)
+      .join('\n\n');
     const report =
-      `## ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ (Gemini Vision)\n` +
-      `_Зчитано безпосередньо з ${parts.length} креслень — пріоритетне джерело розмірів._\n\n` +
-      text;
+      `## ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ (Gemini Vision, ${ok.length} проходів)\n` +
+      `_Зчитано безпосередньо з ${parts.length} креслень — ПРІОРИТЕТНЕ джерело розмірів._\n\n` +
+      body;
 
-    // Витягти сумарну площу для авто-заповнення, якщо її не ввели вручну.
+    // Площа — з проходу по приміщеннях.
     let totalAreaM2: number | undefined;
-    const areaMatch = text.match(/ЗАГАЛЬНА_ПЛОЩА_М2\s*[:=]\s*([\d\s.,]+)/i);
+    const roomsText = passResults.find((r) => r.pass.key === 'rooms')?.text || '';
+    const areaMatch = roomsText.match(/ЗАГАЛЬНА_ПЛОЩА_М2\s*[:=]\s*([\d\s.,]+)/i);
     if (areaMatch) {
       const parsed = parseFloat(areaMatch[1].replace(/\s/g, '').replace(',', '.'));
       if (Number.isFinite(parsed) && parsed > 0) totalAreaM2 = parsed;
@@ -208,5 +275,10 @@ export async function analyzeDrawingsVisually(
     const msg = error instanceof Error ? error.message : String(error);
     console.error('❌ analyzeDrawingsVisually failed:', msg);
     return { report: '', analyzedCount: 0, error: msg };
+  } finally {
+    // Прибрати завантажені файли (best-effort).
+    for (const name of uploadedNames) {
+      fileManager.deleteFile(name).catch(() => {});
+    }
   }
 }
