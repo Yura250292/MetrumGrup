@@ -32,6 +32,8 @@ export interface AgentContext {
     specifications?: string[];
     geology?: string;
     sitePhotos?: string[];
+    /** Структурований обмір з креслень (Gemini Vision). */
+    drawingsVisual?: string;
   };
   previousSections?: EstimateSection[];
   masterContext?: string; // 🆕 Комплексний аналіз всіх даних

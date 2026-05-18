@@ -30,6 +30,8 @@ export interface PreAnalysisInput {
     specifications?: string[];
     geology?: string;
     sitePhotos?: string[];
+    /** Структурований обмір з креслень (Gemini Vision). */
+    drawingsVisual?: string;
   };
   prozorroSearchQuery?: string; // Опис для пошуку на Prozorro
 }
@@ -218,8 +220,9 @@ export class PreAnalysisAgent {
     const hasSpecs = (input.documents.specifications?.length || 0) > 0;
     const hasGeology = !!input.documents.geology;
     const hasPhotos = (input.documents.sitePhotos?.length || 0) > 0;
+    const hasVisual = !!input.documents.drawingsVisual;
 
-    const hasDocuments = hasPlans || hasSpecs || hasGeology || hasPhotos;
+    const hasDocuments = hasPlans || hasSpecs || hasGeology || hasPhotos || hasVisual;
 
     if (!hasDocuments) {
       return {
@@ -261,6 +264,7 @@ export class PreAnalysisAgent {
     }
 
     // Додати інформацію про наявні документи
+    if (hasVisual) keyFindings.push('Візуальний обмір креслень: виконано (Gemini Vision)');
     if (hasPlans) keyFindings.push(`Креслення: ${input.documents.plans!.length} файлів`);
     if (hasSpecs) keyFindings.push(`Специфікації: ${input.documents.specifications!.length} файлів`);
     if (hasGeology) keyFindings.push('Геологічні дані: наявні');
@@ -567,8 +571,17 @@ export class PreAnalysisAgent {
       context += `- ${key}: ${value}\n`;
     });
 
+    // Візуальний обмір креслень — ПРІОРИТЕТНЕ джерело розмірів/кількостей
+    if (input.documents.drawingsVisual) {
+      context += `\n## 2. ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ — ПРІОРИТЕТНІ ДАНІ\n`;
+      context += `⚠️ Розміри, площі та кількості нижче зчитані безпосередньо з креслень.\n`;
+      context += `Використовуй САМЕ ЦІ значення для quantity у позиціях кошторису.\n`;
+      context += `Дані з опитувальника — лише запасний варіант, якщо чогось немає в обмірі.\n\n`;
+      context += `${input.documents.drawingsVisual}\n`;
+    }
+
     // Документи
-    context += `\n## 2. АНАЛІЗ ДОКУМЕНТІВ\n`;
+    context += `\n## 3. АНАЛІЗ ДОКУМЕНТІВ\n`;
     if (documentsAnalysis.hasDocuments) {
       context += `Знайдено:\n`;
       documentsAnalysis.keyFindings.forEach(finding => {
@@ -593,7 +606,7 @@ export class PreAnalysisAgent {
     }
 
     // Prozorro
-    context += `\n## 3. АНАЛІЗ PROZORRO ТЕНДЕРІВ\n`;
+    context += `\n## 4. АНАЛІЗ PROZORRO ТЕНДЕРІВ\n`;
     if (prozorroAnalysis.similarProjectsFound > 0) {
       context += `Знайдено ${prozorroAnalysis.similarProjectsFound} схожих проектів з ${prozorroAnalysis.totalItemsParsed} позиціями.\n`;
       context += `Рівень цін: ${prozorroAnalysis.averagePriceLevel}\n\n`;
@@ -619,7 +632,7 @@ export class PreAnalysisAgent {
 
     // Додаткова інформація
     if (input.projectNotes) {
-      context += `\n## 4. ДОДАТКОВА ІНФОРМАЦІЯ\n`;
+      context += `\n## 5. ДОДАТКОВА ІНФОРМАЦІЯ\n`;
       context += `${input.projectNotes}\n`;
     }
 

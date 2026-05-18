@@ -11,6 +11,7 @@ import { EstimateOrchestrator, GenerationMode } from "@/lib/agents/orchestrator"
 import { vectorizeProject, isProjectVectorized } from "@/lib/rag/vectorizer";
 import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
+import { analyzeDrawingsVisually, type DrawingPart } from "@/lib/estimates/drawing-vision";
 import { getOrCreateScratchProject } from "@/lib/projects/scratch-project";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
@@ -131,6 +132,9 @@ export async function POST(request: NextRequest) {
         const textParts: string[] = [];
         const pdfParts: Array<{ data: string; mimeType: string }> = [];
         const imageParts: Array<{ data: string; mimeType: string; name: string }> = [];
+        // Усі креслення/фото для ВІЗУАЛЬНОГО обміру (Gemini Vision) —
+        // незалежно від того, чи витягнули з них текст.
+        const visualParts: DrawingPart[] = [];
 
         sendUpdate({
           phase: 1,
@@ -144,11 +148,15 @@ export async function POST(request: NextRequest) {
 
           if (fileName.endsWith('.pdf')) {
             const buffer = Buffer.from(await file.arrayBuffer());
+            const base64 = buffer.toString('base64');
+
+            // Кожен PDF доступний для візуального обміру
+            visualParts.push({ data: base64, mimeType: 'application/pdf', name: file.name });
 
             // For large PDFs, send directly
             if (file.size > 15 * 1024 * 1024) {
               pdfParts.push({
-                data: buffer.toString('base64'),
+                data: base64,
                 mimeType: 'application/pdf'
               });
             } else {
@@ -158,11 +166,13 @@ export async function POST(request: NextRequest) {
           } else if (fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') || fileName.endsWith('.webp')) {
             // Process images for Gemini Vision
             const buffer = Buffer.from(await file.arrayBuffer());
+            const base64 = buffer.toString('base64');
             imageParts.push({
-              data: buffer.toString('base64'),
+              data: base64,
               mimeType: file.type,
               name: file.name
             });
+            visualParts.push({ data: base64, mimeType: file.type, name: file.name });
           }
         }
 
@@ -178,6 +188,34 @@ export async function POST(request: NextRequest) {
             imagesProcessed: imageParts.length
           }
         });
+
+        // 🔍 ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ — Gemini Vision читає розміри/кількості
+        //    прямо з PDF/зображень (текстовий витяг CAD-креслень ненадійний).
+        let drawingsVisualReport = '';
+        if (visualParts.length > 0) {
+          sendUpdate({
+            phase: 1,
+            status: 'analyzing',
+            message: `📐 Візуальний обмір ${visualParts.length} креслень...`,
+            progress: 22,
+          });
+          const vision = await analyzeDrawingsVisually(visualParts, {
+            wizardArea: wizardData?.totalArea || wizardData?.area,
+          });
+          drawingsVisualReport = vision.report;
+          if (drawingsVisualReport) {
+            // Доступно і для legacy gemini+openai шляху через textParts
+            textParts.unshift(drawingsVisualReport);
+            sendUpdate({
+              phase: 1,
+              status: 'analyzing',
+              message: `✅ Обмір зчитано з ${vision.analyzedCount} креслень`,
+              progress: 28,
+            });
+          } else {
+            console.warn(`⚠️ Візуальний обмір не вдався: ${vision.error || 'невідомо'}`);
+          }
+        }
 
         // Check for multi-agent or master mode
         const mode = (formData.get("mode") as GenerationMode) || "gemini+openai";
@@ -272,6 +310,7 @@ export async function POST(request: NextRequest) {
               specifications: textParts,
               geology: textParts.find(t => t.toLowerCase().includes('геолог')),
               sitePhotos: imageParts.map(img => img.name),
+              drawingsVisual: drawingsVisualReport || undefined,
             },
             projectNotes: projectNotesStr,
             prozorroSearchQuery, // 🆕 Опис для пошуку на Prozorro

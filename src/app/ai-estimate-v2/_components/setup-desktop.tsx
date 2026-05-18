@@ -346,6 +346,39 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
             </div>
             <div className="mt-4 flex flex-col gap-1.5">
               <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
+                Тип кошторису
+              </label>
+              <div
+                className="flex gap-1 rounded-xl p-1"
+                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
+              >
+                {[
+                  { v: true, label: "Внутрішні роботи", hint: "оздоблення вже збудованого об'єкта" },
+                  { v: false, label: "Будівництво з нуля", hint: "повний цикл: фундамент → коробка → дах" },
+                ].map((opt) => {
+                  const active = controller.interiorOnly === opt.v;
+                  return (
+                    <button
+                      key={String(opt.v)}
+                      type="button"
+                      onClick={() => controller.setInteriorOnly(opt.v)}
+                      className="flex flex-1 flex-col items-start gap-0.5 rounded-lg px-3.5 py-2.5 text-left transition-colors"
+                      style={{
+                        backgroundColor: active ? T.accentPrimary : "transparent",
+                        color: active ? "#fff" : T.textMuted,
+                      }}
+                    >
+                      <span className="text-[13px] font-semibold">{opt.label}</span>
+                      <span className="text-[10px] leading-tight" style={{ opacity: 0.8 }}>
+                        {opt.hint}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="mt-4 flex flex-col gap-1.5">
+              <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
                 Нотатки проєкту
               </label>
               <textarea

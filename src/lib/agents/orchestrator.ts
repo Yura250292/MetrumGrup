@@ -34,6 +34,8 @@ export interface OrchestratorConfig {
     specifications?: string[];
     geology?: string;
     sitePhotos?: string[];
+    /** Структурований обмір з креслень (Gemini Vision). */
+    drawingsVisual?: string;
   };
   projectNotes?: string;
   prozorroSearchQuery?: string; // Опис для пошуку на Prozorro

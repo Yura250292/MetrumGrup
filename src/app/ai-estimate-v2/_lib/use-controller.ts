@@ -90,6 +90,9 @@ export function useAiEstimateController() {
   const [selectedGenerationModel, setSelectedGenerationModel] =
     useState<"gemini" | "openai" | "anthropic" | "pipeline">("gemini");
   const [checkProzorro, setCheckProzorro] = useState<boolean>(true);
+  // Перемикач: true — тільки внутрішні/оздоблювальні роботи (об'єкт уже збудований),
+  // false — повний цикл будівництва з нуля.
+  const [interiorOnly, setInteriorOnly] = useState<boolean>(true);
 
   // ── Wizard ──
   const [wizardData, setWizardData] = useState<WizardData>(DEFAULT_WIZARD_DATA);
@@ -311,9 +314,10 @@ export function useAiEstimateController() {
         formData.append("r2Keys", JSON.stringify(uploadResult.r2Keys));
       }
 
-      if (wizardData) {
-        formData.append("wizardData", JSON.stringify(wizardData));
-      }
+      formData.append(
+        "wizardData",
+        JSON.stringify({ ...(wizardData || {}), interiorOnly })
+      );
 
       const res = await fetch("/api/admin/estimates/analyze", {
         method: "POST",
@@ -332,7 +336,7 @@ export function useAiEstimateController() {
       setIsAnalyzing(false);
       setTimeout(() => setUploadProgress(null), 1000);
     }
-  }, [files, wizardData, prefillR2Keys]);
+  }, [files, wizardData, prefillR2Keys, interiorOnly]);
 
   const closePreAnalysis = useCallback(() => setShowPreAnalysis(false), []);
 
@@ -436,6 +440,7 @@ export function useAiEstimateController() {
         ...wizardData,
         totalArea: resolvedArea,
         area: resolvedArea,
+        interiorOnly,
         specialRequirements: [
           (wizardData as any).specialRequirements,
           projectNotes.trim()
@@ -580,7 +585,7 @@ export function useAiEstimateController() {
       setError(err instanceof Error ? err.message : "Помилка генерації");
       setIsChunkedGenerating(false);
     }
-  }, [files, wizardData, projectNotes, checkProzorro, selectedProjectId, prefillR2Keys, verify]);
+  }, [files, wizardData, projectNotes, checkProzorro, selectedProjectId, prefillR2Keys, verify, interiorOnly]);
 
   /* -------------------------------------------------------------------- */
   /* Result mutations                                                     */
@@ -991,6 +996,8 @@ export function useAiEstimateController() {
     setSelectedGenerationModel,
     checkProzorro,
     setCheckProzorro,
+    interiorOnly,
+    setInteriorOnly,
 
     // wizard
     wizardData,
