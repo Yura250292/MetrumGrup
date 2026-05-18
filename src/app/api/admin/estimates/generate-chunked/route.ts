@@ -75,33 +75,20 @@ export async function POST(request: NextRequest) {
 
         console.log(`📋 Generation params: ${r2Keys.length} files, wizardData: ${!!wizardData}, checkProzorro: ${checkProzorro}, prozorroQuery: "${prozorroSearchQuery}"`);
 
-        // ⚠️ ВАЛІДАЦІЯ ПЛОЩІ
+        // 📐 Площа — м'яка перевірка: якщо не вказана вручну, її визначить
+        //    візуальний обмір креслень нижче. Жорстку помилку кидаємо лише
+        //    якщо площу не вдалось отримати ЖОДНИМ способом.
+        let manualArea = 0;
         if (wizardData) {
           const areaRaw = wizardData.totalArea || wizardData.area;
-          const area = areaRaw ? (typeof areaRaw === 'string' ? parseFloat(areaRaw) : areaRaw) : 0;
-
-          console.log(`📐 Площа проекту: ${area} м² (raw: ${areaRaw}, type: ${typeof areaRaw})`);
-
-          if (!area || area === 0 || isNaN(area)) {
-            console.error(`❌ КРИТИЧНА ПОМИЛКА: Площа не вказана або = 0`);
-            console.error(`wizardData:`, JSON.stringify(wizardData, null, 2));
-
-            throw new Error(
-              `❌ Не вказано площу проекту! \n` +
-              `Площа обов'язкова для розрахунку кошторису.\n` +
-              `Отримано: "${areaRaw}" (${typeof areaRaw})`
-            );
-          }
-
-          // Конвертувати в число якщо прийшло як string
-          if (typeof wizardData.totalArea === 'string') {
-            wizardData.totalArea = parseFloat(wizardData.totalArea);
-          }
-          if (typeof wizardData.area === 'string') {
-            wizardData.area = parseFloat(wizardData.area);
-          }
-
-          console.log(`✅ Площа проекту валідна: ${wizardData.totalArea || wizardData.area} м²`);
+          manualArea =
+            areaRaw
+              ? typeof areaRaw === 'string'
+                ? parseFloat(areaRaw.replace(',', '.'))
+                : Number(areaRaw)
+              : 0;
+          if (!Number.isFinite(manualArea) || manualArea <= 0) manualArea = 0;
+          console.log(`📐 Площа з опитувальника: ${manualArea || 'не вказана — спробуємо з креслень'} м²`);
         }
 
         sendUpdate({
@@ -192,6 +179,7 @@ export async function POST(request: NextRequest) {
         // 🔍 ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ — Gemini Vision читає розміри/кількості
         //    прямо з PDF/зображень (текстовий витяг CAD-креслень ненадійний).
         let drawingsVisualReport = '';
+        let visionTotalArea: number | undefined;
         if (visualParts.length > 0) {
           sendUpdate({
             phase: 1,
@@ -200,22 +188,43 @@ export async function POST(request: NextRequest) {
             progress: 22,
           });
           const vision = await analyzeDrawingsVisually(visualParts, {
-            wizardArea: wizardData?.totalArea || wizardData?.area,
+            wizardArea: manualArea || undefined,
           });
           drawingsVisualReport = vision.report;
+          visionTotalArea = vision.totalAreaM2;
           if (drawingsVisualReport) {
             // Доступно і для legacy gemini+openai шляху через textParts
             textParts.unshift(drawingsVisualReport);
             sendUpdate({
               phase: 1,
               status: 'analyzing',
-              message: `✅ Обмір зчитано з ${vision.analyzedCount} креслень`,
+              message:
+                `✅ Обмір зчитано з ${vision.analyzedCount} креслень` +
+                (visionTotalArea ? ` · площа ≈ ${visionTotalArea} м²` : ''),
               progress: 28,
             });
           } else {
             console.warn(`⚠️ Візуальний обмір не вдався: ${vision.error || 'невідомо'}`);
           }
         }
+
+        // 📐 Фіналізувати площу: ручна → з креслень → помилка.
+        const projectArea = manualArea || visionTotalArea || 0;
+        if (!projectArea || projectArea <= 0) {
+          throw new Error(
+            `❌ Не вдалось визначити площу проекту.\n` +
+            `Вкажіть площу вручну в параметрах АБО завантажте креслення з ` +
+            `читабельними розмірами/специфікацією приміщень.`
+          );
+        }
+        if (wizardData) {
+          wizardData.totalArea = projectArea;
+          wizardData.area = projectArea;
+        }
+        console.log(
+          `✅ Площа проекту: ${projectArea} м² ` +
+          `(джерело: ${manualArea ? 'опитувальник' : 'візуальний обмір креслень'})`
+        );
 
         // Check for multi-agent or master mode
         const mode = (formData.get("mode") as GenerationMode) || "gemini+openai";
