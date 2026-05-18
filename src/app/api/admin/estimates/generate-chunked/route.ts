@@ -391,7 +391,9 @@ export async function POST(request: NextRequest) {
             const createdSection = estimate.sections[sIdx];
 
             const normalized = normalizeAiItems(section.items);
-            const itemsToCreate = normalized.map((item, itemIndex) => ({
+            // parentSortOrder — транзитне поле AI-output, у БД його нема
+            // (ієрархія зберігається через parentItemId). Прибираємо перед createMany.
+            const itemsToCreate = normalized.map(({ parentSortOrder, ...item }, itemIndex) => ({
               ...item,
               sortOrder: itemIndex,
               estimateId: estimate.id,
@@ -640,7 +642,8 @@ export async function POST(request: NextRequest) {
           const createdSection = estimate.sections[sIdx];
 
           const normalized = normalizeAiItems(section.items);
-          const itemsToCreate = normalized.map((item, itemIndex) => ({
+          // parentSortOrder — транзитне поле AI-output, у БД його нема.
+          const itemsToCreate = normalized.map(({ parentSortOrder, ...item }, itemIndex) => ({
             ...item,
             sortOrder: itemIndex,
             estimateId: estimate.id,
