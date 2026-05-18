@@ -39,6 +39,17 @@ interface ZeroItem {
   quantity: number;
 }
 
+interface PriceLookup {
+  unitPrice: number;
+  confidence: number;
+  /** true — ціну реально знайдено на сторінці магазину (Google Search). */
+  verified: boolean;
+  /** Джерело: "Епіцентр (2026-05)" або "AI-оцінка (не підтверджено)". */
+  source: string;
+  /** Короткий опис: магазин, дата, URL. */
+  reason?: string;
+}
+
 export class ZeroPriceFixer {
   /**
    * Знайти всі позиції з нульовою ціною і спробувати знайти ціни
@@ -82,9 +93,9 @@ export class ZeroPriceFixer {
             const estimateItem = section.items[item.itemIndex];
             estimateItem.unitPrice = price.unitPrice;
             estimateItem.totalCost = estimateItem.quantity * price.unitPrice + (estimateItem.laborCost || 0);
-            estimateItem.priceSource = `${fallbackModel} fallback`;
+            estimateItem.priceSource = price.source;
             estimateItem.confidence = price.confidence;
-            (estimateItem as any).priceNote = `Ціну знайдено через ${fallbackModel} (основна модель ${primaryModel} не знайшла)`;
+            (estimateItem as any).priceNote = price.reason || price.source;
 
             // Recalculate section total
             section.sectionTotal = section.items.reduce((sum, it) => sum + it.totalCost, 0);
@@ -93,7 +104,7 @@ export class ZeroPriceFixer {
               sectionTitle: item.sectionTitle,
               description: item.description,
               newPrice: price.unitPrice,
-              source: `${fallbackModel} fallback`,
+              source: price.source,
               confidence: price.confidence,
             });
           } else {
@@ -167,9 +178,9 @@ export class ZeroPriceFixer {
 
   private async fetchPrices(
     items: ZeroItem[],
-    model: 'openai' | 'gemini',
+    _model: 'openai' | 'gemini',
     context?: { objectType?: string; area?: string; region?: string; budgetRange?: string }
-  ): Promise<Array<{ unitPrice: number; confidence: number; reason?: string } | null>> {
+  ): Promise<Array<PriceLookup | null>> {
     const itemsList = items.map((item, i) =>
       `${i + 1}. "${item.description}" (од.: ${item.unit}, к-сть: ${item.quantity}, секція: ${item.sectionTitle})`
     ).join('\n');
@@ -182,13 +193,15 @@ export class ZeroPriceFixer {
       ? `Тип об'єкта: ${context.objectType || 'будівництво'}, площа: ${context.area || 'невідомо'} м², регіон: ${context.region || 'Україна'}${budgetLabel ? `, клас якості: ${budgetLabel}` : ''}`
       : 'Будівельний кошторис, Україна, 2024-2025';
 
+    const year = new Date().getFullYear();
     const prompt = `Ти — експерт з ціноутворення будівельних матеріалів і робіт в Україні.
 
 Контекст: ${contextStr}
 
-Для кожної позиції нижче визнач РЕАЛІСТИЧНУ ціну за одиницю в гривнях (₴).
-Ціни мають відповідати ринку України 2024-2025.
-${budgetLabel ? `ВАЖЛИВО: Клас якості проекту — ${budgetLabel}. Вибирай ціни відповідного цінового сегменту.\n` : ''}
+Для КОЖНОЇ позиції знайди РЕАЛЬНУ актуальну ціну за одиницю в гривнях (₴)
+станом на ${year} рік. ВИКОРИСТОВУЙ Google Search — шукай у магазинах
+(epicentrk.ua, prom.ua, leroymerlin.ua, obi.ua, novalinia, hozcenter тощо).
+${budgetLabel ? `Клас якості проекту — ${budgetLabel}. Бери ціни відповідного сегменту.\n` : ''}
 
 Позиції без цін:
 ${itemsList}
@@ -198,32 +211,39 @@ ${itemsList}
   {
     "index": 1,
     "unitPrice": число_в_гривнях,
+    "verified": true | false,
+    "source": "магазин/сайт де знайдено ціну",
+    "checkedDate": "${year}-MM",
+    "url": "посилання на сторінку товару або пошуку",
     "confidence": 0.0-1.0,
-    "source": "звідки ціна (epicentrk, prom.ua, ринкова оцінка тощо)",
-    "note": "коментар якщо потрібно"
+    "note": "коментар"
   }
 ]
 
 Правила:
-- Ціна = ТІЛЬКИ за матеріал (без роботи), якщо позиція це матеріал
-- Ціна = за одиницю роботи, якщо позиція це робота
-- Якщо не впевнений — все одно дай найкращу оцінку з confidence < 0.5
-- НЕ повертай 0 — дай хоча б приблизну ринкову оцінку
-- Гривні, не долари
+- "verified": true — ЛИШЕ якщо ти реально знайшов ціну на конкретній сторінці
+  (вкажи source + url). Інакше "verified": false і це оцінка.
+- Ціна = ТІЛЬКИ за матеріал (без роботи) для матеріалів; за одиницю роботи — для робіт.
+- НЕ повертай 0 — дай хоча б приблизну ринкову оцінку (verified: false).
+- Гривні, не долари. Ціни — актуальні на ${year} рік.
 
-Повертай ТІЛЬКИ JSON масив, без додаткового тексту.`;
+Повертай ТІЛЬКИ JSON масив.`;
 
-    if (model === 'openai') {
-      return this.fetchFromOpenAI(prompt, items.length);
-    } else {
-      return this.fetchFromGemini(prompt, items.length);
+    // Завжди пробуємо Gemini з Google Search (реальні ціни з магазинів);
+    // OpenAI — лише аварійний фолбек, якщо grounding недоступний.
+    try {
+      const grounded = await this.fetchFromGeminiGrounded(prompt, items.length);
+      if (grounded.some((x) => x)) return grounded;
+    } catch (e) {
+      console.warn('⚠️ ZeroPriceFixer: grounded search failed —', e instanceof Error ? e.message : e);
     }
+    return this.fetchFromOpenAI(prompt, items.length);
   }
 
   private async fetchFromOpenAI(
     prompt: string,
     expectedCount: number
-  ): Promise<Array<{ unitPrice: number; confidence: number; reason?: string } | null>> {
+  ): Promise<Array<PriceLookup | null>> {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return new Array(expectedCount).fill(null);
 
@@ -243,20 +263,25 @@ ${itemsList}
     return this.parseResponse(response.choices[0]?.message?.content || '[]', expectedCount);
   }
 
-  private async fetchFromGemini(
+  /**
+   * Пошук цін через Gemini з Google Search grounding —
+   * модель шукає реальні сторінки магазинів і повертає джерело+дату.
+   */
+  private async fetchFromGeminiGrounded(
     prompt: string,
     expectedCount: number
-  ): Promise<Array<{ unitPrice: number; confidence: number; reason?: string } | null>> {
+  ): Promise<Array<PriceLookup | null>> {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) return new Array(expectedCount).fill(null);
 
     const genAI = new GoogleGenerativeAI(apiKey);
+    // З grounding не можна вимагати responseMimeType=json — парсимо текст.
     const model = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
+      tools: [{ googleSearch: {} }] as any,
       generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 4000,
-        responseMimeType: 'application/json',
+        temperature: 0.2,
+        maxOutputTokens: 8000,
       },
     });
 
@@ -269,9 +294,17 @@ ${itemsList}
   private parseResponse(
     text: string,
     expectedCount: number
-  ): Array<{ unitPrice: number; confidence: number; reason?: string } | null> {
+  ): Array<PriceLookup | null> {
     try {
-      let parsed = JSON.parse(text);
+      const cleaned = (text || '')
+        .trim()
+        .replace(/^```json\s*/i, '')
+        .replace(/^```\s*/i, '')
+        .replace(/```\s*$/i, '')
+        .trim();
+      // З grounding модель може додати текст навколо JSON — витягуємо масив.
+      const arrMatch = cleaned.match(/\[[\s\S]*\]/);
+      let parsed = JSON.parse(arrMatch ? arrMatch[0] : cleaned);
 
       // Handle wrapped response like { "prices": [...] } or { "items": [...] }
       if (parsed && !Array.isArray(parsed)) {
@@ -286,13 +319,34 @@ ${itemsList}
 
       if (!Array.isArray(parsed)) return new Array(expectedCount).fill(null);
 
-      return parsed.map((item: any) => {
+      return parsed.map((item: any): PriceLookup | null => {
         const price = parseFloat(item?.unitPrice ?? item?.price ?? 0);
-        if (price <= 0) return null;
+        if (!Number.isFinite(price) || price <= 0) return null;
+
+        const verified = item?.verified === true;
+        const store = String(item?.source || '').trim();
+        const date = String(item?.checkedDate || '').trim();
+        const url = String(item?.url || '').trim();
+
+        const source =
+          verified && store
+            ? `${store}${date ? ` (${date})` : ''}`
+            : 'AI-оцінка (не підтверджено)';
+        const reason = [verified ? '✅ знайдено' : '≈ оцінка', store, date, url]
+          .filter(Boolean)
+          .join(' · ');
+
+        const rawConf = parseFloat(item?.confidence ?? (verified ? 0.85 : 0.5));
+        const confidence = verified
+          ? Math.min(Number.isFinite(rawConf) ? rawConf : 0.85, 0.9)
+          : Math.min(Number.isFinite(rawConf) ? rawConf : 0.5, 0.5);
+
         return {
           unitPrice: Math.round(price * 100) / 100,
-          confidence: Math.min(parseFloat(item?.confidence ?? 0.5), 0.7), // Cap at 0.7 for fallback
-          reason: item?.note || item?.source,
+          confidence,
+          verified,
+          source,
+          reason,
         };
       });
     } catch {
