@@ -475,7 +475,8 @@ export async function POST(request: NextRequest) {
                   unitPrice: Number(item.unitPrice),
                   laborCost: Number(item.laborRate) * Number(item.laborHours),
                   totalCost: Number(item.amount),
-                  priceSource: null,
+                  itemType: item.itemType,
+                  priceSource: item.priceSource ?? null,
                   priceNote: null
                 })),
                 sectionTotal: Number(section.totalAmount)
