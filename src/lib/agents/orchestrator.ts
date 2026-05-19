@@ -691,7 +691,27 @@ export class EstimateOrchestrator {
       const wd = this.config.wizardData;
       const totalAmount = sections.reduce((sum, s) => sum + s.sectionTotal, 0);
 
+      const interiorOnly =
+        typeof wd?.interiorOnly === 'boolean'
+          ? wd.interiorOnly
+          : wd?.workScope === 'renovation' ||
+            wd?.workScope === 'finishing' ||
+            wd?.objectType === 'apartment' ||
+            wd?.objectType === 'office';
+
+      const interiorNote = interiorOnly
+        ? `
+
+⚠️⚠️ РЕЖИМ: ТІЛЬКИ ВНУТРІШНІ (ОЗДОБЛЮВАЛЬНІ) РОБОТИ ⚠️⚠️
+Об'єкт УЖЕ ЗБУДОВАНИЙ. Це fit-out діючої будівлі.
+❌ executionSequence НЕ повинен містити: підготовку ділянки, земляні роботи,
+   фундамент, коробку/зведення стін, перекриття, покрівлю, фасад.
+✅ Послідовність ТІЛЬКИ внутрішня: підготовка приміщень/демонтаж →
+   перегородки та ГКЛ → інженерні мережі всередині → оздоблення → здача.`
+        : '';
+
       const prompt = `Ти - головний інженер-кошторисник. Сформуй СТРУКТУРОВАНИЙ ЗВІТ у форматі JSON.
+${interiorNote}
 
 ПРОАНАЛІЗОВАНІ ДОКУМЕНТИ:
 ${this.config.documents.plans ? `- Креслення: ${this.config.documents.plans.length} файлів` : "- Креслення: немає"}
@@ -750,8 +770,9 @@ ${validationIssues.length > 0 ? validationIssues.map(i => `- [${i.severity}] ${i
 
 ВАЖЛИВО:
 - executionSequence має бути РЕАЛІСТИЧНОЮ послідовністю для цього типу об'єкта
-- Для нового будівництва: підготовка → фундамент → коробка → інженерія → оздоблення
-- Для ремонту: демонтаж → інженерія → оздоблення
+${interiorOnly
+  ? '- ВНУТРІШНІ роботи: підготовка приміщень/демонтаж → перегородки/ГКЛ → інженерія → оздоблення → здача (БЕЗ фундаменту/коробки!)'
+  : '- Для нового будівництва: підготовка → фундамент → коробка → інженерія → оздоблення\n- Для ремонту: демонтаж → інженерія → оздоблення'}
 - Для комерційного об'єкта: враховуй специфіку (HVAC, холодильне обладнання, торгове обладнання)
 - riskWarnings: мінімум 3 ризики
 - preStartChecklist: мінімум 5 пунктів
