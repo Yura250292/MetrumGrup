@@ -1004,7 +1004,7 @@ export class MasterEstimateAgent {
           { role: "user", content: userPrompt },
         ],
         response_format: { type: "json_object" },
-        temperature: 0.1,
+        temperature: 0, // детермінізм — мінімум варіації між запусками
         max_tokens: 16000,
       }, {
         signal: abortController.signal,
@@ -1040,7 +1040,7 @@ export class MasterEstimateAgent {
       model: "gemini-3-flash-preview",
       generationConfig: {
         responseMimeType: "application/json",
-        temperature: 0.1,
+        temperature: 0, // детермінізм — мінімум варіації між запусками
         maxOutputTokens: 16000,
       },
     });

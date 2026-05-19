@@ -22,7 +22,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Версія кешу обмірів. Зміни її, якщо змінив промпти/логіку проходів —
 // тоді старий кеш інвалідовується і обмір рахується наново.
-const VISION_CACHE_VERSION = 'v1';
+const VISION_CACHE_VERSION = 'v2-facts';
 
 // Gemini inline-payload ліміт ~20 МБ на ВЕСЬ запит. Файли більші за цей поріг
 // (raw bytes) вантажимо через Files API, дрібні — лишаємо inline.
@@ -43,6 +43,28 @@ export interface DrawingPart {
   name?: string;
 }
 
+/**
+ * Структуровані обсяги, зведені з обміру — «відомість обсягів».
+ * Це джерело правди для quantity у кошторисі.
+ */
+export interface MeasuredFacts {
+  totalAreaM2?: number;
+  floorAreaM2?: number;
+  ceilingAreaM2?: number;
+  wallFinishAreaM2?: number;
+  partitions?: Array<{ label: string; unit: string; quantity: number }>;
+  doors?: { interior?: number; glass?: number; technical?: number; entrance?: number };
+  glazingM2?: number;
+  fixtures?: {
+    outlets?: number;
+    switches?: number;
+    lights?: number;
+    toilets?: number;
+    sinks?: number;
+    radiators?: number;
+  };
+}
+
 export interface DrawingVisionResult {
   /** Готовий текстовий блок для masterContext (порожній, якщо аналіз не вдався). */
   report: string;
@@ -50,6 +72,8 @@ export interface DrawingVisionResult {
   analyzedCount: number;
   /** Сумарна площа об'єкта, зчитана з креслень (м²), якщо вдалось визначити. */
   totalAreaM2?: number;
+  /** Структуровані обсяги (зведена відомість). */
+  measuredFacts?: MeasuredFacts;
   /** Технічна помилка, якщо була (генерація не падає через неї). */
   error?: string;
 }
@@ -162,6 +186,84 @@ const PASSES: VisionPass[] = [PASS_ROOMS, PASS_ENGINEERING, PASS_FINISHING, PASS
 type MediaPart =
   | { inlineData: { data: string; mimeType: string } }
   | { fileData: { fileUri: string; mimeType: string } };
+
+/**
+ * Звести прозовий обмір у СТРУКТУРОВАНУ відомість обсягів (JSON).
+ * Це 5-й, консолідаційний прохід — числа беруться з уже зчитаного обміру.
+ */
+async function extractMeasuredFacts(
+  reportBody: string,
+  wizardArea?: string | number
+): Promise<MeasuredFacts | null> {
+  try {
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      generationConfig: { temperature: 0, maxOutputTokens: 3000, responseMimeType: 'application/json' },
+    });
+    const prompt = `На основі ОБМІРУ креслень нижче зведи СТРУКТУРОВАНУ відомість обсягів.
+Числа бери ТІЛЬКИ з обміру, не вигадуй. Чого немає — пропусти поле.
+${wizardArea ? `Орієнтир площі: ~${wizardArea} м².` : ''}
+
+ОБМІР:
+${reportBody.slice(0, 30000)}
+
+Поверни JSON:
+{
+  "totalAreaM2": число, "floorAreaM2": число, "ceilingAreaM2": число,
+  "wallFinishAreaM2": число, "glazingM2": число,
+  "partitions": [{"label":"ГКЛ 100мм","unit":"м²","quantity":число}],
+  "doors": {"interior":число,"glass":число,"technical":число,"entrance":число},
+  "fixtures": {"outlets":число,"switches":число,"lights":число,"toilets":число,"sinks":число,"radiators":число}
+}`;
+    const result = await model.generateContent(prompt);
+    const text = (result.response.text() || '')
+      .trim()
+      .replace(/^```json\s*/i, '')
+      .replace(/```\s*$/i, '')
+      .trim();
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' ? (parsed as MeasuredFacts) : null;
+  } catch (e) {
+    console.warn('⚠️ extractMeasuredFacts failed:', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** Сформувати текстову «відомість обсягів» для промпта. */
+function formatFactsTable(f: MeasuredFacts): string {
+  const num = (n?: number) => (typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : undefined);
+  const lines: string[] = [];
+  if (num(f.totalAreaM2)) lines.push(`- Загальна площа: ${f.totalAreaM2} м²`);
+  if (num(f.floorAreaM2)) lines.push(`- Площа підлоги: ${f.floorAreaM2} м²`);
+  if (num(f.ceilingAreaM2)) lines.push(`- Площа стелі: ${f.ceilingAreaM2} м²`);
+  if (num(f.wallFinishAreaM2)) lines.push(`- Площа стін під опорядження: ${f.wallFinishAreaM2} м²`);
+  if (num(f.glazingM2)) lines.push(`- Скління: ${f.glazingM2} м²`);
+  for (const p of f.partitions ?? []) {
+    if (num(p.quantity)) lines.push(`- Перегородка «${p.label}»: ${p.quantity} ${p.unit || 'м²'}`);
+  }
+  const dp: string[] = [];
+  if (num(f.doors?.interior)) dp.push(`міжкімнатні ${f.doors!.interior}`);
+  if (num(f.doors?.glass)) dp.push(`скляні ${f.doors!.glass}`);
+  if (num(f.doors?.technical)) dp.push(`технічні ${f.doors!.technical}`);
+  if (num(f.doors?.entrance)) dp.push(`вхідні ${f.doors!.entrance}`);
+  if (dp.length) lines.push(`- Двері: ${dp.join(', ')} шт`);
+  const fp: string[] = [];
+  if (num(f.fixtures?.outlets)) fp.push(`розетки ${f.fixtures!.outlets}`);
+  if (num(f.fixtures?.switches)) fp.push(`вимикачі ${f.fixtures!.switches}`);
+  if (num(f.fixtures?.lights)) fp.push(`світильники ${f.fixtures!.lights}`);
+  if (num(f.fixtures?.toilets)) fp.push(`унітази ${f.fixtures!.toilets}`);
+  if (num(f.fixtures?.sinks)) fp.push(`умивальники ${f.fixtures!.sinks}`);
+  if (num(f.fixtures?.radiators)) fp.push(`радіатори ${f.fixtures!.radiators}`);
+  if (fp.length) lines.push(`- Прилади: ${fp.join(', ')} шт`);
+
+  if (lines.length === 0) return '';
+  return (
+    `## 📋 ВІДОМІСТЬ ОБСЯГІВ (ЗАФІКСОВАНО)\n` +
+    `Це ТОЧНІ обсяги з креслень. У позиціях кошторису quantity бери САМЕ звідси.\n` +
+    lines.join('\n') +
+    '\n\n'
+  );
+}
 
 /**
  * Проаналізувати креслення візуально і повернути текстовий обмір.
@@ -282,21 +384,33 @@ export async function analyzeDrawingsVisually(
         return `### ${r.pass.title}\n${text}`;
       })
       .join('\n\n');
+    // 5-й прохід — звести прозовий обмір у структуровану відомість обсягів.
+    const measuredFacts = (await extractMeasuredFacts(body, opts?.wizardArea)) ?? undefined;
+    const factsTable = measuredFacts ? formatFactsTable(measuredFacts) : '';
+
     const report =
       `## ВІЗУАЛЬНИЙ ОБМІР КРЕСЛЕНЬ (Gemini Vision, ${ok.length} проходів)\n` +
       `_Зчитано безпосередньо з ${parts.length} креслень — ПРІОРИТЕТНЕ джерело розмірів._\n\n` +
+      factsTable +
       body;
 
-    // Площа — з проходу по приміщеннях.
-    let totalAreaM2: number | undefined;
-    const roomsText = passResults.find((r) => r.pass.key === 'rooms')?.text || '';
-    const areaMatch = roomsText.match(/ЗАГАЛЬНА_ПЛОЩА_М2\s*[:=]\s*([\d\s.,]+)/i);
-    if (areaMatch) {
-      const parsed = parseFloat(areaMatch[1].replace(/\s/g, '').replace(',', '.'));
-      if (Number.isFinite(parsed) && parsed > 0) totalAreaM2 = parsed;
+    // Площа — з відомості обсягів або з проходу по приміщеннях.
+    let totalAreaM2: number | undefined = measuredFacts?.totalAreaM2;
+    if (!totalAreaM2) {
+      const roomsText = passResults.find((r) => r.pass.key === 'rooms')?.text || '';
+      const areaMatch = roomsText.match(/ЗАГАЛЬНА_ПЛОЩА_М2\s*[:=]\s*([\d\s.,]+)/i);
+      if (areaMatch) {
+        const parsed = parseFloat(areaMatch[1].replace(/\s/g, '').replace(',', '.'));
+        if (Number.isFinite(parsed) && parsed > 0) totalAreaM2 = parsed;
+      }
     }
 
-    const result: DrawingVisionResult = { report, analyzedCount: parts.length, totalAreaM2 };
+    const result: DrawingVisionResult = {
+      report,
+      analyzedCount: parts.length,
+      totalAreaM2,
+      measuredFacts,
+    };
     // Зберегти у кеш — наступні генерації того ж файлу візьмуть готовий обмір.
     await putJsonToR2(cacheKey, result).catch((e) =>
       console.warn('⚠️ drawing-vision: не вдалось закешувати обмір —', e instanceof Error ? e.message : e)
