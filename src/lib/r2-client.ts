@@ -180,6 +180,32 @@ export async function downloadFileFromR2(key: string): Promise<Buffer> {
 }
 
 /**
+ * Зберегти JSON-обʼєкт у R2 (для кешу обмірів тощо).
+ */
+export async function putJsonToR2(key: string, data: unknown): Promise<void> {
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: JSON.stringify(data),
+      ContentType: 'application/json',
+    })
+  );
+}
+
+/**
+ * Прочитати JSON-обʼєкт з R2. Повертає null, якщо ключа немає / помилка.
+ */
+export async function getJsonFromR2<T = unknown>(key: string): Promise<T | null> {
+  try {
+    const buf = await downloadFileFromR2(key);
+    return JSON.parse(buf.toString('utf-8')) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Видаляє файл з R2
  */
 export async function deleteFileFromR2(key: string): Promise<void> {

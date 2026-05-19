@@ -15,8 +15,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { GoogleAIFileManager, FileState } from '@google/generative-ai/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
+import { putJsonToR2, getJsonFromR2 } from '../r2-client';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+// Версія кешу обмірів. Зміни її, якщо змінив промпти/логіку проходів —
+// тоді старий кеш інвалідовується і обмір рахується наново.
+const VISION_CACHE_VERSION = 'v1';
 
 // Gemini inline-payload ліміт ~20 МБ на ВЕСЬ запит. Файли більші за цей поріг
 // (raw bytes) вантажимо через Files API, дрібні — лишаємо inline.
@@ -172,6 +178,18 @@ export async function analyzeDrawingsVisually(
     return { report: '', analyzedCount: 0, error: 'GEMINI_API_KEY not configured' };
   }
 
+  // 🔒 ДЕТЕРМІНІЗМ: обмір кешується за хешем вмісту файлів.
+  // Той самий PDF → той самий обмір кожної генерації (без варіації Vision).
+  const hasher = crypto.createHash('sha256').update(VISION_CACHE_VERSION);
+  for (const p of parts) hasher.update(p.data);
+  const cacheKey = `drawing-vision-cache/${hasher.digest('hex')}.json`;
+
+  const cached = await getJsonFromR2<DrawingVisionResult>(cacheKey);
+  if (cached && cached.report) {
+    console.log('♻️ drawing-vision: обмір узято з кешу R2 (детермінований повтор)');
+    return cached;
+  }
+
   const fileManager = new GoogleAIFileManager(process.env.GEMINI_API_KEY);
   const uploadedNames: string[] = [];
 
@@ -278,7 +296,12 @@ export async function analyzeDrawingsVisually(
       if (Number.isFinite(parsed) && parsed > 0) totalAreaM2 = parsed;
     }
 
-    return { report, analyzedCount: parts.length, totalAreaM2 };
+    const result: DrawingVisionResult = { report, analyzedCount: parts.length, totalAreaM2 };
+    // Зберегти у кеш — наступні генерації того ж файлу візьмуть готовий обмір.
+    await putJsonToR2(cacheKey, result).catch((e) =>
+      console.warn('⚠️ drawing-vision: не вдалось закешувати обмір —', e instanceof Error ? e.message : e)
+    );
+    return result;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('❌ analyzeDrawingsVisually failed:', msg);
