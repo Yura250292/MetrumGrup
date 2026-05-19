@@ -79,7 +79,22 @@ export class ZeroPriceFixer {
     const fallbackModel = primaryModel === 'openai' ? 'gemini' : 'openai';
     console.log(`🤖 ZeroPriceFixer: Основна модель: ${primaryModel}, фолбек: ${fallbackModel}`);
 
+    // Жорсткий дедлайн — допошук цін (з Google Search) не має з'їсти весь
+    // бюджет serverless-функції. Що не встигли — лишається без ціни.
+    const deadline = Date.now() + 110_000;
+
     for (const batch of batches) {
+      if (Date.now() > deadline) {
+        console.warn(`⏱️ ZeroPriceFixer: дедлайн вичерпано — ${batch.length}+ позицій лишилось без допошуку`);
+        for (const item of batch) {
+          unfixedItems.push({
+            sectionTitle: item.sectionTitle,
+            description: item.description,
+            reason: 'Допошук цін перервано за часом',
+          });
+        }
+        continue;
+      }
       try {
         const prices = await this.fetchPrices(batch, fallbackModel, context);
 
@@ -148,7 +163,13 @@ export class ZeroPriceFixer {
       const section = sections[si];
       for (let ii = 0; ii < section.items.length; ii++) {
         const item = section.items[ii];
-        if (item.unitPrice === 0 && item.quantity > 0 && item.description.trim().length > 0) {
+        // "Без ціни" = і unitPrice, і laborCost = 0. У роботи unitPrice=0 —
+        // це норма (вартість у laborCost), такі позиції НЕ чіпаємо.
+        const noPrice =
+          (item.unitPrice ?? 0) === 0 &&
+          (item.laborCost ?? 0) === 0 &&
+          item.quantity > 0;
+        if (noPrice && item.description.trim().length > 0) {
           result.push({
             sectionIndex: si,
             sectionTitle: section.title,

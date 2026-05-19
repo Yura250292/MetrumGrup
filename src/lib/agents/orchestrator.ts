@@ -548,9 +548,18 @@ export class EstimateOrchestrator {
       console.error('[Orchestrator] Rule-based validators failed:', e);
     }
 
-    // 🆕 Zero Price Fixer — знайти позиції з ціною 0 і спробувати через іншу модель
+    // 🆕 Zero Price Fixer — знайти позиції БЕЗ ЦІНИ і спробувати через іншу модель.
+    // ВАЖЛИВО: у роботи (work) unitPrice=0 — це норма (вартість у laborCost).
+    // "Без ціни" = і unitPrice, і laborCost = 0.
     let zeroPriceFixResult: ZeroPriceFixResult | undefined;
-    const zeroCount = sections.reduce((sum, s) => sum + s.items.filter(i => i.unitPrice === 0 && i.quantity > 0).length, 0);
+    const zeroCount = sections.reduce(
+      (sum, s) =>
+        sum +
+        s.items.filter(
+          i => (i.unitPrice ?? 0) === 0 && (i.laborCost ?? 0) === 0 && i.quantity > 0
+        ).length,
+      0
+    );
     if (zeroCount > 0) {
       onProgress({
         phase: 'final',
