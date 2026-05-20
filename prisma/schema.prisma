@@ -397,6 +397,9 @@ model Estimate {
   financeSyncedById     String?
   financeSyncedBy       User?                    @relation("EstimateFinanceSyncer", fields: [financeSyncedById], references: [id])
 
+  // Historical KB index — back-relation для onDelete:Cascade
+  indexedItems          EstimateItemIndex[]
+
   // Pair grouping: CLIENT + INTERNAL pair for comparison view
   role             EstimateRole @default(STANDALONE)
   estimateGroupId  String?
@@ -1957,6 +1960,45 @@ enum FileType {
   COMPLETION_ACT
   ESTIMATE
   AI_RENDER
+}
+
+// ============================================================
+// HISTORICAL ESTIMATES KNOWLEDGE BASE
+// Індекс позицій з усіх збережених кошторисів. Будується синхронно
+// при saveEstimate. Джерело правди для historical price provider та
+// findSimilarEstimates. Денормалізує firmId для швидких queries
+// без join через Project.
+// ============================================================
+
+model EstimateItemIndex {
+  id            String   @id @default(cuid())
+
+  // Що це за робота
+  workName      String   // canonical (lowercase + normalized)
+  workNameRaw   String   // оригінал з кошторису
+  unit          String   // м², м.п., шт (normalized)
+  kind          String   // "work" | "material"
+
+  // Ціни (snapshot at time of indexing)
+  unitPrice     Decimal  @db.Decimal(10, 2)
+  laborCost     Decimal  @default(0) @db.Decimal(10, 2)
+
+  // Контекст для фільтрації
+  estimateId    String
+  estimate      Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  firmId        String?  // денормалізовано з Project.firmId — для швидких queries
+  projectType   String?  // "house" | "apartment" | "commercial" | ...
+  qualityTier   String?  // economy / standard / premium / luxury
+  region        String?
+  totalAreaM2   Decimal? @db.Decimal(10, 2)
+
+  createdAt     DateTime @default(now())
+
+  @@index([workName])
+  @@index([firmId, workName])
+  @@index([firmId, projectType, qualityTier])
+  @@index([estimateId])
+  @@map("estimate_item_index")
 }
 
 model ReferenceEstimate {

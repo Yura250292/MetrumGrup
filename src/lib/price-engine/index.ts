@@ -34,12 +34,17 @@ import {
   type PriceQuery,
   type PriceResult,
 } from './types';
+import { historicalProvider } from './providers/historical';
 import { catalogProvider } from './providers/catalog';
 import { prozorroProvider } from './providers/prozorro';
 import { webScrapeProvider } from './providers/web-scrape';
 import { llmFallbackProvider } from './providers/llm-fallback';
 
+// historicalProvider ПЕРШИЙ — власні дані з минулих кошторисів цінніші
+// за публічний catalog. Якщо корпус не має achievement (≥3 зразки) → confidence
+// нижче CONFIDENCE_FLOOR → engine fall-through на catalog.
 const DEFAULT_PROVIDERS: PriceProvider[] = [
+  historicalProvider,
   catalogProvider,
   prozorroProvider,
   webScrapeProvider,
@@ -119,6 +124,7 @@ export async function enrichItemPrice(item: {
 }
 
 export * from './types';
+export { historicalProvider } from './providers/historical';
 export { catalogProvider } from './providers/catalog';
 export { prozorroProvider } from './providers/prozorro';
 export { webScrapeProvider } from './providers/web-scrape';

@@ -15,6 +15,7 @@ import { auditLog } from "@/lib/audit";
 import { getNextEstimateNumber } from "@/lib/document-numbers";
 import { normalizeAiItems, type AiItem } from "@/lib/estimates/ai-item-normalizer";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
+import { indexEstimate, contextFromWizard } from "@/lib/estimates/indexer";
 
 interface AiSection {
   title: string;
@@ -27,6 +28,8 @@ interface FromAiBody {
   description?: string;
   sections: AiSection[];
   overheadRate?: number;
+  /** Контекст з wizard'а — для indexing метаданих (projectType/qualityTier/area). */
+  wizardData?: any;
 }
 
 export async function POST(request: NextRequest) {
@@ -178,6 +181,18 @@ export async function POST(request: NextRequest) {
     // Recompute totals through the canonical pipeline (covers discount, margin, tax).
     if (completeEstimate) {
       await recomputeEstimateTotals(completeEstimate.id);
+    }
+
+    // Historical KB: index items in EstimateItemIndex for future price lookup
+    // + similarity search. Sync, best-effort — не валимо save якщо впав.
+    if (completeEstimate) {
+      try {
+        const ctx = contextFromWizard(body.wizardData);
+        const result = await indexEstimate(completeEstimate.id, ctx);
+        console.log(`📚 Indexed ${result.indexed} items (skipped ${result.skipped}) for estimate ${completeEstimate.id}`);
+      } catch (err) {
+        console.warn(`⚠️ Historical KB indexing failed for ${completeEstimate.id}:`, err);
+      }
     }
 
     await auditLog({

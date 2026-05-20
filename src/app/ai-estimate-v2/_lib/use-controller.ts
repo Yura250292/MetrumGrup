@@ -97,6 +97,24 @@ export function useAiEstimateController() {
   const [wizardStep, setWizardStep] = useState<number>(0);
   const [wizardCompleted, setWizardCompleted] = useState<boolean>(false);
 
+  // ── Alternative input modes (free-text / AI-interview) ──
+  const [freeTextDraft, setFreeTextDraft] = useState<string>("");
+  const [freeTextDone, setFreeTextDone] = useState<boolean>(false);
+  const [interviewDone, setInterviewDone] = useState<boolean>(false);
+
+  // ── Historical KB (similar projects + corpus stats) ──
+  const [similarEstimates, setSimilarEstimates] = useState<Array<{
+    estimateId: string;
+    title: string;
+    totalAreaM2: number | null;
+    pricePerM2: number | null;
+    itemCount: number;
+  }>>([]);
+  const [corpusStats, setCorpusStats] = useState<{
+    uniqueEstimates: number;
+    totalIndexedItems: number;
+  } | null>(null);
+
   // ── Pre-analysis ──
   const [preAnalysisData, setPreAnalysisData] = useState<PreAnalysisData>(null);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
@@ -269,6 +287,45 @@ export function useAiEstimateController() {
       return next as WizardData;
     });
   }, []);
+
+  // Застосувати wizardData з parse-text / interview. Мерджимо у існуючий wizardData
+  // щоб не втратити поля, які не вернув AI (наприклад utilities defaults).
+  const applyParsedWizard = useCallback(
+    (parsed: Partial<WizardData>, opts?: { interiorOnly?: boolean }) => {
+      setWizardData((prev) => ({ ...prev, ...parsed }));
+      if (parsed && (parsed as any).totalArea != null) {
+        const v = String((parsed as any).totalArea);
+        if (v.trim()) setArea(v);
+      }
+      if (opts && typeof opts.interiorOnly === "boolean") {
+        setInteriorOnly(opts.interiorOnly);
+      }
+      setWizardCompleted(true);
+    },
+    []
+  );
+
+  // Підтягує схожі кошториси з корпусу. Викликається з useEffect коли
+  // змінюється площа / objectType / interiorOnly.
+  const loadSimilarEstimates = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (wizardData.objectType) params.set("projectType", String(wizardData.objectType));
+      if (area) params.set("area", area);
+      params.set("limit", "5");
+      const res = await fetch(`/api/admin/estimates/similar?${params}`);
+      if (!res.ok) return;
+      const json = await res.json();
+      setSimilarEstimates(Array.isArray(json.similar) ? json.similar : []);
+      setCorpusStats(json.stats || null);
+    } catch (err) {
+      console.warn("loadSimilarEstimates failed:", err);
+    }
+  }, [wizardData.objectType, area]);
+
+  useEffect(() => {
+    void loadSimilarEstimates();
+  }, [loadSimilarEstimates]);
 
   const openWizard = useCallback(() => {
     setWizardStep(0);
@@ -806,6 +863,8 @@ export function useAiEstimateController() {
           description: estimate.description || "",
           sections: sectionsForApi,
           overheadRate: estimate.summary?.overheadPercent || 15,
+          // Контекст для Historical KB indexer'а (objectType, budgetRange, totalArea)
+          wizardData: { ...wizardData, interiorOnly, area },
         }),
       });
       const json = await res.json();
@@ -820,7 +879,7 @@ export function useAiEstimateController() {
     } finally {
       setSaving(false);
     }
-  }, [estimate, selectedProjectId, router]);
+  }, [estimate, selectedProjectId, router, wizardData, interiorOnly, area]);
 
   /* -------------------------------------------------------------------- */
   /* Supplement                                                           */
@@ -999,6 +1058,20 @@ export function useAiEstimateController() {
     wizardCompleted,
     completeWizard,
     resetWizard,
+
+    // Alternative input modes
+    applyParsedWizard,
+    freeTextDraft,
+    setFreeTextDraft,
+    freeTextDone,
+    setFreeTextDone,
+    interviewDone,
+    setInterviewDone,
+
+    // Historical KB
+    similarEstimates,
+    corpusStats,
+    loadSimilarEstimates,
 
     // pre-analysis
     preAnalysisData,

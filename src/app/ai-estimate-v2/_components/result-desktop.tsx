@@ -644,6 +644,15 @@ function Row({
           <span className="text-[13px] font-medium truncate" style={{ color: T.textPrimary }}>
             {item.description}
           </span>
+          {item.priceSource?.includes("Метрум корпус") && (
+            <span
+              className="rounded-full px-2 py-0.5 text-[9px] font-bold whitespace-nowrap"
+              style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+              title={item.priceSource}
+            >
+              З КОРПУСУ
+            </span>
+          )}
         </div>
         {(item.priceSource || item.priceNote) && (
           <span className="text-[11px] truncate" style={{ color: T.textMuted }}>

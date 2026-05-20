@@ -9,10 +9,6 @@ import {
   FileSpreadsheet,
   Image as ImageIcon,
   Square,
-  TrendingUp,
-  ListChecks,
-  BadgeCheck,
-  ArrowRight,
   Check,
   Timer,
   Info,
@@ -22,6 +18,7 @@ import {
 } from "lucide-react";
 import { T } from "./tokens";
 import { MetricPill, ChecklistItem, ScoreDial } from "./primitives";
+import { SetupModes, SimilarProjectsCard } from "./setup-modes";
 import { formatBytes } from "../_lib/format";
 import type { AiEstimateController } from "../_lib/use-controller";
 
@@ -202,62 +199,11 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
             </div>
           )}
 
-          {/* Wizard promo */}
-          <div
-            className="rounded-2xl p-6"
-            style={{
-              backgroundColor: T.panel,
-              border: `1px solid ${controller.wizardCompleted ? T.borderSoft : T.borderAccent}`,
-            }}
-          >
-            <div className="flex items-center gap-6">
-              <div className="flex flex-1 flex-col gap-2.5">
-                <span
-                  className="inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold tracking-wider"
-                  style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-                >
-                  <Sparkles size={12} />{" "}
-                  {controller.wizardCompleted ? "МАЙСТЕР ЗАВЕРШЕНО" : "УТОЧНЕННЯ ПРОЄКТУ"}
-                </span>
-                <div className="text-lg font-bold" style={{ color: T.textPrimary }}>
-                  {controller.wizardCompleted
-                    ? "Уточнення заповнено"
-                    : "Уточніть проєкт перед генерацією"}
-                </div>
-                <p className="text-[13px] leading-relaxed" style={{ color: T.textSecondary }}>
-                  Короткі питання про геометрію, конструктив, інженерію та оздоблення. Точна кількість
-                  кроків залежить від типу об'єкта. Уточнення опціональне — без нього кошторис теж згенерується.
-                </p>
-                <div className="flex items-center gap-4 pt-1">
-                  <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: T.textSecondary }}>
-                    <TrendingUp size={14} style={{ color: T.success }} /> Кращі обсяги
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: T.textSecondary }}>
-                    <ListChecks size={14} style={{ color: T.success }} /> Більше позицій
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: T.textSecondary }}>
-                    <BadgeCheck size={14} style={{ color: T.success }} /> Вища впевненість
-                  </span>
-                </div>
-              </div>
-              <div className="flex w-[200px] flex-col items-center gap-3">
-                <ScoreDial
-                  value={controller.wizardCompleted ? 100 : 0}
-                  size={120}
-                  color={controller.wizardCompleted ? T.success : T.accentPrimary}
-                  bigLabel={controller.wizardCompleted ? "✓" : "0"}
-                  label={controller.wizardCompleted ? "готово" : "не запущено"}
-                />
-                <button
-                  onClick={controller.openWizard}
-                  className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95"
-                  style={{ backgroundColor: T.accentPrimary }}
-                >
-                  {controller.wizardCompleted ? "Редагувати" : "Уточнити проєкт"} <ArrowRight size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
+          {/* Setup modes: free-text / AI-interview / Wizard (умовно) */}
+          <SetupModes controller={controller} showWizard={!controller.interiorOnly} />
+
+          {/* Similar projects from corpus */}
+          <SimilarProjectsCard controller={controller} />
 
           {/* Project parameters */}
           <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
