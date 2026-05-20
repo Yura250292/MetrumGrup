@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     if (body.mode === "questions") {
       const ctx = JSON.stringify(body.context || {}, null, 2);
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-3-flash-preview",
         systemInstruction: QUESTIONS_PROMPT,
         generationConfig: { responseMimeType: "application/json", temperature: 0.4 },
       });
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
           .join("\n");
 
       const model = genAI.getGenerativeModel({
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-3-flash-preview",
         systemInstruction: BUILD_PROMPT,
         generationConfig: { responseMimeType: "application/json", temperature: 0.2 },
       });
