@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Circle,
   Sparkles,
+  Trash2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -20,10 +21,16 @@ type Props = {
   currentUserId?: string;
   isTimerActive: boolean;
   pending: boolean;
+  /**
+   * Чи відображати кнопку видалення. Передається з parent'а, який знає роль
+   * користувача — true для SUPER_ADMIN ИЛИ коли task.createdById === currentUserId.
+   */
+  canDelete?: boolean;
   onOpen: () => void;
   onStartTimer: () => void;
   onStopTimer: () => void;
   onMarkDone: () => void;
+  onDelete?: () => void;
 };
 
 function truncate(s: string, max = 60): string {
@@ -61,10 +68,12 @@ export function TaskRowExtended({
   currentUserId,
   isTimerActive,
   pending,
+  canDelete = false,
   onOpen,
   onStartTimer,
   onStopTimer,
   onMarkDone,
+  onDelete,
 }: Props) {
   const overdue = isOverdue(task);
   const incoming = task.incomingDepsCount ?? 0;
@@ -267,6 +276,19 @@ export function TaskRowExtended({
         >
           <CheckCircle2 size={12} />
         </button>
+        {canDelete && onDelete && (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={pending}
+            className="rounded-md p-1.5 disabled:opacity-50"
+            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
+            title="Видалити задачу"
+            aria-label="Видалити задачу"
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
       </div>
     </li>
   );

@@ -660,12 +660,13 @@ export async function archiveTask(taskId: string, actorId: string): Promise<void
   await requireTasksEnabled(existing.projectId);
   const ctx = await getProjectAccessContext(existing.projectId, actorId);
   if (!ctx) forbid();
-  // canDelete OR canEditAnyTask OR (own task + canEditOwnTasks)
+  // Дозволено:
+  //  - SUPER_ADMIN / у кого є canDeleteTasks (адмінська роль)
+  //  - canEditAnyTask
+  //  - автор задачі (createdById) — завжди, незалежно від ProjectMember-прав
   const isOwner = existing.createdById === actorId;
   const allowed =
-    ctx.canDeleteTasks ||
-    ctx.canEditAnyTask ||
-    (isOwner && (ctx.member?.effective.canEditOwnTasks ?? false));
+    ctx.canDeleteTasks || ctx.canEditAnyTask || isOwner;
   if (!allowed) forbid();
 
   await prisma.task.update({ where: { id: taskId }, data: { isArchived: true } });

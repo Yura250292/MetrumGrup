@@ -14,6 +14,7 @@ import {
   ExternalLink,
   Sparkles,
   RefreshCw,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -37,6 +38,7 @@ type DrawerDetail = {
   dueDate: string | null;
   projectId: string;
   project?: { id: string; title: string };
+  createdById: string;
   status: DrawerStatus;
   stage: { stage: string };
   assignees: {
@@ -77,10 +79,14 @@ type CustomFieldDef = {
 
 export function SelfContainedTaskDrawer({
   taskId,
+  currentUserId,
+  currentUserRole,
   onClose,
   onUpdate,
 }: {
   taskId: string;
+  currentUserId?: string;
+  currentUserRole?: string;
   onClose: () => void;
   onUpdate: () => void;
 }) {
@@ -271,13 +277,41 @@ export function SelfContainedTaskDrawer({
           <h2 className="text-sm font-bold" style={{ color: T.textPrimary }}>
             Задача
           </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2"
-            style={{ color: T.textMuted }}
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            {detail &&
+              (currentUserRole === "SUPER_ADMIN" ||
+                detail.createdById === currentUserId) && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Видалити задачу «${detail.title}»?`)) return;
+                    const res = await fetch(`/api/admin/tasks/${taskId}`, {
+                      method: "DELETE",
+                    });
+                    if (res.ok) {
+                      onUpdate();
+                      onClose();
+                    } else {
+                      const j = await res.json().catch(() => ({}));
+                      alert(j.error ?? "Не вдалося видалити");
+                    }
+                  }}
+                  className="rounded-lg p-2"
+                  style={{ color: T.danger }}
+                  title="Видалити задачу"
+                  aria-label="Видалити задачу"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            <button
+              onClick={onClose}
+              className="rounded-lg p-2"
+              style={{ color: T.textMuted }}
+              aria-label="Закрити"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {loading || !detail ? (

@@ -33,6 +33,8 @@ import { TaskRowExtended } from "./task-row-extended";
 type Props = {
   tasks: TaskItem[];
   currentUserId: string;
+  /** SUPER_ADMIN може видаляти будь-яку задачу. */
+  isAdmin?: boolean;
   loading: boolean;
   activeTimerTaskId: string | null;
   pendingId: string | null;
@@ -40,6 +42,7 @@ type Props = {
   onStartTimer: (taskId: string) => void;
   onStopTimer: () => void;
   onMarkDone: (task: TaskItem) => void;
+  onDelete?: (taskId: string, title: string) => void;
 };
 
 // Sections with sub-groups rendered together (Блокери).
@@ -48,6 +51,7 @@ const BLOCKER_GROUP: SectionKey[] = ["blocked-by", "blocking-others"];
 export function SectionsView({
   tasks,
   currentUserId,
+  isAdmin = false,
   loading,
   activeTimerTaskId,
   pendingId,
@@ -55,7 +59,10 @@ export function SectionsView({
   onStartTimer,
   onStopTimer,
   onMarkDone,
+  onDelete,
 }: Props) {
+  const canDeleteTask = (t: TaskItem) =>
+    Boolean(onDelete) && (isAdmin || t.createdById === currentUserId);
   const buckets = useMemo(
     () => groupBySection(tasks, currentUserId),
     [tasks, currentUserId],
@@ -140,10 +147,14 @@ export function SectionsView({
                     currentUserId={currentUserId}
                     isTimerActive={activeTimerTaskId === t.id}
                     pending={pendingId === t.id}
+                    canDelete={canDeleteTask(t)}
                     onOpen={() => onOpenDrawer(t.id)}
                     onStartTimer={() => onStartTimer(t.id)}
                     onStopTimer={onStopTimer}
                     onMarkDone={() => onMarkDone(t)}
+                    onDelete={
+                      onDelete ? () => onDelete(t.id, t.title) : undefined
+                    }
                   />
                 ))}
               </ul>
@@ -196,12 +207,17 @@ export function SectionsView({
                     <TaskRowExtended
                       key={t.id}
                       task={t}
+                      currentUserId={currentUserId}
                       isTimerActive={activeTimerTaskId === t.id}
                       pending={pendingId === t.id}
+                      canDelete={canDeleteTask(t)}
                       onOpen={() => onOpenDrawer(t.id)}
                       onStartTimer={() => onStartTimer(t.id)}
                       onStopTimer={onStopTimer}
                       onMarkDone={() => onMarkDone(t)}
+                      onDelete={
+                        onDelete ? () => onDelete(t.id, t.title) : undefined
+                      }
                     />
                   ))}
                 </ul>
@@ -217,12 +233,17 @@ export function SectionsView({
                     <TaskRowExtended
                       key={t.id}
                       task={t}
+                      currentUserId={currentUserId}
                       isTimerActive={activeTimerTaskId === t.id}
                       pending={pendingId === t.id}
+                      canDelete={canDeleteTask(t)}
                       onOpen={() => onOpenDrawer(t.id)}
                       onStartTimer={() => onStartTimer(t.id)}
                       onStopTimer={onStopTimer}
                       onMarkDone={() => onMarkDone(t)}
+                      onDelete={
+                        onDelete ? () => onDelete(t.id, t.title) : undefined
+                      }
                     />
                   ))}
                 </ul>

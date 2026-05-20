@@ -37,7 +37,10 @@ export default async function MyTasksPage() {
           Що потрібно зробити, що очікує рішення і що блокує команду
         </p>
       </header>
-      <MeDashboard currentUserId={session.user.id} />
+      <MeDashboard
+        currentUserId={session.user.id}
+        currentUserRole={session.user.role}
+      />
     </div>
   );
 }

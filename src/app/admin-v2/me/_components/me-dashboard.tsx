@@ -300,7 +300,18 @@ function KpiStrip({
 
 /* ─── Main dashboard ─── */
 
-export function MeDashboard({ currentUserId }: { currentUserId: string }) {
+export function MeDashboard({
+  currentUserId,
+  currentUserRole,
+}: {
+  currentUserId: string;
+  currentUserRole?: string;
+}) {
+  // Хто має право видаляти задачу:
+  //  - SUPER_ADMIN — будь-яку
+  //  - автор задачі (task.createdById === currentUserId) — свою
+  // Інші ролі (MANAGER/ENGINEER/...) — НЕ бачать кнопку видалення.
+  const isAdmin = currentUserRole === "SUPER_ADMIN";
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
@@ -589,6 +600,7 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
         <SectionsView
           tasks={filteredTasks}
           currentUserId={currentUserId}
+          isAdmin={isAdmin}
           loading={loading}
           activeTimerTaskId={activeTimer?.task.id ?? null}
           pendingId={pendingId}
@@ -596,6 +608,7 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
           onStartTimer={(id) => void startTimer(id)}
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
+          onDelete={(id, title) => void deleteTask(id, title)}
         />
       )}
 
@@ -649,6 +662,8 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
       {drawerTaskId && (
         <SelfContainedTaskDrawer
           taskId={drawerTaskId}
+          currentUserId={currentUserId}
+          currentUserRole={currentUserRole}
           onClose={() => setDrawerTaskId(null)}
           onUpdate={() => void load()}
         />
