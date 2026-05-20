@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Loader2,
   AlertTriangle,
@@ -9,6 +9,7 @@ import {
   User,
   UserPlus,
   ExternalLink,
+  Search,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
@@ -39,6 +40,30 @@ const PRIORITY_DOT: Record<string, string> = {
   URGENT: "#ef4444",
 };
 
+/** Релативна дата ("сьогодні", "завтра", "за 3 д", "прострочено 2 д"). */
+function formatDueRelative(
+  dueIso: string | null,
+  isDone: boolean,
+): { label: string; tone: "danger" | "warn" | "muted" } {
+  if (!dueIso) return { label: "—", tone: "muted" };
+  const now = new Date();
+  const due = new Date(dueIso);
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const b = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
+  const diffDays = Math.round((b - a) / (24 * 60 * 60 * 1000));
+  if (isDone) return { label: "виконано", tone: "muted" };
+  if (diffDays < 0) {
+    return { label: `прострочено ${Math.abs(diffDays)}д`, tone: "danger" };
+  }
+  if (diffDays === 0) return { label: "сьогодні", tone: "warn" };
+  if (diffDays === 1) return { label: "завтра", tone: "warn" };
+  if (diffDays <= 7) return { label: `за ${diffDays}д`, tone: "muted" };
+  return {
+    label: due.toLocaleDateString("uk-UA", { day: "2-digit", month: "2-digit" }),
+    tone: "muted",
+  };
+}
+
 export function TaskPeopleGlobal({
   onOpenDrawer,
 }: {
@@ -46,6 +71,7 @@ export function TaskPeopleGlobal({
 }) {
   const [people, setPeople] = useState<PersonGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     fetch("/api/admin/me/people")
@@ -55,11 +81,21 @@ export function TaskPeopleGlobal({
       .finally(() => setLoading(false));
   }, []);
 
+  const filteredPeople = useMemo(() => {
+    if (!search.trim()) return people;
+    const q = search.trim().toLowerCase();
+    return people.filter((p) => p.user.name.toLowerCase().includes(q));
+  }, [people, search]);
+
   if (loading) {
     return (
       <div
         className="rounded-2xl p-8 text-center text-sm"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, color: T.textMuted }}
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderSoft}`,
+          color: T.textMuted,
+        }}
       >
         <Loader2 size={16} className="animate-spin inline mr-2" />
         Завантаження…
@@ -71,30 +107,52 @@ export function TaskPeopleGlobal({
     return (
       <div
         className="rounded-2xl p-8 text-center text-[12px]"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, color: T.textMuted }}
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderSoft}`,
+          color: T.textMuted,
+        }}
       >
         Немає відкритих задач
       </div>
     );
   }
 
-  const totalTasks = people.reduce((s, p) => s + p.counts.total, 0);
-  const totalOverdue = people.reduce((s, p) => s + p.counts.overdue, 0);
-
   return (
     <div className="flex flex-col gap-3">
-      <div
-        className="flex items-center gap-4 rounded-xl px-4 py-3"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-      >
-        <Stat label="Людей" value={people.length} color={T.accentPrimary} />
-        <Stat label="Задач" value={totalTasks} color={T.textPrimary} />
-        <Stat label="Прострочено" value={totalOverdue} color="#ef4444" />
-      </div>
+      {/* Compact search input. Лічильники людей/задач/прострочено вже є у KPI
+          зверху — окрему stat-смугу прибрали, аби не дублювати. */}
+      {people.length > 3 && (
+        <div
+          className="flex items-center gap-2 rounded-lg px-3 py-2"
+          style={{
+            backgroundColor: T.panelElevated,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <Search size={14} style={{ color: T.textMuted }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Пошук по виконавцю…"
+            className="flex-1 bg-transparent text-sm outline-none"
+            style={{ color: T.textPrimary }}
+          />
+        </div>
+      )}
 
-      {people.map((p) => (
+      {filteredPeople.map((p) => (
         <PersonCard key={p.user.id} group={p} onOpenDrawer={onOpenDrawer} />
       ))}
+
+      {filteredPeople.length === 0 && (
+        <div
+          className="rounded-2xl p-6 text-center text-[12px]"
+          style={{ color: T.textMuted }}
+        >
+          Не знайдено
+        </div>
+      )}
     </div>
   );
 }
@@ -107,24 +165,36 @@ function PersonCard({
   onOpenDrawer: (taskId: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const accent = group.counts.overdue > 0 ? "#ef4444" : T.accentPrimary;
+  const initials = group.user.name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
 
   return (
     <section
       className="rounded-2xl overflow-hidden"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+        borderLeft: `3px solid ${accent}`,
+      }}
     >
       <button
         onClick={() => setCollapsed((v) => !v)}
-        className="flex items-center gap-3 w-full px-4 py-3 text-left hover:brightness-95 transition"
-        style={{ backgroundColor: T.panelElevated }}
+        className="flex items-center gap-3 w-full px-3 py-2 text-left hover:brightness-95 transition"
       >
         {collapsed ? (
           <ChevronRight size={14} style={{ color: T.textMuted }} />
         ) : (
           <ChevronDown size={14} style={{ color: T.textMuted }} />
         )}
+
+        {/* Avatar */}
         <div
-          className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
+          className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold flex-shrink-0"
           style={
             group.user.isExternal
               ? {
@@ -143,15 +213,22 @@ function PersonCard({
             />
           ) : group.user.isExternal ? (
             <UserPlus size={14} />
+          ) : initials ? (
+            initials
           ) : (
             <User size={14} />
           )}
         </div>
-        <span className="text-[13px] font-bold flex-1 flex items-center gap-1.5" style={{ color: T.textPrimary }}>
-          {group.user.name}
+
+        {/* Name + tag */}
+        <span
+          className="text-[13px] font-semibold flex-1 flex items-center gap-1.5 truncate"
+          style={{ color: T.textPrimary }}
+        >
+          <span className="truncate">{group.user.name}</span>
           {group.user.isExternal && (
             <span
-              className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold whitespace-nowrap"
               style={{
                 backgroundColor: T.panelElevated,
                 color: T.textMuted,
@@ -163,59 +240,72 @@ function PersonCard({
             </span>
           )}
         </span>
-        <span className="text-[10px] font-semibold" style={{ color: T.textMuted }}>
-          {group.counts.total} задач
+
+        {/* Counts */}
+        <span
+          className="text-[11px] font-semibold whitespace-nowrap"
+          style={{ color: T.textMuted }}
+        >
+          {group.counts.total} {pluralizeTasks(group.counts.total)}
         </span>
         {group.counts.overdue > 0 && (
           <span
-            className="flex items-center gap-1 text-[10px] font-bold"
+            className="flex items-center gap-1 text-[11px] font-bold whitespace-nowrap"
             style={{ color: "#ef4444" }}
           >
-            <AlertTriangle size={10} />
+            <AlertTriangle size={12} />
             {group.counts.overdue}
           </span>
         )}
       </button>
 
       {!collapsed && (
-        <ul className="flex flex-col gap-1 p-3">
+        <ul className="flex flex-col gap-1 p-2 pt-0">
           {group.tasks.map((t) => {
-            const overdue =
-              t.dueDate && new Date(t.dueDate) < new Date() && !t.status.isDone;
+            const due = formatDueRelative(t.dueDate, t.status.isDone);
+            const dueColor =
+              due.tone === "danger"
+                ? "#ef4444"
+                : due.tone === "warn"
+                  ? "#f59e0b"
+                  : T.textMuted;
+            const overdue = due.tone === "danger";
             return (
               <li
                 key={t.id}
                 onClick={() => onOpenDrawer(t.id)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 cursor-pointer transition hover:brightness-95"
+                className="flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer transition hover:brightness-95"
                 style={{
                   backgroundColor: T.panelElevated,
-                  border: `1px solid ${overdue ? "#ef4444" : T.borderSoft}`,
+                  border: `1px solid ${overdue ? "#ef444433" : T.borderSoft}`,
                 }}
               >
                 <span
                   className="inline-block h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: PRIORITY_DOT[t.priority] ?? "#64748b" }}
+                  style={{
+                    backgroundColor: PRIORITY_DOT[t.priority] ?? "#64748b",
+                  }}
+                  title={`Пріоритет: ${t.priority}`}
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm truncate" style={{ color: T.textPrimary }}>
+                  <div
+                    className="text-[13px] font-medium truncate"
+                    style={{ color: T.textPrimary }}
+                  >
                     {t.title}
                   </div>
                   <div
-                    className="text-[10px] truncate flex items-center gap-1"
+                    className="text-[11px] truncate flex items-center gap-1.5"
                     style={{ color: T.textMuted }}
                   >
                     <ExternalLink size={9} />
-                    {t.project.title}
+                    <span className="truncate">{t.project.title}</span>
+                    <span>·</span>
+                    <span style={{ color: dueColor }} className="font-medium">
+                      {due.label}
+                    </span>
                   </div>
                 </div>
-                {t.dueDate && (
-                  <span
-                    className="text-[10px] font-semibold flex-shrink-0"
-                    style={{ color: overdue ? "#ef4444" : T.textMuted }}
-                  >
-                    {new Date(t.dueDate).toLocaleDateString("uk-UA")}
-                  </span>
-                )}
                 <span
                   className="rounded-full px-2 py-0.5 text-[9px] font-bold flex-shrink-0"
                   style={{
@@ -234,23 +324,11 @@ function PersonCard({
   );
 }
 
-function Stat({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-        {label.toUpperCase()}
-      </span>
-      <span className="text-lg font-bold" style={{ color }}>
-        {value}
-      </span>
-    </div>
-  );
+function pluralizeTasks(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 19) return "задач";
+  if (mod10 === 1) return "задача";
+  if (mod10 >= 2 && mod10 <= 4) return "задачі";
+  return "задач";
 }

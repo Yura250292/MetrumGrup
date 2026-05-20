@@ -410,19 +410,13 @@ export function MeDashboard({
         stopping={pendingId === "__stop__"}
       />
 
-      {/* ── Row 3a: Toolbar — ПЕРЕГЛЯД (how to see tasks) ── */}
+      {/* ── Unified toolbar: view switcher + scope + completed toggle + project filter ── */}
       <div
-        className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2"
-        style={{ backgroundColor: T.panel, border: "1px solid " + T.borderSoft }}
+        className="flex flex-wrap items-center gap-2"
         role="toolbar"
-        aria-label="Перегляд задач"
+        aria-label="Перегляд і фільтри"
       >
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider mr-1"
-          style={{ color: T.textMuted }}
-        >
-          Перегляд
-        </span>
+        {/* View switcher — segmented control */}
         <div
           className="flex gap-0.5 rounded-lg p-0.5"
           style={{ backgroundColor: T.panelElevated }}
@@ -452,21 +446,11 @@ export function MeDashboard({
             );
           })}
         </div>
-      </div>
 
-      {/* ── Row 3b: Toolbar — ФІЛЬТРИ (what to include) ── */}
-      <div
-        className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2"
-        style={{ backgroundColor: T.panel, border: "1px solid " + T.borderSoft }}
-        role="toolbar"
-        aria-label="Фільтри задач"
-      >
-        <span
-          className="text-[10px] font-bold uppercase tracking-wider mr-1"
-          style={{ color: T.textMuted }}
-        >
-          Фільтри
-        </span>
+        {/* Separator */}
+        <div className="h-5 w-px" style={{ backgroundColor: T.borderSoft }} />
+
+        {/* Scope filter */}
         <div
           role="tablist"
           aria-label="Охоплення задач"
@@ -498,12 +482,9 @@ export function MeDashboard({
           })}
         </div>
 
-        {/* Separator */}
-        <div className="h-5 w-px mx-1" style={{ backgroundColor: T.borderSoft }} />
-
         {/* Completed toggle */}
         <label
-          className="flex items-center gap-1.5 text-[11px] cursor-pointer"
+          className="flex items-center gap-1.5 text-[11px] cursor-pointer ml-1"
           style={{ color: T.textMuted }}
         >
           <input
