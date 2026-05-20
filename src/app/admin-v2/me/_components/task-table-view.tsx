@@ -12,6 +12,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { TaskItem } from "./use-me-tasks";
 import { isOverdue, PRIORITY_COLOR } from "./use-me-tasks";
+import { ExternalAssigneeChip } from "./external-assignee-chip";
 
 const PRIORITY_LABEL: Record<TaskItem["priority"], string> = {
   LOW: "Низький",
@@ -253,9 +254,19 @@ function TaskTableRow({
 
       {/* Assignees */}
       <div className="flex -space-x-1.5" onClick={(e) => e.stopPropagation()}>
-        {(task.assignees || []).slice(0, 3).map((a) => (
-          <UserAvatar key={a.user.id} src={a.user.avatar} name={a.user.name} userId={a.user.id} size={24} />
-        ))}
+        {(task.assignees || []).slice(0, 3).map((a) =>
+          a.user ? (
+            <UserAvatar
+              key={a.id}
+              src={a.user.avatar}
+              name={a.user.name}
+              userId={a.user.id}
+              size={24}
+            />
+          ) : (
+            <ExternalAssigneeChip key={a.id} name={a.externalName ?? ""} />
+          ),
+        )}
         {(task.assignees || []).length > 3 && (
           <span
             className="inline-flex items-center justify-center rounded-full h-6 w-6 text-[9px] font-bold"

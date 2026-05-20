@@ -44,27 +44,56 @@ export async function GET() {
     take: 500,
   });
 
+  type Person = {
+    id: string;
+    name: string;
+    avatar: string | null;
+    isExternal: boolean;
+  };
   const peopleMap = new Map<
     string,
     {
-      user: { id: string; name: string; avatar: string | null };
+      user: Person;
       tasks: typeof tasks;
       overdue: number;
     }
   >();
 
   const now = new Date();
+  const UNASSIGNED: Person = {
+    id: "__unassigned__",
+    name: "Без виконавця",
+    avatar: null,
+    isExternal: false,
+  };
 
   for (const t of tasks) {
-    const assignees = t.assignees.length > 0
-      ? t.assignees
-      : [{ user: { id: "__unassigned__", name: "Без виконавця", avatar: null } }];
+    const people: Person[] =
+      t.assignees.length > 0
+        ? t.assignees.map((a) => {
+            if (a.user) {
+              return {
+                id: a.user.id,
+                name: a.user.name,
+                avatar: a.user.avatar,
+                isExternal: false,
+              };
+            }
+            const name = (a.externalName ?? "").trim();
+            return {
+              id: `ext:${name.toLowerCase()}`,
+              name: name || "Без імені",
+              avatar: null,
+              isExternal: true,
+            };
+          })
+        : [UNASSIGNED];
 
-    for (const a of assignees) {
-      if (!peopleMap.has(a.user.id)) {
-        peopleMap.set(a.user.id, { user: a.user, tasks: [], overdue: 0 });
+    for (const person of people) {
+      if (!peopleMap.has(person.id)) {
+        peopleMap.set(person.id, { user: person, tasks: [], overdue: 0 });
       }
-      const entry = peopleMap.get(a.user.id)!;
+      const entry = peopleMap.get(person.id)!;
       entry.tasks.push(t);
       if (t.dueDate && new Date(t.dueDate) < now) entry.overdue++;
     }

@@ -360,8 +360,14 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      {/* ── Row 1: KPI counters + status chips + AI + New task ── */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* ── Header: title + KPI + actions ── */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1
+          className="text-lg font-bold tracking-tight"
+          style={{ color: T.textPrimary }}
+        >
+          Мої задачі
+        </h1>
         <KpiStrip counts={counts} focus={focus} onFocusChange={setFocus} />
 
         <StatusChips tasks={tasks} currentUserId={currentUserId} />
@@ -370,7 +376,7 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
           <AiDaySummary />
           <button
             onClick={() => setCreateOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold"
+            className="hidden sm:flex items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold"
             style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
           >
             <Plus size={14} />
@@ -659,6 +665,23 @@ export function MeDashboard({ currentUserId }: { currentUserId: string }) {
           }}
         />
       )}
+
+      {/* Mobile FAB — завжди доступне швидке створення */}
+      <button
+        type="button"
+        onClick={() => setCreateOpen(true)}
+        aria-label="Нова задача"
+        className="sm:hidden fixed bottom-5 right-5 z-30 flex items-center justify-center rounded-full shadow-lg active:scale-95 transition"
+        style={{
+          width: 56,
+          height: 56,
+          backgroundColor: T.accentPrimary,
+          color: "#fff",
+          boxShadow: "0 6px 18px rgba(0,0,0,0.25)",
+        }}
+      >
+        <Plus size={24} />
+      </button>
     </div>
   );
 }

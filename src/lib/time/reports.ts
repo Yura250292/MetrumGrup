@@ -131,6 +131,7 @@ export async function workloadReport(projectId: string, range?: DateRange) {
 
   const now = new Date();
   for (const a of assignees) {
+    if (!a.userId) continue; // зовнішні виконавці не входять у звіти по людях
     const r = rows.get(a.userId);
     if (!r) continue;
     if (!a.task.status.isDone) r.assignedOpen += 1;

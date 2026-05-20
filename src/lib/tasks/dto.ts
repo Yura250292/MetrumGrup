@@ -26,7 +26,19 @@ export type TaskListDTO = {
   completedAt: string | null;
   createdAt: string;
   status: { id: string; name: string; color: string | null; isDone: boolean };
-  assignees: { id: string; name: string; avatar: string | null }[];
+  /**
+   * `userId` — null коли це зовнішня людина (підрядник тощо), яка не User
+   * у системі. `name` тоді — це `externalName` із TaskAssignee.
+   * `id` — id рядка `TaskAssignee` (потрібен для unassign-операцій), щоб
+   * однозначно адресувати запис незалежно від типу.
+   */
+  assignees: {
+    id: string;
+    userId: string | null;
+    name: string;
+    avatar: string | null;
+    isExternal: boolean;
+  }[];
   labels: { id: string; name: string; color: string | null }[];
   _count: { subtasks: number; checklist: number };
 };
@@ -52,11 +64,17 @@ export function toTaskListDTO(row: Record<string, unknown>): TaskListDTO {
       color: r.status?.color ?? null,
       isDone: r.status?.isDone ?? false,
     },
-    assignees: (r.assignees ?? []).map((a: any) => ({
-      id: a.user?.id ?? a.userId,
-      name: a.user?.name ?? "",
-      avatar: a.user?.avatar ?? null,
-    })),
+    assignees: (r.assignees ?? []).map((a: any) => {
+      const userId: string | null = a.userId ?? a.user?.id ?? null;
+      const isExternal = !userId;
+      return {
+        id: a.id,
+        userId,
+        name: isExternal ? (a.externalName ?? "") : (a.user?.name ?? ""),
+        avatar: isExternal ? null : (a.user?.avatar ?? null),
+        isExternal,
+      };
+    }),
     labels: (r.labels ?? []).map((l: any) => ({
       id: l.label?.id ?? l.labelId,
       name: l.label?.name ?? "",

@@ -43,10 +43,11 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
       where: { status: "ACTIVE" },
       select: { id: true, title: true, totalBudget: true, totalPaid: true },
     }),
-    // Task count per assignee (active tasks)
+    // Task count per assignee (active tasks). Виключаємо зовнішніх (userId=null) —
+    // навантаження вираховуємо тільки для User'ів CRM.
     prisma.taskAssignee.groupBy({
       by: ["userId"],
-      where: { task: { isArchived: false } },
+      where: { task: { isArchived: false }, userId: { not: null } },
       _count: true,
     }),
     // Projects with no updates in 14+ days
@@ -103,8 +104,9 @@ export async function generateInsights(userId: string): Promise<Insight[]> {
     const max = sorted[0];
     const min = sorted[sorted.length - 1];
     if (max._count > min._count * 3 && max._count >= 8) {
-      const maxUser = await prisma.user.findUnique({ where: { id: max.userId }, select: { name: true } });
-      const minUser = await prisma.user.findUnique({ where: { id: min.userId }, select: { name: true } });
+      // userId не null завдяки фільтру вище — асерт у нон-null для типів.
+      const maxUser = await prisma.user.findUnique({ where: { id: max.userId! }, select: { name: true } });
+      const minUser = await prisma.user.findUnique({ where: { id: min.userId! }, select: { name: true } });
       insights.push({
         type: "warning",
         title: "Нерівномірне навантаження",

@@ -20,7 +20,16 @@ export type TaskItem = {
   status: TaskStatus;
   stage: { stage: string };
   labels: { label: { id: string; name: string; color: string } }[];
-  assignees?: { user: { id: string; name: string; avatar: string | null } }[];
+  /**
+   * Виконавці задачі. `user` присутній лише для внутрішніх User'ів CRM.
+   * `externalName` — імʼя зовнішньої людини (підрядник тощо) коли userId=null.
+   */
+  assignees?: {
+    id: string;
+    userId: string | null;
+    externalName: string | null;
+    user: { id: string; name: string; avatar: string | null } | null;
+  }[];
   _count: { checklist: number; subtasks: number };
   createdById?: string;
   createdBy?: { id: string; name: string; avatar: string | null } | null;

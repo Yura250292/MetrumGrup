@@ -45,6 +45,7 @@ type AccessProject = {
   clientId: string | null;
   managerId: string | null;
   isInternal: boolean;
+  personalInboxUserId: string | null;
 };
 
 const PROJECT_ACCESS_SELECT = {
@@ -52,6 +53,7 @@ const PROJECT_ACCESS_SELECT = {
   clientId: true,
   managerId: true,
   isInternal: true,
+  personalInboxUserId: true,
 } as const;
 
 async function loadProject(projectId: string): Promise<AccessProject | null> {
@@ -117,14 +119,24 @@ export async function getProjectAccessContext(
 
   const isSuperAdmin = role === "SUPER_ADMIN";
   const isClientOfProject = role === "CLIENT" && project.clientId === userId;
-  // Internal projects are accessible to all non-CLIENT staff
-  const isInternalAccess = project.isInternal && role !== "CLIENT";
+  // Personal "Inbox" projects are private — only the owner sees them.
+  // Other users (incl. SUPER_ADMIN) cannot view, edit, or create tasks here.
+  const isOthersPersonalInbox =
+    !!project.personalInboxUserId && project.personalInboxUserId !== userId;
+  // Internal projects are accessible to all non-CLIENT staff, EXCEPT when
+  // it's a personal Inbox belonging to someone else.
+  const isInternalAccess =
+    project.isInternal && role !== "CLIENT" && !isOthersPersonalInbox;
 
   const effective = member
     ? resolveMemberPermissions(member.roleInProject, member.permissions)
     : null;
 
-  const canView = isSuperAdmin || isClientOfProject || isInternalAccess || Boolean(member);
+  // Hard block: someone else's personal Inbox is invisible to ALL roles
+  // (including SUPER_ADMIN). Privacy of personal task lists.
+  const canView =
+    !isOthersPersonalInbox &&
+    (isSuperAdmin || isClientOfProject || isInternalAccess || Boolean(member));
   // CLIENT cannot post in team chat / write internal collaboration items.
   const canParticipate = isSuperAdmin || Boolean(member);
   const canUpload = isSuperAdmin || (effective?.canUpload ?? false);
@@ -139,8 +151,9 @@ export async function getProjectAccessContext(
 
   // Tasks are an INTERNAL tool — CLIENT never gets task-related access,
   // regardless of overrides. This hard-block is checked BEFORE merging
-  // effective permissions.
-  const taskDenyClient = role === "CLIENT";
+  // effective permissions. Personal Inboxes of OTHER users are also hard-blocked
+  // here (privacy).
+  const taskDenyClient = role === "CLIENT" || isOthersPersonalInbox;
   const canViewTasks =
     !taskDenyClient && (isSuperAdmin || isInternalAccess || (effective?.canViewTasks ?? false));
   const canCreateTasks =

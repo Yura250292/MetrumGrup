@@ -407,7 +407,9 @@ export async function queryTasks(
       actualHours: true,
       status: { select: { name: true } },
       project: { select: { title: true } },
-      assignees: { select: { user: { select: { name: true } } } },
+      assignees: {
+        select: { user: { select: { name: true } }, externalName: true },
+      },
     },
     orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
     take: input.limit + 1,
@@ -419,7 +421,11 @@ export async function queryTasks(
   md += `| Задача | Проект | Статус | Пріор. | Дедлайн | Виконавці | Год план/факт |\n|---|---|---|---|---|---|---:|\n`;
   for (const t of shown) {
     const overdue = t.dueDate && t.dueDate < new Date() && !t.completedAt ? " ⚠️" : "";
-    const assignees = t.assignees.map((a) => a.user.name).join(", ") || "—";
+    const assignees =
+      t.assignees
+        .map((a) => a.user?.name ?? a.externalName)
+        .filter(Boolean)
+        .join(", ") || "—";
     md += `| ${t.title} | ${t.project?.title ?? "—"} | ${t.status?.name ?? "—"} | ${t.priority} | ${t.dueDate ? t.dueDate.toISOString().slice(0, 10) + overdue : "—"} | ${assignees} | ${Number(t.estimatedHours ?? 0)}/${Number(t.actualHours)} |\n`;
   }
   return md;

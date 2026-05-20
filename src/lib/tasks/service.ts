@@ -243,6 +243,16 @@ export async function getTask(taskId: string, currentUserId: string): Promise<Ta
 
 // ------- Mutations -------
 
+/**
+ * Виконавець задачі.
+ *  - `{ userId: "..." }` — внутрішній користувач CRM.
+ *  - `{ externalName: "..." }` — зовнішня людина (підрядник, гість тощо),
+ *    яка не є User у системі. Зберігається текстом.
+ */
+export type AssigneeInput =
+  | { userId: string; externalName?: never }
+  | { userId?: never; externalName: string };
+
 export type CreateInput = {
   projectId: string;
   stageId: string;
@@ -255,6 +265,13 @@ export type CreateInput = {
   dueDate?: Date | null;
   estimatedHours?: number | null;
   isPrivate?: boolean;
+  /**
+   * Новий формат: мікс User'ів і зовнішніх імен.
+   * `assigneeIds` (legacy) підтримується для зворотньої сумісності — мапиться
+   * у `assignees: [{userId}]` всередині.
+   */
+  assignees?: AssigneeInput[];
+  /** @deprecated Використовуй `assignees`. Залишене для legacy callers. */
   assigneeIds?: string[];
   labelIds?: string[];
 };
@@ -294,13 +311,33 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
   });
   const position = (lastPos._max.position ?? -1) + 1;
 
-  // Validate assigneeIds: each must have task access on this project
-  if (input.assigneeIds && input.assigneeIds.length > 0) {
-    for (const uid of input.assigneeIds) {
-      const targetCtx = await getProjectAccessContext(input.projectId, uid);
+  // Normalize assignees: legacy `assigneeIds` → `{userId}` entries.
+  const rawAssignees: AssigneeInput[] = [
+    ...(input.assignees ?? []),
+    ...((input.assigneeIds ?? []).map((id) => ({ userId: id })) as AssigneeInput[]),
+  ];
+  // Validate: each User assignee must have task access; external names must
+  // be non-empty trimmed strings (≤100 chars). Дедупаємо `externalName`
+  // case-insensitive у межах одного запиту.
+  const seenUserIds = new Set<string>();
+  const seenExternal = new Set<string>();
+  const normalizedAssignees: AssigneeInput[] = [];
+  for (const a of rawAssignees) {
+    if ("userId" in a && a.userId) {
+      if (seenUserIds.has(a.userId)) continue;
+      seenUserIds.add(a.userId);
+      const targetCtx = await getProjectAccessContext(input.projectId, a.userId);
       if (!targetCtx?.canViewTasks) {
-        bad(`Assignee ${uid} does not have task access on this project`);
+        bad(`Assignee ${a.userId} does not have task access on this project`);
       }
+      normalizedAssignees.push({ userId: a.userId });
+    } else if ("externalName" in a && a.externalName) {
+      const trimmed = a.externalName.trim().slice(0, 100);
+      if (!trimmed) continue;
+      const key = trimmed.toLowerCase();
+      if (seenExternal.has(key)) continue;
+      seenExternal.add(key);
+      normalizedAssignees.push({ externalName: trimmed });
     }
   }
 
@@ -337,11 +374,12 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
       },
     });
 
-    if (input.assigneeIds && input.assigneeIds.length > 0) {
+    if (normalizedAssignees.length > 0) {
       await tx.taskAssignee.createMany({
-        data: input.assigneeIds.map((userId) => ({
+        data: normalizedAssignees.map((a) => ({
           taskId: created.id,
-          userId,
+          userId: "userId" in a ? a.userId : null,
+          externalName: "externalName" in a ? a.externalName : null,
           assignedById: actorId,
         })),
         skipDuplicates: true,
@@ -381,7 +419,10 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         select: { name: true },
       }),
     ]);
-    if (input.assigneeIds && input.assigneeIds.length > 0) {
+    const userAssigneeIds = normalizedAssignees
+      .filter((a): a is { userId: string } => "userId" in a && !!a.userId)
+      .map((a) => a.userId);
+    if (userAssigneeIds.length > 0) {
       const dueLabel = task.dueDate
         ? new Date(task.dueDate).toLocaleDateString("uk-UA", {
             day: "2-digit",
@@ -393,7 +434,7 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         ? `Нова задача: «${task.title}» — до ${dueLabel}`
         : `Нова задача: «${task.title}»`;
       await notifyUsers({
-        userIds: input.assigneeIds,
+        userIds: userAssigneeIds,
         actorId,
         type: "TASK_ASSIGNED",
         title: `Вас призначено на задачу «${task.title}»`,
@@ -568,7 +609,9 @@ export async function updateTask(
       });
       if (stakeholders) {
         const userIds = [
-          ...stakeholders.assignees.map((a) => a.userId),
+          ...stakeholders.assignees
+            .map((a) => a.userId)
+            .filter((id): id is string => !!id),
           ...stakeholders.watchers.map((w) => w.userId),
         ];
         await notifyUsers({

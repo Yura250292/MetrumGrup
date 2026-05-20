@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { unauthorizedResponse } from "@/lib/auth-utils";
+import { prisma } from "@/lib/prisma";
 import {
   addChecklistItem,
   createTask,
   listTasks,
   TaskError,
+  type AssigneeInput,
   type ListFilter,
 } from "@/lib/tasks/service";
 
@@ -64,11 +66,42 @@ export async function POST(
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
+  // Resolve stage: explicit `stageId` або дефолтна (перша top-level) проєкту.
+  let stageId = body.stageId ? String(body.stageId) : "";
+  if (!stageId) {
+    const stage = await prisma.projectStageRecord.findFirst({
+      where: { projectId, parentStageId: null },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    });
+    if (!stage) {
+      return NextResponse.json(
+        { error: "У проєкті немає жодної стадії" },
+        { status: 400 },
+      );
+    }
+    stageId = stage.id;
+  }
+
+  // Мерджимо новий `assignees[]` шейп з legacy `assigneeIds[]` для зворотньої
+  // сумісності — service.createTask нормалізує обидва формати.
+  const assignees: AssigneeInput[] = Array.isArray(body.assignees)
+    ? (body.assignees as unknown[]).flatMap((raw) => {
+        if (!raw || typeof raw !== "object") return [];
+        const o = raw as Record<string, unknown>;
+        if (o.userId) return [{ userId: String(o.userId) } as AssigneeInput];
+        if (o.externalName) {
+          return [{ externalName: String(o.externalName) } as AssigneeInput];
+        }
+        return [];
+      })
+    : [];
+
   try {
     const task = await createTask(
       {
         projectId,
-        stageId: String(body.stageId ?? ""),
+        stageId,
         parentTaskId: body.parentTaskId ? String(body.parentTaskId) : undefined,
         title: String(body.title ?? ""),
         description: body.description ? String(body.description) : undefined,
@@ -87,6 +120,7 @@ export async function POST(
             ? undefined
             : Number(body.estimatedHours),
         isPrivate: Boolean(body.isPrivate),
+        assignees: assignees.length > 0 ? assignees : undefined,
         assigneeIds: Array.isArray(body.assigneeIds)
           ? (body.assigneeIds as unknown[]).map((v) => String(v))
           : undefined,

@@ -13,6 +13,21 @@ import {
   SECTION_ORDER,
   type SectionKey,
 } from "../_lib/sections";
+
+/**
+ * Кольорові акценти для left-border секцій (bento-картки).
+ * Червоний — критичне (прострочене), помаранчевий — терміни сьогодні,
+ * фіолетовий — рев'ю/блокери, синій — делеговано, зелений — "роби зараз".
+ */
+const SECTION_ACCENT: Record<SectionKey, string> = {
+  "overdue": "#ef4444",
+  "today": "#f59e0b",
+  "do-now": "#10b981",
+  "waiting-review": "#8b5cf6",
+  "delegated": "#3b82f6",
+  "blocked-by": "#ef4444",
+  "blocking-others": "#f59e0b",
+};
 import { TaskRowExtended } from "./task-row-extended";
 
 type Props = {
@@ -83,11 +98,20 @@ export function SectionsView({
     label: string,
     hint: string,
     sectionTasks: TaskItem[],
+    accent: string,
   ) => {
     const defaultOpen = sectionTasks.length > 0;
     const open = !isCollapsed(id, defaultOpen);
     return (
-      <div key={id} className="flex flex-col gap-2">
+      <div
+        key={id}
+        className="flex flex-col gap-2 rounded-2xl pl-3 pr-2 py-3"
+        style={{
+          backgroundColor: T.panelSoft ?? T.panel,
+          border: `1px solid ${T.borderSoft}`,
+          borderLeft: `3px solid ${accent}`,
+        }}
+      >
         <button
           type="button"
           onClick={() => toggle(id, defaultOpen)}
@@ -141,7 +165,15 @@ export function SectionsView({
     const open = !isCollapsed(id, defaultOpen);
     const total = mineBlocked.length + iBlock.length;
     return (
-      <div key={id} className="flex flex-col gap-2">
+      <div
+        key={id}
+        className="flex flex-col gap-2 rounded-2xl pl-3 pr-2 py-3"
+        style={{
+          backgroundColor: T.panelSoft ?? T.panel,
+          border: `1px solid ${T.borderSoft}`,
+          borderLeft: `3px solid ${SECTION_ACCENT["blocked-by"]}`,
+        }}
+      >
         <button
           type="button"
           onClick={() => toggle(id, defaultOpen)}
@@ -210,7 +242,13 @@ export function SectionsView({
           return null; // blocking-others rendered inside blockers group
         }
         if (!nonEmpty(key)) return null;
-        return renderGroup(key, SECTION_LABEL[key], SECTION_HINT[key], buckets[key]);
+        return renderGroup(
+          key,
+          SECTION_LABEL[key],
+          SECTION_HINT[key],
+          buckets[key],
+          SECTION_ACCENT[key],
+        );
       })}
     </div>
   );

@@ -39,7 +39,12 @@ type DrawerDetail = {
   project?: { id: string; title: string };
   status: DrawerStatus;
   stage: { stage: string };
-  assignees: { user: { id: string; name: string; avatar: string | null } }[];
+  assignees: {
+    id: string;
+    userId: string | null;
+    externalName: string | null;
+    user: { id: string; name: string; avatar: string | null } | null;
+  }[];
   labels: { label: { id: string; name: string; color: string } }[];
   checklist: { id: string; content: string; isDone: boolean; position: number }[];
   customFields: Record<string, unknown> | null;
@@ -431,15 +436,38 @@ export function SelfContainedTaskDrawer({
             {detail.assignees.length > 0 && (
               <Section label="ВИКОНАВЦІ">
                 <div className="flex flex-wrap gap-2">
-                  {detail.assignees.map((a) => (
-                    <span
-                      key={a.user.id}
-                      className="rounded-full px-3 py-1 text-[11px] font-semibold"
-                      style={{ backgroundColor: T.panelElevated, color: T.textPrimary }}
-                    >
-                      {a.user.name}
-                    </span>
-                  ))}
+                  {detail.assignees.map((a) => {
+                    const isExternal = !a.user;
+                    const name = isExternal
+                      ? (a.externalName ?? "—")
+                      : (a.user?.name ?? "—");
+                    return (
+                      <span
+                        key={a.id}
+                        className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                        style={
+                          isExternal
+                            ? {
+                                backgroundColor: T.panelElevated,
+                                color: T.textSecondary,
+                                border: `1px dashed ${T.borderStrong}`,
+                              }
+                            : {
+                                backgroundColor: T.panelElevated,
+                                color: T.textPrimary,
+                              }
+                        }
+                        title={isExternal ? "Зовнішній виконавець" : undefined}
+                      >
+                        {name}
+                        {isExternal && (
+                          <span style={{ color: T.textMuted, marginLeft: 4 }}>
+                            · зовн.
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })}
                 </div>
               </Section>
             )}

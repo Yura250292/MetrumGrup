@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   User,
+  UserPlus,
   ExternalLink,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -21,7 +22,12 @@ type PeopleTask = {
 };
 
 type PersonGroup = {
-  user: { id: string; name: string; avatar: string | null };
+  user: {
+    id: string;
+    name: string;
+    avatar: string | null;
+    isExternal?: boolean;
+  };
   counts: { total: number; overdue: number };
   tasks: PeopleTask[];
 };
@@ -119,7 +125,15 @@ function PersonCard({
         )}
         <div
           className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
-          style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
+          style={
+            group.user.isExternal
+              ? {
+                  backgroundColor: T.panelElevated,
+                  color: T.textSecondary,
+                  border: `1px dashed ${T.borderStrong}`,
+                }
+              : { backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }
+          }
         >
           {group.user.avatar ? (
             <img
@@ -127,12 +141,27 @@ function PersonCard({
               alt=""
               className="h-7 w-7 rounded-full object-cover"
             />
+          ) : group.user.isExternal ? (
+            <UserPlus size={14} />
           ) : (
             <User size={14} />
           )}
         </div>
-        <span className="text-[13px] font-bold flex-1" style={{ color: T.textPrimary }}>
+        <span className="text-[13px] font-bold flex-1 flex items-center gap-1.5" style={{ color: T.textPrimary }}>
           {group.user.name}
+          {group.user.isExternal && (
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textMuted,
+                border: `1px dashed ${T.borderSoft}`,
+              }}
+              title="Зовнішній виконавець (не користувач CRM)"
+            >
+              ЗОВНІШНІЙ
+            </span>
+          )}
         </span>
         <span className="text-[10px] font-semibold" style={{ color: T.textMuted }}>
           {group.counts.total} задач

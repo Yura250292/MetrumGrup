@@ -618,12 +618,13 @@ export default async function AdminV2Dashboard({
   const expenseDelta = calcDelta(expense, prevExpense);
   const netDelta = calcDelta(netProfit, prevNetProfit);
 
-  // Load user names for time logs
+  // Load user names for time logs. activeTasksByUser/overdueTasksByUser йдуть з
+  // TaskAssignee, де `userId` може бути null (зовнішній виконавець) — фільтруємо.
   const allUserIds = [
     ...weekTimeLogs.map((l) => l.userId),
     ...activeTasksByUser.map((a) => a.userId),
     ...overdueTasksByUser.map((a) => a.userId),
-  ];
+  ].filter((id): id is string => !!id);
   const uniqueUserIds = [...new Set(allUserIds)];
   const users =
     uniqueUserIds.length > 0

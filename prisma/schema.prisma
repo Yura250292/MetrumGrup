@@ -48,6 +48,7 @@ model User {
   projectFiles           ProjectFile[]
   clientProjects         Project[]                 @relation("ClientProjects")
   managedProjects        Project[]                 @relation("ManagerProjects")
+  personalInboxProject   Project?                  @relation("PersonalInboxOwner")
   aiRenderJobs           AiRenderJob[]
   estimateVersions       EstimateVersion[]
   approvalSteps          EstimateApprovalStep[]
@@ -169,6 +170,11 @@ model Project {
   telegramThreadId       Int?
   telegramLinkedAt       DateTime?
   telegramLinkedById     String?
+  /// Якщо не null → це персональний "Inbox" для конкретного користувача
+  /// (задачі без проєкту). Доступ — тільки власник. Тісно повʼязано з
+  /// isInternal=true. Лазі-створюється у `getOrCreatePersonalInbox`.
+  personalInboxUserId    String?                 @unique
+  personalInboxUser      User?                   @relation("PersonalInboxOwner", fields: [personalInboxUserId], references: [id], onDelete: Cascade)
   auditLogs              AuditLog[]
   completionActs         CompletionAct[]
   crewAssignments        CrewAssignment[]
@@ -2075,15 +2081,21 @@ model Task {
 model TaskAssignee {
   id           String   @id @default(cuid())
   taskId       String
-  userId       String
+  /// Внутрішній виконавець — User CRM. Null коли призначено зовнішню людину
+  /// (підрядник, гість, працівник без акаунту) — її імʼя у `externalName`.
+  userId       String?
+  /// Текстове імʼя зовнішнього виконавця, який не є користувачем системи.
+  /// Заповнюється коли `userId` = null. Дедуплікація — на рівні сервісу.
+  externalName String?
   assignedAt   DateTime @default(now())
   assignedById String?
 
   task       Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user       User  @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
+  user       User? @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
   assignedBy User? @relation("TaskAssigneeAssigner", fields: [assignedById], references: [id])
 
   @@unique([taskId, userId])
+  @@index([taskId])
   @@index([userId])
   @@map("task_assignees")
 }

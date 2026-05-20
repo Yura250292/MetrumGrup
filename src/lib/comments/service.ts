@@ -100,7 +100,9 @@ async function getTaskStakeholderIds(taskId: string): Promise<string[]> {
   if (!task) return [];
   const ids = new Set<string>();
   if (task.createdById) ids.add(task.createdById);
-  for (const a of task.assignees) ids.add(a.userId);
+  for (const a of task.assignees) {
+    if (a.userId) ids.add(a.userId);
+  }
   for (const w of task.watchers) ids.add(w.userId);
   return Array.from(ids);
 }

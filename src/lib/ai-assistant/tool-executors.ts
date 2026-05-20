@@ -436,7 +436,11 @@ async function getTaskList(input: ToolInput, ctx: AiUserContext) {
         прострочено: t.dueDate ? t.dueDate < now : false,
         годинПлан: t.estimatedHours ? Number(t.estimatedHours) : null,
         годинФакт: Number(t.actualHours ?? 0),
-        виконавці: t.assignees.map((a) => a.user.name).join(", ") || "не призначено",
+        виконавці:
+          t.assignees
+            .map((a) => a.user?.name ?? a.externalName)
+            .filter(Boolean)
+            .join(", ") || "не призначено",
         мітки: t.labels.map((l) => l.label.name).join(", "),
         чеклістПунктів: t._count.checklist,
         коментарів: commentCountByTaskId.get(t.id) ?? 0,
@@ -800,7 +804,9 @@ async function getOverdueItems(input: ToolInput, ctx: AiUserContext) {
           priority: t.priority,
           dueDate: t.dueDate?.toISOString().split("T")[0],
           status: t.status?.name,
-          assignees: t.assignees.map((a) => a.user.name),
+          assignees: t.assignees
+            .map((a) => a.user?.name ?? a.externalName ?? "")
+            .filter(Boolean),
         }))
       : [],
   };
@@ -1828,6 +1834,9 @@ async function getGlobalTeamOverview(ctx: AiUserContext) {
   const tasksByUser = new Map<string, typeof tasks>();
   for (const t of tasks) {
     for (const a of t.assignees) {
+      // Зовнішніх виконавців (userId=null) у team-звіти не включаємо —
+      // це звіт по людях CRM. Зовнішні відображаються у by-people view.
+      if (!a.userId) continue;
       const list = tasksByUser.get(a.userId) || [];
       list.push(t);
       tasksByUser.set(a.userId, list);
