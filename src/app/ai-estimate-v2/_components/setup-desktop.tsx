@@ -3,8 +3,6 @@
 import { useRef, useState, DragEvent, ChangeEvent } from "react";
 import {
   Sparkles,
-  Globe,
-  ShieldCheck,
   CloudUpload,
   FolderOpen,
   FileText,
@@ -17,15 +15,13 @@ import {
   ArrowRight,
   Check,
   Timer,
-  Database,
-  Eye,
   Info,
   ChevronRight,
   X,
   Loader2,
 } from "lucide-react";
 import { T } from "./tokens";
-import { MetricPill, ChecklistItem, SourceStatusCard, ScoreDial } from "./primitives";
+import { MetricPill, ChecklistItem, ScoreDial } from "./primitives";
 import { formatBytes } from "../_lib/format";
 import type { AiEstimateController } from "../_lib/use-controller";
 
@@ -82,29 +78,9 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
             AI генератор кошторисів
           </h1>
           <p className="text-[15px] leading-relaxed" style={{ color: T.textSecondary }}>
-            Створюйте, верифікуйте та уточнюйте будівельні кошториси за допомогою інженерних AI-агентів — на основі
-            RAG-памʼяті та ринкових даних Prozorro.
+            Завантажте документи, вкажіть площу та тип кошторису — AI підготує чернетку, яку можна
+            відредагувати, доповнити й зберегти.
           </p>
-          <div className="flex items-center gap-2 pt-1.5">
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold"
-              style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-            >
-              <Sparkles size={12} /> AI + RAG
-            </span>
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold"
-              style={{ backgroundColor: T.panelElevated, color: T.textPrimary, border: `1px solid ${T.borderStrong}` }}
-            >
-              <Globe size={12} style={{ color: T.accentSecondary }} /> Ринок Prozorro
-            </span>
-            <span
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold"
-              style={{ backgroundColor: T.panelElevated, color: T.textPrimary, border: `1px solid ${T.borderStrong}` }}
-            >
-              <ShieldCheck size={12} style={{ color: T.success }} /> Інженерний контроль
-            </span>
-          </div>
         </div>
         <div className="flex items-start gap-3">
           <MetricPill label="Файли" value={String(controller.files.length)} />
@@ -241,16 +217,16 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
                   style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
                 >
                   <Sparkles size={12} />{" "}
-                  {controller.wizardCompleted ? "МАЙСТЕР ЗАВЕРШЕНО" : "РЕЖИМ З МАЙСТРОМ"}
+                  {controller.wizardCompleted ? "МАЙСТЕР ЗАВЕРШЕНО" : "УТОЧНЕННЯ ПРОЄКТУ"}
                 </span>
                 <div className="text-lg font-bold" style={{ color: T.textPrimary }}>
                   {controller.wizardCompleted
-                    ? "Майстер заповнено — точність максимальна"
-                    : "Запустіть майстер для ~3× кращої точності"}
+                    ? "Уточнення заповнено"
+                    : "Уточніть проєкт перед генерацією"}
                 </div>
                 <p className="text-[13px] leading-relaxed" style={{ color: T.textSecondary }}>
-                  5 коротких кроків про геометрію, матеріали, конструктив та оздоблення. Майстер покращує обсяги,
-                  кількість позицій і ціни.
+                  Короткі питання про геометрію, конструктив, інженерію та оздоблення. Точна кількість
+                  кроків залежить від типу об'єкта. Уточнення опціональне — без нього кошторис теж згенерується.
                 </p>
                 <div className="flex items-center gap-4 pt-1">
                   <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: T.textSecondary }}>
@@ -269,15 +245,15 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
                   value={controller.wizardCompleted ? 100 : 0}
                   size={120}
                   color={controller.wizardCompleted ? T.success : T.accentPrimary}
-                  bigLabel={controller.wizardCompleted ? "✓" : "0 / 5"}
-                  label={controller.wizardCompleted ? "готово" : "кроків"}
+                  bigLabel={controller.wizardCompleted ? "✓" : "0"}
+                  label={controller.wizardCompleted ? "готово" : "не запущено"}
                 />
                 <button
                   onClick={controller.openWizard}
                   className="inline-flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:brightness-95"
                   style={{ backgroundColor: T.accentPrimary }}
                 >
-                  {controller.wizardCompleted ? "Редагувати" : "Запустити майстер"} <ArrowRight size={16} />
+                  {controller.wizardCompleted ? "Редагувати" : "Уточнити проєкт"} <ArrowRight size={16} />
                 </button>
               </div>
             </div>
@@ -285,63 +261,31 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
 
           {/* Project parameters */}
           <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex flex-col gap-1">
-                <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
-                  Параметри проєкту
-                </span>
-                <span className="text-xs" style={{ color: T.textMuted }}>
-                  Уточніть бриф для AI — площа, обсяг, обмеження
-                </span>
-              </div>
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wider"
-                style={{ backgroundColor: T.warningSoft, color: T.warning }}
-              >
-                ОПЦІОНАЛЬНО
+            <div className="mb-4 flex flex-col gap-1">
+              <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
+                Параметри проєкту
+              </span>
+              <span className="text-xs" style={{ color: T.textMuted }}>
+                Площа потрібна для генерації — якщо її немає у кресленнях, вкажіть вручну.
               </span>
             </div>
-            <div className="flex gap-4">
-              <div className="flex flex-1 flex-col gap-1.5">
-                <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
-                  Площа проєкту, м²
-                </label>
-                <div
-                  className="flex items-center gap-2 rounded-xl px-3.5 py-3"
-                  style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
-                >
-                  <Square size={16} style={{ color: T.textMuted }} />
-                  <input
-                    value={controller.area}
-                    onChange={(e) => controller.setArea(e.target.value)}
-                    placeholder="напр. 320"
-                    inputMode="numeric"
-                    className="flex-1 bg-transparent text-sm outline-none"
-                    style={{ color: T.textPrimary }}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-1 flex-col gap-1.5">
-                <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
-                  Модель генерації
-                </label>
-                <select
-                  value={controller.selectedGenerationModel}
-                  onChange={(e) =>
-                    controller.setSelectedGenerationModel(e.target.value as "gemini" | "openai" | "anthropic" | "pipeline")
-                  }
-                  className="rounded-xl px-3.5 py-3 text-sm font-medium outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderAccent}`,
-                    color: T.textPrimary,
-                  }}
-                >
-                  <option value="gemini">Gemini</option>
-                  <option value="openai">OpenAI</option>
-                  <option value="anthropic">Anthropic</option>
-                  <option value="pipeline">Pipeline</option>
-                </select>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] font-semibold tracking-wide" style={{ color: T.textMuted }}>
+                Площа проєкту, м²
+              </label>
+              <div
+                className="flex items-center gap-2 rounded-xl px-3.5 py-3"
+                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}
+              >
+                <Square size={16} style={{ color: T.textMuted }} />
+                <input
+                  value={controller.area}
+                  onChange={(e) => controller.setArea(e.target.value)}
+                  placeholder="напр. 320"
+                  inputMode="numeric"
+                  className="flex-1 bg-transparent text-sm outline-none"
+                  style={{ color: T.textPrimary }}
+                />
               </div>
             </div>
             <div className="mt-4 flex flex-col gap-1.5">
@@ -396,41 +340,6 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
             </div>
           </div>
 
-          {/* Data sources */}
-          <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>
-            <div className="mb-4 flex items-center justify-between">
-              <div className="flex flex-col gap-1">
-                <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
-                  Джерела даних
-                </span>
-                <span className="text-xs" style={{ color: T.textMuted }}>
-                  Внутрішні документи · RAG памʼять · Ринковий контекст Prozorro
-                </span>
-              </div>
-              <label className="flex items-center gap-2 text-xs font-medium" style={{ color: T.accentPrimary }}>
-                <input
-                  type="checkbox"
-                  checked={controller.checkProzorro}
-                  onChange={(e) => controller.setCheckProzorro(e.target.checked)}
-                />
-                Перевіряти Prozorro
-              </label>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              <SourceStatusCard
-                icon={FileText}
-                title="Внутрішні документи"
-                meta={controller.files.length ? `${controller.files.length} файлів додано` : "Немає файлів"}
-              />
-              <SourceStatusCard icon={Database} title="RAG памʼять" meta="Підключено · референси" />
-              <SourceStatusCard
-                icon={Globe}
-                title="Ринок Prozorro"
-                meta={controller.checkProzorro ? "Активно" : "Вимкнено"}
-              />
-            </div>
-          </div>
-
           {controller.error && (
             <div
               className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm"
@@ -478,11 +387,10 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
               />
               <ChecklistItem
                 icon={controller.wizardCompleted ? Check : Timer}
-                title="Майстер"
+                title="Уточнення проєкту"
                 meta={controller.wizardCompleted ? "Завершено" : "Опціонально, але рекомендовано"}
                 state={controller.wizardCompleted ? "done" : "warning"}
               />
-              <ChecklistItem icon={Check} title="Джерела даних" meta="Внутрішні · RAG · Prozorro" />
             </div>
           </div>
 
@@ -495,8 +403,7 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
                 ОЧІКУВАННЯ ВІД ГЕНЕРАЦІЇ
               </span>
               <div className="flex gap-2">
-                <ExpectCell label="Режим" value={controller.wizardCompleted ? "Майстер" : "Швидкий"} />
-                <ExpectCell label="Модель" value={controller.selectedGenerationModel} />
+                <ExpectCell label="Режим" value={controller.wizardCompleted ? "З уточненням" : "Швидкий"} />
                 <ExpectCell label="ETA" value="~3 хв" />
               </div>
             </div>
@@ -509,22 +416,6 @@ export function SetupDesktop({ controller }: { controller: AiEstimateController 
               {controller.isAnalyzing ? <Loader2 size={18} className="animate-spin" /> : <Sparkles size={18} />}
               {controller.isAnalyzing ? "Аналізуємо файли…" : "Згенерувати AI кошторис"}
             </button>
-            <button
-              disabled={!filesReady}
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-[13px] font-semibold transition hover:brightness-95 disabled:opacity-50"
-              style={{ backgroundColor: T.panel, color: T.textSecondary, border: `1px solid ${T.borderStrong}` }}
-            >
-              <Eye size={16} /> Попередній перегляд
-            </button>
-            <div
-              className="flex items-center gap-2 rounded-lg px-3 py-2.5"
-              style={{ backgroundColor: T.accentPrimarySoft }}
-            >
-              <Info size={14} style={{ color: T.accentPrimary }} />
-              <span className="text-[11px] font-medium" style={{ color: T.accentPrimary }}>
-                Майстер підвищує впевненість на ~30%
-              </span>
-            </div>
           </div>
 
           <div className="rounded-2xl p-6" style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}>

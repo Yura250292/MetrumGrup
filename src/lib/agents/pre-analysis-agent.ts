@@ -5,21 +5,14 @@
  * Аналізує:
  * 1. Wizard Data (опитувалка)
  * 2. Документи через RAG
- * 3. Prozorro тендери
- * 4. Додаткову інформацію
+ * 3. Додаткову інформацію
  *
  * Результат: Master Context для AI генерації
  */
 
 import { WizardData } from '../wizard-types';
-import { prozorroClient } from '../prozorro-client';
-import { extractSearchAttributes } from '../prozorro-matcher';
-import { findSimilarPrices, getCategoryPriceStats } from '../prozorro-price-reference';
 import { ragSearch, isProjectVectorized } from '../rag/vectorizer';
-import { prisma } from '../prisma';
 import OpenAI from 'openai';
-import { bidIntelligenceService } from '../services/bid-intelligence-service';
-import type { BidIntelligenceResult } from '../types/bid-intelligence';
 
 export interface PreAnalysisInput {
   wizardData: WizardData;
@@ -33,7 +26,6 @@ export interface PreAnalysisInput {
     /** Структурований обмір з креслень (Gemini Vision). */
     drawingsVisual?: string;
   };
-  prozorroSearchQuery?: string; // Опис для пошуку на Prozorro
 }
 
 export interface PreAnalysisResult {
@@ -56,41 +48,6 @@ export interface PreAnalysisResult {
     specifications: string[];
     constraints: string[];
   };
-
-  // Аналіз Prozorro
-  prozorroAnalysis: {
-    similarProjectsFound: number;
-    totalItemsParsed: number;
-    averagePriceLevel: 'low' | 'medium' | 'high';
-    topSimilarProjects: Array<{
-      title: string;
-      budget: number;
-      similarity: number;
-      itemsCount: number;
-      tenderID?: string;
-      procuringEntity?: string;
-      datePublished?: string;
-      status?: string;
-      city?: string;
-    }>;
-    priceDatabase: Map<string, number>; // category → avg price
-    // 🆕 Згруповано за локацією — сума всіх тендерів навколо одного об'єкта
-    aggregatedLocations?: Array<{
-      location: string;       // "Хмельницький" / "Львів, вул. Зарічанська"
-      city: string;
-      totalAmount: number;    // сума всіх тендерів у цій локації
-      tenderCount: number;
-      tenders: Array<{
-        title: string;
-        amount: number;
-        tenderID?: string;
-        status: string;
-      }>;
-    }>;
-  };
-
-  // Bid Intelligence (new)
-  bidIntelligence?: BidIntelligenceResult;
 
   // Master Context для AI
   masterContext: string;
@@ -123,48 +80,18 @@ export class PreAnalysisAgent {
     const warnings: string[] = [];
 
     // 1️⃣ Аналіз Wizard Data
-    console.log('📋 Крок 1/4: Аналіз опитувалки...');
+    console.log('📋 Крок 1/3: Аналіз опитувалки...');
     const wizardAnalysis = this.analyzeWizardData(input.wizardData);
 
     // 2️⃣ Аналіз документів через RAG
-    console.log('📄 Крок 2/4: Аналіз документів...');
+    console.log('📄 Крок 2/3: Аналіз документів...');
     const documentsAnalysis = await this.analyzeDocuments(input);
 
-    // 3️⃣ Аналіз Prozorro тендерів через BidIntelligenceService.
-    //    Для ВНУТРІШНІХ робіт Prozorro поки вимкнено: тендери там — це
-    //    переважно будівництво/капремонти, ціни нерелевантні для fit-out.
-    const wd = input.wizardData as any;
-    const interiorOnly =
-      typeof wd?.interiorOnly === 'boolean'
-        ? wd.interiorOnly
-        : wd?.workScope === 'renovation' ||
-          wd?.workScope === 'finishing' ||
-          wd?.objectType === 'apartment' ||
-          wd?.objectType === 'office';
-
-    let prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'];
-    let bidIntelligence: BidIntelligenceResult | undefined;
-
-    if (interiorOnly) {
-      console.log('💰 Крок 3/4: Prozorro вимкнено для внутрішніх робіт');
-      prozorroAnalysis = this.getEmptyProzorroAnalysis();
-    } else {
-      console.log('💰 Крок 3/4: Аналіз Prozorro тендерів (Bid Intelligence)...');
-      ({ prozorroAnalysis, bidIntelligence } = await this.analyzeProzorroWithBidIntelligence(input));
-
-      if (prozorroAnalysis.similarProjectsFound === 0) {
-        warnings.push('Не знайдено схожих проектів на Prozorro. Ціни базуватимуться на Google Search та базі даних.');
-      } else {
-        recommendations.push(`Знайдено ${prozorroAnalysis.similarProjectsFound} схожих тендерів з ${prozorroAnalysis.totalItemsParsed} позиціями для референсу цін.`);
-      }
-    }
-
-    // 4️⃣ Створення Master Context
-    console.log('🤖 Крок 4/4: Формування master context...');
+    // 3️⃣ Створення Master Context
+    console.log('🤖 Крок 3/3: Формування master context...');
     const masterContext = await this.buildMasterContext({
       wizardAnalysis,
       documentsAnalysis,
-      prozorroAnalysis,
       input,
     });
 
@@ -172,7 +99,6 @@ export class PreAnalysisAgent {
     const projectSummary = this.generateProjectSummary({
       wizardAnalysis,
       documentsAnalysis,
-      prozorroAnalysis,
     });
 
     console.log('✅ PreAnalysisAgent: Analysis complete!');
@@ -181,8 +107,6 @@ export class PreAnalysisAgent {
       projectSummary,
       wizardAnalysis,
       documentsAnalysis,
-      prozorroAnalysis,
-      bidIntelligence,
       masterContext,
       recommendations,
       warnings,
@@ -298,282 +222,14 @@ export class PreAnalysisAgent {
   }
 
   /**
-   * 3️⃣ Аналіз Prozorro через BidIntelligenceService
-   * Повертає як старий формат (prozorroAnalysis), так і новий (bidIntelligence)
-   */
-  private async analyzeProzorroWithBidIntelligence(
-    input: PreAnalysisInput
-  ): Promise<{
-    prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'];
-    bidIntelligence?: BidIntelligenceResult;
-  }> {
-    try {
-      const wd = input.wizardData as any;
-      const biResult = await bidIntelligenceService.analyze({
-        estimateAmount: 0, // ще не маємо суму до генерації — буде оновлено пост-фактум
-        wizardData: {
-          objectType: wd.objectType,
-          totalArea: wd.totalArea,
-          floors: wd.houseData?.floors,
-          commercialData: wd.commercialData,
-        },
-        searchQuery: input.prozorroSearchQuery,
-        estimateTitle: input.prozorroSearchQuery || '',
-        estimateDescription: input.projectNotes || '',
-      });
-
-      // Map BidIntelligenceResult → old PreAnalysisResult.prozorroAnalysis format
-      const allMatches = biResult.allMatches;
-      const topSimilar = allMatches.slice(0, 10).map(m => ({
-        title: m.title,
-        budget: m.budget,
-        similarity: m.similarityScore,
-        itemsCount: m.itemsCount,
-        tenderID: m.tenderID,
-        procuringEntity: m.procuringEntity,
-        datePublished: m.datePublished,
-        status: m.status,
-        city: m.city,
-      }));
-
-      // Determine price level from budget data
-      const area = wd.totalArea ? parseFloat(wd.totalArea) : 1;
-      const avgBudget = allMatches.length > 0
-        ? allMatches.reduce((sum, m) => sum + m.budget, 0) / allMatches.length
-        : 0;
-      const pricePerSqm = avgBudget / (area || 1);
-      let averagePriceLevel: 'low' | 'medium' | 'high' = 'medium';
-      if (pricePerSqm < 20000) averagePriceLevel = 'low';
-      else if (pricePerSqm > 40000) averagePriceLevel = 'high';
-
-      const prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'] = {
-        similarProjectsFound: biResult.searchMeta.totalFound,
-        totalItemsParsed: Object.keys(biResult.priceDatabase).length,
-        averagePriceLevel,
-        topSimilarProjects: topSimilar,
-        priceDatabase: new Map(Object.entries(biResult.priceDatabase)),
-        aggregatedLocations: biResult.aggregatedLocations,
-      };
-
-      return { prozorroAnalysis, bidIntelligence: biResult };
-    } catch (error) {
-      console.error('❌ BidIntelligence failed, falling back to legacy:', error);
-      // Fallback до старого методу
-      const prozorroAnalysis = await this.analyzeProzorroTenders(input);
-      return { prozorroAnalysis };
-    }
-  }
-
-  /**
-   * Legacy: Аналіз Prozorro тендерів (fallback)
-   */
-  private async analyzeProzorroTenders(
-    input: PreAnalysisInput
-  ): Promise<PreAnalysisResult['prozorroAnalysis']> {
-    try {
-      // Якщо немає пошукового запиту - використати wizard data
-      const searchQuery = input.prozorroSearchQuery || this.buildDefaultProzorroQuery(input.wizardData);
-
-      console.log(`🔍 Prozorro search query: "${searchQuery}"`);
-
-      // Атрибути для розрахунків (площа, бюджет)
-      const searchAttrs = extractSearchAttributes(
-        {
-          id: 'temp',
-          title: searchQuery,
-          description: input.projectNotes || '',
-          totalAmount: 0,
-          totalMaterials: 0,
-          totalLabor: 0,
-          sections: [],
-        } as any,
-        input.wizardData,
-        searchQuery
-      );
-
-      // 🆕 MULTI-QUERY ПОШУК — кілька запитів паралельно для повного покриття
-      // Бо приватні компанії типу АТБ не публікують власні тендери,
-      // але всі дотичні роботи (електропостачання, тротуари, благоустрій) — є
-      const multiQueries = this.buildMultiQueries(searchQuery);
-      console.log(`🔍 Multi-query: ${multiQueries.length} паралельних пошуків`);
-
-      const searchResults = await Promise.all(
-        multiQueries.map(q =>
-          prozorroClient.searchTendersByText({
-            text: q,
-            perPage: 20,
-            classification: '45000000', // CPV: будівельні роботи — виключає LED-лампи, меблі, продукти тощо
-          }).catch(() => [])
-        )
-      );
-
-      // Об'єднуємо та видаляємо дублікати по tenderID
-      const seen = new Set<string>();
-      const tenders = searchResults.flat().filter(t => {
-        const key = t.tenderID || t.id || '';
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      console.log(`📊 Multi-query: знайдено ${tenders.length} унікальних тендерів`);
-
-      // Перевірка prisma перед використанням
-      if (!prisma) {
-        console.error('❌ Prisma client not available');
-        return this.getEmptyProzorroAnalysis();
-      }
-
-      // 🆕 Текстовий пошук повертає tenderID (UA-2025-...) як ідентифікатор
-      // Отримати розпарсені кошториси для цих тендерів (якщо є в кеші)
-      const tenderIds: string[] = tenders
-        .map(t => t.tenderID || t.id)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0);
-
-      const parsedEstimates = await prisma.prozorroEstimateData.findMany({
-        where: {
-          tenderId: { in: tenderIds },
-          parseStatus: 'success',
-        },
-        include: {
-          items: true,
-          tender: true,
-        },
-        take: 10,
-      });
-
-      const totalItemsParsed = parsedEstimates.reduce((sum: number, est: any) => sum + est.totalItems, 0);
-
-      // 🆕 Збагатити кожен тендер: бюджет, локація, реальна схожість
-      const enrichedTenders = tenders.map(t => {
-        const tenderKey = t.tenderID || t.id || '';
-        const parsed = parsedEstimates.find((e: any) => e.tenderId === tenderKey);
-        const awardedAmount = t.awards?.find((a: any) => a.status === 'active')?.value?.amount;
-        const budget = awardedAmount || t.value?.amount || 0;
-        const location = this.extractLocation(t);
-        const similarity = this.calculateRelevance(t.title || '', searchQuery);
-
-        return {
-          title: t.title || t.tenderID || 'Без назви',
-          budget,
-          similarity,
-          itemsCount: parsed?.totalItems || 0,
-          tenderID: t.tenderID || t.id,
-          procuringEntity: t.procuringEntity?.name || '',
-          datePublished: t.datePublished,
-          status: t.status,
-          city: location.city,
-          location: location.full,
-        };
-      }).filter(p => p.budget > 0 && p.similarity >= 30); // 🆕 фільтр: тільки релевантні
-
-      // Топ-10 за РЕАЛЬНОЮ схожістю (а не за бюджетом)
-      const topSimilarProjects = enrichedTenders
-        .sort((a, b) => b.similarity - a.similarity || b.budget - a.budget)
-        .slice(0, 10)
-        .map(({ location, ...rest }) => rest); // прибираємо location з топ-списку
-
-      // 🆕 Групуємо тендери за локацією (місто) — щоб побачити "сукупний кошторис"
-      // всіх дотичних робіт навколо одного об'єкта (АТБ)
-      const locationGroups = new Map<string, typeof enrichedTenders>();
-      for (const t of enrichedTenders) {
-        const key = t.city || 'Невідомо';
-        if (!locationGroups.has(key)) locationGroups.set(key, []);
-        locationGroups.get(key)!.push(t);
-      }
-
-      const aggregatedLocations = Array.from(locationGroups.entries())
-        .map(([city, tendersInLocation]) => ({
-          location: city,
-          city,
-          totalAmount: tendersInLocation.reduce((sum, t) => sum + t.budget, 0),
-          tenderCount: tendersInLocation.length,
-          tenders: tendersInLocation
-            .sort((a, b) => b.budget - a.budget)
-            .map(t => ({
-              title: t.title,
-              amount: t.budget,
-              tenderID: t.tenderID,
-              status: t.status,
-            })),
-        }))
-        .filter(g => g.tenderCount > 0 && g.city !== 'Невідомо')
-        .sort((a, b) => b.totalAmount - a.totalAmount)
-        .slice(0, 10); // топ-10 локацій за сумарною вартістю
-
-      console.log(`📍 Згруповано за локаціями: ${aggregatedLocations.length} міст`);
-
-    // Створити price database за категоріями (з розпарсених)
-    const priceDatabase = new Map<string, number>();
-
-    for (const estimate of parsedEstimates as any[]) {
-      for (const item of (estimate.items || []) as any[]) {
-        const category = item.category || 'general';
-        const currentAvg = priceDatabase.get(category) || 0;
-        const currentCount = priceDatabase.get(`${category}_count`) || 0;
-
-        const newAvg = (currentAvg * currentCount + parseFloat(item.unitPrice.toString())) / (currentCount + 1);
-
-        priceDatabase.set(category, newAvg);
-        priceDatabase.set(`${category}_count`, currentCount + 1);
-      }
-    }
-
-    // Визначити рівень цін на основі тендерів з валідною ціною
-    const tenderBudgets = enrichedTenders.map(t => t.budget);
-    const avgBudget = tenderBudgets.length > 0
-      ? tenderBudgets.reduce((sum, b) => sum + b, 0) / tenderBudgets.length
-      : 0;
-    const pricePerSqm = avgBudget / (searchAttrs.area || 1);
-
-    let averagePriceLevel: 'low' | 'medium' | 'high';
-    if (pricePerSqm < 20000) {
-      averagePriceLevel = 'low';
-    } else if (pricePerSqm < 40000) {
-      averagePriceLevel = 'medium';
-    } else {
-      averagePriceLevel = 'high';
-    }
-
-    console.log(`✅ Prozorro: ${tenders.length} тендерів, ${enrichedTenders.length} з ціною, середня ${avgBudget.toFixed(0)} ₴, ${parsedEstimates.length} розпарсено, ${aggregatedLocations.length} локацій`);
-
-    return {
-      similarProjectsFound: tenders.length,
-      totalItemsParsed,
-      averagePriceLevel,
-      topSimilarProjects,
-      priceDatabase,
-      aggregatedLocations,
-    };
-    } catch (error) {
-      console.error('❌ Помилка аналізу Prozorro тендерів:', error);
-      return this.getEmptyProzorroAnalysis();
-    }
-  }
-
-  /**
-   * Порожній результат Prozorro аналізу (fallback)
-   */
-  private getEmptyProzorroAnalysis(): PreAnalysisResult['prozorroAnalysis'] {
-    return {
-      similarProjectsFound: 0,
-      totalItemsParsed: 0,
-      averagePriceLevel: 'medium',
-      topSimilarProjects: [],
-      priceDatabase: new Map(),
-    };
-  }
-
-  /**
-   * 4️⃣ Створення Master Context
+   * 3️⃣ Створення Master Context
    */
   private async buildMasterContext(params: {
     wizardAnalysis: PreAnalysisResult['wizardAnalysis'];
     documentsAnalysis: PreAnalysisResult['documentsAnalysis'];
-    prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'];
     input: PreAnalysisInput;
   }): Promise<string> {
-    const { wizardAnalysis, documentsAnalysis, prozorroAnalysis, input } = params;
+    const { wizardAnalysis, documentsAnalysis, input } = params;
 
     let context = `# КОМПЛЕКСНИЙ АНАЛІЗ ПРОЕКТУ\n\n`;
 
@@ -619,34 +275,9 @@ export class PreAnalysisAgent {
       context += `Документи не надано. Генерація базується на параметрах з опитувалки.\n`;
     }
 
-    // Prozorro
-    context += `\n## 3. АНАЛІЗ PROZORRO ТЕНДЕРІВ\n`;
-    if (prozorroAnalysis.similarProjectsFound > 0) {
-      context += `Знайдено ${prozorroAnalysis.similarProjectsFound} схожих проектів з ${prozorroAnalysis.totalItemsParsed} позиціями.\n`;
-      context += `Рівень цін: ${prozorroAnalysis.averagePriceLevel}\n\n`;
-
-      context += `Топ-5 найбільш схожих проектів:\n`;
-      prozorroAnalysis.topSimilarProjects.forEach((proj, i) => {
-        context += `${i + 1}. "${proj.title}" - ${proj.budget.toLocaleString()} ₴ (${proj.itemsCount} позицій, схожість ${proj.similarity}%)\n`;
-      });
-
-      context += `\n📊 БАЗА ЦІН З PROZORRO (за категоріями):\n`;
-      Array.from(prozorroAnalysis.priceDatabase.entries())
-        .filter(([key]) => !key.endsWith('_count'))
-        .slice(0, 10)
-        .forEach(([category, avgPrice]) => {
-          context += `- ${category}: ~${avgPrice.toFixed(2)} ₴ (середнє)\n`;
-        });
-
-      context += `\n⚠️ ВАЖЛИВО: Використовуй ціни з Prozorro як ПРІОРИТЕТ для всіх позицій!\n`;
-    } else {
-      context += `Схожих проектів на Prozorro не знайдено.\n`;
-      context += `Використовуй Google Search та базу даних для ціноутворення.\n`;
-    }
-
     // Додаткова інформація
     if (input.projectNotes) {
-      context += `\n## 4. ДОДАТКОВА ІНФОРМАЦІЯ\n`;
+      context += `\n## 3. ДОДАТКОВА ІНФОРМАЦІЯ\n`;
       context += `${input.projectNotes}\n`;
     }
 
@@ -659,9 +290,8 @@ export class PreAnalysisAgent {
   private generateProjectSummary(params: {
     wizardAnalysis: PreAnalysisResult['wizardAnalysis'];
     documentsAnalysis: PreAnalysisResult['documentsAnalysis'];
-    prozorroAnalysis: PreAnalysisResult['prozorroAnalysis'];
   }): string {
-    const { wizardAnalysis, documentsAnalysis, prozorroAnalysis } = params;
+    const { wizardAnalysis, documentsAnalysis } = params;
 
     let summary = `Проект: ${wizardAnalysis.objectType}, ${wizardAnalysis.totalArea} м²`;
 
@@ -669,199 +299,6 @@ export class PreAnalysisAgent {
       summary += ` з документацією`;
     }
 
-    if (prozorroAnalysis.similarProjectsFound > 0) {
-      summary += `. Знайдено ${prozorroAnalysis.similarProjectsFound} схожих тендерів на Prozorro`;
-    }
-
     return summary;
-  }
-
-  /**
-   * Побудувати запит для Prozorro якщо не вказано
-   */
-  private buildDefaultProzorroQuery(wizardData: WizardData): string {
-    const workScopeMap: Record<string, string> = {
-      new_construction: 'Будівництво',
-      renovation: 'Капітальний ремонт',
-      finishing: 'Оздоблювальні роботи',
-      reconstruction: 'Реконструкція',
-    };
-
-    const objectTypeMap: Record<string, string> = {
-      apartment: 'квартири',
-      house: 'житлового будинку',
-      townhouse: 'таунхаусу',
-      commercial: 'комерційного приміщення',
-      office: 'офісного приміщення',
-    };
-
-    const workPrefix = workScopeMap[wizardData.workScope] || 'Будівництво';
-    const objectSuffix = objectTypeMap[wizardData.objectType] || 'будівлі';
-
-    let query = `${workPrefix} ${objectSuffix}`;
-
-    // Комерція з конкретним призначенням — використовуємо його
-    const commercialData = (wizardData as any).commercialData;
-    if (wizardData.objectType === 'commercial' && commercialData?.purpose) {
-      const purposeMap: Record<string, string> = {
-        shop: 'торгівельного приміщення магазину супермаркету',
-        warehouse: 'складського приміщення',
-        restaurant: 'ресторану кафе',
-        factory: 'виробничого приміщення',
-        showroom: 'торгівельного залу',
-      };
-      const purpose = purposeMap[commercialData.purpose] || commercialData.purpose;
-      query = `${workPrefix} ${purpose}`;
-    }
-
-    return query;
-  }
-
-  /**
-   * 🆕 Будує кілька варіантів пошукового запиту для широкого покриття
-   *
-   * Приклад: для "Магазин АТБ" повертає:
-   *   - "Магазин АТБ"               (точний)
-   *   - "будівництво магазину АТБ"  (з типом робіт)
-   *   - "АТБ електропостачання"     (інфраструктура)
-   *   - "АТБ благоустрій"           (територія)
-   *   - "АТБ-Маркет"                (юр. назва)
-   */
-  private buildMultiQueries(searchQuery: string): string[] {
-    const trimmed = searchQuery.trim();
-    const queries = new Set<string>([trimmed]);
-
-    // Завжди додаємо варіант з "будівництво" якщо немає
-    if (!/будівниц|реконструк|капітальн.*ремонт/i.test(trimmed)) {
-      queries.add(`будівництво ${trimmed}`);
-    }
-
-    // Якщо в запиті згадується "АТБ" — шукаємо саме будівництво торгових об'єктів
-    if (/АТБ/i.test(trimmed)) {
-      queries.add('будівництво торгівельного приміщення магазину');
-      queries.add('будівництво супермаркету');
-      queries.add('нове будівництво торгового центру');
-    }
-    // Магазин / супермаркет — шукаємо будівництво торгових об'єктів
-    else if (/магазин|супермаркет|торгів/i.test(trimmed)) {
-      queries.add('будівництво торгівельного приміщення');
-      queries.add('будівництво супермаркету');
-      queries.add('нове будівництво магазину');
-    }
-    // Загальне
-    else {
-      queries.add(`капітальний ремонт ${trimmed}`);
-      queries.add(`реконструкція ${trimmed}`);
-    }
-
-    return Array.from(queries).slice(0, 5);
-  }
-
-  /**
-   * 🆕 Витягує локацію з тендера: спочатку пробує parsing title, потім fallback
-   * на procuringEntity.address
-   */
-  private extractLocation(tender: any): { city?: string; full: string } {
-    const title = (tender.title || '') as string;
-
-    // 1. Місто з тайтлу: "м. Хмельницький", "м.Київ", "в м. Ужгороді"
-    const cityFromTitle = title.match(/м\.\s*([А-ЯЇЄІҐ][А-ЯЇЄІҐа-яїєіґʼ\-]+)/);
-
-    let city = cityFromTitle?.[1];
-
-    // Нормалізуємо словоформи: "Хмельницькому" → "Хмельницький"
-    if (city) {
-      city = city
-        .replace(/ому$/, 'ий')
-        .replace(/ові$/, 'ів')
-        .replace(/і$/, '')
-        .replace(/у$/, '')
-        .replace(/а$/, '');
-    }
-
-    // 2. Якщо нема — fallback на адресу замовника
-    if (!city && tender.procuringEntity?.address?.locality) {
-      const locality = tender.procuringEntity.address.locality as string;
-      // прибираємо префікси типу "село", "місто"
-      city = locality
-        .replace(/^(село|місто|с\.|м\.)\s+/i, '')
-        .trim();
-    }
-
-    // 3. Витягуємо вулицю з тайтлу для повної адреси
-    const streetMatch = title.match(/вул(?:иц[яі])?\.?\s*([А-ЯЇЄІҐ][А-ЯЇЄІҐа-яїєіґʼ\-\s]*?)(?:[,\s]\s*\d|[,;]|$)/);
-    const street = streetMatch?.[1]?.trim();
-
-    const full = [city, street && `вул. ${street}`].filter(Boolean).join(', ') || 'Невідомо';
-
-    return { city, full };
-  }
-
-  /**
-   * 🆕 Розрахунок реальної схожості title тендера до пошукового запиту
-   *
-   * Логіка балів:
-   * - Точне співпадіння бренду (АТБ, АТБ-Маркет): +40
-   * - Тип об'єкта (магазин, супермаркет): +20
-   * - Тип робіт що дотичні (будівництво, реконструкція, електропостачання, благоустрій): +15
-   * - Кожне слово з запиту що зустрічається в title: +5
-   *
-   * Penalty (мінус):
-   * - Очевидно нерелевантні теми (теплоцентраль, гранатомет, навчальний...): -100
-   *
-   * Результат: 0..100 (нормалізований)
-   */
-  private calculateRelevance(title: string, searchQuery: string): number {
-    if (!title) return 0;
-
-    const titleLower = title.toLowerCase();
-    const queryLower = searchQuery.toLowerCase();
-
-    let score = 0;
-
-    // 🚫 PENALTY: явно нерелевантні теми → 0
-    const irrelevantPatterns = [
-      'теплоцентрал', 'гранатомет', 'автомат', 'гвинтівк', 'макет навчальний',
-      'тренажерний', 'тренінгов', 'військов', 'озброєн', 'пально-мастильн',
-      'продукти харчуванн', 'мийні засоби', 'канцтовар', 'папір ',
-    ];
-    for (const pattern of irrelevantPatterns) {
-      if (titleLower.includes(pattern)) return 0;
-    }
-
-    // ✅ Бренд (якщо в запиті згадується)
-    if (queryLower.includes('атб')) {
-      if (/атб[\-\s]?маркет|атб[\-\s]маркет|тов\s*[«"]?\s*атб|товариство\s*[«"]?\s*атб/i.test(title)) {
-        score += 50; // повна назва компанії
-      } else if (/\bатб\b|«атб»|"атб"/i.test(title)) {
-        score += 40; // згадка АТБ
-      }
-    }
-
-    // ✅ Тип об'єкта
-    if (/магазин/i.test(title)) score += 20;
-    if (/супермаркет|гіпермаркет/i.test(title)) score += 25;
-    if (/торгов(а|ий|е|их)\s+(центр|приміщенн|зал|об'єкт)/i.test(title)) score += 20;
-    if (/продовольч/i.test(title)) score += 10;
-
-    // ✅ Тип робіт
-    if (/будівництв|нове\s+будівництв/i.test(title)) score += 15;
-    if (/реконструкц/i.test(title)) score += 15;
-    if (/електропостачанн|електромонтаж|електричн/i.test(title)) score += 12;
-    if (/благоустр/i.test(title)) score += 12;
-    if (/тротуар|асфальт|світлофор/i.test(title)) score += 8;
-    if (/підключенн|приєднанн/i.test(title)) score += 10;
-
-    // ✅ Кожне значуще слово з запиту в title (+5)
-    const queryWords = queryLower
-      .split(/[\s,.]+/)
-      .filter(w => w.length > 3 && !['будівництво', 'магазин', 'атб'].includes(w));
-
-    for (const word of queryWords) {
-      if (titleLower.includes(word)) score += 5;
-    }
-
-    // Нормалізація 0..100
-    return Math.min(100, Math.max(0, score));
   }
 }

@@ -38,7 +38,6 @@ export interface OrchestratorConfig {
     drawingsVisual?: string;
   };
   projectNotes?: string;
-  prozorroSearchQuery?: string; // Опис для пошуку на Prozorro
 }
 
 export interface ProgressUpdate {
@@ -205,14 +204,11 @@ export class EstimateOrchestrator {
       projectId: this.config.projectId,
       projectNotes: this.config.projectNotes,
       documents: this.config.documents,
-      prozorroSearchQuery: this.config.prozorroSearchQuery,
     });
 
     console.log(`✅ Pre-analysis complete:`, {
       wizardAnalyzed: true,
       documentsFound: preAnalysisResult.documentsAnalysis.hasDocuments,
-      prozorroProjects: preAnalysisResult.prozorroAnalysis.similarProjectsFound,
-      prozorroItems: preAnalysisResult.prozorroAnalysis.totalItemsParsed,
     });
 
     onProgress({
@@ -221,8 +217,6 @@ export class EstimateOrchestrator {
       message: `✅ Аналіз завершено: ${preAnalysisResult.projectSummary}`,
       progress: 5,
       data: {
-        prozorroProjects: preAnalysisResult.prozorroAnalysis.similarProjectsFound,
-        prozorroItems: preAnalysisResult.prozorroAnalysis.totalItemsParsed,
         recommendations: preAnalysisResult.recommendations,
         warnings: preAnalysisResult.warnings,
       },

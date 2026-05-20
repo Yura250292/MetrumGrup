@@ -7,7 +7,6 @@ import {
   CloudUpload,
   Sparkles,
   Square,
-  Database,
   ChevronRight,
   ChevronDown,
   Check,
@@ -68,28 +67,8 @@ export function SetupMobile({ controller }: { controller: AiEstimateController }
           AI генератор кошторисів
         </h1>
         <p className="text-[13px] leading-relaxed" style={{ color: T.textSecondary }}>
-          Створюйте будівельні кошториси за допомогою інженерних AI-агентів.
+          Завантажте документи, вкажіть площу — AI підготує чернетку, яку можна доопрацювати.
         </p>
-        <div className="flex gap-1.5">
-          <span
-            className="rounded-full px-2.5 py-1.5 text-[10px] font-bold"
-            style={{ backgroundColor: T.accentPrimarySoft, color: T.accentPrimary }}
-          >
-            AI + RAG
-          </span>
-          <span
-            className="rounded-full px-2.5 py-1.5 text-[10px] font-bold"
-            style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-          >
-            Prozorro
-          </span>
-          <span
-            className="rounded-full px-2.5 py-1.5 text-[10px] font-bold"
-            style={{ backgroundColor: T.panelElevated, color: T.success }}
-          >
-            Перевірено
-          </span>
-        </div>
       </section>
 
       {/* Content */}
@@ -190,10 +169,10 @@ export function SetupMobile({ controller }: { controller: AiEstimateController }
             </div>
             <div className="flex flex-1 flex-col gap-0.5 text-left">
               <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
-                {controller.wizardCompleted ? "Майстер заповнено" : "Запустити майстер"}
+                {controller.wizardCompleted ? "Уточнення заповнено" : "Уточнити проєкт"}
               </span>
               <span className="text-[11px]" style={{ color: T.accentPrimary }}>
-                {controller.wizardCompleted ? "Редагувати" : "Підвищить точність на ~30%"}
+                {controller.wizardCompleted ? "Редагувати" : "Опціонально, покращує точність"}
               </span>
             </div>
             <ChevronRight size={16} style={{ color: T.textMuted }} />
@@ -303,25 +282,6 @@ export function SetupMobile({ controller }: { controller: AiEstimateController }
             )}
           </div>
 
-          <div
-            className="flex items-center gap-3 rounded-xl p-4"
-            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-          >
-            <div
-              className="flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ backgroundColor: T.successSoft }}
-            >
-              <Database size={16} style={{ color: T.success }} />
-            </div>
-            <div className="flex flex-1 flex-col gap-0.5">
-              <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
-                Джерела даних
-              </span>
-              <span className="text-[11px]" style={{ color: T.success }}>
-                Внутрішні · RAG · Prozorro
-              </span>
-            </div>
-          </div>
         </div>
 
         {/* Readiness */}
@@ -345,7 +305,7 @@ export function SetupMobile({ controller }: { controller: AiEstimateController }
             <RowSmall
               icon={controller.wizardCompleted ? Check : Timer}
               bg={controller.wizardCompleted ? T.success : T.warning}
-              text="Майстер — рекомендовано"
+              text="Уточнення — рекомендовано"
             />
           </div>
         </div>

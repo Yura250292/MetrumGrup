@@ -87,9 +87,6 @@ export function useAiEstimateController() {
   const [area, setArea] = useState<string>("");
   const [projectNotes, setProjectNotes] = useState<string>("");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
-  const [selectedGenerationModel, setSelectedGenerationModel] =
-    useState<"gemini" | "openai" | "anthropic" | "pipeline">("gemini");
-  const [checkProzorro, setCheckProzorro] = useState<boolean>(true);
   // Перемикач: true — тільки внутрішні/оздоблювальні роботи (об'єкт уже збудований),
   // false — повний цикл будівництва з нуля.
   const [interiorOnly, setInteriorOnly] = useState<boolean>(true);
@@ -452,8 +449,6 @@ export function useAiEstimateController() {
       };
       formData.append("wizardData", JSON.stringify(enrichedWizard));
       formData.append("projectNotes", projectNotes);
-      formData.append("checkProzorro", String(checkProzorro));
-      formData.append("prozorroSearchQuery", "");
       formData.append("mode", "master");
       if (selectedProjectId) formData.append("projectId", selectedProjectId);
 
@@ -556,9 +551,6 @@ export function useAiEstimateController() {
                 description: "Згенеровано Master Agent",
                 sections: finalSections,
                 ...(update.data.analysisSummary && { analysisSummary: update.data.analysisSummary }),
-                ...(update.data.prozorroAnalysis && { prozorroAnalysis: update.data.prozorroAnalysis }),
-                ...(update.data.structuredReport && { structuredReport: update.data.structuredReport }),
-                ...(update.data.bidIntelligence && { bidIntelligence: update.data.bidIntelligence }),
                 ...(update.data.zeroPriceFixResult && { zeroPriceFixResult: update.data.zeroPriceFixResult }),
                 ...(update.data.scalingInfo && { scalingInfo: update.data.scalingInfo }),
               } as EstimateData);
@@ -585,7 +577,7 @@ export function useAiEstimateController() {
       setError(err instanceof Error ? err.message : "Помилка генерації");
       setIsChunkedGenerating(false);
     }
-  }, [files, wizardData, projectNotes, checkProzorro, selectedProjectId, prefillR2Keys, verify, interiorOnly]);
+  }, [files, wizardData, projectNotes, selectedProjectId, prefillR2Keys, verify, interiorOnly]);
 
   /* -------------------------------------------------------------------- */
   /* Result mutations                                                     */
@@ -992,10 +984,6 @@ export function useAiEstimateController() {
     setProjectNotes,
     selectedTemplate,
     setSelectedTemplate,
-    selectedGenerationModel,
-    setSelectedGenerationModel,
-    checkProzorro,
-    setCheckProzorro,
     interiorOnly,
     setInteriorOnly,
 

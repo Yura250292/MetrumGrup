@@ -49,9 +49,6 @@ export type EstimateData = {
   };
   // Optional metadata returned by the chunked endpoint
   analysisSummary?: any;
-  prozorroAnalysis?: any;
-  structuredReport?: any;
-  bidIntelligence?: any;
   scalingInfo?: ScalingInfo | null;
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { ReactNode, useMemo } from "react";
-import { Check, ArrowLeft, ArrowRight, X } from "lucide-react";
+import { ReactNode, useMemo, useState } from "react";
+import { Check, ArrowLeft, ArrowRight, ChevronDown, X } from "lucide-react";
 import { T } from "./tokens";
 import type { AiEstimateController } from "../_lib/use-controller";
 import type { ObjectType, WorkScope, WizardData } from "@/lib/wizard-types";
@@ -408,18 +408,6 @@ function TerrainStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      <Field label="Глибина ґрунтових вод">
-        <Grid>
-          {(["shallow", "medium", "deep", "unknown"] as const).map((s) => (
-            <Choice
-              key={s}
-              label={s === "shallow" ? "Близько (<2м)" : s === "medium" ? "Середньо (2-5м)" : s === "deep" ? "Глибоко (>5м)" : "Невідомо"}
-              active={t?.groundwaterDepth === s}
-              onClick={() => set("houseData.terrain.groundwaterDepth", s)}
-            />
-          ))}
-        </Grid>
-      </Field>
       <Field label="Рельєф ділянки">
         <Grid>
           {(["flat", "slight", "steep"] as const).map((s) => (
@@ -432,12 +420,26 @@ function TerrainStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      <Field label="Додаткові роботи">
-        <div className="flex flex-col gap-2">
-          <Switch active={!!t?.needsExcavation} onClick={() => set("houseData.terrain.needsExcavation", !t?.needsExcavation)} label="Потрібні земляні роботи" />
-          <Switch active={!!t?.needsDrainage} onClick={() => set("houseData.terrain.needsDrainage", !t?.needsDrainage)} label="Потрібен дренаж" />
-        </div>
-      </Field>
+      <Advanced>
+        <Field label="Глибина ґрунтових вод">
+          <Grid>
+            {(["shallow", "medium", "deep", "unknown"] as const).map((s) => (
+              <Choice
+                key={s}
+                label={s === "shallow" ? "Близько (<2м)" : s === "medium" ? "Середньо (2-5м)" : s === "deep" ? "Глибоко (>5м)" : "Невідомо"}
+                active={t?.groundwaterDepth === s}
+                onClick={() => set("houseData.terrain.groundwaterDepth", s)}
+              />
+            ))}
+          </Grid>
+        </Field>
+        <Field label="Додаткові роботи">
+          <div className="flex flex-col gap-2">
+            <Switch active={!!t?.needsExcavation} onClick={() => set("houseData.terrain.needsExcavation", !t?.needsExcavation)} label="Потрібні земляні роботи" />
+            <Switch active={!!t?.needsDrainage} onClick={() => set("houseData.terrain.needsDrainage", !t?.needsDrainage)} label="Потрібен дренаж" />
+          </div>
+        </Field>
+      </Advanced>
     </>
   );
 }
@@ -458,32 +460,34 @@ function FoundationStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      <div className="flex gap-4">
-        <Field label="Глибина, м" className="flex-1">
-          <TextInput value={f?.depth ?? ""} onChange={(v) => set("houseData.foundation.depth", v)} placeholder="1.5" />
-        </Field>
-        <Field label="Ширина, м" className="flex-1">
-          <TextInput value={f?.width ?? ""} onChange={(v) => set("houseData.foundation.width", v)} placeholder="0.4" />
-        </Field>
-      </div>
-      <Field label="Армування">
-        <Grid>
-          {(["light", "standard", "heavy"] as const).map((s) => (
-            <Choice key={s} label={s === "light" ? "Легке" : s === "standard" ? "Стандартне" : "Підсилене"} active={f?.reinforcement === s} onClick={() => set("houseData.foundation.reinforcement", s)} />
-          ))}
-        </Grid>
-      </Field>
       <Field label="Гідроізоляція та утеплення">
         <div className="flex flex-col gap-2">
           <Switch active={!!f?.waterproofing} onClick={() => set("houseData.foundation.waterproofing", !f?.waterproofing)} label="Гідроізоляція" />
           <Switch active={!!f?.insulation} onClick={() => set("houseData.foundation.insulation", !f?.insulation)} label="Утеплення XPS" />
         </div>
       </Field>
-      {f?.insulation && (
-        <Field label="Товщина утеплення, мм">
-          <TextInput value={String(f.insulationThickness ?? 50)} onChange={(v) => set("houseData.foundation.insulationThickness", Number(v) || 50)} />
+      <Advanced>
+        <div className="flex gap-4">
+          <Field label="Глибина, м" className="flex-1">
+            <TextInput value={f?.depth ?? ""} onChange={(v) => set("houseData.foundation.depth", v)} placeholder="1.5" />
+          </Field>
+          <Field label="Ширина, м" className="flex-1">
+            <TextInput value={f?.width ?? ""} onChange={(v) => set("houseData.foundation.width", v)} placeholder="0.4" />
+          </Field>
+        </div>
+        <Field label="Армування">
+          <Grid>
+            {(["light", "standard", "heavy"] as const).map((s) => (
+              <Choice key={s} label={s === "light" ? "Легке" : s === "standard" ? "Стандартне" : "Підсилене"} active={f?.reinforcement === s} onClick={() => set("houseData.foundation.reinforcement", s)} />
+            ))}
+          </Grid>
         </Field>
-      )}
+        {f?.insulation && (
+          <Field label="Товщина утеплення, мм">
+            <TextInput value={String(f.insulationThickness ?? 50)} onChange={(v) => set("houseData.foundation.insulationThickness", Number(v) || 50)} />
+          </Field>
+        )}
+      </Advanced>
     </>
   );
 }
@@ -504,36 +508,38 @@ function WallsStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      <Field label="Товщина стін, мм">
-        <TextInput value={w?.thickness ?? ""} onChange={(v) => set("houseData.walls.thickness", v)} placeholder="400" />
-      </Field>
       <Field label="Утеплення">
         <Switch active={!!w?.insulation} onClick={() => set("houseData.walls.insulation", !w?.insulation)} label="Стіни утеплені ззовні" />
       </Field>
-      {w?.insulation && (
-        <>
-          <Field label="Тип утеплювача">
-            <Grid>
-              {(["foam", "mineral", "ecowool"] as const).map((s) => (
-                <Choice key={s} label={s === "foam" ? "Пінопласт" : s === "mineral" ? "Мінвата" : "Ековата"} active={w?.insulationType === s} onClick={() => set("houseData.walls.insulationType", s)} />
-              ))}
-            </Grid>
-          </Field>
-          <Field label="Товщина утеплювача, мм">
-            <TextInput value={String(w.insulationThickness ?? 100)} onChange={(v) => set("houseData.walls.insulationThickness", Number(v) || 100)} />
-          </Field>
-        </>
-      )}
-      <Field label="Перегородки">
-        <Grid>
-          {(["gasblock", "brick", "gypsum", "same"] as const).map((s) => (
-            <Choice key={s} label={s === "gasblock" ? "Газоблок" : s === "brick" ? "Цегла" : s === "gypsum" ? "Гіпсокартон" : "Як основні"} active={w?.partitionMaterial === s} onClick={() => set("houseData.walls.partitionMaterial", s)} />
-          ))}
-        </Grid>
-      </Field>
-      <Field label="Конструкція">
-        <Switch active={!!w?.hasLoadBearing} onClick={() => set("houseData.walls.hasLoadBearing", !w?.hasLoadBearing)} label="Є внутрішні несучі стіни" />
-      </Field>
+      <Advanced>
+        <Field label="Товщина стін, мм">
+          <TextInput value={w?.thickness ?? ""} onChange={(v) => set("houseData.walls.thickness", v)} placeholder="400" />
+        </Field>
+        {w?.insulation && (
+          <>
+            <Field label="Тип утеплювача">
+              <Grid>
+                {(["foam", "mineral", "ecowool"] as const).map((s) => (
+                  <Choice key={s} label={s === "foam" ? "Пінопласт" : s === "mineral" ? "Мінвата" : "Ековата"} active={w?.insulationType === s} onClick={() => set("houseData.walls.insulationType", s)} />
+                ))}
+              </Grid>
+            </Field>
+            <Field label="Товщина утеплювача, мм">
+              <TextInput value={String(w.insulationThickness ?? 100)} onChange={(v) => set("houseData.walls.insulationThickness", Number(v) || 100)} />
+            </Field>
+          </>
+        )}
+        <Field label="Перегородки">
+          <Grid>
+            {(["gasblock", "brick", "gypsum", "same"] as const).map((s) => (
+              <Choice key={s} label={s === "gasblock" ? "Газоблок" : s === "brick" ? "Цегла" : s === "gypsum" ? "Гіпсокартон" : "Як основні"} active={w?.partitionMaterial === s} onClick={() => set("houseData.walls.partitionMaterial", s)} />
+            ))}
+          </Grid>
+        </Field>
+        <Field label="Конструкція">
+          <Switch active={!!w?.hasLoadBearing} onClick={() => set("houseData.walls.hasLoadBearing", !w?.hasLoadBearing)} label="Є внутрішні несучі стіни" />
+        </Field>
+      </Advanced>
     </>
   );
 }
@@ -549,11 +555,6 @@ function RoofStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      {r?.type !== "flat" && (
-        <Field label="Кут нахилу, °">
-          <TextInput value={String(r?.pitchAngle ?? 30)} onChange={(v) => set("houseData.roof.pitchAngle", Number(v) || 30)} />
-        </Field>
-      )}
       <Field label="Покриття">
         <Grid>
           {(["metal_tile", "soft_tile", "profiled_sheet", "ceramic", "slate"] as const).map((s) => (
@@ -571,11 +572,6 @@ function RoofStep({ data, set }: { data: WizardData; set: SetNested }) {
       <Field label="Утеплення даху">
         <Switch active={!!r?.insulation} onClick={() => set("houseData.roof.insulation", !r?.insulation)} label="Утеплити дах" />
       </Field>
-      {r?.insulation && (
-        <Field label="Товщина утеплювача, мм">
-          <TextInput value={String(r.insulationThickness ?? 150)} onChange={(v) => set("houseData.roof.insulationThickness", Number(v) || 150)} />
-        </Field>
-      )}
       <Field label="Тип горища">
         <Grid>
           {(["cold", "warm", "living"] as const).map((s) => (
@@ -588,9 +584,21 @@ function RoofStep({ data, set }: { data: WizardData; set: SetNested }) {
           <Switch active={!!r?.gutterSystem} onClick={() => set("houseData.roof.gutterSystem", !r?.gutterSystem)} label="Водостічна система" />
         </div>
       </Field>
-      <Field label="Мансардних вікон, шт">
-        <TextInput value={String(r?.roofWindows ?? 0)} onChange={(v) => set("houseData.roof.roofWindows", Number(v) || 0)} />
-      </Field>
+      <Advanced>
+        {r?.type !== "flat" && (
+          <Field label="Кут нахилу, °">
+            <TextInput value={String(r?.pitchAngle ?? 30)} onChange={(v) => set("houseData.roof.pitchAngle", Number(v) || 30)} />
+          </Field>
+        )}
+        {r?.insulation && (
+          <Field label="Товщина утеплювача, мм">
+            <TextInput value={String(r.insulationThickness ?? 150)} onChange={(v) => set("houseData.roof.insulationThickness", Number(v) || 150)} />
+          </Field>
+        )}
+        <Field label="Мансардних вікон, шт">
+          <TextInput value={String(r?.roofWindows ?? 0)} onChange={(v) => set("houseData.roof.roofWindows", Number(v) || 0)} />
+        </Field>
+      </Advanced>
     </>
   );
 }
@@ -862,32 +870,34 @@ function EngineeringStep({ data, set }: { data: WizardData; set: SetNested }) {
           <Choice label="Трифазна (380В)" active={u?.electrical?.power === "three_phase"} onClick={() => set("utilities.electrical.power", "three_phase")} />
         </Grid>
       </Field>
-      <div className="grid grid-cols-4 gap-3">
-        <Field label="Потужність, кВт">
-          <TextInput value={String(u?.electrical?.capacity ?? "")} onChange={(v) => set("utilities.electrical.capacity", Number(v) || 0)} placeholder="15" />
-        </Field>
-        <Field label="Розеток">
-          <TextInput value={String(u?.electrical?.outlets ?? 0)} onChange={(v) => set("utilities.electrical.outlets", Number(v) || 0)} />
-        </Field>
-        <Field label="Вимикачів">
-          <TextInput value={String(u?.electrical?.switches ?? 0)} onChange={(v) => set("utilities.electrical.switches", Number(v) || 0)} />
-        </Field>
-        <Field label="Точок освітлення">
-          <TextInput value={String(u?.electrical?.lightPoints ?? 0)} onChange={(v) => set("utilities.electrical.lightPoints", Number(v) || 0)} />
-        </Field>
-      </div>
-      <Field label="Підключення">
-        <div className="flex flex-col gap-2">
-          <Switch active={!!u?.electrical?.outdoorLighting} onClick={() => set("utilities.electrical.outdoorLighting", !u?.electrical?.outdoorLighting)} label="Зовнішнє освітлення" />
-          <Switch active={!!u?.electrical?.needsConnection} onClick={() => set("utilities.electrical.needsConnection", !u?.electrical?.needsConnection)} label="Потрібен підвід від мережі" />
-          <Switch active={!!u?.electrical?.needsTransformer} onClick={() => set("utilities.electrical.needsTransformer", !u?.electrical?.needsTransformer)} label="Потрібна трансформаторна підстанція" />
+      <Advanced label="Електрика — деталі">
+        <div className="grid grid-cols-4 gap-3">
+          <Field label="Потужність, кВт">
+            <TextInput value={String(u?.electrical?.capacity ?? "")} onChange={(v) => set("utilities.electrical.capacity", Number(v) || 0)} placeholder="15" />
+          </Field>
+          <Field label="Розеток">
+            <TextInput value={String(u?.electrical?.outlets ?? 0)} onChange={(v) => set("utilities.electrical.outlets", Number(v) || 0)} />
+          </Field>
+          <Field label="Вимикачів">
+            <TextInput value={String(u?.electrical?.switches ?? 0)} onChange={(v) => set("utilities.electrical.switches", Number(v) || 0)} />
+          </Field>
+          <Field label="Точок освітлення">
+            <TextInput value={String(u?.electrical?.lightPoints ?? 0)} onChange={(v) => set("utilities.electrical.lightPoints", Number(v) || 0)} />
+          </Field>
         </div>
-      </Field>
-      {u?.electrical?.needsConnection && (
-        <Field label="Відстань до мережі, м">
-          <TextInput value={String(u.electrical.connectionDistance ?? "")} onChange={(v) => set("utilities.electrical.connectionDistance", Number(v) || 0)} />
+        <Field label="Підключення">
+          <div className="flex flex-col gap-2">
+            <Switch active={!!u?.electrical?.outdoorLighting} onClick={() => set("utilities.electrical.outdoorLighting", !u?.electrical?.outdoorLighting)} label="Зовнішнє освітлення" />
+            <Switch active={!!u?.electrical?.needsConnection} onClick={() => set("utilities.electrical.needsConnection", !u?.electrical?.needsConnection)} label="Потрібен підвід від мережі" />
+            <Switch active={!!u?.electrical?.needsTransformer} onClick={() => set("utilities.electrical.needsTransformer", !u?.electrical?.needsTransformer)} label="Потрібна трансформаторна підстанція" />
+          </div>
         </Field>
-      )}
+        {u?.electrical?.needsConnection && (
+          <Field label="Відстань до мережі, м">
+            <TextInput value={String(u.electrical.connectionDistance ?? "")} onChange={(v) => set("utilities.electrical.connectionDistance", Number(v) || 0)} />
+          </Field>
+        )}
+      </Advanced>
 
       <Field label="Опалення">
         <Grid>
@@ -902,27 +912,29 @@ function EngineeringStep({ data, set }: { data: WizardData; set: SetNested }) {
         </Grid>
       </Field>
       {u?.heating?.type && u.heating.type !== "none" && (
-        <div className="grid grid-cols-3 gap-3">
-          <Field label="Потужність котла, кВт">
-            <TextInput value={String(u.heating.boilerPower ?? "")} onChange={(v) => set("utilities.heating.boilerPower", Number(v) || 0)} />
-          </Field>
-          <Field label="Радіаторів">
-            <TextInput value={String(u.heating.radiators ?? 0)} onChange={(v) => set("utilities.heating.radiators", Number(v) || 0)} />
-          </Field>
-          <Field label="Тепла підлога, м²">
-            <TextInput value={u.heating.underfloorArea ?? ""} onChange={(v) => { set("utilities.heating.underfloor", true); set("utilities.heating.underfloorArea", v); }} placeholder="0 = немає" />
-          </Field>
-        </div>
-      )}
-      {u?.heating?.type === "gas" && (
-        <Field label="Підключення газу">
-          <div className="flex flex-col gap-2">
-            <Switch active={!!u.heating.needsGasConnection} onClick={() => set("utilities.heating.needsGasConnection", !u.heating.needsGasConnection)} label="Потрібен підвід газу" />
-            {u.heating.needsGasConnection && (
-              <TextInput value={String(u.heating.gasConnectionDistance ?? "")} onChange={(v) => set("utilities.heating.gasConnectionDistance", Number(v) || 0)} placeholder="Відстань, м" />
-            )}
+        <Advanced label="Опалення — деталі">
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Потужність котла, кВт">
+              <TextInput value={String(u.heating.boilerPower ?? "")} onChange={(v) => set("utilities.heating.boilerPower", Number(v) || 0)} />
+            </Field>
+            <Field label="Радіаторів">
+              <TextInput value={String(u.heating.radiators ?? 0)} onChange={(v) => set("utilities.heating.radiators", Number(v) || 0)} />
+            </Field>
+            <Field label="Тепла підлога, м²">
+              <TextInput value={u.heating.underfloorArea ?? ""} onChange={(v) => { set("utilities.heating.underfloor", true); set("utilities.heating.underfloorArea", v); }} placeholder="0 = немає" />
+            </Field>
           </div>
-        </Field>
+          {u?.heating?.type === "gas" && (
+            <Field label="Підключення газу">
+              <div className="flex flex-col gap-2">
+                <Switch active={!!u.heating.needsGasConnection} onClick={() => set("utilities.heating.needsGasConnection", !u.heating.needsGasConnection)} label="Потрібен підвід газу" />
+                {u.heating.needsGasConnection && (
+                  <TextInput value={String(u.heating.gasConnectionDistance ?? "")} onChange={(v) => set("utilities.heating.gasConnectionDistance", Number(v) || 0)} placeholder="Відстань, м" />
+                )}
+              </div>
+            </Field>
+          )}
+        </Advanced>
       )}
 
       <Field label="Водопостачання">
@@ -938,28 +950,30 @@ function EngineeringStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      {u?.water?.hotWater && (
-        <>
-          <Field label="Тип бойлера">
-            <Grid>
-              {(["gas", "electric", "none"] as const).map((s) => (
-                <Choice key={s} label={s === "gas" ? "Газовий" : s === "electric" ? "Електричний" : "Немає"} active={u?.water?.boilerType === s} onClick={() => set("utilities.water.boilerType", s)} />
-              ))}
-            </Grid>
-          </Field>
-          {u?.water?.boilerType && u.water.boilerType !== "none" && (
-            <Field label="Об'єм бойлера, л">
-              <TextInput value={String(u.water.boilerVolume ?? 100)} onChange={(v) => set("utilities.water.boilerVolume", Number(v) || 100)} />
+      <Advanced label="Вода — деталі">
+        {u?.water?.hotWater && (
+          <>
+            <Field label="Тип бойлера">
+              <Grid>
+                {(["gas", "electric", "none"] as const).map((s) => (
+                  <Choice key={s} label={s === "gas" ? "Газовий" : s === "electric" ? "Електричний" : "Немає"} active={u?.water?.boilerType === s} onClick={() => set("utilities.water.boilerType", s)} />
+                ))}
+              </Grid>
             </Field>
-          )}
-        </>
-      )}
-      <Field label="Підключення води">
-        <div className="flex flex-col gap-2">
-          <Switch active={!!u?.water?.needsConnection} onClick={() => set("utilities.water.needsConnection", !u?.water?.needsConnection)} label="Потрібен підвід води" />
-          <Switch active={!!u?.water?.needsPump} onClick={() => set("utilities.water.needsPump", !u?.water?.needsPump)} label="Насосна станція" />
-        </div>
-      </Field>
+            {u?.water?.boilerType && u.water.boilerType !== "none" && (
+              <Field label="Об'єм бойлера, л">
+                <TextInput value={String(u.water.boilerVolume ?? 100)} onChange={(v) => set("utilities.water.boilerVolume", Number(v) || 100)} />
+              </Field>
+            )}
+          </>
+        )}
+        <Field label="Підключення води">
+          <div className="flex flex-col gap-2">
+            <Switch active={!!u?.water?.needsConnection} onClick={() => set("utilities.water.needsConnection", !u?.water?.needsConnection)} label="Потрібен підвід води" />
+            <Switch active={!!u?.water?.needsPump} onClick={() => set("utilities.water.needsPump", !u?.water?.needsPump)} label="Насосна станція" />
+          </div>
+        </Field>
+      </Advanced>
 
       <Field label="Каналізація">
         <Grid>
@@ -968,12 +982,14 @@ function EngineeringStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      <Field label="Обладнання каналізації">
-        <div className="flex flex-col gap-2">
-          <Switch active={!!u?.sewerage?.pumpNeeded} onClick={() => set("utilities.sewerage.pumpNeeded", !u?.sewerage?.pumpNeeded)} label="Фекальний насос" />
-          <Switch active={!!u?.sewerage?.needsLift} onClick={() => set("utilities.sewerage.needsLift", !u?.sewerage?.needsLift)} label="Підіймальна установка (для підвалу)" />
-        </div>
-      </Field>
+      <Advanced label="Каналізація — деталі">
+        <Field label="Обладнання каналізації">
+          <div className="flex flex-col gap-2">
+            <Switch active={!!u?.sewerage?.pumpNeeded} onClick={() => set("utilities.sewerage.pumpNeeded", !u?.sewerage?.pumpNeeded)} label="Фекальний насос" />
+            <Switch active={!!u?.sewerage?.needsLift} onClick={() => set("utilities.sewerage.needsLift", !u?.sewerage?.needsLift)} label="Підіймальна установка (для підвалу)" />
+          </div>
+        </Field>
+      </Advanced>
 
       <Field label="Вентиляція">
         <div className="flex flex-col gap-2">
@@ -1009,12 +1025,6 @@ function FinishingStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      {f?.walls?.material === "tile" && (
-        <Field label="Площа плитки на стінах, м²">
-          <TextInput value={String(f.walls.tileArea ?? "")} onChange={(v) => set("finishing.walls.tileArea", Number(v) || 0)} />
-        </Field>
-      )}
-
       <Field label="Підлога — площі за типом, м²">
         <div className="grid grid-cols-3 gap-3">
           {(["tile", "laminate", "parquet", "vinyl", "carpet", "epoxy"] as const).map((k) => (
@@ -1035,22 +1045,29 @@ function FinishingStep({ data, set }: { data: WizardData; set: SetNested }) {
           ))}
         </Grid>
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Рівнів стелі">
-          <Grid>
-            {([1, 2, 3] as const).map((n) => (
-              <Choice key={n} label={String(n)} active={f?.ceiling?.levels === n} onClick={() => set("finishing.ceiling.levels", n)} />
-            ))}
-          </Grid>
-        </Field>
-        <Field label="Освітлення">
-          <Grid>
-            {(["spots", "chandelier", "led", "mixed"] as const).map((s) => (
-              <Choice key={s} label={s === "spots" ? "Точкове" : s === "chandelier" ? "Люстра" : s === "led" ? "LED стрічка" : "Мікс"} active={f?.ceiling?.lighting === s} onClick={() => set("finishing.ceiling.lighting", s)} />
-            ))}
-          </Grid>
-        </Field>
-      </div>
+      <Advanced label="Оздоблення — деталі">
+        {f?.walls?.material === "tile" && (
+          <Field label="Площа плитки на стінах, м²">
+            <TextInput value={String(f.walls.tileArea ?? "")} onChange={(v) => set("finishing.walls.tileArea", Number(v) || 0)} />
+          </Field>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Рівнів стелі">
+            <Grid>
+              {([1, 2, 3] as const).map((n) => (
+                <Choice key={n} label={String(n)} active={f?.ceiling?.levels === n} onClick={() => set("finishing.ceiling.levels", n)} />
+              ))}
+            </Grid>
+          </Field>
+          <Field label="Освітлення">
+            <Grid>
+              {(["spots", "chandelier", "led", "mixed"] as const).map((s) => (
+                <Choice key={s} label={s === "spots" ? "Точкове" : s === "chandelier" ? "Люстра" : s === "led" ? "LED стрічка" : "Мікс"} active={f?.ceiling?.lighting === s} onClick={() => set("finishing.ceiling.lighting", s)} />
+              ))}
+            </Grid>
+          </Field>
+        </div>
+      </Advanced>
     </>
   );
 }
@@ -1198,6 +1215,38 @@ function Field({ label, children, className = "" }: { label: string; children: R
 
 function Grid({ children }: { children: ReactNode }) {
   return <div className="flex flex-wrap gap-2">{children}</div>;
+}
+
+// Collapsible "Розширені параметри" — інженерні поля, що рідко потрібні
+// менеджеру. Backend усе ще приймає ці значення (data shape незмінний),
+// просто за замовчуванням сховано, щоб не перевантажувати UI.
+function Advanced({ children, label = "Розширені параметри" }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className="flex flex-col rounded-xl"
+      style={{ backgroundColor: T.panelSoft, border: `1px dashed ${T.borderSoft}` }}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center justify-between px-4 py-3 text-left"
+      >
+        <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textSecondary }}>
+          {label.toUpperCase()}
+        </span>
+        <ChevronDown
+          size={14}
+          style={{
+            color: T.textMuted,
+            transform: open ? "rotate(180deg)" : "rotate(0deg)",
+            transition: "transform 0.2s",
+          }}
+        />
+      </button>
+      {open && <div className="flex flex-col gap-4 px-4 pb-4">{children}</div>}
+    </div>
+  );
 }
 
 function Choice({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {

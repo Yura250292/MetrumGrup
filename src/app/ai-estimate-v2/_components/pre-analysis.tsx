@@ -6,9 +6,9 @@ import {
   TriangleAlert,
   Info,
   CircleCheck,
-  ShieldCheck,
   Sparkles,
   Loader2,
+  PenLine,
 } from "lucide-react";
 import { T } from "./tokens";
 import type { AiEstimateController } from "../_lib/use-controller";
@@ -26,7 +26,6 @@ function buildFindings(data: any): Finding[] {
 
   // Try to map known shapes from the analyze endpoint
   const classification = data.classification || {};
-  const parsedData = data.parsedData || {};
   const filesAnalyzed: number = data.filesAnalyzed ?? 0;
 
   if (Array.isArray(classification.contradictions) && classification.contradictions.length > 0) {
@@ -72,65 +71,40 @@ function buildFindings(data: any): Finding[] {
     });
   }
 
-  return findings;
+  // Plan: 3-7 ключових зауважень — обрізаємо вихлоп, щоб не перевантажувати.
+  return findings.slice(0, 7);
 }
 
-function summarizeKpi(data: any) {
-  if (!data) {
+function buildSummary(data: any, findings: Finding[]): { text: string; hasBlockers: boolean } {
+  const filesAnalyzed: number = data?.filesAnalyzed ?? 0;
+  const dangers = findings.filter((f) => f.tone === "danger").length;
+  const warnings = findings.filter((f) => f.tone === "warning").length;
+
+  if (filesAnalyzed === 0) {
+    return { text: "Файлів для аналізу не знайдено.", hasBlockers: true };
+  }
+  if (dangers > 0) {
     return {
-      docs: { value: "—", hint: "", color: T.textMuted },
-      completeness: { value: "—", hint: "", color: T.textMuted },
-      contradictions: { value: "—", hint: "", color: T.textMuted },
-      readiness: { value: "—", hint: "", color: T.textMuted },
+      text: `Знайдено ${dangers} ${dangers === 1 ? "суперечність" : "суперечностей"} у документах. Радимо виправити перед генерацією.`,
+      hasBlockers: true,
     };
   }
-
-  const docsCount = data.filesAnalyzed ?? data.classification?.filesCount ?? 0;
-  const completenessRaw = data.classification?.completeness;
-  const completeness =
-    typeof completenessRaw === "number"
-      ? `${Math.round(completenessRaw * 100)}%`
-      : data.classification?.completenessLabel || "—";
-  const contradictions =
-    (Array.isArray(data.classification?.contradictions) && data.classification.contradictions.length) || 0;
-
-  const readinessLabel =
-    contradictions > 0
-      ? "Потребує уваги"
-      : docsCount > 0
-        ? "Висока"
-        : "Низька";
-  const readinessColor =
-    contradictions > 0 ? T.warning : docsCount > 0 ? T.success : T.danger;
-
+  if (warnings > 0) {
+    return {
+      text: `Документи проаналізовано, є ${warnings} ${warnings === 1 ? "зауваження" : "зауважень"} — можна продовжувати.`,
+      hasBlockers: false,
+    };
+  }
   return {
-    docs: {
-      value: `${docsCount} / ${docsCount}`,
-      hint: docsCount > 0 ? "Усі метадані витягнуто" : "Файлів не знайдено",
-      color: docsCount > 0 ? T.success : T.danger,
-    },
-    completeness: {
-      value: completeness,
-      hint: typeof completenessRaw === "number" && completenessRaw < 0.9 ? "Деякі параметри відсутні" : "Повний опис",
-      color: typeof completenessRaw === "number" && completenessRaw < 0.9 ? T.warning : T.success,
-    },
-    contradictions: {
-      value: contradictions > 0 ? `Знайдено ${contradictions}` : "Немає",
-      hint: contradictions > 0 ? "Перегляньте список нижче" : "Документи узгоджені",
-      color: contradictions > 0 ? T.danger : T.success,
-    },
-    readiness: {
-      value: readinessLabel,
-      hint: contradictions > 0 ? "Виправте перед генерацією" : "Безпечно генерувати",
-      color: readinessColor,
-    },
+    text: `Документи проаналізовано без зауважень. Можна генерувати.`,
+    hasBlockers: false,
   };
 }
 
 export function PreAnalysisModal({ controller }: { controller: AiEstimateController }) {
   const data = controller.preAnalysisData;
-  const kpi = summarizeKpi(data);
   const findings = buildFindings(data);
+  const summary = buildSummary(data, findings);
 
   return (
     <div
@@ -175,40 +149,27 @@ export function PreAnalysisModal({ controller }: { controller: AiEstimateControl
         </header>
 
         {/* Body */}
-        <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-8">
-          <div className="grid grid-cols-4 gap-4">
-            <SummaryCard label="ДОКУМЕНТИ" value={kpi.docs.value} hint={kpi.docs.hint} hintColor={kpi.docs.color} />
-            <SummaryCard
-              label="ПОВНОТА"
-              value={kpi.completeness.value}
-              hint={kpi.completeness.hint}
-              hintColor={kpi.completeness.color}
-            />
-            <SummaryCard
-              label="СУПЕРЕЧНОСТІ"
-              value={kpi.contradictions.value}
-              hint={kpi.contradictions.hint}
-              hintColor={kpi.contradictions.color}
-            />
-            <SummaryCard
-              label="AI-ГОТОВНІСТЬ"
-              value={kpi.readiness.value}
-              valueColor={kpi.readiness.color}
-              hint={kpi.readiness.hint}
-              hintColor={kpi.readiness.color}
-            />
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-8">
+          {/* Summary */}
+          <div
+            className="rounded-xl p-5 text-[14px] leading-relaxed"
+            style={{
+              backgroundColor: summary.hasBlockers ? T.dangerSoft : T.panelElevated,
+              border: `1px solid ${summary.hasBlockers ? T.danger : T.borderSoft}`,
+              color: summary.hasBlockers ? T.danger : T.textPrimary,
+            }}
+          >
+            {summary.text}
           </div>
 
-          <div className="flex flex-col gap-3.5">
-            <h3 className="text-base font-bold" style={{ color: T.textPrimary }}>
-              Структуровані висновки
-            </h3>
+          {/* Findings */}
+          <div className="flex flex-col gap-3">
             {findings.length === 0 ? (
               <div
                 className="rounded-xl p-4 text-[13px]"
                 style={{ backgroundColor: T.panelElevated, color: T.textMuted }}
               >
-                Висновків поки немає — обробка може ще тривати або файли проаналізовані без зауважень.
+                Зауважень немає.
               </div>
             ) : (
               findings.map((f, i) => (
@@ -226,70 +187,39 @@ export function PreAnalysisModal({ controller }: { controller: AiEstimateControl
 
         {/* Footer */}
         <footer
-          className="flex items-center justify-between gap-4 border-t px-8 py-5"
+          className="flex items-center justify-end gap-2.5 border-t px-8 py-5"
           style={{ backgroundColor: T.panelSoft, borderColor: T.borderSoft }}
         >
-          <div className="flex items-center gap-2.5">
-            <ShieldCheck size={16} style={{ color: T.success }} />
-            <span className="text-xs font-medium" style={{ color: T.textSecondary }}>
-              Пре-аналіз завершено · можна переходити до генерації
-            </span>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={controller.closePreAnalysis}
-              className="rounded-xl px-4 py-3 text-sm font-medium"
-              style={{ color: T.textSecondary }}
-            >
-              Закрити
-            </button>
-            <button
-              onClick={controller.generate}
-              disabled={controller.isChunkedGenerating}
-              className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
-              style={{ backgroundColor: T.accentPrimary }}
-            >
-              {controller.isChunkedGenerating ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <Sparkles size={16} />
-              )}
-              {controller.isChunkedGenerating ? "Генерація…" : "Перейти до генерації"}
-            </button>
-          </div>
+          <button
+            onClick={controller.closePreAnalysis}
+            className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold"
+            style={{
+              color: T.textPrimary,
+              backgroundColor: T.panelElevated,
+              border: `1px solid ${T.borderStrong}`,
+            }}
+          >
+            <PenLine size={16} /> Виправити
+          </button>
+          <button
+            onClick={controller.generate}
+            disabled={controller.isChunkedGenerating}
+            className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
+            {controller.isChunkedGenerating ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Sparkles size={16} />
+            )}
+            {controller.isChunkedGenerating
+              ? "Генерація…"
+              : summary.hasBlockers
+                ? "Все одно згенерувати"
+                : "Згенерувати кошторис"}
+          </button>
         </footer>
       </div>
-    </div>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  hint,
-  hintColor,
-  valueColor,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  hintColor: string;
-  valueColor?: string;
-}) {
-  return (
-    <div
-      className="flex flex-col gap-1.5 rounded-xl p-[18px]"
-      style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderSoft}` }}
-    >
-      <span className="text-[10px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-        {label}
-      </span>
-      <span className="text-lg font-bold" style={{ color: valueColor ?? T.textPrimary }}>
-        {value}
-      </span>
-      <span className="text-[11px]" style={{ color: hintColor }}>
-        {hint}
-      </span>
     </div>
   );
 }

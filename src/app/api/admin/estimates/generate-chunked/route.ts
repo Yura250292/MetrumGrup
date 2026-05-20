@@ -65,15 +65,11 @@ export async function POST(request: NextRequest) {
         const r2KeysStr = formData.get("r2Keys") as string;
         const wizardDataStr = formData.get("wizardData") as string;
         const projectNotesStr = formData.get("projectNotes") as string || "";
-        const checkProzorroStr = formData.get("checkProzorro") as string;
-        const prozorroSearchQuery = (formData.get("prozorroSearchQuery") as string) || "";
-
         // Files are now optional - can generate from wizard data only
         const r2Keys = r2KeysStr ? JSON.parse(r2KeysStr) : [];
         const wizardData = wizardDataStr ? JSON.parse(wizardDataStr) : null;
-        const checkProzorro = checkProzorroStr === "true";
 
-        console.log(`📋 Generation params: ${r2Keys.length} files, wizardData: ${!!wizardData}, checkProzorro: ${checkProzorro}, prozorroQuery: "${prozorroSearchQuery}"`);
+        console.log(`📋 Generation params: ${r2Keys.length} files, wizardData: ${!!wizardData}`);
 
         // 📐 Площа — м'яка перевірка: якщо не вказана вручну, її визначить
         //    візуальний обмір креслень нижче. Жорстку помилку кидаємо лише
@@ -322,7 +318,6 @@ export async function POST(request: NextRequest) {
               drawingsVisual: drawingsVisualReport || undefined,
             },
             projectNotes: projectNotesStr,
-            prozorroSearchQuery, // 🆕 Опис для пошуку на Prozorro
           });
 
           const estimateData = await orchestrator.generate((update) => {
@@ -352,25 +347,6 @@ export async function POST(request: NextRequest) {
               totalLabor: laborCost,
               totalOverhead: overheadCost,
               analysisSummary: (estimateData as any).analysisSummary || null,
-              structuredReport: (estimateData as any).structuredReport || undefined,
-              bidIntelligence: (estimateData as any).preAnalysisResult?.bidIntelligence || undefined,
-              prozorroChecked: !!(estimateData as any).preAnalysisResult?.prozorroAnalysis,
-              prozorroCheckedAt: !!(estimateData as any).preAnalysisResult?.prozorroAnalysis ? new Date() : null,
-              prozorroAnalysis: (() => {
-                const pa = (estimateData as any).preAnalysisResult?.prozorroAnalysis;
-                if (!pa) return null;
-                // Зберігаємо як JSON-string у БД (поле String? @db.Text)
-                return JSON.stringify({
-                  similarProjectsFound: pa.similarProjectsFound || 0,
-                  totalItemsParsed: pa.totalItemsParsed || 0,
-                  averagePriceLevel: pa.averagePriceLevel || 'medium',
-                  topSimilarProjects: pa.topSimilarProjects || [],
-                  aggregatedLocations: pa.aggregatedLocations || [],
-                  priceDatabase: pa.priceDatabase instanceof Map
-                    ? Object.fromEntries(pa.priceDatabase)
-                    : (pa.priceDatabase || {}),
-                });
-              })(),
               createdById: session.user.id,
               sections: {
                 create: estimateData.sections.map((section, index) => ({
@@ -444,25 +420,7 @@ export async function POST(request: NextRequest) {
               totalAmount: actualTotalAmount,
               sectionsCount: estimateData.sections.length,
               validationIssues: estimateData.validationIssues,
-              // 🆕 Звіт інженера та аналіз Prozorro (як об'єкт для модалки)
               analysisSummary: (estimateData as any).analysisSummary || null,
-              structuredReport: (estimateData as any).structuredReport || null,
-              bidIntelligence: (estimateData as any).preAnalysisResult?.bidIntelligence || null,
-              prozorroAnalysis: (() => {
-                const pa = (estimateData as any).preAnalysisResult?.prozorroAnalysis;
-                if (!pa) return null;
-                // Конвертуємо Map → object щоб серіалізувалось у JSON
-                return {
-                  similarProjectsFound: pa.similarProjectsFound || 0,
-                  totalItemsParsed: pa.totalItemsParsed || 0,
-                  averagePriceLevel: pa.averagePriceLevel || 'medium',
-                  topSimilarProjects: pa.topSimilarProjects || [],
-                  aggregatedLocations: pa.aggregatedLocations || [],
-                  priceDatabase: pa.priceDatabase instanceof Map
-                    ? Object.fromEntries(pa.priceDatabase)
-                    : (pa.priceDatabase || {}),
-                };
-              })(),
               scalingInfo: (estimateData as any).scalingInfo || null,
               zeroPriceFixResult: (estimateData as any).zeroPriceFixResult || null,
               // ✅ Add complete sections from database for frontend display
@@ -623,7 +581,6 @@ export async function POST(request: NextRequest) {
             totalLabor,
             totalOverhead,
             analysisSummary: null,
-            prozorroChecked: checkProzorro,
             createdById: session.user.id,
             sections: {
               create: sections.map((section, index) => ({

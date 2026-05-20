@@ -27,6 +27,10 @@ export function ResultMobile({ controller }: { controller: AiEstimateController 
   const sectionCount = estimate.sections.length;
   const itemCount = estimate.sections.reduce((sum, s) => sum + s.items.length, 0);
   const verifyScore = verification?.overallScore;
+  const noPriceCount = estimate.sections.reduce(
+    (sum, s) => sum + s.items.filter((it) => !it.unitPrice || it.unitPrice <= 0).length,
+    0
+  );
   const [sheetExpanded, setSheetExpanded] = useState(false);
 
   return (
@@ -66,6 +70,19 @@ export function ResultMobile({ controller }: { controller: AiEstimateController 
             </span>
           </div>
         )}
+        {noPriceCount > 0 && (
+          <div
+            className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+            style={{ backgroundColor: T.dangerSoft, border: `1px solid ${T.danger}` }}
+          >
+            <span className="text-[11px] font-bold" style={{ color: T.danger }}>
+              Без ціни: {noPriceCount}
+            </span>
+            <span className="text-[10px]" style={{ color: T.textSecondary }}>
+              потрібна ручна перевірка
+            </span>
+          </div>
+        )}
         <div className="flex gap-2 pt-1.5">
           <KpiCell label="Секції" value={String(sectionCount)} />
           <KpiCell label="Позиції" value={String(itemCount)} />
@@ -87,7 +104,7 @@ export function ResultMobile({ controller }: { controller: AiEstimateController 
 
       {/* Actions */}
       <section className="flex gap-2 px-5 pb-4">
-        {(estimate.analysisSummary || estimate.prozorroAnalysis) && (
+        {estimate.analysisSummary && (
           <ActionBtn
             icon={FileText}
             label="Звіт"

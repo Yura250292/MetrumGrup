@@ -77,6 +77,14 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
     (i) => (i.severity ?? "").toLowerCase().includes("crit") || (i.severity ?? "").toLowerCase() === "error"
   );
 
+  // Items без ціни — окрема секція в сайдбарі (план: "де відсутня впевненість").
+  // Покриває обидва кейси: zero-price-fixer не зміг знайти ціну, або взагалі не запускався.
+  const noPriceItems = estimate.sections.flatMap((s, sIdx) =>
+    s.items
+      .map((it, iIdx) => ({ item: it, sIdx, iIdx, sectionTitle: s.title }))
+      .filter((x) => !x.item.unitPrice || x.item.unitPrice <= 0)
+  );
+
   return (
     <div className="w-full max-w-[1440px]" style={{ backgroundColor: T.background, color: T.textPrimary }}>
       {/* Top bar */}
@@ -102,7 +110,7 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {(estimate.analysisSummary || estimate.prozorroAnalysis) && (
+          {estimate.analysisSummary && (
             <button
               onClick={controller.openEngineerReport}
               className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium border"
@@ -111,7 +119,7 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
                 borderColor: T.warning,
                 backgroundColor: T.warningSoft,
               }}
-              title="Звіт інженера + аналіз Prozorro"
+              title="Звіт інженера"
             >
               <FileText size={16} /> Звіт
             </button>
@@ -257,10 +265,13 @@ export function ResultDesktop({ controller }: { controller: AiEstimateController
             estimate={estimate}
           />
 
-          {/* Zero Price Fix Banner */}
+          {/* Zero Price Fix Banner — показує що було автокореговано */}
           {(estimate as any).zeroPriceFixResult && (estimate as any).zeroPriceFixResult.totalZeroItems > 0 && (
             <ZeroPriceFixBanner result={(estimate as any).zeroPriceFixResult} />
           )}
+
+          {/* Без ціни — позиції які потребують ручної цінової експертизи */}
+          {noPriceItems.length > 0 && <NoPricePanel items={noPriceItems} />}
 
           {/* Scaling */}
           {controller.scalingInfo && (
@@ -1374,6 +1385,66 @@ function ZeroPriceFixBanner({ result }: { result: any }) {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// NO PRICE PANEL — позиції з нульовою ціною, що потребують ручної експертизи
+// ============================================================
+
+function NoPricePanel({
+  items,
+}: {
+  items: Array<{ item: EstimateItem; sIdx: number; iIdx: number; sectionTitle: string }>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const preview = items.slice(0, 5);
+  const rest = items.length - preview.length;
+
+  return (
+    <div
+      className="rounded-2xl p-4"
+      style={{ backgroundColor: T.dangerSoft, border: `1px solid ${T.danger}` }}
+    >
+      <div className="flex items-start gap-3">
+        <TriangleAlert size={18} style={{ color: T.danger }} className="mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="text-xs font-semibold" style={{ color: T.danger }}>
+            Без ціни — {items.length} {items.length === 1 ? "позиція" : "позицій"}
+          </div>
+          <div className="text-[11px] leading-relaxed mt-0.5" style={{ color: T.textSecondary }}>
+            Цих позицій система не знайшла в базі — потрібна ручна перевірка ціни.
+          </div>
+          <div className="mt-2 flex flex-col gap-1.5">
+            {(expanded ? items : preview).map((x, i) => (
+              <div
+                key={`np-${x.sIdx}-${x.iIdx}-${i}`}
+                className="flex items-start gap-2 text-[10px] rounded px-2 py-1.5"
+                style={{ backgroundColor: `${T.danger}10` }}
+              >
+                <span style={{ color: T.danger }}>•</span>
+                <div className="flex-1 min-w-0">
+                  <span className="font-medium" style={{ color: T.textPrimary }}>
+                    {x.item.description}
+                  </span>
+                  <span style={{ color: T.textMuted }}> · {x.sectionTitle}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {rest > 0 && (
+            <button
+              onClick={() => setExpanded(!expanded)}
+              className="text-[10px] font-medium mt-1.5 flex items-center gap-1"
+              style={{ color: T.textMuted }}
+            >
+              {expanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              {expanded ? "Згорнути" : `Показати ще ${rest}`}
+            </button>
           )}
         </div>
       </div>
