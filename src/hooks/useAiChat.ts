@@ -84,6 +84,7 @@ export function useAiSendMessage() {
       message: string;
       conversationId?: string;
       projectId?: string;
+      taskId?: string;
       pathname?: string;
       onConversationId?: (id: string) => void;
     }) => {
@@ -101,6 +102,7 @@ export function useAiSendMessage() {
             conversationId: opts.conversationId,
             message: opts.message,
             projectId: opts.projectId,
+            taskId: opts.taskId,
             pathname: opts.pathname,
           }),
           signal: controller.signal,

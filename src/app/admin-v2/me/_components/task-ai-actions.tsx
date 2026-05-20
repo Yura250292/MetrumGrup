@@ -52,7 +52,10 @@ export function TaskAiActions({ task }: Props) {
   const { open } = useAiPanel();
 
   const fire = (action: TaskAiAction) => {
-    open(buildTaskPrompt(action, task));
+    open(buildTaskPrompt(action, task), {
+      projectId: task.project?.id,
+      taskId: task.id,
+    });
   };
 
   return (

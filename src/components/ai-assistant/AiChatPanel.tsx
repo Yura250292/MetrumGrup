@@ -30,14 +30,18 @@ export function AiChatPanel({ onClose }: Props) {
   const [isNewChat, setIsNewChat] = useState(false);
   const [optimisticMessages, setOptimisticMessages] = useState<AiMessageItem[]>([]);
   const [showTutorialMenu, setShowTutorialMenu] = useState(false);
+  const [overrideCtx, setOverrideCtx] = useState<{ projectId?: string; taskId?: string }>({});
   const { startTutorial, consumePendingPrompt } = useAiPanel();
   const initialPromptSentRef = useRef(false);
 
-  // Auto-detect projectId from current URL
-  const projectId = useMemo(() => {
+  // Auto-detect projectId from current URL (fallback when no explicit ctx)
+  const projectIdFromUrl = useMemo(() => {
     const match = pathname.match(/\/projects\/([^/]+)/);
     return match?.[1] ?? undefined;
   }, [pathname]);
+
+  const projectId = overrideCtx.projectId ?? projectIdFromUrl;
+  const taskId = overrideCtx.taskId;
 
   const { data: conversations } = useAiConversations();
   const { data: savedMessages } = useAiMessages(conversationId);
@@ -79,6 +83,7 @@ export function AiChatPanel({ onClose }: Props) {
         message,
         conversationId: conversationId ?? undefined,
         projectId,
+        taskId,
         pathname,
         onConversationId: (id) => {
           setConversationId(id);
@@ -87,20 +92,40 @@ export function AiChatPanel({ onClose }: Props) {
         },
       });
     },
-    [conversationId, send],
+    [conversationId, send, projectId, taskId, pathname],
   );
 
   // Auto-send a prompt if one was queued via open(prompt). Runs in a new chat.
   useEffect(() => {
     if (initialPromptSentRef.current) return;
-    const prompt = consumePendingPrompt();
-    if (!prompt) return;
+    const pending = consumePendingPrompt();
+    if (!pending) return;
     initialPromptSentRef.current = true;
     setConversationId(null);
     setIsNewChat(true);
-    setOptimisticMessages([]);
-    handleSend(prompt);
-  }, [consumePendingPrompt, handleSend]);
+    setOptimisticMessages([
+      {
+        id: "opt-" + Date.now(),
+        role: "USER",
+        content: pending.prompt,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+    if (pending.context) setOverrideCtx(pending.context);
+
+    // Send directly with the pending context — setState above hasn't applied yet.
+    send({
+      message: pending.prompt,
+      projectId: pending.context?.projectId ?? projectIdFromUrl,
+      taskId: pending.context?.taskId,
+      pathname,
+      onConversationId: (id) => {
+        setConversationId(id);
+        setIsNewChat(false);
+        setOptimisticMessages([]);
+      },
+    });
+  }, [consumePendingPrompt, send, projectIdFromUrl, pathname]);
 
   const handleNewConversation = useCallback(() => {
     // Clean up oldest if at limit (async, non-blocking)

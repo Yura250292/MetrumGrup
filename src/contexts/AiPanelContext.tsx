@@ -12,9 +12,19 @@ import type { TutorialScenario } from "@/components/ai-assistant/AiTutorial";
 
 export type AnimationPhase = "idle" | "asking" | "breaking" | "done";
 
+export type AiPendingContext = {
+  projectId?: string;
+  taskId?: string;
+};
+
+export type PendingPrompt = {
+  prompt: string;
+  context?: AiPendingContext;
+};
+
 type AiPanelState = {
   isOpen: boolean;
-  open: (initialPrompt?: string) => void;
+  open: (initialPrompt?: string, context?: AiPendingContext) => void;
   close: () => void;
   toggle: () => void;
   animationPhase: AnimationPhase;
@@ -23,7 +33,7 @@ type AiPanelState = {
   activeTutorial: TutorialScenario | null;
   startTutorial: (scenario: TutorialScenario) => void;
   closeTutorial: () => void;
-  consumePendingPrompt: () => string | null;
+  consumePendingPrompt: () => PendingPrompt | null;
 };
 
 const AiPanelContext = createContext<AiPanelState>({
@@ -44,10 +54,10 @@ export function AiPanelProvider({ children }: { children: ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const [animationPhase, setAnimationPhase] = useState<AnimationPhase>("idle");
   const [activeTutorial, setActiveTutorial] = useState<TutorialScenario | null>(null);
-  const pendingPromptRef = useRef<string | null>(null);
+  const pendingPromptRef = useRef<PendingPrompt | null>(null);
 
-  const open = useCallback((initialPrompt?: string) => {
-    if (initialPrompt) pendingPromptRef.current = initialPrompt;
+  const open = useCallback((initialPrompt?: string, context?: AiPendingContext) => {
+    if (initialPrompt) pendingPromptRef.current = { prompt: initialPrompt, context };
     setIsOpen(true);
   }, []);
   const close = useCallback(() => {

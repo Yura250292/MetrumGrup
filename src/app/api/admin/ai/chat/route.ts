@@ -26,10 +26,11 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { conversationId: existingConvId, message, projectId, pathname } = body as {
+  const { conversationId: existingConvId, message, projectId, taskId, pathname } = body as {
     conversationId?: string;
     message: string;
     projectId?: string;
+    taskId?: string;
     pathname?: string;
   };
 
@@ -86,12 +87,13 @@ export async function POST(request: NextRequest) {
   let systemPrompt = buildSystemPrompt(userCtx);
   const tools = getToolsForRole(userCtx.role);
 
-  // Inject context packet if on a project page
-  if (pathname) {
-    const ctxPacket = await buildContextPacket(pathname, userCtx.userId);
-    if (ctxPacket) {
-      systemPrompt += `\n\n## КОНТЕКСТ ПОТОЧНОЇ СТОРІНКИ\n${contextPacketToPrompt(ctxPacket)}`;
-    }
+  // Inject context packet (page + optional explicit task/project)
+  const ctxPacket = await buildContextPacket(
+    { pathname, projectId, taskId },
+    userCtx.userId,
+  );
+  if (ctxPacket) {
+    systemPrompt += `\n\n## КОНТЕКСТ ПОТОЧНОЇ СТОРІНКИ\n${contextPacketToPrompt(ctxPacket)}`;
   }
 
   // Conversation compaction: if >20 messages, summarize older ones
