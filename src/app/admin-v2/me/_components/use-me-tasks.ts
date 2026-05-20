@@ -69,9 +69,17 @@ export type ActiveTimer = {
   task: { id: string; title: string; project: { id: string; title: string } };
 };
 
-export type Scope = "assigned" | "created" | "watching" | "all";
+export type Scope = "assigned" | "created" | "all";
 export type Focus = "all" | "overdue" | "today" | "next";
-export type ViewMode = "sections" | "flat" | "by-project" | "by-people" | "table";
+/**
+ * Linear-style: лише два первинні режими подачі.
+ *  - `sections` — Пріоритети (default), bento-секції за класифікацією
+ *  - `table`    — Таблиця, для density power-users
+ * «Список»/«Проєкти»/«Люди» прибрано: список був дублем секцій,
+ * «Проєкти» дублює пункт сайдбару «Огляд проєктів», «Люди» переїхали
+ * на окрему сторінку /admin-v2/team.
+ */
+export type ViewMode = "sections" | "table";
 
 export const PRIORITY_COLOR: Record<TaskItem["priority"], string> = {
   LOW: "#64748b",

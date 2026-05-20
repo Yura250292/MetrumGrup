@@ -63,6 +63,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true, hrAllowed: true },
       { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo, hrAllowed: true },
+      { href: "/admin-v2/team", label: "Команда", icon: Users, hrAllowed: true },
     ],
   },
   {
@@ -137,6 +138,7 @@ export const MOBILE_NAV: NavItem[] = [
 export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2": "Дашборд",
   "/admin-v2/me": "Мої задачі",
+  "/admin-v2/team": "Команда",
   "/admin-v2/projects": "Проєкти",
   "/admin-v2/projects/new": "Новий проєкт",
   "/admin-v2/projects/dashboard": "Огляд проєктів",

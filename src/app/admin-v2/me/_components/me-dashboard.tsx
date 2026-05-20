@@ -7,8 +7,6 @@ import {
   ListChecks,
   Plus,
   List,
-  FolderKanban,
-  Users,
   Table2,
   Search,
   Filter,
@@ -28,9 +26,6 @@ import {
   type TaskItem,
 } from "./use-me-tasks";
 import { FocusBanner } from "./dashboard-kpi";
-import { TaskListFlat } from "./task-list-flat";
-import { TaskListGrouped } from "./task-list-grouped";
-import { TaskPeopleGlobal } from "./task-people-global";
 import { NewTaskModal } from "./new-task-modal";
 import { SelfContainedTaskDrawer } from "./task-drawer-shared";
 import { TaskTableView } from "./task-table-view";
@@ -41,16 +36,12 @@ import { groupBySection } from "../_lib/sections";
 const SCOPE_DEFS: { id: Scope; label: string }[] = [
   { id: "assigned", label: "Мені призначено" },
   { id: "created", label: "Я поставив" },
-  { id: "watching", label: "Я стежу" },
   { id: "all", label: "Всі задачі" },
 ];
 
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "sections", label: "Пріоритети", icon: LayoutGrid },
   { id: "table", label: "Таблиця", icon: Table2 },
-  { id: "flat", label: "Список", icon: List },
-  { id: "by-project", label: "Проєкти", icon: FolderKanban },
-  { id: "by-people", label: "Люди", icon: Users },
 ];
 
 /* ─── Project filter with search + collapsible ─── */
@@ -93,7 +84,7 @@ function ProjectFilterInline({
     <div className="flex flex-col gap-2">
       {/* Search + label */}
       <div className="flex items-center gap-2">
-        <FolderKanban size={13} style={{ color: T.textMuted }} />
+        <Filter size={13} style={{ color: T.textMuted }} />
         <span className="text-[10px] font-bold tracking-wider uppercase" style={{ color: T.textMuted }}>
           Проєкти
         </span>
@@ -604,39 +595,6 @@ export function MeDashboard({
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
         />
-      )}
-
-      {viewMode === "flat" && (
-        <TaskListFlat
-          tasks={filteredTasks}
-          loading={loading}
-          activeTimerTaskId={activeTimer?.task.id ?? null}
-          pendingId={pendingId}
-          focus={focus}
-          onOpenDrawer={setDrawerTaskId}
-          onStartTimer={(id) => void startTimer(id)}
-          onStopTimer={() => void stopTimer()}
-          onMarkDone={(t) => void markDone(t)}
-          onDelete={(id, title) => void deleteTask(id, title)}
-        />
-      )}
-
-      {viewMode === "by-project" && (
-        <TaskListGrouped
-          tasks={filteredTasks}
-          loading={loading}
-          activeTimerTaskId={activeTimer?.task.id ?? null}
-          pendingId={pendingId}
-          onOpenDrawer={setDrawerTaskId}
-          onStartTimer={(id) => void startTimer(id)}
-          onStopTimer={() => void stopTimer()}
-          onMarkDone={(t) => void markDone(t)}
-          onDelete={(id, title) => void deleteTask(id, title)}
-        />
-      )}
-
-      {viewMode === "by-people" && (
-        <TaskPeopleGlobal onOpenDrawer={setDrawerTaskId} />
       )}
 
       {/* Task drawer */}
