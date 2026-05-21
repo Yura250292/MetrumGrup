@@ -16,7 +16,15 @@ export type TaskItem = {
   title: string;
   dueDate: string | null;
   priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
-  project: { id: string; title: string };
+  project: {
+    id: string;
+    title: string;
+    /**
+     * Якщо не null — це Personal Inbox конкретного User'а. UI ховає
+     * назву і не лінкує — задачі без проєкту.
+     */
+    personalInboxUserId?: string | null;
+  };
   status: TaskStatus;
   stage: { stage: string };
   labels: { label: { id: string; name: string; color: string } }[];

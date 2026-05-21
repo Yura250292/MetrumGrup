@@ -20,14 +20,14 @@ export function relatedEntityLink(n: {
       return `/admin/estimates/${n.relatedId}`;
     case "Task":
     case "TASK": {
-      // relatedId format: "projectId:taskId"
+      // relatedId format: "projectId:taskId".
+      // Лінкуємо у "Мої задачі" — задачник, який і так гейтить за canViewTasks
+      // у середині drawer'а. Не використовуємо /admin-v2/projects/<id>
+      // бо для Personal Inbox це показувало б персональний бакет як справжній
+      // проєкт із меню Інвентар/Стадії/Кошториси — а Inbox не проєкт.
       const sep = n.relatedId.indexOf(":");
-      if (sep > 0) {
-        const projectId = n.relatedId.slice(0, sep);
-        const taskId = n.relatedId.slice(sep + 1);
-        return `/admin-v2/projects/${projectId}?tab=tasks&task=${taskId}`;
-      }
-      return "/dashboard/notifications";
+      const taskId = sep > 0 ? n.relatedId.slice(sep + 1) : n.relatedId;
+      return `/admin-v2/me?task=${taskId}`;
     }
     case "PhotoReport":
       // PhotoReport relatedId stores the projectId — see notifyProjectMembers

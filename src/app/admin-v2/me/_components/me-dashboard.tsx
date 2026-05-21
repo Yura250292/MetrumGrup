@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   Clock,
@@ -302,6 +303,16 @@ export function MeDashboard({
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
+
+  // Якщо URL містить ?task=<id> — відкрити drawer одразу (для deep-link'ів з
+  // Telegram / push-нотифікацій). Auth уже виконав middleware (next-auth);
+  // сам drawer додатково гейтить через getProjectAccessContext у API.
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const tId = searchParams?.get("task");
+    if (tId && tId !== drawerTaskId) setDrawerTaskId(tId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [showFilters, setShowFilters] = useState(false);
   const [allProjects, setAllProjects] = useState<ProjectOption[]>([]);
 

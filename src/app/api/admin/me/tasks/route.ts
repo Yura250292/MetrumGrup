@@ -62,7 +62,11 @@ export async function GET(request: NextRequest) {
     const tasks = await prisma.task.findMany({
       where,
       include: {
-        project: { select: { id: true, title: true } },
+        // personalInboxUserId — щоб UI міг приховати ярлик/посилання на
+        // «Особисті задачі» (для власника Inbox це не «проєкт»).
+        project: {
+          select: { id: true, title: true, personalInboxUserId: true },
+        },
         status: true,
         stage: { select: { id: true, stage: true } },
         createdBy: { select: { id: true, name: true, avatar: true } },

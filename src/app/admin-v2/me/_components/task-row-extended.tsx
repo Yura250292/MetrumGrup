@@ -210,7 +210,16 @@ export function TaskRowExtended({
           className="flex items-center gap-2 text-[11px] flex-wrap"
           style={{ color: T.textMuted }}
         >
-          <span className="truncate max-w-[180px]">{task.project.title}</span>
+          {(() => {
+            // Personal Inbox — це бакет, не «проєкт». Не показуємо лейбл.
+            const isMyInbox =
+              task.project.personalInboxUserId &&
+              task.project.personalInboxUserId === currentUserId;
+            if (isMyInbox) return null;
+            return (
+              <span className="truncate max-w-[180px]">{task.project.title}</span>
+            );
+          })()}
           {creatorName && (
             <>
               <span>·</span>

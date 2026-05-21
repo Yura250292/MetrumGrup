@@ -52,10 +52,18 @@ export async function GET() {
   const { firmId } = await resolveFirmScopeForRequest(session);
   const firmFilter = firmWhereForProject(firmId);
 
-  // Load all projects the user has any relationship with
+  // Load all projects the user has any relationship with.
+  // ВАЖЛИВО: Personal Inbox (`personalInboxUserId !== null`) — це приватний
+  // бакет для standalone-задач, а не справжній проєкт. У picker'і його
+  // НЕ показуємо: у NewTaskModal вже є явна опція «Без проєкту (Особисті
+  // задачі)» яка резолвиться у getOrCreatePersonalInbox.
   const rawProjects = await prisma.project.findMany({
     where: isSuperAdmin
-      ? { status: { not: "CANCELLED" }, ...firmFilter }
+      ? {
+          status: { not: "CANCELLED" },
+          personalInboxUserId: null,
+          ...firmFilter,
+        }
       : {
           OR: [
             { managerId: uid },
@@ -63,6 +71,7 @@ export async function GET() {
             { isInternal: true },
           ],
           status: { not: "CANCELLED" },
+          personalInboxUserId: null,
           ...firmFilter,
         },
     select: {

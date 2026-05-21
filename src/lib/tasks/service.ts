@@ -71,6 +71,9 @@ function applyTaskPrivacyScope(
 
 const TASK_DETAIL_INCLUDE = {
   status: true,
+  // Для drawer'а важливо знати чи це Personal Inbox, щоб не показувати
+  // лейбл/посилання «проєкт».
+  project: { select: { id: true, title: true, personalInboxUserId: true } },
   stage: { select: { id: true, stage: true, status: true } },
   assignees: {
     include: {

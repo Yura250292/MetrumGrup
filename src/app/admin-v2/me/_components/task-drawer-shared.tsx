@@ -38,7 +38,7 @@ type DrawerDetail = {
   priority: string;
   dueDate: string | null;
   projectId: string;
-  project?: { id: string; title: string };
+  project?: { id: string; title: string; personalInboxUserId?: string | null };
   createdById: string;
   status: DrawerStatus;
   stage: { stage: string };
@@ -327,16 +327,21 @@ export function SelfContainedTaskDrawer({
               <h3 className="text-lg font-bold" style={{ color: T.textPrimary }}>
                 {detail.title}
               </h3>
-              {detail.project && (
-                <Link
-                  href={`/admin-v2/projects/${detail.project.id}?tab=tasks`}
-                  className="inline-flex items-center gap-1 text-[11px] mt-1"
-                  style={{ color: T.accentPrimary }}
-                >
-                  <ExternalLink size={10} />
-                  {detail.project.title}
-                </Link>
-              )}
+              {detail.project &&
+                // Personal Inbox — це бакет, не проєкт; ховаємо link.
+                !(
+                  detail.project.personalInboxUserId &&
+                  detail.project.personalInboxUserId === currentUserId
+                ) && (
+                  <Link
+                    href={`/admin-v2/projects/${detail.project.id}?tab=tasks`}
+                    className="inline-flex items-center gap-1 text-[11px] mt-1"
+                    style={{ color: T.accentPrimary }}
+                  >
+                    <ExternalLink size={10} />
+                    {detail.project.title}
+                  </Link>
+                )}
             </div>
 
             {/* Compact meta-row: дедлайн + пріоритет — те, що користувач
