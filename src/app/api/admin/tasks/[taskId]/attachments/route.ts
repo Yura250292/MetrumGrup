@@ -32,14 +32,34 @@ const ALLOWED_MIME = [
 async function loadTaskWithAccess(taskId: string, userId: string) {
   const task = await prisma.task.findUnique({
     where: { id: taskId },
-    select: { id: true, projectId: true },
+    select: {
+      id: true,
+      projectId: true,
+      createdById: true,
+      project: { select: { personalInboxUserId: true } },
+    },
   });
   if (!task) return { error: "Задачу не знайдено", status: 404 } as const;
   const ctx = await getProjectAccessContext(task.projectId, userId);
-  if (!ctx?.canViewTasks) {
-    return { error: "Немає доступу", status: 403 } as const;
+  if (ctx?.canViewTasks) return { task, ctx } as const;
+
+  // Fallback: задача у Personal Inbox і я — assignee/creator/watcher.
+  if (task.project?.personalInboxUserId) {
+    const isParticipant =
+      task.createdById === userId ||
+      (await prisma.task.count({
+        where: {
+          id: taskId,
+          OR: [
+            { assignees: { some: { userId } } },
+            { watchers: { some: { userId } } },
+          ],
+        },
+      })) > 0;
+    if (isParticipant) return { task, ctx } as const;
   }
-  return { task, ctx } as const;
+
+  return { error: "Немає доступу", status: 403 } as const;
 }
 
 /**

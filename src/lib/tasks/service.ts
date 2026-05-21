@@ -218,7 +218,53 @@ export async function listTasks(filter: ListFilter, currentUserId: string) {
 export async function getTask(taskId: string, currentUserId: string): Promise<TaskDetail> {
   const lite = await loadTaskWithProject(taskId);
   await requireTasksEnabled(lite.projectId);
-  const ctx = await assertCanView(lite.projectId, currentUserId);
+  // Спершу пробуємо звичайний project-level доступ.
+  let ctx = await getProjectAccessContext(lite.projectId, currentUserId);
+  if (!ctx || !ctx.canViewTasks) {
+    // Fallback: задача у чужому Personal Inbox, але я assignee/watcher/creator.
+    // Тоді отримую task-level доступ.
+    const project = await prisma.project.findUnique({
+      where: { id: lite.projectId },
+      select: { personalInboxUserId: true },
+    });
+    const isInboxTask = !!project?.personalInboxUserId;
+    if (!isInboxTask) forbid();
+    const isParticipant =
+      lite.createdById === currentUserId ||
+      (await prisma.task.count({
+        where: {
+          id: taskId,
+          OR: [
+            { assignees: { some: { userId: currentUserId } } },
+            { watchers: { some: { userId: currentUserId } } },
+          ],
+        },
+      })) > 0;
+    if (!isParticipant) forbid();
+    // Синтезуємо мінімальний ctx: дозволяємо лише view, нічого більше.
+    ctx = {
+      projectId: lite.projectId,
+      userId: currentUserId,
+      isSuperAdmin: false,
+      isClientOfProject: false,
+      member: null,
+      canView: true,
+      canParticipate: false,
+      canUpload: false,
+      canManageMembers: false,
+      canViewFinancials: false,
+      canViewInternalFiles: false,
+      canViewTasks: true,
+      canCreateTasks: false,
+      canEditAnyTask: false,
+      canDeleteTasks: false,
+      canAssignTasks: false,
+      canManageTaskConfig: false,
+      canLogTime: false,
+      canViewTimeReports: false,
+      canViewCostReports: false,
+    };
+  }
 
   // Privacy guard
   if (lite.isPrivate && !ctx.isSuperAdmin && !ctx.member?.effective.canViewPrivateTasks) {
@@ -319,9 +365,19 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
     ...(input.assignees ?? []),
     ...((input.assigneeIds ?? []).map((id) => ({ userId: id })) as AssigneeInput[]),
   ];
-  // Validate: each User assignee must have task access; external names must
-  // be non-empty trimmed strings (≤100 chars). Дедупаємо `externalName`
-  // case-insensitive у межах одного запиту.
+  // Personal Inbox = приватний бакет творця, інші у ньому не члени. Але якщо
+  // у standalone-задачі призначаєш когось іншого — він МУСИТЬ її бачити
+  // (як assignee), навіть не маючи project-level доступу. Тому скіпаємо
+  // assignee-access check для Inbox; натомість read-доступ дає task.assignees
+  // (див. getTask/assertCanView нижче).
+  const projectInfo = await prisma.project.findUnique({
+    where: { id: input.projectId },
+    select: { personalInboxUserId: true },
+  });
+  const isPersonalInbox = !!projectInfo?.personalInboxUserId;
+
+  // Validate: each User assignee must have task access (крім personal-inbox);
+  // external names must be non-empty trimmed strings (≤100 chars).
   const seenUserIds = new Set<string>();
   const seenExternal = new Set<string>();
   const normalizedAssignees: AssigneeInput[] = [];
@@ -329,9 +385,11 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
     if ("userId" in a && a.userId) {
       if (seenUserIds.has(a.userId)) continue;
       seenUserIds.add(a.userId);
-      const targetCtx = await getProjectAccessContext(input.projectId, a.userId);
-      if (!targetCtx?.canViewTasks) {
-        bad(`Assignee ${a.userId} does not have task access on this project`);
+      if (!isPersonalInbox) {
+        const targetCtx = await getProjectAccessContext(input.projectId, a.userId);
+        if (!targetCtx?.canViewTasks) {
+          bad(`Assignee ${a.userId} does not have task access on this project`);
+        }
       }
       normalizedAssignees.push({ userId: a.userId });
     } else if ("externalName" in a && a.externalName) {
