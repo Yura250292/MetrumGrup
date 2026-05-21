@@ -29,6 +29,10 @@ bot.use((ctx, next) => {
 // Зареєструвати команди
 registerCommands(bot);
 
+// Cleanup cron (прострочені сесії + старі audit logs)
+import { startBotCleanupCron } from './services/cleanup';
+const cleanupTimer = startBotCleanupCron();
+
 // Обробка помилок
 bot.catch((err, ctx) => {
   console.error('Bot error:', err);
@@ -56,11 +60,13 @@ if (botMode === 'webhook' && process.env.BOT_WEBHOOK_URL) {
 // Graceful shutdown
 process.once('SIGINT', () => {
   console.log('\n⏹ Зупинка бота...');
+  clearInterval(cleanupTimer);
   bot.stop('SIGINT');
 });
 
 process.once('SIGTERM', () => {
   console.log('\n⏹ Зупинка бота...');
+  clearInterval(cleanupTimer);
   bot.stop('SIGTERM');
 });
 
