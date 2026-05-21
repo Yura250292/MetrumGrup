@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Ruler } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Maximize2, Minus, Plus, RotateCw, Ruler } from "lucide-react";
 import { bbox } from "@/lib/foreman/geometry";
 import type { Room, Side } from "@/lib/foreman/geometry";
 import { parseNum, formatNum } from "@/lib/foreman/format";
@@ -50,16 +50,9 @@ export function PlanCanvas({
       </div>
 
       {!hasRooms ? (
-        <FirstRoomForm
-          defaultHeight={plan.defaultCeilingHeight}
-          onSubmit={onAddFirst}
-        />
+        <FirstRoomForm defaultHeight={plan.defaultCeilingHeight} onSubmit={onAddFirst} />
       ) : (
-        <PlanWithStats
-          plan={plan}
-          onPlusClick={onPlusClick}
-          onRoomTap={onRoomTap}
-        />
+        <PlanWithControls plan={plan} onPlusClick={onPlusClick} onRoomTap={onRoomTap} />
       )}
     </div>
   );
@@ -90,9 +83,7 @@ function FirstRoomForm({
       </p>
 
       <label className="block">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-          Назва
-        </span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">Назва</span>
         <input
           type="text"
           value={name}
@@ -149,7 +140,16 @@ function FirstRoomForm({
   );
 }
 
-function PlanWithStats({
+interface View {
+  scale: number;
+  tx: number;
+  ty: number;
+  rotation: number;
+}
+
+const DEFAULT_VIEW: View = { scale: 1, tx: 0, ty: 0, rotation: 0 };
+
+function PlanWithControls({
   plan,
   onPlusClick,
   onRoomTap,
@@ -167,17 +167,143 @@ function PlanWithStats({
     [plan.rooms],
   );
 
+  const [view, setView] = useState<View>(DEFAULT_VIEW);
+  // Скидати view коли план суттєво змінюється (нова кімната → auto-fit).
+  const prevRoomCountRef = useRef(plan.rooms.length);
+  useEffect(() => {
+    if (plan.rooms.length !== prevRoomCountRef.current) {
+      setView(DEFAULT_VIEW);
+      prevRoomCountRef.current = plan.rooms.length;
+    }
+  }, [plan.rooms.length]);
+
+  // Gestures: 1-finger pan, 2-finger pinch zoom on SVG.
+  const svgWrapRef = useRef<HTMLDivElement>(null);
+  const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const lastPinchRef = useRef<{ dist: number; scale: number } | null>(null);
+  const dragStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+
+  useEffect(() => {
+    const el = svgWrapRef.current;
+    if (!el) return;
+
+    const onPointerDown = (e: PointerEvent) => {
+      // Не блокувати клік по SVG-елементах (rect/+); ставимо pan тільки на 1 палець по pустому місці.
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size === 1) {
+        dragStartRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
+      } else if (pointersRef.current.size === 2) {
+        const pts = Array.from(pointersRef.current.values());
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        lastPinchRef.current = { dist: Math.hypot(dx, dy), scale: view.scale };
+        dragStartRef.current = null;
+      }
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!pointersRef.current.has(e.pointerId)) return;
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointersRef.current.size === 2 && lastPinchRef.current) {
+        const pts = Array.from(pointersRef.current.values());
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        const dist = Math.hypot(dx, dy);
+        if (lastPinchRef.current.dist > 0) {
+          const newScale = clamp(
+            (dist / lastPinchRef.current.dist) * lastPinchRef.current.scale,
+            0.4,
+            4,
+          );
+          setView((v) => ({ ...v, scale: newScale }));
+        }
+        e.preventDefault();
+      } else if (pointersRef.current.size === 1 && dragStartRef.current) {
+        const px = el.clientWidth;
+        const padW = Math.max(0.6, Math.max(b.w, b.h) * 0.12) * 2;
+        const vbW = (b.w || 1) + padW;
+        const metersPerPx = vbW / Math.max(px, 1);
+        const dx = (e.clientX - dragStartRef.current.x) * metersPerPx;
+        const dy = (e.clientY - dragStartRef.current.y) * metersPerPx;
+        setView((v) => ({
+          ...v,
+          tx: dragStartRef.current!.tx + dx,
+          ty: dragStartRef.current!.ty + dy,
+        }));
+      }
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      pointersRef.current.delete(e.pointerId);
+      if (pointersRef.current.size < 2) lastPinchRef.current = null;
+      if (pointersRef.current.size === 0) dragStartRef.current = null;
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const delta = -Math.sign(e.deltaY) * 0.15;
+      setView((v) => ({ ...v, scale: clamp(v.scale * (1 + delta), 0.4, 4) }));
+    };
+
+    el.addEventListener("pointerdown", onPointerDown);
+    el.addEventListener("pointermove", onPointerMove);
+    el.addEventListener("pointerup", onPointerUp);
+    el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown);
+      el.removeEventListener("pointermove", onPointerMove);
+      el.removeEventListener("pointerup", onPointerUp);
+      el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("wheel", onWheel);
+    };
+  }, [b.w, b.h, view.scale, view.tx, view.ty]);
+
   return (
     <div className="space-y-3">
-      <div
-        className={`rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden ${aspectClass}`}
-      >
-        <PlanSvg
-          plan={plan}
-          onPlusClick={onPlusClick}
-          onRoomTap={onRoomTap}
-          className="w-full h-full touch-manipulation select-none"
-        />
+      <div className="relative">
+        <div
+          ref={svgWrapRef}
+          className={`rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden touch-none ${aspectClass}`}
+          style={{ touchAction: "none" }}
+        >
+          <PlanSvg
+            plan={plan}
+            onPlusClick={onPlusClick}
+            onRoomTap={onRoomTap}
+            viewTransform={view}
+            className="w-full h-full select-none"
+          />
+        </div>
+
+        {/* view controls */}
+        <div className="absolute top-2 right-2 flex flex-col gap-1.5">
+          <ViewBtn
+            onClick={() => setView((v) => ({ ...v, scale: clamp(v.scale * 1.25, 0.4, 4) }))}
+            label="Збільшити"
+          >
+            <Plus size={14} />
+          </ViewBtn>
+          <ViewBtn
+            onClick={() => setView((v) => ({ ...v, scale: clamp(v.scale * 0.8, 0.4, 4) }))}
+            label="Зменшити"
+          >
+            <Minus size={14} />
+          </ViewBtn>
+          <ViewBtn
+            onClick={() => setView((v) => ({ ...v, rotation: (v.rotation + 90) % 360 }))}
+            label="Обернути"
+          >
+            <RotateCw size={14} />
+          </ViewBtn>
+          <ViewBtn onClick={() => setView(DEFAULT_VIEW)} label="Підігнати">
+            <Maximize2 size={14} />
+          </ViewBtn>
+        </div>
+
+        {(view.scale !== 1 || view.rotation !== 0 || view.tx !== 0 || view.ty !== 0) && (
+          <div className="absolute bottom-2 left-2 px-2 py-1 rounded-md bg-zinc-900/80 border border-white/10 text-[10px] text-zinc-300 font-mono backdrop-blur">
+            {(view.scale * 100).toFixed(0)}%
+            {view.rotation !== 0 && ` · ↺${view.rotation}°`}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-center">
@@ -187,10 +313,36 @@ function PlanWithStats({
       </div>
 
       <p className="text-[11px] text-zinc-500 leading-relaxed text-center px-2">
-        Натисніть «+» на грані, щоб додати кімнату. Натисніть на кімнату, щоб
-        змінити висоту або видалити.
+        Тап «+» — додати кімнату. Тап по кімнаті — висота, прорізи, видалення.
+        Пінч/перетягування — масштаб і огляд.
       </p>
     </div>
+  );
+}
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.min(Math.max(n, min), max);
+}
+
+function ViewBtn({
+  onClick,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-9 h-9 rounded-lg bg-zinc-900/85 border border-white/10 text-zinc-200 flex items-center justify-center active:scale-90 hover:bg-zinc-800 transition backdrop-blur"
+      aria-label={label}
+      title={label}
+    >
+      {children}
+    </button>
   );
 }
 

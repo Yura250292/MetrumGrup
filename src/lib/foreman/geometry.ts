@@ -51,26 +51,53 @@ export function opposite(side: Side): Side {
   return side === "N" ? "S" : side === "S" ? "N" : side === "E" ? "W" : "E";
 }
 
+export type Align = "start" | "center" | "end";
+
+/** Довжина грані батьківської кімнати у метрах (паралельна до приклеювання). */
+export function parentEdgeLength(parent: Rect, side: Side): number {
+  return side === "N" || side === "S" ? parent.w : parent.h;
+}
+
+/**
+ * Обчислити offset (зсув уздовж грані батьківської кімнати) за обраним
+ * вирівнюванням. Може бути від'ємним або більшим за parentLen — це overhang.
+ */
+export function alignmentOffset(
+  align: Align,
+  parentLen: number,
+  childLen: number,
+): number {
+  switch (align) {
+    case "start":
+      return 0;
+    case "center":
+      return (parentLen - childLen) / 2;
+    case "end":
+      return parentLen - childLen;
+  }
+}
+
 /**
  * Розташувати нову кімнату, приклеєну до конкретної грані батьківської.
  * `length` = довжина вздовж сусідньої стіни, `depth` = вглиб (перпендикулярно).
- * Дефолтне вирівнювання: лівий/верхній кут батьківської грані.
+ * `offset` = зсув уздовж грані батьківської (0 = NW-кут).
  */
 export function placeAdjacent(
   parent: Rect,
   side: Side,
   length: number,
   depth: number,
+  offset = 0,
 ): Rect {
   switch (side) {
     case "N":
-      return { x: parent.x, y: parent.y - depth, w: length, h: depth };
+      return { x: parent.x + offset, y: parent.y - depth, w: length, h: depth };
     case "S":
-      return { x: parent.x, y: parent.y + parent.h, w: length, h: depth };
+      return { x: parent.x + offset, y: parent.y + parent.h, w: length, h: depth };
     case "E":
-      return { x: parent.x + parent.w, y: parent.y, w: depth, h: length };
+      return { x: parent.x + parent.w, y: parent.y + offset, w: depth, h: length };
     case "W":
-      return { x: parent.x - depth, y: parent.y, w: depth, h: length };
+      return { x: parent.x - depth, y: parent.y + offset, w: depth, h: length };
   }
 }
 

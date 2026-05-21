@@ -36,9 +36,17 @@ export interface ComputedLine {
   total: number;
 }
 
-function surfaceArea(room: Room, surface: Surface): number {
+function surfaceArea(
+  room: Room,
+  surface: Surface,
+  openings: { roomId: string; width: number; height: number }[],
+): number {
   if (surface === "floor" || surface === "ceiling") return room.w * room.h;
-  return 2 * (room.w + room.h) * room.ceilingHeight;
+  const base = 2 * (room.w + room.h) * room.ceilingHeight;
+  const subtract = openings
+    .filter((o) => o.roomId === room.id)
+    .reduce((s, o) => s + o.width * o.height, 0);
+  return Math.max(0, base - subtract);
 }
 
 export function Results({
@@ -58,7 +66,7 @@ export function Results({
       const rCfg = works.rooms[room.id] ?? {};
       for (const surface of ["floor", "walls", "ceiling"] as Surface[]) {
         const wts = rCfg[surface] ?? [];
-        const area = surfaceArea(room, surface);
+        const area = surfaceArea(room, surface, plan.openings);
         for (const wt of wts) {
           const presets = presetsForWorkType(wt);
           for (const preset of presets) {
@@ -161,7 +169,10 @@ export function Results({
               <div className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
                 {room.w}×{room.h} м · h {room.ceilingHeight} м · підлога{" "}
                 {formatNum(room.w * room.h)} м² · стіни{" "}
-                {formatNum(2 * (room.w + room.h) * room.ceilingHeight)} м²
+                {formatNum(surfaceArea(room, "walls", plan.openings))} м²
+                {plan.openings.some((o) => o.roomId === room.id) && (
+                  <span className="text-amber-300/80"> (−прорізи)</span>
+                )}
               </div>
             </header>
             {Array.from(bySurface.entries()).map(([surface, surfaceLines]) => (
