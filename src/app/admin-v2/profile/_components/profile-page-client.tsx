@@ -37,6 +37,10 @@ export function ProfilePageClient() {
 
   const [activeSection, setActiveSection] = useState<ProfileSection>("basic");
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Всі hooks мають викликатися ДО будь-яких early-return — інакше при переході
+  // loading→loaded кількість хуків різна і React падає з #310.
+  const stagger = useReducedMotionVariants(heroStagger);
+  const item = useReducedMotionVariants(heroItem);
 
   const scrollToSection = (id: ProfileSection) => {
     setActiveSection(id);
@@ -66,9 +70,6 @@ export function ProfilePageClient() {
       </div>
     );
   }
-
-  const stagger = useReducedMotionVariants(heroStagger);
-  const item = useReducedMotionVariants(heroItem);
 
   return (
     <div className="px-4 md:px-8 py-6 max-w-6xl mx-auto">
