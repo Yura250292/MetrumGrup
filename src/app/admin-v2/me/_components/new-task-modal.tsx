@@ -70,6 +70,20 @@ const inputStyle: React.CSSProperties = {
   border: `1px solid ${T.borderSoft}`,
 };
 
+/**
+ * Робочий діапазон 09:00–18:00 з кроком 30 хв. Передбачає що дедлайн
+ * ставлять у межах робочого дня. Не накладає DB-обмежень — це тільки
+ * UI-пресет для зручності.
+ */
+const WORKING_HOUR_SLOTS: string[] = (() => {
+  const slots: string[] = [];
+  for (let h = 9; h <= 18; h++) {
+    slots.push(`${String(h).padStart(2, "0")}:00`);
+    if (h < 18) slots.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  return slots;
+})();
+
 function flattenStageTree(stages: StageNode[]): Array<{ node: StageNode; depth: number }> {
   const byParent = new Map<string | null, StageNode[]>();
   for (const s of stages) {
@@ -104,7 +118,10 @@ export function NewTaskModal({
   // ── Required core fields ──
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState("");
+  // Дедлайн розділили на 2 поля: дата + час. Час — з пресету 09:00-18:00
+  // через <select>, щоб не вводити нонсенс на кшталт 03:14.
+  const [dueDate, setDueDate] = useState(""); // YYYY-MM-DD
+  const [dueTime, setDueTime] = useState("18:00"); // HH:mm, default = кінець робочого дня
 
   // ── Assignees ──
   const [assignees, setAssignees] = useState<AssigneeChip[]>([]);
@@ -302,6 +319,7 @@ export function NewTaskModal({
   };
   const applySpecDue = () => {
     if (!specJson?.suggestedDueDate) return;
+    // AI повертає YYYY-MM-DD — час залишаємо як є (юзер сам вибрав 18:00 за дефолтом).
     setDueDate(specJson.suggestedDueDate);
     setAppliedDueDate(true);
   };
@@ -396,19 +414,11 @@ export function NewTaskModal({
           ? specJson.checklist.filter((_, i) => checklistSelected.has(i))
           : undefined;
 
-      // datetime-local повертає "YYYY-MM-DDTHH:mm" без таймзони.
-      // Якщо користувач залишив час 00:00 (наприклад вибрав тільки дату через
-      // швидкий ввід) — підставляємо 18:00, щоб задача на сьогодні не була
-      // одразу простроченою.
+      // Збираємо ISO з 2 окремих полів: dueDate (YYYY-MM-DD) + dueTime (HH:mm).
       const dueIso = (() => {
+        const [hStr, mStr] = (dueTime || "18:00").split(":");
         const d = new Date(dueDate);
-        if (
-          d.getHours() === 0 &&
-          d.getMinutes() === 0 &&
-          d.getSeconds() === 0
-        ) {
-          d.setHours(18, 0, 0, 0);
-        }
+        d.setHours(Number(hStr) || 18, Number(mStr) || 0, 0, 0);
         return d.toISOString();
       })();
 
@@ -564,18 +574,33 @@ export function NewTaskModal({
             </RequiredField>
 
             {/* ── Due date + time (required) ──
-                datetime-local замість date — щоб уникнути ефекту
-                «поставив на сьогодні без часу → одразу прострочено» (бо
-                date-only парситься як 00:00). Якщо часу не вкажуть —
-                дефолтимо до 18:00 у submit'і. */}
+                Розділили на 2 поля: дата (type=date) + час (select 09:00-18:00).
+                Чому select для часу: на mobile native time-picker нудний, а
+                юзери у нас працюють у робочому діапазоні. Default = 18:00. */}
             <RequiredField label="Дедлайн">
-              <input
-                type="datetime-local"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="rounded-lg px-3 py-2.5 text-sm outline-none h-11"
-                style={inputStyle}
-              />
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="rounded-lg px-3 py-2.5 text-sm outline-none h-11"
+                  style={inputStyle}
+                />
+                <select
+                  value={dueTime}
+                  onChange={(e) => setDueTime(e.target.value)}
+                  className="rounded-lg px-3 py-2.5 text-sm outline-none h-11"
+                  style={inputStyle}
+                  aria-label="Час"
+                  title="Робочий діапазон 09:00–18:00"
+                >
+                  {WORKING_HOUR_SLOTS.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {slot}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </RequiredField>
 
             {/* ── Reminder (optional, default 75% часу) ── */}
