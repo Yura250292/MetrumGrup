@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, FolderOpen, RotateCcw } from "lucide-react";
 import type { Room, Side } from "@/lib/foreman/geometry";
 import {
   overlapsExisting,
@@ -24,6 +24,7 @@ import { OpeningSheet } from "./_opening-sheet";
 import { WorksPicker } from "./_works-picker";
 import { Results } from "./_results";
 import { Visualize } from "./_visualize";
+import { DraftsSheet } from "./_drafts-sheet";
 
 const DEFAULT_CEILING = 2.7;
 
@@ -262,6 +263,7 @@ export function Estimator({ firmId }: Props) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const [sheet, setSheet] = useState<SheetState>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  const [showDrafts, setShowDrafts] = useState(false);
   const hydratedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -370,7 +372,16 @@ export function Estimator({ firmId }: Props) {
 
   return (
     <div className="space-y-4 pb-8">
-      <StepHeader step={state.step} />
+      <StepHeader
+        step={state.step}
+        canNavigate={{
+          plan: true,
+          works: state.plan.rooms.length > 0,
+          result: state.plan.rooms.length > 0 && hasAnyWorks,
+          visualize: state.plan.rooms.length > 0 && hasAnyWorks,
+        }}
+        onNavigate={(s) => dispatch({ type: "SET_STEP", step: s })}
+      />
 
       <AnimatePresence mode="wait">
         {state.step === "plan" && (
@@ -521,6 +532,17 @@ export function Estimator({ firmId }: Props) {
             <ArrowRight size={16} />
           </button>
         )}
+        {state.step === "plan" && (
+          <button
+            type="button"
+            onClick={() => setShowDrafts(true)}
+            className="flex items-center justify-center w-12 h-12 rounded-xl bg-violet-500/15 border border-violet-500/40 text-violet-200 active:scale-95 transition"
+            aria-label="Чернетки"
+            title="Збережені чернетки"
+          >
+            <FolderOpen size={16} />
+          </button>
+        )}
         {state.step === "plan" && state.plan.rooms.length > 0 && (
           <button
             type="button"
@@ -530,12 +552,25 @@ export function Estimator({ firmId }: Props) {
             }}
             className="flex items-center justify-center w-12 h-12 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 active:scale-95 transition"
             aria-label="Скинути план"
-            title="Скинути план"
+            title="Скинути поточний"
           >
             <RotateCcw size={16} />
           </button>
         )}
       </div>
+
+      {showDrafts && (
+        <DraftsSheet
+          state={state}
+          onLoad={(s) =>
+            dispatch({
+              type: "HYDRATE",
+              payload: s as unknown as Partial<EstimatorState>,
+            })
+          }
+          onClose={() => setShowDrafts(false)}
+        />
+      )}
 
       {sheet?.kind === "room" && (
         <RoomSheet
@@ -656,7 +691,15 @@ export function Estimator({ firmId }: Props) {
   );
 }
 
-function StepHeader({ step }: { step: Step }) {
+function StepHeader({
+  step,
+  canNavigate,
+  onNavigate,
+}: {
+  step: Step;
+  canNavigate: Record<Step, boolean>;
+  onNavigate: (s: Step) => void;
+}) {
   const steps: { id: Step; label: string }[] = [
     { id: "plan", label: "План" },
     { id: "works", label: "Роботи" },
@@ -666,18 +709,29 @@ function StepHeader({ step }: { step: Step }) {
   const activeIdx = steps.findIndex((s) => s.id === step);
   return (
     <div className="flex items-center gap-1">
-      {steps.map((s, i) => (
-        <div
-          key={s.id}
-          className={`flex-1 rounded-full px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-center transition ${
-            i <= activeIdx
-              ? "bg-violet-500/20 border border-violet-500/40 text-violet-200"
-              : "bg-white/[0.03] border border-white/10 text-zinc-500"
-          }`}
-        >
-          {i + 1}. {s.label}
-        </div>
-      ))}
+      {steps.map((s, i) => {
+        const enabled = canNavigate[s.id] && s.id !== step;
+        const isActive = s.id === step;
+        return (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => enabled && onNavigate(s.id)}
+            disabled={!enabled && !isActive}
+            className={`flex-1 rounded-full px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-center transition active:scale-95 ${
+              isActive
+                ? "bg-violet-500/30 border border-violet-500/60 text-violet-100"
+                : i <= activeIdx
+                  ? "bg-violet-500/15 border border-violet-500/30 text-violet-300 hover:bg-violet-500/25"
+                  : enabled
+                    ? "bg-white/[0.03] border border-white/15 text-zinc-300 hover:bg-white/[0.06]"
+                    : "bg-white/[0.02] border border-white/10 text-zinc-600 cursor-not-allowed"
+            }`}
+          >
+            {i + 1}. {s.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

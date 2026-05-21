@@ -147,7 +147,7 @@ export function PlanSvg({
   return (
     <div ref={containerRef} className="w-full h-full">
       <svg
-        data-estimator-plan
+        data-estimator-plan={snapshot ? "snapshot" : "interactive"}
         viewBox={`${layout.vb.x} ${layout.vb.y} ${layout.vb.w} ${layout.vb.h}`}
         preserveAspectRatio="xMidYMid meet"
         className={
@@ -238,9 +238,9 @@ export function PlanSvg({
                   y={r.y + r.h / 2}
                   textAnchor="middle"
                   dominantBaseline="middle"
-                  fill="#e4e4e7"
+                  fill="rgba(229,231,235,0.45)"
                   fontSize={labelFs}
-                  fontWeight={600}
+                  fontWeight={400}
                   pointerEvents="none"
                 >
                   <tspan x={r.x + r.w / 2} dy={showDims ? -labelFs * 0.4 : 0}>
@@ -250,13 +250,70 @@ export function PlanSvg({
                     <tspan
                       x={r.x + r.w / 2}
                       dy={labelFs * 1.2}
-                      fontSize={labelFs * 0.7}
-                      fill="#a1a1aa"
+                      fontSize={labelFs * 0.65}
+                      fill="rgba(161,161,170,0.55)"
                     >
                       {r.w}×{r.h} м · h {r.ceilingHeight} м
                     </tspan>
                   )}
                 </text>
+
+                {/* Розмірні позначки на стінах (як на архітектурному плані).
+                    Показуємо INSIDE біля кожної стіни малим шрифтом. */}
+                {(() => {
+                  const dimFs = Math.max(0.13, Math.min(r.w, r.h) * 0.08);
+                  const inset = Math.min(0.18, Math.min(r.w, r.h) * 0.08);
+                  return (
+                    <g pointerEvents="none">
+                      {/* N */}
+                      <text
+                        x={r.x + r.w / 2}
+                        y={r.y + inset + dimFs * 0.7}
+                        textAnchor="middle"
+                        fontSize={dimFs}
+                        fill="rgba(229,231,235,0.7)"
+                        fontWeight={500}
+                      >
+                        {(r.w * 1000).toFixed(0)}
+                      </text>
+                      {/* S */}
+                      <text
+                        x={r.x + r.w / 2}
+                        y={r.y + r.h - inset}
+                        textAnchor="middle"
+                        fontSize={dimFs}
+                        fill="rgba(229,231,235,0.7)"
+                        fontWeight={500}
+                      >
+                        {(r.w * 1000).toFixed(0)}
+                      </text>
+                      {/* W */}
+                      <text
+                        transform={`rotate(-90 ${r.x + inset + dimFs * 0.4} ${r.y + r.h / 2})`}
+                        x={r.x + inset + dimFs * 0.4}
+                        y={r.y + r.h / 2}
+                        textAnchor="middle"
+                        fontSize={dimFs}
+                        fill="rgba(229,231,235,0.7)"
+                        fontWeight={500}
+                      >
+                        {(r.h * 1000).toFixed(0)}
+                      </text>
+                      {/* E */}
+                      <text
+                        transform={`rotate(-90 ${r.x + r.w - inset} ${r.y + r.h / 2})`}
+                        x={r.x + r.w - inset}
+                        y={r.y + r.h / 2}
+                        textAnchor="middle"
+                        fontSize={dimFs}
+                        fill="rgba(229,231,235,0.7)"
+                        fontWeight={500}
+                      >
+                        {(r.h * 1000).toFixed(0)}
+                      </text>
+                    </g>
+                  );
+                })()}
               </g>
             );
           })}
@@ -267,7 +324,10 @@ export function PlanSvg({
             if (!room) return null;
             const p = openingPoints(room, o);
             const isDoor = o.type === "door";
-            // small offset to nudge the line outside the wall stroke
+            const cx = (p.x1 + p.x2) / 2;
+            const cy = (p.y1 + p.y2) / 2;
+            const isHorizontal = Math.abs(p.x2 - p.x1) > Math.abs(p.y2 - p.y1);
+            const dimFs = Math.max(0.12, Math.min(room.w, room.h) * 0.07);
             return (
               <g key={o.id} pointerEvents="none">
                 <line
@@ -280,7 +340,6 @@ export function PlanSvg({
                   vectorEffect="non-scaling-stroke"
                   strokeLinecap="butt"
                 />
-                {/* dashed accent so door/window remains readable in print */}
                 {!isDoor && (
                   <line
                     x1={p.x1}
@@ -293,6 +352,21 @@ export function PlanSvg({
                     vectorEffect="non-scaling-stroke"
                   />
                 )}
+                {/* Розмір прорізу — мм біля середини. */}
+                <text
+                  transform={
+                    isHorizontal ? undefined : `rotate(-90 ${cx} ${cy})`
+                  }
+                  x={cx}
+                  y={cy + (isHorizontal ? dimFs * 1.6 : 0)}
+                  textAnchor="middle"
+                  dominantBaseline={isHorizontal ? "middle" : "central"}
+                  fontSize={dimFs}
+                  fill={isDoor ? "#fbbf24" : "#38bdf8"}
+                  fontWeight={600}
+                >
+                  {(o.width * 1000).toFixed(0)}
+                </text>
               </g>
             );
           })}

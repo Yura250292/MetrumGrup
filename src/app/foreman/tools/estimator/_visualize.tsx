@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import type { FloorPlan, FurnitureItem, RoomClass } from "./_types";
 import { InteractivePlanView } from "./_interactive-plan-view";
+import { PlanSvg } from "./_plan-svg";
+import { Collapsible } from "./_collapsible";
 import { ComparisonSlider } from "@/components/ui/comparison-slider";
 
 const CLASS_LABELS: Record<RoomClass, string> = {
@@ -117,9 +119,15 @@ export function Visualize({
     setPhotorealError(null);
     setPhotoreal(null);
     try {
-      const svgEl = document.querySelector<SVGSVGElement>(
-        "svg[data-estimator-plan]",
-      );
+      // Знімаємо ЧИСТУ snapshot-версію (без grid сітки) — для fal.ai кращий
+      // вхід. Інтерактивна канва (зі сіткою) забивала контраст при PNG.
+      const svgEl =
+        document.querySelector<SVGSVGElement>(
+          'svg[data-estimator-plan="snapshot"]',
+        ) ??
+        document.querySelector<SVGSVGElement>(
+          'svg[data-estimator-plan="interactive"]',
+        );
       if (!svgEl) throw new Error("Не вдалося знайти SVG плану");
 
       // Конвертуємо SVG → PNG dataURL
@@ -192,6 +200,14 @@ export function Visualize({
 
   return (
     <div className="space-y-4">
+      {/* Прихований snapshot SVG (без grid) — для photoreal PNG input. */}
+      <div
+        aria-hidden
+        className="absolute -left-[9999px] top-0 w-[1024px] h-[1024px] pointer-events-none"
+      >
+        <PlanSvg plan={plan} snapshot className="w-full h-full" />
+      </div>
+
       {hasFurniture && lastGenAt && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs">
           <CheckCircle2 size={14} className="shrink-0" />
@@ -279,11 +295,16 @@ export function Visualize({
             </div>
           </div>
 
-          {/* Класифікація + items per room */}
-          <div className="rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 overflow-hidden">
-            <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-white/[0.02] border-b border-white/5">
-              AI класифікація кімнат
-            </div>
+          <Collapsible
+            title={
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                AI класифікація кімнат
+              </span>
+            }
+            trailing={
+              <span className="text-[11px] text-zinc-500">{plan.rooms.length}</span>
+            }
+          >
             <ul className="divide-y divide-white/5">
               {plan.rooms.map((room) => {
                 const cls = plan.roomClasses[room.id];
@@ -308,13 +329,18 @@ export function Visualize({
                 );
               })}
             </ul>
-          </div>
+          </Collapsible>
 
-          {/* Список меблів */}
-          <div className="rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 overflow-hidden">
-            <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-white/[0.02] border-b border-white/5">
-              Меблі та техніка
-            </div>
+          <Collapsible
+            title={
+              <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                Меблі та техніка
+              </span>
+            }
+            trailing={
+              <span className="text-[11px] text-zinc-500">{plan.furniture.length}</span>
+            }
+          >
             <ul className="divide-y divide-white/5">
               {plan.furniture.map((f) => {
                 const room = plan.rooms.find((r) => r.id === f.roomId);
@@ -341,7 +367,7 @@ export function Visualize({
                 );
               })}
             </ul>
-          </div>
+          </Collapsible>
         </>
       )}
 

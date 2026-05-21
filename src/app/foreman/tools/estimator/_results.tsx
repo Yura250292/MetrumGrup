@@ -16,6 +16,7 @@ import type { Room } from "@/lib/foreman/geometry";
 import { formatMoney, formatNum } from "@/lib/foreman/format";
 import type { FloorPlan, Opening, PricesConfig, WorksConfig } from "./_types";
 import { PlanSvg } from "./_plan-svg";
+import { Collapsible } from "./_collapsible";
 
 interface Props {
   plan: FloorPlan;
@@ -295,7 +296,13 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
     setExporting("pdf");
     try {
       const { exportEstimatePDF } = await import("./_pdf");
-      const svgEl = document.querySelector<SVGSVGElement>("svg[data-estimator-plan]");
+      const svgEl =
+        document.querySelector<SVGSVGElement>(
+          'svg[data-estimator-plan="snapshot"]',
+        ) ??
+        document.querySelector<SVGSVGElement>(
+          'svg[data-estimator-plan="interactive"]',
+        );
       await exportEstimatePDF({
         plan,
         lines,
@@ -358,7 +365,7 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
         </div>
       )}
 
-      {Array.from(byRoom.entries()).map(([roomId, roomLines]) => {
+      {Array.from(byRoom.entries()).map(([roomId, roomLines], idx) => {
         const room = plan.rooms.find((r) => r.id === roomId);
         if (!room) return null;
         const bySurface = new Map<Surface, LineItem[]>();
@@ -368,35 +375,31 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
         }
         const tot = perRoomTotals[roomId] ?? { material: 0, labor: 0, total: 0 };
         return (
-          <section
+          <Collapsible
             key={roomId}
-            className="rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 overflow-hidden"
-          >
-            <header className="px-4 py-3 border-b border-white/5">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-white">{room.name}</div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
-                    {room.w}×{room.h} м · h {room.ceilingHeight} м · підлога{" "}
-                    {formatNum(room.w * room.h)} м² · стіни{" "}
-                    {formatNum(wallArea(room, plan.openings))} м²
-                    {plan.openings.some((o) => o.roomId === room.id) && (
-                      <span className="text-amber-300/80"> (−прорізи)</span>
-                    )}
+            defaultOpen={idx === 0}
+            title={
+              <div>
+                <div className="text-sm font-semibold text-white">{room.name}</div>
+                <div className="text-[11px] text-zinc-500 mt-0.5 tabular-nums">
+                  {room.w}×{room.h} м · підлога {formatNum(room.w * room.h)} м² ·
+                  стіни {formatNum(wallArea(room, plan.openings))} м²
+                </div>
+              </div>
+            }
+            trailing={
+              tot.total > 0 ? (
+                <div className="text-right">
+                  <div className="text-sm font-bold text-emerald-300 tabular-nums">
+                    ₴ {formatMoney(tot.total)}
+                  </div>
+                  <div className="text-[9px] text-zinc-500 tabular-nums">
+                    М {formatMoney(tot.material)} · Р {formatMoney(tot.labor)}
                   </div>
                 </div>
-                {tot.total > 0 && (
-                  <div className="text-right shrink-0">
-                    <div className="text-base font-bold text-emerald-300 tabular-nums">
-                      ₴ {formatMoney(tot.total)}
-                    </div>
-                    <div className="text-[10px] text-zinc-500 tabular-nums">
-                      М {formatMoney(tot.material)} · Р {formatMoney(tot.labor)}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </header>
+              ) : null
+            }
+          >
             {Array.from(bySurface.entries()).map(([surface, surfaceLines]) => (
               <div key={surface}>
                 <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500 bg-white/[0.02] border-b border-white/5">
@@ -423,7 +426,7 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
                 </ul>
               </div>
             ))}
-          </section>
+          </Collapsible>
         );
       })}
 
