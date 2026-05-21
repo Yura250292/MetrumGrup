@@ -219,9 +219,21 @@ export async function notifyUsers(opts: {
   relatedEntity: string;
   relatedId: string;
   emailOverride?: EmailOverride;
+  /**
+   * За замовчуванням actor (хто зробив дію) виключається з targets — щоб не
+   * нотифікувати самого себе про власні коментарі, статус-зміни тощо.
+   *
+   * Передай `skipActor: false` коли actor АБО є й справжнім адресатом
+   * (наприклад, ставить задачу собі — має отримати у Telegram), АБО коли
+   * нотифікація — це системний reminder, а не дія actor'а.
+   */
+  skipActor?: boolean;
 }): Promise<number> {
+  const skipActor = opts.skipActor !== false; // default true
   const targets = Array.from(
-    new Set(opts.userIds.filter((id) => id && id !== opts.actorId)),
+    new Set(
+      opts.userIds.filter((id) => id && (!skipActor || id !== opts.actorId)),
+    ),
   );
   if (targets.length === 0) return 0;
 

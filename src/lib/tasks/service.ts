@@ -453,6 +453,10 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
       await notifyUsers({
         userIds: userAssigneeIds,
         actorId,
+        // skipActor: false — якщо постановник = виконавець (само-призначення),
+        // він теж має отримати повідомлення у Telegram/email (особливо коли
+        // створив задачу через мобільний клік і хоче побачити пуш як reminder).
+        skipActor: false,
         type: "TASK_ASSIGNED",
         title: `Вас призначено на задачу «${task.title}»`,
         body: project?.title ? `Проєкт: ${project.title}` : undefined,

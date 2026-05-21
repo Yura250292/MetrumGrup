@@ -91,6 +91,10 @@ export async function fireTaskReminders(): Promise<number> {
         userIds,
         // Системне нагадування — actor = автор задачі (для аудиту/UI).
         actorId: r.task.createdById,
+        // skipActor: false — це системний reminder, а не людська дія.
+        // Якщо автор задачі = виконавець (само-нагадування), він має
+        // отримати його у Telegram/email — це ж і є сенс кнопки «Нагадати».
+        skipActor: false,
         type: "TASK_DUE_SOON",
         title: `Нагадування: «${r.task.title}»`,
         body: dueLabel
