@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, RotateCcw } from "lucide-react";
-import type { Align, Room, Side } from "@/lib/foreman/geometry";
+import type { Room, Side } from "@/lib/foreman/geometry";
 import {
-  alignmentOffset,
   overlapsExisting,
   parentEdgeLength,
   placeAdjacent,
@@ -264,12 +263,10 @@ export function Estimator({ firmId }: Props) {
     depth: number,
     name: string,
     height: number,
-    align: Align,
+    offset: number,
   ) => {
     const parent = state.plan.rooms.find((r) => r.id === parentId);
     if (!parent) return;
-    const parentLen = parentEdgeLength(parent, side);
-    const offset = alignmentOffset(align, parentLen, length);
     const rect = placeAdjacent(parent, side, length, depth, offset);
     const candidate: Room = {
       id: newId(),
@@ -455,7 +452,7 @@ export function Estimator({ firmId }: Props) {
                 values.width,
                 values.name,
                 values.height,
-                values.align,
+                values.offset,
               );
               setSheet(null);
             } else if (sheet.mode === "edit" && sheet.room) {
