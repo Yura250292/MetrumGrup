@@ -211,9 +211,11 @@ async function lookupMarket(
 
   let response: Anthropic.Messages.Message;
   try {
-    response = await anthropic.messages.create({
+    // Per-call timeout 25s — щоб одна повільна відповідь не з'їла увесь
+    // Vercel budget і не клала весь batch.
+    const callPromise = anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+      max_tokens: 700,
       system: kind === "labor" ? MARKET_SYSTEM_PROMPT_LABOR : MARKET_SYSTEM_PROMPT_MATERIAL,
       tools: [
         // Не передаємо user_location: Anthropic web_search_20250305 не приймає
@@ -221,11 +223,17 @@ async function lookupMarket(
         {
           type: "web_search_20250305",
           name: "web_search",
-          max_uses: 4,
+          max_uses: 2,
         } as unknown as Anthropic.Messages.Tool,
       ],
       messages: [{ role: "user", content: userPrompt }],
     });
+    response = await Promise.race([
+      callPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 25_000),
+      ),
+    ]);
   } catch (e) {
     return {
       source: "none",

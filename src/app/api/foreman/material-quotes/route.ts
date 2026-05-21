@@ -8,8 +8,8 @@ import {
 import { quoteItemsBatch } from "@/lib/foreman/market-quote";
 
 export const runtime = "nodejs";
-// дозволити трохи більше для web_search
-export const maxDuration = 60;
+// Vercel Pro дає до 300s; web_search для кожного item може зайняти 5-20s.
+export const maxDuration = 300;
 
 const bodySchema = z.object({
   items: z
@@ -22,7 +22,8 @@ const bodySchema = z.object({
       }),
     )
     .min(1)
-    .max(40),
+    // Зменшуємо ліміт: клієнт чанкує по 8 items і шле паралельно.
+    .max(12),
 });
 
 /**
@@ -47,6 +48,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Невірний запит" }, { status: 400 });
   }
 
-  const quotes = await quoteItemsBatch(firmId, parsed.data.items, 3);
+  const quotes = await quoteItemsBatch(firmId, parsed.data.items, 6);
   return NextResponse.json({ quotes });
 }

@@ -10,6 +10,7 @@ import {
   calcQty,
   presetsForWorkType,
 } from "@/lib/foreman/material-presets";
+import type { WorkType as WT } from "@/lib/foreman/material-presets";
 import type { LaborPreset, MaterialPreset, Surface, WorkType } from "@/lib/foreman/material-presets";
 import type { Room } from "@/lib/foreman/geometry";
 import { formatMoney, formatNum } from "@/lib/foreman/format";
@@ -157,41 +158,91 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
     let aborted = false;
     setQuoteLoading(true);
     setQuoteError(null);
-    (async () => {
+
+    // Розбиваємо запити на чанки по 8 та шлемо паралельно — щоб не впертися
+    // у 300s Vercel timeout для одного великого batch. Кожен chunk-fetch
+    // незалежний; помилка одного не валить решту.
+    const CHUNK = 8;
+    const chunks: typeof todo[] = [];
+    for (let i = 0; i < todo.length; i += CHUNK) {
+      chunks.push(todo.slice(i, i + CHUNK));
+    }
+
+    const applyChunk = (chunkQuotes: Record<string, Quote>) => {
+      if (aborted) return;
+      setQuotes((prev) => ({ ...prev, ...chunkQuotes }));
+      for (const line of lines) {
+        if (line.unitPrice > 0) continue;
+        const key = `${line.kind}:${line.quoteName}`;
+        const q = chunkQuotes[key];
+        if (q && q.price != null && q.price > 0) {
+          onSetPrice(
+            line.roomId,
+            line.kind === "labor" ? `labor-${line.workType}` : (line.material?.id ?? line.id),
+            q.price,
+          );
+        }
+      }
+    };
+
+    const fetchChunk = async (chunk: typeof todo) => {
       try {
         const res = await fetch("/api/foreman/material-quotes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: todo }),
+          body: JSON.stringify({ items: chunk }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as { quotes: Record<string, Quote> };
-        if (aborted) return;
-        setQuotes((prev) => ({ ...prev, ...json.quotes }));
-        // Auto-fill: для кожного line, якщо ціна ще не задана — підставити з quote.
-        for (const line of lines) {
-          if (line.unitPrice > 0) continue;
-          const key = `${line.kind}:${line.quoteName}`;
-          const q = json.quotes[key];
-          if (q && q.price != null && q.price > 0) {
-            onSetPrice(
-              line.roomId,
-              line.kind === "labor" ? `labor-${line.workType}` : (line.material?.id ?? line.id),
-              q.price,
-            );
-          }
-        }
+        applyChunk(json.quotes);
       } catch (e) {
-        if (!aborted) setQuoteError(e instanceof Error ? e.message : "Не вдалося отримати ціни");
+        if (aborted) return;
+        // Локально позначаємо ці item-и як «не знайдено» — інші чанки працюють.
+        const failure: Record<string, Quote> = {};
+        for (const item of chunk) {
+          failure[item.id] = {
+            source: "none",
+            price: null,
+            unit: null,
+            note: e instanceof Error ? e.message.slice(0, 60) : "помилка",
+          };
+        }
+        applyChunk(failure);
+      }
+    };
+
+    (async () => {
+      try {
+        await Promise.all(chunks.map(fetchChunk));
       } finally {
         if (!aborted) setQuoteLoading(false);
       }
     })();
+
     return () => {
       aborted = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uniqueQuoteRequests]);
+
+  // Labor fallback: якщо AI не повернула ціну для labor — підставляємо
+  // baseline rate з LABOR_PRESETS, щоб підсумок зразу був порахований.
+  useEffect(() => {
+    for (const line of lines) {
+      if (line.kind !== "labor") continue;
+      if (line.unitPrice > 0) continue;
+      const key = `${line.kind}:${line.quoteName}`;
+      const q = quotes[key];
+      // Якщо quote вже отримано і він none/без ціни — fallback на baseline.
+      if (q && (q.price == null || q.price <= 0)) {
+        const baseline = LABOR_PRESETS[line.workType as WT]?.ratePerSqm;
+        if (baseline && baseline > 0) {
+          onSetPrice(line.roomId, `labor-${line.workType}`, baseline);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes]);
 
   // group lines by room → workType → (labor + materials)
   const byRoom = useMemo(() => {
@@ -496,13 +547,23 @@ function LineRow({
           )}
         </div>
       </div>
-      {quote && (
+      {quote && quote.source !== "none" && (
         <SourceBadge
           quote={quote}
           onApply={() => {
             if (quote.price != null && quote.price > 0) onSetPrice(quote.price);
           }}
         />
+      )}
+      {quote && quote.source === "none" && line.unitPrice > 0 && (
+        <div className="text-[10px] text-emerald-300/70 px-1">
+          {isLabor ? "Базова ставка України" : "Ціна задана вручну"}
+        </div>
+      )}
+      {quote && quote.source === "none" && line.unitPrice === 0 && (
+        <div className="text-[10px] text-zinc-600 px-1">
+          Ціну не знайдено{quote.note ? `: ${quote.note}` : ""}
+        </div>
       )}
     </li>
   );

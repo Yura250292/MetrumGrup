@@ -84,34 +84,30 @@ export interface FurnishResult {
   }[];
 }
 
-const SYSTEM_PROMPT = `Ти досвідчений український дизайнер інтер'єру. Тобі дають план квартири і ти:
-1) Класифікуєш кожну кімнату по типу за назвою і розміром (kitchen, bedroom, bathroom, livingroom, corridor, hallway, office, diningroom, balcony, storage, other).
-2) Пропонуєш реалістичну розстановку меблів і техніки у відповідності до української практики.
+/**
+ * System-prompt для ОДНІЄЇ кімнати — Claude класифікує тип і повертає меблі.
+ * Окремий виклик на кімнату дає кращу якість і не перевищує токени.
+ */
+const SYSTEM_PROMPT_ROOM = `Ти український дизайнер інтер'єру. Тобі дають ОДНУ кімнату плану з розмірами і прорізами. Класифікуй її тип і запропонуй меблювання.
+
+Класифікації: kitchen, bedroom, bathroom, livingroom, corridor, hallway, office, diningroom, balcony, storage, other.
+
+Доступні типи меблів: bed, sofa, armchair, table, chair, fridge, stove, oven, sink, toilet, shower, bathtub, wardrobe, tv, desk, shelf, kitchen-cabinet, washer, dishwasher, plant, rug.
 
 Правила:
-- Меблі ПОВИННІ вміщатись у кімнату (x ≥ 0, y ≥ 0, x+w ≤ roomW, y+h ≤ roomH).
-- НЕ перекривай прорізи (вікна/двері) меблями.
-- Координати — у метрах у локальній системі кімнати (NW кут кімнати = (0,0), осі x→Схід, y→Південь).
-- rotation: 0/90/180/270 градусів.
-- Розмір кожного предмета має бути реалістичним (двоспальне ліжко ~1.6×2.0 м, диван ~2.2×0.9 м, плита ~0.6×0.6 м, унітаз ~0.4×0.65 м, ванна ~1.7×0.7 м, тощо).
-- Меблі біля стіни розташовуй з опорою на стіну (x=0 або y=0, або x+w=roomW, або y+h=roomH).
-- Для коридорів — мінімум меблів (можливо тумба біля входу).
-- Класифікуй за назвою: "Кухня"→kitchen, "Спальня"→bedroom, "Ванна"/"Санвузол"→bathroom, "Вітальня"/"Зала"→livingroom, "Коридор"→corridor, "Кабінет"→office.
+- Координати в метрах, NW кут кімнати = (0,0), осі x→Схід, y→Південь.
+- x≥0, y≥0, x+w ≤ roomW, y+h ≤ roomH.
+- НЕ перекривай прорізи.
+- Розміри реалістичні: ліжко ~1.6×2.0, диван ~2.2×0.9, плита ~0.6×0.6, унітаз ~0.4×0.65, ванна ~1.7×0.7.
+- Меблі біля стін.
+- Для коридорів/санвузлів — мінімум предметів.
+- Класифікація за назвою: "Кухня"→kitchen, "Спальня"→bedroom, "Ванна"/"Санвузол"→bathroom, "Вітальня"→livingroom, "Коридор"→corridor.
 
-Доступні типи: bed, sofa, armchair, table, chair, fridge, stove, oven, sink, toilet, shower, bathtub, wardrobe, tv, desk, shelf, kitchen-cabinet, washer, dishwasher, plant, rug.
-
-Поверни ВИКЛЮЧНО валідний JSON без markdown-обгорток, такого формату:
+Поверни ВИКЛЮЧНО валідний JSON:
 {
-  "rooms": [{"roomId": "<id>", "classification": "<class>"}],
+  "classification": "<class>",
   "furniture": [
-    {
-      "id": "<unique short id>",
-      "roomId": "<room id>",
-      "type": "<type>",
-      "label": "<коротка українська назва>",
-      "x": <number>, "y": <number>, "w": <number>, "h": <number>,
-      "rotation": 0|90|180|270
-    }
+    {"type": "<type>", "label": "<укр.назва>", "x": <n>, "y": <n>, "w": <n>, "h": <n>, "rotation": 0|90|180|270}
   ]
 }
 
@@ -153,6 +149,99 @@ const VALID_CLASSES = new Set<RoomClass>([
   "office", "diningroom", "balcony", "storage", "other",
 ]);
 
+interface RoomPromptResult {
+  classification: RoomClass;
+  furniture: FurnishResult["furniture"];
+}
+
+async function furnishRoom(
+  anthropic: Anthropic,
+  room: FurnishRequest["rooms"][number],
+  openings: FurnishRequest["openings"],
+): Promise<RoomPromptResult> {
+  const roomOpenings = openings.filter((o) => o.roomId === room.id);
+  const roomInput = JSON.stringify({
+    name: room.name,
+    w: room.w,
+    h: room.h,
+    h_ceil: room.ceilingHeight,
+    openings: roomOpenings.map((o) => ({
+      side: o.side,
+      offset: o.offset,
+      w: o.width,
+      h: o.height,
+      type: o.type,
+    })),
+  });
+
+  const userPrompt = `Кімната: ${roomInput}\nКласифікуй і запропонуй меблювання. Поверни лише JSON.`;
+
+  // 30s per-room timeout, щоб одна кімната не зжерла весь budget
+  const callPromise = anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 900,
+    system: SYSTEM_PROMPT_ROOM,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+  const response = await Promise.race([
+    callPromise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), 35_000),
+    ),
+  ]);
+
+  const textBlocks = response.content
+    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+
+  const parsed = extractJson(textBlocks) as
+    | { classification?: string; furniture?: unknown[] }
+    | null;
+
+  if (!parsed) {
+    return { classification: "other", furniture: [] };
+  }
+
+  const classification = VALID_CLASSES.has(parsed.classification as RoomClass)
+    ? (parsed.classification as RoomClass)
+    : "other";
+
+  const furniture: FurnishResult["furniture"] = [];
+  const rawList = (parsed.furniture ?? []) as Array<Record<string, unknown>>;
+  let autoIdx = 0;
+  for (const item of rawList) {
+    const type = String(item.type ?? "");
+    if (!VALID_TYPES.has(type as FurnitureType)) continue;
+    const x = Number(item.x);
+    const y = Number(item.y);
+    const w = Number(item.w);
+    const h = Number(item.h);
+    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
+    const cx = Math.max(0, Math.min(x, Math.max(0, room.w - 0.1)));
+    const cy = Math.max(0, Math.min(y, Math.max(0, room.h - 0.1)));
+    const cw = Math.max(0.1, Math.min(w, room.w - cx));
+    const ch = Math.max(0.1, Math.min(h, room.h - cy));
+    const rotation = [0, 90, 180, 270].includes(Number(item.rotation))
+      ? Number(item.rotation)
+      : 0;
+    const label = typeof item.label === "string" ? item.label : "";
+    furniture.push({
+      id: `f-${room.id.slice(0, 4)}-${autoIdx++}-${Date.now() % 100000}`,
+      roomId: room.id,
+      type: type as FurnitureType,
+      label,
+      x: cx,
+      y: cy,
+      w: cw,
+      h: ch,
+      rotation,
+    });
+  }
+
+  return { classification, furniture };
+}
+
 export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY не налаштований на сервері");
@@ -163,93 +252,24 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  // компактний JSON-опис плану для меншого input
-  const planJson = JSON.stringify({
-    rooms: req.rooms.map((r) => ({
-      id: r.id,
-      name: r.name,
-      w: r.w,
-      h: r.h,
-      h_ceil: r.ceilingHeight,
-    })),
-    openings: req.openings.map((o) => ({
-      roomId: o.roomId,
-      side: o.side,
-      offset: o.offset,
-      w: o.width,
-      h: o.height,
-      type: o.type,
-    })),
-  });
+  // Паралельно — одна Claude-сесія на кімнату. Якщо якась впаде/таймаутне,
+  // повертаємо для неї порожній набір; інші продовжать працювати.
+  const results = await Promise.allSettled(
+    req.rooms.map((room) => furnishRoom(anthropic, room, req.openings)),
+  );
 
-  const userPrompt = `Ось план:\n${planJson}\n\nКласифікуй кімнати і запропонуй меблювання. Поверни лише JSON.`;
-
-  const response = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 3000,
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-
-  const textBlocks = response.content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-
-  const parsed = extractJson(textBlocks) as
-    | { rooms?: { roomId: string; classification: string }[]; furniture?: unknown[] }
-    | null;
-
-  if (!parsed) {
-    throw new Error("AI не повернув валідний JSON");
-  }
-
-  // Sanitize + clamp furniture в межі кімнат, виключити невалідні items.
-  const roomIndex = new Map(req.rooms.map((r) => [r.id, r]));
-  const rooms = (parsed.rooms ?? [])
-    .filter((r) => roomIndex.has(r.roomId) && VALID_CLASSES.has(r.classification as RoomClass))
-    .map((r) => ({
-      roomId: r.roomId,
-      classification: r.classification as RoomClass,
-    }));
-
+  const rooms: FurnishResult["rooms"] = [];
   const furniture: FurnishResult["furniture"] = [];
-  const rawList = (parsed.furniture ?? []) as Array<Record<string, unknown>>;
-  let autoIdx = 0;
-  for (const item of rawList) {
-    const roomId = typeof item.roomId === "string" ? item.roomId : "";
-    const room = roomIndex.get(roomId);
-    if (!room) continue;
-    const type = String(item.type ?? "");
-    if (!VALID_TYPES.has(type as FurnitureType)) continue;
-    const x = Number(item.x);
-    const y = Number(item.y);
-    const w = Number(item.w);
-    const h = Number(item.h);
-    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
-    // clamp у межі кімнати
-    const cx = Math.max(0, Math.min(x, Math.max(0, room.w - 0.1)));
-    const cy = Math.max(0, Math.min(y, Math.max(0, room.h - 0.1)));
-    const cw = Math.max(0.1, Math.min(w, room.w - cx));
-    const ch = Math.max(0.1, Math.min(h, room.h - cy));
-    const rotation = [0, 90, 180, 270].includes(Number(item.rotation))
-      ? Number(item.rotation)
-      : 0;
-    const label = typeof item.label === "string" ? item.label : "";
-    const id = typeof item.id === "string" && item.id.length > 0
-      ? `f-${item.id}-${autoIdx++}`
-      : `f-${roomId.slice(0, 4)}-${autoIdx++}`;
-    furniture.push({
-      id,
-      roomId,
-      type: type as FurnitureType,
-      label,
-      x: cx,
-      y: cy,
-      w: cw,
-      h: ch,
-      rotation,
-    });
+  for (let i = 0; i < req.rooms.length; i++) {
+    const room = req.rooms[i];
+    const r = results[i];
+    if (r.status === "fulfilled") {
+      rooms.push({ roomId: room.id, classification: r.value.classification });
+      furniture.push(...r.value.furniture);
+    } else {
+      // тиха помилка — fallback на "other" без меблів
+      rooms.push({ roomId: room.id, classification: "other" });
+    }
   }
 
   return { rooms, furniture };
