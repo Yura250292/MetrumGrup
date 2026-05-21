@@ -12,6 +12,7 @@ import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
 import { SearchModal } from "./search-modal";
+import { TelegramQuickAction } from "./telegram-quick-action";
 
 export function Header() {
   const pathname = usePathname();
@@ -130,7 +131,7 @@ export function Header() {
         onClick={() => setSearchOpen(true)}
         className="hidden md:flex items-center gap-2 mx-auto rounded-lg px-3 py-1.5 text-[13px] transition hover:brightness-[0.97]"
         style={{
-          width: 320,
+          width: 280,
           backgroundColor: T.panelElevated,
           border: `1px solid ${T.borderSoft}`,
           color: T.textMuted,
@@ -153,6 +154,7 @@ export function Header() {
       <div className="flex items-center gap-1.5 md:gap-3">
         <div className="flex items-center gap-1 md:gap-1.5">
           <AiChatButton />
+          <TelegramQuickAction />
           <NotificationBell
             variant="v2"
             buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
