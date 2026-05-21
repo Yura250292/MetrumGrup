@@ -178,6 +178,14 @@ function PlanWithControls({
   );
 
   const [view, setView] = useState<View>(DEFAULT_VIEW);
+  // viewRef — щоб обробники жестів читали актуальний view БЕЗ переприсвоєння
+  // event listener-ів на кожен setView. Інакше при швидкому pinch listener-и
+  // постійно re-attach і pointer-події можуть «провалюватись» з помилкою.
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
   // Скидати view коли план суттєво змінюється (нова кімната → auto-fit).
   const prevRoomCountRef = useRef(plan.rooms.length);
   useEffect(() => {
@@ -192,64 +200,94 @@ function PlanWithControls({
   const pointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const lastPinchRef = useRef<{ dist: number; scale: number } | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; tx: number; ty: number } | null>(null);
+  // bbox-розміри теж через ref, щоб не реактиватися на кожен re-render
+  const bboxRef = useRef({ w: b.w, h: b.h });
+  useEffect(() => {
+    bboxRef.current = { w: b.w, h: b.h };
+  }, [b.w, b.h]);
 
   useEffect(() => {
     const el = svgWrapRef.current;
     if (!el) return;
 
+    const safeScale = (s: number) =>
+      Number.isFinite(s) ? clamp(s, 0.4, 4) : viewRef.current.scale;
+    const safeOffset = (o: number) => (Number.isFinite(o) ? o : 0);
+
     const onPointerDown = (e: PointerEvent) => {
-      // Не блокувати клік по SVG-елементах (rect/+); ставимо pan тільки на 1 палець по pустому місці.
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointersRef.current.size === 1) {
-        dragStartRef.current = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty };
-      } else if (pointersRef.current.size === 2) {
-        const pts = Array.from(pointersRef.current.values());
-        const dx = pts[0].x - pts[1].x;
-        const dy = pts[0].y - pts[1].y;
-        lastPinchRef.current = { dist: Math.hypot(dx, dy), scale: view.scale };
-        dragStartRef.current = null;
-      }
-    };
-    const onPointerMove = (e: PointerEvent) => {
-      if (!pointersRef.current.has(e.pointerId)) return;
-      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointersRef.current.size === 2 && lastPinchRef.current) {
-        const pts = Array.from(pointersRef.current.values());
-        const dx = pts[0].x - pts[1].x;
-        const dy = pts[0].y - pts[1].y;
-        const dist = Math.hypot(dx, dy);
-        if (lastPinchRef.current.dist > 0) {
-          const newScale = clamp(
-            (dist / lastPinchRef.current.dist) * lastPinchRef.current.scale,
-            0.4,
-            4,
-          );
-          setView((v) => ({ ...v, scale: newScale }));
+      try {
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const v = viewRef.current;
+        if (pointersRef.current.size === 1) {
+          dragStartRef.current = { x: e.clientX, y: e.clientY, tx: v.tx, ty: v.ty };
+        } else if (pointersRef.current.size === 2) {
+          const pts = Array.from(pointersRef.current.values());
+          const dx = pts[0].x - pts[1].x;
+          const dy = pts[0].y - pts[1].y;
+          const dist = Math.hypot(dx, dy);
+          lastPinchRef.current = { dist: dist > 0 ? dist : 1, scale: v.scale };
+          dragStartRef.current = null;
         }
-        e.preventDefault();
-      } else if (pointersRef.current.size === 1 && dragStartRef.current) {
-        const px = el.clientWidth;
-        const padW = Math.max(0.6, Math.max(b.w, b.h) * 0.12) * 2;
-        const vbW = (b.w || 1) + padW;
-        const metersPerPx = vbW / Math.max(px, 1);
-        const dx = (e.clientX - dragStartRef.current.x) * metersPerPx;
-        const dy = (e.clientY - dragStartRef.current.y) * metersPerPx;
-        setView((v) => ({
-          ...v,
-          tx: dragStartRef.current!.tx + dx,
-          ty: dragStartRef.current!.ty + dy,
-        }));
+      } catch {
+        /* defensive */
       }
     };
-    const onPointerUp = (e: PointerEvent) => {
-      pointersRef.current.delete(e.pointerId);
-      if (pointersRef.current.size < 2) lastPinchRef.current = null;
-      if (pointersRef.current.size === 0) dragStartRef.current = null;
+
+    const onPointerMove = (e: PointerEvent) => {
+      try {
+        if (!pointersRef.current.has(e.pointerId)) return;
+        pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (pointersRef.current.size === 2 && lastPinchRef.current) {
+          const pts = Array.from(pointersRef.current.values());
+          const dx = pts[0].x - pts[1].x;
+          const dy = pts[0].y - pts[1].y;
+          const dist = Math.hypot(dx, dy);
+          const baseDist = lastPinchRef.current.dist;
+          if (baseDist > 0 && dist > 0) {
+            const newScale = safeScale(
+              (dist / baseDist) * lastPinchRef.current.scale,
+            );
+            setView((v) => ({ ...v, scale: newScale }));
+          }
+          e.preventDefault();
+        } else if (pointersRef.current.size === 1 && dragStartRef.current) {
+          const px = el.clientWidth;
+          if (px <= 0) return;
+          const { w: bw, h: bh } = bboxRef.current;
+          const padW = Math.max(0.6, Math.max(bw, bh) * 0.12) * 2;
+          const vbW = (bw || 1) + padW;
+          const metersPerPx = vbW / px;
+          const dx = (e.clientX - dragStartRef.current.x) * metersPerPx;
+          const dy = (e.clientY - dragStartRef.current.y) * metersPerPx;
+          setView((v) => ({
+            ...v,
+            tx: safeOffset(dragStartRef.current!.tx + dx),
+            ty: safeOffset(dragStartRef.current!.ty + dy),
+          }));
+        }
+      } catch {
+        /* defensive — не падати на жесті */
+      }
     };
+
+    const onPointerUp = (e: PointerEvent) => {
+      try {
+        pointersRef.current.delete(e.pointerId);
+        if (pointersRef.current.size < 2) lastPinchRef.current = null;
+        if (pointersRef.current.size === 0) dragStartRef.current = null;
+      } catch {
+        /* defensive */
+      }
+    };
+
     const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const delta = -Math.sign(e.deltaY) * 0.15;
-      setView((v) => ({ ...v, scale: clamp(v.scale * (1 + delta), 0.4, 4) }));
+      try {
+        e.preventDefault();
+        const delta = -Math.sign(e.deltaY) * 0.15;
+        setView((v) => ({ ...v, scale: safeScale(v.scale * (1 + delta)) }));
+      } catch {
+        /* defensive */
+      }
     };
 
     el.addEventListener("pointerdown", onPointerDown);
@@ -263,8 +301,14 @@ function PlanWithControls({
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerUp);
       el.removeEventListener("wheel", onWheel);
+      pointersRef.current.clear();
+      lastPinchRef.current = null;
+      dragStartRef.current = null;
     };
-  }, [b.w, b.h, view.scale, view.tx, view.ty]);
+    // ВАЖЛИВО: пусті deps — слухачі чіпляються один раз. Актуальний state
+    // читаємо з viewRef/bboxRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="space-y-3">

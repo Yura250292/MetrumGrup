@@ -150,6 +150,25 @@ interface MarketJson {
   reason?: string;
 }
 
+function friendlyErrorMessage(e: unknown): string {
+  if (!(e instanceof Error)) return "Помилка пошуку";
+  const m = e.message;
+  // Якщо API повернув довгий JSON — обрізаємо і показуємо короткий зміст
+  if (m.includes("Country code") && m.includes("not supported")) {
+    return "AI-пошук тимчасово недоступний для UA. Спробуйте пізніше.";
+  }
+  if (m.includes("invalid_request_error")) {
+    return "AI-сервіс відмовив у запиті. Введіть ціну вручну.";
+  }
+  if (m.includes("rate_limit") || m.includes("429")) {
+    return "Забагато запитів. Спробуйте за хвилину.";
+  }
+  if (m.includes("timeout") || m.includes("Timeout")) {
+    return "Пошук зайняв забагато часу.";
+  }
+  return m.length > 80 ? m.slice(0, 77) + "…" : m;
+}
+
 function extractJson(text: string): MarketJson | null {
   // strip ```json fences if present, then take the first balanced {...}
   const cleaned = text.replace(/```(?:json)?/g, "").trim();
@@ -197,11 +216,12 @@ async function lookupMarket(
       max_tokens: 1024,
       system: kind === "labor" ? MARKET_SYSTEM_PROMPT_LABOR : MARKET_SYSTEM_PROMPT_MATERIAL,
       tools: [
+        // Не передаємо user_location: Anthropic web_search_20250305 не приймає
+        // country code "UA". Українські сайти обмежуємо в system-prompt.
         {
           type: "web_search_20250305",
           name: "web_search",
-          max_uses: 3,
-          user_location: { type: "approximate", country: "UA" },
+          max_uses: 4,
         } as unknown as Anthropic.Messages.Tool,
       ],
       messages: [{ role: "user", content: userPrompt }],
@@ -211,7 +231,7 @@ async function lookupMarket(
       source: "none",
       price: null,
       unit: null,
-      note: e instanceof Error ? e.message.slice(0, 140) : "Помилка пошуку",
+      note: friendlyErrorMessage(e),
     };
   }
 
@@ -298,7 +318,7 @@ export async function quoteItemsBatch(
           source: "none",
           price: null,
           unit: null,
-          note: e instanceof Error ? e.message.slice(0, 120) : "помилка",
+          note: friendlyErrorMessage(e),
         };
       }
     }
