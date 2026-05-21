@@ -64,6 +64,7 @@ model User {
   createdTasks           Task[]                    @relation("TaskCreator")
   taskAssignments        TaskAssignee[]            @relation("TaskAssigneeUser")
   taskAssignerOf         TaskAssignee[]            @relation("TaskAssigneeAssigner")
+  taskAttachmentsUploaded TaskAttachment[]         @relation("TaskAttachmentUploader")
   taskWatchers           TaskWatcher[]             @relation("TaskWatcherUser")
   checklistItems         ChecklistItem[]           @relation("ChecklistAssignee")
   checklistCompletions   ChecklistItem[]           @relation("ChecklistCompletedBy")
@@ -2111,6 +2112,7 @@ model Task {
   outgoingDeps       TaskDependency[]      @relation("TaskDepPredecessor")
   incomingDeps       TaskDependency[]      @relation("TaskDepSuccessor")
   timeLogs           TimeLog[]
+  attachments        TaskAttachment[]
 
   @@index([projectId, stageId, isArchived])
   @@index([projectId, statusId])
@@ -2118,6 +2120,25 @@ model Task {
   @@index([dueDate])
   @@index([createdById])
   @@map("tasks")
+}
+
+/// Вкладення до задачі (Word/PDF/Excel/картинка тощо). Зберігається у R2,
+/// рядок містить ключ + метадані. Паттерн: ForemanReportAttachment.
+model TaskAttachment {
+  id           String   @id @default(cuid())
+  taskId       String
+  r2Key        String
+  originalName String
+  mimeType     String
+  size         Int
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  task       Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("TaskAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([taskId])
+  @@map("task_attachments")
 }
 
 model TaskAssignee {

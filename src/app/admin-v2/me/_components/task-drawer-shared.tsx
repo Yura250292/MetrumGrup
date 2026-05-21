@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { TaskAttachmentsPanel } from "./task-attachments-panel";
 import { CommentThread } from "@/components/collab/CommentThread";
 import { TaskAiActions } from "./task-ai-actions";
 
@@ -591,6 +592,9 @@ export function SelfContainedTaskDrawer({
                 </div>
               </Section>
             )}
+
+            {/* Attachments — файли, прикріплені до задачі (PDF/Word/Excel/тощо). */}
+            <TaskAttachmentsPanel taskId={taskId} />
 
             {/* AI помічник — згорнутий за замовчуванням, щоб не лякати новачків.
                 Тімер-трекінг прибрано повністю — переїде у наступну ітерацію,
