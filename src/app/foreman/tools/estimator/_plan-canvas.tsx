@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Minus, Plus, RotateCw, Ruler } from "lucide-react";
+import { DoorOpen, Maximize2, Minus, Plus, RotateCw, Ruler } from "lucide-react";
 import { bbox } from "@/lib/foreman/geometry";
 import type { Room, Side } from "@/lib/foreman/geometry";
 import { parseNum, formatNum } from "@/lib/foreman/format";
@@ -14,6 +14,7 @@ interface Props {
   onAddFirst: (length: number, width: number, name: string, height: number) => void;
   onPlusClick: (parentId: string, side: Side) => void;
   onRoomTap: (room: Room) => void;
+  onWallTap: (roomId: string, side: Side, offset: number) => void;
 }
 
 export function PlanCanvas({
@@ -22,6 +23,7 @@ export function PlanCanvas({
   onAddFirst,
   onPlusClick,
   onRoomTap,
+  onWallTap,
 }: Props) {
   const hasRooms = plan.rooms.length > 0;
 
@@ -52,7 +54,12 @@ export function PlanCanvas({
       {!hasRooms ? (
         <FirstRoomForm defaultHeight={plan.defaultCeilingHeight} onSubmit={onAddFirst} />
       ) : (
-        <PlanWithControls plan={plan} onPlusClick={onPlusClick} onRoomTap={onRoomTap} />
+        <PlanWithControls
+          plan={plan}
+          onPlusClick={onPlusClick}
+          onRoomTap={onRoomTap}
+          onWallTap={onWallTap}
+        />
       )}
     </div>
   );
@@ -153,11 +160,14 @@ function PlanWithControls({
   plan,
   onPlusClick,
   onRoomTap,
+  onWallTap,
 }: {
   plan: FloorPlan;
   onPlusClick: (parentId: string, side: Side) => void;
   onRoomTap: (room: Room) => void;
+  onWallTap: (roomId: string, side: Side, offset: number) => void;
 }) {
+  const [viewMode, setViewMode] = useState<"rooms" | "openings">("rooms");
   const b = useMemo(() => bbox(plan.rooms), [plan.rooms]);
   const ratio = b.w === 0 || b.h === 0 ? 1 : b.w / b.h;
   const aspectClass =
@@ -268,10 +278,40 @@ function PlanWithControls({
             plan={plan}
             onPlusClick={onPlusClick}
             onRoomTap={onRoomTap}
+            onWallTap={onWallTap}
+            viewMode={viewMode}
             viewTransform={view}
             className="w-full h-full select-none"
           />
         </div>
+
+        {/* mode toggle */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1.5">
+          <button
+            type="button"
+            onClick={() => setViewMode((m) => (m === "rooms" ? "openings" : "rooms"))}
+            className={`flex items-center gap-1.5 min-h-[34px] px-2.5 rounded-lg text-[11px] font-semibold border backdrop-blur transition active:scale-95 ${
+              viewMode === "openings"
+                ? "bg-amber-500/20 border-amber-500/50 text-amber-200"
+                : "bg-zinc-900/85 border-white/10 text-zinc-200"
+            }`}
+            aria-label="Режим прорізів"
+            title={
+              viewMode === "openings"
+                ? "Тап по стіні — додати проріз. Натисни ще раз щоб вийти."
+                : "Увімкнути режим додавання прорізів"
+            }
+          >
+            <DoorOpen size={14} />
+            {viewMode === "openings" ? "Прорізи: ON" : "Прорізи"}
+          </button>
+        </div>
+
+        {viewMode === "openings" && (
+          <div className="absolute top-12 left-2 right-12 px-2.5 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-100 backdrop-blur leading-snug">
+            Тап по стіні → AI визначить найближчу грань і відкриє sheet.
+          </div>
+        )}
 
         {/* view controls */}
         <div className="absolute top-2 right-2 flex flex-col gap-1.5">

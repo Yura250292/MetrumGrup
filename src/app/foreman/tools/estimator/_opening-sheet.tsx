@@ -16,6 +16,8 @@ interface Props {
   edgeLengths: Record<Side, number>;
   ceilingHeight: number;
   existing?: Opening;
+  /** Якщо передано — використовується в режимі add як початкова стіна/offset. */
+  prefill?: { side: Side; offset: number };
   onClose: () => void;
   onConfirm: (op: Omit<Opening, "id">) => void;
   onDelete?: () => void;
@@ -38,13 +40,16 @@ export function OpeningSheet({
   edgeLengths,
   ceilingHeight,
   existing,
+  prefill,
   onClose,
   onConfirm,
   onDelete,
 }: Props) {
   const [type, setType] = useState<OpeningType>(existing?.type ?? "door");
-  const [side, setSide] = useState<Side>(existing?.side ?? "S");
-  const [offset, setOffset] = useState(String(existing?.offset ?? 0));
+  const [side, setSide] = useState<Side>(existing?.side ?? prefill?.side ?? "S");
+  const [offset, setOffset] = useState(
+    String(existing?.offset ?? prefill?.offset ?? 0),
+  );
   const [width, setWidth] = useState(
     String(existing?.width ?? DEFAULTS["door"].width),
   );

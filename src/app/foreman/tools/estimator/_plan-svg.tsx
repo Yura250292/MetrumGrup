@@ -9,6 +9,13 @@ interface Props {
   plan: FloorPlan;
   onPlusClick?: (parentId: string, side: Side) => void;
   onRoomTap?: (room: Room) => void;
+  /**
+   * Тап по тілу кімнати у режимі «openings» — повертає визначену
+   * найближчу стіну і offset у метрах від NW-кута цієї грані.
+   */
+  onWallTap?: (roomId: string, side: Side, offset: number) => void;
+  /** Режим взаємодії з канвою. */
+  viewMode?: "rooms" | "openings";
   /** Snapshot для PDF — без сітки, +, інтеракцій. */
   snapshot?: boolean;
   className?: string;
@@ -43,10 +50,13 @@ export function PlanSvg({
   plan,
   onPlusClick,
   onRoomTap,
+  onWallTap,
+  viewMode = "rooms",
   snapshot,
   className,
   viewTransform,
 }: Props) {
+  const openingsMode = viewMode === "openings" && !snapshot;
   const layout = useMemo(() => {
     const b = bbox(plan.rooms);
     const pad = Math.max(0.6, Math.max(b.w, b.h) * 0.12);
@@ -85,13 +95,39 @@ export function PlanSvg({
   const strokePx = 1.4; // non-scaling stroke у px
 
   const free = useMemo(
-    () => (onPlusClick && !snapshot ? freeSegments(plan.rooms) : null),
-    [plan.rooms, onPlusClick, snapshot],
+    () => (onPlusClick && !snapshot && !openingsMode ? freeSegments(plan.rooms) : null),
+    [plan.rooms, onPlusClick, snapshot, openingsMode],
   );
   const buttons = useMemo(
-    () => (onPlusClick && free && !snapshot ? freeButtons(plan.rooms, free) : []),
-    [plan.rooms, free, onPlusClick, snapshot],
+    () => (free ? freeButtons(plan.rooms, free) : []),
+    [plan.rooms, free],
   );
+
+  /** Конвертація client → SVG user-space, з урахуванням viewTransform. */
+  const handleWallTap = (e: React.MouseEvent<SVGRectElement>, room: Room) => {
+    if (!onWallTap) return;
+    const target = e.currentTarget;
+    const ctm = target.getScreenCTM();
+    if (!ctm) return;
+    const inv = ctm.inverse();
+    const svgEl = target.ownerSVGElement;
+    if (!svgEl) return;
+    const pt = svgEl.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    const local = pt.matrixTransform(inv);
+    // closest edge
+    const distN = local.y - room.y;
+    const distS = room.y + room.h - local.y;
+    const distW = local.x - room.x;
+    const distE = room.x + room.w - local.x;
+    const min = Math.min(distN, distS, distW, distE);
+    const side: Side =
+      min === distN ? "N" : min === distS ? "S" : min === distW ? "W" : "E";
+    const rawOffset =
+      side === "N" || side === "S" ? local.x - room.x : local.y - room.y;
+    onWallTap(room.id, side, rawOffset);
+  };
 
   // Translation в екранних координатах застосовується ПІСЛЯ rotate/scale,
   // щоб drag вліво/вправо завжди працював вздовж екранних осей.
@@ -160,21 +196,32 @@ export function PlanSvg({
             const showDims = Math.min(r.w, r.h) >= 1.5;
             const labelFs = Math.min(r.w, r.h) * 0.14;
             return (
-              <g
-                key={r.id}
-                onClick={onRoomTap ? () => onRoomTap(r) : undefined}
-                className={onRoomTap ? "cursor-pointer" : undefined}
-              >
+              <g key={r.id}>
                 <rect
                   x={r.x}
                   y={r.y}
                   width={r.w}
                   height={r.h}
-                  fill="rgba(139,92,246,0.12)"
-                  stroke="rgb(139,92,246)"
+                  fill={openingsMode ? "rgba(251,191,36,0.08)" : "rgba(139,92,246,0.12)"}
+                  stroke={openingsMode ? "rgb(251,191,36)" : "rgb(139,92,246)"}
                   strokeWidth={strokePx + 0.4}
+                  strokeDasharray={openingsMode ? "0.25 0.25" : undefined}
                   vectorEffect="non-scaling-stroke"
                   rx={Math.min(0.12, Math.min(r.w, r.h) * 0.03)}
+                  onClick={
+                    openingsMode
+                      ? (e) => handleWallTap(e, r)
+                      : onRoomTap
+                        ? () => onRoomTap(r)
+                        : undefined
+                  }
+                  style={{
+                    cursor: openingsMode
+                      ? "crosshair"
+                      : onRoomTap
+                        ? "pointer"
+                        : "default",
+                  }}
                 />
                 <text
                   x={r.x + r.w / 2}
@@ -241,6 +288,7 @@ export function PlanSvg({
           })}
 
           {!snapshot &&
+            !openingsMode &&
             buttons.map((b) => (
               <g
                 key={b.id}

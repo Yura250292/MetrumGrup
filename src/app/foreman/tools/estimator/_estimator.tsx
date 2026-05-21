@@ -202,6 +202,7 @@ type SheetState =
       mode: "add" | "edit";
       roomId: string;
       opening?: Opening;
+      prefill?: { side: Side; offset: number };
     };
 
 function newId(): string {
@@ -337,6 +338,24 @@ export function Estimator({ firmId }: Props) {
                 });
               }}
               onRoomTap={(room) => setSheet({ kind: "room", mode: "edit", room })}
+              onWallTap={(roomId, side, rawOffset) => {
+                const room = state.plan.rooms.find((r) => r.id === roomId);
+                if (!room) return;
+                // дефолт ширина дверей; центруємо отвір навколо точки тапу
+                const defaultWidth = 0.9;
+                const edgeLen = side === "N" || side === "S" ? room.w : room.h;
+                const centered = rawOffset - defaultWidth / 2;
+                const clamped = Math.max(
+                  0,
+                  Math.min(centered, Math.max(0, edgeLen - defaultWidth)),
+                );
+                setSheet({
+                  kind: "opening",
+                  mode: "add",
+                  roomId,
+                  prefill: { side, offset: clamped },
+                });
+              }}
             />
           </motion.div>
         )}
@@ -495,7 +514,16 @@ export function Estimator({ firmId }: Props) {
             edgeLengths={{ N: room.w, S: room.w, E: room.h, W: room.h }}
             ceilingHeight={room.ceilingHeight}
             existing={sheet.opening}
-            onClose={() => setSheet({ kind: "room", mode: "edit", room })}
+            prefill={sheet.prefill}
+            onClose={() => {
+              // Якщо це додавання прорізу прямо з канви — повертаємо у канву,
+              // не в room sheet. Інакше — у room sheet.
+              if (sheet.prefill) {
+                setSheet(null);
+              } else {
+                setSheet({ kind: "room", mode: "edit", room });
+              }
+            }}
             onConfirm={(op) => {
               if (sheet.mode === "edit" && sheet.opening) {
                 dispatch({
@@ -509,7 +537,10 @@ export function Estimator({ firmId }: Props) {
                   opening: { id: newId(), ...op, roomId: room.id },
                 });
               }
-              setSheet({ kind: "room", mode: "edit", room });
+              // Якщо це був вхід прямо з канви — закриваємо повністю,
+              // інакше повертаємось у room sheet щоб бачити список.
+              if (sheet.prefill) setSheet(null);
+              else setSheet({ kind: "room", mode: "edit", room });
             }}
             onDelete={
               sheet.mode === "edit" && sheet.opening
