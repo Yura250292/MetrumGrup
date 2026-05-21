@@ -8,8 +8,7 @@ import {
   FileText,
   ChevronRight,
   Sparkles,
-  Calculator,
-  Package,
+  LayoutDashboard,
   Ruler,
   Camera,
 } from "lucide-react";
@@ -151,20 +150,21 @@ export function ForemanHomeHero({ firmId, userName, pending, approved }: Props) 
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <ToolTile
-            href="/foreman/tools/area"
-            icon={<Calculator size={20} strokeWidth={2} />}
-            label="Калькулятор"
-            sublabel="Площа кімнати"
-            iconBg="bg-sky-500/10 text-sky-300 border-sky-500/30"
-          />
-          <ToolTile
-            href="/foreman/tools/materials"
-            icon={<Package size={20} strokeWidth={2} />}
-            label="Матеріали"
-            sublabel="Витрата на м²"
-            iconBg="bg-violet-500/10 text-violet-300 border-violet-500/30"
-          />
+          <Link
+            href="/foreman/tools/estimator"
+            className="col-span-2 group relative flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-br from-violet-500/15 via-violet-500/5 to-transparent border border-violet-500/30 hover:border-violet-500/60 active:scale-[0.98] transition-all duration-200 shadow-[0_4px_20px_-8px_rgba(139,92,246,0.4),inset_0_1px_0_rgba(255,255,255,0.05)] cursor-pointer overflow-hidden"
+          >
+            <span className="flex items-center justify-center w-12 h-12 rounded-xl border bg-violet-500/15 text-violet-200 border-violet-500/40">
+              <LayoutDashboard size={22} strokeWidth={2} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-base font-bold text-white tracking-tight">Кошторис</div>
+              <div className="text-[11px] text-violet-200/80 mt-0.5 truncate">
+                План кімнат + матеріали + ціни
+              </div>
+            </div>
+            <ChevronRight size={18} className="text-violet-300/70 shrink-0" />
+          </Link>
           <ToolTile
             href="/foreman/tools/level"
             icon={<Ruler size={20} strokeWidth={2} />}
