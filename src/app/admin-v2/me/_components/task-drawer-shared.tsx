@@ -103,42 +103,82 @@ export function SelfContainedTaskDrawer({
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [saving, setSaving] = useState(false);
   const [timerBusy, setTimerBusy] = useState(false);
 
+  /** Fetch з 15-секундним таймаутом — без AbortController був ризик
+   *  «вічного спінера» якщо мобільна мережа залипла. */
+  const fetchWithTimeout = useCallback(
+    async (url: string, timeoutMs = 15000): Promise<Response> => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    [],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       // Step 1: fetch task detail to get projectId
-      const detailRes = await fetch(`/api/admin/tasks/${taskId}`);
-      if (!detailRes.ok) return;
+      const detailRes = await fetchWithTimeout(`/api/admin/tasks/${taskId}`);
+      if (!detailRes.ok) {
+        const msg =
+          detailRes.status === 401
+            ? "Сесія завершилась. Залогінься заново."
+            : detailRes.status === 403
+              ? "Немає доступу до цієї задачі."
+              : detailRes.status === 404
+                ? "Задача не знайдена або видалена."
+                : `Не вдалося завантажити задачу (HTTP ${detailRes.status}).`;
+        setLoadError(msg);
+        return;
+      }
       const { data: taskData } = await detailRes.json();
       setDetail(taskData);
 
       const projectId = taskData.projectId;
 
-      // Step 2: parallel fetch project-scoped data + other task data
-      const [statusRes, logsRes, currentRes, depsRes, cfRes] = await Promise.all([
-        fetch(`/api/admin/projects/${projectId}/statuses`),
-        fetch(`/api/admin/tasks/${taskId}/time`),
-        fetch(`/api/admin/time/timer/current`),
-        fetch(`/api/admin/tasks/${taskId}/dependencies`),
-        fetch(`/api/admin/projects/${projectId}/custom-fields`),
+      // Step 2: parallel fetch — не критичні дані, помилки тут НЕ ламають
+      // основний flow. Failed sub-fetch просто лишає секцію порожньою.
+      const settled = await Promise.allSettled([
+        fetchWithTimeout(`/api/admin/projects/${projectId}/statuses`),
+        fetchWithTimeout(`/api/admin/tasks/${taskId}/time`),
+        fetchWithTimeout(`/api/admin/time/timer/current`),
+        fetchWithTimeout(`/api/admin/tasks/${taskId}/dependencies`),
+        fetchWithTimeout(`/api/admin/projects/${projectId}/custom-fields`),
       ]);
+      const [statusRes, logsRes, currentRes, depsRes, cfRes] = settled.map((s) =>
+        s.status === "fulfilled" ? s.value : null,
+      );
 
-      if (statusRes.ok) setStatuses((await statusRes.json()).data ?? []);
-      if (logsRes.ok) setLogs((await logsRes.json()).data ?? []);
-      if (currentRes.ok) {
+      if (statusRes?.ok) setStatuses((await statusRes.json()).data ?? []);
+      if (logsRes?.ok) setLogs((await logsRes.json()).data ?? []);
+      if (currentRes?.ok) {
         const j = await currentRes.json();
         setActiveTimerId(j.data && j.data.task?.id === taskId ? j.data.id : null);
       }
-      if (depsRes.ok) setDeps((await depsRes.json()).data ?? { incoming: [], outgoing: [] });
-      if (cfRes.ok) setCustomFieldDefs((await cfRes.json()).data ?? []);
+      if (depsRes?.ok) setDeps((await depsRes.json()).data ?? { incoming: [], outgoing: [] });
+      if (cfRes?.ok) setCustomFieldDefs((await cfRes.json()).data ?? []);
+    } catch (e) {
+      const msg =
+        e instanceof DOMException && e.name === "AbortError"
+          ? "Таймаут. Перевірте інтернет і спробуйте знову."
+          : e instanceof Error
+            ? e.message
+            : "Помилка завантаження";
+      setLoadError(msg);
     } finally {
       setLoading(false);
     }
-  }, [taskId]);
+  }, [taskId, fetchWithTimeout]);
 
   useEffect(() => {
     void load();
@@ -315,10 +355,35 @@ export function SelfContainedTaskDrawer({
           </div>
         </div>
 
-        {loading || !detail ? (
+        {loading ? (
           <div className="p-8 text-center text-sm" style={{ color: T.textMuted }}>
             <Loader2 size={18} className="animate-spin inline mr-2" />
             Завантаження…
+          </div>
+        ) : loadError || !detail ? (
+          <div className="p-6 flex flex-col gap-3 items-center text-center">
+            <div
+              className="text-sm font-semibold"
+              style={{ color: T.danger }}
+            >
+              {loadError ?? "Не вдалося завантажити задачу"}
+            </div>
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="rounded-lg px-4 py-2 text-sm font-semibold"
+              style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+            >
+              Спробувати знову
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-4 py-2 text-xs"
+              style={{ color: T.textMuted }}
+            >
+              Закрити
+            </button>
           </div>
         ) : (
           <div className="p-5 flex flex-col gap-5">
