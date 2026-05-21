@@ -302,6 +302,123 @@ export function presetsForWorkType(wt: WorkType): MaterialPreset[] {
   return PRESETS.filter((p) => p.workType === wt);
 }
 
+/**
+ * Пресети РОБОТИ (labor) — окрема ставка ₴/м² за вид робіт.
+ * Базові цифри — типові для України 2026; foreman може скорегувати або
+ * автоматичну ціну підставить AI-quote (web_search). Помножується ТІЛЬКИ на
+ * площу поверхні; на товщину/розмір плитки не залежить.
+ */
+export interface LaborPreset {
+  workType: WorkType;
+  surface: Surface;
+  name: string;
+  /** Базова ставка ₴ за м² (як стартова точка / fallback). */
+  ratePerSqm: number;
+  /** Назва для AI-quote запитів. */
+  marketQuery: string;
+}
+
+export const LABOR_PRESETS: Record<WorkType, LaborPreset> = {
+  "floor-tile": {
+    workType: "floor-tile",
+    surface: "floor",
+    name: "Укладання плитки (підлога)",
+    ratePerSqm: 400,
+    marketQuery: "розцінка укладання плитки підлога ціна за м²",
+  },
+  "floor-laminate": {
+    workType: "floor-laminate",
+    surface: "floor",
+    name: "Укладання ламінату",
+    ratePerSqm: 170,
+    marketQuery: "розцінка укладання ламінату ціна за м²",
+  },
+  "floor-leveling": {
+    workType: "floor-leveling",
+    surface: "floor",
+    name: "Заливка нівелірмаси",
+    ratePerSqm: 110,
+    marketQuery: "розцінка заливка нівелірмаси самонівелір ціна за м²",
+  },
+  "floor-screed": {
+    workType: "floor-screed",
+    surface: "floor",
+    name: "Стяжка підлоги",
+    ratePerSqm: 200,
+    marketQuery: "розцінка цементна стяжка підлоги ціна за м²",
+  },
+  "wall-tile": {
+    workType: "wall-tile",
+    surface: "walls",
+    name: "Укладання плитки (стіни)",
+    ratePerSqm: 480,
+    marketQuery: "розцінка укладання плитки стіни ціна за м²",
+  },
+  "wall-putty": {
+    workType: "wall-putty",
+    surface: "walls",
+    name: "Шпаклівка стін (старт+фініш)",
+    ratePerSqm: 220,
+    marketQuery: "розцінка шпаклівка стін старт фініш ціна за м²",
+  },
+  "wall-plaster-gypsum": {
+    workType: "wall-plaster-gypsum",
+    surface: "walls",
+    name: "Гіпсова штукатурка стін",
+    ratePerSqm: 170,
+    marketQuery: "розцінка гіпсова штукатурка стін ціна за м²",
+  },
+  "wall-plaster-cement": {
+    workType: "wall-plaster-cement",
+    surface: "walls",
+    name: "Цементна штукатурка стін",
+    ratePerSqm: 250,
+    marketQuery: "розцінка цементна штукатурка стін ціна за м²",
+  },
+  "wall-paint": {
+    workType: "wall-paint",
+    surface: "walls",
+    name: "Фарбування стін",
+    ratePerSqm: 100,
+    marketQuery: "розцінка малярні роботи фарбування стін ціна за м²",
+  },
+  "wall-primer": {
+    workType: "wall-primer",
+    surface: "walls",
+    name: "Ґрунтування стін",
+    ratePerSqm: 40,
+    marketQuery: "розцінка грунтування стін ціна за м²",
+  },
+  "wall-drywall": {
+    workType: "wall-drywall",
+    surface: "walls",
+    name: "Монтаж гіпсокартону",
+    ratePerSqm: 240,
+    marketQuery: "розцінка монтаж гіпсокартону стіни ціна за м²",
+  },
+  "ceiling-paint": {
+    workType: "ceiling-paint",
+    surface: "ceiling",
+    name: "Фарбування стелі",
+    ratePerSqm: 120,
+    marketQuery: "розцінка фарбування стелі ціна за м²",
+  },
+  "ceiling-primer": {
+    workType: "ceiling-primer",
+    surface: "ceiling",
+    name: "Ґрунтування стелі",
+    ratePerSqm: 40,
+    marketQuery: "розцінка грунтування стелі ціна за м²",
+  },
+  "ceiling-putty": {
+    workType: "ceiling-putty",
+    surface: "ceiling",
+    name: "Шпаклівка стелі",
+    ratePerSqm: 240,
+    marketQuery: "розцінка шпаклівка стелі ціна за м²",
+  },
+};
+
 /** Розрахунок кількості матеріалу. */
 export function calcQty(
   preset: MaterialPreset,

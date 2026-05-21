@@ -3,13 +3,10 @@
  * (для кирилиці). SVG плану конвертується в PNG dataURL через canvas.
  */
 
-import {
-  SURFACE_LABELS,
-  UNIT_LABELS,
-} from "@/lib/foreman/material-presets";
-import { formatMoney, formatNum } from "@/lib/foreman/format";
+import { SURFACE_LABELS } from "@/lib/foreman/material-presets";
 import type { Surface } from "@/lib/foreman/material-presets";
-import type { ComputedLine } from "./_results";
+import { formatMoney, formatNum } from "@/lib/foreman/format";
+import type { LineItem } from "./_results";
 import type { FloorPlan } from "./_types";
 
 async function svgToPngDataUrl(svg: SVGSVGElement, maxWidth = 1200): Promise<string | null> {
@@ -52,14 +49,16 @@ async function svgToPngDataUrl(svg: SVGSVGElement, maxWidth = 1200): Promise<str
 
 interface ExportArgs {
   plan: FloorPlan;
-  lines: ComputedLine[];
+  lines: LineItem[];
   grandTotal: number;
-  perSurface: Record<Surface, number>;
+  grandMaterial: number;
+  grandLabor: number;
+  perRoomTotals: Record<string, { material: number; labor: number; total: number }>;
   svgEl: SVGSVGElement | null;
 }
 
 export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
-  const { plan, lines, grandTotal, perSurface, svgEl } = args;
+  const { plan, lines, grandTotal, grandMaterial, grandLabor, perRoomTotals, svgEl } = args;
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
   const { ROBOTO_BASE64 } = await import("@/lib/fonts/roboto-base64");
@@ -74,7 +73,6 @@ export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
   const margin = 15;
   const contentW = pageW - margin * 2;
 
-  // header accent
   doc.setFillColor(139, 92, 246);
   doc.rect(0, 0, pageW, 4, "F");
 
@@ -96,12 +94,10 @@ export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
 
   let y = 36;
 
-  // SVG snapshot
   if (svgEl) {
     const png = await svgToPngDataUrl(svgEl, 1400);
     if (png) {
       const imgW = contentW;
-      // get aspect from canvas data URL — re-load to measure
       const im = await new Promise<HTMLImageElement | null>((resolve) => {
         const i = new Image();
         i.onload = () => resolve(i);
@@ -117,8 +113,7 @@ export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
     }
   }
 
-  // per-room tables
-  const byRoom = new Map<string, ComputedLine[]>();
+  const byRoom = new Map<string, LineItem[]>();
   for (const l of lines) {
     if (!byRoom.has(l.roomId)) byRoom.set(l.roomId, []);
     byRoom.get(l.roomId)!.push(l);
@@ -138,26 +133,29 @@ export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
     doc.text(room.name, margin, y);
     doc.setFontSize(8);
     doc.setTextColor(120, 120, 120);
+    const tot = perRoomTotals[roomId] ?? { material: 0, labor: 0, total: 0 };
     doc.text(
-      `${room.w}×${room.h} м · h ${room.ceilingHeight} м · підлога ${formatNum(room.w * room.h)} м²`,
+      `${room.w}×${room.h} м · h ${room.ceilingHeight} м · підлога ${formatNum(room.w * room.h)} м²  |  Р ${formatMoney(tot.labor)} · М ${formatMoney(tot.material)} · ₴ ${formatMoney(tot.total)}`,
       margin,
       y + 4,
     );
     y += 7;
 
     const rows = roomLines.map((l) => [
-      `${SURFACE_LABELS[l.surface]}: ${l.preset.name}`,
-      UNIT_LABELS[l.preset.unit],
-      l.preset.qtyMode === "tile" || l.preset.qtyMode === "drywall"
-        ? String(Math.ceil(l.qty))
-        : formatNum(l.qty),
+      `${l.kind === "labor" ? "Р" : "М"} · ${SURFACE_LABELS[l.surface]}: ${l.name}`,
+      l.unit,
+      l.qty < 10 && l.kind === "material" && l.material?.qtyMode !== "tile" && l.material?.qtyMode !== "drywall"
+        ? formatNum(l.qty)
+        : l.kind === "material" && (l.material?.qtyMode === "tile" || l.material?.qtyMode === "drywall")
+          ? String(Math.ceil(l.qty))
+          : formatNum(l.qty),
       l.unitPrice > 0 ? formatMoney(l.unitPrice) : "—",
       l.unitPrice > 0 ? formatMoney(l.total) : "—",
     ]);
 
     autoTable(doc, {
       startY: y,
-      head: [["Матеріал", "Од.", "К-сть", "Ціна, ₴", "Сума, ₴"]],
+      head: [["Позиція", "Од.", "К-сть", "Ціна, ₴", "Сума, ₴"]],
       body: rows,
       styles: { font: "Roboto", fontSize: 9, cellPadding: 1.6 },
       headStyles: { fillColor: [139, 92, 246], textColor: 255, fontStyle: "normal" },
@@ -173,7 +171,6 @@ export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
     y = lastY + 8;
   }
 
-  // summary
   if (y > pageH - 50) {
     doc.addPage();
     y = margin;
@@ -185,13 +182,12 @@ export async function exportEstimatePDF(args: ExportArgs): Promise<void> {
   doc.setTextColor(80, 80, 80);
   doc.text("Підсумок", margin + 4, y + 7);
 
-  const rows: [string, number][] = [
-    ["Підлога", perSurface.floor],
-    ["Стіни", perSurface.walls],
-    ["Стеля", perSurface.ceiling],
+  const summaryRows: [string, number][] = [
+    ["Матеріали", grandMaterial],
+    ["Робота", grandLabor],
   ];
   let sy = y + 13;
-  for (const [label, v] of rows) {
+  for (const [label, v] of summaryRows) {
     doc.setFontSize(9);
     doc.setTextColor(80, 80, 80);
     doc.text(label, margin + 4, sy);
