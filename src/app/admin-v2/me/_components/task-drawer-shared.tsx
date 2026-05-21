@@ -338,6 +338,34 @@ export function SelfContainedTaskDrawer({
               )}
             </div>
 
+            {/* Compact meta-row: дедлайн + пріоритет — те, що користувач
+                бачив у формі створення. Статус показуємо нижче окремою
+                секцією бо там бувають довгі назви. */}
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+              {detail.dueDate && (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    color: T.textSecondary,
+                  }}
+                  title="Дедлайн"
+                >
+                  📅 {formatDeadline(detail.dueDate)}
+                </span>
+              )}
+              <span
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
+                style={{
+                  backgroundColor: priorityBg(detail.priority),
+                  color: priorityColor(detail.priority),
+                }}
+                title="Пріоритет"
+              >
+                ⚑ {priorityLabel(detail.priority)}
+              </span>
+            </div>
+
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
                 <span
@@ -564,78 +592,64 @@ export function SelfContainedTaskDrawer({
               </Section>
             )}
 
-            {/* Time tracking */}
-            <Section label={`ТАЙМ-ТРЕКІНГ · ${totalHours} год`} icon={<Clock size={11} />}>
-              <div className="flex gap-2">
-                {activeTimerId ? (
-                  <button
-                    onClick={() => void stopTimer()}
-                    disabled={timerBusy}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
-                    style={{ backgroundColor: "#ef4444", color: "#fff" }}
-                  >
-                    {timerBusy ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
-                    Зупинити
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => void startTimer()}
-                    disabled={timerBusy}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
-                    style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-                  >
-                    {timerBusy ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                    Старт
-                  </button>
-                )}
-              </div>
-              {logs.length > 0 && (
-                <ul className="flex flex-col gap-1 mt-1">
-                  {logs.slice(0, 10).map((l) => (
-                    <li
-                      key={l.id}
-                      className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[11px]"
-                      style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-                    >
-                      <span className="truncate flex-1">
-                        {l.user.name} · {new Date(l.startedAt).toLocaleDateString("uk-UA")}
-                        {l.description ? ` · ${l.description}` : ""}
-                      </span>
-                      <span className="font-mono font-bold ml-2" style={{ color: T.textPrimary }}>
-                        {l.minutes !== null
-                          ? `${Math.floor(l.minutes / 60)}:${(l.minutes % 60).toString().padStart(2, "0")}`
-                          : "..."}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
-
-            {/* AI helper */}
+            {/* AI помічник — згорнутий за замовчуванням, щоб не лякати новачків.
+                Тімер-трекінг прибрано повністю — переїде у наступну ітерацію,
+                якщо буде потреба. */}
             {detail && (
-              <div
-                className="rounded-xl p-3"
-                style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
-              >
-                <TaskAiActions
-                  task={{
-                    id: detail.id,
-                    title: detail.title,
-                    description: detail.description,
-                    status: { name: detail.status.name },
-                    priority: detail.priority,
-                    dueDate: detail.dueDate,
-                    project: detail.project,
-                    assignees: detail.assignees,
-                    checklist: detail.checklist.map((c) => ({
-                      content: c.content,
-                      isDone: c.isDone,
-                    })),
-                    stage: detail.stage,
+              <details className="group">
+                <summary
+                  className="flex items-center justify-between gap-2 cursor-pointer rounded-lg px-3 py-2 text-xs font-semibold select-none"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    color: T.textSecondary,
+                    border: `1px solid ${T.borderSoft}`,
+                    listStyle: "none",
                   }}
-                />
-              </div>
+                  title="AI може коротко пояснити задачу, розбити на кроки, знайти блокери, підказати кого підключити, скласти чекліст або повідомлення. Все — на основі цієї задачі."
+                >
+                  <span className="flex items-center gap-2">
+                    <Sparkles size={12} style={{ color: T.accentPrimary }} />
+                    AI помічник
+                    <span
+                      className="text-[10px] font-normal"
+                      style={{ color: T.textMuted }}
+                    >
+                      підказки, кроки, чекліст…
+                    </span>
+                  </span>
+                  <span
+                    className="text-[10px] font-normal transition-transform group-open:rotate-180"
+                    style={{ color: T.textMuted }}
+                  >
+                    ▼
+                  </span>
+                </summary>
+                <div
+                  className="rounded-xl p-3 mt-2"
+                  style={{
+                    backgroundColor: T.panelSoft,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  <TaskAiActions
+                    task={{
+                      id: detail.id,
+                      title: detail.title,
+                      description: detail.description,
+                      status: { name: detail.status.name },
+                      priority: detail.priority,
+                      dueDate: detail.dueDate,
+                      project: detail.project,
+                      assignees: detail.assignees,
+                      checklist: detail.checklist.map((c) => ({
+                        content: c.content,
+                        isDone: c.isDone,
+                      })),
+                      stage: detail.stage,
+                    }}
+                  />
+                </div>
+              </details>
             )}
 
             {/* Comments */}
@@ -695,4 +709,45 @@ function DepRow({
       </span>
     </li>
   );
+}
+
+/** "21 трав, 18:00" — компактний формат дедлайну для меta-row. */
+function formatDeadline(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const date = d.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" });
+  const isMidnightUtc =
+    d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0;
+  if (isMidnightUtc) return date; // legacy date-only — час не показуємо
+  const time = d.toLocaleTimeString("uk-UA", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return `${date}, ${time}`;
+}
+
+function priorityLabel(p: string): string {
+  return p === "URGENT"
+    ? "Терміновий"
+    : p === "HIGH"
+      ? "Високий"
+      : p === "LOW"
+        ? "Низький"
+        : "Нормальний";
+}
+
+function priorityColor(p: string): string {
+  return p === "URGENT" || p === "HIGH"
+    ? "#ef4444"
+    : p === "LOW"
+      ? T.textMuted
+      : T.accentPrimary;
+}
+
+function priorityBg(p: string): string {
+  return p === "URGENT" || p === "HIGH"
+    ? "#ef444422"
+    : p === "LOW"
+      ? T.panelElevated
+      : T.accentPrimarySoft;
 }
