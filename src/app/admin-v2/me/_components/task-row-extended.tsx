@@ -65,6 +65,31 @@ function formatDueRelative(
   };
 }
 
+/**
+ * Кольоровий маркер «скільки часу лишилось до дедлайну».
+ *  🟢 >50% (багато часу) · 🟡 25-50% · 🔴 <25% · ⚫ прострочено · ⚪ done
+ */
+function deadlineDotColor(
+  dueIso: string | null,
+  createdAtIso: string | undefined,
+  isDone: boolean,
+): string | null {
+  if (!dueIso || isDone) return null;
+  const due = new Date(dueIso).getTime();
+  // Якщо createdAt не передали — fallback на «дедлайн мінус 7 днів».
+  const created = createdAtIso
+    ? new Date(createdAtIso).getTime()
+    : due - 7 * 24 * 3600 * 1000;
+  const now = Date.now();
+  if (now > due) return "#000000";
+  const total = Math.max(due - created, 1);
+  const remaining = due - now;
+  const pct = (remaining / total) * 100;
+  if (pct >= 50) return "#10b981"; // green
+  if (pct >= 25) return "#f59e0b"; // yellow
+  return "#ef4444"; // red
+}
+
 export function TaskRowExtended({
   task,
   currentUserId,
@@ -230,12 +255,27 @@ export function TaskRowExtended({
             </>
           )}
           <span>·</span>
-          <span
-            className="font-medium"
-            style={{ color: dueColor }}
-          >
-            {due.label}
-          </span>
+          {(() => {
+            const dot = deadlineDotColor(
+              task.dueDate,
+              task.createdAt,
+              task.status.isDone,
+            );
+            return (
+              <span className="inline-flex items-center gap-1">
+                {dot && (
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: dot }}
+                    title="Маркер часу до дедлайну"
+                  />
+                )}
+                <span className="font-medium" style={{ color: dueColor }}>
+                  {due.label}
+                </span>
+              </span>
+            );
+          })()}
         </div>
 
         {nextStep && (

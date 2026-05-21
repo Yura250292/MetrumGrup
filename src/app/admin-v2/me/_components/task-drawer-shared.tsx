@@ -38,9 +38,11 @@ type DrawerDetail = {
   description: string | null;
   priority: string;
   dueDate: string | null;
+  createdAt: string;
   projectId: string;
   project?: { id: string; title: string; personalInboxUserId?: string | null };
   createdById: string;
+  createdBy?: { id: string; name: string; avatar: string | null } | null;
   status: DrawerStatus;
   stage: { stage: string };
   assignees: {
@@ -108,6 +110,18 @@ export function SelfContainedTaskDrawer({
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [saving, setSaving] = useState(false);
   const [timerBusy, setTimerBusy] = useState(false);
+
+  // ── Permissions ──
+  // Автор = той хто створив; Адмін = SUPER_ADMIN.
+  // Тільки вони можуть редагувати поля, видаляти, закривати/повертати.
+  const isAdmin = currentUserRole === "SUPER_ADMIN";
+  const isAuthor =
+    !!detail && !!currentUserId && detail.createdById === currentUserId;
+  const canEditOrDelete = isAdmin || isAuthor;
+  const isAssigneeNow =
+    !!detail &&
+    !!currentUserId &&
+    (detail.assignees ?? []).some((a) => a.user?.id === currentUserId);
 
   // ── Edit mode ──
   // Активується клацанням «Редагувати». У цьому стані title/description/due/
@@ -327,6 +341,28 @@ export function SelfContainedTaskDrawer({
     }
   };
 
+  /**
+   * Transition endpoints — серверні route'и гейтять права. Тут просто
+   * викликаємо + перезавантажуємо.
+   */
+  const doTransition = async (path: "resolve" | "confirm" | "reject") => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/tasks/${taskId}/${path}`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(j.error ?? "Не вдалося змінити статус");
+        return;
+      }
+      await load();
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const setStatus = async (statusId: string) => {
     setSaving(true);
     try {
@@ -424,7 +460,7 @@ export function SelfContainedTaskDrawer({
             Задача
           </h2>
           <div className="flex items-center gap-1">
-            {detail && !editing && (
+            {detail && !editing && canEditOrDelete && (
               <button
                 onClick={startEdit}
                 className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold"
@@ -439,10 +475,7 @@ export function SelfContainedTaskDrawer({
                 Редагувати
               </button>
             )}
-            {detail &&
-              !editing &&
-              (currentUserRole === "SUPER_ADMIN" ||
-                detail.createdById === currentUserId) && (
+            {detail && !editing && canEditOrDelete && (
                 <button
                   onClick={async () => {
                     if (!confirm(`Видалити задачу «${detail.title}»?`)) return;
@@ -644,18 +677,30 @@ export function SelfContainedTaskDrawer({
               </div>
             ) : (
               <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                {detail.dueDate && (
-                  <span
-                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
-                    style={{
-                      backgroundColor: T.panelElevated,
-                      color: T.textSecondary,
-                    }}
-                    title="Дедлайн"
-                  >
-                    📅 {formatDeadline(detail.dueDate)}
-                  </span>
-                )}
+                {detail.dueDate &&
+                  (() => {
+                    const m = deadlineMarker(
+                      detail.dueDate,
+                      detail.createdAt,
+                      detail.status?.isDone ?? false,
+                    );
+                    return (
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold"
+                        style={{
+                          backgroundColor: m.bg,
+                          color: m.color,
+                        }}
+                        title={`Дедлайн · ${m.label}`}
+                      >
+                        <span
+                          className="inline-block h-2 w-2 rounded-full"
+                          style={{ backgroundColor: m.color }}
+                        />
+                        📅 {formatDeadline(detail.dueDate)}
+                      </span>
+                    );
+                  })()}
                 <span
                   className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
                   style={{
@@ -666,6 +711,19 @@ export function SelfContainedTaskDrawer({
                 >
                   ⚑ {priorityLabel(detail.priority)}
                 </span>
+                {detail.createdBy && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
+                    style={{
+                      backgroundColor: T.panelElevated,
+                      color: T.textSecondary,
+                      border: `1px solid ${T.borderSoft}`,
+                    }}
+                    title="Хто поставив задачу"
+                  >
+                    ✍ Автор: {detail.createdBy.name}
+                  </span>
+                )}
               </div>
             )}
 
@@ -677,29 +735,31 @@ export function SelfContainedTaskDrawer({
                 >
                   {detail.description ? "Технічне завдання" : "Опис"}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void rewriteSpec()}
-                  disabled={!detail.description || rewritingSpec}
-                  className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase disabled:opacity-50"
-                  style={{
-                    backgroundColor: T.panelElevated,
-                    color: T.accentPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                  title={
-                    detail.description
-                      ? "AI виправить орфографію та пунктуацію, не змінюючи суть"
-                      : "Опис відсутній"
-                  }
-                >
-                  {rewritingSpec ? (
-                    <Loader2 size={10} className="animate-spin" />
-                  ) : (
-                    <RefreshCw size={10} />
-                  )}
-                  AI: виправити текст
-                </button>
+                {canEditOrDelete && (
+                  <button
+                    type="button"
+                    onClick={() => void rewriteSpec()}
+                    disabled={!detail.description || rewritingSpec}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase disabled:opacity-50"
+                    style={{
+                      backgroundColor: T.panelElevated,
+                      color: T.accentPrimary,
+                      border: `1px solid ${T.borderSoft}`,
+                    }}
+                    title={
+                      detail.description
+                        ? "AI виправить орфографію та пунктуацію, не змінюючи суть"
+                        : "Опис відсутній"
+                    }
+                  >
+                    {rewritingSpec ? (
+                      <Loader2 size={10} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={10} />
+                    )}
+                    AI: виправити текст
+                  </button>
+                )}
               </div>
               {specError && (
                 <div
@@ -742,28 +802,97 @@ export function SelfContainedTaskDrawer({
               )}
             </div>
 
-            {/* Status selector */}
+            {/* Status — author/admin бачить усі pills (повний контроль);
+                асайні без авторства бачать тільки потрібні transition кнопки. */}
             <Section label="СТАТУС">
-              <div className="flex flex-wrap gap-2">
-                {statuses.map((s) => {
-                  const active = s.id === detail.status.id;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => void setStatus(s.id)}
-                      disabled={saving}
-                      className="rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
-                      style={{
-                        backgroundColor: active ? s.color + "33" : T.panelElevated,
-                        color: active ? s.color : T.textMuted,
-                        border: `1px solid ${active ? s.color : T.borderSoft}`,
-                      }}
+              {canEditOrDelete ? (
+                <div className="flex flex-wrap gap-2">
+                  {statuses.map((s) => {
+                    const active = s.id === detail.status.id;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => void setStatus(s.id)}
+                        disabled={saving}
+                        className="rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
+                        style={{
+                          backgroundColor: active ? s.color + "33" : T.panelElevated,
+                          color: active ? s.color : T.textMuted,
+                          border: `1px solid ${active ? s.color : T.borderSoft}`,
+                        }}
+                      >
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Виконавець без авторства — тільки relevant action button. */
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: detail.status.color + "33",
+                      color: detail.status.color,
+                      border: `1px solid ${detail.status.color}`,
+                    }}
+                  >
+                    {detail.status.name}
+                  </span>
+                  {isAssigneeNow &&
+                    (detail.status.name === "Новий" ||
+                      detail.status.name === "В роботі") && (
+                      <button
+                        onClick={() => void doTransition("resolve")}
+                        disabled={saving}
+                        className="rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                        style={{
+                          backgroundColor: "#f59e0b",
+                          color: "#fff",
+                        }}
+                        title="Позначити як вирішено — задача піде автору на перевірку"
+                      >
+                        Позначити як вирішено
+                      </button>
+                    )}
+                  {detail.status.name === "Вирішено" && (
+                    <span
+                      className="text-[11px]"
+                      style={{ color: T.textMuted }}
                     >
-                      {s.name}
-                    </button>
-                  );
-                })}
-              </div>
+                      Чекає підтвердження автора.
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Author actions для статусу «Вирішено» — кнопки confirm / reject. */}
+              {canEditOrDelete && detail.status.name === "Вирішено" && (
+                <div className="flex gap-2 mt-2">
+                  <button
+                    onClick={() => void doTransition("confirm")}
+                    disabled={saving}
+                    className="rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                    style={{ backgroundColor: T.success, color: "#fff" }}
+                    title="Підтвердити що задача виконана коректно — закрити"
+                  >
+                    Підтвердити (Закрити)
+                  </button>
+                  <button
+                    onClick={() => void doTransition("reject")}
+                    disabled={saving}
+                    className="rounded-lg px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                    style={{
+                      backgroundColor: T.panelElevated,
+                      color: T.danger,
+                      border: `1px solid ${T.danger}40`,
+                    }}
+                    title="Повернути на доопрацювання"
+                  >
+                    Повернути на доопрацювання
+                  </button>
+                </div>
+              )}
             </Section>
 
             {/* Checklist */}
@@ -1117,6 +1246,38 @@ function priorityColor(p: string): string {
     : p === "LOW"
       ? T.textMuted
       : T.accentPrimary;
+}
+
+/**
+ * Колір для маркера часу до дедлайну.
+ *  🟢 >50% часу лишилось
+ *  🟡 25–50%
+ *  🔴 <25%
+ *  ⚫ прострочено
+ *  ✅ виконано (виконано → нейтральний muted)
+ */
+function deadlineMarker(
+  dueIso: string,
+  createdAtIso: string,
+  isDone: boolean,
+): { color: string; bg: string; label: string } {
+  if (isDone) {
+    return { color: T.textMuted, bg: T.panelElevated, label: "виконано" };
+  }
+  const due = new Date(dueIso).getTime();
+  const created = new Date(createdAtIso).getTime();
+  const now = Date.now();
+  if (now > due) {
+    return { color: "#000000", bg: "#0000001a", label: "прострочено" };
+  }
+  const total = Math.max(due - created, 1);
+  const remaining = due - now;
+  const pct = (remaining / total) * 100;
+  if (pct >= 50)
+    return { color: "#10b981", bg: "#10b98122", label: `>50% часу (${Math.round(pct)}%)` };
+  if (pct >= 25)
+    return { color: "#f59e0b", bg: "#f59e0b22", label: `<50% часу (${Math.round(pct)}%)` };
+  return { color: "#ef4444", bg: "#ef444422", label: `<25% часу (${Math.round(pct)}%)` };
 }
 
 function priorityBg(p: string): string {

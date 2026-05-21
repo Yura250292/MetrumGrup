@@ -15,6 +15,8 @@ export type TaskItem = {
   id: string;
   title: string;
   dueDate: string | null;
+  /** Момент створення — для маркера «скільки часу лишилось». */
+  createdAt?: string;
   priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   project: {
     id: string;
