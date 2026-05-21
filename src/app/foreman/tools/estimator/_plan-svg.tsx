@@ -3,7 +3,55 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { bbox, edge, freeButtons, freeSegments } from "@/lib/foreman/geometry";
 import type { Room, Side } from "@/lib/foreman/geometry";
-import type { FloorPlan, Opening } from "./_types";
+import type { FloorPlan, FurnitureItem, Opening } from "./_types";
+
+const FURNITURE_EMOJI: Record<string, string> = {
+  bed: "🛏️",
+  sofa: "🛋️",
+  armchair: "🪑",
+  table: "🟫",
+  chair: "🪑",
+  fridge: "❄️",
+  stove: "🔥",
+  oven: "♨️",
+  sink: "🚰",
+  toilet: "🚽",
+  shower: "🚿",
+  bathtub: "🛁",
+  wardrobe: "🚪",
+  tv: "📺",
+  desk: "🖥️",
+  shelf: "📚",
+  "kitchen-cabinet": "🗄️",
+  washer: "🌀",
+  dishwasher: "🧽",
+  plant: "🪴",
+  rug: "🟪",
+};
+
+const FURNITURE_FILL: Record<string, string> = {
+  bed: "rgba(244,114,182,0.18)",
+  sofa: "rgba(56,189,248,0.18)",
+  armchair: "rgba(56,189,248,0.18)",
+  table: "rgba(251,191,36,0.18)",
+  chair: "rgba(251,191,36,0.14)",
+  fridge: "rgba(125,211,252,0.18)",
+  stove: "rgba(239,68,68,0.18)",
+  oven: "rgba(239,68,68,0.15)",
+  sink: "rgba(125,211,252,0.18)",
+  toilet: "rgba(165,243,252,0.18)",
+  shower: "rgba(125,211,252,0.18)",
+  bathtub: "rgba(125,211,252,0.18)",
+  wardrobe: "rgba(168,162,158,0.18)",
+  tv: "rgba(99,102,241,0.18)",
+  desk: "rgba(251,191,36,0.18)",
+  shelf: "rgba(168,162,158,0.18)",
+  "kitchen-cabinet": "rgba(168,162,158,0.18)",
+  washer: "rgba(125,211,252,0.14)",
+  dishwasher: "rgba(125,211,252,0.14)",
+  plant: "rgba(34,197,94,0.18)",
+  rug: "rgba(168,85,247,0.14)",
+};
 
 interface Props {
   plan: FloorPlan;
@@ -14,6 +62,8 @@ interface Props {
    * найближчу стіну і offset у метрах від NW-кута цієї грані.
    */
   onWallTap?: (roomId: string, side: Side, offset: number) => void;
+  /** Тап по меблевому предмету — для видалення/редагування. */
+  onFurnitureTap?: (item: FurnitureItem) => void;
   /** Режим взаємодії з канвою. */
   viewMode?: "rooms" | "openings";
   /** Snapshot для PDF — без сітки, +, інтеракцій. */
@@ -51,6 +101,7 @@ export function PlanSvg({
   onPlusClick,
   onRoomTap,
   onWallTap,
+  onFurnitureTap,
   viewMode = "rooms",
   snapshot,
   className,
@@ -282,6 +333,67 @@ export function PlanSvg({
                     strokeDasharray="2 2"
                     vectorEffect="non-scaling-stroke"
                   />
+                )}
+              </g>
+            );
+          })}
+
+          {/* Furniture overlay (worldspace = room.x + item.x) */}
+          {plan.furniture.map((f) => {
+            const room = plan.rooms.find((r) => r.id === f.roomId);
+            if (!room) return null;
+            const wx = room.x + f.x;
+            const wy = room.y + f.y;
+            const cx = wx + f.w / 2;
+            const cy = wy + f.h / 2;
+            const fill = FURNITURE_FILL[f.type] ?? "rgba(255,255,255,0.05)";
+            const emoji = FURNITURE_EMOJI[f.type] ?? "▢";
+            const minDim = Math.min(f.w, f.h);
+            const emojiFs = Math.max(0.18, minDim * 0.55);
+            const labelFs = Math.max(0.12, minDim * 0.16);
+            const showLabel = minDim >= 0.6 && f.label.length > 0;
+            return (
+              <g
+                key={f.id}
+                transform={`rotate(${f.rotation} ${cx} ${cy})`}
+                onClick={
+                  onFurnitureTap && !snapshot ? () => onFurnitureTap(f) : undefined
+                }
+                style={{ cursor: onFurnitureTap ? "pointer" : "default" }}
+              >
+                <rect
+                  x={wx}
+                  y={wy}
+                  width={f.w}
+                  height={f.h}
+                  fill={fill}
+                  stroke="rgba(255,255,255,0.25)"
+                  strokeWidth={strokePx * 0.6}
+                  strokeDasharray="0.12 0.08"
+                  vectorEffect="non-scaling-stroke"
+                  rx={0.06}
+                />
+                <text
+                  x={cx}
+                  y={cy + emojiFs * 0.1}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={emojiFs}
+                  pointerEvents="none"
+                >
+                  {emoji}
+                </text>
+                {showLabel && (
+                  <text
+                    x={cx}
+                    y={wy + f.h + labelFs * 0.9}
+                    textAnchor="middle"
+                    fontSize={labelFs}
+                    fill="#a1a1aa"
+                    pointerEvents="none"
+                  >
+                    {f.label}
+                  </text>
                 )}
               </g>
             );

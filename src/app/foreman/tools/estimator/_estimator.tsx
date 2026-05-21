@@ -10,18 +10,31 @@ import {
   placeAdjacent,
 } from "@/lib/foreman/geometry";
 import type { Surface, WorkType } from "@/lib/foreman/material-presets";
-import type { EstimatorState, Opening, Step } from "./_types";
+import type {
+  EstimatorState,
+  FurnitureItem,
+  Opening,
+  RoomClass,
+  Step,
+} from "./_types";
 import { clearDraft, loadDraft, saveDraft } from "./_draft-storage";
 import { PlanCanvas } from "./_plan-canvas";
 import { RoomSheet, type RoomSheetMode } from "./_room-sheet";
 import { OpeningSheet } from "./_opening-sheet";
 import { WorksPicker } from "./_works-picker";
 import { Results } from "./_results";
+import { Visualize } from "./_visualize";
 
 const DEFAULT_CEILING = 2.7;
 
 const initialState: EstimatorState = {
-  plan: { defaultCeilingHeight: DEFAULT_CEILING, rooms: [], openings: [] },
+  plan: {
+    defaultCeilingHeight: DEFAULT_CEILING,
+    rooms: [],
+    openings: [],
+    furniture: [],
+    roomClasses: {},
+  },
   works: { rooms: {}, tileSizes: {}, thicknessCm: {} },
   prices: { unitPrices: {} },
   step: "plan",
@@ -38,6 +51,13 @@ type Action =
   | { type: "ADD_OPENING"; opening: Opening }
   | { type: "UPDATE_OPENING"; id: string; patch: Partial<Opening> }
   | { type: "REMOVE_OPENING"; id: string }
+  | {
+      type: "SET_FURNITURE";
+      furniture: FurnitureItem[];
+      roomClasses: Record<string, RoomClass>;
+    }
+  | { type: "REMOVE_FURNITURE"; id: string }
+  | { type: "CLEAR_FURNITURE" }
   | {
       type: "TOGGLE_WORKTYPE";
       roomId: string;
@@ -63,6 +83,8 @@ function reducer(state: EstimatorState, action: Action): EstimatorState {
           defaultCeilingHeight: p.plan?.defaultCeilingHeight ?? state.plan.defaultCeilingHeight,
           rooms: p.plan?.rooms ?? state.plan.rooms,
           openings: p.plan?.openings ?? [],
+          furniture: p.plan?.furniture ?? [],
+          roomClasses: p.plan?.roomClasses ?? {},
         },
         works: p.works ?? state.works,
         prices: p.prices ?? state.prices,
@@ -90,6 +112,9 @@ function reducer(state: EstimatorState, action: Action): EstimatorState {
     case "REMOVE_ROOM": {
       const rooms = state.plan.rooms.filter((r) => r.id !== action.id);
       const openings = state.plan.openings.filter((o) => o.roomId !== action.id);
+      const furniture = state.plan.furniture.filter((f) => f.roomId !== action.id);
+      const roomClasses = { ...state.plan.roomClasses };
+      delete roomClasses[action.id];
       const w = { ...state.works.rooms };
       delete w[action.id];
       const tileSizes = { ...state.works.tileSizes };
@@ -106,7 +131,7 @@ function reducer(state: EstimatorState, action: Action): EstimatorState {
       }
       return {
         ...state,
-        plan: { ...state.plan, rooms, openings },
+        plan: { ...state.plan, rooms, openings, furniture, roomClasses },
         works: { rooms: w, tileSizes, thicknessCm },
         prices: { unitPrices },
       };
@@ -130,6 +155,28 @@ function reducer(state: EstimatorState, action: Action): EstimatorState {
       return {
         ...state,
         plan: { ...state.plan, openings: state.plan.openings.filter((o) => o.id !== action.id) },
+      };
+    case "SET_FURNITURE":
+      return {
+        ...state,
+        plan: {
+          ...state.plan,
+          furniture: action.furniture,
+          roomClasses: { ...state.plan.roomClasses, ...action.roomClasses },
+        },
+      };
+    case "REMOVE_FURNITURE":
+      return {
+        ...state,
+        plan: {
+          ...state.plan,
+          furniture: state.plan.furniture.filter((f) => f.id !== action.id),
+        },
+      };
+    case "CLEAR_FURNITURE":
+      return {
+        ...state,
+        plan: { ...state.plan, furniture: [], roomClasses: {} },
       };
     case "TOGGLE_WORKTYPE": {
       const { roomId, surface, workType } = action;
@@ -286,9 +333,21 @@ export function Estimator({ firmId }: Props) {
   };
 
   const goNext: Step | null =
-    state.step === "plan" ? "works" : state.step === "works" ? "result" : null;
+    state.step === "plan"
+      ? "works"
+      : state.step === "works"
+        ? "result"
+        : state.step === "result"
+          ? "visualize"
+          : null;
   const goPrev: Step | null =
-    state.step === "result" ? "works" : state.step === "works" ? "plan" : null;
+    state.step === "visualize"
+      ? "result"
+      : state.step === "result"
+        ? "works"
+        : state.step === "works"
+          ? "plan"
+          : null;
 
   const canAdvance = state.plan.rooms.length > 0;
   const hasAnyWorks = useMemo(
@@ -407,6 +466,27 @@ export function Estimator({ firmId }: Props) {
             />
           </motion.div>
         )}
+
+        {state.step === "visualize" && (
+          <motion.div
+            key="visualize"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.22 }}
+          >
+            <Visualize
+              plan={state.plan}
+              onSetFurniture={(furniture, roomClasses) =>
+                dispatch({ type: "SET_FURNITURE", furniture, roomClasses })
+              }
+              onRemoveFurniture={(id) =>
+                dispatch({ type: "REMOVE_FURNITURE", id })
+              }
+              onClearFurniture={() => dispatch({ type: "CLEAR_FURNITURE" })}
+            />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <div className="flex gap-2">
@@ -433,7 +513,11 @@ export function Estimator({ firmId }: Props) {
             onClick={() => dispatch({ type: "SET_STEP", step: goNext })}
             className="flex-1 flex items-center justify-center gap-2 min-h-[48px] px-4 rounded-xl bg-violet-500/15 border border-violet-500/40 text-violet-200 text-sm font-semibold active:scale-95 transition disabled:opacity-40 disabled:active:scale-100"
           >
-            {state.step === "plan" ? "Вибрати види робіт" : "Розрахувати"}
+            {state.step === "plan"
+              ? "Вибрати види робіт"
+              : state.step === "works"
+                ? "Розрахувати"
+                : "Візуалізація"}
             <ArrowRight size={16} />
           </button>
         )}
@@ -577,14 +661,15 @@ function StepHeader({ step }: { step: Step }) {
     { id: "plan", label: "План" },
     { id: "works", label: "Роботи" },
     { id: "result", label: "Кошторис" },
+    { id: "visualize", label: "Візуалізація" },
   ];
   const activeIdx = steps.findIndex((s) => s.id === step);
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-1">
       {steps.map((s, i) => (
         <div
           key={s.id}
-          className={`flex-1 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-center transition ${
+          className={`flex-1 rounded-full px-1.5 py-1 text-[9px] font-bold uppercase tracking-wider text-center transition ${
             i <= activeIdx
               ? "bg-violet-500/20 border border-violet-500/40 text-violet-200"
               : "bg-white/[0.03] border border-white/10 text-zinc-500"
