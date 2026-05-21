@@ -177,18 +177,27 @@ async function furnishRoom(
   const userPrompt = `Кімната: ${roomInput}\nКласифікуй і запропонуй меблювання. Поверни лише JSON.`;
 
   // 30s per-room timeout, щоб одна кімната не зжерла весь budget
-  const callPromise = anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 900,
-    system: SYSTEM_PROMPT_ROOM,
-    messages: [{ role: "user", content: userPrompt }],
-  });
-  const response = await Promise.race([
-    callPromise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), 35_000),
-    ),
-  ]);
+  let response: Anthropic.Messages.Message;
+  try {
+    const callPromise = anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 900,
+      system: SYSTEM_PROMPT_ROOM,
+      messages: [{ role: "user", content: userPrompt }],
+    });
+    response = await Promise.race([
+      callPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 35_000),
+      ),
+    ]);
+  } catch (e) {
+    console.warn(
+      `[ai-furnish] room "${room.name}" (${room.id}) call failed:`,
+      e instanceof Error ? e.message : String(e),
+    );
+    return { classification: "other", furniture: [] };
+  }
 
   const textBlocks = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
@@ -200,24 +209,41 @@ async function furnishRoom(
     | null;
 
   if (!parsed) {
+    console.warn(
+      `[ai-furnish] room "${room.name}" (${room.id}): could not parse JSON. Raw text head:`,
+      textBlocks.slice(0, 200),
+    );
     return { classification: "other", furniture: [] };
   }
 
-  const classification = VALID_CLASSES.has(parsed.classification as RoomClass)
-    ? (parsed.classification as RoomClass)
+  const normalizedClass = String(parsed.classification ?? "").toLowerCase().trim();
+  const classification = VALID_CLASSES.has(normalizedClass as RoomClass)
+    ? (normalizedClass as RoomClass)
     : "other";
 
   const furniture: FurnishResult["furniture"] = [];
   const rawList = (parsed.furniture ?? []) as Array<Record<string, unknown>>;
   let autoIdx = 0;
+  let droppedCount = 0;
+  const droppedReasons: string[] = [];
   for (const item of rawList) {
-    const type = String(item.type ?? "");
-    if (!VALID_TYPES.has(type as FurnitureType)) continue;
+    // Нормалізуємо тип: AI може повернути "Bed", "BED", "bed " тощо.
+    const type = String(item.type ?? "").toLowerCase().trim();
+    if (!VALID_TYPES.has(type as FurnitureType)) {
+      droppedCount++;
+      if (droppedReasons.length < 3) droppedReasons.push(`invalid type "${item.type}"`);
+      continue;
+    }
     const x = Number(item.x);
     const y = Number(item.y);
     const w = Number(item.w);
     const h = Number(item.h);
-    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) continue;
+    if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) {
+      droppedCount++;
+      if (droppedReasons.length < 3)
+        droppedReasons.push(`bad dims (x=${item.x},y=${item.y},w=${item.w},h=${item.h})`);
+      continue;
+    }
     const cx = Math.max(0, Math.min(x, Math.max(0, room.w - 0.1)));
     const cy = Math.max(0, Math.min(y, Math.max(0, room.h - 0.1)));
     const cw = Math.max(0.1, Math.min(w, room.w - cx));
@@ -237,6 +263,12 @@ async function furnishRoom(
       h: ch,
       rotation,
     });
+  }
+  if (droppedCount > 0) {
+    console.warn(
+      `[ai-furnish] room ${room.id} (${room.name}): dropped ${droppedCount}/${rawList.length} items.`,
+      droppedReasons,
+    );
   }
 
   return { classification, furniture };

@@ -30,27 +30,51 @@ const FURNITURE_EMOJI: Record<string, string> = {
 };
 
 const FURNITURE_FILL: Record<string, string> = {
-  bed: "rgba(244,114,182,0.18)",
-  sofa: "rgba(56,189,248,0.18)",
-  armchair: "rgba(56,189,248,0.18)",
-  table: "rgba(251,191,36,0.18)",
-  chair: "rgba(251,191,36,0.14)",
-  fridge: "rgba(125,211,252,0.18)",
-  stove: "rgba(239,68,68,0.18)",
-  oven: "rgba(239,68,68,0.15)",
-  sink: "rgba(125,211,252,0.18)",
-  toilet: "rgba(165,243,252,0.18)",
-  shower: "rgba(125,211,252,0.18)",
-  bathtub: "rgba(125,211,252,0.18)",
-  wardrobe: "rgba(168,162,158,0.18)",
-  tv: "rgba(99,102,241,0.18)",
-  desk: "rgba(251,191,36,0.18)",
-  shelf: "rgba(168,162,158,0.18)",
-  "kitchen-cabinet": "rgba(168,162,158,0.18)",
-  washer: "rgba(125,211,252,0.14)",
-  dishwasher: "rgba(125,211,252,0.14)",
-  plant: "rgba(34,197,94,0.18)",
-  rug: "rgba(168,85,247,0.14)",
+  bed: "rgba(244,114,182,0.45)",
+  sofa: "rgba(56,189,248,0.45)",
+  armchair: "rgba(56,189,248,0.45)",
+  table: "rgba(251,191,36,0.45)",
+  chair: "rgba(251,191,36,0.35)",
+  fridge: "rgba(125,211,252,0.45)",
+  stove: "rgba(239,68,68,0.45)",
+  oven: "rgba(239,68,68,0.40)",
+  sink: "rgba(125,211,252,0.45)",
+  toilet: "rgba(165,243,252,0.45)",
+  shower: "rgba(125,211,252,0.45)",
+  bathtub: "rgba(125,211,252,0.45)",
+  wardrobe: "rgba(168,162,158,0.45)",
+  tv: "rgba(99,102,241,0.45)",
+  desk: "rgba(251,191,36,0.45)",
+  shelf: "rgba(168,162,158,0.45)",
+  "kitchen-cabinet": "rgba(168,162,158,0.45)",
+  washer: "rgba(125,211,252,0.40)",
+  dishwasher: "rgba(125,211,252,0.40)",
+  plant: "rgba(34,197,94,0.45)",
+  rug: "rgba(168,85,247,0.30)",
+};
+
+const FURNITURE_STROKE: Record<string, string> = {
+  bed: "rgb(244,114,182)",
+  sofa: "rgb(56,189,248)",
+  armchair: "rgb(56,189,248)",
+  table: "rgb(251,191,36)",
+  chair: "rgb(251,191,36)",
+  fridge: "rgb(125,211,252)",
+  stove: "rgb(239,68,68)",
+  oven: "rgb(239,68,68)",
+  sink: "rgb(125,211,252)",
+  toilet: "rgb(165,243,252)",
+  shower: "rgb(125,211,252)",
+  bathtub: "rgb(125,211,252)",
+  wardrobe: "rgb(168,162,158)",
+  tv: "rgb(99,102,241)",
+  desk: "rgb(251,191,36)",
+  shelf: "rgb(168,162,158)",
+  "kitchen-cabinet": "rgb(168,162,158)",
+  washer: "rgb(125,211,252)",
+  dishwasher: "rgb(125,211,252)",
+  plant: "rgb(34,197,94)",
+  rug: "rgb(168,85,247)",
 };
 
 interface Props {
@@ -346,12 +370,13 @@ export function PlanSvg({
             const wy = room.y + f.y;
             const cx = wx + f.w / 2;
             const cy = wy + f.h / 2;
-            const fill = FURNITURE_FILL[f.type] ?? "rgba(255,255,255,0.05)";
+            const fill = FURNITURE_FILL[f.type] ?? "rgba(255,255,255,0.25)";
+            const stroke = FURNITURE_STROKE[f.type] ?? "rgba(255,255,255,0.6)";
             const emoji = FURNITURE_EMOJI[f.type] ?? "▢";
             const minDim = Math.min(f.w, f.h);
-            const emojiFs = Math.max(0.18, minDim * 0.55);
-            const labelFs = Math.max(0.12, minDim * 0.16);
-            const showLabel = minDim >= 0.6 && f.label.length > 0;
+            const emojiFs = Math.max(0.22, minDim * 0.6);
+            const labelFs = Math.max(0.14, minDim * 0.18);
+            const showLabel = minDim >= 0.5 && f.label.length > 0;
             return (
               <g
                 key={f.id}
@@ -367,9 +392,8 @@ export function PlanSvg({
                   width={f.w}
                   height={f.h}
                   fill={fill}
-                  stroke="rgba(255,255,255,0.25)"
-                  strokeWidth={strokePx * 0.6}
-                  strokeDasharray="0.12 0.08"
+                  stroke={stroke}
+                  strokeWidth={2.2}
                   vectorEffect="non-scaling-stroke"
                   rx={0.06}
                 />
@@ -386,10 +410,11 @@ export function PlanSvg({
                 {showLabel && (
                   <text
                     x={cx}
-                    y={wy + f.h + labelFs * 0.9}
+                    y={wy + f.h + labelFs * 1.1}
                     textAnchor="middle"
                     fontSize={labelFs}
-                    fill="#a1a1aa"
+                    fill="#d4d4d8"
+                    fontWeight={600}
                     pointerEvents="none"
                   >
                     {f.label}

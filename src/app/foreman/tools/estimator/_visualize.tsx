@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Info, Loader2, Sparkles, Trash2, X } from "lucide-react";
+import { CheckCircle2, Info, Loader2, Sparkles, Trash2, X } from "lucide-react";
 import type { FloorPlan, FurnitureItem, RoomClass } from "./_types";
-import { PlanSvg } from "./_plan-svg";
+import { InteractivePlanView } from "./_interactive-plan-view";
 
 const CLASS_LABELS: Record<RoomClass, string> = {
   kitchen: "Кухня",
@@ -37,6 +37,7 @@ export function Visualize({
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastGenAt, setLastGenAt] = useState<number | null>(null);
 
   const handleFurnish = async () => {
     setLoading(true);
@@ -74,6 +75,12 @@ export function Visualize({
       const classes: Record<string, RoomClass> = {};
       for (const r of json.rooms) classes[r.roomId] = r.classification;
       onSetFurniture(json.furniture, classes);
+      setLastGenAt(Date.now());
+      if (json.furniture.length === 0) {
+        setError(
+          "AI не зміг розмістити меблі (можливо, кімнати малі або назви нетипові). Спробуйте перейменувати кімнати у звичні «Кухня/Спальня/Санвузол» і повторіть.",
+        );
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Помилка");
     } finally {
@@ -92,21 +99,30 @@ export function Visualize({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 overflow-hidden aspect-[4/3]">
-        <PlanSvg
-          plan={plan}
-          onFurnitureTap={(item) => {
-            if (
-              typeof window !== "undefined" &&
-              !window.confirm(`Видалити «${item.label}» з плану?`)
-            ) {
-              return;
-            }
-            onRemoveFurniture(item.id);
-          }}
-          className="w-full h-full select-none"
-        />
-      </div>
+      {hasFurniture && lastGenAt && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs">
+          <CheckCircle2 size={14} className="shrink-0" />
+          <span>
+            AI розмістила <b>{totalItems}</b> меблевих елемент
+            {totalItems === 1 ? "" : totalItems < 5 ? "и" : "ів"} на плані. Тап
+            по предмету щоб видалити; пінч/drag — зум плану.
+          </span>
+        </div>
+      )}
+
+      <InteractivePlanView
+        plan={plan}
+        onFurnitureTap={(item) => {
+          if (
+            typeof window !== "undefined" &&
+            !window.confirm(`Видалити «${item.label}» з плану?`)
+          ) {
+            return;
+          }
+          onRemoveFurniture(item.id);
+        }}
+        resetKey={`viz-${plan.rooms.length}-${plan.furniture.length}`}
+      />
 
       {!hasFurniture ? (
         <div className="rounded-2xl bg-violet-500/10 border border-violet-500/30 p-4 space-y-3">
