@@ -1,7 +1,7 @@
 import { prisma } from '../../../src/lib/prisma';
 import { notifyFinanceActor } from '../../../src/lib/financing/notify-approval';
-import { sendTelegramNotification } from '../../../src/lib/notifications/telegram';
 import { registerTool } from './registry';
+import { urls } from '../urls';
 
 const APPROVER_ROLES = ['SUPER_ADMIN', 'MANAGER', 'FINANCIER'] as const;
 
@@ -63,6 +63,7 @@ registerTool({
         counterparty: e.counterparty,
         project: e.project?.title ?? null,
         author: e.createdBy.name ?? e.createdBy.email,
+        url: urls.financeEntry(e.id),
       })),
       foremanReports: foremanReports.map((r) => ({
         id: r.id,
@@ -71,6 +72,7 @@ registerTool({
         author: r.createdBy.name ?? r.createdBy.email,
         itemCount: r.items.length,
         total: r.items.reduce((s, it) => s + Number(it.amount), 0),
+        url: urls.foremanReport(r.id),
       })),
       financeEntriesCount: financeEntries.length,
       foremanReportsCount: foremanReports.length,
@@ -345,6 +347,7 @@ registerTool({
       totalPaid: Number(project.totalPaid),
       factExpenseTotal: expenseTotal,
       factIncomeTotal: incomeTotal,
+      url: urls.project(project.id),
     };
 
     if (ctx.role === 'SUPER_ADMIN') {

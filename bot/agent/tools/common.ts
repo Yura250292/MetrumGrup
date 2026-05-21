@@ -1,5 +1,6 @@
 import { prisma } from '../../../src/lib/prisma';
 import { registerTool } from './registry';
+import { urls } from '../urls';
 
 registerTool({
   name: 'get_time',
@@ -29,7 +30,7 @@ registerTool({
 registerTool({
   name: 'search_projects',
   description:
-    'Пошук проектів за частковою назвою або статусом. Повертає до 10 збігів з firmId-ізоляцією.',
+    'Пошук ПРОЕКТІВ (Project = об\'єкт будівництва/папка робіт). Aliases: проект, об\'єкт, будівля, стройка, обʼєкт, папка. НЕ використовуй коли користувач хоче "задачі / завдання / тікети" — для цього є my_tasks.',
   parameters: {
     type: 'object',
     properties: {
@@ -69,14 +70,16 @@ registerTool({
         stageProgress: true,
       },
     });
-    return { projects };
+    return {
+      projects: projects.map((p) => ({ ...p, url: urls.project(p.id) })),
+    };
   },
 });
 
 registerTool({
   name: 'get_project_info',
   description:
-    'Деталі одного проекту: статус, етап, прогрес. БЕЗ зарплат та чутливих фінансових даних.',
+    'Деталі ОДНОГО проекту (Project): статус, етап, прогрес, клієнт, менеджер. БЕЗ зарплат та чутливих фінансових даних. Aliases: інфо про проект, деталі проекту, що з проектом, статус обʼєкта.',
   parameters: {
     type: 'object',
     properties: {
@@ -114,6 +117,6 @@ registerTool({
       },
     });
     if (!project) return { found: false };
-    return { found: true, project };
+    return { found: true, project: { ...project, url: urls.project(project.id) } };
   },
 });

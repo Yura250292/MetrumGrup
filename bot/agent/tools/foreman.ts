@@ -13,6 +13,7 @@ import {
 import { resolveSuppliersBulk } from '../../../src/lib/foreman/resolve-supplier';
 import { sendTelegramNotification } from '../../../src/lib/notifications/telegram';
 import { registerTool } from './registry';
+import { urls } from '../urls';
 import type { CostType } from '@prisma/client';
 
 const ITEM_SCHEMA = {
@@ -297,6 +298,7 @@ registerTool({
       project: project.title,
       ...sum,
       managersNotified: managers.length,
+      url: urls.foremanReport(report.id),
     };
   },
 });
@@ -347,6 +349,7 @@ registerTool({
         rejectionReason: r.rejectionReason,
         itemCount: r.items.length,
         total: r.items.reduce((s, it) => s + Number(it.amount), 0),
+        url: urls.foremanReport(r.id),
       })),
     };
   },

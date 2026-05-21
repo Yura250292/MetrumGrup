@@ -1,10 +1,11 @@
 import { prisma } from '../../../src/lib/prisma';
 import { registerTool } from './registry';
+import { urls } from '../urls';
 
 registerTool({
   name: 'my_tasks',
   description:
-    'Список задач, призначених поточному користувачу. Фільтр за статусом — необовʼязковий.',
+    'Список РОБОЧИХ ЗАДАЧ (Task entity) призначених на поточного користувача. Aliases: задача, задачі, завдання, тікет, todo, тудушка, моя робота, що в роботі, що мені робити. НЕ ПЛУТАЙ з ПРОЕКТАМИ (Project) — для проектів є search_projects.',
   parameters: {
     type: 'object',
     properties: {
@@ -54,10 +55,12 @@ registerTool({
         title: t.title,
         priority: t.priority,
         project: t.project.title,
+        projectUrl: urls.project(t.project.id),
         status: t.status.name,
         statusIsDone: t.status.isDone,
         dueDate: t.dueDate,
         overdue: t.dueDate ? t.dueDate.getTime() < now : false,
+        url: urls.task(t.id),
       })),
     };
   },

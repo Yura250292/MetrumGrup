@@ -45,6 +45,29 @@ export class StreamingEditor {
 
   private async flushNow(text: string): Promise<void> {
     if (text === this.lastText) return;
+    // Спершу пробуємо як HTML (AI генерує <b>/<i>/<a> через промпт).
+    // Якщо chunk містить незакритий тег (часто на середині стріму) —
+    // Telegram повертає "can't parse entities"; тоді шлемо як plain text,
+    // щоб юзер бачив прогрес. На finalize() AI закриває всі теги.
+    try {
+      await this.ctx.telegram.editMessageText(
+        this.ctx.chat!.id,
+        this.messageId,
+        undefined,
+        text || '…',
+        { parse_mode: 'HTML', link_preview_options: { is_disabled: true } },
+      );
+      this.lastText = text;
+      this.lastEditAt = Date.now();
+      return;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('message is not modified')) return;
+      if (!msg.includes("can't parse entities")) {
+        console.error('Streaming edit (HTML) failed:', msg);
+      }
+    }
+    // Fallback: plain text без розмітки.
     try {
       await this.ctx.telegram.editMessageText(
         this.ctx.chat!.id,
@@ -57,7 +80,7 @@ export class StreamingEditor {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       if (!msg.includes('message is not modified')) {
-        console.error('Streaming edit failed:', msg);
+        console.error('Streaming edit (plain) failed:', msg);
       }
     }
   }
