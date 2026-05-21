@@ -124,7 +124,10 @@ export function NewTaskModal({
   const [dueTime, setDueTime] = useState("18:00"); // HH:mm, default = кінець робочого дня
 
   // ── Assignees ──
-  const [assignees, setAssignees] = useState<AssigneeChip[]>([]);
+  // Модель: ОДИН виконавець. Або «Ви» (assignToMe), або інший User. Якщо
+  // обираєш іншого — заміняєш, а не додаєш (взаємно виключно). Зовнішні
+  // виконавці поки прибрано — лишимо як майбутню фічу, коли буде Contact CRUD.
+  const [assignee, setAssignee] = useState<AssigneeChip | null>(null);
   const [assignToMe, setAssignToMe] = useState(true);
   /**
    * Об'єднаний список кандидатів для picker'а: User'и CRM + Employee'и з HR.
@@ -141,8 +144,6 @@ export function NewTaskModal({
   >([]);
   const [userPickerOpen, setUserPickerOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
-  const [externalInput, setExternalInput] = useState("");
-  const [showExternalInput, setShowExternalInput] = useState(false);
 
   // ── Advanced (collapsed by default) ──
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -273,10 +274,9 @@ export function NewTaskModal({
   }, [userPickerOpen]);
 
   const canGenerateSpec = title.trim().length >= 4 && !generatingSpec;
-  const formValid =
-    title.trim().length > 0 &&
-    description.trim().length > 0 &&
-    dueDate.length > 0;
+  // Опис тепер опційний — інколи заголовку достатньо.
+  // Обовʼязкові: тільки назва і дедлайн (дата).
+  const formValid = title.trim().length > 0 && dueDate.length > 0;
 
   const generateSpec = async () => {
     if (!canGenerateSpec) return;
@@ -329,49 +329,26 @@ export function NewTaskModal({
     setAppliedHours(true);
   };
 
-  const addUserAssignee = (userId: string, name: string) => {
-    setAssignees((prev) =>
-      prev.some((a) => a.kind === "user" && a.userId === userId)
-        ? prev
-        : [...prev, { kind: "user", userId, name }],
-    );
+  /**
+   * Виставити ОДНОГО виконавця. Якщо це я — просто assignToMe=true.
+   * Якщо інший — assignToMe=false і запам'ятовуємо чип. Взаємно виключно.
+   */
+  const setUserAssignee = (userId: string, name: string) => {
+    if (userId === currentUserId) {
+      setAssignToMe(true);
+      setAssignee(null);
+    } else {
+      setAssignToMe(false);
+      setAssignee({ kind: "user", userId, name });
+    }
     setUserPickerOpen(false);
     setUserSearch("");
   };
 
-  /** Employee без User'а — додаємо як externalName (бо в системі нема акаунту). */
-  const addEmployeeAsExternal = (fullName: string) => {
-    const name = fullName.trim().slice(0, 100);
-    if (!name) return;
-    setAssignees((prev) =>
-      prev.some(
-        (a) =>
-          (a.kind === "external" && a.name.toLowerCase() === name.toLowerCase()) ||
-          (a.kind === "user" && a.name.toLowerCase() === name.toLowerCase()),
-      )
-        ? prev
-        : [...prev, { kind: "external", name }],
-    );
-    setUserPickerOpen(false);
-    setUserSearch("");
-  };
-
-  const addExternalAssignee = () => {
-    const name = externalInput.trim();
-    if (!name) return;
-    setAssignees((prev) =>
-      prev.some(
-        (a) => a.kind === "external" && a.name.toLowerCase() === name.toLowerCase(),
-      )
-        ? prev
-        : [...prev, { kind: "external", name: name.slice(0, 100) }],
-    );
-    setExternalInput("");
-    setShowExternalInput(false);
-  };
-
-  const removeAssignee = (idx: number) => {
-    setAssignees((prev) => prev.filter((_, i) => i !== idx));
+  /** Очистити поточного виконавця → дефолт «Ви». */
+  const clearAssignee = () => {
+    setAssignee(null);
+    setAssignToMe(true);
   };
 
   const filteredCandidates = useMemo(() => {
@@ -392,21 +369,12 @@ export function NewTaskModal({
     setSaving(true);
     setError(null);
     try {
-      // Build assignees payload.
+      // Build assignees payload. У моделі — ОДИН виконавець (User).
       const payload: Array<{ userId?: string; externalName?: string }> = [];
-      const seenUserIds = new Set<string>();
       if (assignToMe) {
         payload.push({ userId: currentUserId });
-        seenUserIds.add(currentUserId);
-      }
-      for (const a of assignees) {
-        if (a.kind === "user") {
-          if (seenUserIds.has(a.userId)) continue;
-          seenUserIds.add(a.userId);
-          payload.push({ userId: a.userId });
-        } else {
-          payload.push({ externalName: a.name });
-        }
+      } else if (assignee?.kind === "user") {
+        payload.push({ userId: assignee.userId });
       }
 
       const checklist =
@@ -514,8 +482,8 @@ export function NewTaskModal({
               />
             </RequiredField>
 
-            {/* ── Description (required) ── */}
-            <RequiredField label="Короткий опис">
+            {/* ── Description (optional) ── інколи заголовку достатньо */}
+            <Field label="Короткий опис (необовʼязково)">
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-end gap-1">
                   <button
@@ -571,7 +539,7 @@ export function NewTaskModal({
                   </div>
                 )}
               </div>
-            </RequiredField>
+            </Field>
 
             {/* ── Due date + time (required) ──
                 Розділили на 2 поля: дата (type=date) + час (select 09:00-18:00).
@@ -637,29 +605,34 @@ export function NewTaskModal({
               </div>
             </Field>
 
-            {/* ── Assignees (optional) ── */}
-            <Field label="Виконавець (необовʼязково)">
+            {/* ── Assignee (single) ──
+                ЛЮДЕЙ ОДНА ПОЗИЦІЯ. За дефолтом — «Ви» (автор=виконавець).
+                Натиск «Змінити виконавця» → picker → інший User замінює мене.
+                Тоді: Автор = я, Виконавець = він. */}
+            <Field label="Виконавець">
               <div className="flex flex-col gap-2">
-                {/* Existing chips */}
-                {(assignees.length > 0 || assignToMe) && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {assignToMe && (
-                      <Chip
-                        label={`Ви`}
-                        onRemove={() => setAssignToMe(false)}
-                        tone="primary"
-                      />
-                    )}
-                    {assignees.map((a, i) => (
-                      <Chip
-                        key={`${a.kind}-${i}-${a.name}`}
-                        label={a.name}
-                        onRemove={() => removeAssignee(i)}
-                        tone={a.kind === "external" ? "external" : "default"}
-                      />
-                    ))}
-                  </div>
-                )}
+                {/* Поточний виконавець як один чип */}
+                <div className="flex flex-wrap gap-1.5">
+                  {assignToMe && !assignee && (
+                    <Chip
+                      label="Ви"
+                      onRemove={() => {
+                        // прибрати «Ви» не можна — мають бути або я, або інший.
+                        // Просто залишаємо як є; для «нікого» юзер натискає
+                        // «Змінити» і не обирає нікого (поки нема такого UI —
+                        // лишаємо завжди когось).
+                      }}
+                      tone="primary"
+                    />
+                  )}
+                  {assignee && assignee.kind === "user" && (
+                    <Chip
+                      label={assignee.name}
+                      onRemove={clearAssignee}
+                      tone="default"
+                    />
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2">
                   {/* User picker */}
                   <div className="relative" ref={userPickerRef}>
@@ -673,7 +646,7 @@ export function NewTaskModal({
                         border: `1px solid ${T.borderSoft}`,
                       }}
                     >
-                      <Plus size={12} /> Додати співробітника
+                      <Plus size={12} /> Змінити виконавця
                     </button>
                     {userPickerOpen && (
                       <div
@@ -706,143 +679,65 @@ export function NewTaskModal({
                               className="px-2 py-3 text-center text-[11px]"
                               style={{ color: T.textMuted }}
                             >
-                              Не знайдено. Можна додати як зовнішнього →
+                              Не знайдено
                             </div>
                           ) : (
-                            filteredCandidates.map((c) => {
-                              const already =
-                                c.kind === "user"
-                                  ? (c.id === currentUserId && assignToMe) ||
-                                    assignees.some(
-                                      (a) => a.kind === "user" && a.userId === c.id,
-                                    )
-                                  : assignees.some(
-                                      (a) =>
-                                        a.kind === "external" &&
-                                        a.name.toLowerCase() === c.name.toLowerCase(),
-                                    );
-                              return (
-                                <button
-                                  key={`${c.kind}:${c.id}`}
-                                  type="button"
-                                  disabled={already}
-                                  onClick={() =>
-                                    c.kind === "user"
-                                      ? addUserAssignee(c.id, c.name)
-                                      : addEmployeeAsExternal(c.name)
-                                  }
-                                  className="flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs disabled:opacity-40 hover:brightness-95"
-                                  style={{ color: T.textPrimary }}
-                                  title={
-                                    c.kind === "employee"
-                                      ? "Співробітник без акаунту — буде додано як зовнішнього"
-                                      : undefined
-                                  }
-                                >
-                                  <span className="flex flex-col leading-tight">
-                                    <span className="flex items-center gap-1.5">
-                                      {c.name}
-                                      {c.kind === "user" && c.id === currentUserId && (
-                                        <span style={{ color: T.textMuted }}>(ви)</span>
-                                      )}
-                                      {c.kind === "employee" && (
+                            filteredCandidates
+                              // Тимчасово ховаємо Employee без акаунту (kind="employee").
+                              // Зовнішніх виконавців прибрано наразі — повернеться
+                              // коли буде окремий Contact-довідник.
+                              .filter((c) => c.kind === "user")
+                              .map((c) => {
+                                const isCurrent =
+                                  c.id === currentUserId
+                                    ? assignToMe
+                                    : assignee?.kind === "user" && assignee.userId === c.id;
+                                return (
+                                  <button
+                                    key={`${c.kind}:${c.id}`}
+                                    type="button"
+                                    onClick={() => setUserAssignee(c.id, c.name)}
+                                    className="flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:brightness-95"
+                                    style={{ color: T.textPrimary }}
+                                  >
+                                    <span className="flex flex-col leading-tight">
+                                      <span className="flex items-center gap-1.5">
+                                        {c.name}
+                                        {c.id === currentUserId && (
+                                          <span style={{ color: T.textMuted }}>(ви)</span>
+                                        )}
+                                      </span>
+                                      {c.subtitle && (
                                         <span
-                                          className="rounded-full px-1.5 py-0 text-[9px] font-semibold"
-                                          style={{
-                                            color: T.textMuted,
-                                            border: `1px dashed ${T.borderSoft}`,
-                                          }}
+                                          className="text-[10px]"
+                                          style={{ color: T.textMuted }}
                                         >
-                                          без акаунту
+                                          {c.subtitle}
                                         </span>
                                       )}
                                     </span>
-                                    {c.subtitle && (
-                                      <span
-                                        className="text-[10px]"
-                                        style={{ color: T.textMuted }}
-                                      >
-                                        {c.subtitle}
-                                      </span>
+                                    {isCurrent && (
+                                      <Check size={12} style={{ color: T.success }} />
                                     )}
-                                  </span>
-                                  {already && (
-                                    <Check size={12} style={{ color: T.success }} />
-                                  )}
-                                </button>
-                              );
-                            })
+                                  </button>
+                                );
+                              })
                           )}
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* External assignee */}
-                  {showExternalInput ? (
-                    <div
-                      className="flex items-center gap-1 rounded-lg px-2 py-1"
-                      style={{
-                        backgroundColor: T.panelElevated,
-                        border: `1px dashed ${T.borderStrong}`,
-                      }}
-                    >
-                      <UserPlus size={12} style={{ color: T.textMuted }} />
-                      <input
-                        value={externalInput}
-                        onChange={(e) => setExternalInput(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addExternalAssignee();
-                          }
-                          if (e.key === "Escape") {
-                            setExternalInput("");
-                            setShowExternalInput(false);
-                          }
-                        }}
-                        placeholder="напр. «Юрій Федишин»"
-                        className="bg-transparent text-xs outline-none w-44"
-                        style={{ color: T.textPrimary }}
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={addExternalAssignee}
-                        className="rounded-md px-2 py-1 text-[10px] font-bold"
-                        style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-                      >
-                        ОК
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setShowExternalInput(true)}
-                      className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
-                      style={{
-                        backgroundColor: T.panelElevated,
-                        color: T.textSecondary,
-                        border: `1px dashed ${T.borderStrong}`,
-                      }}
-                      title="Додати людину, яка не є користувачем CRM"
-                    >
-                      <UserPlus size={12} /> Додати зовнішнього
-                    </button>
-                  )}
                 </div>
                 {!assignToMe && (
-                  <label
-                    className="flex items-center gap-2 text-[11px]"
+                  <button
+                    type="button"
+                    onClick={clearAssignee}
+                    className="text-[11px] underline self-start"
                     style={{ color: T.textMuted }}
                   >
-                    <input
-                      type="checkbox"
-                      checked={false}
-                      onChange={() => setAssignToMe(true)}
-                    />
                     Призначити мені
-                  </label>
+                  </button>
                 )}
               </div>
             </Field>

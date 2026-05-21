@@ -14,6 +14,13 @@ const BodySchema = z.object({
   title: z.string().min(1).max(500),
   description: z.string().max(4000).optional(),
   projectId: z.string().optional(),
+  /**
+   * Режим:
+   *  - "generate" (default) — створити повне структуроване ТЗ з нуля.
+   *  - "refine" — лише виправити орфографію/пунктуацію/форматування у
+   *    наявному `description`. НЕ змінювати суть, НЕ додавати секцій.
+   */
+  mode: z.enum(["generate", "refine"]).optional(),
 });
 
 const SpecSchema = z.object({
@@ -79,7 +86,8 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  const { title, description, projectId } = parsed.data;
+  const { title, description, projectId, mode } = parsed.data;
+  const refineMode = mode === "refine";
 
   let projectTitle: string | undefined;
   let projectStage: string | undefined;
@@ -101,19 +109,59 @@ export async function POST(request: NextRequest) {
     today: new Date().toISOString().slice(0, 10),
   });
 
+  // Refine mode використовує окремий промпт: тільки правописна правка,
+  // без перетворення в структуроване ТЗ.
+  const REFINE_SYSTEM_PROMPT = `Ти редактор. Тобі дано опис задачі, написаний людиною. Твоя робота:
+
+ДОЗВОЛЕНО:
+- Виправити орфографію та граматику українською.
+- Розставити розділові знаки (коми, крапки тощо).
+- Поправити регістр (з великої літери на початку речення).
+- Покращити формат: розбити суцільну стіну тексту на абзаци; якщо у тексті є перелік речей через коми чи дефіси — переоформити як буллет-список Markdown ("- ").
+
+СУВОРО ЗАБОРОНЕНО:
+- Змінювати суть або зміст.
+- Додавати нову інформацію, рекомендації, припущення.
+- Створювати секції "Мета", "Обсяг", "Критерії приймання", "Терміни", "Ризики", "Ролі", "Що уточнити" і подібні. Це не структуроване ТЗ, а просто чистка тексту.
+- Перекладати, розширювати, додавати воду.
+
+Поверни СУВОРО валідний JSON: { "markdown": "виправлений текст у Markdown" }. Без жодних інших полів.`;
+
+  const refineUserPrompt = `Заголовок задачі: ${title}\n\nТекст опису для правки:\n${description ?? "(порожній — повернути порожній рядок)"}`;
+
   try {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
-      temperature: 0.4,
-      max_tokens: 2000,
+      temperature: refineMode ? 0.1 : 0.4,
+      max_tokens: refineMode ? 1500 : 2000,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: TASK_SPEC_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
+        {
+          role: "system",
+          content: refineMode ? REFINE_SYSTEM_PROMPT : TASK_SPEC_SYSTEM_PROMPT,
+        },
+        { role: "user", content: refineMode ? refineUserPrompt : userPrompt },
       ],
     });
 
     const raw = completion.choices[0]?.message?.content ?? "";
+
+    // Refine mode повертає лише { markdown }. Без AiSpec, чекліст не чіпаємо.
+    if (refineMode) {
+      try {
+        const j = JSON.parse(raw) as { markdown?: string };
+        return NextResponse.json({
+          spec: null,
+          markdown: typeof j.markdown === "string" ? j.markdown : description ?? "",
+        });
+      } catch {
+        return NextResponse.json({
+          spec: null,
+          markdown: description ?? "",
+        });
+      }
+    }
+
     let specParsed: z.infer<typeof SpecSchema> | null = null;
     try {
       const jsonCandidate = JSON.parse(raw);

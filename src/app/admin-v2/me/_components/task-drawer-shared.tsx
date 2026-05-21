@@ -203,7 +203,7 @@ export function SelfContainedTaskDrawer({
     if (!detail) return;
     if (
       !window.confirm(
-        "Переписати опис задачі з AI? Поточний вміст буде замінено на новий.",
+        "AI виправить орфографію, пунктуацію і форматування. Суть тексту не змінюється. Замінити?",
       )
     )
       return;
@@ -217,6 +217,9 @@ export function SelfContainedTaskDrawer({
           title: detail.title,
           description: detail.description ?? undefined,
           projectId: detail.projectId,
+          // У drawer'і «Переписати з AI» — це чистка тексту, а не генерація
+          // структурованого ТЗ. Передаємо mode=refine.
+          mode: "refine",
         }),
       });
       const aiJson = await aiRes.json();
@@ -677,23 +680,25 @@ export function SelfContainedTaskDrawer({
                 <button
                   type="button"
                   onClick={() => void rewriteSpec()}
-                  disabled={rewritingSpec}
+                  disabled={!detail.description || rewritingSpec}
                   className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase disabled:opacity-50"
                   style={{
                     backgroundColor: T.panelElevated,
                     color: T.accentPrimary,
                     border: `1px solid ${T.borderSoft}`,
                   }}
-                  title="AI перепише опис як структуроване ТЗ"
+                  title={
+                    detail.description
+                      ? "AI виправить орфографію та пунктуацію, не змінюючи суть"
+                      : "Опис відсутній"
+                  }
                 >
                   {rewritingSpec ? (
                     <Loader2 size={10} className="animate-spin" />
-                  ) : detail.description ? (
-                    <RefreshCw size={10} />
                   ) : (
-                    <Sparkles size={10} />
+                    <RefreshCw size={10} />
                   )}
-                  {detail.description ? "Переписати з AI" : "Згенерувати ТЗ"}
+                  AI: виправити текст
                 </button>
               </div>
               {specError && (
