@@ -44,16 +44,26 @@ type DepartmentFull = {
 
 /**
  * Кандидат для керівника / бригадира / учасника бригади.
- * Список будується зі співробітників, а не з User-ів. Якщо у співробітника
- * ще не привʼязаний акаунт (`userId === null`) — він показується у списку
- * з позначкою "без акаунта", але вибрати його не можна (схема зберігає
- * `headUserId`/`leadUserId`, тобто посилання на User). Це тимчасово, поки
- * команда поступово привʼязує акаунти до співробітників.
+ * Список будується зі співробітників (Employee), а не з User-ів — щоб
+ * адмін міг призначити людину навіть до того, як їй створено акаунт.
+ * Як тільки до цього співробітника буде привʼязано User, права/нотифікації
+ * почнуть діяти автоматично.
  */
-type UserOption = { userId: string | null; name: string };
+type EmployeeOption = {
+  employeeId: string;
+  name: string;
+  hasAccount: boolean;
+};
 
 type TeamMemberRow = {
-  user: { id: string; name: string; avatar: string | null };
+  id: string;
+  // API адаптує payload: для employee-based членів user.id містить employeeId,
+  // name — fullName співробітника, avatar — лише якщо є привʼязаний User.
+  user: {
+    id: string;
+    name: string;
+    avatar: string | null;
+  } | null;
 };
 
 const BRIGADE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
@@ -73,8 +83,9 @@ export function DepartmentDetail({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Кандидати для керівника / бригадирів / учасників — співробітники з акаунтом.
-  const [userOptions, setUserOptions] = useState<UserOption[]>([]);
+  // Кандидати для керівника / бригадира / учасника — усі активні співробітники
+  // (з акаунтом і без), щоб директор міг призначити будь-кого.
+  const [employeeOptions, setEmployeeOptions] = useState<EmployeeOption[]>([]);
   // Усі співробітники (для додавання у підрозділ).
   const [allEmployees, setAllEmployees] = useState<
     { id: string; fullName: string; departmentId: string | null }[]
@@ -83,7 +94,7 @@ export function DepartmentDetail({
   // Поля шапки.
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [headUserId, setHeadUserId] = useState("");
+  const [headEmployeeId, setHeadEmployeeId] = useState("");
   const [savingHead, setSavingHead] = useState(false);
 
   const load = useCallback(async () => {
@@ -103,7 +114,7 @@ export function DepartmentDetail({
       setDept(d);
       setName(d.name);
       setDescription(d.description ?? "");
-      setHeadUserId(d.head?.id ?? "");
+      setHeadEmployeeId(d.head?.id ?? "");
 
       if (eRes.ok) {
         const eJson = await eRes.json().catch(() => ({}));
@@ -121,13 +132,17 @@ export function DepartmentDetail({
             departmentId: e.departmentId,
           })),
         );
-        // Усі активні співробітники потрапляють у dropdown; ті, в кого ще немає
-        // акаунта (userId === null), показуються disabled — щоб директор бачив
-        // повну картину людей, навіть якщо вибрати ще не може.
-        setUserOptions(
+        // Усі активні співробітники потрапляють у dropdown — і з акаунтом, і без.
+        // Поле `hasAccount` потрібне лише для дрібного візуального натяку біля
+        // імені (без блокування вибору).
+        setEmployeeOptions(
           emps
             .filter((e) => e.isActive)
-            .map((e) => ({ userId: e.userId, name: e.fullName })),
+            .map((e) => ({
+              employeeId: e.id,
+              name: e.fullName,
+              hasAccount: Boolean(e.userId),
+            })),
         );
       }
     } catch (err) {
@@ -153,7 +168,7 @@ export function DepartmentDetail({
     dept !== null &&
     (name.trim() !== dept.name ||
       description.trim() !== (dept.description ?? "") ||
-      headUserId !== (dept.head?.id ?? ""));
+      headEmployeeId !== (dept.head?.id ?? ""));
 
   async function saveHeader() {
     if (!dept || !name.trim()) return;
@@ -166,7 +181,7 @@ export function DepartmentDetail({
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim() || null,
-          headUserId: headUserId || null,
+          headEmployeeId: headEmployeeId || null,
         }),
       });
       const j = await res.json().catch(() => ({}));
@@ -290,14 +305,14 @@ export function DepartmentDetail({
               </Field>
               <Field label="Керівник підрозділу">
                 <select
-                  value={headUserId}
-                  onChange={(e) => setHeadUserId(e.target.value)}
+                  value={headEmployeeId}
+                  onChange={(e) => setHeadEmployeeId(e.target.value)}
                   disabled={!canEdit}
                   className="w-full rounded-lg px-3 py-2 text-sm outline-none disabled:opacity-70"
                   style={inputStyle()}
                 >
                   <option value="">— не призначено —</option>
-                  {renderEmployeeOptions(userOptions)}
+                  {renderEmployeeOptions(employeeOptions)}
                 </select>
               </Field>
               <Field label="Нотатки">
@@ -398,7 +413,7 @@ export function DepartmentDetail({
                   key={team.id}
                   team={team}
                   canEdit={canEdit}
-                  userOptions={userOptions}
+                  employeeOptions={employeeOptions}
                   onChanged={() => {
                     void load();
                     onChanged();
@@ -581,12 +596,12 @@ function CreateBrigadeRow({
 function BrigadeCard({
   team,
   canEdit,
-  userOptions,
+  employeeOptions,
   onChanged,
 }: {
   team: DeptTeam;
   canEdit: boolean;
-  userOptions: UserOption[];
+  employeeOptions: EmployeeOption[];
   onChanged: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
@@ -595,9 +610,9 @@ function BrigadeCard({
   const [name, setName] = useState(team.name);
   const [description, setDescription] = useState(team.description ?? "");
   const [color, setColor] = useState(team.color);
-  const [leadUserId, setLeadUserId] = useState(team.lead?.id ?? "");
+  const [leadEmployeeId, setLeadEmployeeId] = useState(team.lead?.id ?? "");
   const [saving, setSaving] = useState(false);
-  const [addUserId, setAddUserId] = useState("");
+  const [addEmployeeId, setAddEmployeeId] = useState("");
 
   const loadMembers = useCallback(async () => {
     setLoadingMembers(true);
@@ -614,7 +629,17 @@ function BrigadeCard({
     if (expanded) void loadMembers();
   }, [expanded, loadMembers]);
 
-  const memberIds = useMemo(() => new Set(members.map((m) => m.user.id)), [members]);
+  // API повертає member.user.id як employeeId (адаптовано серверно). Для legacy
+  // записів без employee — user буде null, такі ігноруємо для фільтру.
+  const memberIds = useMemo(
+    () =>
+      new Set(
+        members
+          .map((m) => m.user?.id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [members],
+  );
 
   async function saveBrigade() {
     setSaving(true);
@@ -626,7 +651,7 @@ function BrigadeCard({
           name: name.trim() || team.name,
           description: description.trim() || null,
           color,
-          leadUserId: leadUserId || null,
+          leadEmployeeId: leadEmployeeId || null,
         }),
       });
       if (res.ok) onChanged();
@@ -642,22 +667,22 @@ function BrigadeCard({
   }
 
   async function addMember() {
-    if (!addUserId) return;
+    if (!addEmployeeId) return;
     const res = await fetch(`/api/admin/teams/${team.id}/members`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: addUserId }),
+      body: JSON.stringify({ employeeId: addEmployeeId }),
     });
     if (res.ok) {
-      setAddUserId("");
+      setAddEmployeeId("");
       await loadMembers();
       onChanged();
     }
   }
 
-  async function removeMember(userId: string) {
+  async function removeMember(employeeId: string) {
     const res = await fetch(
-      `/api/admin/teams/${team.id}/members?userId=${encodeURIComponent(userId)}`,
+      `/api/admin/teams/${team.id}/members?employeeId=${encodeURIComponent(employeeId)}`,
       { method: "DELETE" },
     );
     if (res.ok) {
@@ -718,13 +743,13 @@ function BrigadeCard({
                 style={inputStyle()}
               />
               <select
-                value={leadUserId}
-                onChange={(e) => setLeadUserId(e.target.value)}
+                value={leadEmployeeId}
+                onChange={(e) => setLeadEmployeeId(e.target.value)}
                 className="w-full rounded-lg px-3 py-2 text-sm outline-none"
                 style={inputStyle()}
               >
                 <option value="">— бригадир не призначений —</option>
-                {renderEmployeeOptions(userOptions)}
+                {renderEmployeeOptions(employeeOptions)}
               </select>
               <div className="flex items-center gap-1.5">
                 {BRIGADE_COLORS.map((c) => (
@@ -780,49 +805,53 @@ function BrigadeCard({
                 Учасників ще немає.
               </span>
             )}
-            {members.map((m) => (
-              <div
-                key={m.user.id}
-                className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
-                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-              >
-                <EmployeeAvatar
-                  fullName={m.user.name}
-                  avatarUrl={m.user.avatar}
-                  size={22}
-                />
-                <span className="flex-1 text-[12px]" style={{ color: T.textPrimary }}>
-                  {m.user.name}
-                </span>
-                {canEdit && (
-                  <button
-                    onClick={() => void removeMember(m.user.id)}
-                    className="rounded p-1 hover:bg-black/5"
-                    aria-label="Прибрати"
-                  >
-                    <X size={13} style={{ color: T.textMuted }} />
-                  </button>
-                )}
-              </div>
-            ))}
+            {members.map((m) => {
+              if (!m.user) return null;
+              const employeeId = m.user.id;
+              return (
+                <div
+                  key={m.id}
+                  className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
+                  style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+                >
+                  <EmployeeAvatar
+                    fullName={m.user.name}
+                    avatarUrl={m.user.avatar}
+                    size={22}
+                  />
+                  <span className="flex-1 text-[12px]" style={{ color: T.textPrimary }}>
+                    {m.user.name}
+                  </span>
+                  {canEdit && (
+                    <button
+                      onClick={() => void removeMember(employeeId)}
+                      className="rounded p-1 hover:bg-black/5"
+                      aria-label="Прибрати"
+                    >
+                      <X size={13} style={{ color: T.textMuted }} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
             {canEdit && (
               <div className="flex items-center gap-2 pt-1">
                 <select
-                  value={addUserId}
-                  onChange={(e) => setAddUserId(e.target.value)}
+                  value={addEmployeeId}
+                  onChange={(e) => setAddEmployeeId(e.target.value)}
                   className="flex-1 rounded-lg px-2.5 py-1.5 text-[12px] outline-none"
                   style={inputStyle()}
                 >
                   <option value="">— додати учасника —</option>
                   {renderEmployeeOptions(
-                    userOptions.filter(
-                      (u) => !u.userId || !memberIds.has(u.userId),
+                    employeeOptions.filter(
+                      (o) => !memberIds.has(o.employeeId),
                     ),
                   )}
                 </select>
                 <button
                   onClick={() => void addMember()}
-                  disabled={!addUserId}
+                  disabled={!addEmployeeId}
                   className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40"
                   style={{ backgroundColor: T.accentPrimary }}
                 >
@@ -883,23 +912,14 @@ function inputStyle(): React.CSSProperties {
 
 /**
  * Спільний рендер опцій dropdown-а для керівника/бригадира/учасника.
- * Співробітники без привʼязаного акаунта показуються disabled з підписом
- * «(без акаунта)» — щоб директор бачив повний штат, але не міг призначити
- * нікого, для кого ще немає User-а у схемі.
+ * Усі співробітники доступні для вибору. Біля імені тих, у кого ще немає
+ * привʼязаного акаунта, ставимо тонкий маркер «·» — суто візуальний натяк,
+ * що для нотифікацій/прав цій людині потім треба прив'язати User.
  */
-function renderEmployeeOptions(options: UserOption[]): React.ReactNode {
-  return options.map((u, idx) => {
-    if (!u.userId) {
-      return (
-        <option key={`no-acct-${idx}-${u.name}`} value="" disabled>
-          {u.name} — без акаунта
-        </option>
-      );
-    }
-    return (
-      <option key={u.userId} value={u.userId}>
-        {u.name}
-      </option>
-    );
-  });
+function renderEmployeeOptions(options: EmployeeOption[]): React.ReactNode {
+  return options.map((o) => (
+    <option key={o.employeeId} value={o.employeeId}>
+      {o.hasAccount ? o.name : `${o.name} · без акаунта`}
+    </option>
+  ));
 }

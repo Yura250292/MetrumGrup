@@ -14,12 +14,18 @@ export async function GET() {
   const teams = await prisma.team.findMany({
     include: {
       department: { select: { id: true, name: true } },
-      lead: { select: { id: true, name: true } },
+      leadEmployee: { select: { id: true, fullName: true } },
       _count: { select: { members: true } },
     },
     orderBy: [{ department: { name: "asc" } }, { name: "asc" }],
   });
-  return NextResponse.json({ data: teams });
+  const data = teams.map(({ leadEmployee, ...rest }) => ({
+    ...rest,
+    lead: leadEmployee
+      ? { id: leadEmployee.id, name: leadEmployee.fullName }
+      : null,
+  }));
+  return NextResponse.json({ data });
 }
 
 export async function POST(request: NextRequest) {
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
       name,
       description: body.description ? String(body.description).trim() : null,
       departmentId: body.departmentId ? String(body.departmentId) : null,
-      leadUserId: body.leadUserId ? String(body.leadUserId) : null,
+      leadEmployeeId: body.leadEmployeeId ? String(body.leadEmployeeId) : null,
       color: body.color ? String(body.color) : "#3b82f6",
     },
   });

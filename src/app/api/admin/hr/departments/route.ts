@@ -18,7 +18,7 @@ async function guard() {
 const createSchema = z.object({
   name: z.string().trim().min(1, "Назва обовʼязкова"),
   description: z.string().trim().optional(),
-  headUserId: z.string().trim().optional(),
+  headEmployeeId: z.string().trim().optional(),
 });
 
 export async function GET() {
@@ -31,11 +31,19 @@ export async function GET() {
       id: true,
       name: true,
       description: true,
-      head: { select: { id: true, name: true } },
+      headEmployee: { select: { id: true, fullName: true } },
       _count: { select: { employees: true, teams: true } },
     },
   });
-  return NextResponse.json({ data: departments });
+  // Адаптуємо payload так, щоб клієнт не знав про різницю User vs Employee:
+  // полем `head` далі віддаємо { id, name } — лише тепер це Employee.
+  const data = departments.map(({ headEmployee, ...rest }) => ({
+    ...rest,
+    head: headEmployee
+      ? { id: headEmployee.id, name: headEmployee.fullName }
+      : null,
+  }));
+  return NextResponse.json({ data });
 }
 
 export async function POST(request: NextRequest) {
@@ -61,7 +69,7 @@ export async function POST(request: NextRequest) {
     data: {
       name,
       description: parsed.data.description?.trim() || null,
-      headUserId: parsed.data.headUserId || null,
+      headEmployeeId: parsed.data.headEmployeeId || null,
     },
   });
   return NextResponse.json({ data: created }, { status: 201 });

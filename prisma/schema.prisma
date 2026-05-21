@@ -2554,13 +2554,18 @@ model Department {
   id          String   @id @default(cuid())
   name        String   @unique
   description String?
+  /// Deprecated: лишилось для legacy записів. Нові призначення — `headEmployeeId`.
+  /// Headнею тепер є Employee (а не User), бо адмін поступово прив'язує акаунти.
   headUserId  String?
+  /// Керівник підрозділу — як співробітник. Може не мати привʼязаного акаунта.
+  headEmployeeId String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  head      User?      @relation("DepartmentHead", fields: [headUserId], references: [id])
-  teams     Team[]
-  employees Employee[]
+  head         User?      @relation("DepartmentHead", fields: [headUserId], references: [id])
+  headEmployee Employee?  @relation("DepartmentHeadEmployee", fields: [headEmployeeId], references: [id], onDelete: SetNull)
+  teams        Team[]
+  employees    Employee[]
 
   @@map("departments")
 }
@@ -2570,14 +2575,18 @@ model Team {
   name         String
   description  String?
   departmentId String?
+  /// Deprecated: лишилось для legacy. Нові призначення — `leadEmployeeId`.
   leadUserId   String?
+  /// Бригадир — як співробітник. Може не мати привʼязаного акаунта.
+  leadEmployeeId String?
   color        String   @default("#3b82f6")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  department Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
-  lead       User?        @relation("TeamLead", fields: [leadUserId], references: [id])
-  members    TeamMember[]
+  department   Department?  @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  lead         User?        @relation("TeamLead", fields: [leadUserId], references: [id])
+  leadEmployee Employee?    @relation("TeamLeadEmployee", fields: [leadEmployeeId], references: [id], onDelete: SetNull)
+  members      TeamMember[]
 
   @@unique([departmentId, name])
   @@map("teams")
@@ -2586,14 +2595,21 @@ model Team {
 model TeamMember {
   id       String   @id @default(cuid())
   teamId   String
-  userId   String
+  /// Deprecated: nullable, оскільки тепер канонічний ідентифікатор учасника —
+  /// `employeeId`. Заповнюється коли у співробітника є привʼязаний User.
+  userId   String?
+  /// Учасник бригади — як співробітник. Може не мати привʼязаного акаунта.
+  employeeId String?
   joinedAt DateTime @default(now())
 
-  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  user User @relation("TeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user     User?     @relation("TeamMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  employee Employee? @relation("TeamMemberEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
 
   @@unique([teamId, userId])
+  @@unique([teamId, employeeId])
   @@index([userId])
+  @@index([employeeId])
   @@map("team_members")
 }
 
@@ -2640,6 +2656,79 @@ model TelegramLinkToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("telegram_link_tokens")
+}
+
+enum BotChatRole {
+  USER
+  ASSISTANT
+  TOOL
+  SYSTEM
+}
+
+enum BotSessionScope {
+  DM
+  GROUP
+  TOPIC
+}
+
+/// Persistent розмова Telegram-користувача з Universal Bot Agent.
+/// Один запис на (telegramUserId, chatId, threadId). Sliding 24h TTL.
+model BotChatSession {
+  id             String           @id @default(cuid())
+  telegramUserId BigInt
+  chatId         BigInt
+  threadId       Int?
+  scope          BotSessionScope  @default(DM)
+  userId         String?
+  firmId         String?
+  role           Role?
+  lastActiveAt   DateTime         @default(now())
+  expiresAt      DateTime
+  createdAt      DateTime         @default(now())
+  messages       BotChatMessage[]
+
+  @@unique([telegramUserId, chatId, threadId])
+  @@index([userId, lastActiveAt])
+  @@index([expiresAt])
+  @@map("bot_chat_sessions")
+}
+
+/// Повідомлення у BotChatSession: user prompt, assistant reply,
+/// tool call (з toolName/toolArgs/toolResult) або system snapshot.
+model BotChatMessage {
+  id         String         @id @default(cuid())
+  sessionId  String
+  role       BotChatRole
+  content    String         @db.Text
+  toolName   String?
+  toolCallId String?
+  toolArgs   Json?
+  toolResult Json?
+  tokenUsage Json?
+  errored    Boolean        @default(false)
+  createdAt  DateTime       @default(now())
+  session    BotChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@map("bot_chat_messages")
+}
+
+/// Аудит дій бота: усі mutation-tools (approve, reject, submit, update)
+/// пишуть row сюди для compliance + debugging.
+model BotAuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  telegramId BigInt
+  action     String
+  payload    Json?
+  resultOk   Boolean
+  errorCode  String?
+  firmId     String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("bot_audit_log")
 }
 
 /// Тимчасовий draft витрат що бот розпарсив з тексту майстра в TG-групі
@@ -2993,6 +3082,12 @@ model Employee {
   user          User?            @relation("EmployeeUser", fields: [userId], references: [id], onDelete: SetNull)
   timesheets    Timesheet[]      @relation("EmployeeTimesheets")
   salaries      EmployeeSalary[] @relation("EmployeeSalaryHistory")
+  /// Підрозділи, де цей співробітник — керівник.
+  headedDepartments Department[] @relation("DepartmentHeadEmployee")
+  /// Бригади, де цей співробітник — бригадир.
+  ledTeams         Team[]       @relation("TeamLeadEmployee")
+  /// Бригади, у яких цей співробітник — учасник.
+  teamMemberships  TeamMember[] @relation("TeamMemberEmployee")
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 

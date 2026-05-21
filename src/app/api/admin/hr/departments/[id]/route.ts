@@ -18,7 +18,7 @@ async function guard() {
 const updateSchema = z.object({
   name: z.string().trim().min(1).optional(),
   description: z.string().trim().nullable().optional(),
-  headUserId: z.string().trim().nullable().optional(),
+  headEmployeeId: z.string().trim().nullable().optional(),
 });
 
 export async function GET(
@@ -35,7 +35,7 @@ export async function GET(
       id: true,
       name: true,
       description: true,
-      head: { select: { id: true, name: true } },
+      headEmployee: { select: { id: true, fullName: true } },
       employees: {
         orderBy: [{ isActive: "desc" }, { fullName: "asc" }],
         select: { id: true, fullName: true, position: true, isActive: true },
@@ -47,7 +47,7 @@ export async function GET(
           name: true,
           description: true,
           color: true,
-          lead: { select: { id: true, name: true } },
+          leadEmployee: { select: { id: true, fullName: true } },
           _count: { select: { members: true } },
         },
       },
@@ -57,7 +57,21 @@ export async function GET(
   if (!department) {
     return NextResponse.json({ error: "Підрозділ не знайдено" }, { status: 404 });
   }
-  return NextResponse.json({ data: department });
+  // Адаптуємо payload: клієнтський тип чекає `head` / `lead` як { id, name }.
+  const data = {
+    ...department,
+    head: department.headEmployee
+      ? { id: department.headEmployee.id, name: department.headEmployee.fullName }
+      : null,
+    headEmployee: undefined,
+    teams: department.teams.map(({ leadEmployee, ...rest }) => ({
+      ...rest,
+      lead: leadEmployee
+        ? { id: leadEmployee.id, name: leadEmployee.fullName }
+        : null,
+    })),
+  };
+  return NextResponse.json({ data });
 }
 
 export async function PATCH(
@@ -95,8 +109,8 @@ export async function PATCH(
       ...(parsed.data.description !== undefined
         ? { description: parsed.data.description?.trim() || null }
         : {}),
-      ...(parsed.data.headUserId !== undefined
-        ? { headUserId: parsed.data.headUserId || null }
+      ...(parsed.data.headEmployeeId !== undefined
+        ? { headEmployeeId: parsed.data.headEmployeeId || null }
         : {}),
     },
   });

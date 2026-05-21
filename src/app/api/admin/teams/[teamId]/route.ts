@@ -18,16 +18,57 @@ export async function GET(
     where: { id: teamId },
     include: {
       department: true,
-      lead: { select: { id: true, name: true } },
+      leadEmployee: { select: { id: true, fullName: true } },
       members: {
         include: {
+          employee: {
+            select: {
+              id: true,
+              fullName: true,
+              user: { select: { id: true, avatar: true, role: true } },
+            },
+          },
           user: { select: { id: true, name: true, avatar: true, role: true } },
         },
+        orderBy: { joinedAt: "asc" },
       },
     },
   });
   if (!team) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ data: team });
+
+  // Адаптуємо payload до UI: lead/members містять { id, name, avatar }.
+  // Для нових Employee-based членів `id` — це employeeId. Якщо до співробітника
+  // привʼязаний акаунт, користуємось його avatar; інакше — null.
+  const { leadEmployee, members, ...rest } = team;
+  const data = {
+    ...rest,
+    lead: leadEmployee
+      ? { id: leadEmployee.id, name: leadEmployee.fullName }
+      : null,
+    members: members.map((m) => {
+      if (m.employee) {
+        return {
+          id: m.id,
+          joinedAt: m.joinedAt,
+          user: {
+            id: m.employee.id,
+            name: m.employee.fullName,
+            avatar: m.employee.user?.avatar ?? null,
+            role: m.employee.user?.role ?? null,
+          },
+        };
+      }
+      // Legacy: запис з лише userId (не змігровано на employee).
+      return {
+        id: m.id,
+        joinedAt: m.joinedAt,
+        user: m.user
+          ? { id: m.user.id, name: m.user.name ?? "", avatar: m.user.avatar, role: m.user.role }
+          : null,
+      };
+    }),
+  };
+  return NextResponse.json({ data });
 }
 
 export async function PATCH(
@@ -51,7 +92,8 @@ export async function PATCH(
             ? String(body.description).trim()
             : null,
       departmentId: body.departmentId === undefined ? undefined : body.departmentId,
-      leadUserId: body.leadUserId === undefined ? undefined : body.leadUserId,
+      leadEmployeeId:
+        body.leadEmployeeId === undefined ? undefined : body.leadEmployeeId,
       color: typeof body.color === "string" ? body.color : undefined,
     },
   });
