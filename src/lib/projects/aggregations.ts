@@ -31,7 +31,16 @@ export type ProjectWithAggregations = {
 
 export async function listProjectsWithAggregations(
   currentUserId: string,
-  opts?: { folderId?: string | null; firmId?: string | null },
+  opts?: {
+    folderId?: string | null;
+    firmId?: string | null;
+    /**
+     * If set, only return projects where this user has an active ProjectMember.
+     * Used to restrict FINANCIER (membership-only role) to projects they were
+     * explicitly added to. Pass `currentUserId` for FINANCIER.
+     */
+    restrictToMemberOfUserId?: string | null;
+  },
 ): Promise<ProjectWithAggregations[]> {
   // HOTFIX: production may not have project_members migration applied yet.
   // If `members` include fails, fall back to a query without it. The team
@@ -63,6 +72,14 @@ export async function listProjectsWithAggregations(
   if (opts?.firmId) {
     where.firmId = opts.firmId;
   }
+  // Membership-only restriction (e.g. FINANCIER). If the project_members table
+  // is missing in legacy environments the inner try/catch falls back to an
+  // empty list — safer than leaking unrestricted projects.
+  if (opts?.restrictToMemberOfUserId) {
+    where.members = {
+      some: { userId: opts.restrictToMemberOfUserId, isActive: true },
+    };
+  }
 
   const fetchProjects = async () => {
     try {
@@ -86,6 +103,11 @@ export async function listProjectsWithAggregations(
         "[aggregations] members include failed, falling back without ProjectMember:",
         err
       );
+      // Membership-only roles cannot fall back to "all projects" — that would
+      // leak data. Return empty list instead.
+      if (opts?.restrictToMemberOfUserId) {
+        return [];
+      }
       const projects = await prisma.project.findMany({
         where,
         orderBy: { updatedAt: "desc" },

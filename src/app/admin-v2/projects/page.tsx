@@ -25,6 +25,10 @@ export default async function AdminV2ProjectsPage({
   if (!session?.user) redirect("/login");
 
   const isSuperAdmin = session.user.role === "SUPER_ADMIN";
+  // FINANCIER бачить тільки проєкти, де доданий як ProjectMember (будь-яка
+  // roleInProject). Без членства — порожньо.
+  const restrictToMemberOfUserId =
+    session.user.role === "FINANCIER" ? session.user.id : null;
   const params = await searchParams;
   const folderId = params.folderId ?? null;
 
@@ -42,6 +46,7 @@ export default async function AdminV2ProjectsPage({
   const projects = await listProjectsWithAggregations(session.user.id, {
     folderId,
     firmId,
+    restrictToMemberOfUserId,
   });
 
   const extrasMap = new Map<string, ProjectExtra>();

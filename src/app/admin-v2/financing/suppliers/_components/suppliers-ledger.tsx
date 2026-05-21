@@ -20,6 +20,7 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 import { SupplierPaymentModal } from "@/app/admin-v2/counterparties/_components/supplier-payment-modal";
+import { AddInvoiceModal } from "./add-invoice-modal";
 
 type Supplier = {
   id: string;
@@ -103,6 +104,9 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [addInvoiceFor, setAddInvoiceFor] = useState<{
+    counterpartyId: string | null;
+  } | null>(null);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [invoicesByCp, setInvoicesByCp] = useState<Map<string, Invoice[]>>(
@@ -145,6 +149,19 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showOnlyDebt, includeInactive, dateFrom, dateTo]);
+
+  // Deep-link: дашборд фінансиста має кнопку «+ Накладна» з `?action=new-invoice`.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sp = new URLSearchParams(window.location.search);
+    if (sp.get("action") === "new-invoice") {
+      setAddInvoiceFor({ counterpartyId: null });
+      // прибираємо параметр щоб модалка не відкривалася при наступному рендері
+      sp.delete("action");
+      const next = `${window.location.pathname}${sp.toString() ? `?${sp.toString()}` : ""}`;
+      window.history.replaceState({}, "", next);
+    }
+  }, []);
 
   const { creditors, others } = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -391,6 +408,19 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
           Деактивовані
         </label>
         <div className="flex-1" />
+        {canPay && (
+          <button
+            onClick={() => setAddInvoiceFor({ counterpartyId: null })}
+            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            <Plus size={13} /> Накладна
+          </button>
+        )}
         {canCreate && (
           <button
             onClick={() => {
@@ -517,6 +547,28 @@ export function SuppliersLedger({ currentUserRole }: { currentUserRole: string }
               next.delete(payTarget.id);
               return next;
             });
+            await load();
+          }}
+        />
+      )}
+
+      {addInvoiceFor && (
+        <AddInvoiceModal
+          presetCounterpartyId={addInvoiceFor.counterpartyId}
+          onClose={() => setAddInvoiceFor(null)}
+          onCreated={async () => {
+            const target = addInvoiceFor.counterpartyId;
+            setAddInvoiceFor(null);
+            // Сбросити кеш рахунків (outstanding змінився).
+            if (target) {
+              setInvoicesByCp((prev) => {
+                const next = new Map(prev);
+                next.delete(target);
+                return next;
+              });
+            } else {
+              setInvoicesByCp(new Map());
+            }
             await load();
           }}
         />

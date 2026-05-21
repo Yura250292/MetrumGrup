@@ -80,10 +80,17 @@ export function forbiddenResponse() {
 // Common role groups for consistent authorization
 export const ADMIN_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER"];
 export const ESTIMATE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "ENGINEER", "FINANCIER"];
-// Хто бачить фінансові цифри (ЗП, витрати, доходи, бюджети, ставки, виплати).
-// Правило власника: ТІЛЬКИ SUPER_ADMIN. Усі решта — MANAGER/HR/ENGINEER/
-// FINANCIER/FOREMAN/CLIENT — НЕ бачать. Єдина точка істини для UI+API.
+// Хто бачить ЗП, project budgets, cashflow, strategic reports.
+// Правило власника: ТІЛЬКИ SUPER_ADMIN. Винятки (2026-05-21):
+//   - FINANCIER бачить Invoice/SupplierPayment (облік постачальників) і суми
+//     у foreman-звітах при approve. ЗП/cashflow/budgets — НЕ бачить.
+//   - MANAGER веде облік постачальників (без ЗП/cashflow).
+// Для перевірки доступу до фін.цифр (ЗП/cashflow/budgets) використовуй FINANCE_ROLES.
+// Для доступу до обліку постачальників — SUPPLIER_LEDGER_ROLES.
 export const FINANCE_ROLES: Role[] = ["SUPER_ADMIN"];
+// Хто має доступ до обліку постачальників (Invoice, SupplierPayment) — список,
+// журнал платежів, ручне додавання накладних, FIFO-allocation.
+export const SUPPLIER_LEDGER_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "FINANCIER"];
 
 /** True iff this role may see any financial numbers. Use everywhere — UI, API, AI context. */
 export function canViewFinance(role: Role | string | null | undefined): boolean {
@@ -95,9 +102,9 @@ export const STAFF_ROLES: Role[] = ESTIMATE_ROLES;
 export const HR_ACCESSIBLE_ROLES: Role[] = ["SUPER_ADMIN", "MANAGER", "HR"];
 // Foreman: kiosk PWA users (виконроб). Submit expense reports → manager approves.
 export const FOREMAN_ROLES: Role[] = ["FOREMAN"];
-// Хто бачить queue звітів виконробів і може approve/reject. Звіти містять
-// суми витрат → ТІЛЬКИ SUPER_ADMIN (правило: цифри бачить тільки Адмін).
-export const FOREMAN_REPORT_REVIEWERS: Role[] = ["SUPER_ADMIN"];
+// Хто бачить queue звітів виконробів і може approve/reject. SUPER_ADMIN + FINANCIER
+// (фінансист виступає як проджект-менеджер по фінансовій частині — 2026-05-21).
+export const FOREMAN_REPORT_REVIEWERS: Role[] = ["SUPER_ADMIN", "FINANCIER"];
 // Owner: директор/засновник — мінімалістичний read-only аналітичний дашборд.
 // SUPER_ADMIN теж пропускається у /owner (може дивитись overview якщо хоче).
 export const OWNER_ROLES: Role[] = ["OWNER", "SUPER_ADMIN"];

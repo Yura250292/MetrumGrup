@@ -32,6 +32,7 @@ import { DashboardShell, DashboardWidgetConfigButton } from "./_components/dashb
 import { DashboardGrid } from "./_components/dashboard/dashboard-grid";
 import { AiSummary } from "./_components/dashboard/ai-summary";
 import { HrDashboard } from "./_components/dashboard/hr-dashboard";
+import { FinancierDashboard } from "./_components/dashboard/financier-dashboard";
 import {
   projectNotTestByFirm,
   financeEntryNotTestByFirm,
@@ -155,6 +156,10 @@ export default async function AdminV2Dashboard({
   // Наприклад shymilo93 на Metrum Group → HR; на Metrum Studio → SUPER_ADMIN (нормальний дашборд).
   if (activeRole === "HR") {
     return <HrDashboard firstName={firstName} today={today} firmId={firmId} />;
+  }
+  // FINANCIER має окремий дашборд фокусом на постачальниках/боргах/foreman queue.
+  if (activeRole === "FINANCIER") {
+    return <FinancierDashboard firstName={firstName} today={today} firmId={firmId} />;
   }
   const activePeriod = (sp.period || "month") as PeriodId;
 

@@ -124,9 +124,13 @@ export async function getProjectAccessContext(
   const isOthersPersonalInbox =
     !!project.personalInboxUserId && project.personalInboxUserId !== userId;
   // Internal projects are accessible to all non-CLIENT staff, EXCEPT when
-  // it's a personal Inbox belonging to someone else.
+  // it's a personal Inbox belonging to someone else. FINANCIER is
+  // membership-only — they do NOT get the broad "internal staff" pass.
   const isInternalAccess =
-    project.isInternal && role !== "CLIENT" && !isOthersPersonalInbox;
+    project.isInternal &&
+    role !== "CLIENT" &&
+    role !== "FINANCIER" &&
+    !isOthersPersonalInbox;
 
   const effective = member
     ? resolveMemberPermissions(member.roleInProject, member.permissions)

@@ -38,14 +38,16 @@ export type NavItem = {
   };
 };
 
-// Хто бачить фінансові пункти меню. Має збігатися з FINANCE_ROLES у auth-utils.
-// Правило: цифри бачить ТІЛЬКИ SUPER_ADMIN.
+// Хто бачить фінансові пункти меню (cashflow, бюджети, strategic, reports).
+// Збігається з FINANCE_ROLES у auth-utils. Правило: ЗП/cashflow/budgets бачить
+// ТІЛЬКИ SUPER_ADMIN.
 const FINANCE_VIEW_ROLES = ["SUPER_ADMIN"] as const;
-// Чергу звітів виконробів (суми витрат) — теж лише SUPER_ADMIN.
-const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN"] as const;
-// Виняток для постачальників: MANAGER веде облік постачальників разом з Адміном
-// (рішення власника 2026-05-11). Решта ролей все ще не бачать.
-const SUPPLIERS_ACCESS_ROLES = ["SUPER_ADMIN", "MANAGER"] as const;
+// Чергу звітів виконробів — SUPER_ADMIN + FINANCIER (виступає як проджект-менеджер
+// по фінансовій частині, approve породжує FinanceEntry). 2026-05-21.
+const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN", "FINANCIER"] as const;
+// Облік постачальників (Invoice/SupplierPayment): MANAGER + FINANCIER + SUPER_ADMIN.
+// Збігається з SUPPLIER_LEDGER_ROLES у auth-utils. 2026-05-21.
+const SUPPLIERS_ACCESS_ROLES = ["SUPER_ADMIN", "MANAGER", "FINANCIER"] as const;
 // Manager-only analytics overlays на проєктному списку (огляд по проєктах).
 const PROJECTS_MANAGER_ROLES = ["SUPER_ADMIN", "MANAGER"] as const;
 
