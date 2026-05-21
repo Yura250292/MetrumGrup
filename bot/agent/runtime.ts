@@ -36,6 +36,17 @@ export type AgentInput = {
   prefix?: string;
 };
 
+/**
+ * Per-session lock: один runAgent у польоті на (telegramUserId,chatId).
+ * Інакше якщо юзер швидко тицяє кілька кнопок підряд — паралельні рани
+ * читають session history одне одного без assistant-message (ще не
+ * персистована), AI плутається і відповідь приходить "із зсувом".
+ */
+const activeAgents = new Set<string>();
+function lockKey(ctx: BotContext): string {
+  return `${ctx.from?.id ?? 0}:${ctx.chat?.id ?? 0}`;
+}
+
 function toGeminiTools(role: Role | null, scope: LoadedSession['scope']) {
   const tools = getToolsForRole(role, scope);
   if (tools.length === 0) return undefined;
@@ -245,9 +256,17 @@ export async function runAgent(
   const userText = [input.prefix, input.text].filter(Boolean).join('\n\n').trim();
   if (!userText) return;
 
+  const key = lockKey(ctx);
+  if (activeAgents.has(key)) {
+    await ctx.reply('⏳ Зачекай — ще обробляю попередній запит…');
+    return;
+  }
+  activeAgents.add(key);
+
   try {
     consumeGlobal(BigInt(ctx.from.id));
   } catch (err) {
+    activeAgents.delete(key);
     if (err instanceof RateLimitError) {
       await ctx.reply(err.userMessage);
       return;
@@ -255,109 +274,146 @@ export async function runAgent(
     throw err;
   }
 
-  const loaded = await loadOrCreateSession(ctx);
-
-  if (!loaded.user || !loaded.role) {
-    await ctx.reply(
-      '🔗 Спочатку прив\'яжіть обліковий запис у Metrum. Згенеруйте посилання в профілі та натисніть /start TOKEN.',
-    );
-    return;
-  }
-
-  await persistMessage(loaded.session.id, BotChatRole.USER, { content: userText });
-
-  const processing = await ctx.reply('⏳ Думаю…');
-  const editor = new StreamingEditor(ctx, processing.message_id);
-
-  const systemInstruction = composeSystemPrompt({
-    user: loaded.user,
-    role: loaded.role,
-    firmId: loaded.firmId,
-    scope: loaded.scope,
-    now: new Date(),
-  });
-
-  const tools = toGeminiTools(loaded.role, loaded.scope);
-  const history = buildHistoryContent(loaded);
-  let currentUserParts: Part[] = [{ text: userText }];
-
   try {
-    let toolCallCount = 0;
-    let finalText = '';
+    const loaded = await loadOrCreateSession(ctx);
 
-    while (toolCallCount <= MAX_TOOL_CALLS_PER_TURN) {
-      const { text, functionCalls } = await streamWithFallback(
-        systemInstruction,
-        history,
-        currentUserParts,
-        tools,
-        editor,
+    if (!loaded.user || !loaded.role) {
+      await ctx.reply(
+        '🔗 Спочатку прив\'яжіть обліковий запис у Metrum. Згенеруйте посилання в профілі та натисніть /start TOKEN.',
       );
+      return;
+    }
 
-      if (text) finalText = text;
+    await persistMessage(loaded.session.id, BotChatRole.USER, { content: userText });
 
-      if (functionCalls.length === 0) {
-        await editor.finalize(finalText || '✅');
-        if (finalText) {
-          await persistMessage(loaded.session.id, BotChatRole.ASSISTANT, {
-            content: finalText,
+    const processing = await ctx.reply('⏳ Думаю…');
+    const editor = new StreamingEditor(ctx, processing.message_id);
+
+    const systemInstruction = composeSystemPrompt({
+      user: loaded.user,
+      role: loaded.role,
+      firmId: loaded.firmId,
+      scope: loaded.scope,
+      now: new Date(),
+    });
+
+    const tools = toGeminiTools(loaded.role, loaded.scope);
+    const history = buildHistoryContent(loaded);
+    let currentUserParts: Part[] = [{ text: userText }];
+
+    try {
+      let toolCallCount = 0;
+      let finalText = '';
+
+      while (toolCallCount <= MAX_TOOL_CALLS_PER_TURN) {
+        const { text, functionCalls } = await streamWithFallback(
+          systemInstruction,
+          history,
+          currentUserParts,
+          tools,
+          editor,
+        );
+
+        if (text) finalText = text;
+
+        if (functionCalls.length === 0) {
+          await editor.finalize(finalText || '✅');
+          if (finalText) {
+            await persistMessage(loaded.session.id, BotChatRole.ASSISTANT, {
+              content: finalText,
+            });
+          }
+          await attachMenuButton(ctx, processing.message_id);
+          return;
+        }
+
+        if (toolCallCount + functionCalls.length > MAX_TOOL_CALLS_PER_TURN) {
+          await editor.finalize(
+            (finalText ? finalText + '\n\n' : '') +
+              '⚠️ Досягнуто ліміту дій для одного запиту. Уточни питання — і я продовжу.',
+          );
+          await attachMenuButton(ctx, processing.message_id);
+          return;
+        }
+
+        history.push({
+          role: 'model',
+          parts: [
+            ...(finalText ? [{ text: finalText } as Part] : []),
+            ...functionCalls.map((fc) => ({ functionCall: fc }) as Part),
+          ],
+        });
+
+        const responseParts: Part[] = [];
+        for (const call of functionCalls) {
+          toolCallCount += 1;
+          const args = (call.args as Record<string, unknown>) ?? {};
+          const exec = await executeTool(call.name, args, loaded, ctx);
+          await persistMessage(loaded.session.id, BotChatRole.TOOL, {
+            toolName: call.name,
+            toolArgs: args,
+            toolResult: exec,
+            errored: !exec.ok,
+          });
+          responseParts.push({
+            functionResponse: {
+              name: call.name,
+              response: exec as unknown as object,
+            },
           });
         }
-        return;
+
+        currentUserParts = responseParts;
+        finalText = '';
       }
 
-      if (toolCallCount + functionCalls.length > MAX_TOOL_CALLS_PER_TURN) {
-        await editor.finalize(
-          (finalText ? finalText + '\n\n' : '') +
-            '⚠️ Досягнуто ліміту дій для одного запиту. Уточни питання — і я продовжу.',
-        );
-        return;
+      await editor.finalize(
+        '⚠️ Забагато tool-викликів. Уточни запит, і я повторю.',
+      );
+      await attachMenuButton(ctx, processing.message_id);
+    } catch (err) {
+      const userMsg =
+        err instanceof AgentError
+          ? err.userMessage
+          : '❌ Сталася помилка при обробці запиту. Спробуйте /menu.';
+      try {
+        await editor.finalize(userMsg);
+      } catch {
+        await ctx.reply(userMsg);
       }
-
-      history.push({
-        role: 'model',
-        parts: [
-          ...(finalText ? [{ text: finalText } as Part] : []),
-          ...functionCalls.map((fc) => ({ functionCall: fc }) as Part),
-        ],
-      });
-
-      const responseParts: Part[] = [];
-      for (const call of functionCalls) {
-        toolCallCount += 1;
-        const args = (call.args as Record<string, unknown>) ?? {};
-        const exec = await executeTool(call.name, args, loaded, ctx);
-        await persistMessage(loaded.session.id, BotChatRole.TOOL, {
-          toolName: call.name,
-          toolArgs: args,
-          toolResult: exec,
-          errored: !exec.ok,
-        });
-        responseParts.push({
-          functionResponse: {
-            name: call.name,
-            response: exec as unknown as object,
-          },
-        });
-      }
-
-      currentUserParts = responseParts;
-      finalText = '';
+      await attachMenuButton(ctx, processing.message_id);
+      console.error('[bot-agent] runAgent error:', err);
     }
+  } finally {
+    activeAgents.delete(key);
+  }
+}
 
-    await editor.finalize(
-      '⚠️ Забагато tool-викликів. Уточни запит, і я повторю.',
+/**
+ * Додає inline-кнопку "📋 Меню" під фінальним AI-повідомленням, щоб юзер
+ * міг повернутись назад без /menu вручну. Помилки тихо ігноруємо — якщо
+ * Telegram повернув "message can't be edited" (надто старе чи без тексту),
+ * не критично.
+ */
+async function attachMenuButton(
+  ctx: BotContext,
+  messageId: number,
+): Promise<void> {
+  try {
+    await ctx.telegram.editMessageReplyMarkup(
+      ctx.chat!.id,
+      messageId,
+      undefined,
+      {
+        inline_keyboard: [
+          [{ text: '📋 Меню', callback_data: 'back_to_menu' }],
+        ],
+      },
     );
   } catch (err) {
-    const userMsg =
-      err instanceof AgentError
-        ? err.userMessage
-        : '❌ Сталася помилка при обробці запиту. Спробуйте /menu.';
-    try {
-      await editor.finalize(userMsg);
-    } catch {
-      await ctx.reply(userMsg);
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!msg.includes('message is not modified')) {
+      console.warn('[bot-agent] attachMenuButton:', msg);
     }
-    console.error('[bot-agent] runAgent error:', err);
   }
 }
