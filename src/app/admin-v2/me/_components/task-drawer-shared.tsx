@@ -15,6 +15,7 @@ import {
   Sparkles,
   RefreshCw,
   Trash2,
+  Pencil,
 } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -107,6 +108,20 @@ export function SelfContainedTaskDrawer({
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [saving, setSaving] = useState(false);
   const [timerBusy, setTimerBusy] = useState(false);
+
+  // ── Edit mode ──
+  // Активується клацанням «Редагувати». У цьому стані title/description/due/
+  // priority/hours стають інпутами; натиск Save → PATCH /api/admin/tasks/[id].
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editDueDate, setEditDueDate] = useState(""); // YYYY-MM-DD
+  const [editDueTime, setEditDueTime] = useState("18:00"); // HH:mm
+  const [editPriority, setEditPriority] = useState<
+    "LOW" | "NORMAL" | "HIGH" | "URGENT"
+  >("NORMAL");
+  const [editHours, setEditHours] = useState<string>("");
+  const [editSaveError, setEditSaveError] = useState<string | null>(null);
 
   /** Fetch з 15-секундним таймаутом — без AbortController був ризик
    *  «вічного спінера» якщо мобільна мережа залипла. */
@@ -222,6 +237,93 @@ export function SelfContainedTaskDrawer({
     }
   };
 
+  /** Заповнює edit-state з поточного detail і вмикає редагування. */
+  const startEdit = () => {
+    if (!detail) return;
+    setEditTitle(detail.title);
+    setEditDescription(detail.description ?? "");
+    if (detail.dueDate) {
+      const d = new Date(detail.dueDate);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      setEditDueDate(`${y}-${m}-${day}`);
+      const isMidnightUtc =
+        d.getUTCHours() === 0 &&
+        d.getUTCMinutes() === 0 &&
+        d.getUTCSeconds() === 0;
+      setEditDueTime(
+        isMidnightUtc
+          ? "18:00"
+          : `${String(d.getHours()).padStart(2, "0")}:${String(
+              d.getMinutes(),
+            ).padStart(2, "0")}`,
+      );
+    } else {
+      setEditDueDate("");
+      setEditDueTime("18:00");
+    }
+    setEditPriority(
+      (detail.priority as "LOW" | "NORMAL" | "HIGH" | "URGENT") ?? "NORMAL",
+    );
+    setEditHours(""); // не зберігаємо у DrawerDetail; reset до empty
+    setEditSaveError(null);
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setEditSaveError(null);
+  };
+
+  const saveEdit = async () => {
+    if (!detail) return;
+    if (!editTitle.trim()) {
+      setEditSaveError("Назва не може бути порожньою");
+      return;
+    }
+    setSaving(true);
+    setEditSaveError(null);
+    try {
+      const body: Record<string, unknown> = {
+        title: editTitle.trim(),
+        description: editDescription.trim() || null,
+        priority: editPriority,
+      };
+      if (editDueDate) {
+        const [hStr, mStr] = (editDueTime || "18:00").split(":");
+        const d = new Date(editDueDate);
+        d.setHours(Number(hStr) || 18, Number(mStr) || 0, 0, 0);
+        body.dueDate = d.toISOString();
+      } else {
+        body.dueDate = null;
+      }
+      if (editHours.trim()) {
+        const n = Number(editHours);
+        if (!isNaN(n)) body.estimatedHours = n;
+      } else {
+        body.estimatedHours = null;
+      }
+
+      const res = await fetch(`/api/admin/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error ?? "Не вдалося зберегти");
+      }
+      await load();
+      onUpdate();
+      setEditing(false);
+    } catch (e) {
+      setEditSaveError(e instanceof Error ? e.message : "Помилка збереження");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const setStatus = async (statusId: string) => {
     setSaving(true);
     try {
@@ -319,7 +421,23 @@ export function SelfContainedTaskDrawer({
             Задача
           </h2>
           <div className="flex items-center gap-1">
+            {detail && !editing && (
+              <button
+                onClick={startEdit}
+                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold"
+                style={{
+                  backgroundColor: T.panelElevated,
+                  color: T.accentPrimary,
+                  border: `1px solid ${T.borderSoft}`,
+                }}
+                title="Редагувати поля задачі"
+              >
+                <Pencil size={11} />
+                Редагувати
+              </button>
+            )}
             {detail &&
+              !editing &&
               (currentUserRole === "SUPER_ADMIN" ||
                 detail.createdById === currentUserId) && (
                 <button
@@ -387,12 +505,27 @@ export function SelfContainedTaskDrawer({
           </div>
         ) : (
           <div className="p-5 flex flex-col gap-5">
-            {/* Title + project link */}
+            {/* Title + project link (або редагований title) */}
             <div>
-              <h3 className="text-lg font-bold" style={{ color: T.textPrimary }}>
-                {detail.title}
-              </h3>
-              {detail.project &&
+              {editing ? (
+                <input
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Назва задачі"
+                  className="w-full rounded-lg px-3 py-2 text-base font-bold outline-none"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                />
+              ) : (
+                <h3 className="text-lg font-bold" style={{ color: T.textPrimary }}>
+                  {detail.title}
+                </h3>
+              )}
+              {!editing &&
+                detail.project &&
                 // Personal Inbox — це бакет, не проєкт; ховаємо link.
                 !(
                   detail.project.personalInboxUserId &&
@@ -409,33 +542,129 @@ export function SelfContainedTaskDrawer({
                 )}
             </div>
 
-            {/* Compact meta-row: дедлайн + пріоритет — те, що користувач
-                бачив у формі створення. Статус показуємо нижче окремою
-                секцією бо там бувають довгі назви. */}
-            <div className="flex flex-wrap items-center gap-2 text-[11px]">
-              {detail.dueDate && (
+            {/* Compact meta-row: дедлайн + пріоритет.
+                У edit-режимі замінюємо на повноцінні інпути. */}
+            {editing ? (
+              <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1">
+                  <span
+                    className="text-[10px] font-bold uppercase tracking-wider"
+                    style={{ color: T.textMuted }}
+                  >
+                    Дедлайн
+                  </span>
+                  <div className="grid grid-cols-[1fr_auto] gap-2">
+                    <input
+                      type="date"
+                      value={editDueDate}
+                      onChange={(e) => setEditDueDate(e.target.value)}
+                      className="rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    />
+                    <select
+                      value={editDueTime}
+                      onChange={(e) => setEditDueTime(e.target.value)}
+                      className="rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    >
+                      {WORKING_HOUR_SLOTS_DRAWER.map((slot) => (
+                        <option key={slot} value={slot}>
+                          {slot}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: T.textMuted }}
+                    >
+                      Пріоритет
+                    </span>
+                    <select
+                      value={editPriority}
+                      onChange={(e) =>
+                        setEditPriority(
+                          e.target.value as
+                            | "LOW"
+                            | "NORMAL"
+                            | "HIGH"
+                            | "URGENT",
+                        )
+                      }
+                      className="rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    >
+                      <option value="LOW">Низький</option>
+                      <option value="NORMAL">Нормальний</option>
+                      <option value="HIGH">Високий</option>
+                      <option value="URGENT">Терміновий</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span
+                      className="text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: T.textMuted }}
+                    >
+                      Оцінка, год
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={editHours}
+                      onChange={(e) => setEditHours(e.target.value)}
+                      placeholder="—"
+                      className="rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                {detail.dueDate && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
+                    style={{
+                      backgroundColor: T.panelElevated,
+                      color: T.textSecondary,
+                    }}
+                    title="Дедлайн"
+                  >
+                    📅 {formatDeadline(detail.dueDate)}
+                  </span>
+                )}
                 <span
                   className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
                   style={{
-                    backgroundColor: T.panelElevated,
-                    color: T.textSecondary,
+                    backgroundColor: priorityBg(detail.priority),
+                    color: priorityColor(detail.priority),
                   }}
-                  title="Дедлайн"
+                  title="Пріоритет"
                 >
-                  📅 {formatDeadline(detail.dueDate)}
+                  ⚑ {priorityLabel(detail.priority)}
                 </span>
-              )}
-              <span
-                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold"
-                style={{
-                  backgroundColor: priorityBg(detail.priority),
-                  color: priorityColor(detail.priority),
-                }}
-                title="Пріоритет"
-              >
-                ⚑ {priorityLabel(detail.priority)}
-              </span>
-            </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between">
@@ -475,7 +704,21 @@ export function SelfContainedTaskDrawer({
                   {specError}
                 </div>
               )}
-              {detail.description ? (
+              {editing ? (
+                <textarea
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Що саме треба зробити?"
+                  rows={8}
+                  className="rounded-lg px-3 py-2 text-sm outline-none font-mono"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                    minHeight: 180,
+                  }}
+                />
+              ) : detail.description ? (
                 <div
                   className="prose prose-invert prose-sm max-w-none rounded-lg p-3"
                   style={{
@@ -726,6 +969,49 @@ export function SelfContainedTaskDrawer({
               </details>
             )}
 
+            {/* Edit Save/Cancel bar — sticky-bottom при редагуванні */}
+            {editing && (
+              <div
+                className="sticky bottom-0 flex items-center justify-end gap-2 -mx-5 px-5 py-3 mt-1"
+                style={{
+                  backgroundColor: T.panel,
+                  borderTop: `1px solid ${T.borderSoft}`,
+                }}
+              >
+                {editSaveError && (
+                  <span
+                    className="mr-auto text-[11px] font-semibold"
+                    style={{ color: T.danger }}
+                  >
+                    {editSaveError}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  disabled={saving}
+                  className="rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                  style={{
+                    backgroundColor: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  Скасувати
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveEdit()}
+                  disabled={saving || !editTitle.trim()}
+                  className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50"
+                  style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Зберегти
+                </button>
+              </div>
+            )}
+
             {/* Comments */}
             <CommentThread entityType="TASK" entityId={taskId} />
           </div>
@@ -784,6 +1070,16 @@ function DepRow({
     </li>
   );
 }
+
+/** 09:00..18:00 з кроком 30 хв — пресет для edit-режиму. */
+const WORKING_HOUR_SLOTS_DRAWER: string[] = (() => {
+  const slots: string[] = [];
+  for (let h = 9; h <= 18; h++) {
+    slots.push(`${String(h).padStart(2, "0")}:00`);
+    if (h < 18) slots.push(`${String(h).padStart(2, "0")}:30`);
+  }
+  return slots;
+})();
 
 /** "21 трав, 18:00" — компактний формат дедлайну для меta-row. */
 function formatDeadline(iso: string): string {
