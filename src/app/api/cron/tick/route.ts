@@ -4,6 +4,7 @@ import { processPending as processWebhooks } from "@/lib/webhooks/deliver";
 import { prisma } from "@/lib/prisma";
 import { dispatchEvent } from "@/lib/automations/engine";
 import { notifyFinanceApprovers } from "@/lib/financing/notify-approval";
+import { fireTaskReminders } from "@/lib/tasks/reminders";
 
 /**
  * Vercel cron endpoint — fires every minute (configured in vercel.json).
@@ -46,6 +47,12 @@ export async function GET(request: NextRequest) {
     out.financeRemindersSent = await fireFinanceReminders();
   } catch (err) {
     out.financeRemindersError = String(err);
+  }
+
+  try {
+    out.taskRemindersSent = await fireTaskReminders();
+  } catch (err) {
+    out.taskRemindersError = String(err);
   }
 
   return NextResponse.json({ ok: true, ...out });

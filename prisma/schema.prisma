@@ -2113,6 +2113,7 @@ model Task {
   incomingDeps       TaskDependency[]      @relation("TaskDepSuccessor")
   timeLogs           TimeLog[]
   attachments        TaskAttachment[]
+  reminders          TaskReminder[]
 
   @@index([projectId, stageId, isArchived])
   @@index([projectId, statusId])
@@ -2120,6 +2121,32 @@ model Task {
   @@index([dueDate])
   @@index([createdById])
   @@map("tasks")
+}
+
+/// Нагадування про дедлайн задачі. fireAt — ABS момент коли cron має
+/// відправити нотифікацію виконавцям. firedAt != null → вже відправлено
+/// (для idempotency у cron loop). kind/value збережено для UI редагування
+/// (наприклад, «70% від терміну» зберігаємо як PERCENT/70).
+model TaskReminder {
+  id        String              @id @default(cuid())
+  taskId    String
+  kind      TaskReminderKind    @default(PERCENT)
+  /// Для PERCENT — частка тривалості (1..100). Для BEFORE_HOURS — години.
+  value     Int
+  fireAt    DateTime
+  firedAt   DateTime?
+  createdAt DateTime            @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([fireAt, firedAt])
+  @@index([taskId])
+  @@map("task_reminders")
+}
+
+enum TaskReminderKind {
+  PERCENT
+  BEFORE_HOURS
 }
 
 /// Вкладення до задачі (Word/PDF/Excel/картинка тощо). Зберігається у R2,

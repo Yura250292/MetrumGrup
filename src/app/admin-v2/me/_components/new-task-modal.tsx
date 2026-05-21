@@ -135,6 +135,10 @@ export function NewTaskModal({
   const [priority, setPriority] = useState<TaskPriority>("NORMAL");
   const [estimatedHours, setEstimatedHours] = useState("");
 
+  // ── Reminders ── (поки що: один preset на задачу; multiple — пізніше)
+  type ReminderPreset = "none" | "p50" | "p75" | "h24" | "h1";
+  const [reminder, setReminder] = useState<ReminderPreset>("p75");
+
   // ── AI ──
   const [generatingSpec, setGeneratingSpec] = useState(false);
   const [specJson, setSpecJson] = useState<AiSpec | null>(null);
@@ -408,6 +412,22 @@ export function NewTaskModal({
         return d.toISOString();
       })();
 
+      // Reminder → структурований spec для бекенда. Бекенд порахує fireAt
+      // на основі createdAt + dueDate.
+      const reminderSpec: {
+        kind: "PERCENT" | "BEFORE_HOURS";
+        value: number;
+      } | null =
+        reminder === "none"
+          ? null
+          : reminder === "p50"
+            ? { kind: "PERCENT", value: 50 }
+            : reminder === "p75"
+              ? { kind: "PERCENT", value: 75 }
+              : reminder === "h24"
+                ? { kind: "BEFORE_HOURS", value: 24 }
+                : { kind: "BEFORE_HOURS", value: 1 };
+
       const body: Record<string, unknown> = {
         title: title.trim(),
         description: description.trim(),
@@ -416,6 +436,7 @@ export function NewTaskModal({
         estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
         assignees: payload.length > 0 ? payload : undefined,
         checklist: checklist && checklist.length > 0 ? checklist : undefined,
+        reminder: reminderSpec,
       };
       if (projectId) {
         body.projectId = projectId;
@@ -556,6 +577,40 @@ export function NewTaskModal({
                 style={inputStyle}
               />
             </RequiredField>
+
+            {/* ── Reminder (optional, default 75% часу) ── */}
+            <Field label="Нагадати про дедлайн">
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    { id: "p50", label: "50% часу" },
+                    { id: "p75", label: "75% часу" },
+                    { id: "h24", label: "за 1 день" },
+                    { id: "h1", label: "за 1 годину" },
+                    { id: "none", label: "Не треба" },
+                  ] as { id: ReminderPreset; label: string }[]
+                ).map((p) => {
+                  const active = reminder === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setReminder(p.id)}
+                      className="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
+                      style={{
+                        backgroundColor: active
+                          ? T.accentPrimarySoft
+                          : T.panelElevated,
+                        color: active ? T.accentPrimary : T.textMuted,
+                        border: `1px solid ${active ? T.accentPrimary + "40" : T.borderSoft}`,
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
 
             {/* ── Assignees (optional) ── */}
             <Field label="Виконавець (необовʼязково)">

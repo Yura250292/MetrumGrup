@@ -9,6 +9,7 @@ import {
   type AssigneeInput,
 } from "@/lib/tasks/service";
 import { getOrCreatePersonalInbox } from "@/lib/tasks/personal-inbox";
+import { computeFireAt } from "@/lib/tasks/reminders";
 
 /**
  * Створення задачі БЕЗ обовʼязкового проєкту в URL.
@@ -133,6 +134,47 @@ export async function POST(request: NextRequest) {
           );
         } catch (err) {
           console.error("[tasks POST] checklist item failed:", err);
+        }
+      }
+    }
+
+    // Reminder — опційний. Якщо передано — створимо TaskReminder з обчисленим
+    // fireAt. Cron-tick підбере його коли наступить час.
+    if (body.reminder && typeof body.reminder === "object") {
+      const r = body.reminder as { kind?: string; value?: number };
+      if (
+        (r.kind === "PERCENT" || r.kind === "BEFORE_HOURS") &&
+        typeof r.value === "number" &&
+        r.value > 0
+      ) {
+        try {
+          const { prisma } = await import("@/lib/prisma");
+          const created = await prisma.task.findUnique({
+            where: { id: task.id },
+            select: { createdAt: true, dueDate: true },
+          });
+          if (created?.dueDate) {
+            const fireAt = computeFireAt(
+              r.kind,
+              r.value,
+              created.createdAt,
+              created.dueDate,
+            );
+            // Якщо момент уже в минулому (наприклад дедлайн через 30 хв,
+            // а юзер вибрав «за 1 годину») — пропускаємо тихо.
+            if (fireAt.getTime() > Date.now()) {
+              await prisma.taskReminder.create({
+                data: {
+                  taskId: task.id,
+                  kind: r.kind,
+                  value: r.value,
+                  fireAt,
+                },
+              });
+            }
+          }
+        } catch (err) {
+          console.error("[tasks POST] reminder create failed:", err);
         }
       }
     }
