@@ -514,6 +514,7 @@ export function Estimator({ firmId }: Props) {
             edgeLengths={{ N: room.w, S: room.w, E: room.h, W: room.h }}
             ceilingHeight={room.ceilingHeight}
             existing={sheet.opening}
+            roomOpenings={state.plan.openings.filter((o) => o.roomId === room.id)}
             prefill={sheet.prefill}
             onClose={() => {
               // Якщо це додавання прорізу прямо з канви — повертаємо у канву,

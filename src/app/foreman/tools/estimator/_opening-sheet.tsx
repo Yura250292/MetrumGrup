@@ -16,6 +16,8 @@ interface Props {
   edgeLengths: Record<Side, number>;
   ceilingHeight: number;
   existing?: Opening;
+  /** Інші прорізи в цій кімнаті (без поточного редагованого) — для overlap-check. */
+  roomOpenings?: Opening[];
   /** Якщо передано — використовується в режимі add як початкова стіна/offset. */
   prefill?: { side: Side; offset: number };
   onClose: () => void;
@@ -40,6 +42,7 @@ export function OpeningSheet({
   edgeLengths,
   ceilingHeight,
   existing,
+  roomOpenings,
   prefill,
   onClose,
   onConfirm,
@@ -77,6 +80,45 @@ export function OpeningSheet({
   const w = parseNum(width);
   const h = parseNum(height);
   const edgeLen = edgeLengths[side];
+
+  // Інші прорізи цієї кімнати (виключаючи поточний редагований).
+  const otherOpenings = useMemo(
+    () => (roomOpenings ?? []).filter((x) => x.id !== existing?.id),
+    [roomOpenings, existing?.id],
+  );
+
+  /** Скільки прорізів на кожній стіні і скільки м вони зайняли. */
+  const sideStats = useMemo(() => {
+    const stats: Record<Side, { count: number; usedM: number }> = {
+      N: { count: 0, usedM: 0 },
+      E: { count: 0, usedM: 0 },
+      S: { count: 0, usedM: 0 },
+      W: { count: 0, usedM: 0 },
+    };
+    for (const x of otherOpenings) {
+      stats[x.side].count += 1;
+      stats[x.side].usedM += x.width;
+    }
+    return stats;
+  }, [otherOpenings]);
+
+  /** Чи перекривається кандидат з якимось існуючим прорізом на цій же стіні. */
+  const overlapsExistingOpening = useMemo(() => {
+    if (w <= 0) return null;
+    for (const x of otherOpenings) {
+      if (x.side !== side) continue;
+      const a = Math.max(o, x.offset);
+      const b = Math.min(o + w, x.offset + x.width);
+      if (b - a > 1e-6) {
+        return {
+          type: x.type,
+          offset: x.offset,
+          width: x.width,
+        };
+      }
+    }
+    return null;
+  }, [otherOpenings, side, o, w]);
 
   const validation = useMemo(() => {
     if (w <= 0 || h <= 0) return "Введіть розміри";
@@ -144,27 +186,49 @@ export function OpeningSheet({
         </div>
 
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5">
-            Стіна
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              Стіна
+            </span>
+            {sideStats[side].count > 0 && (
+              <span className="text-[10px] text-amber-300/80 tabular-nums">
+                на цій стіні вже {sideStats[side].count} проріз
+                {sideStats[side].count === 1 ? "" : sideStats[side].count < 5 ? "и" : "ів"}
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-4 gap-1.5">
-            {(["N", "E", "S", "W"] as Side[]).map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setSide(s)}
-                className={`min-h-[44px] rounded-xl text-xs font-semibold transition border active:scale-95 ${
-                  side === s
-                    ? "bg-violet-500/20 border-violet-500/50 text-violet-100"
-                    : "bg-white/[0.03] border-white/10 text-zinc-300"
-                }`}
-              >
-                {SIDE_LABELS[s]}
-                <div className="text-[9px] opacity-70 tabular-nums">
-                  {formatNum(edgeLengths[s])} м
-                </div>
-              </button>
-            ))}
+            {(["N", "E", "S", "W"] as Side[]).map((s) => {
+              const stat = sideStats[s];
+              const free = Math.max(0, edgeLengths[s] - stat.usedM);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSide(s)}
+                  className={`relative min-h-[52px] rounded-xl text-xs font-semibold transition border active:scale-95 ${
+                    side === s
+                      ? "bg-violet-500/20 border-violet-500/50 text-violet-100"
+                      : "bg-white/[0.03] border-white/10 text-zinc-300"
+                  }`}
+                >
+                  {stat.count > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-amber-500/30 border border-amber-500/50 text-amber-100 text-[9px] font-bold flex items-center justify-center tabular-nums">
+                      {stat.count}
+                    </span>
+                  )}
+                  {SIDE_LABELS[s]}
+                  <div className="text-[9px] opacity-70 tabular-nums leading-tight mt-0.5">
+                    {formatNum(edgeLengths[s])} м
+                    {stat.count > 0 && (
+                      <div className="text-emerald-300/80">
+                        вільно {formatNum(free)}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -239,6 +303,15 @@ export function OpeningSheet({
         {validation && (
           <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
             {validation}
+          </div>
+        )}
+
+        {!validation && overlapsExistingOpening && (
+          <div className="text-[11px] text-amber-200 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+            ⚠️ Перекривається з існуючим прорізом
+            {overlapsExistingOpening.type === "door" ? " (двері" : " (вікно"} {formatNum(
+              overlapsExistingOpening.offset,
+            )}–{formatNum(overlapsExistingOpening.offset + overlapsExistingOpening.width)} м). Площа стіни порахується завищено — змістіть зсув.
           </div>
         )}
 

@@ -312,29 +312,43 @@ export function RoomSheet({
               </button>
             </div>
             {openings && openings.length > 0 ? (
-              <ul className="space-y-1.5">
-                {openings.map((o) => {
-                  const Icon = o.type === "door" ? DoorOpen : Square;
-                  return (
-                    <li key={o.id}>
-                      <button
-                        type="button"
-                        onClick={() => onEditOpening?.(o)}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10 active:scale-[0.99] transition text-left"
-                      >
-                        <Icon size={14} className="text-violet-300 shrink-0" />
-                        <span className="flex-1 text-xs text-zinc-200">
-                          {o.type === "door" ? "Двері" : "Вікно"}
-                          <span className="text-zinc-500 ml-1.5">
-                            · {SIDE_LABELS[o.side].toLowerCase()} ·{" "}
-                            {formatNum(o.width)}×{formatNum(o.height)} м
-                          </span>
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+              <>
+                <div className="text-[10px] text-zinc-500 mb-1">
+                  Всього: {openings.length} · можна додавати ще
+                </div>
+                <ul className="space-y-1.5">
+                  {[...openings]
+                    .sort((a, b) => {
+                      const sideOrder: Record<Side, number> = { N: 0, E: 1, S: 2, W: 3 };
+                      if (sideOrder[a.side] !== sideOrder[b.side]) {
+                        return sideOrder[a.side] - sideOrder[b.side];
+                      }
+                      return a.offset - b.offset;
+                    })
+                    .map((o) => {
+                      const Icon = o.type === "door" ? DoorOpen : Square;
+                      return (
+                        <li key={o.id}>
+                          <button
+                            type="button"
+                            onClick={() => onEditOpening?.(o)}
+                            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.03] border border-white/10 active:scale-[0.99] transition text-left"
+                          >
+                            <Icon size={14} className="text-violet-300 shrink-0" />
+                            <span className="flex-1 text-xs text-zinc-200">
+                              {o.type === "door" ? "Двері" : "Вікно"}
+                              <span className="text-zinc-500 ml-1.5">
+                                · {SIDE_LABELS[o.side].toLowerCase()} · зсув{" "}
+                                {formatNum(o.offset)} · {formatNum(o.width)}×
+                                {formatNum(o.height)} м
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </>
             ) : (
               <p className="text-[11px] text-zinc-500">
                 Без прорізів. Стіни рахуються повністю.
