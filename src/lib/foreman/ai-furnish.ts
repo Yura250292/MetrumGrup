@@ -88,41 +88,64 @@ export interface FurnishResult {
  * System-prompt для ОДНІЄЇ кімнати — Claude класифікує тип і повертає меблі.
  * Окремий виклик на кімнату дає кращу якість і не перевищує токени.
  */
-const SYSTEM_PROMPT_ROOM = `Ти український дизайнер інтер'єру. Тобі дають ОДНУ кімнату плану з розмірами і прорізами. Класифікуй її тип і ОБОВ'ЯЗКОВО запропонуй меблювання.
+const SYSTEM_PROMPT_ROOM = `Ти український дизайнер інтер'єру з 10+ роками досвіду. Створюєш ПОВНОЦІННЕ функціональне меблювання для одного приміщення. Це не простий "примітивний" список — це реалістичний план як для архітектурного проєкту.
 
-Класифікації: kitchen, bedroom, bathroom, livingroom, corridor, hallway, office, diningroom, balcony, storage, other.
+Класифікація (за назвою кімнати, у нижньому регістрі):
+- "Кухня" → kitchen (плита + мийка + холодильник + посудомийка + 2 секції кух.шафи + обідня група + декор)
+- "Спальня" → bedroom (ліжко + 2 тумби з боків + шафа-купе + туалетний столик + крісло + килим + декор)
+- "Ванна"/"Санвузол" → bathroom (ванна/душ + унітаз + раковина + пралка + полиця для рушників)
+- "Вітальня"/"Зала" → livingroom (диван + 2 крісла + журн.стіл + ТВ + ТВ-стійка + 2 рослини + килим + книжкова полиця)
+- "Кабінет"/"Office" → office (робочий стіл + крісло + книжкова полиця + тумба + декор)
+- "Їдальня" → diningroom (великий стіл + 4-6 стільців + сервант + декор)
+- "Коридор" → corridor (мінімум або нічого)
+- "Передпокій" → hallway (шафа для одягу + полиця для взуття + дзеркало-полиця)
+- Незрозуміла назва (наприклад "Кімната 1"): якщо площа > 12 м² → livingroom; 8-12 м² → bedroom; < 8 м² → other
 
-Класифікація ЗА НАЗВОЮ (пріоритет):
-- "Кухня"/"Kitchen" → kitchen (плита, мийка, холодильник, кух.шафа, стіл)
-- "Спальня"/"Bedroom" → bedroom (ліжко, шафа, тумба)
-- "Ванна"/"Санвузол"/"Туалет" → bathroom (унітаз, раковина, ванна або душ)
-- "Вітальня"/"Зала"/"Гостинна" → livingroom (диван, тв, журн.стіл, крісло)
-- "Кабінет"/"Office" → office (стіл, крісло, полиця)
-- "Їдальня" → diningroom (стіл, стільці)
-- "Коридор" → corridor (нічого або тумба)
-- "Передпокій" → hallway (тумба)
-- Якщо назва незрозуміла ("Кімната 1") АЛЕ площа > 8 м² → класифікуй як livingroom і додай меблі вітальні.
+Доступні типи (англ, нижній регістр): bed, sofa, armchair, table, chair, fridge, stove, oven, sink, toilet, shower, bathtub, wardrobe, tv, desk, shelf, kitchen-cabinet, washer, dishwasher, plant, rug.
 
-Доступні типи меблів (у нижньому регістрі, англ): bed, sofa, armchair, table, chair, fridge, stove, oven, sink, toilet, shower, bathtub, wardrobe, tv, desk, shelf, kitchen-cabinet, washer, dishwasher, plant, rug.
+КООРДИНАТИ:
+- Метри, NW кут кімнати = (0,0), осі x→Схід, y→Південь.
+- x≥0, y≥0, x+w ≤ roomW, y+h ≤ roomH, з margin 0.05-0.1м.
+- НЕ перекривай прорізи (door/window) меблями.
 
-Правила розташування:
-- Координати в метрах, NW кут кімнати = (0,0), осі x→Схід, y→Південь.
-- x≥0, y≥0, x+w ≤ roomW, y+h ≤ roomH.
-- Меблі біля стін з невеликим зазором (margin 0.05-0.1м).
-- Розміри реалістичні: ліжко 1.6×2.0, диван 2.2-2.4 × 0.9, плита 0.6×0.6, унітаз 0.4×0.65, ванна 1.7×0.7, холодильник 0.6×0.65.
+РЕАЛІСТИЧНІ РОЗМІРИ (метри):
+- ліжко двоспальне: 1.6×2.0, односпальне: 0.9×2.0, тумба біля ліжка: 0.4×0.4
+- диван: 2.2-2.6 × 0.85, крісло: 0.8×0.9, журн.стіл: 1.0×0.6
+- обідній стіл 4-місний: 1.2×0.8, 6-місний: 1.6-1.8 × 0.9, стілець: 0.45×0.45
+- плита: 0.6×0.6, холодильник: 0.6×0.65, мийка: 0.6×0.55, посудомийка: 0.6×0.55
+- кух.шафа (нижня): 0.6-2.0 м довжина × 0.6 м глибина
+- унітаз: 0.4×0.65, раковина настінна: 0.6×0.45, ванна: 1.7×0.7, душ-кабіна: 0.9×0.9, пралка: 0.6×0.6
+- шафа-купе: 1.6-2.5 × 0.6, тумба: 0.6×0.4, полиця: 0.8-1.6 × 0.3-0.4
+- тв: 1.2-1.5 × 0.15, тв-стійка: 1.4-1.8 × 0.4
+- килим: 1.8-2.5 × 1.5-2.0 (НЕ більший за 70% площі кімнати)
+- рослина у вазоні: 0.35×0.35
 
-ВАЖЛИВО:
-- ДЛЯ КУХНІ → МУСИШ дати щонайменше 3 предмети: stove, sink, fridge
-- ДЛЯ СПАЛЬНІ → МУСИШ дати ліжко + шафу
-- ДЛЯ САНВУЗЛУ → МУСИШ дати унітаз + раковину
-- ДЛЯ ВІТАЛЬНІ → МУСИШ дати диван
-- Якщо щось не вміщається — зменши розмір, але НЕ повертай порожній furniture[].
+ПРАВИЛА РОЗМІЩЕННЯ (як реальний дизайнер):
+- ТЕХНІКА КУХНІ — у послідовності холодильник → робоча зона → мийка → плита → посудомийка, вздовж однієї стіни. L-форма теж OK.
+- ЛІЖКО — узголів'ям до стіни (короткою стороною), з двох сторін тумби.
+- ДИВАН — навпроти ТВ або під вікном, тумба з ТВ — на протилежній стіні.
+- ОБІДНІЙ СТІЛ — центр кімнати, стільці рівномірно навколо (по 1-2 на кожну довгу сторону, по 1 на коротку).
+- УНІТАЗ — у кутку, БІЛЯ стояка (зазвичай NW кут санвузла).
+- ВАННА — вздовж довшої стіни.
+- КИЛИМ — під дзеркальною групою (диван+крісло+стіл) або під ліжком, частково.
+- РОСЛИНИ — у кутках кімнати, біля вікон.
+
+ОБОВ'ЯЗКОВО (мінімум предметів):
+- kitchen: 6+ (холодильник, мийка, плита, посудомийка, кух.шафа, стіл, +обідні стільці якщо є місце)
+- livingroom: 7+ (диван, 1-2 крісла, журн.стіл, тв, тв-стійка, килим, рослина, полиця)
+- bedroom: 6+ (ліжко, 2 тумби, шафа, туал.столик, крісло, килим)
+- bathroom: 4+ (ванна або душ, унітаз, раковина, пралка)
+- office: 4+ (стіл, крісло, полиця, тумба)
+- diningroom: 5+ (стіл, 4-6 стільців, сервант)
+- hallway: 2+ (шафа, полиця/тумба)
+
+Якщо щось не вміщається — зменши розмір (мінімум 0.3×0.3), але НЕ ігноруй обов'язкові предмети. Краще дати 8 предметів зі скромними розмірами, ніж 3 ідеальних.
 
 Поверни ВИКЛЮЧНО валідний JSON (без markdown):
 {
   "classification": "<class>",
   "furniture": [
-    {"type": "<type>", "label": "<укр.назва>", "x": <n>, "y": <n>, "w": <n>, "h": <n>, "rotation": 0|90|180|270}
+    {"type": "<type>", "label": "<укр.назва_3-15слів>", "x": <n>, "y": <n>, "w": <n>, "h": <n>, "rotation": 0|90|180|270}
   ]
 }
 
@@ -199,54 +222,80 @@ interface BaselineItem {
 
 const BASELINE: Record<RoomClass, BaselineItem[]> = {
   kitchen: [
-    { type: "stove", label: "Плита", w: 0.6, h: 0.6, anchor: "NW" },
-    { type: "sink", label: "Мийка", w: 0.6, h: 0.6, anchor: "N-center" },
-    { type: "fridge", label: "Холодильник", w: 0.65, h: 0.65, anchor: "NE" },
-    { type: "kitchen-cabinet", label: "Кух. шафа", w: 1.8, h: 0.5, anchor: "S-center" },
-    { type: "table", label: "Стіл", w: 1.2, h: 0.8, anchor: "center" },
+    // L-подібна кухня: техніка вздовж N стіни, шафа вздовж W стіни
+    { type: "fridge", label: "Холодильник", w: 0.65, h: 0.65, anchor: "NW" },
+    { type: "kitchen-cabinet", label: "Робоча зона", w: 1.2, h: 0.6, anchor: "N-center" },
+    { type: "sink", label: "Мийка", w: 0.6, h: 0.55, anchor: "NE" },
+    { type: "stove", label: "Плита", w: 0.6, h: 0.6, anchor: "E-center" },
+    { type: "dishwasher", label: "Посудомийка", w: 0.6, h: 0.55, anchor: "SE" },
+    { type: "table", label: "Обідній стіл", w: 1.2, h: 0.9, anchor: "center" },
+    { type: "kitchen-cabinet", label: "Шафа-вітрина", w: 1.6, h: 0.4, anchor: "S-center" },
+    { type: "plant", label: "Рослина", w: 0.35, h: 0.35, anchor: "SW" },
   ],
   bedroom: [
-    { type: "bed", label: "Ліжко", w: 1.6, h: 2.0, anchor: "N-center" },
-    { type: "wardrobe", label: "Шафа", w: 1.5, h: 0.6, anchor: "S-center" },
-    { type: "desk", label: "Стіл", w: 1.0, h: 0.5, anchor: "W-center" },
+    { type: "bed", label: "Двоспальне ліжко", w: 1.6, h: 2.0, anchor: "N-center" },
+    { type: "shelf", label: "Тумба", w: 0.4, h: 0.4, anchor: "NW" },
+    { type: "shelf", label: "Тумба", w: 0.4, h: 0.4, anchor: "NE" },
+    { type: "wardrobe", label: "Шафа-купе", w: 2.0, h: 0.6, anchor: "S-center" },
+    { type: "desk", label: "Туалетний столик", w: 1.0, h: 0.5, anchor: "W-center" },
+    { type: "armchair", label: "Крісло", w: 0.8, h: 0.8, anchor: "SE" },
+    { type: "rug", label: "Килим", w: 2.0, h: 1.6, anchor: "center" },
+    { type: "plant", label: "Рослина", w: 0.35, h: 0.35, anchor: "SW" },
   ],
   bathroom: [
-    { type: "toilet", label: "Унітаз", w: 0.4, h: 0.65, anchor: "NW" },
-    { type: "sink", label: "Раковина", w: 0.6, h: 0.45, anchor: "NE" },
-    { type: "bathtub", label: "Ванна", w: 1.7, h: 0.7, anchor: "S-center" },
-    { type: "shower", label: "Душ", w: 0.9, h: 0.9, anchor: "SW" },
+    { type: "bathtub", label: "Ванна", w: 1.7, h: 0.7, anchor: "N-center" },
+    { type: "toilet", label: "Унітаз", w: 0.4, h: 0.65, anchor: "SW" },
+    { type: "sink", label: "Раковина", w: 0.6, h: 0.45, anchor: "S-center" },
+    { type: "shower", label: "Душ", w: 0.9, h: 0.9, anchor: "NE" },
     { type: "washer", label: "Пралка", w: 0.6, h: 0.6, anchor: "SE" },
+    { type: "shelf", label: "Полиця", w: 0.6, h: 0.25, anchor: "W-center" },
   ],
   livingroom: [
     { type: "sofa", label: "Диван", w: 2.4, h: 0.9, anchor: "S-center" },
-    { type: "tv", label: "Телевізор", w: 1.2, h: 0.2, anchor: "N-center" },
+    { type: "tv", label: "Телевізор", w: 1.4, h: 0.2, anchor: "N-center" },
     { type: "table", label: "Журн. стіл", w: 1.0, h: 0.6, anchor: "center" },
     { type: "armchair", label: "Крісло", w: 0.9, h: 0.9, anchor: "SE" },
-    { type: "shelf", label: "Полиця", w: 1.0, h: 0.4, anchor: "W-center" },
+    { type: "armchair", label: "Крісло", w: 0.9, h: 0.9, anchor: "SW" },
+    { type: "shelf", label: "ТВ-стійка", w: 1.6, h: 0.4, anchor: "N-center" },
+    { type: "shelf", label: "Книжкова полиця", w: 1.0, h: 0.35, anchor: "W-center" },
+    { type: "plant", label: "Велика рослина", w: 0.5, h: 0.5, anchor: "NW" },
+    { type: "plant", label: "Рослина", w: 0.35, h: 0.35, anchor: "NE" },
+    { type: "rug", label: "Килим", w: 2.5, h: 2.0, anchor: "center" },
   ],
   diningroom: [
-    { type: "table", label: "Стіл", w: 1.6, h: 0.9, anchor: "center" },
+    { type: "table", label: "Обідній стіл", w: 1.8, h: 1.0, anchor: "center" },
     { type: "chair", label: "Стілець", w: 0.45, h: 0.45, anchor: "N-center" },
     { type: "chair", label: "Стілець", w: 0.45, h: 0.45, anchor: "S-center" },
-    { type: "shelf", label: "Сервант", w: 1.2, h: 0.5, anchor: "W-center" },
+    { type: "chair", label: "Стілець", w: 0.45, h: 0.45, anchor: "W-center" },
+    { type: "chair", label: "Стілець", w: 0.45, h: 0.45, anchor: "E-center" },
+    { type: "shelf", label: "Сервант", w: 1.4, h: 0.5, anchor: "NW" },
+    { type: "plant", label: "Рослина", w: 0.4, h: 0.4, anchor: "SE" },
   ],
   office: [
-    { type: "desk", label: "Стіл", w: 1.4, h: 0.7, anchor: "N-center" },
-    { type: "chair", label: "Крісло", w: 0.55, h: 0.55, anchor: "center" },
-    { type: "shelf", label: "Полиця", w: 1.0, h: 0.3, anchor: "S-center" },
+    { type: "desk", label: "Робочий стіл", w: 1.6, h: 0.7, anchor: "N-center" },
+    { type: "chair", label: "Офісне крісло", w: 0.6, h: 0.6, anchor: "center" },
+    { type: "shelf", label: "Книжкова полиця", w: 1.4, h: 0.35, anchor: "W-center" },
     { type: "armchair", label: "Крісло", w: 0.9, h: 0.9, anchor: "SE" },
+    { type: "shelf", label: "Тумба", w: 0.6, h: 0.4, anchor: "NE" },
+    { type: "plant", label: "Рослина", w: 0.35, h: 0.35, anchor: "SW" },
   ],
   corridor: [],
   hallway: [
-    { type: "shelf", label: "Тумба", w: 0.6, h: 0.3, anchor: "E-center" },
+    { type: "shelf", label: "Полиця для взуття", w: 0.8, h: 0.3, anchor: "E-center" },
+    { type: "wardrobe", label: "Шафа", w: 0.6, h: 0.5, anchor: "W-center" },
+    { type: "plant", label: "Рослина", w: 0.35, h: 0.35, anchor: "NE" },
   ],
   storage: [
-    { type: "shelf", label: "Стелаж", w: 0.6, h: 0.3, anchor: "E-center" },
-    { type: "shelf", label: "Стелаж", w: 0.6, h: 0.3, anchor: "W-center" },
+    { type: "shelf", label: "Стелаж", w: 0.6, h: 0.35, anchor: "E-center" },
+    { type: "shelf", label: "Стелаж", w: 0.6, h: 0.35, anchor: "W-center" },
+    { type: "shelf", label: "Стелаж", w: 0.6, h: 0.35, anchor: "N-center" },
   ],
   balcony: [
     { type: "chair", label: "Крісло", w: 0.5, h: 0.5, anchor: "SW" },
-    { type: "plant", label: "Рослина", w: 0.4, h: 0.4, anchor: "SE" },
+    { type: "chair", label: "Крісло", w: 0.5, h: 0.5, anchor: "SE" },
+    { type: "table", label: "Столик", w: 0.6, h: 0.6, anchor: "center" },
+    { type: "plant", label: "Рослина", w: 0.4, h: 0.4, anchor: "NE" },
+    { type: "plant", label: "Рослина", w: 0.4, h: 0.4, anchor: "NW" },
   ],
   other: [],
 };
@@ -491,10 +540,27 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  // Паралельно — одна Claude-сесія на кімнату. Якщо якась впаде/таймаутне,
-  // повертаємо для неї порожній набір; інші продовжать працювати.
-  const results = await Promise.allSettled(
-    req.rooms.map((room) => furnishRoom(anthropic, room, req.openings)),
+  // Per-room concurrency cap — Anthropic має ліміт на конкурентні з'єднання
+  // (429 errors при паралельних викликах). Беремо 2 одночасних запитів.
+  const CONCURRENCY = 2;
+  const results: PromiseSettledResult<RoomPromptResult>[] = new Array(
+    req.rooms.length,
+  );
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < req.rooms.length) {
+      const idx = cursor++;
+      const room = req.rooms[idx];
+      try {
+        const v = await furnishRoom(anthropic, room, req.openings);
+        results[idx] = { status: "fulfilled", value: v };
+      } catch (e) {
+        results[idx] = { status: "rejected", reason: e };
+      }
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENCY, req.rooms.length) }, worker),
   );
 
   const rooms: FurnishResult["rooms"] = [];
@@ -502,12 +568,19 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
   for (let i = 0; i < req.rooms.length; i++) {
     const room = req.rooms[i];
     const r = results[i];
-    if (r.status === "fulfilled") {
+    if (r && r.status === "fulfilled") {
       rooms.push({ roomId: room.id, classification: r.value.classification });
       furniture.push(...r.value.furniture);
     } else {
-      // тиха помилка — fallback на "other" без меблів
-      rooms.push({ roomId: room.id, classification: "other" });
+      // тиха помилка — fallback на inferred class + baseline
+      const inferred = inferClassFromName(room.name) ?? "other";
+      if (inferred !== "other" && inferred !== "corridor") {
+        const baseline = applyBaselineLayout(room, inferred);
+        rooms.push({ roomId: room.id, classification: inferred });
+        furniture.push(...baseline);
+      } else {
+        rooms.push({ roomId: room.id, classification: inferred });
+      }
     }
   }
 

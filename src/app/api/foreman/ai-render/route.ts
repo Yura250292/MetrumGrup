@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import * as fal from "@fal-ai/serverless-client";
 import {
   requireForeman,
   forbiddenResponse,
   unauthorizedResponse,
 } from "@/lib/auth-utils";
 import { generateRender } from "@/lib/ai-render/fal-client";
-import { FOREMAN_BUCKET } from "@/lib/foreman/r2";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // fal.ai може займати до 60-120s
@@ -19,44 +18,31 @@ const bodySchema = z.object({
   prompt: z.string().trim().max(500).optional(),
 });
 
-const R2_ACCOUNT_ID = process.env.R2_ACCOUNT_ID || "";
-const R2_ENDPOINT = R2_ACCOUNT_ID
-  ? `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-  : process.env.R2_ENDPOINT;
-
-let _s3: S3Client | null = null;
-function s3(): S3Client {
-  if (!_s3) {
-    _s3 = new S3Client({
-      region: "auto",
-      endpoint: R2_ENDPOINT,
-      forcePathStyle: true,
-      credentials: {
-        accessKeyId: process.env.R2_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "",
-      },
-    });
-  }
-  return _s3;
-}
+fal.config({ credentials: process.env.FAL_KEY });
 
 /**
  * Photoreal 3D рендер плану з меблями (foreman scope, без projectId).
- * Клієнт надсилає PNG snapshot SVG-плану → ми вантажимо в R2 →
- * передаємо публічний URL у fal.ai (FLOOR_PLAN_TO_3D) → повертаємо
- * URL фінального зображення.
+ * Клієнт надсилає PNG snapshot SVG-плану → ми вантажимо напряму в fal.storage →
+ * передаємо URL у fal.ai (FLOOR_PLAN_TO_3D) → повертаємо URL фінального
+ * зображення.
  *
- * Чернетковий режим: результат НЕ зберігається в AiRenderJob БД.
- * Користувач може потім прикріпити до конкретного проєкту окремою дією.
+ * Чернетковий режим: результат НЕ зберігається в AiRenderJob БД. Не залежить
+ * від R2 — пряме використання fal storage (yes works for foreman без проєкту).
  */
 export async function POST(request: NextRequest) {
-  let session;
   try {
-    ({ session } = await requireForeman());
+    await requireForeman();
   } catch (e) {
     const msg = e instanceof Error ? e.message : "";
     if (msg === "Forbidden") return forbiddenResponse();
     return unauthorizedResponse();
+  }
+
+  if (!process.env.FAL_KEY) {
+    return NextResponse.json(
+      { error: "FAL_KEY не налаштований на сервері" },
+      { status: 500 },
+    );
   }
 
   const body = await request.json().catch(() => null);
@@ -73,47 +59,21 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Завантажуємо input у R2 під foreman scope
-  if (!FOREMAN_BUCKET) {
-    return NextResponse.json(
-      { error: "R2 сховище не налаштоване на сервері" },
-      { status: 500 },
-    );
-  }
-  if (!process.env.R2_PUBLIC_BASE_URL) {
-    return NextResponse.json(
-      {
-        error:
-          "R2_PUBLIC_BASE_URL не налаштований — fal.ai потребує публічний URL",
-      },
-      { status: 500 },
-    );
-  }
-
-  const timestamp = Date.now();
-  const inputKey = `foreman/${session.user.id}/ai-renders/${timestamp}-input.png`;
+  // Завантажуємо PNG напряму у fal storage (без R2)
+  let inputUrl: string;
   try {
-    await s3().send(
-      new PutObjectCommand({
-        Bucket: FOREMAN_BUCKET,
-        Key: inputKey,
-        Body: buf,
-        ContentType: "image/png",
-        Metadata: {
-          uploadedBy: session.user.id,
-          source: "foreman-estimator-photoreal",
-        },
-      }),
-    );
+    const file = new File([buf], `foreman-plan-${Date.now()}.png`, {
+      type: "image/png",
+    });
+    inputUrl = await fal.storage.upload(file);
   } catch (e) {
-    console.error("[foreman/ai-render] R2 upload failed", e);
+    console.error("[foreman/ai-render] fal.storage upload failed", e);
     return NextResponse.json(
-      { error: "Помилка завантаження у сховище" },
+      { error: "Не вдалось завантажити зображення в fal.ai" },
       { status: 500 },
     );
   }
 
-  const inputUrl = `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${inputKey}`;
   const userPrompt = parsed.data.prompt?.trim() || "";
 
   const prompt = [
@@ -162,32 +122,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Опційно: завантажити результат у R2 щоб мати стабільний URL
-  let storedOutputUrl: string | null = null;
-  try {
-    const resp = await fetch(outputUrl);
-    if (resp.ok) {
-      const outBuf = Buffer.from(await resp.arrayBuffer());
-      const outputKey = `foreman/${session.user.id}/ai-renders/${timestamp}-output.png`;
-      await s3().send(
-        new PutObjectCommand({
-          Bucket: FOREMAN_BUCKET,
-          Key: outputKey,
-          Body: outBuf,
-          ContentType: "image/png",
-        }),
-      );
-      storedOutputUrl = `${process.env.R2_PUBLIC_BASE_URL.replace(/\/$/, "")}/${outputKey}`;
-    }
-  } catch (e) {
-    console.warn("[foreman/ai-render] failed to mirror output to R2", e);
-  }
-
   return NextResponse.json({
     inputUrl,
-    outputUrl: storedOutputUrl ?? outputUrl,
-    // fal.ai URL короткоживучий — клієнт повинен скачати/закешувати якщо
-    // йому потрібен довгий доступ. storedOutputUrl стабільний.
-    durableUrl: storedOutputUrl,
+    outputUrl,
   });
 }

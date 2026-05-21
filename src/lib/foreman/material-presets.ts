@@ -111,10 +111,11 @@ export function isThicknessWork(wt: WorkType): boolean {
   );
 }
 
-// Базові ціни — типова українська роздріб 2026 (медіана: epicentr / leroymerlin /
-// novabud). Це fallback коли AI пошук не зміг знайти; foreman може скоригувати
-// вручну. Помітне відхилення від реальної ціни — нормально, бо різниця між
-// економ / середнім / преміум сегментом може бути 3-5x.
+// Базові ціни — типова українська роздріб станом на 2026 (медіана з
+// epicentr.com.ua / leroymerlin.ua / novabud.com.ua / prom.ua середній сегмент).
+// Foreman може скоригувати вручну. Різниця між економ/середнім/преміум — 2-4x,
+// тож це орієнтовно для попередньої оцінки. Перевірені проти типового
+// чека: ванна + плитка + клей + затірка ≈ 35-45 тис. ₴ матеріалу 5 м².
 export const PRESETS: MaterialPreset[] = [
   // === Підлога ===
   {
@@ -126,7 +127,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "pcs",
     reservePercent: 10,
     qtyMode: "tile",
-    baselinePrice: 150, // ₴/шт за тип 60×60 (середній сегмент)
+    baselinePrice: 165, // ₴/шт 60×60 середній сегмент (Cersanit/Argenta ~460₴/м²)
   },
   {
     id: "floor-tile-glue",
@@ -137,7 +138,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
-    baselinePrice: 12, // Ceresit CM11/CM14 ≈ 240 ₴/мішок 25кг
+    baselinePrice: 15, // Ceresit CM-11/CM-14 25кг ≈ 360-450₴, Anserglob 280₴
   },
   {
     id: "floor-laminate",
@@ -148,7 +149,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "m2",
     reservePercent: 7,
     qtyMode: "perArea",
-    baselinePrice: 320, // ₴/м² 8мм 32 клас
+    baselinePrice: 350, // ₴/м² 8мм 32 клас Krono/Kastamonu (280-450)
   },
   {
     id: "floor-underlay",
@@ -159,7 +160,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "m2",
     reservePercent: 5,
     qtyMode: "perArea",
-    baselinePrice: 35, // ₴/м² спінений ПЕ 3мм
+    baselinePrice: 40, // ₴/м² ППЕ 3мм
   },
   {
     id: "floor-leveling",
@@ -170,7 +171,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "perArea",
-    baselinePrice: 18, // ₴/кг (Ceresit CN-83 ≈ 450 ₴/25кг)
+    baselinePrice: 22, // ₴/кг Ceresit CN-83 25кг ≈ 550₴
   },
   {
     id: "floor-screed",
@@ -181,7 +182,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "thicknessCm",
-    baselinePrice: 5, // ₴/кг (М-150 ≈ 125 ₴/25кг)
+    baselinePrice: 3, // ₴/кг М-150 50кг мішок ≈ 150-180₴
   },
 
   // === Стіни ===
@@ -194,7 +195,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "pcs",
     reservePercent: 10,
     qtyMode: "tile",
-    baselinePrice: 200, // ₴/шт стінова плитка
+    baselinePrice: 180, // ₴/шт стінова плитка середній сегмент (Cersanit ~480₴/м²)
   },
   {
     id: "wall-tile-glue",
@@ -205,7 +206,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
-    baselinePrice: 12,
+    baselinePrice: 15,
   },
   {
     id: "wall-putty-start",
@@ -216,7 +217,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
-    baselinePrice: 13, // ₴/кг (Knauf HP-Start ≈ 330 ₴/25кг)
+    baselinePrice: 15, // ₴/кг Knauf HP-Start 25кг ≈ 370₴
   },
   {
     id: "wall-putty-finish",
@@ -227,7 +228,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
-    baselinePrice: 15, // ₴/кг (Sniezka ≈ 380 ₴/25кг)
+    baselinePrice: 22, // ₴/кг Sniezka Acryl-putz 17кг ≈ 380₴
   },
   {
     id: "wall-plaster-gypsum",
@@ -238,7 +239,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "thicknessCm",
-    baselinePrice: 11, // ₴/кг (Knauf MP-75 ≈ 280 ₴/25кг)
+    baselinePrice: 13, // ₴/кг Knauf Rotband 30кг ≈ 380₴
   },
   {
     id: "wall-plaster-cement",
@@ -249,7 +250,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "thicknessCm",
-    baselinePrice: 6, // ₴/кг
+    baselinePrice: 7, // ₴/кг ThermoPro/Henkel 25кг ≈ 170₴
   },
   {
     id: "wall-paint",
@@ -260,7 +261,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
-    baselinePrice: 220, // ₴/л (Sniezka / Aura ≈ 220 ₴/л)
+    baselinePrice: 210, // ₴/л Sniezka Eko/Aura 10л ≈ 1700-2200₴
   },
   {
     id: "wall-primer",
@@ -271,7 +272,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
-    baselinePrice: 80, // ₴/л (Ceresit CT-17 ≈ 400 ₴/5л)
+    baselinePrice: 85, // ₴/л Ceresit CT-17 10л ≈ 800-900₴
   },
   {
     id: "wall-drywall",
@@ -282,7 +283,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "pcs",
     reservePercent: 10,
     qtyMode: "drywall",
-    baselinePrice: 280, // ₴/лист 1.2×2.5 (Knauf 12.5мм)
+    baselinePrice: 340, // ₴/лист Knauf 12.5мм 1.2×2.5 (320-380)
   },
 
   // === Стеля ===
@@ -295,7 +296,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
-    baselinePrice: 220,
+    baselinePrice: 210,
   },
   {
     id: "ceiling-primer",
@@ -306,7 +307,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
-    baselinePrice: 80,
+    baselinePrice: 85,
   },
   {
     id: "ceiling-putty",
@@ -317,7 +318,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
-    baselinePrice: 15,
+    baselinePrice: 22, // як і фінішна шпаклівка стін
   },
 ];
 
