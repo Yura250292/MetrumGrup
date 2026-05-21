@@ -160,6 +160,7 @@ type Employee = {
   lastName: string | null;
   firstName: string | null;
   middleName: string | null;
+  employeeNumber: string | null;
   phone: string | null;
   email: string | null;
   position: string | null;
@@ -178,8 +179,31 @@ type Employee = {
   user: LinkedUser | null;
   /// Історія ЗП — лише для не-HR. HR отримує [].
   salaries: SalaryPeriod[];
+  /// Місячні зарплатні періоди з 1С Excel (повний breakdown). Видно лише SUPER_ADMIN.
+  payrollPeriods: PayrollPeriod[];
   createdAt: string;
   updatedAt: string;
+};
+
+type PayrollPeriod = {
+  id: string;
+  period: string;
+  isVacation: boolean;
+  officialPart: number | string | null;
+  pdfo: number | string | null;
+  vz: number | string | null;
+  esv: number | string | null;
+  taxesTotal: number | string | null;
+  salaryToCard: number | string | null;
+  totalSum: number | string | null;
+  advance: number | string | null;
+  sickLeave: number | string | null;
+  vacationPay: number | string | null;
+  bonus: number | string | null;
+  metrumExpenses: number | string | null;
+  currency: string;
+  sourceFile: string | null;
+  notes: string | null;
 };
 
 type DeferralType = "NONE" | "RESERVATION" | "DEFERMENT";
@@ -877,6 +901,10 @@ export function EmployeeDossier({
           canEdit={canEdit}
           onChanged={() => void load()}
         />
+      )}
+
+      {canSeeSalary && employee.payrollPeriods.length > 0 && (
+        <PayrollPeriodsSection periods={employee.payrollPeriods} />
       )}
       </div>
 
@@ -2033,6 +2061,127 @@ function SalarySummaryCell({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function PayrollPeriodsSection({ periods }: { periods: PayrollPeriod[] }) {
+  // Найновіший період зверху — періоди приходять відсортованими, але страхуємо.
+  const sorted = useMemo(
+    () => [...periods].sort((a, b) => (a.period < b.period ? 1 : -1)),
+    [periods],
+  );
+
+  const fmt = (v: number | string | null) => {
+    if (v == null) return "—";
+    const n = typeof v === "string" ? Number(v) : v;
+    if (!Number.isFinite(n) || n === 0) return "—";
+    return formatCurrency(n);
+  };
+
+  const periodLabel = (p: string) => {
+    const [y, m] = p.split("-");
+    const months = [
+      "січ",
+      "лют",
+      "бер",
+      "квіт",
+      "трав",
+      "черв",
+      "лип",
+      "серп",
+      "вер",
+      "жовт",
+      "лист",
+      "груд",
+    ];
+    const mi = Number(m) - 1;
+    if (mi < 0 || mi > 11) return p;
+    return `${months[mi]} ${y}`;
+  };
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+    >
+      <div
+        className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+        style={{
+          color: T.textSecondary,
+          backgroundColor: T.panelSoft,
+          borderBottom: `1px solid ${T.borderSoft}`,
+        }}
+      >
+        <Wallet size={12} />
+        <span>Місячні нарахування (1С)</span>
+        <span className="ml-auto text-[10px] font-normal tracking-normal" style={{ color: T.textMuted }}>
+          {sorted.length} {sorted.length === 1 ? "період" : "періоди"}
+        </span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-[12px]" style={{ color: T.textPrimary }}>
+          <thead>
+            <tr
+              className="text-[10px] font-bold uppercase tracking-wider"
+              style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
+            >
+              <th className="px-3 py-2.5 text-left whitespace-nowrap">Період</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Оф. зп</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">ПДФО</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">ВЗ</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">ЄСВ</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">На карту</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Аванс</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Лік.</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Відп.</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Премії</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap">Метрум</th>
+              <th className="px-3 py-2.5 text-right whitespace-nowrap font-bold">ЗАГ.</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((p) => (
+              <tr
+                key={p.id}
+                className="border-t"
+                style={{ borderColor: T.borderSoft }}
+              >
+                <td className="px-3 py-2.5 whitespace-nowrap font-medium">
+                  {periodLabel(p.period)}
+                  {p.isVacation && (
+                    <span
+                      className="ml-2 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                      style={{ backgroundColor: T.panelSoft, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
+                    >
+                      Відпустка
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(p.officialPart)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.pdfo)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.vz)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.esv)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{fmt(p.salaryToCard)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums">{fmt(p.advance)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.sickLeave)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.vacationPay)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.bonus)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textSecondary }}>{fmt(p.metrumExpenses)}</td>
+                <td className="px-3 py-2.5 text-right tabular-nums font-bold">{fmt(p.totalSum)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {sorted.some((p) => p.sourceFile) && (
+        <div
+          className="px-4 py-2 text-[10px]"
+          style={{ color: T.textMuted, borderTop: `1px solid ${T.borderSoft}`, backgroundColor: T.panelSoft }}
+        >
+          Джерело: {Array.from(new Set(sorted.map((p) => p.sourceFile).filter(Boolean))).join(", ")}
+        </div>
+      )}
     </div>
   );
 }

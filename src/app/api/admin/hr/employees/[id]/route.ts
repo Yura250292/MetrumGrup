@@ -39,6 +39,9 @@ export async function GET(
       salaries: canSeeSalary
         ? { orderBy: [{ effectiveFrom: "desc" }] }
         : false,
+      payrollPeriods: canSeeSalary
+        ? { orderBy: [{ period: "desc" }] }
+        : false,
     },
   });
   if (!employee) {

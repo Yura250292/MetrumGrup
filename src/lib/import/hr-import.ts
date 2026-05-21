@@ -100,6 +100,7 @@ export async function readSheetAsRows(buffer: Buffer): Promise<string[][]> {
 // ======== Employees ========
 
 export type EmployeeImportRow = {
+  employeeNumber: string | null;
   fullName: string;
   phone: string | null;
   email: string | null;
@@ -127,6 +128,9 @@ export async function parseEmployeesExcel(
 
   const { headers, totalRows } = readRow(ws);
   const cols = {
+    employeeNumber: matchColumn(headers, (h) =>
+      includesAny(h, ["табельн", "табел", "employee number", "emp number", "personnel no", "номер працівник"]),
+    ),
     fullName: matchColumn(headers, (h) =>
       includesAny(h, ["піб", "фио", "прізвище", "ім'я", "імʼя", "full name", "name"]),
     ),
@@ -181,6 +185,7 @@ export async function parseEmployeesExcel(
       salaryTypeRaw.includes("год") || salaryTypeRaw.includes("hour") ? "HOURLY" : "MONTHLY";
 
     data.push({
+      employeeNumber: cellValue(ws, r, cols.employeeNumber) || null,
       fullName,
       phone: cellValue(ws, r, cols.phone) || null,
       email: emailRaw || null,
@@ -206,6 +211,7 @@ export async function generateEmployeesTemplate(): Promise<Buffer> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("Співробітники");
   ws.columns = [
+    { header: "Табельний номер", key: "employeeNumber", width: 14 },
     { header: "ПІБ *", key: "fullName", width: 32 },
     { header: "Посада", key: "position", width: 22 },
     { header: "Телефон", key: "phone", width: 18 },
@@ -223,6 +229,7 @@ export async function generateEmployeesTemplate(): Promise<Buffer> {
   ];
   styleHeader(ws);
   ws.addRow({
+    employeeNumber: "00001",
     fullName: "Петренко Іван Сергійович",
     position: "Бригадир",
     phone: "+380501234567",
@@ -239,6 +246,7 @@ export async function generateEmployeesTemplate(): Promise<Buffer> {
     notes: "",
   });
   ws.addRow({
+    employeeNumber: "00002",
     fullName: "Коваленко Марія",
     position: "Інженер",
     phone: "",
@@ -534,6 +542,7 @@ export function applyEmployeeMapping(
       salaryTypeRaw.includes("год") || salaryTypeRaw.includes("hour") ? "HOURLY" : "MONTHLY";
 
     data.push({
+      employeeNumber: pick(rows, i, cols.employeeNumber) || null,
       fullName,
       phone: pick(rows, i, cols.phone) || null,
       email: emailRaw || null,
@@ -646,6 +655,7 @@ export function applySubcontractorMapping(
 // ======== Field specs (для AI mapper) ========
 
 export const EMPLOYEE_FIELDS = [
+  { key: "employeeNumber", label: "Табельний номер", hint: "Унікальний код працівника з 1С (напр. 00010). Використовується для дедуплікації при повторному імпорті." },
   { key: "fullName", label: "ПІБ", required: true, hint: "Прізвище Імʼя По-батькові; інколи розбито на колонки" },
   { key: "phone", label: "Телефон" },
   { key: "email", label: "Email" },

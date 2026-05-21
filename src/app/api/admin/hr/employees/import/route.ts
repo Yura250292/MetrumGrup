@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
     // У новій моделі salaryAmount/salaryType — лише deprecated кеш, який
     // підтягне syncEmployeeSalaryCache() після створення EmployeeSalary.
     let created = 0;
+    let skipped = 0;
     await prisma.$transaction(async (tx) => {
       for (const row of parsed.data) {
         // Видаляємо deprecated поля яких більше нема на Employee. extraData
@@ -73,6 +74,18 @@ export async function POST(request: NextRequest) {
           notes,
           ...employeeData
         } = row;
+        // Дедуплікація за табельним номером — якщо є employeeNumber і вже
+        // існує запис із таким номером, пропускаємо (повторний upload штату).
+        if (employeeData.employeeNumber) {
+          const existing = await tx.employee.findUnique({
+            where: { employeeNumber: employeeData.employeeNumber },
+            select: { id: true },
+          });
+          if (existing) {
+            skipped++;
+            continue;
+          }
+        }
         const mergedNotes = [notes, extraData]
           .filter((v): v is string => Boolean(v && v.trim()))
           .join("\n\n") || null;
@@ -100,6 +113,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       created,
+      skipped,
       totalRows: parsed.totalRows,
       errors: parsed.errors,
       usedAi,

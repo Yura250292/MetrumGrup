@@ -7,7 +7,7 @@ export type EmployeeRecord = {
 /// Компенсаційні поля. Канонічне джерело — EmployeeSalary[]; інших ЗП-полів
 /// на Employee більше нема. Бачать лише ролі з canViewFinance() — решта
 /// (HR/MANAGER/ENGINEER/FOREMAN/CLIENT) отримують порожній масив.
-const SALARY_FIELDS = ["salaries"] as const;
+const SALARY_FIELDS = ["salaries", "payrollPeriods"] as const;
 
 export function isHrRole(role: string | null | undefined): boolean {
   return role === "HR";
