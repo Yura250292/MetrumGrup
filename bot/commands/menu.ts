@@ -32,6 +32,38 @@ function presetButton(label: string, slug: string) {
   return Markup.button.callback(label, `ai:preset:${slug}`);
 }
 
+/**
+ * Smart inline-keyboard layout — балансує кнопки у рядках:
+ *   1-3 → один рядок
+ *   4   → 2+2 (симетрично)
+ *   5   → 3+2
+ *   6   → 3+3
+ *   7   → 3+2+2 (уникаємо хвостового одинака)
+ *   8   → 3+3+2
+ *   9   → 3+3+3
+ *  N>9  → послідовність 3-ок з останнім рядком 2/3 (ніколи 1).
+ */
+function gridButtons<T>(items: T[]): T[][] {
+  const n = items.length;
+  if (n === 0) return [];
+  if (n <= 3) return [items];
+  if (n === 4) return [items.slice(0, 2), items.slice(2, 4)];
+  const rows: T[][] = [];
+  let i = 0;
+  while (n - i >= 5) {
+    rows.push(items.slice(i, i + 3));
+    i += 3;
+  }
+  const tail = n - i;
+  if (tail === 4) {
+    rows.push(items.slice(i, i + 2));
+    rows.push(items.slice(i + 2, i + 4));
+  } else if (tail > 0) {
+    rows.push(items.slice(i, i + tail));
+  }
+  return rows;
+}
+
 function menuForRole(role: Role | null) {
   const aiHint = '\n\n💡 Просто пиши або говори — AI зрозуміє.';
   if (role === 'FOREMAN') {
@@ -39,11 +71,13 @@ function menuForRole(role: Role | null) {
       text:
         '🔧 <b>Меню виконроба</b>\n\nЗапис витрат, перегляд звітів, контакт із менеджером.' +
         aiHint,
-      keyboard: Markup.inlineKeyboard([
-        [presetButton('🧾 Записати витрату', 'foreman.new_expense')],
-        [presetButton('📋 Мої звіти', 'foreman.my_reports')],
-        [presetButton('📊 Що по моїх проектах', 'foreman.my_projects')],
-      ]),
+      keyboard: Markup.inlineKeyboard(
+        gridButtons([
+          presetButton('🧾 Записати витрату', 'foreman.new_expense'),
+          presetButton('📋 Мої звіти', 'foreman.my_reports'),
+          presetButton('📊 Мої проекти', 'foreman.my_projects'),
+        ]),
+      ),
     };
   }
   if (role === 'MANAGER' || role === 'FINANCIER') {
@@ -52,22 +86,26 @@ function menuForRole(role: Role | null) {
         `📊 <b>Меню ${role === 'MANAGER' ? 'менеджера' : 'фінансиста'}</b>\n\n` +
         'Апруви, зведення дня, бюджети.' +
         aiHint,
-      keyboard: Markup.inlineKeyboard([
-        [presetButton('⏳ Що треба апрувити', 'manager.pending_approvals')],
-        [presetButton('📈 Зведення дня', 'manager.daily_summary')],
-        [presetButton('🗂 Активні проекти', 'manager.active_projects')],
-      ]),
+      keyboard: Markup.inlineKeyboard(
+        gridButtons([
+          presetButton('⏳ Апруви', 'manager.pending_approvals'),
+          presetButton('📈 Зведення дня', 'manager.daily_summary'),
+          presetButton('🗂 Проекти', 'manager.active_projects'),
+        ]),
+      ),
     };
   }
   if (role === 'ENGINEER' || role === 'HR' || role === 'OWNER') {
     return {
       text:
         '🧠 <b>Меню</b>\n\nТвої задачі, фокус дня, проекти.' + aiHint,
-      keyboard: Markup.inlineKeyboard([
-        [presetButton('✅ Мої задачі', 'engineer.my_tasks')],
-        [presetButton('📈 Що сьогодні', 'engineer.daily_summary')],
-        [presetButton('🗂 Активні проекти', 'manager.active_projects')],
-      ]),
+      keyboard: Markup.inlineKeyboard(
+        gridButtons([
+          presetButton('✅ Мої задачі', 'engineer.my_tasks'),
+          presetButton('📈 Що сьогодні', 'engineer.daily_summary'),
+          presetButton('🗂 Проекти', 'manager.active_projects'),
+        ]),
+      ),
     };
   }
   if (role === 'SUPER_ADMIN') {
@@ -75,20 +113,22 @@ function menuForRole(role: Role | null) {
       text:
         '🛠 <b>Меню адміністратора</b>\n\nПовний доступ — від апрувів до фінансів.' +
         aiHint,
-      keyboard: Markup.inlineKeyboard([
-        [presetButton('⏳ Що треба апрувити', 'manager.pending_approvals')],
-        [presetButton('📈 Зведення дня', 'manager.daily_summary')],
-        [presetButton('🧾 Записати чек', 'foreman.new_expense')],
-        [presetButton('🗂 Активні проекти', 'manager.active_projects')],
-      ]),
+      keyboard: Markup.inlineKeyboard(
+        gridButtons([
+          presetButton('⏳ Апруви', 'manager.pending_approvals'),
+          presetButton('📈 Зведення', 'manager.daily_summary'),
+          presetButton('🧾 Чек', 'foreman.new_expense'),
+          presetButton('🗂 Проекти', 'manager.active_projects'),
+        ]),
+      ),
     };
   }
   if (role === 'CLIENT') {
     return {
       text: '🏠 <b>Меню клієнта</b>\n\nТвої проекти та платежі.' + aiHint,
-      keyboard: Markup.inlineKeyboard([
-        [presetButton('🏗 Мій проект', 'client.my_project')],
-      ]),
+      keyboard: Markup.inlineKeyboard(
+        gridButtons([presetButton('🏗 Мій проект', 'client.my_project')]),
+      ),
     };
   }
   return {
