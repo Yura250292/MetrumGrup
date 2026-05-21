@@ -289,7 +289,7 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
   });
   if (!stage) bad("Stage does not belong to this project");
 
-  const status = input.statusId
+  let status = input.statusId
     ? await prisma.taskStatus.findFirst({
         where: { id: input.statusId, projectId: input.projectId },
       })
@@ -338,6 +338,23 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
       if (seenExternal.has(key)) continue;
       seenExternal.add(key);
       normalizedAssignees.push({ externalName: trimmed });
+    }
+  }
+
+  // Auto-«В роботі» якщо постановник = єдиний (User) виконавець і явний
+  // status не передано. Семантика: «сам поставив сам собі → ти у роботі,
+  // нема кого підтверджувати». Зовнішніх не враховуємо у цьому правилі.
+  if (!input.statusId) {
+    const userAssignees = normalizedAssignees.filter(
+      (a): a is { userId: string } => "userId" in a && !!a.userId,
+    );
+    const isSoleSelfAssign =
+      userAssignees.length === 1 && userAssignees[0]!.userId === actorId;
+    if (isSoleSelfAssign) {
+      const inProgress = await prisma.taskStatus.findFirst({
+        where: { projectId: input.projectId, name: "В роботі" },
+      });
+      if (inProgress) status = inProgress;
     }
   }
 

@@ -208,17 +208,13 @@ function StatusChips({
     [tasks, currentUserId],
   );
   const blockers = buckets["blocked-by"].length + buckets["blocking-others"].length;
-  const review = buckets["waiting-review"].length;
   const delegated = buckets["delegated"].length;
 
-  if (blockers === 0 && review === 0 && delegated === 0) return null;
+  if (blockers === 0 && delegated === 0) return null;
 
   const chips: { key: string; label: string; value: number; color: string }[] = [];
   if (blockers > 0) {
     chips.push({ key: "blockers", label: "Блокери", value: blockers, color: "#ef4444" });
-  }
-  if (review > 0) {
-    chips.push({ key: "review", label: "Чекає рішення", value: review, color: T.accentSecondary });
   }
   if (delegated > 0) {
     chips.push({ key: "delegated", label: "Делеговано", value: delegated, color: T.accentPrimary });
@@ -329,6 +325,7 @@ export function MeDashboard({
     stopTimer,
     markDone,
     deleteTask,
+    acceptTask,
   } = useMeTasks({ projectIds: projectIds.length > 0 ? projectIds : undefined });
 
   // Load projects for filter
@@ -581,6 +578,7 @@ export function MeDashboard({
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
           onDelete={(id, title) => void deleteTask(id, title)}
+          onAccept={(id) => void acceptTask(id)}
         />
       )}
 

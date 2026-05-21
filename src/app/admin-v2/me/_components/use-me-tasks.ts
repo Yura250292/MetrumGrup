@@ -244,6 +244,17 @@ export function useMeTasks({ projectIds }: { projectIds?: string[] } = {}) {
     }
   };
 
+  /** Виконавець підтверджує що бере задачу: «Новий» → «В роботі». */
+  const acceptTask = async (taskId: string) => {
+    setPendingId(taskId);
+    try {
+      await fetch(`/api/admin/tasks/${taskId}/accept`, { method: "POST" });
+      await load();
+    } finally {
+      setPendingId(null);
+    }
+  };
+
   return {
     dashboard,
     tasks,
@@ -264,5 +275,6 @@ export function useMeTasks({ projectIds }: { projectIds?: string[] } = {}) {
     stopTimer,
     markDone,
     deleteTask,
+    acceptTask,
   };
 }

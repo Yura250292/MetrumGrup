@@ -23,7 +23,6 @@ const SECTION_ACCENT: Record<SectionKey, string> = {
   "overdue": "#ef4444",
   "today": "#f59e0b",
   "do-now": "#10b981",
-  "waiting-review": "#8b5cf6",
   "delegated": "#3b82f6",
   "blocked-by": "#ef4444",
   "blocking-others": "#f59e0b",
@@ -43,6 +42,8 @@ type Props = {
   onStopTimer: () => void;
   onMarkDone: (task: TaskItem) => void;
   onDelete?: (taskId: string, title: string) => void;
+  /** Виконавець підтверджує задачу зі статусом «Новий» → «В роботі». */
+  onAccept?: (taskId: string) => void;
 };
 
 // Sections with sub-groups rendered together (Блокери).
@@ -60,6 +61,7 @@ export function SectionsView({
   onStopTimer,
   onMarkDone,
   onDelete,
+  onAccept,
 }: Props) {
   const canDeleteTask = (t: TaskItem) =>
     Boolean(onDelete) && (isAdmin || t.createdById === currentUserId);
@@ -155,6 +157,7 @@ export function SectionsView({
                     onDelete={
                       onDelete ? () => onDelete(t.id, t.title) : undefined
                     }
+                    onAccept={onAccept ? () => onAccept(t.id) : undefined}
                   />
                 ))}
               </ul>
@@ -218,6 +221,7 @@ export function SectionsView({
                       onDelete={
                         onDelete ? () => onDelete(t.id, t.title) : undefined
                       }
+                      onAccept={onAccept ? () => onAccept(t.id) : undefined}
                     />
                   ))}
                 </ul>
@@ -244,6 +248,7 @@ export function SectionsView({
                       onDelete={
                         onDelete ? () => onDelete(t.id, t.title) : undefined
                       }
+                      onAccept={onAccept ? () => onAccept(t.id) : undefined}
                     />
                   ))}
                 </ul>

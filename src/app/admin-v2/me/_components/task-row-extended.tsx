@@ -9,6 +9,7 @@ import {
   Circle,
   Sparkles,
   Trash2,
+  Check,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -30,6 +31,8 @@ type Props = {
   onStopTimer: () => void;
   onMarkDone: () => void;
   onDelete?: () => void;
+  /** Викликається коли користувач натискає «Прийняти» (status «Новий»). */
+  onAccept?: () => void;
 };
 
 function truncate(s: string, max = 60): string {
@@ -75,7 +78,14 @@ export function TaskRowExtended({
   onStopTimer: _onStopTimer,
   onMarkDone,
   onDelete,
+  onAccept,
 }: Props) {
+  // Чи може поточний юзер прийняти задачу: у статусі «Новий» І він серед
+  // assignees як User (не зовнішній).
+  const isMyToAccept =
+    !!currentUserId &&
+    task.status.name === "Новий" &&
+    (task.assignees ?? []).some((a) => a.user?.id === currentUserId);
   void _onStartTimer;
   void _onStopTimer;
   const overdue = isOverdue(task);
@@ -264,11 +274,28 @@ export function TaskRowExtended({
         </div>
       )}
 
-      {/* Швидкі дії: завершити + (опційно) видалити з 2-step confirm. */}
+      {/* Швидкі дії: прийняти (для «Новий») / завершити / видалити з 2-step. */}
       <div
         className="flex items-center gap-1 flex-shrink-0 opacity-60 group-hover:opacity-100 transition"
         onClick={(e) => e.stopPropagation()}
       >
+        {isMyToAccept && onAccept && (
+          <button
+            type="button"
+            onClick={onAccept}
+            disabled={pending}
+            className="flex items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-semibold disabled:opacity-50"
+            style={{
+              backgroundColor: T.accentPrimary,
+              color: "#fff",
+            }}
+            title="Прийняти задачу у роботу"
+            aria-label="Прийняти"
+          >
+            <Check size={12} />
+            Прийняти
+          </button>
+        )}
         <button
           type="button"
           onClick={onMarkDone}

@@ -6,6 +6,17 @@ import { prisma } from "@/lib/prisma";
  * (projectId, name) unique index + `skipDuplicates: true`.
  */
 
+/**
+ * 3-status модель (Asana / Todoist style):
+ *  - "Новий"   — задача створена, виконавець ще не прийняв.
+ *  - "В роботі" — виконавець підтвердив що бере задачу. Авто-проставляється
+ *    у createTask, коли єдиний виконавець = автор (само-призначення).
+ *  - "Закрито" — фінальний (isDone = true).
+ *
+ * Назви статусів використовуються як ключі у мапінгу при міграції (defaults.ts
+ * не може просто перейменувати — старі рядки залишаться, тому є окрема data
+ * migration `scripts/migrate-task-statuses.ts`).
+ */
 export const DEFAULT_STATUSES: Array<{
   name: string;
   color: string;
@@ -13,10 +24,9 @@ export const DEFAULT_STATUSES: Array<{
   isDone: boolean;
   isDefault: boolean;
 }> = [
-  { name: "Backlog", color: "#94a3b8", position: 0, isDone: false, isDefault: true },
-  { name: "In Progress", color: "#3b82f6", position: 1, isDone: false, isDefault: false },
-  { name: "In Review", color: "#f59e0b", position: 2, isDone: false, isDefault: false },
-  { name: "Done", color: "#10b981", position: 3, isDone: true, isDefault: false },
+  { name: "Новий", color: "#94a3b8", position: 0, isDone: false, isDefault: true },
+  { name: "В роботі", color: "#3b82f6", position: 1, isDone: false, isDefault: false },
+  { name: "Закрито", color: "#10b981", position: 2, isDone: true, isDefault: false },
 ];
 
 export const DEFAULT_LABELS: Array<{ name: string; color: string }> = [
