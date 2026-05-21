@@ -109,7 +109,19 @@ export function NewTaskModal({
   // ── Assignees ──
   const [assignees, setAssignees] = useState<AssigneeChip[]>([]);
   const [assignToMe, setAssignToMe] = useState(true);
-  const [teamUsers, setTeamUsers] = useState<{ id: string; name: string }[]>([]);
+  /**
+   * Об'єднаний список кандидатів для picker'а: User'и CRM + Employee'и з HR.
+   *  - Якщо Employee має linkedUserId — він зливається з User'ом
+   *    (показуємо одним записом з kind="user").
+   *  - Інакше показуємо як kind="employee" → при виборі додаємо як
+   *    externalName (бо User'а у системі немає).
+   */
+  const [candidates, setCandidates] = useState<
+    Array<
+      | { kind: "user"; id: string; name: string; subtitle?: string }
+      | { kind: "employee"; id: string; name: string; subtitle?: string }
+    >
+  >([]);
   const [userPickerOpen, setUserPickerOpen] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [externalInput, setExternalInput] = useState("");
@@ -144,22 +156,59 @@ export function NewTaskModal({
   useEffect(() => {
     (async () => {
       try {
-        const [projRes, usersRes] = await Promise.all([
+        const [projRes, usersRes, empRes] = await Promise.all([
           fetch("/api/admin/me/projects"),
           fetch("/api/admin/users?role=SUPER_ADMIN,MANAGER,ENGINEER,FINANCIER"),
+          fetch("/api/admin/employees/picker"),
         ]);
         if (projRes.ok) {
           const j = await projRes.json();
           setProjects((j.data ?? []) as MyProject[]);
         }
+
+        // Зливаємо User'ів і Employee'ів в один список кандидатів.
+        // Employee з linkedUserId — показуємо як User (щоб не дублювати).
+        // Решта Employees — як kind="employee" (буде externalName).
+        const merged = new Map<
+          string,
+          | { kind: "user"; id: string; name: string; subtitle?: string }
+          | { kind: "employee"; id: string; name: string; subtitle?: string }
+        >();
+
         if (usersRes.ok) {
           const j = await usersRes.json();
-          setTeamUsers(
-            (j.data ?? [])
-              .filter((u: any) => u.isActive)
-              .map((u: any) => ({ id: u.id, name: u.name })),
-          );
+          for (const u of (j.data ?? []).filter((u: any) => u.isActive)) {
+            merged.set(`user:${u.id}`, {
+              kind: "user",
+              id: u.id,
+              name: u.name,
+            });
+          }
         }
+        if (empRes.ok) {
+          const j = await empRes.json();
+          for (const e of j.data ?? []) {
+            if (e.linkedUserId) {
+              // Employee має акаунт → вже у списку як User; додамо посаду як підпис
+              const key = `user:${e.linkedUserId}`;
+              const existing = merged.get(key);
+              if (existing) {
+                merged.set(key, {
+                  ...existing,
+                  subtitle: e.position ?? undefined,
+                });
+              }
+            } else {
+              merged.set(`emp:${e.id}`, {
+                kind: "employee",
+                id: e.id,
+                name: e.fullName,
+                subtitle: e.position ?? "співробітник без акаунту",
+              });
+            }
+          }
+        }
+        setCandidates([...merged.values()]);
       } finally {
         setLoadingProjects(false);
       }
@@ -268,6 +317,23 @@ export function NewTaskModal({
     setUserSearch("");
   };
 
+  /** Employee без User'а — додаємо як externalName (бо в системі нема акаунту). */
+  const addEmployeeAsExternal = (fullName: string) => {
+    const name = fullName.trim().slice(0, 100);
+    if (!name) return;
+    setAssignees((prev) =>
+      prev.some(
+        (a) =>
+          (a.kind === "external" && a.name.toLowerCase() === name.toLowerCase()) ||
+          (a.kind === "user" && a.name.toLowerCase() === name.toLowerCase()),
+      )
+        ? prev
+        : [...prev, { kind: "external", name }],
+    );
+    setUserPickerOpen(false);
+    setUserSearch("");
+  };
+
   const addExternalAssignee = () => {
     const name = externalInput.trim();
     if (!name) return;
@@ -286,11 +352,18 @@ export function NewTaskModal({
     setAssignees((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const filteredUsers = useMemo(() => {
+  const filteredCandidates = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
-    const list = teamUsers.filter((u) => !q || u.name.toLowerCase().includes(q));
+    const list = candidates.filter(
+      (c) => !q || c.name.toLowerCase().includes(q),
+    );
+    // Сортуємо: спочатку User'и (бо їх можна нотифікувати), потім Employees.
+    list.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === "user" ? -1 : 1;
+      return a.name.localeCompare(b.name, "uk");
+    });
     return list.slice(0, 50);
-  }, [teamUsers, userSearch]);
+  }, [candidates, userSearch]);
 
   const submit = async () => {
     if (!formValid) return;
@@ -319,10 +392,26 @@ export function NewTaskModal({
           ? specJson.checklist.filter((_, i) => checklistSelected.has(i))
           : undefined;
 
+      // datetime-local повертає "YYYY-MM-DDTHH:mm" без таймзони.
+      // Якщо користувач залишив час 00:00 (наприклад вибрав тільки дату через
+      // швидкий ввід) — підставляємо 18:00, щоб задача на сьогодні не була
+      // одразу простроченою.
+      const dueIso = (() => {
+        const d = new Date(dueDate);
+        if (
+          d.getHours() === 0 &&
+          d.getMinutes() === 0 &&
+          d.getSeconds() === 0
+        ) {
+          d.setHours(18, 0, 0, 0);
+        }
+        return d.toISOString();
+      })();
+
       const body: Record<string, unknown> = {
         title: title.trim(),
         description: description.trim(),
-        dueDate: new Date(dueDate).toISOString(),
+        dueDate: dueIso,
         priority,
         estimatedHours: estimatedHours ? Number(estimatedHours) : undefined,
         assignees: payload.length > 0 ? payload : undefined,
@@ -453,10 +542,14 @@ export function NewTaskModal({
               </div>
             </RequiredField>
 
-            {/* ── Due date (required) ── */}
+            {/* ── Due date + time (required) ──
+                datetime-local замість date — щоб уникнути ефекту
+                «поставив на сьогодні без часу → одразу прострочено» (бо
+                date-only парситься як 00:00). Якщо часу не вкажуть —
+                дефолтимо до 18:00 у submit'і. */}
             <RequiredField label="Дедлайн">
               <input
-                type="date"
+                type="datetime-local"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 className="rounded-lg px-3 py-2.5 text-sm outline-none h-11"
@@ -500,11 +593,11 @@ export function NewTaskModal({
                         border: `1px solid ${T.borderSoft}`,
                       }}
                     >
-                      <Plus size={12} /> Додати користувача
+                      <Plus size={12} /> Додати співробітника
                     </button>
                     {userPickerOpen && (
                       <div
-                        className="absolute z-10 mt-1 w-72 rounded-lg p-2 shadow-lg flex flex-col gap-1"
+                        className="absolute z-10 mt-1 w-80 rounded-lg p-2 shadow-lg flex flex-col gap-1"
                         style={{
                           backgroundColor: T.panel,
                           border: `1px solid ${T.borderStrong}`,
@@ -521,42 +614,75 @@ export function NewTaskModal({
                           <input
                             value={userSearch}
                             onChange={(e) => setUserSearch(e.target.value)}
-                            placeholder="Пошук…"
+                            placeholder="Пошук по імʼю / прізвищу…"
                             className="flex-1 bg-transparent text-xs outline-none"
                             style={{ color: T.textPrimary }}
                             autoFocus
                           />
                         </div>
-                        <div className="max-h-60 overflow-y-auto flex flex-col gap-0.5">
-                          {filteredUsers.length === 0 ? (
+                        <div className="max-h-72 overflow-y-auto flex flex-col gap-0.5">
+                          {filteredCandidates.length === 0 ? (
                             <div
                               className="px-2 py-3 text-center text-[11px]"
                               style={{ color: T.textMuted }}
                             >
-                              Не знайдено
+                              Не знайдено. Можна додати як зовнішнього →
                             </div>
                           ) : (
-                            filteredUsers.map((u) => {
+                            filteredCandidates.map((c) => {
                               const already =
-                                (u.id === currentUserId && assignToMe) ||
-                                assignees.some(
-                                  (a) => a.kind === "user" && a.userId === u.id,
-                                );
+                                c.kind === "user"
+                                  ? (c.id === currentUserId && assignToMe) ||
+                                    assignees.some(
+                                      (a) => a.kind === "user" && a.userId === c.id,
+                                    )
+                                  : assignees.some(
+                                      (a) =>
+                                        a.kind === "external" &&
+                                        a.name.toLowerCase() === c.name.toLowerCase(),
+                                    );
                               return (
                                 <button
-                                  key={u.id}
+                                  key={`${c.kind}:${c.id}`}
                                   type="button"
                                   disabled={already}
-                                  onClick={() => addUserAssignee(u.id, u.name)}
+                                  onClick={() =>
+                                    c.kind === "user"
+                                      ? addUserAssignee(c.id, c.name)
+                                      : addEmployeeAsExternal(c.name)
+                                  }
                                   className="flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs disabled:opacity-40 hover:brightness-95"
                                   style={{ color: T.textPrimary }}
+                                  title={
+                                    c.kind === "employee"
+                                      ? "Співробітник без акаунту — буде додано як зовнішнього"
+                                      : undefined
+                                  }
                                 >
-                                  <span>
-                                    {u.name}
-                                    {u.id === currentUserId && (
-                                      <span style={{ color: T.textMuted }}>
-                                        {" "}
-                                        (ви)
+                                  <span className="flex flex-col leading-tight">
+                                    <span className="flex items-center gap-1.5">
+                                      {c.name}
+                                      {c.kind === "user" && c.id === currentUserId && (
+                                        <span style={{ color: T.textMuted }}>(ви)</span>
+                                      )}
+                                      {c.kind === "employee" && (
+                                        <span
+                                          className="rounded-full px-1.5 py-0 text-[9px] font-semibold"
+                                          style={{
+                                            color: T.textMuted,
+                                            border: `1px dashed ${T.borderSoft}`,
+                                          }}
+                                        >
+                                          без акаунту
+                                        </span>
+                                      )}
+                                    </span>
+                                    {c.subtitle && (
+                                      <span
+                                        className="text-[10px]"
+                                        style={{ color: T.textMuted }}
+                                      >
+                                        {c.subtitle}
                                       </span>
                                     )}
                                   </span>

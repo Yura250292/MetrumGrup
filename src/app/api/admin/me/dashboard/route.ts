@@ -34,11 +34,14 @@ export async function GET() {
         prisma.task.count({
           where: { ...baseAssigned, status: { isDone: false } },
         }),
+        // «Прострочено» = дедлайн раніше СЬОГОДНІ (а не раніше поточної
+        // хвилини). Інакше legacy задачі без часу (dueDate=00:00 UTC) на
+        // сьогодні автоматично потрапляли б у прострочені о 09:00 ранку.
         prisma.task.count({
           where: {
             ...baseAssigned,
             status: { isDone: false },
-            dueDate: { lt: now },
+            dueDate: { lt: startOfToday },
           },
         }),
         prisma.task.count({

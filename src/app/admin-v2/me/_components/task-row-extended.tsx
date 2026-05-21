@@ -1,9 +1,8 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import {
   CheckCircle2,
-  Play,
-  Square,
   User,
   ArrowRight,
   AlertTriangle,
@@ -70,12 +69,39 @@ export function TaskRowExtended({
   pending,
   canDelete = false,
   onOpen,
-  onStartTimer,
-  onStopTimer,
+  // onStartTimer/onStopTimer — лишено у props для зворотньої сумісності
+  // з усіма викликами; кнопка таймера у row прихована (виноситься у drawer).
+  onStartTimer: _onStartTimer,
+  onStopTimer: _onStopTimer,
   onMarkDone,
   onDelete,
 }: Props) {
+  void _onStartTimer;
+  void _onStopTimer;
   const overdue = isOverdue(task);
+
+  // Inline-confirm на видалення: 1й клік підсвічує і чекає 3с. Другий клік
+  // протягом 3с — реально видаляє. Поза цим вікном — reset. Так нема
+  // міскліків + не залежимо від system confirm().
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const confirmTimerRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    return () => {
+      if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    };
+  }, []);
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onDelete) return;
+    if (!confirmingDelete) {
+      setConfirmingDelete(true);
+      confirmTimerRef.current = setTimeout(() => setConfirmingDelete(false), 3000);
+      return;
+    }
+    if (confirmTimerRef.current) clearTimeout(confirmTimerRef.current);
+    setConfirmingDelete(false);
+    onDelete();
+  };
   const incoming = task.incomingDepsCount ?? 0;
   const outgoing = task.outgoingDepsCount ?? 0;
   const nextStep = task.firstUndoneChecklistItem;
@@ -238,34 +264,11 @@ export function TaskRowExtended({
         </div>
       )}
 
-      {/* Timer + done quick actions */}
+      {/* Швидкі дії: завершити + (опційно) видалити з 2-step confirm. */}
       <div
         className="flex items-center gap-1 flex-shrink-0 opacity-60 group-hover:opacity-100 transition"
         onClick={(e) => e.stopPropagation()}
       >
-        {isTimerActive ? (
-          <button
-            type="button"
-            onClick={onStopTimer}
-            disabled={pending}
-            className="rounded-md p-1.5 disabled:opacity-50"
-            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-            title="Зупинити таймер"
-          >
-            <Square size={12} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={onStartTimer}
-            disabled={pending}
-            className="rounded-md p-1.5 disabled:opacity-50"
-            style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-            title="Старт таймера"
-          >
-            <Play size={12} />
-          </button>
-        )}
         <button
           type="button"
           onClick={onMarkDone}
@@ -273,20 +276,27 @@ export function TaskRowExtended({
           className="rounded-md p-1.5 disabled:opacity-50 hidden sm:inline-flex"
           style={{ backgroundColor: T.successSoft, color: T.success }}
           title="Завершити"
+          aria-label="Завершити"
         >
           <CheckCircle2 size={12} />
         </button>
         {canDelete && onDelete && (
           <button
             type="button"
-            onClick={onDelete}
+            onClick={handleDeleteClick}
             disabled={pending}
-            className="rounded-md p-1.5 disabled:opacity-50"
-            style={{ backgroundColor: T.dangerSoft, color: T.danger }}
-            title="Видалити задачу"
+            className="flex items-center gap-1 rounded-md px-2 py-1.5 disabled:opacity-50 transition"
+            style={{
+              backgroundColor: confirmingDelete ? T.danger : T.dangerSoft,
+              color: confirmingDelete ? "#fff" : T.danger,
+            }}
+            title={confirmingDelete ? "Натисніть ще раз щоб видалити" : "Видалити задачу"}
             aria-label="Видалити задачу"
           >
             <Trash2 size={12} />
+            {confirmingDelete && (
+              <span className="text-[10px] font-bold">Точно?</span>
+            )}
           </button>
         )}
       </div>

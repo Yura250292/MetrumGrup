@@ -88,8 +88,28 @@ export const PRIORITY_COLOR: Record<TaskItem["priority"], string> = {
   URGENT: "#ef4444",
 };
 
+/**
+ * "Прострочено" = дедлайн уже минув і задача не закрита.
+ *
+ * Special-case для legacy task'ів, які створені без часу (date-only ISO
+ * парситься як 00:00 UTC, що в киевском часі це 03:00 минулого дня → задача
+ * на «сьогодні» одразу прострочена). Якщо година = 00:00 — трактуємо як
+ * кінець робочого дня (23:59 локального часу).
+ */
 export function isOverdue(t: TaskItem): boolean {
-  return Boolean(t.dueDate && new Date(t.dueDate) < new Date() && !t.status.isDone);
+  if (!t.dueDate || t.status.isDone) return false;
+  const d = new Date(t.dueDate);
+  const isMidnightUtc =
+    d.getUTCHours() === 0 &&
+    d.getUTCMinutes() === 0 &&
+    d.getUTCSeconds() === 0;
+  if (isMidnightUtc) {
+    // legacy date-only → останній мілісек цього дня (local)
+    const eod = new Date(d);
+    eod.setHours(23, 59, 59, 999);
+    return eod < new Date();
+  }
+  return d < new Date();
 }
 
 export function isDueToday(t: TaskItem): boolean {
@@ -208,8 +228,13 @@ export function useMeTasks({ projectIds }: { projectIds?: string[] } = {}) {
     }
   };
 
-  const deleteTask = async (taskId: string, title: string) => {
-    if (!confirm(`Видалити задачу «${title}»?`)) return;
+  /**
+   * Видаляє задачу. Підтвердження тут НЕ робиться — кожен caller (row,
+   * drawer тощо) має свій UX-контракт: в row це 2-крок «Точно?», у drawer
+   * це `window.confirm`. Дублювати тут — створює зайвий popup.
+   */
+  const deleteTask = async (taskId: string, _title: string) => {
+    void _title;
     setPendingId(taskId);
     try {
       await fetch(`/api/admin/tasks/${taskId}`, { method: "DELETE" });
