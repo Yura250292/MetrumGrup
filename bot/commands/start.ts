@@ -85,35 +85,42 @@ export async function startCommand(ctx: BotContext) {
     }
   }
 
-  // If already admin — show admin menu
+  // Якщо є linked Metrum-аккаунт — одразу відкриваємо role-aware меню
+  if (telegramId) {
+    try {
+      const { prisma } = await import('../../src/lib/prisma');
+      const linked = await prisma.telegramBotUser.findUnique({
+        where: { telegramId: BigInt(telegramId) },
+        select: { userId: true },
+      });
+      if (linked?.userId) {
+        await ctx.reply(`👋 Привіт, ${userName}!`, { parse_mode: 'HTML' });
+        const { menuCommand } = await import('./menu');
+        return menuCommand(ctx);
+      }
+    } catch (err) {
+      console.error('[start] check linked failed:', err);
+    }
+  }
+
+  // Legacy admin (через пароль, без user-linking)
   if (ctx.session?.isAdmin) {
     const { menuCommand } = await import('./menu');
     return menuCommand(ctx);
   }
 
-  // Public menu
-  const message = `🏗 <b>Вітаємо в Metrum Group!</b>
+  // Публічне меню для неприв'язаних
+  const message = `🏗 <b>Metrum Group</b>
 
-Провідна будівельна компанія з професійною командою інженерів та прозорою системою оплати.
+Будівельна компанія повного циклу — від ідеї до ключів.
 
-<b>Наші послуги:</b>
-🏠 Будівництво приватних будинків
-🏢 Комерційне будівництво
-🔧 Ремонт та реконструкція
-🌳 Ландшафтний дизайн
-📐 Архітектурне проектування
-
-✅ Повний цикл: від ідеї до ключів`;
+Щоб користуватись внутрішнім функціоналом (звіти, апруви, задачі) — прив'яжіть Metrum-акаунт у профілі на сайті.`;
 
   await ctx.reply(message, {
     parse_mode: 'HTML',
     ...Markup.inlineKeyboard([
-      [
-        Markup.button.url('🌐 Наш сайт', 'https://www.metrum-grup.biz.ua'),
-        Markup.button.callback('📞 Контакти', 'contact')
-      ],
-      [Markup.button.callback('💼 Послуги', 'services')],
-      [Markup.button.callback('🔐 Адмінка', 'admin_login')],
-    ])
+      [Markup.button.url('🌐 Сайт', 'https://www.metrum-grup.biz.ua')],
+      [Markup.button.callback('📞 Контакти', 'contact')],
+    ]),
   });
 }

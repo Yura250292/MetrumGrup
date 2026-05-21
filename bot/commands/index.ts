@@ -3,11 +3,7 @@ import { BotContext } from '../types';
 import { startCommand } from './start';
 import { adminCommand, logoutCommand } from './admin';
 import { menuCommand } from './menu';
-import { projectsCommand } from './projects';
 import { estimateCommand } from './estimate';
-import { materialsCommand } from './materials';
-import { paymentsCommand } from './payments';
-import { statusCommand } from './status';
 import { helpCommand } from './help';
 import {
   receiptCommand,
@@ -48,8 +44,6 @@ import {
   handleFinanceRejectCallback,
 } from './finance-approval';
 import { requireAdmin } from '../middleware/auth';
-import { getUserProjects } from '../services/database';
-import { formatProjectsList } from '../services/formatter';
 
 export function registerCommands(bot: Telegraf<BotContext>) {
   // Публічні команди
@@ -57,14 +51,10 @@ export function registerCommands(bot: Telegraf<BotContext>) {
   bot.command('help', helpCommand);
   bot.command('admin', adminCommand);
 
-  // Команди тільки для адміна
-  bot.command('menu', requireAdmin, menuCommand);
+  // Команди для linked Metrum-користувачів та legacy-адмінів
+  bot.command('menu', menuCommand);
   bot.command('logout', logoutCommand);
-  bot.command('projects', requireAdmin, projectsCommand);
   bot.command('estimate', requireAdmin, estimateCommand);
-  bot.command('materials', requireAdmin, materialsCommand);
-  bot.command('payments', requireAdmin, paymentsCommand);
-  bot.command('status', requireAdmin, statusCommand);
   bot.command('receipt', requireAdmin, receiptCommand);
   bot.command('scanwarehouse', requireAdmin, scanwarehouseCommand);
 
@@ -100,7 +90,34 @@ export function registerCommands(bot: Telegraf<BotContext>) {
 
   // Функція обробки аудіо (для voice та audio)
   const handleAudioMessage = async (ctx: BotContext, fileId: string, duration: number) => {
-    // Тільки для адміна
+    // Universal Agent — будь-який linked Metrum-користувач у DM
+    if (ctx.chat?.type === 'private' && ctx.from?.id) {
+      try {
+        const { prisma } = await import('../../src/lib/prisma');
+        const linked = await prisma.telegramBotUser.findUnique({
+          where: { telegramId: BigInt(ctx.from.id) },
+          select: { userId: true },
+        });
+        if (linked?.userId) {
+          await ctx.reply('🎙️ Розпізнаю аудіо…');
+          const { transcribeVoiceSafe } = await import('../agent/media');
+          const text = await transcribeVoiceSafe(ctx, fileId, duration);
+          if (!text) {
+            return ctx.reply('❌ Не вдалося розпізнати аудіо. Спробуй текстом.');
+          }
+          const { runAgent } = await import('../agent');
+          await runAgent(ctx, {
+            text,
+            prefix: '🎙️ [Голосове повідомлення розпізнано]',
+          });
+          return;
+        }
+      } catch (err) {
+        console.error('[agent-voice] fallback failed:', err);
+      }
+    }
+
+    // Тільки для адміна (legacy)
     if (!ctx.session?.isAdmin) {
       return ctx.reply('⛔️ Голосові повідомлення доступні тільки для прораба.\n\nВикористовуйте /admin для входу.');
     }
@@ -167,7 +184,56 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     }
   });
 
-  // Обробка фото — спершу group-expense (linked group + topic), потім приватний flow
+  // Universal Agent fallback for media у DM
+  const tryAgentMediaFallback = async (
+    ctx: BotContext,
+    fileId: string,
+    mime: string,
+    name: string,
+    caption: string | undefined,
+  ): Promise<boolean> => {
+    if (ctx.chat?.type !== 'private' || !ctx.from?.id) return false;
+    if (ctx.session?.pendingReceipt || ctx.session?.pendingWarehouseScan) return false;
+    try {
+      const { prisma } = await import('../../src/lib/prisma');
+      const linked = await prisma.telegramBotUser.findUnique({
+        where: { telegramId: BigInt(ctx.from.id) },
+        select: { userId: true },
+      });
+      if (!linked?.userId) return false;
+
+      await ctx.reply('📥 Завантажую файл…');
+      const { uploadToR2 } = await import('../agent/media');
+      const uploaded = await uploadToR2(ctx, fileId, {
+        fallbackName: name,
+        fallbackMime: mime,
+      });
+      if (!uploaded) {
+        await ctx.reply('❌ Не вдалося завантажити файл. Спробуй ще раз.');
+        return true;
+      }
+      const prefix = [
+        '📎 [Прикріплений файл]',
+        `r2Key: ${uploaded.r2Key}`,
+        `mimeType: ${uploaded.mimeType}`,
+        `name: ${uploaded.name}`,
+        mime.startsWith('image/')
+          ? 'Якщо це чек/накладна/фото витрати — виклич parse_expense_image з цим r2Key+mimeType.'
+          : 'Цей файл збережено у R2. Поки що OCR підтримується лише для зображень.',
+      ].join('\n');
+      const { runAgent } = await import('../agent');
+      await runAgent(ctx, {
+        text: caption || '',
+        prefix,
+      });
+      return true;
+    } catch (err) {
+      console.error('[agent-media] fallback failed:', err);
+      return false;
+    }
+  };
+
+  // Обробка фото — спершу group-expense, далі pending wizards для адміна, інакше Agent
   bot.on('photo', async (ctx) => {
     try {
       const handledByGroup = await handleGroupExpensePhoto(ctx);
@@ -175,9 +241,27 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     } catch (err) {
       console.error('[expense-photo] error:', err);
     }
+    if (ctx.session?.pendingReceipt) {
+      await handleReceiptPhoto(ctx);
+      return;
+    }
+    if (ctx.session?.pendingWarehouseScan) {
+      const handled = await handleWarehouseScanPhoto(ctx);
+      if (handled) return;
+    }
+    const photos = ctx.message?.photo ?? [];
+    const largest = photos[photos.length - 1];
+    if (largest) {
+      const handled = await tryAgentMediaFallback(
+        ctx,
+        largest.file_id,
+        'image/jpeg',
+        `photo-${largest.file_unique_id}.jpg`,
+        ctx.message?.caption,
+      );
+      if (handled) return;
+    }
     if (!ctx.session?.isAdmin) return;
-    const handled = await handleWarehouseScanPhoto(ctx);
-    if (handled) return;
     await handleReceiptPhoto(ctx);
   });
 
@@ -189,9 +273,26 @@ export function registerCommands(bot: Telegraf<BotContext>) {
     } catch (err) {
       console.error('[expense-doc] error:', err);
     }
+    if (ctx.session?.pendingReceipt) {
+      await handleReceiptDocument(ctx);
+      return;
+    }
+    if (ctx.session?.pendingWarehouseScan) {
+      const handled = await handleWarehouseScanDocument(ctx);
+      if (handled) return;
+    }
+    const doc = ctx.message?.document;
+    if (doc) {
+      const handled = await tryAgentMediaFallback(
+        ctx,
+        doc.file_id,
+        doc.mime_type || 'application/octet-stream',
+        doc.file_name || `doc-${doc.file_unique_id}`,
+        ctx.message?.caption,
+      );
+      if (handled) return;
+    }
     if (!ctx.session?.isAdmin) return;
-    const handled = await handleWarehouseScanDocument(ctx);
-    if (handled) return;
     await handleReceiptDocument(ctx);
   });
 
@@ -251,7 +352,31 @@ export function registerCommands(bot: Telegraf<BotContext>) {
       return;
     }
 
-    // Якщо адмін - обробляємо через AI
+    // Universal Bot Agent: будь-який linked Metrum-користувач у DM
+    // (FOREMAN/MANAGER/FINANCIER/ENGINEER/SUPER_ADMIN) йде через новий runtime.
+    if (
+      !text.startsWith('/') &&
+      ctx.chat?.type === 'private' &&
+      ctx.from?.id
+    ) {
+      try {
+        const { prisma } = await import('../../src/lib/prisma');
+        const linked = await prisma.telegramBotUser.findUnique({
+          where: { telegramId: BigInt(ctx.from.id) },
+          select: { userId: true },
+        });
+        if (linked?.userId) {
+          const { runAgent } = await import('../agent');
+          await ctx.sendChatAction('typing');
+          await runAgent(ctx, { text });
+          return;
+        }
+      } catch (err) {
+        console.error('[agent-fallback] failed, falling back to legacy:', err);
+      }
+    }
+
+    // Legacy admin AI - якщо адмін через пароль, без user-linking
     if (ctx.session?.isAdmin && !text.startsWith('/')) {
       const { handleAdminAI } = await import('../services/ai');
 
@@ -436,7 +561,28 @@ export function registerCommands(bot: Telegraf<BotContext>) {
       return;
     }
 
-    // Адмін кнопки
+    // AI preset (натиск кнопки з меню → запускаємо runAgent із preset-промптом)
+    if (data.startsWith('ai:preset:')) {
+      const slug = data.replace('ai:preset:', '');
+      await ctx.answerCbQuery();
+      try {
+        const { PRESET_PROMPTS } = await import('./menu');
+        const prompt = PRESET_PROMPTS[slug];
+        if (!prompt) {
+          await ctx.reply('⚠️ Невідома дія. Спробуй /menu.');
+          return;
+        }
+        const { runAgent } = await import('../agent');
+        await ctx.sendChatAction('typing');
+        await runAgent(ctx, { text: prompt });
+      } catch (err) {
+        console.error('[ai-preset] failed:', err);
+        await ctx.reply('❌ Сталася помилка. Спробуй ще раз.');
+      }
+      return;
+    }
+
+    // Адмін кнопки (legacy: для адмінів через пароль без user-linking)
     if (data.startsWith('admin:')) {
       if (!ctx.session?.isAdmin) {
         await ctx.answerCbQuery('⛔️ Потрібен вхід адміністратора', { show_alert: true });
@@ -451,113 +597,6 @@ export function registerCommands(bot: Telegraf<BotContext>) {
           await receiptCommand(ctx);
           break;
 
-        case 'projects':
-          await ctx.answerCbQuery();
-          // Показуємо всі проекти
-          const projects = await getUserProjects('', 'SUPER_ADMIN');
-          const message = formatProjectsList(projects);
-          await ctx.reply(message, {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([
-              [Markup.button.callback('🔙 Назад до меню', 'back_to_menu')]
-            ])
-          });
-          break;
-
-        case 'payments':
-          await ctx.answerCbQuery();
-          const { getUserPayments } = await import('../services/database');
-          const { formatPaymentsList } = await import('../services/formatter');
-          const payments = await getUserPayments('', 'SUPER_ADMIN');
-          const paymentsMsg = formatPaymentsList(payments);
-          await ctx.reply(paymentsMsg, {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([
-              [Markup.button.callback('🔙 Назад до меню', 'back_to_menu')]
-            ])
-          });
-          break;
-
-        case 'estimates':
-          await ctx.answerCbQuery();
-          const { prisma } = await import('../../src/lib/prisma');
-          const estimates = await prisma.estimate.findMany({
-            include: { project: true },
-            orderBy: { createdAt: 'desc' },
-            take: 10
-          });
-
-          if (estimates.length === 0) {
-            await ctx.reply('📊 Кошторисів не знайдено', {
-              ...Markup.inlineKeyboard([
-                [Markup.button.callback('🔙 Назад до меню', 'back_to_menu')]
-              ])
-            });
-          } else {
-            let msg = `📊 <b>Кошториси (${estimates.length})</b>\n\n`;
-            estimates.forEach((est, i) => {
-              msg += `${i + 1}. <b>${est.number}</b>\n`;
-              msg += `   └ ${est.title}\n`;
-              msg += `   └ Проект: ${est.project.title}\n`;
-              msg += `   └ Статус: ${est.status}\n\n`;
-            });
-            msg += `\nВикористовуйте: /estimate НОМЕР`;
-            await ctx.reply(msg, {
-              parse_mode: 'HTML',
-              ...Markup.inlineKeyboard([
-                [Markup.button.callback('🔙 Назад до меню', 'back_to_menu')]
-              ])
-            });
-          }
-          break;
-
-        case 'materials':
-          await ctx.answerCbQuery();
-          const { getMaterials } = await import('../services/database');
-          const { formatMaterialsList } = await import('../services/formatter');
-          const materials = await getMaterials();
-          const materialsMsg = formatMaterialsList(materials);
-          await ctx.reply(materialsMsg, {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([
-              [Markup.button.callback('🔙 Назад до меню', 'back_to_menu')]
-            ])
-          });
-          break;
-
-        case 'stats':
-          await ctx.answerCbQuery();
-          // Статистика
-          const allProjects = await getUserProjects('', 'SUPER_ADMIN');
-          const { getUserPayments: getPayments } = await import('../services/database');
-          const allPayments = await getPayments('', 'SUPER_ADMIN');
-          const { formatCurrency } = await import('../utils/constants');
-
-          const activeProjects = allProjects.filter(p => p.status === 'ACTIVE').length;
-          const totalBudget = allProjects.reduce((sum, p) => sum + parseFloat(p.totalBudget.toString()), 0);
-          const totalPaid = allProjects.reduce((sum, p) => sum + parseFloat(p.totalPaid.toString()), 0);
-          const pendingPayments = allPayments.filter(p => p.status === 'PENDING').length;
-
-          let statsMsg = `📊 <b>Загальна статистика</b>\n\n`;
-          statsMsg += `<b>Проекти:</b>\n`;
-          statsMsg += `└ Всього: ${allProjects.length}\n`;
-          statsMsg += `└ Активних: ${activeProjects}\n\n`;
-          statsMsg += `<b>Фінанси:</b>\n`;
-          statsMsg += `└ Загальний бюджет: ${formatCurrency(totalBudget)}\n`;
-          statsMsg += `└ Оплачено: ${formatCurrency(totalPaid)}\n`;
-          statsMsg += `└ Залишок: ${formatCurrency(totalBudget - totalPaid)}\n\n`;
-          if (pendingPayments > 0) {
-            statsMsg += `⏳ Очікується платежів: ${pendingPayments}\n`;
-          }
-
-          await ctx.reply(statsMsg, {
-            parse_mode: 'HTML',
-            ...Markup.inlineKeyboard([
-              [Markup.button.callback('🔙 Назад до меню', 'back_to_menu')]
-            ])
-          });
-          break;
-
         case 'logout':
           if (ctx.session) {
             ctx.session.isAdmin = false;
@@ -567,7 +606,7 @@ export function registerCommands(bot: Telegraf<BotContext>) {
           break;
 
         default:
-          await ctx.answerCbQuery('Функція в розробці...');
+          await ctx.answerCbQuery('Скористайтесь меню — /menu', { show_alert: true });
       }
     } else if (data === 'back_to_menu') {
       // Повернення до меню прораба

@@ -1,42 +1,62 @@
-import { BotContext } from '../types';
 import { Markup } from 'telegraf';
+import { BotContext } from '../types';
+
+async function isLinked(telegramId: number | undefined): Promise<boolean> {
+  if (!telegramId) return false;
+  try {
+    const { prisma } = await import('../../src/lib/prisma');
+    const row = await prisma.telegramBotUser.findUnique({
+      where: { telegramId: BigInt(telegramId) },
+      select: { userId: true },
+    });
+    return !!row?.userId;
+  } catch {
+    return false;
+  }
+}
 
 export async function helpCommand(ctx: BotContext) {
-  const isAdmin = ctx.session?.isAdmin;
+  const linked = await isLinked(ctx.from?.id);
 
-  const message = isAdmin
-    ? `ℹ️ <b>Довідка - Режим прораба</b>
+  if (linked) {
+    const message = `ℹ️ <b>Як користуватися ботом</b>
 
-<b>Доступні команди:</b>
+🤖 Бот побудовано навколо AI-помічника на Gemini 3.0 Flash.
 
-/menu - Головне меню прораба
-/projects - Всі проекти
-/payments - Всі платежі
-/estimates - Всі кошториси
-/materials - Каталог матеріалів
-/status - Загальна статистика
-/logout - Вийти з режиму прораба
+<b>Просто напиши або скажи:</b>
+• "Записати чек на 3200 за арматуру у проект Сонячна 12"
+• "Що сьогодні треба апрувити?"
+• "Мої задачі за пріоритетом"
+• "Покажи останні мої звіти"
 
-<b>AI Асистент:</b>
+📸 <b>Фото / 🎙 голос:</b>
+Надішли — бот сам розпізнає текст і запропонує дію.
 
-📝 Пишіть запити українською мовою:
-• "Покажи активні проекти"
-• "Скільки витратили на фундамент?"
-• "Статус платежів по проекту X"
-• "Розрахуй ПДВ на 100000"
-• "Коли завершимо проект?"
+<b>Команди:</b>
+/menu — твоє персональне меню
+/help — ця довідка
 
-🎙️ <b>Голосові повідомлення:</b>
-Надсилайте голосові повідомлення - бот автоматично розпізнає мову і виконає команду!
+🔔 Бот також надсилає:
+• сповіщення про @згадки і нові задачі
+• апруви на підтвердження
+• нагадування про дедлайни`;
 
-Бот автоматично знайде потрібну інформацію та виконає розрахунки.`
-    : `ℹ️ <b>Metrum Group Bot - Довідка</b>
+    await ctx.reply(message, {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('📋 Меню', 'back_to_menu')],
+      ]),
+    });
+    return;
+  }
 
-<b>Доступні команди:</b>
+  const message = `ℹ️ <b>Metrum Group Bot</b>
 
-/start - Головне меню
-/admin - Вхід для прораба
-/help - Ця довідка
+<b>Команди:</b>
+/start — головне меню
+/help — довідка
+
+Щоб отримати доступ до внутрішнього функціоналу — згенеруйте Telegram-посилання у профілі Metrum на сайті.
 
 <b>Підтримка:</b>
 📱 +380 67 743 0101
@@ -44,8 +64,6 @@ export async function helpCommand(ctx: BotContext) {
 
   await ctx.reply(message, {
     parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([
-      [Markup.button.callback(isAdmin ? '🔙 Назад до меню' : '🏠 Головна', isAdmin ? 'back_to_menu' : 'start')]
-    ])
+    ...Markup.inlineKeyboard([[Markup.button.callback('🏠 Головна', 'start')]]),
   });
 }
