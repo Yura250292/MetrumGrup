@@ -43,6 +43,8 @@ export interface MaterialPreset {
   /** Запас % за замовчуванням. */
   reservePercent: number;
   qtyMode: QtyMode;
+  /** Базова ціна ₴ за preset.unit (типова українська роздріб 2026). Fallback коли AI пошук не знайшов. */
+  baselinePrice: number;
 }
 
 /** Площа однієї стандартної гіпсокартонної плити 1.2 × 2.5 м, м². */
@@ -109,6 +111,10 @@ export function isThicknessWork(wt: WorkType): boolean {
   );
 }
 
+// Базові ціни — типова українська роздріб 2026 (медіана: epicentr / leroymerlin /
+// novabud). Це fallback коли AI пошук не зміг знайти; foreman може скоригувати
+// вручну. Помітне відхилення від реальної ціни — нормально, бо різниця між
+// економ / середнім / преміум сегментом може бути 3-5x.
 export const PRESETS: MaterialPreset[] = [
   // === Підлога ===
   {
@@ -120,6 +126,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "pcs",
     reservePercent: 10,
     qtyMode: "tile",
+    baselinePrice: 150, // ₴/шт за тип 60×60 (середній сегмент)
   },
   {
     id: "floor-tile-glue",
@@ -130,6 +137,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
+    baselinePrice: 12, // Ceresit CM11/CM14 ≈ 240 ₴/мішок 25кг
   },
   {
     id: "floor-laminate",
@@ -140,6 +148,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "m2",
     reservePercent: 7,
     qtyMode: "perArea",
+    baselinePrice: 320, // ₴/м² 8мм 32 клас
   },
   {
     id: "floor-underlay",
@@ -150,6 +159,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "m2",
     reservePercent: 5,
     qtyMode: "perArea",
+    baselinePrice: 35, // ₴/м² спінений ПЕ 3мм
   },
   {
     id: "floor-leveling",
@@ -160,6 +170,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "perArea",
+    baselinePrice: 18, // ₴/кг (Ceresit CN-83 ≈ 450 ₴/25кг)
   },
   {
     id: "floor-screed",
@@ -170,6 +181,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "thicknessCm",
+    baselinePrice: 5, // ₴/кг (М-150 ≈ 125 ₴/25кг)
   },
 
   // === Стіни ===
@@ -182,6 +194,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "pcs",
     reservePercent: 10,
     qtyMode: "tile",
+    baselinePrice: 200, // ₴/шт стінова плитка
   },
   {
     id: "wall-tile-glue",
@@ -192,6 +205,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
+    baselinePrice: 12,
   },
   {
     id: "wall-putty-start",
@@ -202,6 +216,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
+    baselinePrice: 13, // ₴/кг (Knauf HP-Start ≈ 330 ₴/25кг)
   },
   {
     id: "wall-putty-finish",
@@ -212,6 +227,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
+    baselinePrice: 15, // ₴/кг (Sniezka ≈ 380 ₴/25кг)
   },
   {
     id: "wall-plaster-gypsum",
@@ -222,6 +238,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "thicknessCm",
+    baselinePrice: 11, // ₴/кг (Knauf MP-75 ≈ 280 ₴/25кг)
   },
   {
     id: "wall-plaster-cement",
@@ -232,6 +249,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 5,
     qtyMode: "thicknessCm",
+    baselinePrice: 6, // ₴/кг
   },
   {
     id: "wall-paint",
@@ -242,6 +260,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
+    baselinePrice: 220, // ₴/л (Sniezka / Aura ≈ 220 ₴/л)
   },
   {
     id: "wall-primer",
@@ -252,6 +271,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
+    baselinePrice: 80, // ₴/л (Ceresit CT-17 ≈ 400 ₴/5л)
   },
   {
     id: "wall-drywall",
@@ -262,6 +282,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "pcs",
     reservePercent: 10,
     qtyMode: "drywall",
+    baselinePrice: 280, // ₴/лист 1.2×2.5 (Knauf 12.5мм)
   },
 
   // === Стеля ===
@@ -274,6 +295,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
+    baselinePrice: 220,
   },
   {
     id: "ceiling-primer",
@@ -284,6 +306,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "l",
     reservePercent: 5,
     qtyMode: "perArea",
+    baselinePrice: 80,
   },
   {
     id: "ceiling-putty",
@@ -294,6 +317,7 @@ export const PRESETS: MaterialPreset[] = [
     unit: "kg",
     reservePercent: 10,
     qtyMode: "perArea",
+    baselinePrice: 15,
   },
 ];
 

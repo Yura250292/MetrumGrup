@@ -231,7 +231,7 @@ async function lookupMarket(
     response = await Promise.race([
       callPromise,
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 25_000),
+        setTimeout(() => reject(new Error("timeout")), 50_000),
       ),
     ]);
   } catch (e) {

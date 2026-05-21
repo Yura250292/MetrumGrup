@@ -225,19 +225,23 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uniqueQuoteRequests]);
 
-  // Labor fallback: якщо AI не повернула ціну для labor — підставляємо
-  // baseline rate з LABOR_PRESETS, щоб підсумок зразу був порахований.
+  // Baseline fallback: якщо AI не повернула ціну (timeout, відмова) —
+  // підставляємо типову українську baseline-ціну (LABOR_PRESETS для робіт,
+  // material.baselinePrice для матеріалів), щоб підсумок зразу був порахований.
   useEffect(() => {
     for (const line of lines) {
-      if (line.kind !== "labor") continue;
       if (line.unitPrice > 0) continue;
       const key = `${line.kind}:${line.quoteName}`;
       const q = quotes[key];
       // Якщо quote вже отримано і він none/без ціни — fallback на baseline.
       if (q && (q.price == null || q.price <= 0)) {
-        const baseline = LABOR_PRESETS[line.workType as WT]?.ratePerSqm;
-        if (baseline && baseline > 0) {
-          onSetPrice(line.roomId, `labor-${line.workType}`, baseline);
+        if (line.kind === "labor") {
+          const baseline = LABOR_PRESETS[line.workType as WT]?.ratePerSqm;
+          if (baseline && baseline > 0) {
+            onSetPrice(line.roomId, `labor-${line.workType}`, baseline);
+          }
+        } else if (line.material?.baselinePrice && line.material.baselinePrice > 0) {
+          onSetPrice(line.roomId, line.material.id, line.material.baselinePrice);
         }
       }
     }
@@ -557,7 +561,11 @@ function LineRow({
       )}
       {quote && quote.source === "none" && line.unitPrice > 0 && (
         <div className="text-[10px] text-emerald-300/70 px-1">
-          {isLabor ? "Базова ставка України" : "Ціна задана вручну"}
+          {isLabor
+            ? "Базова ставка України"
+            : line.material?.baselinePrice === line.unitPrice
+              ? "Базова ціна України"
+              : "Ціна задана вручну"}
         </div>
       )}
       {quote && quote.source === "none" && line.unitPrice === 0 && (
