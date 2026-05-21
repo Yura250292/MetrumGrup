@@ -42,7 +42,15 @@ type DepartmentFull = {
   teams: DeptTeam[];
 };
 
-type UserOption = { userId: string; name: string };
+/**
+ * Кандидат для керівника / бригадира / учасника бригади.
+ * Список будується зі співробітників, а не з User-ів. Якщо у співробітника
+ * ще не привʼязаний акаунт (`userId === null`) — він показується у списку
+ * з позначкою "без акаунта", але вибрати його не можна (схема зберігає
+ * `headUserId`/`leadUserId`, тобто посилання на User). Це тимчасово, поки
+ * команда поступово привʼязує акаунти до співробітників.
+ */
+type UserOption = { userId: string | null; name: string };
 
 type TeamMemberRow = {
   user: { id: string; name: string; avatar: string | null };
@@ -103,6 +111,7 @@ export function DepartmentDetail({
           id: string;
           fullName: string;
           userId: string | null;
+          isActive: boolean;
           departmentId: string | null;
         }[];
         setAllEmployees(
@@ -112,10 +121,13 @@ export function DepartmentDetail({
             departmentId: e.departmentId,
           })),
         );
+        // Усі активні співробітники потрапляють у dropdown; ті, в кого ще немає
+        // акаунта (userId === null), показуються disabled — щоб директор бачив
+        // повну картину людей, навіть якщо вибрати ще не може.
         setUserOptions(
           emps
-            .filter((e) => e.userId)
-            .map((e) => ({ userId: e.userId as string, name: e.fullName })),
+            .filter((e) => e.isActive)
+            .map((e) => ({ userId: e.userId, name: e.fullName })),
         );
       }
     } catch (err) {
@@ -285,11 +297,7 @@ export function DepartmentDetail({
                   style={inputStyle()}
                 >
                   <option value="">— не призначено —</option>
-                  {userOptions.map((u) => (
-                    <option key={u.userId} value={u.userId}>
-                      {u.name}
-                    </option>
-                  ))}
+                  {renderEmployeeOptions(userOptions)}
                 </select>
               </Field>
               <Field label="Нотатки">
@@ -716,11 +724,7 @@ function BrigadeCard({
                 style={inputStyle()}
               >
                 <option value="">— бригадир не призначений —</option>
-                {userOptions.map((u) => (
-                  <option key={u.userId} value={u.userId}>
-                    {u.name}
-                  </option>
-                ))}
+                {renderEmployeeOptions(userOptions)}
               </select>
               <div className="flex items-center gap-1.5">
                 {BRIGADE_COLORS.map((c) => (
@@ -810,13 +814,11 @@ function BrigadeCard({
                   style={inputStyle()}
                 >
                   <option value="">— додати учасника —</option>
-                  {userOptions
-                    .filter((u) => !memberIds.has(u.userId))
-                    .map((u) => (
-                      <option key={u.userId} value={u.userId}>
-                        {u.name}
-                      </option>
-                    ))}
+                  {renderEmployeeOptions(
+                    userOptions.filter(
+                      (u) => !u.userId || !memberIds.has(u.userId),
+                    ),
+                  )}
                 </select>
                 <button
                   onClick={() => void addMember()}
@@ -877,4 +879,27 @@ function inputStyle(): React.CSSProperties {
     border: `1px solid ${T.borderStrong}`,
     color: T.textPrimary,
   };
+}
+
+/**
+ * Спільний рендер опцій dropdown-а для керівника/бригадира/учасника.
+ * Співробітники без привʼязаного акаунта показуються disabled з підписом
+ * «(без акаунта)» — щоб директор бачив повний штат, але не міг призначити
+ * нікого, для кого ще немає User-а у схемі.
+ */
+function renderEmployeeOptions(options: UserOption[]): React.ReactNode {
+  return options.map((u, idx) => {
+    if (!u.userId) {
+      return (
+        <option key={`no-acct-${idx}-${u.name}`} value="" disabled>
+          {u.name} — без акаунта
+        </option>
+      );
+    }
+    return (
+      <option key={u.userId} value={u.userId}>
+        {u.name}
+      </option>
+    );
+  });
 }
