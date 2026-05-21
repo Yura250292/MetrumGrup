@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   Clock,
   Copy,
+  Eye,
+  EyeOff,
   ExternalLink,
   KeyRound,
   Link2,
@@ -29,6 +31,7 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 import { EmployeeAvatar } from "./employee-avatar";
+import { useHideSalaries } from "./use-hide-salaries";
 import {
   ROLE_COLORS,
   ROLE_LABELS,
@@ -277,7 +280,10 @@ export function EmployeeDossier({
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canDelete = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
   // ЗП — лише SUPER_ADMIN (правило: цифри бачить тільки Адмін).
-  const canSeeSalary = currentUserRole === "SUPER_ADMIN";
+  const hasSalaryAccess = currentUserRole === "SUPER_ADMIN";
+  const [salariesHidden, setSalariesHidden] = useHideSalaries();
+  // Опенспейс-режим: див. employees-list — toggle спільний через localStorage.
+  const canSeeSalary = hasSalaryAccess && !salariesHidden;
 
   async function load() {
     setLoading(true);
@@ -417,6 +423,26 @@ export function EmployeeDossier({
             {tenure && <span>· стаж {tenure}</span>}
           </div>
         </div>
+        {hasSalaryAccess && (
+          <button
+            type="button"
+            onClick={() => setSalariesHidden(!salariesHidden)}
+            title={
+              salariesHidden
+                ? "Зарплати приховані — натисніть, щоб показати"
+                : "Сховати зарплати на цьому екрані (опенспейс-режим)"
+            }
+            className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold transition"
+            style={{
+              backgroundColor: salariesHidden ? T.accentPrimary : T.panelSoft,
+              color: salariesHidden ? "#fff" : T.textSecondary,
+              border: `1px solid ${salariesHidden ? T.accentPrimary : T.borderSoft}`,
+            }}
+          >
+            {salariesHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+            {salariesHidden ? "ЗП приховані" : "Сховати ЗП"}
+          </button>
+        )}
         {canDelete && (
           <button
             onClick={handleDelete}

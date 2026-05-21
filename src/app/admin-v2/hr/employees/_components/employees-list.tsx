@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  Eye,
+  EyeOff,
   LayoutList,
   ListTree,
   Loader2,
@@ -18,6 +20,7 @@ import { ExcelImportModal } from "../../_components/excel-import-modal";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
 import { EmployeesTable, type DisplayMode } from "./employees-table";
 import { DepartmentsPanel } from "./departments-panel";
+import { useHideSalaries } from "./use-hide-salaries";
 
 type LinkedUser = {
   id: string;
@@ -117,7 +120,11 @@ export function EmployeesList({
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canSeeExternal = currentUserRole === "SUPER_ADMIN";
   // ЗП — лише SUPER_ADMIN (правило: цифри бачить тільки Адмін).
-  const canSeeSalary = currentUserRole === "SUPER_ADMIN";
+  const hasSalaryAccess = currentUserRole === "SUPER_ADMIN";
+  const [salariesHidden, setSalariesHidden] = useHideSalaries();
+  // Опенспейс-режим: дозволяємо адміну тимчасово сховати ЗП на власному екрані,
+  // щоб стажери поруч не побачили цифри. На права не впливає — лише на рендер.
+  const canSeeSalary = hasSalaryAccess && !salariesHidden;
 
   const [tab, setTab] = useState<Tab>(
     initialTab === "external" && canSeeExternal ? "external" : "employees",
@@ -411,6 +418,26 @@ export function EmployeesList({
           />
           Показати неактивних
         </label>
+        {hasSalaryAccess && tab === "employees" && (
+          <button
+            type="button"
+            onClick={() => setSalariesHidden(!salariesHidden)}
+            title={
+              salariesHidden
+                ? "Зарплати приховані — натисніть, щоб показати"
+                : "Сховати зарплати на цьому екрані (опенспейс-режим)"
+            }
+            className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-[12px] font-semibold transition"
+            style={{
+              backgroundColor: salariesHidden ? T.accentPrimary : T.panelSoft,
+              color: salariesHidden ? "#fff" : T.textSecondary,
+              border: `1px solid ${salariesHidden ? T.accentPrimary : T.borderSoft}`,
+            }}
+          >
+            {salariesHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+            {salariesHidden ? "ЗП приховані" : "Сховати ЗП"}
+          </button>
+        )}
       </div>
       )}
 
