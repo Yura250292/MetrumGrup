@@ -202,15 +202,20 @@ export async function POST(request: NextRequest) {
     });
   } catch (e) {
     console.error("[foreman/ai-render] fal.ai failed", e);
-    return NextResponse.json(
-      {
-        error:
-          e instanceof Error
-            ? e.message.slice(0, 200)
-            : "Помилка генерації photoreal",
-      },
-      { status: 500 },
-    );
+    const raw = e instanceof Error ? e.message : String(e);
+    // Friendly messages для типових проблем
+    let friendly = raw.slice(0, 200);
+    if (/balance|insufficient|funds|credit/i.test(raw)) {
+      friendly = "На fal.ai не вистачає коштів. Поповніть баланс fal API.";
+    } else if (/timeout|timed out|exceeded/i.test(raw)) {
+      friendly =
+        "Генерація зайняла надто багато часу. Спробуйте ще раз — можливо план занадто складний для одного проходу.";
+    } else if (/rate.?limit|429/i.test(raw)) {
+      friendly = "Забагато паралельних запитів до fal.ai. Зачекайте 30 с і повторіть.";
+    } else if (/network|fetch|ECONN|ETIMED/i.test(raw)) {
+      friendly = "Проблема з мережею до fal.ai. Спробуйте за хвилину.";
+    }
+    return NextResponse.json({ error: friendly }, { status: 500 });
   }
 
   const outputUrl = result.images[0]?.url;

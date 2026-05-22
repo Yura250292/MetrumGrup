@@ -16,6 +16,8 @@ const bodySchema = z.object({
       z.object({
         id: z.string().min(1).max(120),
         name: z.string().trim().min(1).max(120),
+        x: z.number().default(0),
+        y: z.number().default(0),
         w: z.number().positive(),
         h: z.number().positive(),
         ceilingHeight: z.number().positive(),

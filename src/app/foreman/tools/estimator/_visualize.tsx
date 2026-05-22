@@ -69,6 +69,8 @@ export function Visualize({
           rooms: plan.rooms.map((r) => ({
             id: r.id,
             name: r.name,
+            x: r.x,
+            y: r.y,
             w: r.w,
             h: r.h,
             ceilingHeight: r.ceilingHeight,

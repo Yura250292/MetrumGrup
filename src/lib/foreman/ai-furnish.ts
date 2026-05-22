@@ -53,6 +53,10 @@ export interface FurnishRequest {
   rooms: {
     id: string;
     name: string;
+    /** World координати NW-кута — потрібні для projectOpeningToRoom щоб
+     *  знайти спільні стіни між кімнатами. */
+    x: number;
+    y: number;
     w: number;
     h: number;
     ceilingHeight: number;
@@ -326,15 +330,15 @@ function rectsOverlap(a: Rect2, b: Rect2, eps = 0.02): boolean {
 
 /**
  * Зона "не ставити меблі" перед прорізом — perpendicular into the room.
- * Двері: 1 м (з невеликим відступом по ширині), вікна: 0.3 м.
+ * Двері: 1.2 м (swing зона + comfortable walk-through), вікна: 0.3 м.
  */
 function openingClearanceRect(
   opening: FurnishRequest["openings"][number],
   roomW: number,
   roomH: number,
 ): Rect2 {
-  const depth = opening.type === "door" ? 1.0 : 0.3;
-  const widthMargin = opening.type === "door" ? 0.1 : 0;
+  const depth = opening.type === "door" ? 1.2 : 0.3;
+  const widthMargin = opening.type === "door" ? 0.15 : 0;
   switch (opening.side) {
     case "N":
       return {
@@ -383,6 +387,130 @@ function blocksAnyOpening(
     }
   }
   return { blocked: false };
+}
+
+/**
+ * Проектує опеннінг із sourceRoom на targetRoom, якщо вони мають спільну
+ * стіну і опеннінг лежить на ній. Без цього двері/вікна між кімнатами
+ * "видимі" тільки для тієї кімнати, на якій користувач їх позначив, і AI
+ * не знає про них при меблюванні сусідньої кімнати.
+ *
+ * Повертає null якщо опеннінг НЕ на спільній стіні.
+ */
+function projectOpeningToRoom(
+  opening: FurnishRequest["openings"][number],
+  sourceRoom: FurnishRequest["rooms"][number],
+  targetRoom: FurnishRequest["rooms"][number],
+): FurnishRequest["openings"][number] | null {
+  if (sourceRoom.id === targetRoom.id) return null;
+
+  const EPS = 0.02;
+  const sxA =
+    opening.side === "N" || opening.side === "S"
+      ? sourceRoom.x + opening.offset
+      : sourceRoom.x + (opening.side === "E" ? sourceRoom.w : 0);
+  const sxB =
+    opening.side === "N" || opening.side === "S"
+      ? sourceRoom.x + opening.offset + opening.width
+      : sxA;
+  const syA =
+    opening.side === "E" || opening.side === "W"
+      ? sourceRoom.y + opening.offset
+      : sourceRoom.y + (opening.side === "S" ? sourceRoom.h : 0);
+  const syB =
+    opening.side === "E" || opening.side === "W"
+      ? sourceRoom.y + opening.offset + opening.width
+      : syA;
+
+  const txMin = targetRoom.x;
+  const txMax = targetRoom.x + targetRoom.w;
+  const tyMin = targetRoom.y;
+  const tyMax = targetRoom.y + targetRoom.h;
+
+  const horizontal = opening.side === "N" || opening.side === "S";
+
+  if (horizontal) {
+    // Опеннінг — горизонтальна лінія в y = syA. Шукаємо чи це N або S
+    // стіна targetRoom.
+    const yLine = syA;
+    // Має бути на одній з горизонтальних стін targetRoom і x-діапазон
+    // має перекриватися з x-діапазоном targetRoom.
+    const xOverlapMin = Math.max(sxA, txMin);
+    const xOverlapMax = Math.min(sxB, txMax);
+    if (xOverlapMax - xOverlapMin < opening.width - EPS) return null;
+
+    if (Math.abs(yLine - tyMin) < EPS) {
+      return {
+        ...opening,
+        roomId: targetRoom.id,
+        side: "N",
+        offset: Math.max(0, xOverlapMin - txMin),
+      };
+    }
+    if (Math.abs(yLine - tyMax) < EPS) {
+      return {
+        ...opening,
+        roomId: targetRoom.id,
+        side: "S",
+        offset: Math.max(0, xOverlapMin - txMin),
+      };
+    }
+    return null;
+  }
+
+  // Vertical opening — на E/W стіні
+  const xLine = sxA;
+  const yOverlapMin = Math.max(syA, tyMin);
+  const yOverlapMax = Math.min(syB, tyMax);
+  if (yOverlapMax - yOverlapMin < opening.width - EPS) return null;
+
+  if (Math.abs(xLine - txMin) < EPS) {
+    return {
+      ...opening,
+      roomId: targetRoom.id,
+      side: "W",
+      offset: Math.max(0, yOverlapMin - tyMin),
+    };
+  }
+  if (Math.abs(xLine - txMax) < EPS) {
+    return {
+      ...opening,
+      roomId: targetRoom.id,
+      side: "E",
+      offset: Math.max(0, yOverlapMin - tyMin),
+    };
+  }
+  return null;
+}
+
+/**
+ * Розширює список опеннінгів: для кожної кімнати додає проекції з сусідніх.
+ * Результат — масив де КОЖНА кімната бачить ВСІ опеннінги, що впливають на її
+ * стіни, незалежно від того, де користувач їх "зареєстрував".
+ */
+function expandOpenings(
+  rooms: FurnishRequest["rooms"],
+  openings: FurnishRequest["openings"],
+): FurnishRequest["openings"] {
+  const result: FurnishRequest["openings"] = [...openings];
+  const seenKeys = new Set(
+    openings.map((o) => `${o.roomId}|${o.side}|${o.offset.toFixed(2)}|${o.width.toFixed(2)}`),
+  );
+
+  for (const targetRoom of rooms) {
+    for (const o of openings) {
+      if (o.roomId === targetRoom.id) continue;
+      const sourceRoom = rooms.find((r) => r.id === o.roomId);
+      if (!sourceRoom) continue;
+      const projected = projectOpeningToRoom(o, sourceRoom, targetRoom);
+      if (!projected) continue;
+      const key = `${projected.roomId}|${projected.side}|${projected.offset.toFixed(2)}|${projected.width.toFixed(2)}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      result.push(projected);
+    }
+  }
+  return result;
 }
 
 function placeAt(
@@ -655,6 +783,12 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+  // ВАЖЛИВО: розширюємо опеннінги — кожна кімната має бачити всі прорізи,
+  // що впливають на її стіни (включно з тими, що зареєстровані на сусідніх
+  // кімнатах через спільні стіни). Інакше AI ставить меблі на двері між
+  // кімнатами, бо «зі свого боку» їх не бачить.
+  const expandedOpenings = expandOpenings(req.rooms, req.openings);
+
   // Per-room concurrency cap. Тепер semaphore у anthropic-throttle глобально
   // обмежує паралелізм; тут можна лишити 2 (буде стояти у черзі семафора).
   const CONCURRENCY = 2;
@@ -667,7 +801,7 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
       const idx = cursor++;
       const room = req.rooms[idx];
       try {
-        const v = await furnishRoom(anthropic, room, req.openings);
+        const v = await furnishRoom(anthropic, room, expandedOpenings);
         results[idx] = { status: "fulfilled", value: v };
       } catch (e) {
         results[idx] = { status: "rejected", reason: e };
@@ -690,7 +824,7 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
       // тиха помилка — fallback на inferred class + baseline
       const inferred = inferClassFromName(room.name) ?? "other";
       if (inferred !== "other" && inferred !== "corridor") {
-        const baseline = applyBaselineLayout(room, inferred, req.openings);
+        const baseline = applyBaselineLayout(room, inferred, expandedOpenings);
         rooms.push({ roomId: room.id, classification: inferred });
         furniture.push(...baseline);
       } else {
