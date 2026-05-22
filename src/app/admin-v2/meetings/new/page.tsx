@@ -2,7 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeft, Loader2, AlertCircle, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Mic,
+  FileText,
+} from "lucide-react";
 import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -12,6 +21,11 @@ import {
 import { AudioPreview } from "../_components/audio-preview";
 import { LiveAgentPanel } from "../_components/live-agent-panel";
 import { MeetingsNavSidebar } from "../_components/meetings-nav-sidebar";
+import { MeetingNoteEditor } from "../_components/meeting-note-editor";
+import {
+  AttachmentStager,
+  uploadMeetingAttachment,
+} from "../_components/meeting-attachments";
 import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
 type FolderOption = {
@@ -28,7 +42,10 @@ type PendingAudio = {
   fileName: string;
 };
 
-type Stage = "form" | "creating" | "uploading" | "triggering";
+// Як створюється нарада: голосом (запис/аудіофайл) або текстовою нотаткою.
+type SourceMode = "voice" | "text";
+
+type Stage = "form" | "creating" | "uploading" | "attaching" | "triggering";
 
 export default function NewMeetingPage() {
   const router = useRouter();
@@ -37,9 +54,13 @@ export default function NewMeetingPage() {
 
   const [folderOptions, setFolderOptions] = useState<FolderOption[]>([]);
 
+  const [mode, setMode] = useState<SourceMode>("voice");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [folderId, setFolderId] = useState<string>(initialFolder);
+
+  const [noteText, setNoteText] = useState("");
+  const [stagedFiles, setStagedFiles] = useState<File[]>([]);
 
   const [pending, setPending] = useState<PendingAudio | null>(null);
   const [stage, setStage] = useState<Stage>("form");
@@ -74,6 +95,7 @@ export default function NewMeetingPage() {
   // Створення draft-meeting при старті запису — для Live AI Agent.
   useEffect(() => {
     if (
+      mode === "voice" &&
       recState === "recording" &&
       !meetingId &&
       !creatingDraft &&
@@ -102,7 +124,7 @@ export default function NewMeetingPage() {
         }
       })();
     }
-  }, [recState, meetingId, creatingDraft, stage, title, description, folderId]);
+  }, [mode, recState, meetingId, creatingDraft, stage, title, description, folderId]);
 
   useEffect(() => {
     (async () => {
@@ -127,6 +149,20 @@ export default function NewMeetingPage() {
     });
   }
 
+  // Завантаження стейдж-файлів у вже створену нараду. Не критичний шлях —
+  // якщо якийсь файл не завантажився, нараду все одно зберігаємо, а вкладення
+  // можна додати пізніше на сторінці наради.
+  async function uploadStagedAttachments(targetMeetingId: string) {
+    for (const file of stagedFiles) {
+      try {
+        await uploadMeetingAttachment(targetMeetingId, file);
+      } catch (err) {
+        console.warn("[new-meeting] attachment upload failed:", file.name, err);
+      }
+    }
+  }
+
+  // ── Голосова нарада: створити → завантажити аудіо → вкладення → транскрипція
   async function saveAndProcess() {
     if (!pending) return;
     setError(null);
@@ -208,8 +244,60 @@ export default function NewMeetingPage() {
       );
       if (!completeRes.ok) throw new Error("Не вдалося зафіксувати завантаження");
 
+      if (stagedFiles.length > 0) {
+        setStage("attaching");
+        await uploadStagedAttachments(id);
+      }
+
       setStage("triggering");
       fetch(`/api/admin/meetings/${id}/transcribe`, { method: "POST" }).catch(
+        () => {}
+      );
+
+      router.push(`/admin-v2/meetings/${id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка");
+      setStage("form");
+    }
+  }
+
+  // ── Текстова нарада: створити з нотаткою → вкладення → AI-підсумок
+  async function saveTextMeeting() {
+    const text = noteText.trim();
+    if (!text) {
+      setError("Спершу введіть текст наради");
+      return;
+    }
+    setError(null);
+    try {
+      const finalTitle = title.trim() || autoDefaultTitle();
+
+      setStage("creating");
+      const createRes = await fetch("/api/admin/meetings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: finalTitle,
+          description: description.trim() || null,
+          folderId: folderId || null,
+          noteText: text,
+        }),
+      });
+      if (!createRes.ok) {
+        const j = await createRes.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося створити нараду");
+      }
+      const { meeting } = await createRes.json();
+      const id: string = meeting.id;
+
+      if (stagedFiles.length > 0) {
+        setStage("attaching");
+        await uploadStagedAttachments(id);
+      }
+
+      setStage("triggering");
+      // AI-підсумок генерується окремо й оригінальну нотатку не змінює.
+      fetch(`/api/admin/meetings/${id}/summarize`, { method: "POST" }).catch(
         () => {}
       );
 
@@ -228,182 +316,308 @@ export default function NewMeetingPage() {
 
   const busy = stage !== "form";
   const titlePlaceholder = autoDefaultTitle();
+  // Перемикач режиму ховаємо, щойно користувач почав запис / має аудіо —
+  // на цьому етапі нарада вже «голосова».
+  const canSwitchMode = !busy && !pending && recState === "idle";
 
   return (
     <div className="mx-auto max-w-7xl">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
         <MeetingsNavSidebar highlightFolderId={folderId || null} />
         <div className="min-w-0">
-      <Link
-        href="/admin-v2/meetings"
-        className="mb-4 inline-flex items-center gap-1 text-sm"
-        style={{ color: T.textMuted }}
-      >
-        <ArrowLeft size={14} /> До списку нарад
-      </Link>
+          <Link
+            href="/admin-v2/meetings"
+            className="mb-4 inline-flex items-center gap-1 text-sm"
+            style={{ color: T.textMuted }}
+          >
+            <ArrowLeft size={14} /> До списку нарад
+          </Link>
 
-      <h1 className="mb-2 text-2xl font-bold" style={{ color: T.textPrimary }}>
-        Нова нарада
-      </h1>
-      <p className="mb-4 flex items-center gap-1.5 text-sm" style={{ color: T.textMuted }}>
-        <Sparkles size={14} style={{ color: T.accentPrimary }} />
-        Просто натисніть «Почати запис». Назву AI підбере сам після розпізнавання — її потім можна перейменувати.
-      </p>
-
-      {!pending && !busy && (
-        <>
-          <MeetingRecorder />
-          {recState === "idle" && (
-            <>
-              <div className="my-3" />
-              <MeetingUploader onFile={handleFile} disabled={false} />
-            </>
-          )}
-        </>
-      )}
-
-      {/* Live AI Agent — зʼявляється коли draft-meeting створено
-          (момент старту запису). Дає підказки в реальному часі. */}
-      {meetingId && (
-        <div className="mt-4">
-          <LiveAgentPanel meetingId={meetingId} />
-        </div>
-      )}
-
-      {!busy && (
-        <div
-          className="mt-4 rounded-xl"
-          style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
-        >
-          <button
-            type="button"
-            onClick={() => setDetailsOpen((v) => !v)}
-            className="flex w-full items-center justify-between px-5 py-3 text-sm font-medium"
+          <h1
+            className="mb-3 text-2xl font-bold"
             style={{ color: T.textPrimary }}
           >
-            <span>
-              Деталі (необов'язково)
-              <span className="ml-2 text-xs" style={{ color: T.textMuted }}>
-                {title.trim() || "AI назве сам"}
+            Нова нарада
+          </h1>
+
+          {/* Перемикач способу: голос або текст */}
+          {canSwitchMode && (
+            <div
+              className="mb-3 flex gap-1 rounded-xl p-1"
+              style={{
+                background: T.panel,
+                border: `1px solid ${T.borderSoft}`,
+                width: "fit-content",
+              }}
+            >
+              <ModeTab
+                active={mode === "voice"}
+                onClick={() => setMode("voice")}
+                icon={<Mic size={15} />}
+                label="Голосова"
+              />
+              <ModeTab
+                active={mode === "text"}
+                onClick={() => setMode("text")}
+                icon={<FileText size={15} />}
+                label="Текстова"
+              />
+            </div>
+          )}
+
+          {!busy && (
+            <p
+              className="mb-4 flex items-center gap-1.5 text-sm"
+              style={{ color: T.textMuted }}
+            >
+              <Sparkles size={14} style={{ color: T.accentPrimary }} />
+              {mode === "voice"
+                ? "Натисніть «Почати запис» або завантажте аудіо. Назву AI підбере сам після розпізнавання."
+                : "Запишіть нараду текстом — AI зробить структурований підсумок, рішення та задачі. Назву підбере сам."}
+            </p>
+          )}
+
+          {/* ─────────────── ГОЛОСОВА ─────────────── */}
+          {mode === "voice" && (
+            <>
+              {!pending && !busy && (
+                <>
+                  <MeetingRecorder />
+                  {recState === "idle" && (
+                    <>
+                      <div className="my-3" />
+                      <MeetingUploader onFile={handleFile} disabled={false} />
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* Live AI Agent — зʼявляється коли draft-meeting створено
+                  (момент старту запису). Дає підказки в реальному часі. */}
+              {meetingId && (
+                <div className="mt-4">
+                  <LiveAgentPanel meetingId={meetingId} />
+                </div>
+              )}
+
+              {pending && (
+                <div className="mt-4">
+                  <AudioPreview
+                    blob={pending.blob}
+                    mimeType={pending.mimeType}
+                    durationMs={pending.durationMs}
+                    fileName={pending.fileName}
+                    onSave={saveAndProcess}
+                    onReset={resetPending}
+                    saving={busy}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ─────────────── ТЕКСТОВА ─────────────── */}
+          {mode === "text" && !busy && (
+            <MeetingNoteEditor
+              value={noteText}
+              onChange={setNoteText}
+              disabled={busy}
+            />
+          )}
+
+          {/* ─────────────── ВКЛАДЕННЯ (обидва режими) ─────────────── */}
+          {!busy && (
+            <div className="mt-4">
+              <AttachmentStager
+                files={stagedFiles}
+                onChange={setStagedFiles}
+                disabled={busy}
+              />
+            </div>
+          )}
+
+          {/* ─────────────── ДЕТАЛІ ─────────────── */}
+          {!busy && (
+            <div
+              className="mt-4 rounded-xl"
+              style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
+            >
+              <button
+                type="button"
+                onClick={() => setDetailsOpen((v) => !v)}
+                className="flex w-full items-center justify-between px-5 py-3 text-sm font-medium"
+                style={{ color: T.textPrimary }}
+              >
+                <span>
+                  Деталі (необовʼязково)
+                  <span className="ml-2 text-xs" style={{ color: T.textMuted }}>
+                    {title.trim() || "AI назве сам"}
+                  </span>
+                </span>
+                {detailsOpen ? (
+                  <ChevronUp size={16} />
+                ) : (
+                  <ChevronDown size={16} />
+                )}
+              </button>
+              {detailsOpen && (
+                <div
+                  className="border-t px-5 pb-5 pt-3"
+                  style={{ borderColor: T.borderSoft }}
+                >
+                  <div className="mb-3">
+                    <label
+                      className="mb-1 block text-xs font-medium"
+                      style={{ color: T.textSecondary }}
+                    >
+                      Назва
+                    </label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      disabled={busy}
+                      placeholder={`Залиште порожньою — AI назве сам · напр. «${titlePlaceholder}»`}
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        background: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="mb-3">
+                    <label
+                      className="mb-1 block text-xs font-medium"
+                      style={{ color: T.textSecondary }}
+                    >
+                      Папка
+                    </label>
+                    <select
+                      value={folderId}
+                      onChange={(e) => setFolderId(e.target.value)}
+                      disabled={busy}
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        background: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    >
+                      <option value="">— Без папки —</option>
+                      {folderOptions.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {`${"— ".repeat(f.depth)}${f.name}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label
+                      className="mb-1 block text-xs font-medium"
+                      style={{ color: T.textSecondary }}
+                    >
+                      Опис
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      disabled={busy}
+                      rows={2}
+                      placeholder="Короткий контекст для AI (опційно)…"
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        background: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Кнопка збереження текстової наради */}
+          {mode === "text" && !busy && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={saveTextMeeting}
+                disabled={!noteText.trim()}
+                className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ background: T.accentPrimary }}
+              >
+                <Sparkles size={16} />
+                Зберегти й проаналізувати
+              </button>
+            </div>
+          )}
+
+          {error && (
+            <div
+              className="mt-4 flex items-center gap-2 rounded-lg p-3 text-sm"
+              style={{ background: T.dangerSoft, color: T.danger }}
+            >
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+
+          {busy && (
+            <div
+              className="mt-4 flex items-center gap-3 rounded-lg p-4"
+              style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
+            >
+              <Loader2
+                size={18}
+                className="animate-spin"
+                style={{ color: T.accentPrimary }}
+              />
+              <span className="text-sm" style={{ color: T.textPrimary }}>
+                {stage === "creating" && "Створення наради…"}
+                {stage === "uploading" &&
+                  `Завантаження аудіо… ${uploadProgress}%`}
+                {stage === "attaching" && "Завантаження вкладень…"}
+                {stage === "triggering" &&
+                  (mode === "text"
+                    ? "Запускаємо AI-аналіз…"
+                    : "Запускаємо розпізнавання…")}
               </span>
-            </span>
-            {detailsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-          {detailsOpen && (
-            <div className="border-t px-5 pb-5 pt-3" style={{ borderColor: T.borderSoft }}>
-              <div className="mb-3">
-                <label
-                  className="mb-1 block text-xs font-medium"
-                  style={{ color: T.textSecondary }}
-                >
-                  Назва
-                </label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  disabled={busy}
-                  placeholder={`Залиште порожньою — AI назве сам · напр. «${titlePlaceholder}»`}
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                />
-              </div>
-
-              <div className="mb-3">
-                <label
-                  className="mb-1 block text-xs font-medium"
-                  style={{ color: T.textSecondary }}
-                >
-                  Папка
-                </label>
-                <select
-                  value={folderId}
-                  onChange={(e) => setFolderId(e.target.value)}
-                  disabled={busy}
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                >
-                  <option value="">— Без папки —</option>
-                  {folderOptions.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {`${"— ".repeat(f.depth)}${f.name}`}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label
-                  className="mb-1 block text-xs font-medium"
-                  style={{ color: T.textSecondary }}
-                >
-                  Опис
-                </label>
-                <textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  disabled={busy}
-                  rows={2}
-                  placeholder="Короткий контекст для AI (опційно)…"
-                  className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    background: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                />
-              </div>
             </div>
           )}
         </div>
-      )}
-
-      {pending && (
-        <AudioPreview
-          blob={pending.blob}
-          mimeType={pending.mimeType}
-          durationMs={pending.durationMs}
-          fileName={pending.fileName}
-          onSave={saveAndProcess}
-          onReset={resetPending}
-          saving={busy}
-        />
-      )}
-
-      {error && (
-        <div
-          className="mt-4 flex items-center gap-2 rounded-lg p-3 text-sm"
-          style={{ background: T.dangerSoft, color: T.danger }}
-        >
-          <AlertCircle size={16} />
-          {error}
-        </div>
-      )}
-
-      {busy && (
-        <div
-          className="mt-4 flex items-center gap-3 rounded-lg p-4"
-          style={{ background: T.panel, border: `1px solid ${T.borderSoft}` }}
-        >
-          <Loader2 size={18} className="animate-spin" style={{ color: T.accentPrimary }} />
-          <span className="text-sm" style={{ color: T.textPrimary }}>
-            {stage === "creating" && "Створення наради…"}
-            {stage === "uploading" && `Завантаження аудіо… ${uploadProgress}%`}
-            {stage === "triggering" && "Запускаємо розпізнавання…"}
-          </span>
-        </div>
-      )}
-        </div>
       </div>
     </div>
+  );
+}
+
+function ModeTab({
+  active,
+  onClick,
+  icon,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition"
+      style={{
+        background: active ? T.accentPrimary : "transparent",
+        color: active ? "#fff" : T.textSecondary,
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

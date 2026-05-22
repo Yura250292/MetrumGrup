@@ -38,6 +38,7 @@ import {
 import { DelegateTaskModal } from "../_components/delegate-task-modal";
 import { LiveAgentPanel } from "../_components/live-agent-panel";
 import { MeetingsNavSidebar } from "../_components/meetings-nav-sidebar";
+import { AttachmentsPanel } from "../_components/meeting-attachments";
 import { useAiPanel } from "@/contexts/AiPanelContext";
 
 const POLL_INTERVAL_MS = 3000;
@@ -192,7 +193,7 @@ export default function MeetingDetailPage() {
   }
 
   async function regenerateSummary() {
-    if (!meeting?.transcript) return;
+    if (!meeting?.transcript && !meeting?.noteText) return;
     if (
       meeting.structured &&
       !confirm(
@@ -295,6 +296,12 @@ export default function MeetingDetailPage() {
 
   const processing = POLLING_STATES.has(meeting.status);
 
+  // Текстова нарада — без аудіо, з оригінальною Markdown-нотаткою.
+  const isTextMeeting = !meeting.audioUrl && !!meeting.noteText;
+  // Тіло наради для AI-аналізу та вкладки: транскрипт або текстова нотатка.
+  const bodyText = meeting.transcript ?? meeting.noteText;
+  const bodyLabel = isTextMeeting ? "Нотатка" : "Транскрипт";
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
@@ -314,7 +321,11 @@ export default function MeetingDetailPage() {
             className="flex items-center gap-2 text-2xl font-bold"
             style={{ color: T.textPrimary }}
           >
-            <Mic size={22} style={{ color: T.accentPrimary }} />
+            {isTextMeeting ? (
+              <FileText size={22} style={{ color: T.accentPrimary }} />
+            ) : (
+              <Mic size={22} style={{ color: T.accentPrimary }} />
+            )}
             {editingTitle ? (
               <span className="flex flex-1 items-center gap-2">
                 <input
@@ -434,7 +445,7 @@ export default function MeetingDetailPage() {
           >
             {STATUS_LABELS[meeting.status]}
           </span>
-          {meeting.transcript && (
+          {(meeting.transcript || meeting.noteText) && (
             <button
               onClick={regenerateSummary}
               disabled={regenerating || retranscribing || processing}
@@ -443,7 +454,11 @@ export default function MeetingDetailPage() {
                 background: T.accentPrimarySoft,
                 color: T.accentPrimary,
               }}
-              title="Перезапустити AI-аналіз з тим же транскриптом, щоб отримати глибший підсумок"
+              title={
+                isTextMeeting
+                  ? "Перезапустити AI-аналіз тексту наради — оригінальна нотатка не зміниться"
+                  : "Перезапустити AI-аналіз з тим же транскриптом, щоб отримати глибший підсумок"
+              }
             >
               {regenerating ? (
                 <Loader2 size={14} className="animate-spin" />
@@ -504,8 +519,20 @@ export default function MeetingDetailPage() {
         </div>
       )}
 
+      {!isTextMeeting && (
+        <div className="mb-4">
+          <LiveAgentPanel meetingId={id} />
+        </div>
+      )}
+
       <div className="mb-4">
-        <LiveAgentPanel meetingId={id} />
+        <AttachmentsPanel
+          meetingId={id}
+          attachments={meeting.attachments ?? []}
+          onChange={async () => {
+            await refresh();
+          }}
+        />
       </div>
 
       {meeting.status === "FAILED" && (
@@ -526,7 +553,7 @@ export default function MeetingDetailPage() {
             </p>
           )}
           <div className="mt-3 flex gap-2">
-            {!meeting.transcript && (
+            {meeting.audioR2Key && !meeting.transcript && (
               <button
                 onClick={retryTranscribe}
                 className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium"
@@ -535,7 +562,7 @@ export default function MeetingDetailPage() {
                 <RefreshCw size={14} /> Спробувати транскрипцію знову
               </button>
             )}
-            {meeting.transcript && (
+            {(meeting.transcript || meeting.noteText) && (
               <button
                 onClick={retrySummarize}
                 className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm font-medium"
@@ -564,7 +591,7 @@ export default function MeetingDetailPage() {
         </div>
       )}
 
-      {(meeting.transcript || meeting.structured) && (
+      {(bodyText || meeting.structured) && (
         <div
           className="mb-3 flex gap-1 rounded-lg p-1"
           style={{ background: T.panelElevated, width: "fit-content" }}
@@ -580,8 +607,8 @@ export default function MeetingDetailPage() {
             active={activeTab === "transcript"}
             onClick={() => setActiveTab("transcript")}
             icon={<FileText size={14} />}
-            label="Транскрипт"
-            disabled={!meeting.transcript}
+            label={bodyLabel}
+            disabled={!bodyText}
           />
         </div>
       )}
@@ -626,12 +653,14 @@ export default function MeetingDetailPage() {
         />
       )}
 
-      {activeTab === "transcript" && meeting.transcript && (
+      {activeTab === "transcript" && bodyText && (
         <TranscriptView
-          transcript={meeting.transcript}
+          transcript={bodyText}
           entities={meeting.entities ?? []}
           speakers={meeting.structured?.speakers ?? []}
           meetingId={id}
+          fieldKey={isTextMeeting ? "noteText" : "transcript"}
+          label={bodyLabel}
           onSaved={async () => {
             await refresh();
           }}
@@ -953,14 +982,20 @@ function TranscriptView({
   entities,
   speakers,
   meetingId,
+  fieldKey,
+  label,
   onSaved,
 }: {
   transcript: string;
   entities: MeetingEntity[];
   speakers: MeetingSpeaker[];
   meetingId: string;
+  // Яке поле наради редагуємо: аудіо-транскрипт чи текстова нотатка.
+  fieldKey: "transcript" | "noteText";
+  label: string;
   onSaved?: () => void | Promise<void>;
 }) {
+  const isNote = fieldKey === "noteText";
   // Мапа лейбл -> ідентифіковане імʼя/роль
   const speakerNameByLabel = new Map<string, string>();
   for (const s of speakers) {
@@ -985,7 +1020,7 @@ function TranscriptView({
       const res = await fetch(`/api/admin/meetings/${meetingId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: draft }),
+        body: JSON.stringify({ [fieldKey]: draft }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -1015,8 +1050,9 @@ function TranscriptView({
       >
         <div className="mb-3 flex items-center gap-2">
           <span className="text-xs" style={{ color: T.textMuted }}>
-            Збережи лейбли спікерів («Speaker A [00:00]: …») — від цього
-            залежить розбивка по людях.
+            {isNote
+              ? "Підтримується Markdown. Це оригінал нотатки — AI-підсумок будується окремо й цей текст не змінює."
+              : "Збережи лейбли спікерів («Speaker A [00:00]: …») — від цього залежить розбивка по людях."}
           </span>
         </div>
         <textarea
@@ -1107,7 +1143,7 @@ function TranscriptView({
         <span className="text-xs" style={{ color: T.textMuted }}>
           {hasSpeakers
             ? `${speakerOrder.size} спікер${speakerOrder.size === 1 ? "" : speakerOrder.size < 5 ? "и" : "ів"} · ${parsed.length} реплік`
-            : "Транскрипт"}
+            : label}
         </span>
         <button
           onClick={() => setEditing(true)}

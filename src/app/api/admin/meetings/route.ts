@@ -14,6 +14,9 @@ const createSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().max(5000).optional().nullable(),
   folderId: z.string().min(1).optional().nullable(),
+  // Текстова нарада: оригінальна Markdown-нотатка замість аудіозапису.
+  // Якщо передано — нарада одразу готова до AI-аналізу (без транскрипції).
+  noteText: z.string().max(100000).optional().nullable(),
 });
 
 export async function GET(request: NextRequest) {
@@ -44,6 +47,7 @@ export async function GET(request: NextRequest) {
     include: {
       createdBy: { select: { id: true, name: true } },
       folder: { select: { id: true, name: true } },
+      _count: { select: { attachments: true } },
     },
     take: 200,
   });
@@ -83,6 +87,8 @@ export async function POST(request: NextRequest) {
 
   const { firmId } = await resolveFirmScopeForRequest(session);
 
+  const noteText = parsed.data.noteText?.trim() || null;
+
   const meeting = await prisma.meeting.create({
     data: {
       title: parsed.data.title,
@@ -90,7 +96,10 @@ export async function POST(request: NextRequest) {
       folderId: parsed.data.folderId ?? null,
       firmId: firmId ?? null,
       createdById: session.user.id,
-      status: "DRAFT",
+      noteText,
+      // Текстова нарада минає аудіо/транскрипцію — одразу TRANSCRIBED,
+      // тобто готова до AI-підсумку. Звичайна нарада стартує як DRAFT.
+      status: noteText ? "TRANSCRIBED" : "DRAFT",
     },
     include: {
       folder: { select: { id: true, name: true } },

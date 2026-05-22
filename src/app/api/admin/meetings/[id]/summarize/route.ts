@@ -417,9 +417,17 @@ export async function POST(
   if (!meeting) {
     return NextResponse.json({ error: "Meeting not found" }, { status: 404 });
   }
-  if (!meeting.transcript?.trim()) {
+
+  // Джерело для аналізу: аудіо-транскрипт АБО текстова нотатка наради.
+  // Текстова нотатка (noteText) — оригінал користувача; AI її лише читає,
+  // підсумок пишеться окремо у summary/structured і нотатку не змінює.
+  const isTextNote =
+    !meeting.transcript?.trim() && !!meeting.noteText?.trim();
+  const sourceText =
+    meeting.transcript?.trim() || meeting.noteText?.trim() || "";
+  if (!sourceText) {
     return NextResponse.json(
-      { error: "Транскрипт ще не готовий" },
+      { error: "Немає тексту для аналізу — ні транскрипту, ні нотатки" },
       { status: 400 }
     );
   }
@@ -502,12 +510,16 @@ export async function POST(
       enrichmentBlocks.length > 0 ? "" : null,
       enrichmentBlocks.length > 0 ? enrichmentBlocks.join("\n\n") : null,
       "",
-      "ТРАНСКРИПТ (з лейблами Speaker A/B/C... і таймстемпами):",
-      meeting.transcript,
+      isTextNote
+        ? "ТЕКСТОВА НОТАТКА НАРАДИ (написана учасником вручну у Markdown — це НЕ аудіо-транскрипт: спікерів, діаризації та таймстемпів немає; аналізуй за змістом тексту):"
+        : "ТРАНСКРИПТ (з лейблами Speaker A/B/C... і таймстемпами):",
+      sourceText,
       "",
       "ЗАВДАННЯ:",
       "1. suggestedTitle у форматі «<Проєкт>. <Хто> про <Що>» — лаконічно, 5-9 слів.",
-      "2. Ідентифікуй кожного спікера (Speaker A, B, ...) → speakers[]. Кожен з evidence-цитатою.",
+      isTextNote
+        ? "2. Спікери у тексті явно не розмічені — лиши speakers порожнім масивом (заповнюй лише якщо в тексті прямо названі учасники)."
+        : "2. Ідентифікуй кожного спікера (Speaker A, B, ...) → speakers[]. Кожен з evidence-цитатою.",
       "3. Знайди ВСІ дії-наміри і виведи їх у tasks. Assignee — реальне імʼя якщо ідентифікував спікера, інакше те імʼя що звучало.",
       "4. Якщо обговорювали ПРОЦЕС/ЛАНЦЮЖОК — actionPlan[] з нумерованими кроками. Якщо нарада не про процес — порожній масив.",
       "5. ОБОВʼЯЗКОВО проаналізуй кожну проблему/виклик/неясність → proposedSolutions[] з конкретною експертною порадою. Не переказуй що сказали — давай СВОЄ рішення спираючись на бізнес-логіку індустрії.",

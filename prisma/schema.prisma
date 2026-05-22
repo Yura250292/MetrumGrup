@@ -99,6 +99,7 @@ model User {
   commentReadStates       CommentReadState[]
   aiConversations         AiConversation[]          @relation("AiConversationUser")
   meetings                Meeting[]                 @relation("MeetingCreator")
+  meetingAttachments      MeetingAttachment[]       @relation("MeetingAttachmentUploader")
   employeeProfile         Employee?                 @relation("EmployeeUser")
   materialPriceSnapshots  MaterialPriceSnapshot[]   @relation("PriceSnapshotCreator")
   receiptScansCreated     ReceiptScan[]             @relation("ReceiptScanCreator")
@@ -2858,6 +2859,12 @@ model Meeting {
   audioDurationMs Int?
   audioSizeBytes  Int?
 
+  /// Текстова нарада: оригінальна нотатка користувача у Markdown.
+  /// Альтернатива аудіозапису — нараду провели/занотували в тексті.
+  /// AI-підсумок генерується ОКРЕМО на її основі й НІКОЛИ не змінює
+  /// цей текст — оригінал лишається недоторканим.
+  noteText String? @db.Text
+
   status          MeetingStatus @default(DRAFT)
   transcript      String?       @db.Text
   summary         String?       @db.Text
@@ -2884,6 +2891,11 @@ model Meeting {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
+  /// Вкладення до наради — фото, PDF, Excel, документи (довідкові
+  /// матеріали). AI-аналіз їх НЕ читає — підсумок будується лише з
+  /// аудіо-транскрипту або текстової нотатки.
+  attachments       MeetingAttachment[]
+
   /// Live AI Agent: інсайти що генеруються в режимі live під час запису.
   liveInsights      LiveMeetingInsight[]
   /// Live AI Agent: лог витрат AI-токенів.
@@ -2902,6 +2914,30 @@ model Meeting {
   @@index([folderId])
   @@index([firmId])
   @@map("meetings")
+}
+
+/// Вкладення до наради — фото, PDF, Excel, документи тощо. Довідкові
+/// матеріали; зберігаються у Cloudflare R2. AI-підсумок їх НЕ читає
+/// (будується лише з аудіо-транскрипту або текстової нотатки).
+/// Паттерн: task_attachments / foreman_report_attachments.
+model MeetingAttachment {
+  id           String   @id @default(cuid())
+  meetingId    String
+  r2Key        String
+  url          String
+  originalName String
+  mimeType     String
+  size         Int
+  /// Категорія для іконки/групування: image | pdf | spreadsheet | document | other
+  kind         String
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  meeting    Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  uploadedBy User    @relation("MeetingAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([meetingId])
+  @@map("meeting_attachments")
 }
 
 /// Live AI Agent: інсайти що генеруються «на льоту» під час наради.

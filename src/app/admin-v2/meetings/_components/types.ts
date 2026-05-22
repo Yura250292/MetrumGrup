@@ -69,6 +69,24 @@ export type MeetingStructured = {
   glossary?: MeetingGlossaryTerm[];
 };
 
+export type MeetingAttachmentKind =
+  | "image"
+  | "pdf"
+  | "spreadsheet"
+  | "document"
+  | "other";
+
+export type MeetingAttachment = {
+  id: string;
+  r2Key: string;
+  url: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  kind: MeetingAttachmentKind;
+  createdAt: string;
+};
+
 export type MeetingListItem = {
   id: string;
   title: string;
@@ -76,12 +94,14 @@ export type MeetingListItem = {
   status: MeetingStatus;
   audioUrl: string | null;
   audioDurationMs: number | null;
+  noteText: string | null;
   summary: string | null;
   recordedAt: string;
   createdAt: string;
   folderId: string | null;
   createdBy: { id: string; name: string };
   folder?: { id: string; name: string } | null;
+  _count?: { attachments: number };
 };
 
 export type MeetingEntity = {
@@ -112,6 +132,7 @@ export type Meeting = MeetingListItem & {
   entities: MeetingEntity[] | null;
   chapters: MeetingChapter[] | null;
   transcribeProvider: string | null;
+  attachments: MeetingAttachment[];
 };
 
 export const STATUS_LABELS: Record<MeetingStatus, string> = {

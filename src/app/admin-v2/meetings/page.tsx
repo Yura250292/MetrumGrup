@@ -18,6 +18,8 @@ import {
   Pencil,
   Check,
   X,
+  FileText,
+  Paperclip,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
@@ -476,7 +478,11 @@ export default function MeetingsListPage() {
                         color: T.accentPrimary,
                       }}
                     >
-                      <Mic size={18} />
+                      {m.noteText && !m.audioUrl ? (
+                        <FileText size={18} />
+                      ) : (
+                        <Mic size={18} />
+                      )}
                     </div>
                     <div className="min-w-0 flex-1">
                       <p
@@ -492,8 +498,17 @@ export default function MeetingsListPage() {
                         <span>
                           {new Date(m.recordedAt).toLocaleString("uk-UA")}
                         </span>
+                        {m.noteText && !m.audioUrl ? (
+                          <span>Текстова</span>
+                        ) : null}
                         {m.audioDurationMs ? (
                           <span>{formatDuration(m.audioDurationMs)}</span>
+                        ) : null}
+                        {m._count?.attachments ? (
+                          <span className="flex items-center gap-1">
+                            <Paperclip size={11} />
+                            {m._count.attachments}
+                          </span>
                         ) : null}
                       </div>
                     </div>
