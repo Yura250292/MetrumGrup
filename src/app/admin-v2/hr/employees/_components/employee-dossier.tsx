@@ -480,13 +480,9 @@ export function EmployeeDossier({
         )}
       </div>
 
-      {/* Три-колонкова сітка: Основне / Користувач (вузька) / Зарплата (ширша). */}
+      {/* Дво-колонкова сітка: Основне | Зарплата (рівні половини). */}
       <div
-        className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${
-          canSeeSalary
-            ? "xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]"
-            : ""
-        }`}
+        className={`grid grid-cols-1 gap-4 ${canSeeSalary ? "xl:grid-cols-2" : ""}`}
       >
       <div
         className="overflow-hidden rounded-2xl"
@@ -893,12 +889,6 @@ export function EmployeeDossier({
         </table>
       </div>
 
-      <AccountSection
-        employee={employee}
-        currentUserRole={currentUserRole}
-        onChanged={() => void load()}
-      />
-
       {canSeeSalary && (
         <SalarySection
           employeeId={id}
@@ -908,11 +898,17 @@ export function EmployeeDossier({
           onChanged={() => void load()}
         />
       )}
+      </div>
+
+      <AccountSection
+        employee={employee}
+        currentUserRole={currentUserRole}
+        onChanged={() => void load()}
+      />
 
       {canSeeSalary && employee.payrollPeriods.length > 1 && (
         <PayrollPeriodsSection periods={employee.payrollPeriods} />
       )}
-      </div>
 
       {engagement && <EngagementPanel data={engagement} />}
 
@@ -2026,7 +2022,7 @@ function SalarySection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* === ЗАРПЛАТА (неофіційна) === */}
         <div
           className="overflow-hidden rounded-2xl"
