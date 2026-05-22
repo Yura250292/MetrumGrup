@@ -163,14 +163,15 @@ export async function POST(request: NextRequest) {
   }
 
   // Prompt оптимізований для Seedream v4 edit моделі.
-  // Ключове повідомлення: PRESERVE — model має точно відтворити входину
-  // структуру. Дублюємо інструкцію 3 рази у різних формулюваннях для більшої
-  // ваги.
+  // Камера — СТРОГО зверху (bird's-eye), як у проектній AI-візуалізації
+  // (FLOOR_PLAN_TO_3D у prompt-builder.ts). Без axonometric/dollhouse нахилу.
+  // Ключове повідомлення: PRESERVE — model має точно відтворити вхідну
+  // структуру.
   const prompt = [
-    "Convert this 2D architectural floor plan image into a photorealistic 3D axonometric top-down interior rendering.",
-    "Camera angle: cabinet/dollhouse view — top-down with 30° tilt, walls visible at 1.5m height showing their thickness, floors and furniture clearly visible.",
-    "ABSOLUTELY CRITICAL — STRUCTURAL FIDELITY: Every wall, room boundary, door position, window position, and piece of furniture in the input plan MUST appear in EXACTLY the same location and orientation in the 3D render. DO NOT rearrange the layout. DO NOT add or remove rooms. DO NOT shift walls. The 3D render must be an exact volumetric reconstruction of the 2D plan.",
-    "Match the input image 1:1 in geometry — only transform the visual style from flat 2D to photorealistic 3D.",
+    "Photorealistic top-down interior visualization of this exact floor plan.",
+    "Camera angle: strict top-down bird's-eye view — camera looking straight down at 90°, identical perspective, framing and orientation to the input plan. This MUST be a flat top-down view. NOT axonometric, NOT isometric, NOT angled, NOT tilted, NOT a dollhouse/cabinet view — never show walls from the side.",
+    "ABSOLUTELY CRITICAL — STRUCTURAL FIDELITY: Every wall, room boundary, door position, window position, and piece of furniture in the input plan MUST appear in EXACTLY the same location and orientation in the render. DO NOT rearrange the layout. DO NOT add or remove rooms. DO NOT shift walls. The render must be an exact 1:1 reconstruction of the 2D plan.",
+    "Only transform the visual style from a flat 2D drawing into photorealistic materials, textures and lighting — keep the geometry and the strict top-down camera unchanged.",
     layoutDescription,
     "RENDERING per room type:",
     "- Kitchen: marble or quartz countertops, stainless steel appliances, tile splashback, wooden cabinets, hanging pendant lights",
@@ -182,7 +183,7 @@ export async function POST(request: NextRequest) {
     "Style: contemporary Ukrainian apartment, modern minimalist Scandinavian-meets-warm.",
     "Lighting: soft warm natural daylight through windows, slight ambient shadows under furniture for depth, no harsh sun.",
     "Decor: indoor plants in clay pots near windows and corners, area rugs under sofa groups and beds.",
-    "Quality: high resolution, photorealistic textures, clean geometry, professional interior render style (like ArchDaily or Behance).",
+    "Quality: high resolution, photorealistic textures, clean geometry, professional top-down architectural floor plan render.",
     "DO NOT include: people, text, watermarks, labels, dimension numbers, measurement annotations, compass symbols, arrows or any overlay graphics. Clean unannotated interior.",
     userPrompt,
   ]
@@ -196,7 +197,7 @@ export async function POST(request: NextRequest) {
       imageUrl: inputUrl,
       prompt,
       negativePrompt:
-        "people, text, watermark, labels, dimensions, measurement annotations, compass, arrows, low quality, blurry, distorted, deformed walls, broken perspective, cartoon, illustration, isometric video game style",
+        "axonometric, isometric, 3D perspective, angled camera, tilted view, side view, dollhouse view, walls seen from the side, people, text, watermark, labels, dimensions, measurement annotations, compass, arrows, low quality, blurry, distorted, deformed walls, broken perspective, cartoon, illustration, isometric video game style",
       // Seedream v4 edit ігнорує strength/controlnetType (вони лише для
       // інших моделей), але передаємо як no-op для сумісності типу.
       strength: 0.8,
