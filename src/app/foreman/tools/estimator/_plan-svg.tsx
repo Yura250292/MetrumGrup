@@ -142,6 +142,229 @@ export function PlanSvg({
     ? `translate(${cx} ${cy}) translate(${viewTransform.tx} ${viewTransform.ty}) scale(${viewTransform.scale}) rotate(${viewTransform.rotation}) translate(${-cx} ${-cy})`
     : undefined;
 
+  // ─── Memoized sub-trees ────────────────────────────────────────────────
+  // Ці JSX блоки НЕ залежать від viewTransform. Memoize щоб при pinch/zoom
+  // (60Hz setView) ці елементи не перераховувалися і React просто перевстановлював
+  // transform на одному <g>. Інакше re-render усіх ~500+ SVG-елементів кожні
+  // 16ms кладе iOS Safari (OOM crash).
+
+  const roomsJsx = useMemo(() => {
+    return plan.rooms.map((r) => {
+      const showDims = Math.min(r.w, r.h) >= 1.5;
+      const labelFs = Math.min(r.w, r.h) * 0.14;
+      const dimFs = Math.max(0.13, Math.min(r.w, r.h) * 0.08);
+      const inset = Math.min(0.18, Math.min(r.w, r.h) * 0.08);
+      return (
+        <g key={r.id}>
+          <rect
+            x={r.x}
+            y={r.y}
+            width={r.w}
+            height={r.h}
+            fill={openingsMode ? "rgba(251,191,36,0.06)" : "rgba(139,92,246,0.04)"}
+            stroke={openingsMode ? "rgb(251,191,36)" : "rgba(229,231,235,0.9)"}
+            strokeWidth={openingsMode ? strokePx + 0.4 : 2.6}
+            strokeDasharray={openingsMode ? "0.25 0.25" : undefined}
+            vectorEffect="non-scaling-stroke"
+            onClick={
+              openingsMode
+                ? (e) => handleWallTap(e, r)
+                : onRoomTap
+                  ? () => onRoomTap(r)
+                  : undefined
+            }
+            style={{
+              cursor: openingsMode
+                ? "crosshair"
+                : onRoomTap
+                  ? "pointer"
+                  : "default",
+            }}
+          />
+          <text
+            x={r.x + r.w / 2}
+            y={r.y + r.h / 2}
+            textAnchor="middle"
+            dominantBaseline="middle"
+            fill="rgba(229,231,235,0.45)"
+            fontSize={labelFs}
+            fontWeight={400}
+            pointerEvents="none"
+          >
+            <tspan x={r.x + r.w / 2} dy={showDims ? -labelFs * 0.4 : 0}>
+              {r.name}
+            </tspan>
+            {showDims && (
+              <tspan
+                x={r.x + r.w / 2}
+                dy={labelFs * 1.2}
+                fontSize={labelFs * 0.65}
+                fill="rgba(161,161,170,0.55)"
+              >
+                {r.w}×{r.h} м · h {r.ceilingHeight} м
+              </tspan>
+            )}
+          </text>
+          <g pointerEvents="none">
+            <text
+              x={r.x + r.w / 2}
+              y={r.y + inset + dimFs * 0.7}
+              textAnchor="middle"
+              fontSize={dimFs}
+              fill="rgba(229,231,235,0.7)"
+              fontWeight={500}
+            >
+              {(r.w * 1000).toFixed(0)}
+            </text>
+            <text
+              x={r.x + r.w / 2}
+              y={r.y + r.h - inset}
+              textAnchor="middle"
+              fontSize={dimFs}
+              fill="rgba(229,231,235,0.7)"
+              fontWeight={500}
+            >
+              {(r.w * 1000).toFixed(0)}
+            </text>
+            <text
+              transform={`rotate(-90 ${r.x + inset + dimFs * 0.4} ${r.y + r.h / 2})`}
+              x={r.x + inset + dimFs * 0.4}
+              y={r.y + r.h / 2}
+              textAnchor="middle"
+              fontSize={dimFs}
+              fill="rgba(229,231,235,0.7)"
+              fontWeight={500}
+            >
+              {(r.h * 1000).toFixed(0)}
+            </text>
+            <text
+              transform={`rotate(-90 ${r.x + r.w - inset} ${r.y + r.h / 2})`}
+              x={r.x + r.w - inset}
+              y={r.y + r.h / 2}
+              textAnchor="middle"
+              fontSize={dimFs}
+              fill="rgba(229,231,235,0.7)"
+              fontWeight={500}
+            >
+              {(r.h * 1000).toFixed(0)}
+            </text>
+          </g>
+        </g>
+      );
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.rooms, openingsMode, onRoomTap, onWallTap]);
+
+  const openingsJsx = useMemo(() => {
+    return plan.openings.map((o) => {
+      const room = plan.rooms.find((r) => r.id === o.roomId);
+      if (!room) return null;
+      const p = openingPoints(room, o);
+      const isDoor = o.type === "door";
+      const ocx = (p.x1 + p.x2) / 2;
+      const ocy = (p.y1 + p.y2) / 2;
+      const isHorizontal = Math.abs(p.x2 - p.x1) > Math.abs(p.y2 - p.y1);
+      const dimFs = Math.max(0.12, Math.min(room.w, room.h) * 0.07);
+      return (
+        <g key={o.id} pointerEvents="none">
+          <line
+            x1={p.x1}
+            y1={p.y1}
+            x2={p.x2}
+            y2={p.y2}
+            stroke={isDoor ? "#fbbf24" : "#38bdf8"}
+            strokeWidth={strokePx + 2.6}
+            vectorEffect="non-scaling-stroke"
+            strokeLinecap="butt"
+          />
+          {!isDoor && (
+            <line
+              x1={p.x1}
+              y1={p.y1}
+              x2={p.x2}
+              y2={p.y2}
+              stroke="#0c4a6e"
+              strokeWidth={strokePx + 0.4}
+              strokeDasharray="2 2"
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          <text
+            transform={isHorizontal ? undefined : `rotate(-90 ${ocx} ${ocy})`}
+            x={ocx}
+            y={ocy + (isHorizontal ? dimFs * 1.6 : 0)}
+            textAnchor="middle"
+            dominantBaseline={isHorizontal ? "middle" : "central"}
+            fontSize={dimFs}
+            fill={isDoor ? "#fbbf24" : "#38bdf8"}
+            fontWeight={600}
+          >
+            {(o.width * 1000).toFixed(0)}
+          </text>
+        </g>
+      );
+    });
+  }, [plan.openings, plan.rooms]);
+
+  const furnitureJsx = useMemo(() => {
+    return plan.furniture.map((f) => {
+      const room = plan.rooms.find((r) => r.id === f.roomId);
+      if (!room) return null;
+      return (
+        <FurnitureShape
+          key={f.id}
+          item={f}
+          wx={room.x + f.x}
+          wy={room.y + f.y}
+          onClick={
+            onFurnitureTap && !snapshot ? () => onFurnitureTap(f) : undefined
+          }
+        />
+      );
+    });
+  }, [plan.furniture, plan.rooms, onFurnitureTap, snapshot]);
+
+  const buttonsJsx = useMemo(() => {
+    if (snapshot || openingsMode) return null;
+    return buttons.map((b) => (
+      <g
+        key={b.id}
+        transform={`translate(${b.cx} ${b.cy})`}
+        className="cursor-pointer"
+        onClick={onPlusClick ? () => onPlusClick(b.parentId, b.side) : undefined}
+      >
+        <circle r={btnHitR} fill="transparent" pointerEvents="all" />
+        <circle
+          r={btnVisualR}
+          fill="rgba(16,185,129,0.85)"
+          stroke="rgba(255,255,255,0.95)"
+          strokeWidth={strokePx}
+          vectorEffect="non-scaling-stroke"
+        />
+        <line
+          x1={-btnVisualR * 0.45}
+          y1={0}
+          x2={btnVisualR * 0.45}
+          y2={0}
+          stroke="#fff"
+          strokeWidth={strokePx + 0.6}
+          vectorEffect="non-scaling-stroke"
+          strokeLinecap="round"
+        />
+        <line
+          x1={0}
+          y1={-btnVisualR * 0.45}
+          x2={0}
+          y2={btnVisualR * 0.45}
+          stroke="#fff"
+          strokeWidth={strokePx + 0.6}
+          vectorEffect="non-scaling-stroke"
+          strokeLinecap="round"
+        />
+      </g>
+    ));
+  }, [buttons, snapshot, openingsMode, onPlusClick, btnHitR, btnVisualR]);
+
   if (plan.rooms.length === 0) return null;
 
   return (
@@ -197,238 +420,10 @@ export function PlanSvg({
         )}
 
         <g transform={transformAttr}>
-          {plan.rooms.map((r) => {
-            const showDims = Math.min(r.w, r.h) >= 1.5;
-            const labelFs = Math.min(r.w, r.h) * 0.14;
-            return (
-              <g key={r.id}>
-                <rect
-                  x={r.x}
-                  y={r.y}
-                  width={r.w}
-                  height={r.h}
-                  fill={
-                    openingsMode
-                      ? "rgba(251,191,36,0.06)"
-                      : "rgba(139,92,246,0.04)"
-                  }
-                  stroke={
-                    openingsMode ? "rgb(251,191,36)" : "rgba(229,231,235,0.9)"
-                  }
-                  strokeWidth={openingsMode ? strokePx + 0.4 : 2.6}
-                  strokeDasharray={openingsMode ? "0.25 0.25" : undefined}
-                  vectorEffect="non-scaling-stroke"
-                  onClick={
-                    openingsMode
-                      ? (e) => handleWallTap(e, r)
-                      : onRoomTap
-                        ? () => onRoomTap(r)
-                        : undefined
-                  }
-                  style={{
-                    cursor: openingsMode
-                      ? "crosshair"
-                      : onRoomTap
-                        ? "pointer"
-                        : "default",
-                  }}
-                />
-                <text
-                  x={r.x + r.w / 2}
-                  y={r.y + r.h / 2}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill="rgba(229,231,235,0.45)"
-                  fontSize={labelFs}
-                  fontWeight={400}
-                  pointerEvents="none"
-                >
-                  <tspan x={r.x + r.w / 2} dy={showDims ? -labelFs * 0.4 : 0}>
-                    {r.name}
-                  </tspan>
-                  {showDims && (
-                    <tspan
-                      x={r.x + r.w / 2}
-                      dy={labelFs * 1.2}
-                      fontSize={labelFs * 0.65}
-                      fill="rgba(161,161,170,0.55)"
-                    >
-                      {r.w}×{r.h} м · h {r.ceilingHeight} м
-                    </tspan>
-                  )}
-                </text>
-
-                {/* Розмірні позначки на стінах (як на архітектурному плані).
-                    Показуємо INSIDE біля кожної стіни малим шрифтом. */}
-                {(() => {
-                  const dimFs = Math.max(0.13, Math.min(r.w, r.h) * 0.08);
-                  const inset = Math.min(0.18, Math.min(r.w, r.h) * 0.08);
-                  return (
-                    <g pointerEvents="none">
-                      {/* N */}
-                      <text
-                        x={r.x + r.w / 2}
-                        y={r.y + inset + dimFs * 0.7}
-                        textAnchor="middle"
-                        fontSize={dimFs}
-                        fill="rgba(229,231,235,0.7)"
-                        fontWeight={500}
-                      >
-                        {(r.w * 1000).toFixed(0)}
-                      </text>
-                      {/* S */}
-                      <text
-                        x={r.x + r.w / 2}
-                        y={r.y + r.h - inset}
-                        textAnchor="middle"
-                        fontSize={dimFs}
-                        fill="rgba(229,231,235,0.7)"
-                        fontWeight={500}
-                      >
-                        {(r.w * 1000).toFixed(0)}
-                      </text>
-                      {/* W */}
-                      <text
-                        transform={`rotate(-90 ${r.x + inset + dimFs * 0.4} ${r.y + r.h / 2})`}
-                        x={r.x + inset + dimFs * 0.4}
-                        y={r.y + r.h / 2}
-                        textAnchor="middle"
-                        fontSize={dimFs}
-                        fill="rgba(229,231,235,0.7)"
-                        fontWeight={500}
-                      >
-                        {(r.h * 1000).toFixed(0)}
-                      </text>
-                      {/* E */}
-                      <text
-                        transform={`rotate(-90 ${r.x + r.w - inset} ${r.y + r.h / 2})`}
-                        x={r.x + r.w - inset}
-                        y={r.y + r.h / 2}
-                        textAnchor="middle"
-                        fontSize={dimFs}
-                        fill="rgba(229,231,235,0.7)"
-                        fontWeight={500}
-                      >
-                        {(r.h * 1000).toFixed(0)}
-                      </text>
-                    </g>
-                  );
-                })()}
-              </g>
-            );
-          })}
-
-          {/* openings rendered on top of walls */}
-          {plan.openings.map((o) => {
-            const room = plan.rooms.find((r) => r.id === o.roomId);
-            if (!room) return null;
-            const p = openingPoints(room, o);
-            const isDoor = o.type === "door";
-            const cx = (p.x1 + p.x2) / 2;
-            const cy = (p.y1 + p.y2) / 2;
-            const isHorizontal = Math.abs(p.x2 - p.x1) > Math.abs(p.y2 - p.y1);
-            const dimFs = Math.max(0.12, Math.min(room.w, room.h) * 0.07);
-            return (
-              <g key={o.id} pointerEvents="none">
-                <line
-                  x1={p.x1}
-                  y1={p.y1}
-                  x2={p.x2}
-                  y2={p.y2}
-                  stroke={isDoor ? "#fbbf24" : "#38bdf8"}
-                  strokeWidth={strokePx + 2.6}
-                  vectorEffect="non-scaling-stroke"
-                  strokeLinecap="butt"
-                />
-                {!isDoor && (
-                  <line
-                    x1={p.x1}
-                    y1={p.y1}
-                    x2={p.x2}
-                    y2={p.y2}
-                    stroke="#0c4a6e"
-                    strokeWidth={strokePx + 0.4}
-                    strokeDasharray="2 2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                )}
-                {/* Розмір прорізу — мм біля середини. */}
-                <text
-                  transform={
-                    isHorizontal ? undefined : `rotate(-90 ${cx} ${cy})`
-                  }
-                  x={cx}
-                  y={cy + (isHorizontal ? dimFs * 1.6 : 0)}
-                  textAnchor="middle"
-                  dominantBaseline={isHorizontal ? "middle" : "central"}
-                  fontSize={dimFs}
-                  fill={isDoor ? "#fbbf24" : "#38bdf8"}
-                  fontWeight={600}
-                >
-                  {(o.width * 1000).toFixed(0)}
-                </text>
-              </g>
-            );
-          })}
-
-          {/* Furniture overlay — детальні архітектурні шейпи. */}
-          {plan.furniture.map((f) => {
-            const room = plan.rooms.find((r) => r.id === f.roomId);
-            if (!room) return null;
-            return (
-              <FurnitureShape
-                key={f.id}
-                item={f}
-                wx={room.x + f.x}
-                wy={room.y + f.y}
-                onClick={
-                  onFurnitureTap && !snapshot ? () => onFurnitureTap(f) : undefined
-                }
-              />
-            );
-          })}
-
-          {!snapshot &&
-            !openingsMode &&
-            buttons.map((b) => (
-              <g
-                key={b.id}
-                transform={`translate(${b.cx} ${b.cy})`}
-                className="cursor-pointer"
-                onClick={onPlusClick ? () => onPlusClick(b.parentId, b.side) : undefined}
-              >
-                {/* hit area — transparent, larger */}
-                <circle r={btnHitR} fill="transparent" pointerEvents="all" />
-                {/* outer ring */}
-                <circle
-                  r={btnVisualR}
-                  fill="rgba(16,185,129,0.85)"
-                  stroke="rgba(255,255,255,0.95)"
-                  strokeWidth={strokePx}
-                  vectorEffect="non-scaling-stroke"
-                />
-                <line
-                  x1={-btnVisualR * 0.45}
-                  y1={0}
-                  x2={btnVisualR * 0.45}
-                  y2={0}
-                  stroke="#fff"
-                  strokeWidth={strokePx + 0.6}
-                  vectorEffect="non-scaling-stroke"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1={0}
-                  y1={-btnVisualR * 0.45}
-                  x2={0}
-                  y2={btnVisualR * 0.45}
-                  stroke="#fff"
-                  strokeWidth={strokePx + 0.6}
-                  vectorEffect="non-scaling-stroke"
-                  strokeLinecap="round"
-                />
-              </g>
-            ))}
+          {roomsJsx}
+          {openingsJsx}
+          {furnitureJsx}
+          {buttonsJsx}
         </g>
       </svg>
     </div>

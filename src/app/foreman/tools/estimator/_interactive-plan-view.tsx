@@ -91,6 +91,23 @@ export function InteractivePlanView({
     bboxRef.current = { w: b.w, h: b.h };
   }, [b.w, b.h]);
 
+  // rAF-throttle: native pointermove events fire 60-120 Hz, iOS Safari OOM
+  // при 27+ меблях у SVG re-render. Накопичуємо найсвіжіший view і коммітимо
+  // один раз на frame.
+  const rafIdRef = useRef<number | null>(null);
+  const pendingViewRef = useRef<View | null>(null);
+  const scheduleView = (next: View) => {
+    pendingViewRef.current = next;
+    viewRef.current = next; // зберігаємо ref у sync негайно для наступних handlers
+    if (rafIdRef.current !== null) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const p = pendingViewRef.current;
+      pendingViewRef.current = null;
+      if (p) setView(p);
+    });
+  };
+
   useEffect(() => {
     const el = svgWrapRef.current;
     if (!el) return;
@@ -130,7 +147,7 @@ export function InteractivePlanView({
           const baseDist = lastPinchRef.current.dist;
           if (baseDist > 0 && dist > 0) {
             const newScale = safeScale((dist / baseDist) * lastPinchRef.current.scale);
-            setView((v) => ({ ...v, scale: newScale }));
+            scheduleView({ ...viewRef.current, scale: newScale });
           }
           e.preventDefault();
         } else if (pointersRef.current.size === 1 && dragStartRef.current) {
@@ -142,11 +159,11 @@ export function InteractivePlanView({
           const metersPerPx = vbW / px;
           const dx = (e.clientX - dragStartRef.current.x) * metersPerPx;
           const dy = (e.clientY - dragStartRef.current.y) * metersPerPx;
-          setView((v) => ({
-            ...v,
+          scheduleView({
+            ...viewRef.current,
             tx: safeOffset(dragStartRef.current!.tx + dx),
             ty: safeOffset(dragStartRef.current!.ty + dy),
-          }));
+          });
         }
       } catch {
         /* defensive */
@@ -167,7 +184,8 @@ export function InteractivePlanView({
       try {
         e.preventDefault();
         const delta = -Math.sign(e.deltaY) * 0.15;
-        setView((v) => ({ ...v, scale: safeScale(v.scale * (1 + delta)) }));
+        const v = viewRef.current;
+        scheduleView({ ...v, scale: safeScale(v.scale * (1 + delta)) });
       } catch {
         /* defensive */
       }
@@ -187,6 +205,11 @@ export function InteractivePlanView({
       pointersRef.current.clear();
       lastPinchRef.current = null;
       dragStartRef.current = null;
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      pendingViewRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
