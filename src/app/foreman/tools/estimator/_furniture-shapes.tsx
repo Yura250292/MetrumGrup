@@ -12,10 +12,12 @@
 
 import type { FurnitureItem } from "./_types";
 
-const STROKE = "rgba(229,231,235,0.85)";       // основний контур (zinc-200 з alpha)
-const STROKE_THIN = "rgba(229,231,235,0.55)";   // деталі
-const FILL_LIGHT = "rgba(255,255,255,0.04)";    // мінімальна заливка тіла
-const FILL_ACCENT = "rgba(139,92,246,0.10)";    // акцент для важливих предметів
+// Архітектурний light-theme: чорні лінії на білому тлі (як на реальному
+// кресленні). Краще читається + кращий вхід для fal.ai моделі.
+const STROKE = "rgba(0,0,0,0.8)";          // основний контур
+const STROKE_THIN = "rgba(0,0,0,0.5)";      // деталі
+const FILL_LIGHT = "rgba(0,0,0,0.02)";      // мінімальна заливка тіла
+const FILL_ACCENT = "rgba(139,92,246,0.12)"; // акцент для важливих предметів
 
 const SW_MAIN = 1.6;   // px (non-scaling stroke)
 const SW_DETAIL = 0.9; // px
@@ -59,7 +61,7 @@ function ShapeWrap({
           y={wy + item.h + labelFs * 1.05}
           textAnchor="middle"
           fontSize={labelFs}
-          fill="#a1a1aa"
+          fill="#52525b"
           fontWeight={500}
           pointerEvents="none"
         >
@@ -685,7 +687,7 @@ function TVShape({ item, wx, wy }: ShapeProps) {
         y={wy}
         width={w}
         height={h}
-        fill="rgba(99,102,241,0.18)"
+        fill="rgba(99,102,241,0.25)"
         stroke={STROKE}
         strokeWidth={SW_MAIN}
         vectorEffect="non-scaling-stroke"
@@ -836,7 +838,7 @@ function PlantShape({ item, wx, wy }: ShapeProps) {
         vectorEffect="non-scaling-stroke"
       />
       {/* Листя — кілька кіл */}
-      <circle cx={cx} cy={cy - r * 0.2} r={r * 0.55} fill="rgba(34,197,94,0.18)" stroke={STROKE} strokeWidth={SW_DETAIL} vectorEffect="non-scaling-stroke" />
+      <circle cx={cx} cy={cy - r * 0.2} r={r * 0.55} fill="rgba(34,197,94,0.3)" stroke={STROKE} strokeWidth={SW_DETAIL} vectorEffect="non-scaling-stroke" />
       <circle cx={cx - r * 0.3} cy={cy - r * 0.05} r={r * 0.35} fill="transparent" stroke={STROKE_THIN} strokeWidth={SW_DETAIL} vectorEffect="non-scaling-stroke" />
       <circle cx={cx + r * 0.3} cy={cy - r * 0.05} r={r * 0.35} fill="transparent" stroke={STROKE_THIN} strokeWidth={SW_DETAIL} vectorEffect="non-scaling-stroke" />
     </ShapeWrap>
@@ -852,7 +854,7 @@ function RugShape({ item, wx, wy }: ShapeProps) {
         y={wy}
         width={w}
         height={h}
-        fill="rgba(168,85,247,0.10)"
+        fill="rgba(168,85,247,0.15)"
         stroke={STROKE_THIN}
         strokeWidth={SW_DETAIL}
         strokeDasharray="0.15 0.10"

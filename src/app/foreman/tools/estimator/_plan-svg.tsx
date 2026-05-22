@@ -161,8 +161,8 @@ export function PlanSvg({
             y={r.y}
             width={r.w}
             height={r.h}
-            fill={openingsMode ? "rgba(251,191,36,0.06)" : "rgba(139,92,246,0.04)"}
-            stroke={openingsMode ? "rgb(251,191,36)" : "rgba(229,231,235,0.9)"}
+            fill={openingsMode ? "rgba(251,191,36,0.08)" : "rgba(139,92,246,0.05)"}
+            stroke={openingsMode ? "rgb(217,119,6)" : "rgba(0,0,0,0.85)"}
             strokeWidth={openingsMode ? strokePx + 0.4 : 2.6}
             strokeDasharray={openingsMode ? "0.25 0.25" : undefined}
             vectorEffect="non-scaling-stroke"
@@ -186,9 +186,9 @@ export function PlanSvg({
             y={r.y + r.h / 2}
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="rgba(229,231,235,0.55)"
+            fill="rgba(0,0,0,0.6)"
             fontSize={labelFs}
-            fontWeight={400}
+            fontWeight={500}
             pointerEvents="none"
           >
             <tspan x={r.x + r.w / 2} dy={showDims ? -labelFs * 0.4 : 0}>
@@ -199,7 +199,8 @@ export function PlanSvg({
                 x={r.x + r.w / 2}
                 dy={labelFs * 1.2}
                 fontSize={labelFs * 0.65}
-                fill="rgba(161,161,170,0.6)"
+                fill="rgba(0,0,0,0.5)"
+                fontWeight={400}
               >
                 {r.w}×{r.h} м
               </tspan>
@@ -242,7 +243,7 @@ export function PlanSvg({
           y1={yBottom}
           x2={b.x + b.w}
           y2={yBottom}
-          stroke="rgba(229,231,235,0.55)"
+          stroke="rgba(0,0,0,0.55)"
           strokeWidth={1.2}
           vectorEffect="non-scaling-stroke"
         />
@@ -253,7 +254,7 @@ export function PlanSvg({
             y1={yBottom - tickLen}
             x2={x}
             y2={yBottom + tickLen}
-            stroke="rgba(229,231,235,0.6)"
+            stroke="rgba(0,0,0,0.6)"
             strokeWidth={1.2}
             vectorEffect="non-scaling-stroke"
           />
@@ -271,7 +272,7 @@ export function PlanSvg({
               y={yBottom + fs * 1.4}
               textAnchor="middle"
               fontSize={fs}
-              fill="rgba(229,231,235,0.75)"
+              fill="rgba(0,0,0,0.7)"
               fontWeight={500}
             >
               {(seg * 1000).toFixed(0)}
@@ -284,7 +285,7 @@ export function PlanSvg({
           y={yBottom + fs * 3.0}
           textAnchor="middle"
           fontSize={fs * 0.85}
-          fill="rgba(161,161,170,0.6)"
+          fill="rgba(0,0,0,0.45)"
           fontStyle="italic"
         >
           всього {(b.w * 1000).toFixed(0)} мм
@@ -296,7 +297,7 @@ export function PlanSvg({
           y1={b.y}
           x2={xRight}
           y2={b.y + b.h}
-          stroke="rgba(229,231,235,0.55)"
+          stroke="rgba(0,0,0,0.55)"
           strokeWidth={1.2}
           vectorEffect="non-scaling-stroke"
         />
@@ -307,7 +308,7 @@ export function PlanSvg({
             y1={y}
             x2={xRight + tickLen}
             y2={y}
-            stroke="rgba(229,231,235,0.6)"
+            stroke="rgba(0,0,0,0.6)"
             strokeWidth={1.2}
             vectorEffect="non-scaling-stroke"
           />
@@ -326,7 +327,7 @@ export function PlanSvg({
               textAnchor="middle"
               dominantBaseline="central"
               fontSize={fs}
-              fill="rgba(229,231,235,0.75)"
+              fill="rgba(0,0,0,0.7)"
               fontWeight={500}
             >
               {(seg * 1000).toFixed(0)}
@@ -340,7 +341,7 @@ export function PlanSvg({
           textAnchor="middle"
           dominantBaseline="central"
           fontSize={fs * 0.85}
-          fill="rgba(161,161,170,0.6)"
+          fill="rgba(0,0,0,0.45)"
           fontStyle="italic"
         >
           всього {(b.h * 1000).toFixed(0)} мм
@@ -366,7 +367,7 @@ export function PlanSvg({
             y1={p.y1}
             x2={p.x2}
             y2={p.y2}
-            stroke={isDoor ? "#fbbf24" : "#38bdf8"}
+            stroke={isDoor ? "#d97706" : "#0284c7"}
             strokeWidth={strokePx + 2.6}
             vectorEffect="non-scaling-stroke"
             strokeLinecap="butt"
@@ -390,7 +391,7 @@ export function PlanSvg({
             textAnchor="middle"
             dominantBaseline={isHorizontal ? "middle" : "central"}
             fontSize={dimFs}
-            fill={isDoor ? "#fbbf24" : "#38bdf8"}
+            fill={isDoor ? "#d97706" : "#0284c7"}
             fontWeight={600}
           >
             {(o.width * 1000).toFixed(0)}
@@ -472,6 +473,15 @@ export function PlanSvg({
           `w-full h-full touch-manipulation select-none ${layout.aspectClass}`
         }
       >
+        {/* Біле тло — як у архітектурному кресленні. Краще читається,
+            краще для fal.ai photoreal моделі (тренована на white bg). */}
+        <rect
+          x={layout.vb.x}
+          y={layout.vb.y}
+          width={layout.vb.w}
+          height={layout.vb.h}
+          fill="#ffffff"
+        />
         <defs>
           {!snapshot && (
             <>
@@ -484,7 +494,7 @@ export function PlanSvg({
                 <path
                   d="M 0.5 0 L 0 0 0 0.5"
                   fill="none"
-                  stroke="rgba(255,255,255,0.04)"
+                  stroke="rgba(0,0,0,0.05)"
                   strokeWidth={0.35}
                   vectorEffect="non-scaling-stroke"
                 />
@@ -494,7 +504,7 @@ export function PlanSvg({
                 <path
                   d="M 1 0 L 0 0 0 1"
                   fill="none"
-                  stroke="rgba(255,255,255,0.10)"
+                  stroke="rgba(0,0,0,0.12)"
                   strokeWidth={0.6}
                   vectorEffect="non-scaling-stroke"
                 />

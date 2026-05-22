@@ -218,7 +218,7 @@ export function InteractivePlanView({
     <div className="relative">
       <div
         ref={svgWrapRef}
-        className={`rounded-2xl bg-white/[0.02] border border-white/10 overflow-hidden touch-none ${aspectClass}`}
+        className={`rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none ${aspectClass}`}
         style={{ touchAction: "none" }}
       >
         <PlanSvg
