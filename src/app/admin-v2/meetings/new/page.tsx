@@ -11,6 +11,7 @@ import {
   Sparkles,
   Mic,
   FileText,
+  Save,
 } from "lucide-react";
 import Link from "next/link";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -261,8 +262,10 @@ export default function NewMeetingPage() {
     }
   }
 
-  // ── Текстова нарада: створити з нотаткою → вкладення → AI-підсумок
-  async function saveTextMeeting() {
+  // ── Текстова нарада: створити з нотаткою → вкладення → (опц.) AI.
+  // analyze=false — «Зберегти» (текст готовий); analyze=true — «АІ
+  // покращення» (підсумок + вичищена версія тексту).
+  async function saveTextMeeting(analyze: boolean) {
     const text = noteText.trim();
     if (!text) {
       setError("Спершу введіть текст наради");
@@ -281,6 +284,7 @@ export default function NewMeetingPage() {
           description: description.trim() || null,
           folderId: folderId || null,
           noteText: text,
+          analyze,
         }),
       });
       if (!createRes.ok) {
@@ -295,11 +299,14 @@ export default function NewMeetingPage() {
         await uploadStagedAttachments(id);
       }
 
-      setStage("triggering");
-      // AI-підсумок генерується окремо й оригінальну нотатку не змінює.
-      fetch(`/api/admin/meetings/${id}/summarize`, { method: "POST" }).catch(
-        () => {}
-      );
+      if (analyze) {
+        setStage("triggering");
+        // AI-підсумок + вичищена версія генеруються окремо;
+        // оригінальну нотатку не змінюють.
+        fetch(`/api/admin/meetings/${id}/summarize`, { method: "POST" }).catch(
+          () => {}
+        );
+      }
 
       router.push(`/admin-v2/meetings/${id}`);
     } catch (err) {
@@ -321,8 +328,8 @@ export default function NewMeetingPage() {
   const canSwitchMode = !busy && !pending && recState === "idle";
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
+    <div className="mx-auto max-w-[1800px]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[320px_1fr]">
         <MeetingsNavSidebar highlightFolderId={folderId || null} />
         <div className="min-w-0">
           <Link
@@ -540,19 +547,41 @@ export default function NewMeetingPage() {
             </div>
           )}
 
-          {/* Кнопка збереження текстової наради */}
+          {/* Кнопки збереження текстової наради */}
           {mode === "text" && !busy && (
             <div className="mt-4">
-              <button
-                type="button"
-                onClick={saveTextMeeting}
-                disabled={!noteText.trim()}
-                className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: T.accentPrimary }}
-              >
-                <Sparkles size={16} />
-                Зберегти й проаналізувати
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => saveTextMeeting(false)}
+                  disabled={!noteText.trim()}
+                  className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold disabled:opacity-50"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                >
+                  <Save size={16} />
+                  Зберегти
+                </button>
+                <button
+                  type="button"
+                  onClick={() => saveTextMeeting(true)}
+                  disabled={!noteText.trim()}
+                  className="flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  style={{ background: T.accentPrimary }}
+                >
+                  <Sparkles size={16} />
+                  АІ покращення
+                </button>
+              </div>
+              <p className="mt-2 text-xs" style={{ color: T.textMuted }}>
+                «Зберегти» — текст уже готовий, лишити як є. «АІ покращення» —
+                AI виправить помилки, гарно оформить і додасть структурований
+                підсумок (рішення, задачі). Оригінал тексту збережеться в
+                будь-якому разі.
+              </p>
             </div>
           )}
 

@@ -121,6 +121,7 @@ export type MeetingChapter = {
 
 export type Meeting = MeetingListItem & {
   transcript: string | null;
+  noteRefined: string | null;
   structured: MeetingStructured | null;
   audioR2Key: string | null;
   audioMimeType: string | null;

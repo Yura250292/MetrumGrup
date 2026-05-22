@@ -394,6 +394,42 @@ const RESPONSE_SCHEMA = {
 
 const AUTO_TITLE_RE = /^Нарада(\s+\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}|$)/i;
 
+// «АІ покращення» тексту: вичищає чернетку нотатки у гарний Markdown,
+// не змінюючи зміст. Результат — окрема версія (noteRefined); оригінал
+// noteText лишається недоторканим.
+const REFINE_SYSTEM_PROMPT = `Ти — редактор ділових нотаток. Тобі дають чернетку нотатки наради, написану нашвидкуруч. Поверни ВИЧИЩЕНУ, гарно оформлену версію у Markdown:
+- виправ орфографію, пунктуацію, одруківки;
+- структуруй: заголовки (## / ###), марковані та нумеровані списки, таблиці де це доречно;
+- прибери дублювання, зроби формулювання чіткими й діловими;
+- АЛЕ не додавай нової інформації і не прибирай наявну — усі факти, цифри, суми, імена, дати, назви зберігай точно як в оригіналі;
+- не перекладай: український текст лишається українською, російський — російською.
+Поверни ТІЛЬКИ готовий Markdown-текст нотатки, без жодних коментарів і без обгортки у код-блок.`;
+
+async function refineNoteText(noteText: string): Promise<string | null> {
+  try {
+    const res = await openai.chat.completions.create({
+      model: MODEL,
+      messages: [
+        { role: "system", content: REFINE_SYSTEM_PROMPT },
+        { role: "user", content: noteText },
+      ],
+      temperature: 0.3,
+    });
+    const out = res.choices[0]?.message?.content?.trim() || "";
+    // Прибираємо можливу ```markdown ... ``` обгортку.
+    const unwrapped = out
+      .replace(/^```(?:markdown|md)?\s*\n?/i, "")
+      .replace(/\n?```\s*$/i, "")
+      .trim();
+    return unwrapped || null;
+  } catch (err) {
+    // Покращення тексту не критичне — структурований підсумок усе одно
+    // згенерується. Просто лишаємо noteRefined порожнім.
+    console.warn("[summarize] refineNoteText failed:", err);
+    return null;
+  }
+}
+
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -532,25 +568,33 @@ export async function POST(
       .filter((p) => p !== null)
       .join("\n");
 
-    const response = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: userParts },
-      ],
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: "meeting_summary",
-          strict: true,
-          schema: RESPONSE_SCHEMA,
+    // Для текстової наради паралельно зі структурованим підсумком робимо
+    // «АІ покращення» самого тексту — вичищена/відформатована версія
+    // (noteRefined). Оригінал noteText при цьому НЕ змінюється.
+    const [response, refinedText] = await Promise.all([
+      openai.chat.completions.create({
+        model: MODEL,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userParts },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "meeting_summary",
+            strict: true,
+            schema: RESPONSE_SCHEMA,
+          },
         },
-      },
-      // Ставимо трошки більше temperature для proposedSolutions — там потрібна
-      // експертна творчість (запропонувати рішення, а не повторити транскрипт),
-      // одночасно strict-schema утримує форму.
-      temperature: 0.5,
-    });
+        // Ставимо трошки більше temperature для proposedSolutions — там
+        // потрібна експертна творчість (запропонувати рішення, а не
+        // повторити транскрипт), одночасно strict-schema утримує форму.
+        temperature: 0.5,
+      }),
+      isTextNote
+        ? refineNoteText(sourceText)
+        : Promise.resolve<string | null>(null),
+    ]);
 
     const raw = response.choices[0]?.message?.content ?? "{}";
     const structured = JSON.parse(raw);
@@ -570,6 +614,10 @@ export async function POST(
         title: shouldAutoRename ? suggested : undefined,
         summary: structured.summary ?? null,
         structured,
+        // Покращену версію тексту пишемо лише якщо вона є; оригінал
+        // noteText не чіпаємо в жодному разі.
+        noteRefined:
+          refinedText && refinedText.length > 0 ? refinedText : undefined,
         aiModelUsed: MODEL,
         aiTokensUsed: tokensUsed,
       },

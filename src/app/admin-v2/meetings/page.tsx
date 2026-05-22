@@ -224,7 +224,7 @@ export default function MeetingsListPage() {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
+    <div className="mx-auto max-w-[1800px]">
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1
@@ -260,7 +260,7 @@ export default function MeetingsListPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-[320px_1fr] gap-4">
         {/* Sidebar — folder tree */}
         <aside
           className="rounded-xl p-3"

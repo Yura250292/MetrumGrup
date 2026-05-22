@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import {
   ArrowLeft,
   Loader2,
@@ -39,6 +37,7 @@ import { DelegateTaskModal } from "../_components/delegate-task-modal";
 import { LiveAgentPanel } from "../_components/live-agent-panel";
 import { MeetingsNavSidebar } from "../_components/meetings-nav-sidebar";
 import { AttachmentsPanel } from "../_components/meeting-attachments";
+import { MeetingMarkdown } from "../_components/markdown";
 import { useAiPanel } from "@/contexts/AiPanelContext";
 
 const POLL_INTERVAL_MS = 3000;
@@ -58,9 +57,9 @@ export default function MeetingDetailPage() {
   const [meeting, setMeeting] = useState<Meeting | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"summary" | "transcript">(
-    "summary"
-  );
+  const [activeTab, setActiveTab] = useState<
+    "summary" | "transcript" | "original"
+  >("summary");
   const [delegating, setDelegating] = useState<{
     index: number;
     task: MeetingTask;
@@ -298,13 +297,30 @@ export default function MeetingDetailPage() {
 
   // Текстова нарада — без аудіо, з оригінальною Markdown-нотаткою.
   const isTextMeeting = !meeting.audioUrl && !!meeting.noteText;
-  // Тіло наради для AI-аналізу та вкладки: транскрипт або текстова нотатка.
-  const bodyText = meeting.transcript ?? meeting.noteText;
+  // Чи є «АІ покращена» версія тексту (окремо від оригіналу).
+  const hasRefined = isTextMeeting && !!meeting.noteRefined;
+  // Вкладка «Нотатка/Транскрипт» показує найкращу доступну версію:
+  // транскрипт (аудіо) → вичищену нотатку → оригінал нотатки.
+  const bodyText =
+    meeting.transcript ?? meeting.noteRefined ?? meeting.noteText;
   const bodyLabel = isTextMeeting ? "Нотатка" : "Транскрипт";
+  const bodyFieldKey: "transcript" | "noteText" | "noteRefined" =
+    meeting.transcript
+      ? "transcript"
+      : meeting.noteRefined
+        ? "noteRefined"
+        : "noteText";
+  // Якщо обрана вкладка недоступна — показуємо першу змістовну.
+  const effectiveTab =
+    activeTab === "summary" && !meeting.structured
+      ? "transcript"
+      : activeTab === "original" && !hasRefined
+        ? "transcript"
+        : activeTab;
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-[260px_1fr]">
+    <div className="mx-auto max-w-[1800px]">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-[320px_1fr]">
         <MeetingsNavSidebar highlightFolderId={meeting?.folder?.id ?? null} />
         <div className="min-w-0">
       <Link
@@ -465,7 +481,11 @@ export default function MeetingDetailPage() {
               ) : (
                 <Sparkles size={14} />
               )}
-              {meeting.structured ? "Перегенерувати" : "Сформувати підсумок"}
+              {meeting.structured
+                ? "Перегенерувати"
+                : isTextMeeting
+                  ? "АІ покращення"
+                  : "Сформувати підсумок"}
             </button>
           )}
           {meeting.audioUrl && (
@@ -597,23 +617,31 @@ export default function MeetingDetailPage() {
           style={{ background: T.panelElevated, width: "fit-content" }}
         >
           <TabBtn
-            active={activeTab === "summary"}
+            active={effectiveTab === "summary"}
             onClick={() => setActiveTab("summary")}
             icon={<Sparkles size={14} />}
             label="Підсумок"
             disabled={!meeting.structured}
           />
           <TabBtn
-            active={activeTab === "transcript"}
+            active={effectiveTab === "transcript"}
             onClick={() => setActiveTab("transcript")}
             icon={<FileText size={14} />}
             label={bodyLabel}
             disabled={!bodyText}
           />
+          {hasRefined && (
+            <TabBtn
+              active={effectiveTab === "original"}
+              onClick={() => setActiveTab("original")}
+              icon={<FileText size={14} />}
+              label="Оригінал"
+            />
+          )}
         </div>
       )}
 
-      {activeTab === "summary" && meeting.structured && (
+      {effectiveTab === "summary" && meeting.structured && (
         <SummaryView
           data={meeting.structured}
           delegated={delegated}
@@ -653,18 +681,38 @@ export default function MeetingDetailPage() {
         />
       )}
 
-      {activeTab === "transcript" && bodyText && (
+      {effectiveTab === "transcript" && bodyText && (
         <TranscriptView
           transcript={bodyText}
           entities={meeting.entities ?? []}
           speakers={meeting.structured?.speakers ?? []}
           meetingId={id}
-          fieldKey={isTextMeeting ? "noteText" : "transcript"}
+          fieldKey={bodyFieldKey}
           label={bodyLabel}
           onSaved={async () => {
             await refresh();
           }}
         />
+      )}
+
+      {effectiveTab === "original" && meeting.noteText && (
+        <>
+          <p className="mb-2 text-xs" style={{ color: T.textMuted }}>
+            Оригінал нотатки — текст як ви його ввели. AI його не змінює;
+            «Нотатка» — це вичищена AI-версія.
+          </p>
+          <TranscriptView
+            transcript={meeting.noteText}
+            entities={[]}
+            speakers={[]}
+            meetingId={id}
+            fieldKey="noteText"
+            label="Оригінал"
+            onSaved={async () => {
+              await refresh();
+            }}
+          />
+        </>
       )}
 
       <MoveToFolderDialog
@@ -869,96 +917,6 @@ function highlightEntities(
   return parts;
 }
 
-// Стилізація markdown-елементів узгоджена з токенами дизайну. Підтримує
-// заголовки, списки, bold/italic, code, hr, blockquote, links.
-const MD_COMPONENTS = {
-  h1: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h1
-      {...props}
-      className="mt-5 mb-3 text-xl font-bold"
-      style={{ color: T.textPrimary }}
-    />
-  ),
-  h2: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h2
-      {...props}
-      className="mt-5 mb-2 text-lg font-bold"
-      style={{ color: T.textPrimary }}
-    />
-  ),
-  h3: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h3
-      {...props}
-      className="mt-4 mb-2 text-base font-bold"
-      style={{ color: T.textPrimary }}
-    />
-  ),
-  h4: (props: React.HTMLAttributes<HTMLHeadingElement>) => (
-    <h4
-      {...props}
-      className="mt-3 mb-2 text-sm font-bold"
-      style={{ color: T.textPrimary }}
-    />
-  ),
-  p: (props: React.HTMLAttributes<HTMLParagraphElement>) => (
-    <p {...props} className="my-2 leading-relaxed" />
-  ),
-  ul: (props: React.HTMLAttributes<HTMLUListElement>) => (
-    <ul {...props} className="my-2 list-disc pl-6 space-y-1" />
-  ),
-  ol: (props: React.OlHTMLAttributes<HTMLOListElement>) => (
-    <ol {...props} className="my-2 list-decimal pl-6 space-y-1" />
-  ),
-  li: (props: React.HTMLAttributes<HTMLLIElement>) => (
-    <li {...props} className="leading-relaxed" />
-  ),
-  strong: (props: React.HTMLAttributes<HTMLElement>) => (
-    <strong
-      {...props}
-      style={{ color: T.textPrimary, fontWeight: 700 }}
-    />
-  ),
-  em: (props: React.HTMLAttributes<HTMLElement>) => (
-    <em {...props} style={{ color: T.textSecondary }} />
-  ),
-  hr: () => (
-    <hr
-      className="my-5 border-0"
-      style={{ borderTop: `1px solid ${T.borderSoft}` }}
-    />
-  ),
-  blockquote: (props: React.BlockquoteHTMLAttributes<HTMLQuoteElement>) => (
-    <blockquote
-      {...props}
-      className="my-3 pl-4 italic"
-      style={{
-        borderLeft: `3px solid ${T.borderStrong}`,
-        color: T.textSecondary,
-      }}
-    />
-  ),
-  code: (props: React.HTMLAttributes<HTMLElement>) => (
-    <code
-      {...props}
-      className="rounded px-1 py-0.5 text-[12px]"
-      style={{
-        background: T.panelElevated,
-        color: T.textPrimary,
-        fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      }}
-    />
-  ),
-  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
-    <a
-      {...props}
-      target="_blank"
-      rel="noreferrer noopener"
-      className="underline"
-      style={{ color: T.accentPrimary }}
-    />
-  ),
-};
-
 // Чи текст виглядає як markdown — просте евристичне виявлення:
 // - заголовки ## або ###
 // - горизонтальна лінія ---
@@ -990,12 +948,13 @@ function TranscriptView({
   entities: MeetingEntity[];
   speakers: MeetingSpeaker[];
   meetingId: string;
-  // Яке поле наради редагуємо: аудіо-транскрипт чи текстова нотатка.
-  fieldKey: "transcript" | "noteText";
+  // Яке поле наради редагуємо: аудіо-транскрипт, оригінал нотатки
+  // або «АІ покращену» нотатку.
+  fieldKey: "transcript" | "noteText" | "noteRefined";
   label: string;
   onSaved?: () => void | Promise<void>;
 }) {
-  const isNote = fieldKey === "noteText";
+  const isNote = fieldKey !== "transcript";
   // Мапа лейбл -> ідентифіковане імʼя/роль
   const speakerNameByLabel = new Map<string, string>();
   for (const s of speakers) {
@@ -1160,14 +1119,7 @@ function TranscriptView({
       </div>
 
       {looksLikeMarkdown(transcript) ? (
-        <div className="text-sm leading-relaxed">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={MD_COMPONENTS}
-          >
-            {transcript}
-          </ReactMarkdown>
-        </div>
+        <MeetingMarkdown>{transcript}</MeetingMarkdown>
       ) : !hasSpeakers ? (
         <p className="whitespace-pre-wrap leading-relaxed">
           {highlightEntities(transcript, entities)}

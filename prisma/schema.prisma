@@ -2865,6 +2865,11 @@ model Meeting {
   /// цей текст — оригінал лишається недоторканим.
   noteText String? @db.Text
 
+  /// «АІ покращення»: вичищена/відформатована версія noteText —
+  /// виправлені помилки, гарне оформлення. Окрема копія; оригінал
+  /// (noteText) недоторканий. Null, якщо AI-покращення не запускали.
+  noteRefined String? @db.Text
+
   status          MeetingStatus @default(DRAFT)
   transcript      String?       @db.Text
   summary         String?       @db.Text

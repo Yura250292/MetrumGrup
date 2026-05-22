@@ -15,8 +15,10 @@ const createSchema = z.object({
   description: z.string().max(5000).optional().nullable(),
   folderId: z.string().min(1).optional().nullable(),
   // Текстова нарада: оригінальна Markdown-нотатка замість аудіозапису.
-  // Якщо передано — нарада одразу готова до AI-аналізу (без транскрипції).
   noteText: z.string().max(100000).optional().nullable(),
+  // Чи запускати «АІ покращення» (підсумок + вичищена версія тексту).
+  // false = «Зберегти» — текст уже готовий, AI не потрібен.
+  analyze: z.boolean().optional().default(true),
 });
 
 export async function GET(request: NextRequest) {
@@ -64,47 +66,64 @@ export async function POST(request: NextRequest) {
     return msg === "Forbidden" ? forbiddenResponse() : unauthorizedResponse();
   }
 
-  const parsed = createSchema.safeParse(await request.json());
-  if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Invalid payload", details: parsed.error.issues },
-      { status: 400 }
-    );
-  }
-
-  if (parsed.data.folderId) {
-    const folder = await prisma.folder.findUnique({
-      where: { id: parsed.data.folderId },
-      select: { domain: true },
-    });
-    if (!folder || folder.domain !== "MEETING") {
+  try {
+    const body = await request.json().catch(() => null);
+    const parsed = createSchema.safeParse(body);
+    if (!parsed.success) {
       return NextResponse.json(
-        { error: "Папку нарад не знайдено" },
-        { status: 400 },
+        { error: "Некоректні дані форми", details: parsed.error.issues },
+        { status: 400 }
       );
     }
+
+    if (parsed.data.folderId) {
+      const folder = await prisma.folder.findUnique({
+        where: { id: parsed.data.folderId },
+        select: { domain: true },
+      });
+      if (!folder || folder.domain !== "MEETING") {
+        return NextResponse.json(
+          { error: "Папку нарад не знайдено" },
+          { status: 400 },
+        );
+      }
+    }
+
+    const { firmId } = await resolveFirmScopeForRequest(session);
+
+    const noteText = parsed.data.noteText?.trim() || null;
+
+    // Текстова нарада: «АІ покращення» → TRANSCRIBED (клієнт запустить
+    // аналіз), «Зберегти» (analyze=false) → READY, нарада вже готова.
+    // Аудіо-нарада завжди стартує як DRAFT.
+    const status: "DRAFT" | "TRANSCRIBED" | "READY" = noteText
+      ? parsed.data.analyze
+        ? "TRANSCRIBED"
+        : "READY"
+      : "DRAFT";
+
+    const meeting = await prisma.meeting.create({
+      data: {
+        title: parsed.data.title,
+        description: parsed.data.description ?? null,
+        folderId: parsed.data.folderId ?? null,
+        firmId: firmId ?? null,
+        createdById: session.user.id,
+        noteText,
+        status,
+      },
+      include: {
+        folder: { select: { id: true, name: true } },
+      },
+    });
+
+    return NextResponse.json({ meeting });
+  } catch (err) {
+    // Повертаємо реальну причину, а не глуху 500 — щоб у UI було видно,
+    // що саме пішло не так (напр. застарілий Prisma-клієнт після міграції).
+    const message =
+      err instanceof Error ? err.message : "Не вдалося створити нараду";
+    console.error("[meetings POST] create failed:", err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  const { firmId } = await resolveFirmScopeForRequest(session);
-
-  const noteText = parsed.data.noteText?.trim() || null;
-
-  const meeting = await prisma.meeting.create({
-    data: {
-      title: parsed.data.title,
-      description: parsed.data.description ?? null,
-      folderId: parsed.data.folderId ?? null,
-      firmId: firmId ?? null,
-      createdById: session.user.id,
-      noteText,
-      // Текстова нарада минає аудіо/транскрипцію — одразу TRANSCRIBED,
-      // тобто готова до AI-підсумку. Звичайна нарада стартує як DRAFT.
-      status: noteText ? "TRANSCRIBED" : "DRAFT",
-    },
-    include: {
-      folder: { select: { id: true, name: true } },
-    },
-  });
-
-  return NextResponse.json({ meeting });
 }
