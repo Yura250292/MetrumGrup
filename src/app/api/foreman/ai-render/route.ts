@@ -7,6 +7,7 @@ import {
   unauthorizedResponse,
 } from "@/lib/auth-utils";
 import { generateRender } from "@/lib/ai-render/fal-client";
+import { buildPrompt } from "@/lib/ai-render/prompt-builder";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // fal.ai може займати до 60-120s
@@ -16,64 +17,13 @@ const bodySchema = z.object({
   imageBase64: z.string().min(100),
   /** Опційний user-prompt для стилю. */
   prompt: z.string().trim().max(500).optional(),
-  /** Структурований опис плану — для збагачення промпта семантикою. */
-  layout: z
-    .object({
-      rooms: z
-        .array(
-          z.object({
-            name: z.string(),
-            classification: z.string().optional(),
-            x: z.number(),
-            y: z.number(),
-            w: z.number(),
-            h: z.number(),
-            furnitureLabels: z.array(z.string()).optional(),
-          }),
-        )
-        .max(40),
-      openings: z
-        .array(
-          z.object({
-            type: z.enum(["door", "window"]),
-            roomName: z.string().optional(),
-          }),
-        )
-        .max(80)
-        .default([]),
-      bbox: z.object({ w: z.number(), h: z.number() }),
-    })
-    .optional(),
+  /**
+   * Структурований опис плану клієнт ще може надсилати — приймаємо й
+   * ігноруємо (зворотна сумісність). Промпт будуємо без нього: за тестами
+   * команди семантика кімнат лише заплутує Seedream.
+   */
+  layout: z.unknown().optional(),
 });
-
-const ROOM_CLASS_EN: Record<string, string> = {
-  kitchen: "kitchen with stove, sink, refrigerator, cabinets",
-  bedroom: "bedroom with bed and wardrobe",
-  bathroom: "bathroom with toilet, sink, bathtub or shower",
-  livingroom: "living room with sofa, TV, coffee table",
-  corridor: "corridor / hallway passage",
-  hallway: "entrance hallway with coat storage",
-  office: "home office with desk and chair",
-  diningroom: "dining room with table and chairs",
-  balcony: "balcony with outdoor seating",
-  storage: "storage closet with shelves",
-  other: "general room",
-};
-
-/** Позиція "top-left", "center", "bottom-right" і т.д. — для prompt context. */
-function describePosition(
-  room: { x: number; y: number; w: number; h: number },
-  bbox: { w: number; h: number },
-): string {
-  const cx = room.x + room.w / 2;
-  const cy = room.y + room.h / 2;
-  const xZone = cx < bbox.w / 3 ? "left" : cx < (2 * bbox.w) / 3 ? "center" : "right";
-  const yZone = cy < bbox.h / 3 ? "top" : cy < (2 * bbox.h) / 3 ? "middle" : "bottom";
-  if (xZone === "center" && yZone === "middle") return "center";
-  if (yZone === "middle") return xZone === "left" ? "left side" : "right side";
-  if (xZone === "center") return yZone === "top" ? "top center" : "bottom center";
-  return `${yZone}-${xZone}`;
-}
 
 fal.config({ credentials: process.env.FAL_KEY });
 
@@ -132,63 +82,18 @@ export async function POST(request: NextRequest) {
   }
 
   const userPrompt = parsed.data.prompt?.trim() || "";
-  const layout = parsed.data.layout;
 
-  // Структурний опис плану — Seedream краще розуміє коли є явна семантика
-  // призначення кожної кімнати і конкретний підрахунок дверей/вікон.
-  let layoutDescription = "";
-  if (layout && layout.rooms.length > 0) {
-    const roomLines = layout.rooms.map((r) => {
-      const pos = describePosition(r, layout.bbox);
-      const classKey = (r.classification ?? "other").toLowerCase();
-      const semDesc = ROOM_CLASS_EN[classKey] ?? "general room";
-      const furniturePart =
-        r.furnitureLabels && r.furnitureLabels.length > 0
-          ? ` containing: ${r.furnitureLabels.slice(0, 8).join(", ")}`
-          : "";
-      return `  • ${pos} (${r.w.toFixed(1)}×${r.h.toFixed(1)} m): ${semDesc}${furniturePart}`;
-    });
-
-    const doorCount = layout.openings.filter((o) => o.type === "door").length;
-    const windowCount = layout.openings.filter((o) => o.type === "window").length;
-
-    layoutDescription = [
-      "",
-      "LAYOUT (rooms by position — render each room with appropriate finishes and lighting for its function):",
-      ...roomLines,
-      "",
-      `OPENINGS: exactly ${doorCount} door(s) marked by arc swing symbols, and ${windowCount} window(s) marked by double parallel line symbols. Render them as functional doors and windows in the 3D view at the exact positions shown.`,
-      "",
-    ].join("\n");
-  }
-
-  // Prompt оптимізований для Seedream v4 edit моделі.
-  // Камера — СТРОГО зверху (bird's-eye), як у проектній AI-візуалізації
-  // (FLOOR_PLAN_TO_3D у prompt-builder.ts). Без axonometric/dollhouse нахилу.
-  // Ключове повідомлення: PRESERVE — model має точно відтворити вхідну
-  // структуру.
-  const prompt = [
-    "Photorealistic top-down interior visualization of this exact floor plan.",
-    "Camera angle: strict top-down bird's-eye view — camera looking straight down at 90°, identical perspective, framing and orientation to the input plan. This MUST be a flat top-down view. NOT axonometric, NOT isometric, NOT angled, NOT tilted, NOT a dollhouse/cabinet view — never show walls from the side.",
-    "ABSOLUTELY CRITICAL — STRUCTURAL FIDELITY: Every wall, room boundary, door position, window position, and piece of furniture in the input plan MUST appear in EXACTLY the same location and orientation in the render. DO NOT rearrange the layout. DO NOT add or remove rooms. DO NOT shift walls. The render must be an exact 1:1 reconstruction of the 2D plan.",
-    "Only transform the visual style from a flat 2D drawing into photorealistic materials, textures and lighting — keep the geometry and the strict top-down camera unchanged.",
-    layoutDescription,
-    "RENDERING per room type:",
-    "- Kitchen: marble or quartz countertops, stainless steel appliances, tile splashback, wooden cabinets, hanging pendant lights",
-    "- Bathroom: large-format ceramic tile floor and walls, white sanitary ware (toilet, sink, bathtub/shower), chrome fixtures, towels on rails",
-    "- Bedroom: oak parquet, made bed with neutral linen, bedside lamps, area rug under bed, soft warm lighting",
-    "- Living room: oak parquet, fabric sofa in beige/sage/charcoal, wooden coffee table, TV unit, large area rug, indoor plants, framed art",
-    "- Office: desk with task lamp, ergonomic chair, bookshelf, plants",
-    "- Corridor / hallway: parquet, console with mirror, coat rack near entrance",
-    "Style: contemporary Ukrainian apartment, modern minimalist Scandinavian-meets-warm.",
-    "Lighting: soft warm natural daylight through windows, slight ambient shadows under furniture for depth, no harsh sun.",
-    "Decor: indoor plants in clay pots near windows and corners, area rugs under sofa groups and beds.",
-    "Quality: high resolution, photorealistic textures, clean geometry, professional top-down architectural floor plan render.",
-    "DO NOT include: people, text, watermarks, labels, dimension numbers, measurement annotations, compass symbols, arrows or any overlay graphics. Clean unannotated interior.",
+  // Той самий промпт і модель, що й у проектній AI-візуалізації:
+  // buildPrompt(FLOOR_PLAN_TO_3D) → fal-ai/bytedance/seedream/v4/edit.
+  // Раніше foreman мав власний великий промпт із layoutDescription (позиції
+  // та типи кімнат). За тестами команди (коментар у src/lib/ai-render/index.ts)
+  // згодовування Seedream семантики кімнат ЗАПЛУТУЄ модель — вона сама добре
+  // читає креслення. Тепер foreman 1:1 повторює проектний пайплайн.
+  const { prompt, negativePrompt } = buildPrompt({
+    stylePreset: null,
     userPrompt,
-  ]
-    .filter(Boolean)
-    .join(" ");
+    mode: "FLOOR_PLAN_TO_3D",
+  });
 
   let result;
   try {
@@ -196,14 +101,13 @@ export async function POST(request: NextRequest) {
       mode: "FLOOR_PLAN_TO_3D",
       imageUrl: inputUrl,
       prompt,
-      negativePrompt:
-        "axonometric, isometric, 3D perspective, angled camera, tilted view, side view, dollhouse view, walls seen from the side, people, text, watermark, labels, dimensions, measurement annotations, compass, arrows, low quality, blurry, distorted, deformed walls, broken perspective, cartoon, illustration, isometric video game style",
-      // Seedream v4 edit ігнорує strength/controlnetType (вони лише для
-      // інших моделей), але передаємо як no-op для сумісності типу.
-      strength: 0.8,
-      controlnetType: "canny",
-      width: 2048,
-      height: 2048,
+      negativePrompt,
+      // Seedream v4 edit для FLOOR_PLAN_TO_3D ігнорує strength/controlnet/
+      // width/height — передаємо ті самі значення, що й проектний рендер.
+      strength: 0.85,
+      controlnetType: "none",
+      width: 1024,
+      height: 1024,
     });
   } catch (e) {
     console.error("[foreman/ai-render] fal.ai failed", e);
