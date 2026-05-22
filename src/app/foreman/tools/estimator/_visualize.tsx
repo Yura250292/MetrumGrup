@@ -1,6 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+/** 20 scenario IDs (mirror серверного списку). Клієнт вибирає різний за раз
+ *  при кожному "Перегенерувати". */
+const SCENARIO_IDS = [
+  "modern-minimalist",
+  "scandinavian-cozy",
+  "industrial-loft",
+  "boho-eclectic",
+  "japandi",
+  "classic-ukrainian",
+  "french-parisian",
+  "mid-century-modern",
+  "maximalist-gallery",
+  "smart-tech",
+  "family-kids",
+  "bachelor-pad",
+  "senior-accessible",
+  "studio-saver",
+  "luxury-upscale",
+  "rustic-country",
+  "mediterranean",
+  "asian-zen",
+  "coastal-beach",
+  "cottagecore",
+];
 import {
   CheckCircle2,
   Image as ImageIcon,
@@ -49,6 +74,10 @@ export function Visualize({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastGenAt, setLastGenAt] = useState<number | null>(null);
+  const [scenario, setScenario] = useState<{ id: string; name: string } | null>(
+    null,
+  );
+  const lastScenarioIdRef = useRef<string | null>(null);
 
   // Photoreal state
   const [photorealLoading, setPhotorealLoading] = useState(false);
@@ -62,6 +91,14 @@ export function Visualize({
     setLoading(true);
     setError(null);
     try {
+      // Обираємо РАНДОМНИЙ сценарій, але уникаємо одразу того самого, що
+      // був попереднього разу — щоб користувач бачив варіативність.
+      const available = lastScenarioIdRef.current
+        ? SCENARIO_IDS.filter((id) => id !== lastScenarioIdRef.current)
+        : SCENARIO_IDS;
+      const scenarioId = available[Math.floor(Math.random() * available.length)];
+      lastScenarioIdRef.current = scenarioId;
+
       const res = await fetch("/api/foreman/ai-furnish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -83,6 +120,7 @@ export function Visualize({
             height: o.height,
             type: o.type,
           })),
+          scenarioId,
         }),
       });
       if (!res.ok) {
@@ -92,11 +130,16 @@ export function Visualize({
       const json = (await res.json()) as {
         rooms: { roomId: string; classification: RoomClass }[];
         furniture: FurnitureItem[];
+        scenario?: { id: string; name: string };
       };
       const classes: Record<string, RoomClass> = {};
       for (const r of json.rooms) classes[r.roomId] = r.classification;
       onSetFurniture(json.furniture, classes);
       setLastGenAt(Date.now());
+      if (json.scenario) {
+        setScenario(json.scenario);
+        lastScenarioIdRef.current = json.scenario.id;
+      }
       if (json.furniture.length === 0) {
         setError(
           "AI не зміг розмістити меблі (можливо, кімнати малі або назви нетипові). Спробуйте перейменувати кімнати у звичні «Кухня/Спальня/Санвузол» і повторіть.",
@@ -262,13 +305,21 @@ export function Visualize({
       </div>
 
       {hasFurniture && lastGenAt && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs">
-          <CheckCircle2 size={14} className="shrink-0" />
-          <span>
-            AI розмістила <b>{totalItems}</b> меблевих елемент
-            {totalItems === 1 ? "" : totalItems < 5 ? "и" : "ів"} на плані. Тап
-            по предмету щоб видалити; пінч/drag — зум плану.
-          </span>
+        <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs">
+          <CheckCircle2 size={14} className="shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <div>
+              AI розмістила <b>{totalItems}</b> меблевих елемент
+              {totalItems === 1 ? "" : totalItems < 5 ? "и" : "ів"} на плані. Тап
+              по предмету щоб видалити; пінч/drag — зум плану.
+            </div>
+            {scenario && (
+              <div className="mt-1 text-emerald-100/80">
+                Стиль: <b>{scenario.name}</b>. Натисніть «Перегенерувати»
+                для іншого з 20 варіантів.
+              </div>
+            )}
+          </div>
         </div>
       )}
 

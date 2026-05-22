@@ -38,6 +38,7 @@ const bodySchema = z.object({
     )
     .max(80)
     .default([]),
+  scenarioId: z.string().min(1).max(60).optional(),
 });
 
 /**

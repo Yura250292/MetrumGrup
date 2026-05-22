@@ -69,6 +69,8 @@ export interface FurnishRequest {
     height: number;
     type: "door" | "window";
   }[];
+  /** Опційний ID стильового сценарію. Якщо не задано — рандомний. */
+  scenarioId?: string;
 }
 
 export interface FurnishResult {
@@ -87,6 +89,8 @@ export interface FurnishResult {
     h: number;
     rotation: number;
   }[];
+  /** Сценарій, який було використано — клієнт показує користувачеві. */
+  scenario: { id: string; name: string };
 }
 
 /**
@@ -216,6 +220,270 @@ function inferClassFromName(name: string): RoomClass | null {
   if (/балкон|лоджі|balcony|loggia/.test(n)) return "balcony";
   if (/комор|кладов|гардероб|storage|pantry|закром/.test(n)) return "storage";
   return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// СТИЛЬОВІ СЦЕНАРІЇ (20 варіантів)
+// AI обирає меблі у вибраному стилі. На кожному "Перегенерувати"
+// клієнт може передавати інший scenarioId — отримує іншу естетику.
+// ─────────────────────────────────────────────────────────────────────
+
+export interface FurnishScenario {
+  id: string;
+  name: string;
+  description: string;
+  preferences: string[];
+}
+
+export const FURNISH_SCENARIOS: FurnishScenario[] = [
+  {
+    id: "modern-minimalist",
+    name: "Сучасний мінімалізм",
+    description:
+      "Clean lines, neutral palette (white, beige, charcoal), few but premium pieces, lots of empty space",
+    preferences: [
+      "Fewer larger statement pieces over many small ones",
+      "1-2 plants per room maximum",
+      "Sofa: 3-seater in beige or charcoal fabric",
+      "Empty corners are fine",
+    ],
+  },
+  {
+    id: "scandinavian-cozy",
+    name: "Скандинавський затишок",
+    description:
+      "Warm light wood (oak, birch), white walls, layered textiles, multiple small plants, hygge",
+    preferences: [
+      "Multiple plants in different sizes",
+      "Layered rugs and throws on sofas",
+      "Wooden furniture with light finish",
+      "Reading nook with armchair near window",
+    ],
+  },
+  {
+    id: "industrial-loft",
+    name: "Індустріальний лофт",
+    description:
+      "Exposed brick/concrete, black metal frames, leather, vintage Edison bulbs, raw materials",
+    preferences: [
+      "Leather sofa in cognac or dark brown",
+      "Black metal coffee table or bookshelf",
+      "Floor-standing lamp instead of overhead",
+      "Few plants but tall (palms)",
+    ],
+  },
+  {
+    id: "boho-eclectic",
+    name: "Богемний еклектичний",
+    description:
+      "Layered patterns, rattan, macrame, low furniture, many plants, terracotta and earth tones",
+    preferences: [
+      "Low sofa with many throw pillows",
+      "Multiple layered rugs",
+      "Many plants — hanging and floor",
+      "Round/oval coffee table",
+    ],
+  },
+  {
+    id: "japandi",
+    name: "Japandi (японсько-скандинавський)",
+    description:
+      "Low natural wood furniture, neutral muted palette, single-stem plants, restrained zen",
+    preferences: [
+      "Low platform bed close to floor",
+      "Light oak wood throughout",
+      "Single tall plant per room (bonsai, monstera)",
+      "Minimal decor — under 5 items per room",
+    ],
+  },
+  {
+    id: "classic-ukrainian",
+    name: "Класичний український",
+    description:
+      "Traditional warm style, embroidered textiles accents, family-friendly, sturdy wood",
+    preferences: [
+      "Dining table at center of living/dining area",
+      "Sofa group facing TV — family viewing",
+      "Solid wood wardrobes and shelves",
+      "Embroidered runner on table, textile accents",
+    ],
+  },
+  {
+    id: "french-parisian",
+    name: "Французький паризький",
+    description:
+      "Elegant, brass and gold accents, light fabrics, antique-style touches, refined",
+    preferences: [
+      "Velvet armchair in jewel tone",
+      "Brass-framed mirror over console",
+      "Crystal chandelier hint (no chandelier in plan view but suggest by lamp placement)",
+      "Marble-look coffee table",
+    ],
+  },
+  {
+    id: "mid-century-modern",
+    name: "Mid-century modern",
+    description:
+      "Teak wood, sculptural curved furniture, 60s vibe, mustard/olive/teal accents",
+    preferences: [
+      "Iconic curved sofa (Eames-style)",
+      "Teak credenza for TV",
+      "Sputnik-inspired lighting (suggested by lamp placement)",
+      "Sunburst mirror on accent wall",
+    ],
+  },
+  {
+    id: "maximalist-gallery",
+    name: "Максималістський gallery wall",
+    description:
+      "Bold colors, mixed patterns, full gallery walls, many decor items, eclectic abundance",
+    preferences: [
+      "Sofa in bold color (emerald, navy, terracotta)",
+      "Multiple armchairs (each different style)",
+      "Patterned rug",
+      "Many plants and decor objects everywhere",
+    ],
+  },
+  {
+    id: "smart-tech",
+    name: "Smart-tech орієнтований",
+    description:
+      "Sleek modern, integrated tech, gadgets visible, hidden storage, ambient lighting",
+    preferences: [
+      "Large smart TV as centerpiece",
+      "Desk with monitor in living/office",
+      "Sleek lines, gray and white",
+      "Robot vacuum dock visible (small rect)",
+    ],
+  },
+  {
+    id: "family-kids",
+    name: "Сімейний з дітьми",
+    description:
+      "Durable kid-friendly, soft edges, play zone, storage for toys, sturdy washable fabrics",
+    preferences: [
+      "Sectional sofa (more seats for family)",
+      "Storage ottomans for toys",
+      "Large rug as play area in living",
+      "Round table corners or covered",
+    ],
+  },
+  {
+    id: "bachelor-pad",
+    name: "Холостяцьке житло",
+    description:
+      "Dark tones, leather, bar cart, masculine palette, fewer textiles, focus on entertainment",
+    preferences: [
+      "Dark leather sofa",
+      "Bar cart in living room",
+      "Large TV with sound system",
+      "Minimal plants — 1-2 max",
+    ],
+  },
+  {
+    id: "senior-accessible",
+    name: "Для людей старшого віку",
+    description:
+      "Wide walking paths, firm seating, fewer items, no low tables to bump, grab support hints",
+    preferences: [
+      "Firmer higher chairs (easier to stand up)",
+      "Single sofa, no second seating block",
+      "Wider gaps between furniture",
+      "No coffee table in middle (trip hazard)",
+    ],
+  },
+  {
+    id: "studio-saver",
+    name: "Студія / економія простору",
+    description:
+      "Multi-functional furniture, vertical storage, fold-down items, compact pieces",
+    preferences: [
+      "Smaller compact sofa (2-seater)",
+      "Tall narrow wardrobes/shelves (vertical)",
+      "Drop-leaf or extendable table",
+      "Bed could double as daybed",
+    ],
+  },
+  {
+    id: "luxury-upscale",
+    name: "Преміум luxury",
+    description:
+      "Marble, gold/brass, large statement chandelier, premium fabrics, designer pieces",
+    preferences: [
+      "Marble-top coffee table",
+      "Velvet or silk sofa in deep color",
+      "Crystal/brass accents (suggest by lamp placement)",
+      "Large area rug under entire seating group",
+    ],
+  },
+  {
+    id: "rustic-country",
+    name: "Кантрі рустік",
+    description:
+      "Pine wood, woven baskets, gingham patterns, simple sturdy, country farmhouse",
+    preferences: [
+      "Wooden farmhouse dining table",
+      "Pine bookshelves",
+      "Woven baskets as storage",
+      "Floral or gingham fabric on chairs",
+    ],
+  },
+  {
+    id: "mediterranean",
+    name: "Середземноморський",
+    description:
+      "White walls, terracotta accents, blue glass, light woods, citrus plants, breezy",
+    preferences: [
+      "White or cream sofa",
+      "Terracotta plant pots",
+      "Light wood (whitewashed)",
+      "Citrus tree near window if space",
+    ],
+  },
+  {
+    id: "asian-zen",
+    name: "Азійський дзен",
+    description:
+      "Low platform furniture, sliding panel hints, simple lines, single bonsai, harmony",
+    preferences: [
+      "Low platform bed and sofa",
+      "Low coffee table (Japanese kotatsu-style)",
+      "Single bonsai or bamboo plant",
+      "Very minimal decor",
+    ],
+  },
+  {
+    id: "coastal-beach",
+    name: "Прибережний beach house",
+    description:
+      "Light blue and white, white-washed wood, woven natural fibers, breezy",
+    preferences: [
+      "White slipcovered sofa",
+      "Woven jute rug",
+      "Light blue accents (pillows)",
+      "Driftwood-style coffee table",
+    ],
+  },
+  {
+    id: "cottagecore",
+    name: "Cottagecore романтичний",
+    description:
+      "Floral patterns, vintage furniture, layered textiles, soft pastels, romantic",
+    preferences: [
+      "Floral pattern sofa or armchair",
+      "Vintage-look round mirror",
+      "Lace or floral table cloth on dining",
+      "Plants in vintage pots, fresh flowers",
+    ],
+  },
+];
+
+export function pickScenario(id: string | undefined): FurnishScenario {
+  if (id) {
+    const found = FURNISH_SCENARIOS.find((s) => s.id === id);
+    if (found) return found;
+  }
+  return FURNISH_SCENARIOS[Math.floor(Math.random() * FURNISH_SCENARIOS.length)];
 }
 
 /** Шаблон базового меблювання — застосовується коли AI повернув 0 предметів. */
@@ -597,6 +865,7 @@ async function furnishRoom(
   anthropic: Anthropic,
   room: FurnishRequest["rooms"][number],
   openings: FurnishRequest["openings"],
+  scenario: FurnishScenario,
 ): Promise<RoomPromptResult> {
   const roomOpenings = openings.filter((o) => o.roomId === room.id);
   const roomInput = JSON.stringify({
@@ -613,7 +882,16 @@ async function furnishRoom(
     })),
   });
 
-  const userPrompt = `Кімната: ${roomInput}\nКласифікуй і запропонуй меблювання. Поверни лише JSON.`;
+  const variantSeed = Math.floor(Math.random() * 100000);
+  const userPrompt = `Кімната: ${roomInput}
+
+СТИЛЬ МЕБЛЮВАННЯ: «${scenario.name}» — ${scenario.description}
+Стильові preferences (обов'язково врахуй):
+${scenario.preferences.map((p) => `  - ${p}`).join("\n")}
+
+Класифікуй кімнату і запропонуй меблювання у цьому стилі. ВАЖЛИВО — навіть у одному стилі варіюй розташування меблів (не дублюй один і той самий layout). Variant seed: ${variantSeed}.
+
+Поверни лише JSON.`;
 
   // 35s per-room timeout + global Anthropic semaphore + 429 retry.
   let response: Anthropic.Messages.Message;
@@ -774,11 +1052,17 @@ async function furnishRoom(
 }
 
 export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
+  const scenario = pickScenario(req.scenarioId);
+
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new Error("ANTHROPIC_API_KEY не налаштований на сервері");
   }
   if (req.rooms.length === 0) {
-    return { rooms: [], furniture: [] };
+    return {
+      rooms: [],
+      furniture: [],
+      scenario: { id: scenario.id, name: scenario.name },
+    };
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -801,7 +1085,7 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
       const idx = cursor++;
       const room = req.rooms[idx];
       try {
-        const v = await furnishRoom(anthropic, room, expandedOpenings);
+        const v = await furnishRoom(anthropic, room, expandedOpenings, scenario);
         results[idx] = { status: "fulfilled", value: v };
       } catch (e) {
         results[idx] = { status: "rejected", reason: e };
@@ -833,5 +1117,9 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
     }
   }
 
-  return { rooms, furniture };
+  return {
+    rooms,
+    furniture,
+    scenario: { id: scenario.id, name: scenario.name },
+  };
 }
