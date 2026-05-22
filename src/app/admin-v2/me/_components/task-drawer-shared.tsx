@@ -785,14 +785,23 @@ export function SelfContainedTaskDrawer({
                 />
               ) : detail.description ? (
                 <div
-                  className="prose prose-invert prose-sm max-w-none rounded-lg p-3"
+                  className="prose prose-invert prose-sm max-w-none rounded-lg px-3 py-2 font-mono overflow-y-auto"
                   style={{
-                    color: T.textSecondary,
+                    color: T.textPrimary,
                     backgroundColor: T.panelElevated,
                     border: `1px solid ${T.borderSoft}`,
+                    minHeight: 180,
+                    maxHeight: 360,
                   }}
                 >
-                  <ReactMarkdown>{detail.description}</ReactMarkdown>
+                  {/* Зберігаємо переноси рядків як у textarea: одиночний \n
+                      перетворюємо на markdown line-break ("  \n"), якщо там
+                      ще не подвійний абзац. Так ТЗ з AI з ## заголовками
+                      рендериться, а звичайний текст не зливається у простий
+                      параграф. */}
+                  <ReactMarkdown>
+                    {detail.description.replace(/(?<!\n)\n(?!\n)/g, "  \n")}
+                  </ReactMarkdown>
                 </div>
               ) : (
                 <p className="text-xs italic" style={{ color: T.textMuted }}>
