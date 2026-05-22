@@ -3,6 +3,7 @@
 import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 /**
@@ -171,9 +172,17 @@ export function MeetingMarkdown({ children }: { children: string }) {
   return (
     <div
       className="text-sm leading-relaxed"
-      style={{ color: T.textPrimary, wordBreak: "break-word" }}
+      // overflowWrap (а не word-break) — переносить лише задовгі непарні
+      // рядки/URL, але НЕ ламає звичайні слова й не «стискає» колонки
+      // таблиць до нуля ширини.
+      style={{ color: T.textPrimary, overflowWrap: "break-word" }}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+      {/* remarkBreaks: одиночний Enter = перенос рядка (як у Telegram/
+          Obsidian), а не «склеювання» в один абзац за CommonMark. */}
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkBreaks]}
+        components={COMPONENTS}
+      >
         {children}
       </ReactMarkdown>
     </div>

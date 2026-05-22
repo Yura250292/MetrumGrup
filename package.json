@@ -80,6 +80,7 @@
     "react-is": "^19.2.5",
     "react-markdown": "^10.1.0",
     "recharts": "^3.8.1",
+    "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "resend": "^6.12.2",
     "rrule": "^2.8.1",
