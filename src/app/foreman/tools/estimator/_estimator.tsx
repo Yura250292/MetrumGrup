@@ -488,6 +488,7 @@ export function Estimator({ firmId }: Props) {
           >
             <Visualize
               plan={state.plan}
+              works={state.works}
               onSetFurniture={(furniture, roomClasses) =>
                 dispatch({ type: "SET_FURNITURE", furniture, roomClasses })
               }

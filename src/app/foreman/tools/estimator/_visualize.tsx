@@ -40,7 +40,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import type { FloorPlan, FurnitureItem, RoomClass } from "./_types";
+import type { FloorPlan, FurnitureItem, RoomClass, WorksConfig } from "./_types";
 import { InteractivePlanView } from "./_interactive-plan-view";
 import { PlanSvg } from "./_plan-svg";
 import { Collapsible } from "./_collapsible";
@@ -84,6 +84,8 @@ function buildRoomSubPlan(plan: FloorPlan, roomId: string): FloorPlan {
 
 interface Props {
   plan: FloorPlan;
+  /** Конфіг робіт із кроку 2 — звідси беремо матеріал підлоги кімнати. */
+  works: WorksConfig;
   onSetFurniture: (
     furniture: FurnitureItem[],
     roomClasses: Record<string, RoomClass>,
@@ -92,8 +94,20 @@ interface Props {
   onClearFurniture: () => void;
 }
 
+/** Матеріал підлоги кімнати за вибором користувача у кроці 2 (для photoreal). */
+function floorMaterialForRoom(
+  works: WorksConfig,
+  roomId: string,
+): string | null {
+  const floor = works.rooms[roomId]?.floor ?? [];
+  if (floor.includes("floor-tile")) return "large-format ceramic tile";
+  if (floor.includes("floor-laminate")) return "warm wood parquet / laminate";
+  return null; // не обрано — API підставить нейтральну підлогу
+}
+
 export function Visualize({
   plan,
+  works,
   onSetFurniture,
   onRemoveFurniture,
   onClearFurniture,
@@ -255,7 +269,10 @@ export function Visualize({
     const res = await fetch("/api/foreman/ai-render", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageBase64: pngBase64 }),
+      body: JSON.stringify({
+        imageBase64: pngBase64,
+        floorMaterial: floorMaterialForRoom(works, roomId) ?? undefined,
+      }),
     });
     if (!res.ok) {
       const t = await res.text().catch(() => "");

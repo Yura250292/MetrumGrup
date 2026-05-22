@@ -16,6 +16,8 @@ const bodySchema = z.object({
   imageBase64: z.string().min(100),
   /** Опційний user-prompt для стилю. */
   prompt: z.string().trim().max(500).optional(),
+  /** Матеріал підлоги з кроку 2 (англ. опис) — для однорідної підлоги. */
+  floorMaterial: z.string().trim().max(80).optional(),
   /**
    * Структурований опис плану клієнт ще може надсилати — приймаємо й
    * ігноруємо (зворотна сумісність). Промпт будуємо без нього: за тестами
@@ -81,6 +83,7 @@ export async function POST(request: NextRequest) {
   }
 
   const userNote = parsed.data.prompt?.trim() || "";
+  const floorMaterial = parsed.data.floorMaterial?.trim() || "";
 
   // ВЛАСНИЙ промпт foreman (НЕ спільний buildPrompt!). Спільний промпт містив
   // фразу "render fixtures (bathtub, toilet, sink, stove, bed, sofa...)" —
@@ -97,7 +100,10 @@ export async function POST(request: NextRequest) {
     "DO NOT invent a bathroom, kitchen, bed, sofa, toilet, bathtub, shower, stove or sink — render an object ONLY if its exact shape is physically drawn in this plan.",
     "Camera: strict top-down bird's-eye view, looking straight down at 90°, same framing and orientation as the input. NOT axonometric, NOT tilted, NOT angled.",
     "Keep geometry 1:1 with the input — only convert the flat 2D drawing into realistic materials, textures and lighting.",
-    "Style: realistic modern Ukrainian interior, wood parquet or ceramic tile floor, soft natural daylight, gentle shadows.",
+    floorMaterial
+      ? `Floor: the ENTIRE room has ONE single uniform floor — ${floorMaterial} — covering the whole room wall to wall. NEVER mix flooring types, NEVER split the floor into different zones or materials.`
+      : "Floor: the ENTIRE room has ONE single uniform floor material covering the whole room wall to wall. NEVER mix flooring types, NEVER split the floor into zones.",
+    "Style: realistic modern Ukrainian interior, soft natural daylight, gentle shadows.",
     "Output: clean photorealistic top-down render. No text, no labels, no dimensions, no people, no annotations.",
     userNote,
   ]
