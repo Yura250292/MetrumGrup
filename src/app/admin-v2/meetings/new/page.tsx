@@ -27,6 +27,7 @@ import {
   AttachmentStager,
   uploadMeetingAttachment,
 } from "../_components/meeting-attachments";
+import { toDateTimeLocalValue } from "../_components/types";
 import { useMeetingRecording } from "@/contexts/MeetingRecordingContext";
 
 type FolderOption = {
@@ -59,6 +60,11 @@ export default function NewMeetingPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [folderId, setFolderId] = useState<string>(initialFolder);
+  // Дата проведення наради. Дефолт — зараз; можна виправити, якщо файл
+  // завантажують пізніше за саму нараду.
+  const [recordedAt, setRecordedAt] = useState(() =>
+    toDateTimeLocalValue(new Date()),
+  );
 
   const [noteText, setNoteText] = useState("");
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
@@ -112,6 +118,7 @@ export default function NewMeetingPage() {
               title: title.trim() || autoDefaultTitle(),
               description: description.trim() || null,
               folderId: folderId || null,
+              recordedAt: recordedAtIso(recordedAt),
             }),
           });
           if (!res.ok) throw new Error("draft create failed");
@@ -181,6 +188,7 @@ export default function NewMeetingPage() {
             title: finalTitle,
             description: description.trim() || null,
             folderId: folderId || null,
+            recordedAt: recordedAtIso(recordedAt),
           }),
         });
         if (!patchRes.ok) {
@@ -196,6 +204,7 @@ export default function NewMeetingPage() {
             title: finalTitle,
             description: description.trim() || null,
             folderId: folderId || null,
+            recordedAt: recordedAtIso(recordedAt),
           }),
         });
         if (!createRes.ok) {
@@ -285,6 +294,7 @@ export default function NewMeetingPage() {
           folderId: folderId || null,
           noteText: text,
           analyze,
+          recordedAt: recordedAtIso(recordedAt),
         }),
       });
       if (!createRes.ok) {
@@ -499,6 +509,34 @@ export default function NewMeetingPage() {
                       className="mb-1 block text-xs font-medium"
                       style={{ color: T.textSecondary }}
                     >
+                      Дата наради
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={recordedAt}
+                      onChange={(e) => setRecordedAt(e.target.value)}
+                      disabled={busy}
+                      className="w-full rounded-lg px-3 py-2 text-sm outline-none"
+                      style={{
+                        background: T.panelElevated,
+                        color: T.textPrimary,
+                        border: `1px solid ${T.borderSoft}`,
+                      }}
+                    />
+                    <p
+                      className="mt-1 text-xs"
+                      style={{ color: T.textMuted }}
+                    >
+                      Коли нарада фактично відбулася. За замовчуванням —
+                      зараз; змініть, якщо завантажуєте пізніше.
+                    </p>
+                  </div>
+
+                  <div className="mb-3">
+                    <label
+                      className="mb-1 block text-xs font-medium"
+                      style={{ color: T.textSecondary }}
+                    >
                       Папка
                     </label>
                     <select
@@ -648,6 +686,14 @@ function ModeTab({
       {label}
     </button>
   );
+}
+
+// datetime-local string → ISO для API. Порожнє/невалідне → undefined
+// (сервер підставить поточну дату через @default(now())).
+function recordedAtIso(value: string): string | undefined {
+  if (!value) return undefined;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
 function autoDefaultTitle(): string {

@@ -19,6 +19,9 @@ const createSchema = z.object({
   // Чи запускати «АІ покращення» (підсумок + вичищена версія тексту).
   // false = «Зберегти» — текст уже готовий, AI не потрібен.
   analyze: z.boolean().optional().default(true),
+  // Дата проведення наради. Якщо не передано — береться поточна (default
+  // у схемі). Корисно коли файл завантажують пізніше за саму нараду.
+  recordedAt: z.coerce.date().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -111,6 +114,8 @@ export async function POST(request: NextRequest) {
         createdById: session.user.id,
         noteText,
         status,
+        // undefined → спрацьовує @default(now()) зі схеми.
+        recordedAt: parsed.data.recordedAt ?? undefined,
       },
       include: {
         folder: { select: { id: true, name: true } },

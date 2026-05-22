@@ -18,11 +18,13 @@ import {
   Pencil,
   Check,
   X,
+  Calendar,
 } from "lucide-react";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
   formatDuration,
+  toDateTimeLocalValue,
   STATUS_LABELS,
   type Meeting,
   type MeetingEntity,
@@ -72,6 +74,9 @@ export default function MeetingDetailPage() {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
+  const [editingDate, setEditingDate] = useState(false);
+  const [dateDraft, setDateDraft] = useState("");
+  const [savingDate, setSavingDate] = useState(false);
   const summaryTriggeredRef = useRef(false);
   const { open: openAiPanel } = useAiPanel();
 
@@ -253,6 +258,39 @@ export default function MeetingDetailPage() {
     }
   }
 
+  function startEditDate() {
+    if (!meeting) return;
+    setDateDraft(toDateTimeLocalValue(new Date(meeting.recordedAt)));
+    setEditingDate(true);
+  }
+
+  async function saveDate() {
+    if (!meeting) return;
+    const parsedDate = new Date(dateDraft);
+    if (isNaN(parsedDate.getTime())) {
+      setEditingDate(false);
+      return;
+    }
+    setSavingDate(true);
+    try {
+      const res = await fetch(`/api/admin/meetings/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordedAt: parsedDate.toISOString() }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || "Не вдалося зберегти дату");
+      }
+      await refresh();
+      setEditingDate(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Помилка");
+    } finally {
+      setSavingDate(false);
+    }
+  }
+
   async function moveToFolder(targetFolderId: string | null) {
     setMovingFolder(true);
     try {
@@ -417,7 +455,58 @@ export default function MeetingDetailPage() {
                 <Folder size={14} /> Без папки
               </button>
             )}
-            <span>{new Date(meeting.recordedAt).toLocaleString("uk-UA")}</span>
+            {editingDate ? (
+              <span className="flex items-center gap-1">
+                <input
+                  type="datetime-local"
+                  value={dateDraft}
+                  onChange={(e) => setDateDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveDate();
+                    if (e.key === "Escape") setEditingDate(false);
+                  }}
+                  autoFocus
+                  disabled={savingDate}
+                  className="rounded-md px-1.5 py-0.5 text-xs outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                />
+                <button
+                  onClick={saveDate}
+                  disabled={savingDate}
+                  className="rounded-md p-1"
+                  style={{ background: T.successSoft, color: T.success }}
+                  title="Зберегти дату"
+                >
+                  {savingDate ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Check size={12} />
+                  )}
+                </button>
+                <button
+                  onClick={() => setEditingDate(false)}
+                  disabled={savingDate}
+                  className="rounded-md p-1"
+                  style={{ background: T.panelElevated, color: T.textSecondary }}
+                  title="Скасувати"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={startEditDate}
+                className="flex items-center gap-1 hover:underline"
+                title="Змінити дату наради"
+              >
+                <Calendar size={13} />
+                {new Date(meeting.recordedAt).toLocaleString("uk-UA")}
+              </button>
+            )}
             {meeting.audioDurationMs && (
               <span>{formatDuration(meeting.audioDurationMs)}</span>
             )}

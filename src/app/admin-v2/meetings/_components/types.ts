@@ -146,6 +146,14 @@ export const STATUS_LABELS: Record<MeetingStatus, string> = {
   FAILED: "Помилка",
 };
 
+/** Date → значення для <input type="datetime-local"> у локальному часі. */
+export function toDateTimeLocalValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+    d.getDate(),
+  )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 export function formatDuration(ms: number | null | undefined): string {
   if (!ms || ms <= 0) return "—";
   const totalSec = Math.round(ms / 1000);

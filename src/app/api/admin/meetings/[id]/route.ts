@@ -16,6 +16,10 @@ const updateSchema = z.object({
   // Оригінальна Markdown-нотатка текстової наради. Редагується вручну
   // користувачем; AI-підсумок її ніколи не змінює.
   noteText: z.string().max(100000).nullable().optional(),
+  noteRefined: z.string().max(100000).nullable().optional(),
+  // Дата проведення наради. Адмін може виправити (файл завантажили
+  // сьогодні, а нарада була вчора).
+  recordedAt: z.coerce.date().optional(),
   folderId: z.string().min(1).nullable().optional(),
 });
 
