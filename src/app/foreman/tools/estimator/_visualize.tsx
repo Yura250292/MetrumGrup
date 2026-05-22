@@ -336,7 +336,7 @@ export function Visualize({
 
       <InteractivePlanView
         plan={plan}
-        heightClass="h-[240px]"
+        heightClass="h-[360px]"
         onFurnitureTap={(item) => {
           if (
             typeof window !== "undefined" &&

@@ -197,6 +197,7 @@ function PlanWithControls({
     <div className="space-y-3">
       <InteractivePlanView
         plan={plan}
+        heightClass="h-[360px]"
         onPlusClick={onPlusClick}
         onRoomTap={onRoomTap}
         onWallTap={onWallTap}
