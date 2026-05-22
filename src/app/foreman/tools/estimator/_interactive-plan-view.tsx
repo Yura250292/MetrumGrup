@@ -252,12 +252,34 @@ export function InteractivePlanView({
       </div>
 
       {topLeftOverlay && (
-        <div className="absolute top-2 left-2 flex flex-col gap-1.5">
+        <div
+          className="absolute flex flex-col gap-1.5"
+          style={
+            fullscreen
+              ? {
+                  top: "calc(env(safe-area-inset-top, 0px) + 16px)",
+                  left: "calc(env(safe-area-inset-left, 0px) + 16px)",
+                }
+              : { top: 8, left: 8 }
+          }
+        >
           {topLeftOverlay}
         </div>
       )}
 
-      <div className={`${fullscreen ? "absolute top-5 right-5" : "absolute top-2 right-2"} flex flex-col gap-1.5`}>
+      {/* У fullscreen кнопки відсовуємо від notch/Dynamic Island через
+          safe-area insets — інакше їх не видно і не вийти з режиму. */}
+      <div
+        className="absolute flex flex-col gap-1.5"
+        style={
+          fullscreen
+            ? {
+                top: "calc(env(safe-area-inset-top, 0px) + 16px)",
+                right: "calc(env(safe-area-inset-right, 0px) + 16px)",
+              }
+            : { top: 8, right: 8 }
+        }
+      >
         <ViewBtn
           onClick={() => setFullscreen((v) => !v)}
           label={fullscreen ? "Згорнути" : "На весь екран"}
@@ -295,7 +317,17 @@ export function InteractivePlanView({
         view.rotation !== 0 ||
         view.tx !== 0 ||
         view.ty !== 0) && (
-        <div className={`absolute ${fullscreen ? "bottom-5 left-5" : "bottom-2 left-2"} px-2 py-1 rounded-md bg-zinc-900/80 border border-white/10 text-[10px] text-zinc-300 font-mono backdrop-blur`}>
+        <div
+          className="absolute px-2 py-1 rounded-md bg-zinc-900/80 border border-white/10 text-[10px] text-zinc-300 font-mono backdrop-blur"
+          style={
+            fullscreen
+              ? {
+                  bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+                  left: "calc(env(safe-area-inset-left, 0px) + 16px)",
+                }
+              : { bottom: 8, left: 8 }
+          }
+        >
           {(view.scale * 100).toFixed(0)}%
           {view.rotation !== 0 && ` · ↺${view.rotation}°`}
         </div>

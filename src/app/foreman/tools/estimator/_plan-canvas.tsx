@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DoorOpen, Ruler } from "lucide-react";
 import { bbox } from "@/lib/foreman/geometry";
 import type { Room, Side } from "@/lib/foreman/geometry";
@@ -27,6 +27,20 @@ export function PlanCanvas({
 }: Props) {
   const hasRooms = plan.rooms.length > 0;
 
+  // Локальний текстовий стан інпута висоти — щоб можна було друкувати "2."
+  // та "2,7". Прямий binding до числа з'їдав крапку: кожна клавіша
+  // пере-парситься у число і "2." миттєво ставало "2".
+  const [ceilingText, setCeilingText] = useState(() =>
+    String(plan.defaultCeilingHeight),
+  );
+  // Синхронізація лише коли значення приходить ззовні (гідрація чернетки).
+  useEffect(() => {
+    if (parseNum(ceilingText) !== plan.defaultCeilingHeight) {
+      setCeilingText(String(plan.defaultCeilingHeight));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan.defaultCeilingHeight]);
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl bg-white/[0.03] backdrop-blur-md border border-white/10 p-4 space-y-3">
@@ -38,10 +52,18 @@ export function PlanCanvas({
             type="text"
             inputMode="decimal"
             pattern="[0-9.,]*"
-            value={String(plan.defaultCeilingHeight)}
+            value={ceilingText}
             onChange={(e) => {
-              const v = parseNum(e.target.value);
+              const raw = e.target.value;
+              setCeilingText(raw);
+              const v = parseNum(raw);
               if (v > 0) onChangeDefaultCeiling(v);
+            }}
+            onBlur={() => {
+              const v = parseNum(ceilingText);
+              setCeilingText(
+                v > 0 ? String(v) : String(plan.defaultCeilingHeight),
+              );
             }}
             className="mt-1 w-full px-4 py-3 rounded-xl bg-zinc-950 border border-white/10 text-white text-base focus:border-violet-500/60 focus:outline-none"
           />
