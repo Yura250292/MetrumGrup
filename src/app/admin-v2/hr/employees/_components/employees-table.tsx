@@ -9,6 +9,8 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Copy,
   Mail,
   MoreHorizontal,
@@ -161,6 +163,8 @@ export function EmployeesTable({
   const [hiddenCols, setHiddenCols] = useState<Set<ColumnKey>>(new Set());
   const [widths, setWidths] = useState<Record<ColumnKey, number>>(DEFAULT_WIDTHS);
   const [density, setDensity] = useState<Density>("normal");
+  /// Згорнуті групи-підрозділи (за ключем). Порожньо = всі розгорнуті.
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
   // Load layout from localStorage on mount
   useEffect(() => {
@@ -303,15 +307,51 @@ export function EmployeesTable({
     columns.reduce((s, c) => s + (widths[c.key] ?? DEFAULT_WIDTHS[c.key]), 0) +
     ACTIONS_W;
 
+  const allCollapsed =
+    grouped != null && grouped.length > 0 && collapsedGroups.size >= grouped.length;
+
   return (
-    <div
-      className="overflow-x-auto rounded-2xl text-[12.5px]"
-      style={{
-        backgroundColor: T.panel,
-        border: `1px solid ${T.borderStrong}`,
-        fontVariantNumeric: "tabular-nums",
-      }}
-    >
+    <div className="flex flex-col gap-2">
+      {mode === "grouped" && grouped && grouped.length > 0 && (
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setCollapsedGroups(new Set(grouped.map(([k]) => k)))}
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.textSecondary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            <ChevronsDownUp size={12} /> Згорнути всі
+          </button>
+          <button
+            type="button"
+            onClick={() => setCollapsedGroups(new Set())}
+            className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-semibold transition"
+            style={{
+              backgroundColor: T.panelSoft,
+              color: T.textSecondary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            <ChevronsUpDown size={12} /> Розгорнути всі
+          </button>
+          <span className="text-[11px]" style={{ color: T.textMuted }}>
+            {grouped.length} підрозділ{grouped.length === 1 ? "" : grouped.length < 5 ? "и" : "ів"}
+            {allCollapsed ? " · всі згорнуті" : ""}
+          </span>
+        </div>
+      )}
+      <div
+        className="overflow-x-auto rounded-2xl text-[12.5px]"
+        style={{
+          backgroundColor: T.panel,
+          border: `1px solid ${T.borderStrong}`,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
       <div style={{ minWidth: `${totalWidth}px` }}>
         <TableHeader
           columns={columns}
@@ -342,6 +382,15 @@ export function EmployeesTable({
                 gridTemplate={gridTemplate}
                 canSeeSalary={canSeeSalary}
                 density={density}
+                collapsed={collapsedGroups.has(key)}
+                onToggle={() =>
+                  setCollapsedGroups((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(key)) next.delete(key);
+                    else next.add(key);
+                    return next;
+                  })
+                }
               />
             ))
           ) : (
@@ -366,6 +415,7 @@ export function EmployeesTable({
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
@@ -695,6 +745,8 @@ function DepartmentGroup({
   gridTemplate,
   canSeeSalary,
   density,
+  collapsed,
+  onToggle,
 }: {
   name: string;
   items: EmployeeRow[];
@@ -702,13 +754,15 @@ function DepartmentGroup({
   gridTemplate: string;
   canSeeSalary: boolean;
   density: Density;
+  collapsed: boolean;
+  onToggle: () => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const open = !collapsed;
   return (
     <div>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={onToggle}
         className="flex w-full items-center gap-1.5 px-2 py-1 text-left text-[10px] font-bold uppercase tracking-wider transition-colors duration-150 hover:bg-black/[0.02]"
         style={{
           color: T.textSecondary,

@@ -223,7 +223,7 @@ export function EmployeesList({
       <div className="flex items-center gap-2 flex-wrap">
         <Users size={20} style={{ color: T.textPrimary }} />
         <h1 className="text-xl font-bold" style={{ color: T.textPrimary }}>
-          Співробітники та акаунти
+          Співробітники
         </h1>
         {tab !== "departments" && (
           <span
@@ -231,9 +231,17 @@ export function EmployeesList({
             style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
           >
             {tab === "employees"
-              ? `${filtered.length}${
-                  filtered.length !== items.length ? ` / ${items.length}` : ""
-                } · ${activeCount} активних`
+              ? filtered.length !== items.length
+                ? `${filtered.length} з ${items.length} · ${activeCount} активних`
+                : `Всього: ${items.length} співробітник${
+                    items.length % 10 === 1 && items.length % 100 !== 11
+                      ? ""
+                      : items.length % 10 >= 2 &&
+                          items.length % 10 <= 4 &&
+                          (items.length % 100 < 10 || items.length % 100 >= 20)
+                        ? "и"
+                        : "ів"
+                  } · ${activeCount} активних`
               : `${filteredExternal.length} зовнішніх акаунтів`}
           </span>
         )}
