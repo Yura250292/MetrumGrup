@@ -97,7 +97,7 @@ export function PlanSvg({
 
   // Touch-friendly у пікселях, конвертуємо в метри.
   const baseScale = viewTransform?.scale ?? 1;
-  const btnVisualR = Math.max(0.08, 12 / Math.max(pxPerMeter * baseScale, 1));
+  const btnVisualR = Math.max(0.06, 9 / Math.max(pxPerMeter * baseScale, 1));
   const btnHitR = Math.max(0.18, 24 / Math.max(pxPerMeter * baseScale, 1));
   const strokePx = 1.4; // non-scaling stroke у px
 
@@ -360,18 +360,67 @@ export function PlanSvg({
       const ocy = (p.y1 + p.y2) / 2;
       const isHorizontal = Math.abs(p.x2 - p.x1) > Math.abs(p.y2 - p.y1);
       const dimFs = Math.max(0.12, Math.min(room.w, room.h) * 0.07);
+
+      // Дверна дуга (стандарт архітектурного креслення): hinge у offset-кінці
+      // door, blade сягає на ширину перпендикулярно у кімнату, arc 90° від
+      // закритого положення до відкритого.
+      let doorArc: string | null = null;
+      let doorBlade: { x1: number; y1: number; x2: number; y2: number } | null = null;
+      if (isDoor) {
+        const w = o.width;
+        // worldspace координати hinge / end / arc point — залежать від сторони
+        let hx = 0, hy = 0, ex = 0, ey = 0, ax = 0, ay = 0;
+        switch (o.side) {
+          case "N":
+            hx = room.x + o.offset; hy = room.y;
+            ex = hx + w; ey = hy;
+            ax = hx; ay = hy + w;
+            break;
+          case "S":
+            hx = room.x + o.offset + w; hy = room.y + room.h;
+            ex = hx - w; ey = hy;
+            ax = hx; ay = hy - w;
+            break;
+          case "E":
+            hx = room.x + room.w; hy = room.y + o.offset + w;
+            ex = hx; ey = hy - w;
+            ax = hx - w; ay = hy;
+            break;
+          case "W":
+            hx = room.x; hy = room.y + o.offset;
+            ex = hx; ey = hy + w;
+            ax = hx + w; ay = hy;
+            break;
+        }
+        doorArc = `M ${ex} ${ey} A ${w} ${w} 0 0 1 ${ax} ${ay}`;
+        doorBlade = { x1: hx, y1: hy, x2: ax, y2: ay };
+      }
+
       return (
         <g key={o.id} pointerEvents="none">
+          {/* «прогалина» в стіні — біла лінія яка маскує чорну стіну */}
+          <line
+            x1={p.x1}
+            y1={p.y1}
+            x2={p.x2}
+            y2={p.y2}
+            stroke="#ffffff"
+            strokeWidth={strokePx + 3.0}
+            vectorEffect="non-scaling-stroke"
+            strokeLinecap="butt"
+          />
+          {/* кольорова смужка прорізу */}
           <line
             x1={p.x1}
             y1={p.y1}
             x2={p.x2}
             y2={p.y2}
             stroke={isDoor ? "#d97706" : "#0284c7"}
-            strokeWidth={strokePx + 2.6}
+            strokeWidth={strokePx + (isDoor ? 1.4 : 2.4)}
             vectorEffect="non-scaling-stroke"
             strokeLinecap="butt"
           />
+          {/* для вікна — пунктирна додатково */}
           {!isDoor && (
             <line
               x1={p.x1}
@@ -380,9 +429,31 @@ export function PlanSvg({
               y2={p.y2}
               stroke="#0c4a6e"
               strokeWidth={strokePx + 0.4}
-              strokeDasharray="2 2"
+              strokeDasharray="0.12 0.08"
               vectorEffect="non-scaling-stroke"
             />
+          )}
+          {/* двері — арка swing + полотно */}
+          {isDoor && doorArc && doorBlade && (
+            <>
+              <path
+                d={doorArc}
+                fill="none"
+                stroke="rgba(0,0,0,0.35)"
+                strokeWidth={1}
+                strokeDasharray="0.08 0.08"
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1={doorBlade.x1}
+                y1={doorBlade.y1}
+                x2={doorBlade.x2}
+                y2={doorBlade.y2}
+                stroke="rgba(0,0,0,0.55)"
+                strokeWidth={1.4}
+                vectorEffect="non-scaling-stroke"
+              />
+            </>
           )}
           <text
             transform={isHorizontal ? undefined : `rotate(-90 ${ocx} ${ocy})`}
@@ -391,7 +462,7 @@ export function PlanSvg({
             textAnchor="middle"
             dominantBaseline={isHorizontal ? "middle" : "central"}
             fontSize={dimFs}
-            fill={isDoor ? "#d97706" : "#0284c7"}
+            fill={isDoor ? "#92400e" : "#075985"}
             fontWeight={600}
           >
             {(o.width * 1000).toFixed(0)}
@@ -428,12 +499,14 @@ export function PlanSvg({
         className="cursor-pointer"
         onClick={onPlusClick ? () => onPlusClick(b.parentId, b.side) : undefined}
       >
+        {/* hit area невидимий — touch-friendly */}
         <circle r={btnHitR} fill="transparent" pointerEvents="all" />
+        {/* делікатніший вигляд: біле тло + зелений тонкий обвід + зелений + */}
         <circle
           r={btnVisualR}
-          fill="rgba(16,185,129,0.85)"
-          stroke="rgba(255,255,255,0.95)"
-          strokeWidth={strokePx}
+          fill="rgba(255,255,255,0.95)"
+          stroke="rgba(16,185,129,0.85)"
+          strokeWidth={1.4}
           vectorEffect="non-scaling-stroke"
         />
         <line
@@ -441,8 +514,8 @@ export function PlanSvg({
           y1={0}
           x2={btnVisualR * 0.45}
           y2={0}
-          stroke="#fff"
-          strokeWidth={strokePx + 0.6}
+          stroke="rgb(16,185,129)"
+          strokeWidth={1.4}
           vectorEffect="non-scaling-stroke"
           strokeLinecap="round"
         />
@@ -451,8 +524,8 @@ export function PlanSvg({
           y1={-btnVisualR * 0.45}
           x2={0}
           y2={btnVisualR * 0.45}
-          stroke="#fff"
-          strokeWidth={strokePx + 0.6}
+          stroke="rgb(16,185,129)"
+          strokeWidth={1.4}
           vectorEffect="non-scaling-stroke"
           strokeLinecap="round"
         />
@@ -529,6 +602,48 @@ export function PlanSvg({
           {openingsJsx}
           {furnitureJsx}
           {buttonsJsx}
+          {/* Компас (N↑) у лівому-верхньому куті bbox — лише в інтерактивному
+              режимі. Snapshot для PDF/photoreal обходиться без нього. */}
+          {!snapshot && plan.rooms.length > 0 && (
+            <g
+              transform={`translate(${layout.b.x - 0.3} ${layout.b.y - 0.2})`}
+              pointerEvents="none"
+            >
+              <circle
+                r={0.22}
+                cx={0}
+                cy={0}
+                fill="rgba(255,255,255,0.95)"
+                stroke="rgba(0,0,0,0.55)"
+                strokeWidth={1}
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1={0}
+                y1={0.16}
+                x2={0}
+                y2={-0.18}
+                stroke="rgba(0,0,0,0.7)"
+                strokeWidth={1.4}
+                vectorEffect="non-scaling-stroke"
+                strokeLinecap="round"
+              />
+              <polygon
+                points={`0,-0.22 -0.06,-0.10 0.06,-0.10`}
+                fill="rgba(0,0,0,0.7)"
+              />
+              <text
+                x={0}
+                y={0.28}
+                fontSize={0.13}
+                textAnchor="middle"
+                fill="rgba(0,0,0,0.65)"
+                fontWeight={600}
+              >
+                Пн
+              </text>
+            </g>
+          )}
         </g>
       </svg>
     </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Maximize2, Minus, Plus, RotateCw } from "lucide-react";
+import { Expand, Maximize2, Minimize2, Minus, Plus, RotateCw } from "lucide-react";
 import { bbox } from "@/lib/foreman/geometry";
 import type { Room, Side } from "@/lib/foreman/geometry";
 import type { FloorPlan, FurnitureItem } from "./_types";
@@ -67,6 +67,7 @@ export function InteractivePlanView({
           : "aspect-[4/3]";
 
   const [view, setView] = useState<View>(DEFAULT_VIEW);
+  const [fullscreen, setFullscreen] = useState(false);
   const viewRef = useRef(view);
   useEffect(() => {
     viewRef.current = view;
@@ -214,11 +215,22 @@ export function InteractivePlanView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // У fullscreen контейнер фіксований на viewport і не використовує aspect
+  // class — заповнює весь екран. SVG всередині сам preserve aspect через
+  // viewBox + xMidYMid meet.
+  const wrapperClass = fullscreen
+    ? "fixed inset-0 z-50 bg-zinc-950 p-3 flex flex-col"
+    : "relative";
+
+  const innerClass = fullscreen
+    ? "rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none flex-1"
+    : `rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none ${aspectClass}`;
+
   return (
-    <div className="relative">
+    <div className={wrapperClass}>
       <div
         ref={svgWrapRef}
-        className={`rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none ${aspectClass}`}
+        className={innerClass}
         style={{ touchAction: "none" }}
       >
         <PlanSvg
@@ -239,7 +251,13 @@ export function InteractivePlanView({
         </div>
       )}
 
-      <div className="absolute top-2 right-2 flex flex-col gap-1.5">
+      <div className={`${fullscreen ? "absolute top-5 right-5" : "absolute top-2 right-2"} flex flex-col gap-1.5`}>
+        <ViewBtn
+          onClick={() => setFullscreen((v) => !v)}
+          label={fullscreen ? "Згорнути" : "На весь екран"}
+        >
+          {fullscreen ? <Minimize2 size={14} /> : <Expand size={14} />}
+        </ViewBtn>
         <ViewBtn
           onClick={() =>
             setView((v) => ({ ...v, scale: clamp(v.scale * 1.25, 0.4, 4) }))
@@ -271,7 +289,7 @@ export function InteractivePlanView({
         view.rotation !== 0 ||
         view.tx !== 0 ||
         view.ty !== 0) && (
-        <div className="absolute bottom-2 left-2 px-2 py-1 rounded-md bg-zinc-900/80 border border-white/10 text-[10px] text-zinc-300 font-mono backdrop-blur">
+        <div className={`absolute ${fullscreen ? "bottom-5 left-5" : "bottom-2 left-2"} px-2 py-1 rounded-md bg-zinc-900/80 border border-white/10 text-[10px] text-zinc-300 font-mono backdrop-blur`}>
           {(view.scale * 100).toFixed(0)}%
           {view.rotation !== 0 && ` · ↺${view.rotation}°`}
         </div>
