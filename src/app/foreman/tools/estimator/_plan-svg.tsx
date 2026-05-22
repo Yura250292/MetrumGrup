@@ -65,18 +65,20 @@ export function PlanSvg({
   const layout = useMemo(() => {
     const b = bbox(plan.rooms);
     const pad = Math.max(0.6, Math.max(b.w, b.h) * 0.12);
+    // Додатковий padding знизу і справа для зовнішніх розмірних ліній.
+    const dimPad = snapshot ? 0 : Math.max(0.6, Math.max(b.w, b.h) * 0.12);
     const vb = {
       x: b.x - pad,
       y: b.y - pad,
-      w: b.w + 2 * pad,
-      h: b.h + 2 * pad,
+      w: b.w + 2 * pad + dimPad,
+      h: b.h + 2 * pad + dimPad,
     };
     const maxDim = Math.max(b.w, b.h, 1);
-    const ratio = b.w === 0 || b.h === 0 ? 1 : b.w / b.h;
+    const ratio = vb.w === 0 || vb.h === 0 ? 1 : vb.w / vb.h;
     const aspectClass =
       ratio > 2.2 ? "aspect-[2/1]" : ratio < 0.45 ? "aspect-[1/2]" : "aspect-[4/3]";
     return { b, vb, maxDim, aspectClass };
-  }, [plan.rooms]);
+  }, [plan.rooms, snapshot]);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [pxPerMeter, setPxPerMeter] = useState(60);
@@ -152,8 +154,6 @@ export function PlanSvg({
     return plan.rooms.map((r) => {
       const showDims = Math.min(r.w, r.h) >= 1.5;
       const labelFs = Math.min(r.w, r.h) * 0.14;
-      const dimFs = Math.max(0.13, Math.min(r.w, r.h) * 0.08);
-      const inset = Math.min(0.18, Math.min(r.w, r.h) * 0.08);
       return (
         <g key={r.id}>
           <rect
@@ -186,7 +186,7 @@ export function PlanSvg({
             y={r.y + r.h / 2}
             textAnchor="middle"
             dominantBaseline="middle"
-            fill="rgba(229,231,235,0.45)"
+            fill="rgba(229,231,235,0.55)"
             fontSize={labelFs}
             fontWeight={400}
             pointerEvents="none"
@@ -199,61 +199,155 @@ export function PlanSvg({
                 x={r.x + r.w / 2}
                 dy={labelFs * 1.2}
                 fontSize={labelFs * 0.65}
-                fill="rgba(161,161,170,0.55)"
+                fill="rgba(161,161,170,0.6)"
               >
-                {r.w}×{r.h} м · h {r.ceilingHeight} м
+                {r.w}×{r.h} м
               </tspan>
             )}
           </text>
-          <g pointerEvents="none">
-            <text
-              x={r.x + r.w / 2}
-              y={r.y + inset + dimFs * 0.7}
-              textAnchor="middle"
-              fontSize={dimFs}
-              fill="rgba(229,231,235,0.7)"
-              fontWeight={500}
-            >
-              {(r.w * 1000).toFixed(0)}
-            </text>
-            <text
-              x={r.x + r.w / 2}
-              y={r.y + r.h - inset}
-              textAnchor="middle"
-              fontSize={dimFs}
-              fill="rgba(229,231,235,0.7)"
-              fontWeight={500}
-            >
-              {(r.w * 1000).toFixed(0)}
-            </text>
-            <text
-              transform={`rotate(-90 ${r.x + inset + dimFs * 0.4} ${r.y + r.h / 2})`}
-              x={r.x + inset + dimFs * 0.4}
-              y={r.y + r.h / 2}
-              textAnchor="middle"
-              fontSize={dimFs}
-              fill="rgba(229,231,235,0.7)"
-              fontWeight={500}
-            >
-              {(r.h * 1000).toFixed(0)}
-            </text>
-            <text
-              transform={`rotate(-90 ${r.x + r.w - inset} ${r.y + r.h / 2})`}
-              x={r.x + r.w - inset}
-              y={r.y + r.h / 2}
-              textAnchor="middle"
-              fontSize={dimFs}
-              fill="rgba(229,231,235,0.7)"
-              fontWeight={500}
-            >
-              {(r.h * 1000).toFixed(0)}
-            </text>
-          </g>
         </g>
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan.rooms, openingsMode, onRoomTap, onWallTap]);
+
+  /**
+   * Зовнішні розмірні лінії — як на архітектурному кресленні: одна знизу
+   * (загальна ширина + tick marks на кутах кімнат) і одна справа (загальна
+   * глибина). Без захаращення всередині кімнат.
+   */
+  const externalDimsJsx = useMemo(() => {
+    if (plan.rooms.length === 0 || snapshot) return null;
+    const b = layout.b;
+    const offset = Math.max(0.25, Math.min(b.w, b.h) * 0.06);
+    const fs = Math.max(0.16, Math.min(b.w, b.h) * 0.05);
+    const tickLen = Math.max(0.08, Math.min(b.w, b.h) * 0.015);
+
+    // Унікальні x-координати кутів кімнат для tick marks по горизонталі
+    const xs = Array.from(
+      new Set(plan.rooms.flatMap((r) => [r.x, r.x + r.w])),
+    ).sort((a, c) => a - c);
+    const ys = Array.from(
+      new Set(plan.rooms.flatMap((r) => [r.y, r.y + r.h])),
+    ).sort((a, c) => a - c);
+
+    const yBottom = b.y + b.h + offset;
+    const xRight = b.x + b.w + offset;
+
+    return (
+      <g pointerEvents="none">
+        {/* нижня лінія */}
+        <line
+          x1={b.x}
+          y1={yBottom}
+          x2={b.x + b.w}
+          y2={yBottom}
+          stroke="rgba(229,231,235,0.55)"
+          strokeWidth={1.2}
+          vectorEffect="non-scaling-stroke"
+        />
+        {xs.map((x) => (
+          <line
+            key={`tx-${x}`}
+            x1={x}
+            y1={yBottom - tickLen}
+            x2={x}
+            y2={yBottom + tickLen}
+            stroke="rgba(229,231,235,0.6)"
+            strokeWidth={1.2}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {/* підписи сегментів між ticks */}
+        {xs.slice(0, -1).map((x, i) => {
+          const xNext = xs[i + 1];
+          const mid = (x + xNext) / 2;
+          const seg = xNext - x;
+          if (seg < 0.3) return null;
+          return (
+            <text
+              key={`xseg-${i}`}
+              x={mid}
+              y={yBottom + fs * 1.4}
+              textAnchor="middle"
+              fontSize={fs}
+              fill="rgba(229,231,235,0.75)"
+              fontWeight={500}
+            >
+              {(seg * 1000).toFixed(0)}
+            </text>
+          );
+        })}
+        {/* загальна ширина */}
+        <text
+          x={b.x + b.w / 2}
+          y={yBottom + fs * 3.0}
+          textAnchor="middle"
+          fontSize={fs * 0.85}
+          fill="rgba(161,161,170,0.6)"
+          fontStyle="italic"
+        >
+          всього {(b.w * 1000).toFixed(0)} мм
+        </text>
+
+        {/* права вертикальна лінія */}
+        <line
+          x1={xRight}
+          y1={b.y}
+          x2={xRight}
+          y2={b.y + b.h}
+          stroke="rgba(229,231,235,0.55)"
+          strokeWidth={1.2}
+          vectorEffect="non-scaling-stroke"
+        />
+        {ys.map((y) => (
+          <line
+            key={`ty-${y}`}
+            x1={xRight - tickLen}
+            y1={y}
+            x2={xRight + tickLen}
+            y2={y}
+            stroke="rgba(229,231,235,0.6)"
+            strokeWidth={1.2}
+            vectorEffect="non-scaling-stroke"
+          />
+        ))}
+        {ys.slice(0, -1).map((y, i) => {
+          const yNext = ys[i + 1];
+          const mid = (y + yNext) / 2;
+          const seg = yNext - y;
+          if (seg < 0.3) return null;
+          return (
+            <text
+              key={`yseg-${i}`}
+              transform={`rotate(-90 ${xRight + fs * 1.4} ${mid})`}
+              x={xRight + fs * 1.4}
+              y={mid}
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize={fs}
+              fill="rgba(229,231,235,0.75)"
+              fontWeight={500}
+            >
+              {(seg * 1000).toFixed(0)}
+            </text>
+          );
+        })}
+        <text
+          transform={`rotate(-90 ${xRight + fs * 3.0} ${b.y + b.h / 2})`}
+          x={xRight + fs * 3.0}
+          y={b.y + b.h / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize={fs * 0.85}
+          fill="rgba(161,161,170,0.6)"
+          fontStyle="italic"
+        >
+          всього {(b.h * 1000).toFixed(0)} мм
+        </text>
+      </g>
+    );
+  }, [plan.rooms, layout.b, snapshot]);
 
   const openingsJsx = useMemo(() => {
     return plan.openings.map((o) => {
@@ -421,6 +515,7 @@ export function PlanSvg({
 
         <g transform={transformAttr}>
           {roomsJsx}
+          {externalDimsJsx}
           {openingsJsx}
           {furnitureJsx}
           {buttonsJsx}
