@@ -480,9 +480,13 @@ export function EmployeeDossier({
         )}
       </div>
 
-      {/* Three-column layout: Основне / Користувач / Зарплата */}
+      {/* Три-колонкова сітка: Основне / Користувач (вузька) / Зарплата (ширша). */}
       <div
-        className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${canSeeSalary ? "xl:grid-cols-3" : ""}`}
+        className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${
+          canSeeSalary
+            ? "xl:grid-cols-[minmax(0,1.3fr)_minmax(0,0.7fr)_minmax(0,1.4fr)]"
+            : ""
+        }`}
       >
       <div
         className="overflow-hidden rounded-2xl"
@@ -2022,7 +2026,7 @@ function SalarySection({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
         {/* === ЗАРПЛАТА (неофіційна) === */}
         <div
           className="overflow-hidden rounded-2xl"
@@ -2040,11 +2044,11 @@ function SalarySection({
             <span>Зарплата</span>
           </div>
           <div className="flex flex-col">
-            <SalaryRow label="На руки" value={active ? `${formatCurrency(onHand)} ₴` : "—"} emphasis />
-            <SalaryRow label="Оклад" value={active ? `${formatCurrency(base)} ₴` : "—"} />
+            <SalaryRow label="На руки" value={active ? `${formatCurrency(onHand)}` : "—"} emphasis />
+            <SalaryRow label="Оклад" value={active ? `${formatCurrency(base)}` : "—"} />
             <SalaryRow
               label="Премія"
-              value={active ? (coef === 0 ? "—" : `${formatCurrency(coef)} ₴`) : "—"}
+              value={active ? (coef === 0 ? "—" : `${formatCurrency(coef)}`) : "—"}
               tone={coef < 0 ? "danger" : undefined}
             />
             {!active && (
@@ -2083,12 +2087,12 @@ function SalarySection({
             )}
           </div>
           <div className="flex flex-col">
-            <SalaryRow label="Оф. зарплата" value={off?.gross != null ? `${formatCurrency(off.gross)} ₴` : "—"} emphasis />
-            <SalaryRow label="ПДФО" value={off?.pdfo != null ? `${formatCurrency(off.pdfo)} ₴` : "—"} muted />
-            <SalaryRow label="ВЗ" value={off?.vz != null ? `${formatCurrency(off.vz)} ₴` : "—"} muted />
-            <SalaryRow label="ЄСВ" value={off?.esv != null ? `${formatCurrency(off.esv)} ₴` : "—"} muted />
-            <SalaryRow label="На карту" value={off?.onCard != null ? `${formatCurrency(off.onCard)} ₴` : "—"} />
-            <SalaryRow label="Оф. разом" value={off?.total != null ? `${formatCurrency(off.total)} ₴` : "—"} emphasis />
+            <SalaryRow label="Оф. зарплата" value={off?.gross != null ? `${formatCurrency(off.gross)}` : "—"} emphasis />
+            <SalaryRow label="ПДФО" value={off?.pdfo != null ? `${formatCurrency(off.pdfo)}` : "—"} muted />
+            <SalaryRow label="ВЗ" value={off?.vz != null ? `${formatCurrency(off.vz)}` : "—"} muted />
+            <SalaryRow label="ЄСВ" value={off?.esv != null ? `${formatCurrency(off.esv)}` : "—"} muted />
+            <SalaryRow label="На карту" value={off?.onCard != null ? `${formatCurrency(off.onCard)}` : "—"} />
+            <SalaryRow label="Оф. разом" value={off?.total != null ? `${formatCurrency(off.total)}` : "—"} emphasis />
             {!latestPayroll && (
               <div
                 className="px-4 py-2 text-[11px]"
@@ -2767,12 +2771,12 @@ function AccountSection({
             </button>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-[13px]" style={{ color: T.textSecondary }}>
-              Акаунт ще не створено. Співробітник не зможе входити в систему.
+          <div className="flex flex-col gap-2">
+            <span className="text-[12px]" style={{ color: T.textMuted }}>
+              Без акаунта.
             </span>
             {canTouch && (
-              <div className="ml-auto flex gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => {
                     setForm({
@@ -2782,21 +2786,21 @@ function AccountSection({
                     });
                     setMode("create");
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold text-white"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-white"
                   style={{ backgroundColor: T.accentPrimary }}
                 >
-                  <UserPlus size={12} /> Створити акаунт
+                  <UserPlus size={11} /> Створити
                 </button>
                 <button
                   onClick={() => setMode("link")}
-                  className="inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[12px] font-semibold"
+                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
                   style={{
                     backgroundColor: T.panelSoft,
                     color: T.textSecondary,
                     border: `1px solid ${T.borderStrong}`,
                   }}
                 >
-                  <Link2 size={12} /> Привʼязати існуючий
+                  <Link2 size={11} /> Привʼязати
                 </button>
               </div>
             )}
