@@ -76,13 +76,23 @@ export async function POST(request: NextRequest) {
 
   const userPrompt = parsed.data.prompt?.trim() || "";
 
+  // Prompt оптимізований для Seedream v4 edit моделі. Ключі для якісного
+  // floor-plan→3D результату:
+  //  - Чіткий стиль перспективи (axonometric top-down 3D view)
+  //  - Збереження СТРУКТУРИ як обов'язкова інструкція
+  //  - Конкретні матеріали (Seedream любить специфіку)
+  //  - Освітлення і атмосфера
+  //  - Detailed negative prompt (через сам prompt бо API не має negative).
   const prompt = [
-    "Photorealistic top-down floor plan visualization of a Ukrainian apartment interior.",
-    "Preserve EXACT room walls, doors, windows and furniture positions from the input image.",
-    "Modern minimalist style, soft natural daylight, wooden parquet flooring, ceramic tile in bathroom.",
-    "Realistic furniture textures (fabric sofas, wooden tables, stainless steel appliances).",
-    "Plants and small decor elements where appropriate.",
-    "Clean architectural rendering, no people, no text overlays.",
+    "Transform this 2D architectural floor plan into a photorealistic 3D axonometric top-down rendered interior view.",
+    "Show the apartment from a slight aerial perspective (top-down with 25-30° tilt), as if walls were cut at 1.5m height — revealing floors, furniture and walls.",
+    "STRICTLY PRESERVE: every wall position, room layout, door and window placements, furniture positions and orientations exactly as in the input plan. Do not move, add or remove anything structural.",
+    "Style: contemporary Ukrainian apartment interior, modern minimalist Scandinavian-meets-warm style.",
+    "Materials: oak or walnut parquet flooring in living areas, large-format ceramic tile in bathroom and kitchen splash zone, matte white painted walls, soft fabric upholstery on sofas in neutral tones (beige, sage, charcoal), wooden tables, brushed steel appliances, white sanitary ware.",
+    "Lighting: soft warm natural daylight from windows, slight ambient shadows under furniture for depth, no harsh sun.",
+    "Decor: indoor plants in clay pots near windows and corners, area rugs under sofa groups and beds, framed art on walls (subtle).",
+    "Quality: high resolution, photorealistic textures, clean geometry, professional interior render style (like ArchDaily or Behance).",
+    "DO NOT include: people, text, watermarks, labels, dimension numbers, measurement annotations, compass symbols, arrows or any overlay graphics. Clean unannotated interior.",
     userPrompt,
   ]
     .filter(Boolean)
@@ -95,11 +105,13 @@ export async function POST(request: NextRequest) {
       imageUrl: inputUrl,
       prompt,
       negativePrompt:
-        "people, text, watermark, low quality, blurry, distorted, deformed walls, broken perspective",
-      strength: 0.75,
+        "people, text, watermark, labels, dimensions, measurement annotations, compass, arrows, low quality, blurry, distorted, deformed walls, broken perspective, cartoon, illustration, isometric video game style",
+      // Seedream v4 edit ігнорує strength/controlnetType (вони лише для
+      // інших моделей), але передаємо як no-op для сумісності типу.
+      strength: 0.8,
       controlnetType: "canny",
-      width: 1024,
-      height: 1024,
+      width: 2048,
+      height: 2048,
     });
   } catch (e) {
     console.error("[foreman/ai-render] fal.ai failed", e);

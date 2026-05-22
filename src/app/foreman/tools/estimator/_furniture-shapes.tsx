@@ -10,7 +10,12 @@
  * non-scaling-stroke, тож товщина однакова на будь-якому зумі.
  */
 
+import { createContext, useContext } from "react";
 import type { FurnitureItem } from "./_types";
+
+/** Snapshot mode — пропускає текстові підписи меблів для чистого вхідного
+ *  зображення у fal.ai (Seedream v4 edit краще працює без anchor-тексту). */
+const SnapshotContext = createContext(false);
 
 // Архітектурний light-theme: чорні лінії на білому тлі (як на реальному
 // кресленні). Краще читається + кращий вхід для fal.ai моделі.
@@ -49,13 +54,17 @@ function ShapeWrap({
   children: React.ReactNode;
   showLabel?: boolean;
 }) {
+  const snapshot = useContext(SnapshotContext);
   const minDim = Math.min(item.w, item.h);
   const labelFs = Math.max(0.13, minDim * 0.18);
   const cx = wx + item.w / 2;
+  // У snapshot режимі (PNG для photoreal) — приховуємо текстові підписи,
+  // щоб Seedream бачив чисті меблеві shapes без зайвого тексту.
+  const finalShowLabel = showLabel && !snapshot;
   return (
     <g transform={rotateAttr(item, wx, wy)}>
       {children}
-      {showLabel && minDim >= 0.4 && item.label.length > 0 && (
+      {finalShowLabel && minDim >= 0.4 && item.label.length > 0 && (
         <text
           x={cx}
           y={wy + item.h + labelFs * 1.05}
@@ -892,9 +901,11 @@ interface FurnitureShapeProps {
   wx: number;
   wy: number;
   onClick?: () => void;
+  /** Snapshot mode для PDF/photoreal — без підписів та anchor-точок. */
+  snapshot?: boolean;
 }
 
-export function FurnitureShape({ item, wx, wy, onClick }: FurnitureShapeProps) {
+export function FurnitureShape({ item, wx, wy, onClick, snapshot }: FurnitureShapeProps) {
   let inner: React.ReactNode;
   switch (item.type) {
     case "bed":
@@ -965,11 +976,13 @@ export function FurnitureShape({ item, wx, wy, onClick }: FurnitureShapeProps) {
   }
 
   return (
-    <g
-      onClick={onClick}
-      style={{ cursor: onClick ? "pointer" : "default" }}
-    >
-      {inner}
-    </g>
+    <SnapshotContext.Provider value={!!snapshot}>
+      <g
+        onClick={onClick}
+        style={{ cursor: onClick ? "pointer" : "default" }}
+      >
+        {inner}
+      </g>
+    </SnapshotContext.Provider>
   );
 }

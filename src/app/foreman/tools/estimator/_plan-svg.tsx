@@ -181,36 +181,40 @@ export function PlanSvg({
                   : "default",
             }}
           />
-          <text
-            x={r.x + r.w / 2}
-            y={r.y + r.h / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fill="rgba(0,0,0,0.6)"
-            fontSize={labelFs}
-            fontWeight={500}
-            pointerEvents="none"
-          >
-            <tspan x={r.x + r.w / 2} dy={showDims ? -labelFs * 0.4 : 0}>
-              {r.name}
-            </tspan>
-            {showDims && (
-              <tspan
-                x={r.x + r.w / 2}
-                dy={labelFs * 1.2}
-                fontSize={labelFs * 0.65}
-                fill="rgba(0,0,0,0.5)"
-                fontWeight={400}
-              >
-                {r.w}×{r.h} м
+          {/* Snapshot mode НЕ показує текстові підписи — Seedream чистіше
+              інтерпретує план без зайвих елементів. */}
+          {!snapshot && (
+            <text
+              x={r.x + r.w / 2}
+              y={r.y + r.h / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="rgba(0,0,0,0.6)"
+              fontSize={labelFs}
+              fontWeight={500}
+              pointerEvents="none"
+            >
+              <tspan x={r.x + r.w / 2} dy={showDims ? -labelFs * 0.4 : 0}>
+                {r.name}
               </tspan>
-            )}
-          </text>
+              {showDims && (
+                <tspan
+                  x={r.x + r.w / 2}
+                  dy={labelFs * 1.2}
+                  fontSize={labelFs * 0.65}
+                  fill="rgba(0,0,0,0.5)"
+                  fontWeight={400}
+                >
+                  {r.w}×{r.h} м
+                </tspan>
+              )}
+            </text>
+          )}
         </g>
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.rooms, openingsMode, onRoomTap, onWallTap]);
+  }, [plan.rooms, openingsMode, onRoomTap, onWallTap, snapshot]);
 
   /**
    * Зовнішні розмірні лінії — як на архітектурному кресленні: одна знизу
@@ -396,81 +400,139 @@ export function PlanSvg({
         doorBlade = { x1: hx, y1: hy, x2: ax, y2: ay };
       }
 
+      // Архітектурний "double-line" для вікна — два паралельні штрихи
+      // перпендикулярно до стіни.
+      const windowOffset = 0.06;
+      const windowLines = !isDoor
+        ? (() => {
+            // Перпендикулярна нормаль для вікна
+            const isHoriz = isHorizontal;
+            const dx1 = isHoriz ? 0 : -windowOffset;
+            const dy1 = isHoriz ? -windowOffset : 0;
+            const dx2 = -dx1;
+            const dy2 = -dy1;
+            return [
+              { x1: p.x1 + dx1, y1: p.y1 + dy1, x2: p.x2 + dx1, y2: p.y2 + dy1 },
+              { x1: p.x1 + dx2, y1: p.y1 + dy2, x2: p.x2 + dx2, y2: p.y2 + dy2 },
+            ];
+          })()
+        : [];
+
       return (
         <g key={o.id} pointerEvents="none">
-          {/* «прогалина» в стіні — біла лінія яка маскує чорну стіну */}
+          {/* «прогалина» в стіні — біла лінія маскує чорну стіну */}
           <line
             x1={p.x1}
             y1={p.y1}
             x2={p.x2}
             y2={p.y2}
             stroke="#ffffff"
-            strokeWidth={strokePx + 3.0}
+            strokeWidth={strokePx + 3.2}
             vectorEffect="non-scaling-stroke"
             strokeLinecap="butt"
           />
-          {/* кольорова смужка прорізу */}
-          <line
-            x1={p.x1}
-            y1={p.y1}
-            x2={p.x2}
-            y2={p.y2}
-            stroke={isDoor ? "#d97706" : "#0284c7"}
-            strokeWidth={strokePx + (isDoor ? 1.4 : 2.4)}
-            vectorEffect="non-scaling-stroke"
-            strokeLinecap="butt"
-          />
-          {/* для вікна — пунктирна додатково */}
-          {!isDoor && (
-            <line
-              x1={p.x1}
-              y1={p.y1}
-              x2={p.x2}
-              y2={p.y2}
-              stroke="#0c4a6e"
-              strokeWidth={strokePx + 0.4}
-              strokeDasharray="0.12 0.08"
-              vectorEffect="non-scaling-stroke"
-            />
-          )}
-          {/* двері — арка swing + полотно */}
-          {isDoor && doorArc && doorBlade && (
+          {snapshot ? (
+            // Архітектурні символи для Seedream: тонкі чорні лінії без кольору
             <>
-              <path
-                d={doorArc}
-                fill="none"
-                stroke="rgba(0,0,0,0.35)"
-                strokeWidth={1}
-                strokeDasharray="0.08 0.08"
-                vectorEffect="non-scaling-stroke"
-              />
+              {isDoor && doorArc && doorBlade ? (
+                <>
+                  <path
+                    d={doorArc}
+                    fill="none"
+                    stroke="rgba(0,0,0,0.85)"
+                    strokeWidth={1.6}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <line
+                    x1={doorBlade.x1}
+                    y1={doorBlade.y1}
+                    x2={doorBlade.x2}
+                    y2={doorBlade.y2}
+                    stroke="rgba(0,0,0,0.85)"
+                    strokeWidth={1.6}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </>
+              ) : (
+                // Вікно — double-line
+                windowLines.map((l, i) => (
+                  <line
+                    key={i}
+                    x1={l.x1}
+                    y1={l.y1}
+                    x2={l.x2}
+                    y2={l.y2}
+                    stroke="rgba(0,0,0,0.85)"
+                    strokeWidth={1.5}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                ))
+              )}
+            </>
+          ) : (
+            // Інтерактивний режим — з кольоровими акцентами + dim label
+            <>
               <line
-                x1={doorBlade.x1}
-                y1={doorBlade.y1}
-                x2={doorBlade.x2}
-                y2={doorBlade.y2}
-                stroke="rgba(0,0,0,0.55)"
-                strokeWidth={1.4}
+                x1={p.x1}
+                y1={p.y1}
+                x2={p.x2}
+                y2={p.y2}
+                stroke={isDoor ? "#d97706" : "#0284c7"}
+                strokeWidth={strokePx + (isDoor ? 1.4 : 2.4)}
                 vectorEffect="non-scaling-stroke"
+                strokeLinecap="butt"
               />
+              {!isDoor && (
+                <line
+                  x1={p.x1}
+                  y1={p.y1}
+                  x2={p.x2}
+                  y2={p.y2}
+                  stroke="#0c4a6e"
+                  strokeWidth={strokePx + 0.4}
+                  strokeDasharray="0.12 0.08"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {isDoor && doorArc && doorBlade && (
+                <>
+                  <path
+                    d={doorArc}
+                    fill="none"
+                    stroke="rgba(0,0,0,0.35)"
+                    strokeWidth={1}
+                    strokeDasharray="0.08 0.08"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <line
+                    x1={doorBlade.x1}
+                    y1={doorBlade.y1}
+                    x2={doorBlade.x2}
+                    y2={doorBlade.y2}
+                    stroke="rgba(0,0,0,0.55)"
+                    strokeWidth={1.4}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </>
+              )}
+              <text
+                transform={isHorizontal ? undefined : `rotate(-90 ${ocx} ${ocy})`}
+                x={ocx}
+                y={ocy + (isHorizontal ? dimFs * 1.6 : 0)}
+                textAnchor="middle"
+                dominantBaseline={isHorizontal ? "middle" : "central"}
+                fontSize={dimFs}
+                fill={isDoor ? "#92400e" : "#075985"}
+                fontWeight={600}
+              >
+                {(o.width * 1000).toFixed(0)}
+              </text>
             </>
           )}
-          <text
-            transform={isHorizontal ? undefined : `rotate(-90 ${ocx} ${ocy})`}
-            x={ocx}
-            y={ocy + (isHorizontal ? dimFs * 1.6 : 0)}
-            textAnchor="middle"
-            dominantBaseline={isHorizontal ? "middle" : "central"}
-            fontSize={dimFs}
-            fill={isDoor ? "#92400e" : "#075985"}
-            fontWeight={600}
-          >
-            {(o.width * 1000).toFixed(0)}
-          </text>
         </g>
       );
     });
-  }, [plan.openings, plan.rooms]);
+  }, [plan.openings, plan.rooms, snapshot]);
 
   const furnitureJsx = useMemo(() => {
     return plan.furniture.map((f) => {
@@ -482,6 +544,7 @@ export function PlanSvg({
           item={f}
           wx={room.x + f.x}
           wy={room.y + f.y}
+          snapshot={snapshot}
           onClick={
             onFurnitureTap && !snapshot ? () => onFurnitureTap(f) : undefined
           }

@@ -137,8 +137,10 @@ export function Visualize({
       //  3) Тримаємо xmlns для коректного XML
       const vb = svgEl.viewBox.baseVal;
       const aspect = vb && vb.width > 0 ? vb.height / vb.width : 0.75;
-      const targetW = 1024;
-      const targetH = Math.max(256, Math.min(2048, Math.round(targetW * aspect)));
+      // 2048 — Seedream v4 edit обробляє високу роздільність;
+      // більше деталей у вхідному плані = краще збереження структури в 3D.
+      const targetW = 2048;
+      const targetH = Math.max(512, Math.min(2560, Math.round(targetW * aspect)));
 
       const cloned = svgEl.cloneNode(true) as SVGSVGElement;
       if (!cloned.getAttribute("xmlns")) {
