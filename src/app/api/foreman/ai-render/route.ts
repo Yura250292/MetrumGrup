@@ -16,7 +16,64 @@ const bodySchema = z.object({
   imageBase64: z.string().min(100),
   /** Опційний user-prompt для стилю. */
   prompt: z.string().trim().max(500).optional(),
+  /** Структурований опис плану — для збагачення промпта семантикою. */
+  layout: z
+    .object({
+      rooms: z
+        .array(
+          z.object({
+            name: z.string(),
+            classification: z.string().optional(),
+            x: z.number(),
+            y: z.number(),
+            w: z.number(),
+            h: z.number(),
+            furnitureLabels: z.array(z.string()).optional(),
+          }),
+        )
+        .max(40),
+      openings: z
+        .array(
+          z.object({
+            type: z.enum(["door", "window"]),
+            roomName: z.string().optional(),
+          }),
+        )
+        .max(80)
+        .default([]),
+      bbox: z.object({ w: z.number(), h: z.number() }),
+    })
+    .optional(),
 });
+
+const ROOM_CLASS_EN: Record<string, string> = {
+  kitchen: "kitchen with stove, sink, refrigerator, cabinets",
+  bedroom: "bedroom with bed and wardrobe",
+  bathroom: "bathroom with toilet, sink, bathtub or shower",
+  livingroom: "living room with sofa, TV, coffee table",
+  corridor: "corridor / hallway passage",
+  hallway: "entrance hallway with coat storage",
+  office: "home office with desk and chair",
+  diningroom: "dining room with table and chairs",
+  balcony: "balcony with outdoor seating",
+  storage: "storage closet with shelves",
+  other: "general room",
+};
+
+/** Позиція "top-left", "center", "bottom-right" і т.д. — для prompt context. */
+function describePosition(
+  room: { x: number; y: number; w: number; h: number },
+  bbox: { w: number; h: number },
+): string {
+  const cx = room.x + room.w / 2;
+  const cy = room.y + room.h / 2;
+  const xZone = cx < bbox.w / 3 ? "left" : cx < (2 * bbox.w) / 3 ? "center" : "right";
+  const yZone = cy < bbox.h / 3 ? "top" : cy < (2 * bbox.h) / 3 ? "middle" : "bottom";
+  if (xZone === "center" && yZone === "middle") return "center";
+  if (yZone === "middle") return xZone === "left" ? "left side" : "right side";
+  if (xZone === "center") return yZone === "top" ? "top center" : "bottom center";
+  return `${yZone}-${xZone}`;
+}
 
 fal.config({ credentials: process.env.FAL_KEY });
 
@@ -75,22 +132,52 @@ export async function POST(request: NextRequest) {
   }
 
   const userPrompt = parsed.data.prompt?.trim() || "";
+  const layout = parsed.data.layout;
 
-  // Prompt оптимізований для Seedream v4 edit моделі. Ключі для якісного
-  // floor-plan→3D результату:
-  //  - Чіткий стиль перспективи (axonometric top-down 3D view)
-  //  - Збереження СТРУКТУРИ як обов'язкова інструкція
-  //  - Конкретні матеріали (Seedream любить специфіку)
-  //  - Освітлення і атмосфера
-  //  - Detailed negative prompt (через сам prompt бо API не має negative).
+  // Структурний опис плану — Seedream краще розуміє коли є явна семантика
+  // призначення кожної кімнати і конкретний підрахунок дверей/вікон.
+  let layoutDescription = "";
+  if (layout && layout.rooms.length > 0) {
+    const roomLines = layout.rooms.map((r) => {
+      const pos = describePosition(r, layout.bbox);
+      const classKey = (r.classification ?? "other").toLowerCase();
+      const semDesc = ROOM_CLASS_EN[classKey] ?? "general room";
+      const furniturePart =
+        r.furnitureLabels && r.furnitureLabels.length > 0
+          ? ` containing: ${r.furnitureLabels.slice(0, 8).join(", ")}`
+          : "";
+      return `  • ${pos} (${r.w.toFixed(1)}×${r.h.toFixed(1)} m): ${semDesc}${furniturePart}`;
+    });
+
+    const doorCount = layout.openings.filter((o) => o.type === "door").length;
+    const windowCount = layout.openings.filter((o) => o.type === "window").length;
+
+    layoutDescription = [
+      "",
+      "LAYOUT (rooms by position — render each room with appropriate finishes and lighting for its function):",
+      ...roomLines,
+      "",
+      `OPENINGS: exactly ${doorCount} door(s) marked by arc swing symbols, and ${windowCount} window(s) marked by double parallel line symbols. Render them as functional doors and windows in the 3D view at the exact positions shown.`,
+      "",
+    ].join("\n");
+  }
+
+  // Prompt оптимізований для Seedream v4 edit моделі.
   const prompt = [
     "Transform this 2D architectural floor plan into a photorealistic 3D axonometric top-down rendered interior view.",
     "Show the apartment from a slight aerial perspective (top-down with 25-30° tilt), as if walls were cut at 1.5m height — revealing floors, furniture and walls.",
     "STRICTLY PRESERVE: every wall position, room layout, door and window placements, furniture positions and orientations exactly as in the input plan. Do not move, add or remove anything structural.",
-    "Style: contemporary Ukrainian apartment interior, modern minimalist Scandinavian-meets-warm style.",
-    "Materials: oak or walnut parquet flooring in living areas, large-format ceramic tile in bathroom and kitchen splash zone, matte white painted walls, soft fabric upholstery on sofas in neutral tones (beige, sage, charcoal), wooden tables, brushed steel appliances, white sanitary ware.",
-    "Lighting: soft warm natural daylight from windows, slight ambient shadows under furniture for depth, no harsh sun.",
-    "Decor: indoor plants in clay pots near windows and corners, area rugs under sofa groups and beds, framed art on walls (subtle).",
+    layoutDescription,
+    "RENDERING per room type:",
+    "- Kitchen: marble or quartz countertops, stainless steel appliances, tile splashback, wooden cabinets, hanging pendant lights",
+    "- Bathroom: large-format ceramic tile floor and walls, white sanitary ware (toilet, sink, bathtub/shower), chrome fixtures, towels on rails",
+    "- Bedroom: oak parquet, made bed with neutral linen, bedside lamps, area rug under bed, soft warm lighting",
+    "- Living room: oak parquet, fabric sofa in beige/sage/charcoal, wooden coffee table, TV unit, large area rug, indoor plants, framed art",
+    "- Office: desk with task lamp, ergonomic chair, bookshelf, plants",
+    "- Corridor / hallway: parquet, console with mirror, coat rack near entrance",
+    "Style: contemporary Ukrainian apartment, modern minimalist Scandinavian-meets-warm.",
+    "Lighting: soft warm natural daylight through windows, slight ambient shadows under furniture for depth, no harsh sun.",
+    "Decor: indoor plants in clay pots near windows and corners, area rugs under sofa groups and beds.",
     "Quality: high resolution, photorealistic textures, clean geometry, professional interior render style (like ArchDaily or Behance).",
     "DO NOT include: people, text, watermarks, labels, dimension numbers, measurement annotations, compass symbols, arrows or any overlay graphics. Clean unannotated interior.",
     userPrompt,

@@ -181,10 +181,49 @@ export function Visualize({
         URL.revokeObjectURL(url);
       }
 
+      // Структурований опис плану — допомагає Seedream розуміти семантику
+      // кожної кімнати, не покладаючись лише на візуальну інтерпретацію.
+      const bb = (() => {
+        if (plan.rooms.length === 0) return { w: 0, h: 0 };
+        const xs = plan.rooms.flatMap((r) => [r.x, r.x + r.w]);
+        const ys = plan.rooms.flatMap((r) => [r.y, r.y + r.h]);
+        return {
+          w: Math.max(...xs) - Math.min(...xs),
+          h: Math.max(...ys) - Math.min(...ys),
+        };
+      })();
+      const minX = Math.min(...plan.rooms.map((r) => r.x));
+      const minY = Math.min(...plan.rooms.map((r) => r.y));
+      const layout = {
+        bbox: bb,
+        rooms: plan.rooms.map((r) => {
+          const items = plan.furniture
+            .filter((f) => f.roomId === r.id)
+            .map((f) => f.label)
+            .filter(Boolean);
+          return {
+            name: r.name,
+            classification: plan.roomClasses[r.id],
+            x: r.x - minX,
+            y: r.y - minY,
+            w: r.w,
+            h: r.h,
+            furnitureLabels: items.length > 0 ? items : undefined,
+          };
+        }),
+        openings: plan.openings.map((o) => {
+          const room = plan.rooms.find((rr) => rr.id === o.roomId);
+          return {
+            type: o.type,
+            roomName: room?.name,
+          };
+        }),
+      };
+
       const res = await fetch("/api/foreman/ai-render", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: pngBase64 }),
+        body: JSON.stringify({ imageBase64: pngBase64, layout }),
       });
       if (!res.ok) {
         const t = await res.text().catch(() => "");

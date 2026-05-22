@@ -181,9 +181,7 @@ export function PlanSvg({
                   : "default",
             }}
           />
-          {/* Snapshot mode НЕ показує текстові підписи — Seedream чистіше
-              інтерпретує план без зайвих елементів. */}
-          {!snapshot && (
+          {!snapshot ? (
             <text
               x={r.x + r.w / 2}
               y={r.y + r.h / 2}
@@ -209,12 +207,31 @@ export function PlanSvg({
                 </tspan>
               )}
             </text>
+          ) : (
+            // У snapshot — невеликий АНГЛІЙСЬКИЙ клас кімнати для Seedream
+            // (тренована переважно на англійських labels). Допомагає моделі
+            // інтерпретувати призначення приміщення.
+            plan.roomClasses[r.id] && plan.roomClasses[r.id] !== "other" && (
+              <text
+                x={r.x + r.w / 2}
+                y={r.y + r.h / 2}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                fill="rgba(0,0,0,0.45)"
+                fontSize={Math.max(0.18, Math.min(r.w, r.h) * 0.1)}
+                fontWeight={400}
+                fontStyle="italic"
+                pointerEvents="none"
+              >
+                {plan.roomClasses[r.id]}
+              </text>
+            )
           )}
         </g>
       );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan.rooms, openingsMode, onRoomTap, onWallTap, snapshot]);
+  }, [plan.rooms, plan.roomClasses, openingsMode, onRoomTap, onWallTap, snapshot]);
 
   /**
    * Зовнішні розмірні лінії — як на архітектурному кресленні: одна знизу
