@@ -59,6 +59,12 @@ const CLASS_LABELS: Record<RoomClass, string> = {
   other: "Інше",
 };
 
+/** Стан photoreal-рендера однієї кімнати. */
+type RoomRender =
+  | { status: "loading" }
+  | { status: "done"; inputUrl: string; outputUrl: string }
+  | { status: "error"; message: string };
+
 /** Підплан з однієї кімнати — для покімнатного photoreal-рендера. */
 function buildRoomSubPlan(plan: FloorPlan, roomId: string): FloorPlan {
   const room = plan.rooms.find((r) => r.id === roomId);
@@ -102,20 +108,18 @@ export function Visualize({
   // Resume wake-lock коли документ знову видимий
   useEffect(() => installWakeLockResumeHandler(), []);
 
-  // Photoreal state — рендеримо ПОКІМНАТНО
-  const [photorealLoading, setPhotorealLoading] = useState(false);
-  const [photorealError, setPhotorealError] = useState<string | null>(null);
-  const [photoreal, setPhotoreal] = useState<{
-    inputUrl: string;
-    outputUrl: string;
-  } | null>(null);
+  // Photoreal state — рендеримо ПОКІМНАТНО, кожна кімната окремою карткою.
+  const [photorealRunning, setPhotorealRunning] = useState(false);
   // Кімната, чий прихований SVG зараз рендериться для зняття snapshot.
   const [captureRoomId, setCaptureRoomId] = useState<string | null>(null);
-  // Кімната, до якої належить поточний результат (для підпису).
-  const [photorealRoom, setPhotorealRoom] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  // Які кімнати позначені галочками для рендера (типово — усі).
+  const [selectedRoomIds, setSelectedRoomIds] = useState<Set<string>>(
+    () => new Set(plan.rooms.map((r) => r.id)),
+  );
+  // Результат рендера по кожній кімнаті: roomId → стан.
+  const [photorealResults, setPhotorealResults] = useState<
+    Record<string, RoomRender>
+  >({});
 
   const handleFurnish = async () => {
     setLoading(true);
@@ -188,95 +192,108 @@ export function Visualize({
   const totalItems = plan.furniture.length;
 
   /**
-   * Photoreal-рендер ОДНІЄЇ кімнати: знімок SVG-підплану кімнати → PNG base64
-   * → POST /api/foreman/ai-render → fal.ai → ComparisonSlider.
-   * Покімнатно — точніше тримається плану, ніж рендер усієї квартири за раз.
+   * Знімає SVG-підплан ОДНІЄЇ кімнати → PNG → POST /api/foreman/ai-render.
+   * captureRoomId керує прихованим SVG, тож у рендер потрапляє ВИКЛЮЧНО ця
+   * кімната (buildRoomSubPlan відфільтровує решту).
    */
-  const handlePhotoreal = async (room: { id: string; name: string }) => {
-    setCaptureRoomId(room.id);
-    setPhotorealRoom(room);
-    setPhotorealLoading(true);
-    setPhotorealError(null);
-    setPhotoreal(null);
+  const renderOneRoom = async (
+    roomId: string,
+  ): Promise<{ inputUrl: string; outputUrl: string }> => {
+    setCaptureRoomId(roomId);
+    // Чекаємо 2 кадри, поки React відрендерить прихований SVG саме цієї
+    // кімнати (captureRoomId щойно змінився).
+    await new Promise<void>((res) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => res())),
+    );
+    const svgEl = document.querySelector<SVGSVGElement>(
+      'svg[data-estimator-plan="snapshot"]',
+    );
+    if (!svgEl) throw new Error("Не вдалося підготувати план кімнати");
+
+    // Готуємо SVG для рендера в PNG: клон + явні width/height + xmlns.
+    const vb = svgEl.viewBox.baseVal;
+    const aspect = vb && vb.width > 0 ? vb.height / vb.width : 0.75;
+    const targetW = 2048;
+    const targetH = Math.max(512, Math.min(2560, Math.round(targetW * aspect)));
+
+    const cloned = svgEl.cloneNode(true) as SVGSVGElement;
+    if (!cloned.getAttribute("xmlns")) {
+      cloned.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    }
+    cloned.setAttribute("width", String(targetW));
+    cloned.setAttribute("height", String(targetH));
+
+    const serialized = new XMLSerializer().serializeToString(cloned);
+    const svgBlob = new Blob([serialized], {
+      type: "image/svg+xml;charset=utf-8",
+    });
+    const url = URL.createObjectURL(svgBlob);
+    let pngBase64: string;
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const im = new Image();
+        im.onload = () => resolve(im);
+        im.onerror = reject;
+        im.src = url;
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) throw new Error("Canvas не доступний");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, targetW, targetH);
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      pngBase64 = canvas
+        .toDataURL("image/png")
+        .replace(/^data:image\/png;base64,/, "");
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+
+    const res = await fetch("/api/foreman/ai-render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageBase64: pngBase64 }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}: ${t.slice(0, 100)}`);
+    }
+    return (await res.json()) as { inputUrl: string; outputUrl: string };
+  };
+
+  /** Рендерить обрані кімнати ПО ЧЕРЗІ; кожна — окрема картка-результат. */
+  const runPhotoreal = async (roomIds: string[]) => {
+    if (roomIds.length === 0 || photorealRunning) return;
+    setPhotorealRunning(true);
     const release = await acquireWakeLock();
     try {
-      // Чекаємо 2 кадри, поки React відрендерить прихований SVG обраної
-      // кімнати (captureRoomId щойно змінився).
-      await new Promise<void>((res) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => res())),
-      );
-      const svgEl = document.querySelector<SVGSVGElement>(
-        'svg[data-estimator-plan="snapshot"]',
-      );
-      if (!svgEl) throw new Error("Не вдалося підготувати план кімнати");
-
-      // Готуємо SVG для рендера в PNG: клон + явні width/height + xmlns.
-      const vb = svgEl.viewBox.baseVal;
-      const aspect = vb && vb.width > 0 ? vb.height / vb.width : 0.75;
-      // 2048 — Seedream v4 edit обробляє високу роздільність;
-      // більше деталей у вхідному плані = краще збереження структури в 3D.
-      const targetW = 2048;
-      const targetH = Math.max(512, Math.min(2560, Math.round(targetW * aspect)));
-
-      const cloned = svgEl.cloneNode(true) as SVGSVGElement;
-      if (!cloned.getAttribute("xmlns")) {
-        cloned.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      for (const id of roomIds) {
+        if (!plan.rooms.some((r) => r.id === id)) continue;
+        setPhotorealResults((p) => ({ ...p, [id]: { status: "loading" } }));
+        try {
+          const r = await renderOneRoom(id);
+          setPhotorealResults((p) => ({
+            ...p,
+            [id]: { status: "done", inputUrl: r.inputUrl, outputUrl: r.outputUrl },
+          }));
+        } catch (e) {
+          setPhotorealResults((p) => ({
+            ...p,
+            [id]: {
+              status: "error",
+              message:
+                e instanceof Error
+                  ? e.message.slice(0, 140)
+                  : "Помилка генерації",
+            },
+          }));
+        }
       }
-      cloned.setAttribute("width", String(targetW));
-      cloned.setAttribute("height", String(targetH));
-
-      const serialized = new XMLSerializer().serializeToString(cloned);
-      const svgBlob = new Blob([serialized], {
-        type: "image/svg+xml;charset=utf-8",
-      });
-      const url = URL.createObjectURL(svgBlob);
-      let pngBase64: string;
-      try {
-        const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-          const im = new Image();
-          im.onload = () => resolve(im);
-          im.onerror = reject;
-          im.src = url;
-        });
-        const canvas = document.createElement("canvas");
-        canvas.width = targetW;
-        canvas.height = targetH;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("Canvas не доступний");
-
-        // SVG plan тепер у light-theme (чорні лінії на білому) — це
-        // нативний формат архітектурних креслень, який fal.ai розпізнає.
-        // Інверсія більше не потрібна.
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, targetW, targetH);
-        ctx.drawImage(img, 0, 0, targetW, targetH);
-
-        const dataUrl = canvas.toDataURL("image/png");
-        pngBase64 = dataUrl.replace(/^data:image\/png;base64,/, "");
-      } finally {
-        URL.revokeObjectURL(url);
-      }
-
-      const res = await fetch("/api/foreman/ai-render", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: pngBase64 }),
-      });
-      if (!res.ok) {
-        const t = await res.text().catch(() => "");
-        throw new Error(`HTTP ${res.status}: ${t.slice(0, 100)}`);
-      }
-      const json = (await res.json()) as {
-        inputUrl: string;
-        outputUrl: string;
-      };
-      setPhotoreal(json);
-    } catch (e) {
-      setPhotorealError(
-        e instanceof Error ? e.message.slice(0, 160) : "Помилка генерації",
-      );
     } finally {
-      setPhotorealLoading(false);
+      setPhotorealRunning(false);
+      setCaptureRoomId(null);
       await release();
     }
   };
@@ -482,7 +499,7 @@ export function Visualize({
         </div>
       )}
 
-      {/* Photoreal 3D rendering section — ПОКІМНАТНО */}
+      {/* Photoreal 3D rendering section — ПОКІМНАТНО, з вибором галочками */}
       {hasFurniture && (
         <div className="rounded-2xl bg-gradient-to-br from-violet-500/15 via-violet-500/5 to-transparent border border-violet-500/30 p-4 space-y-3">
           <div className="flex items-center gap-2">
@@ -492,87 +509,144 @@ export function Visualize({
             </h3>
           </div>
           <p className="text-xs text-violet-200/80 leading-relaxed">
-            Обери приміщення — AI перетворить його 2D-план з меблями у
-            фотореалістичний рендер (fal.ai, 30-90с). Рендеримо по одній
-            кімнаті — так результат точніше відповідає плану.
+            Признач кімнати галочками — AI відрендерить кожну ОКРЕМО, по черзі
+            (fal.ai, ~30-90с на кімнату). Покімнатно — результат точніше
+            відповідає плану. Кожна кімната зʼявиться окремою карткою нижче.
           </p>
 
-          {/* Чипи кімнат — тап запускає рендер цієї кімнати */}
-          <div className="flex flex-wrap gap-2">
+          {/* Галочки кімнат */}
+          <div className="space-y-1.5">
             {plan.rooms.map((room) => {
-              const active = photorealRoom?.id === room.id;
+              const checked = selectedRoomIds.has(room.id);
               return (
-                <button
+                <label
                   key={room.id}
-                  type="button"
-                  onClick={() =>
-                    handlePhotoreal({ id: room.id, name: room.name })
-                  }
-                  disabled={photorealLoading}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold active:scale-95 transition disabled:opacity-40 ${
-                    active
-                      ? "bg-violet-500/30 border-violet-400/70 text-white"
-                      : "bg-violet-500/10 border-violet-500/40 text-violet-200"
-                  }`}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/10 cursor-pointer"
                 >
-                  {photorealLoading && active ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <ImageIcon size={12} />
-                  )}
-                  {room.name}
-                </button>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    disabled={photorealRunning}
+                    onChange={() =>
+                      setSelectedRoomIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(room.id)) next.delete(room.id);
+                        else next.add(room.id);
+                        return next;
+                      })
+                    }
+                    className="w-4 h-4 accent-violet-500 shrink-0"
+                  />
+                  <span className="text-sm text-white flex-1 truncate">
+                    {room.name}
+                  </span>
+                  <span className="text-[11px] text-zinc-500 tabular-nums">
+                    {room.w}×{room.h} м
+                  </span>
+                </label>
               );
             })}
           </div>
 
-          {photorealLoading && (
-            <div className="text-[11px] text-violet-200/80">
-              AI рендерить «{photorealRoom?.name}»… (до 90с)
-            </div>
-          )}
-          {photorealError && (
-            <div className="text-[11px] text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
-              {photorealError}
-            </div>
-          )}
-          {photoreal && !photorealLoading && (
-            <div className="space-y-3">
-              {photorealRoom && (
-                <div className="text-xs font-bold text-violet-200">
-                  {photorealRoom.name}
+          <div className="flex items-center gap-3 text-[11px]">
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedRoomIds(new Set(plan.rooms.map((r) => r.id)))
+              }
+              disabled={photorealRunning}
+              className="text-violet-300 underline disabled:opacity-40"
+            >
+              Обрати всі
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedRoomIds(new Set())}
+              disabled={photorealRunning}
+              className="text-zinc-400 underline disabled:opacity-40"
+            >
+              Зняти всі
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              runPhotoreal(
+                plan.rooms
+                  .filter((r) => selectedRoomIds.has(r.id))
+                  .map((r) => r.id),
+              )
+            }
+            disabled={photorealRunning || selectedRoomIds.size === 0}
+            className="w-full flex items-center justify-center gap-2 min-h-[48px] rounded-xl bg-violet-500/20 border border-violet-500/50 text-violet-100 text-sm font-semibold active:scale-95 transition disabled:opacity-50"
+          >
+            {photorealRunning ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <ImageIcon size={16} />
+            )}
+            {photorealRunning
+              ? "AI рендерить…"
+              : `Згенерувати 3D (${selectedRoomIds.size})`}
+          </button>
+
+          {/* Результати — окрема картка на кожну кімнату */}
+          {plan.rooms.map((room) => {
+            const r = photorealResults[room.id];
+            if (!r) return null;
+            return (
+              <div
+                key={room.id}
+                className="rounded-xl bg-white/[0.03] border border-white/10 p-3 space-y-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-violet-200">
+                    {room.name}
+                  </span>
+                  {r.status !== "loading" && (
+                    <button
+                      type="button"
+                      onClick={() => runPhotoreal([room.id])}
+                      disabled={photorealRunning}
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-violet-500/15 border border-violet-500/40 text-violet-200 text-[11px] font-semibold active:scale-95 transition disabled:opacity-50"
+                    >
+                      <Sparkles size={11} />
+                      Перегенерувати
+                    </button>
+                  )}
                 </div>
-              )}
-              <ComparisonSlider
-                inputUrl={photoreal.inputUrl}
-                outputUrl={photoreal.outputUrl}
-                inputLabel="План"
-                outputLabel="Photoreal"
-              />
-              <div className="flex gap-2">
-                <a
-                  href={photoreal.outputUrl}
-                  download={`photoreal-${photorealRoom?.name ?? "room"}-${Date.now()}.png`}
-                  className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-xl bg-white/[0.05] border border-white/10 text-zinc-200 text-xs font-semibold active:scale-95 transition"
-                >
-                  Завантажити
-                </a>
-                <button
-                  type="button"
-                  onClick={() => photorealRoom && handlePhotoreal(photorealRoom)}
-                  disabled={photorealLoading || !photorealRoom}
-                  className="flex-1 flex items-center justify-center gap-2 min-h-[40px] rounded-xl bg-violet-500/15 border border-violet-500/40 text-violet-200 text-xs font-semibold active:scale-95 transition disabled:opacity-50"
-                >
-                  <Sparkles size={12} />
-                  Перегенерувати
-                </button>
+                {r.status === "loading" && (
+                  <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-violet-200/80">
+                    <Loader2 size={14} className="animate-spin" />
+                    Рендериться… (до 90с)
+                  </div>
+                )}
+                {r.status === "error" && (
+                  <div className="text-[11px] text-rose-200 bg-rose-500/10 border border-rose-500/30 rounded-lg px-3 py-2">
+                    {r.message}
+                  </div>
+                )}
+                {r.status === "done" && (
+                  <>
+                    <ComparisonSlider
+                      inputUrl={r.inputUrl}
+                      outputUrl={r.outputUrl}
+                      inputLabel="План"
+                      outputLabel="Photoreal"
+                    />
+                    <a
+                      href={r.outputUrl}
+                      download={`photoreal-${room.name}-${Date.now()}.png`}
+                      className="flex items-center justify-center gap-2 min-h-[40px] rounded-xl bg-white/[0.05] border border-white/10 text-zinc-200 text-xs font-semibold active:scale-95 transition"
+                    >
+                      Завантажити
+                    </a>
+                  </>
+                )}
               </div>
-              <p className="text-[10px] text-zinc-500 text-center">
-                Перетягни смужку щоб порівняти план і реалістику. Обери іншу
-                кімнату вище, щоб відрендерити її.
-              </p>
-            </div>
-          )}
+            );
+          })}
         </div>
       )}
 
