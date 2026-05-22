@@ -10,7 +10,7 @@
  * non-scaling-stroke, тож товщина однакова на будь-якому зумі.
  */
 
-import { createContext, useContext } from "react";
+import { createContext } from "react";
 import type { FurnitureItem } from "./_types";
 
 /** Snapshot mode — пропускає текстові підписи меблів для чистого вхідного
@@ -46,39 +46,18 @@ function ShapeWrap({
   wx,
   wy,
   children,
-  showLabel = true,
 }: {
   item: FurnitureItem;
   wx: number;
   wy: number;
   children: React.ReactNode;
+  /** Лишено в типі для сумісності викликів; підписи більше не малюємо. */
   showLabel?: boolean;
 }) {
-  const snapshot = useContext(SnapshotContext);
-  const minDim = Math.min(item.w, item.h);
-  const labelFs = Math.max(0.13, minDim * 0.18);
-  const cx = wx + item.w / 2;
-  // У snapshot режимі (PNG для photoreal) — приховуємо текстові підписи,
-  // щоб Seedream бачив чисті меблеві shapes без зайвого тексту.
-  const finalShowLabel = showLabel && !snapshot;
-  return (
-    <g transform={rotateAttr(item, wx, wy)}>
-      {children}
-      {finalShowLabel && minDim >= 0.4 && item.label.length > 0 && (
-        <text
-          x={cx}
-          y={wy + item.h + labelFs * 1.05}
-          textAnchor="middle"
-          fontSize={labelFs}
-          fill="#52525b"
-          fontWeight={500}
-          pointerEvents="none"
-        >
-          {item.label}
-        </text>
-      )}
-    </g>
-  );
+  // Підписи меблів НЕ малюємо на плані — як на справжньому архітектурному
+  // кресленні (еталон від користувача): чисті символи меблів без тексту.
+  // Назву видно у списку «Меблі та техніка» і в діалозі видалення.
+  return <g transform={rotateAttr(item, wx, wy)}>{children}</g>;
 }
 
 // ─────────────────────────────────────────────────────────────
