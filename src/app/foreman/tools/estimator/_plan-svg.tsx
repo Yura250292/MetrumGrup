@@ -101,6 +101,14 @@ export function PlanSvg({
   const btnHitR = Math.max(0.18, 24 / Math.max(pxPerMeter * baseScale, 1));
   const strokePx = 1.4; // non-scaling stroke у px
 
+  // Snapshot (вхід для fal.ai photoreal) — товсті ЧОРНІ лінії, що масштабуються
+  // разом із планом (БЕЗ non-scaling-stroke). Інакше на 2048px-растрі стіни
+  // виходять волосяними (2.6px), Seedream не бачить структуру і галюцинує.
+  // Значення у метрах viewBox → пропорційні до розміру плану.
+  const snapWallSW = Math.max(0.12, layout.maxDim * 0.016);
+  const snapSymSW = Math.max(0.035, layout.maxDim * 0.0055);
+  const snapFurnSW = Math.max(0.03, layout.maxDim * 0.005);
+
   const free = useMemo(
     () => (onPlusClick && !snapshot && !openingsMode ? freeSegments(plan.rooms) : null),
     [plan.rooms, onPlusClick, snapshot, openingsMode],
@@ -161,11 +169,25 @@ export function PlanSvg({
             y={r.y}
             width={r.w}
             height={r.h}
-            fill={openingsMode ? "rgba(251,191,36,0.08)" : "rgba(139,92,246,0.05)"}
-            stroke={openingsMode ? "rgb(217,119,6)" : "rgba(0,0,0,0.85)"}
-            strokeWidth={openingsMode ? strokePx + 0.4 : 2.6}
+            fill={
+              openingsMode
+                ? "rgba(251,191,36,0.08)"
+                : snapshot
+                  ? "#ffffff"
+                  : "rgba(139,92,246,0.05)"
+            }
+            stroke={
+              openingsMode
+                ? "rgb(217,119,6)"
+                : snapshot
+                  ? "#000000"
+                  : "rgba(0,0,0,0.85)"
+            }
+            strokeWidth={
+              openingsMode ? strokePx + 0.4 : snapshot ? snapWallSW : 2.6
+            }
             strokeDasharray={openingsMode ? "0.25 0.25" : undefined}
-            vectorEffect="non-scaling-stroke"
+            vectorEffect={snapshot ? undefined : "non-scaling-stroke"}
             onClick={
               openingsMode
                 ? (e) => handleWallTap(e, r)
@@ -207,26 +229,7 @@ export function PlanSvg({
                 </tspan>
               )}
             </text>
-          ) : (
-            // У snapshot — невеликий АНГЛІЙСЬКИЙ клас кімнати для Seedream
-            // (тренована переважно на англійських labels). Допомагає моделі
-            // інтерпретувати призначення приміщення.
-            plan.roomClasses[r.id] && plan.roomClasses[r.id] !== "other" && (
-              <text
-                x={r.x + r.w / 2}
-                y={r.y + r.h / 2}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill="rgba(0,0,0,0.45)"
-                fontSize={Math.max(0.18, Math.min(r.w, r.h) * 0.1)}
-                fontWeight={400}
-                fontStyle="italic"
-                pointerEvents="none"
-              >
-                {plan.roomClasses[r.id]}
-              </text>
-            )
-          )}
+          ) : null}
         </g>
       );
     });
@@ -444,30 +447,31 @@ export function PlanSvg({
             x2={p.x2}
             y2={p.y2}
             stroke="#ffffff"
-            strokeWidth={strokePx + 3.2}
-            vectorEffect="non-scaling-stroke"
+            strokeWidth={snapshot ? snapWallSW * 1.5 : strokePx + 3.2}
+            vectorEffect={snapshot ? undefined : "non-scaling-stroke"}
             strokeLinecap="butt"
           />
           {snapshot ? (
-            // Архітектурні символи для Seedream: тонкі чорні лінії без кольору
+            // Архітектурні символи для Seedream: жирні чорні лінії, що
+            // масштабуються з планом (без non-scaling-stroke).
             <>
               {isDoor && doorArc && doorBlade ? (
                 <>
                   <path
                     d={doorArc}
                     fill="none"
-                    stroke="rgba(0,0,0,0.85)"
-                    strokeWidth={1.6}
-                    vectorEffect="non-scaling-stroke"
+                    stroke="#000000"
+                    strokeWidth={snapSymSW}
+                    strokeLinecap="round"
                   />
                   <line
                     x1={doorBlade.x1}
                     y1={doorBlade.y1}
                     x2={doorBlade.x2}
                     y2={doorBlade.y2}
-                    stroke="rgba(0,0,0,0.85)"
-                    strokeWidth={1.6}
-                    vectorEffect="non-scaling-stroke"
+                    stroke="#000000"
+                    strokeWidth={snapSymSW}
+                    strokeLinecap="round"
                   />
                 </>
               ) : (
@@ -479,9 +483,8 @@ export function PlanSvg({
                     y1={l.y1}
                     x2={l.x2}
                     y2={l.y2}
-                    stroke="rgba(0,0,0,0.85)"
-                    strokeWidth={1.5}
-                    vectorEffect="non-scaling-stroke"
+                    stroke="#000000"
+                    strokeWidth={snapSymSW}
                   />
                 ))
               )}
@@ -635,6 +638,12 @@ export function PlanSvg({
           height={layout.vb.h}
           fill="#ffffff"
         />
+        {/* Snapshot: робимо контури меблів жирними й масштабованими — CSS
+            перекриває non-scaling-stroke та тонку px-товщину кожного шейпа
+            одним правилом, без правки 50+ елементів у _furniture-shapes. */}
+        {snapshot && (
+          <style>{`.snap-furn [stroke]{vector-effect:none;stroke-width:${snapFurnSW};}`}</style>
+        )}
         <defs>
           {!snapshot && (
             <>
@@ -680,7 +689,7 @@ export function PlanSvg({
           {roomsJsx}
           {externalDimsJsx}
           {openingsJsx}
-          {furnitureJsx}
+          <g className={snapshot ? "snap-furn" : undefined}>{furnitureJsx}</g>
           {buttonsJsx}
           {/* Компас (N↑) у лівому-верхньому куті bbox — лише в інтерактивному
               режимі. Snapshot для PDF/photoreal обходиться без нього. */}
