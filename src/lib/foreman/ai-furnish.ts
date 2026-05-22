@@ -615,6 +615,27 @@ function overlapFraction(a: Rect2, b: Rect2): number {
   return (ox * oy) / minArea;
 }
 
+/** Типи меблів, які за дизайном стоять впритул до стіни (не по центру). */
+const WALL_SNAP_TYPES: Set<FurnitureType> = new Set([
+  "bed",
+  "sofa",
+  "armchair",
+  "wardrobe",
+  "fridge",
+  "stove",
+  "oven",
+  "sink",
+  "toilet",
+  "bathtub",
+  "shower",
+  "washer",
+  "dishwasher",
+  "kitchen-cabinet",
+  "tv",
+  "desk",
+  "shelf",
+]);
+
 /**
  * Зона "не ставити меблі" перед прорізом — perpendicular into the room.
  * Двері: 1.2 м (swing зона + comfortable walk-through), вікна: 0.3 м.
@@ -1077,6 +1098,40 @@ ${scenario.preferences.map((p) => `  - ${p}`).join("\n")}
       `[ai-furnish] room ${room.id} (${room.name}): dropped ${droppedCount}/${rawList.length} items.`,
       droppedReasons,
     );
+  }
+
+  // Вирівнювання до стін: меблі, що мають стояти біля стіни, але "плавають"
+  // близько до неї — підсуваємо впритул. Робить план охайнішим (менше
+  // хаотичного розкидання). Снеп лише якщо нова позиція не блокує проріз і
+  // не накладається на інший предмет.
+  for (let i = 0; i < furniture.length; i++) {
+    const f = furniture[i];
+    if (!WALL_SNAP_TYPES.has(f.type)) continue;
+    const dW = f.x;
+    const dN = f.y;
+    const dE = room.w - (f.x + f.w);
+    const dS = room.h - (f.y + f.h);
+    const m = Math.min(dW, dN, dE, dS);
+    if (m <= 0.03 || m > 0.7) continue; // вже впритул або задалеко від стіни
+    const snapped: Rect2 = { x: f.x, y: f.y, w: f.w, h: f.h };
+    if (m === dW) snapped.x = 0;
+    else if (m === dN) snapped.y = 0;
+    else if (m === dE) snapped.x = Math.max(0, room.w - f.w);
+    else snapped.y = Math.max(0, room.h - f.h);
+    if (blocksAnyOpening(snapped, openings, room.id, room.w, room.h).blocked) {
+      continue;
+    }
+    let bad = false;
+    for (let j = 0; j < furniture.length; j++) {
+      if (j === i || furniture[j].type === "rug") continue;
+      if (overlapFraction(snapped, furniture[j]) > 0.12) {
+        bad = true;
+        break;
+      }
+    }
+    if (bad) continue;
+    f.x = snapped.x;
+    f.y = snapped.y;
   }
 
   // Baseline fallback: якщо AI повернув 0 предметів для habitable кімнати —

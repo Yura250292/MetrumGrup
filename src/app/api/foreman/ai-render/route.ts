@@ -7,7 +7,6 @@ import {
   unauthorizedResponse,
 } from "@/lib/auth-utils";
 import { generateRender } from "@/lib/ai-render/fal-client";
-import { buildPrompt } from "@/lib/ai-render/prompt-builder";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // fal.ai може займати до 60-120s
@@ -83,24 +82,30 @@ export async function POST(request: NextRequest) {
 
   const userNote = parsed.data.prompt?.trim() || "";
 
-  // Той самий промпт і модель, що й у проектній AI-візуалізації:
-  // buildPrompt(FLOOR_PLAN_TO_3D) → fal-ai/bytedance/seedream/v4/edit.
-  // Раніше foreman мав власний великий промпт із layoutDescription (позиції
-  // та типи кімнат). За тестами команди (коментар у src/lib/ai-render/index.ts)
-  // згодовування Seedream семантики кімнат ЗАПЛУТУЄ модель — вона сама добре
-  // читає креслення. Тепер foreman 1:1 повторює проектний пайплайн.
-  //
-  // Підсилення проти найчастішої галюцинації Seedream — поділ однієї великої
-  // кімнати на кілька і вигадування внутрішніх стін. Інструкція йде через
-  // userPrompt (НЕ чіпаємо спільний buildPrompt, від якого залежать проекти).
-  const FIDELITY_NOTE =
-    "CRITICAL: keep the EXACT same number of rooms and walls as in the plan. Do NOT split one room into several. Do NOT add internal walls or partitions. Do NOT merge rooms. One large room must stay one single large room. Render furniture only where it is already drawn — do not invent kitchens, bathrooms or extra rooms.";
-  const userPrompt = [FIDELITY_NOTE, userNote].filter(Boolean).join(" ");
-  const { prompt, negativePrompt } = buildPrompt({
-    stylePreset: null,
-    userPrompt,
-    mode: "FLOOR_PLAN_TO_3D",
-  });
+  // ВЛАСНИЙ промпт foreman (НЕ спільний buildPrompt!). Спільний промпт містив
+  // фразу "render fixtures (bathtub, toilet, sink, stove, bed, sofa...)" —
+  // Seedream читав цей перелік як інструкцію НАМАЛЮВАТИ ванну/унітаз/плиту,
+  // навіть коли їх немає в кімнаті (рендер вітальні виходив із санвузлом +
+  // кухнею). Тут перелік типів НЕ згадуємо взагалі: "сірий силует = меблі,
+  // малюй лише те, що фізично намальоване".
+  const prompt = [
+    "Convert this 2D top-down floor plan of a SINGLE room into a photorealistic top-down interior render.",
+    "The image shows exactly ONE room. Render ONE room only — never split it, never add extra rooms, never add internal walls or partitions.",
+    "The thick black outline is the room's walls — keep walls exactly where they are, same shape and proportions.",
+    "Each solid GRAY SHAPE inside the room is one piece of furniture already placed by the user. Render every gray shape as a realistic furniture object of the SAME size, at the SAME position and orientation.",
+    "Render ONLY the furniture drawn as gray shapes. DO NOT add any furniture, appliance or fixture that is not drawn. Floor areas that are empty in the plan MUST stay empty floor in the render.",
+    "DO NOT invent a bathroom, kitchen, bed, sofa, toilet, bathtub, shower, stove or sink — render an object ONLY if its exact shape is physically drawn in this plan.",
+    "Camera: strict top-down bird's-eye view, looking straight down at 90°, same framing and orientation as the input. NOT axonometric, NOT tilted, NOT angled.",
+    "Keep geometry 1:1 with the input — only convert the flat 2D drawing into realistic materials, textures and lighting.",
+    "Style: realistic modern Ukrainian interior, wood parquet or ceramic tile floor, soft natural daylight, gentle shadows.",
+    "Output: clean photorealistic top-down render. No text, no labels, no dimensions, no people, no annotations.",
+    userNote,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const negativePrompt =
+    "extra rooms, multiple rooms, internal walls, room dividers, added furniture not in the plan, invented fixtures, people, text, watermark, labels, dimension lines, numbers, axonometric, isometric, 3D perspective, tilted camera, angled view, side view, dollhouse, blurry, low quality, distorted walls, cartoon, illustration";
 
   let result;
   try {
