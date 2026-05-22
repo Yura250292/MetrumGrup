@@ -31,6 +31,7 @@ const SCENARIO_IDS = [
   "cottagecore",
 ];
 import {
+  Check,
   CheckCircle2,
   Image as ImageIcon,
   Info,
@@ -514,36 +515,49 @@ export function Visualize({
             відповідає плану. Кожна кімната зʼявиться окремою карткою нижче.
           </p>
 
-          {/* Галочки кімнат */}
+          {/* Вибір кімнат — кнопки-рядки (надійний тап + чітка підсвітка) */}
           <div className="space-y-1.5">
             {plan.rooms.map((room) => {
               const checked = selectedRoomIds.has(room.id);
               return (
-                <label
+                <button
                   key={room.id}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-white/[0.03] border border-white/10 cursor-pointer"
+                  type="button"
+                  disabled={photorealRunning}
+                  onClick={() =>
+                    setSelectedRoomIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(room.id)) next.delete(room.id);
+                      else next.add(room.id);
+                      return next;
+                    })
+                  }
+                  className={`w-full flex items-center gap-2.5 px-3 py-3 rounded-xl border text-left transition active:scale-[0.99] disabled:opacity-50 ${
+                    checked
+                      ? "bg-violet-500/25 border-violet-400/70"
+                      : "bg-white/[0.03] border-white/10"
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={photorealRunning}
-                    onChange={() =>
-                      setSelectedRoomIds((prev) => {
-                        const next = new Set(prev);
-                        if (next.has(room.id)) next.delete(room.id);
-                        else next.add(room.id);
-                        return next;
-                      })
-                    }
-                    className="w-4 h-4 accent-violet-500 shrink-0"
-                  />
-                  <span className="text-sm text-white flex-1 truncate">
+                  <span
+                    className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
+                      checked
+                        ? "bg-violet-500 border-violet-400"
+                        : "border-white/30"
+                    }`}
+                  >
+                    {checked && <Check size={13} className="text-white" />}
+                  </span>
+                  <span
+                    className={`text-sm flex-1 truncate ${
+                      checked ? "text-white font-semibold" : "text-zinc-300"
+                    }`}
+                  >
                     {room.name}
                   </span>
                   <span className="text-[11px] text-zinc-500 tabular-nums">
                     {room.w}×{room.h} м
                   </span>
-                </label>
+                </button>
               );
             })}
           </div>
