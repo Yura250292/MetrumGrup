@@ -513,6 +513,7 @@ export default function NewMeetingPage() {
                     </label>
                     <input
                       type="datetime-local"
+                      lang="uk"
                       value={recordedAt}
                       onChange={(e) => setRecordedAt(e.target.value)}
                       disabled={busy}

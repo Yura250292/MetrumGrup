@@ -459,6 +459,7 @@ export default function MeetingDetailPage() {
               <span className="flex items-center gap-1">
                 <input
                   type="datetime-local"
+                  lang="uk"
                   value={dateDraft}
                   onChange={(e) => setDateDraft(e.target.value)}
                   onKeyDown={(e) => {
