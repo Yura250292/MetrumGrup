@@ -644,6 +644,27 @@ function rectsOverlap(a: Rect2, b: Rect2, eps = 0.02): boolean {
   );
 }
 
+/**
+ * ВИДИМИЙ (повернутий) прямокутник предмета. Фігура обертається навколо
+ * свого центру, тож при rotation 90/270 видимі габарити w↔h міняються
+ * місцями. Усі перевірки меж і колізій мають іти по цьому прямокутнику —
+ * інакше повернуті меблі «вилазять» за стіни.
+ */
+function effectiveRect(f: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  rotation: number;
+}): Rect2 {
+  const cx = f.x + f.w / 2;
+  const cy = f.y + f.h / 2;
+  const rotated = f.rotation === 90 || f.rotation === 270;
+  const ew = rotated ? f.h : f.w;
+  const eh = rotated ? f.w : f.h;
+  return { x: cx - ew / 2, y: cy - eh / 2, w: ew, h: eh };
+}
+
 /** Площа перетину двох прямокутників відносно меншого з них (0..1). */
 function overlapFraction(a: Rect2, b: Rect2): number {
   const ox = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
@@ -1063,56 +1084,76 @@ ${scenario.preferences.map((p) => `  - ${p}`).join("\n")}
     if (type === "rug" || type === "plant") continue;
     const x = Number(item.x);
     const y = Number(item.y);
-    const w = Number(item.w);
-    const h = Number(item.h);
+    let w = Number(item.w);
+    let h = Number(item.h);
     if (![x, y, w, h].every(Number.isFinite) || w <= 0 || h <= 0) {
       droppedCount++;
       if (droppedReasons.length < 3)
         droppedReasons.push(`bad dims (x=${item.x},y=${item.y},w=${item.w},h=${item.h})`);
       continue;
     }
-    const cx = Math.max(0, Math.min(x, Math.max(0, room.w - 0.1)));
-    const cy = Math.max(0, Math.min(y, Math.max(0, room.h - 0.1)));
-    const cw = Math.max(0.1, Math.min(w, room.w - cx));
-    const ch = Math.max(0.1, Math.min(h, room.h - cy));
     const rotation = [0, 90, 180, 270].includes(Number(item.rotation))
       ? Number(item.rotation)
       : 0;
     const label = typeof item.label === "string" ? item.label : "";
 
+    // Поворот 90/270 міняє місцями ВИДИМІ габарити (фігура крутиться навколо
+    // центру). Усі перевірки меж/колізій робимо по видимому прямокутнику —
+    // інакше повернуті меблі вилазять за стіни.
+    const rotated = rotation === 90 || rotation === 270;
+    const maxW = Math.max(0.3, room.w - 0.1);
+    const maxH = Math.max(0.3, room.h - 0.1);
+    // Завеликий предмет — пропорційно зменшуємо під розмір кімнати.
+    const effW0 = rotated ? h : w;
+    const effH0 = rotated ? w : h;
+    if (effW0 > maxW || effH0 > maxH) {
+      const k = Math.min(maxW / effW0, maxH / effH0);
+      w *= k;
+      h *= k;
+    }
+    const effW = rotated ? h : w;
+    const effH = rotated ? w : h;
+    // Центр з координат AI; зсуваємо так, щоб видимий AABB був у межах кімнати.
+    const centerX = Math.min(Math.max(x + w / 2, effW / 2), room.w - effW / 2);
+    const centerY = Math.min(Math.max(y + h / 2, effH / 2), room.h - effH / 2);
+    const cx = centerX - w / 2;
+    const cy = centerY - h / 2;
+    const cw = w;
+    const ch = h;
+    const effRect: Rect2 = {
+      x: centerX - effW / 2,
+      y: centerY - effH / 2,
+      w: effW,
+      h: effH,
+    };
+
     // Перевірка — не блокувати прорізи (двері 1м clearance / вікна 0.3м).
-    // Виняток: rug (килим) і plant (рослина) можуть бути там, бо не блокують.
-    if (type !== "rug" && type !== "plant") {
-      const collision = blocksAnyOpening(
-        { x: cx, y: cy, w: cw, h: ch },
-        openings,
-        room.id,
-        room.w,
-        room.h,
-      );
-      if (collision.blocked) {
-        droppedCount++;
-        if (droppedReasons.length < 5)
-          droppedReasons.push(
-            `blocks ${collision.opening.type} on ${collision.opening.side}`,
-          );
-        continue;
-      }
+    const collision = blocksAnyOpening(
+      effRect,
+      openings,
+      room.id,
+      room.w,
+      room.h,
+    );
+    if (collision.blocked) {
+      droppedCount++;
+      if (droppedReasons.length < 5)
+        droppedReasons.push(
+          `blocks ${collision.opening.type} on ${collision.opening.side}`,
+        );
+      continue;
     }
 
-    // Анти-хаос: відкидаємо предмет, що суттєво (>30%) перетинає вже
-    // прийнятий. Виняток: rug лягає ПІД меблі; стілець ↔ стіл/desk —
-    // стільці підсуваються під стіл, накладання нормальне.
-    if (type !== "rug") {
-      const cand: Rect2 = { x: cx, y: cy, w: cw, h: ch };
+    // Анти-хаос: відкидаємо предмет, що суттєво (>22%) перетинає вже
+    // прийнятий. Виняток: стілець ↔ стіл/desk — стільці підсуваються під стіл.
+    {
       let overlapsAccepted = false;
       for (const a of furniture) {
-        if (a.type === "rug") continue;
         const chairTablePair =
           (type === "chair" && (a.type === "table" || a.type === "desk")) ||
           ((type === "table" || type === "desk") && a.type === "chair");
         if (chairTablePair) continue;
-        if (overlapFraction(cand, a) > 0.22) {
+        if (overlapFraction(effRect, effectiveRect(a)) > 0.22) {
           overlapsAccepted = true;
           break;
         }
@@ -1150,31 +1191,37 @@ ${scenario.preferences.map((p) => `  - ${p}`).join("\n")}
   for (let i = 0; i < furniture.length; i++) {
     const f = furniture[i];
     if (!WALL_SNAP_TYPES.has(f.type)) continue;
-    const dW = f.x;
-    const dN = f.y;
-    const dE = room.w - (f.x + f.w);
-    const dS = room.h - (f.y + f.h);
+    // Відстані рахуємо по ВИДИМОМУ (повернутому) прямокутнику.
+    const er = effectiveRect(f);
+    const dW = er.x;
+    const dN = er.y;
+    const dE = room.w - (er.x + er.w);
+    const dS = room.h - (er.y + er.h);
     const m = Math.min(dW, dN, dE, dS);
     if (m <= 0.03 || m > 0.7) continue; // вже впритул або задалеко від стіни
-    const snapped: Rect2 = { x: f.x, y: f.y, w: f.w, h: f.h };
-    if (m === dW) snapped.x = 0;
-    else if (m === dN) snapped.y = 0;
-    else if (m === dE) snapped.x = Math.max(0, room.w - f.w);
-    else snapped.y = Math.max(0, room.h - f.h);
-    if (blocksAnyOpening(snapped, openings, room.id, room.w, room.h).blocked) {
+    // Зсув видимого прямокутника до стіни = такий самий зсув координат x/y.
+    let dx = 0;
+    let dy = 0;
+    if (m === dW) dx = -er.x;
+    else if (m === dN) dy = -er.y;
+    else if (m === dE) dx = Math.max(0, room.w - er.w) - er.x;
+    else dy = Math.max(0, room.h - er.h) - er.y;
+    const moved = { x: f.x + dx, y: f.y + dy, w: f.w, h: f.h, rotation: f.rotation };
+    const movedEff = effectiveRect(moved);
+    if (blocksAnyOpening(movedEff, openings, room.id, room.w, room.h).blocked) {
       continue;
     }
     let bad = false;
     for (let j = 0; j < furniture.length; j++) {
-      if (j === i || furniture[j].type === "rug") continue;
-      if (overlapFraction(snapped, furniture[j]) > 0.12) {
+      if (j === i) continue;
+      if (overlapFraction(movedEff, effectiveRect(furniture[j])) > 0.12) {
         bad = true;
         break;
       }
     }
     if (bad) continue;
-    f.x = snapped.x;
-    f.y = snapped.y;
+    f.x = moved.x;
+    f.y = moved.y;
   }
 
   // Baseline fallback: якщо AI повернув 0 предметів для habitable кімнати —
