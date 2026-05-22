@@ -11,6 +11,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
+import { withAnthropicSlot } from "./anthropic-throttle";
 
 export interface MaterialQuote {
   source: "supplier" | "market" | "none";
@@ -211,29 +212,28 @@ async function lookupMarket(
 
   let response: Anthropic.Messages.Message;
   try {
-    // Per-call timeout 25s — щоб одна повільна відповідь не з'їла увесь
-    // Vercel budget і не клала весь batch.
-    const callPromise = anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 700,
-      system: kind === "labor" ? MARKET_SYSTEM_PROMPT_LABOR : MARKET_SYSTEM_PROMPT_MATERIAL,
-      tools: [
-        // Не передаємо user_location: Anthropic web_search_20250305 не приймає
-        // country code "UA". Українські сайти обмежуємо в system-prompt.
-        {
-          type: "web_search_20250305",
-          name: "web_search",
-          max_uses: 2,
-        } as unknown as Anthropic.Messages.Tool,
-      ],
-      messages: [{ role: "user", content: userPrompt }],
+    // Per-call timeout 50s + global Anthropic semaphore + 429 retry.
+    response = await withAnthropicSlot(() => {
+      const callPromise = anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 700,
+        system: kind === "labor" ? MARKET_SYSTEM_PROMPT_LABOR : MARKET_SYSTEM_PROMPT_MATERIAL,
+        tools: [
+          {
+            type: "web_search_20250305",
+            name: "web_search",
+            max_uses: 2,
+          } as unknown as Anthropic.Messages.Tool,
+        ],
+        messages: [{ role: "user", content: userPrompt }],
+      });
+      return Promise.race([
+        callPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 50_000),
+        ),
+      ]);
     });
-    response = await Promise.race([
-      callPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 50_000),
-      ),
-    ]);
   } catch (e) {
     return {
       source: "none",

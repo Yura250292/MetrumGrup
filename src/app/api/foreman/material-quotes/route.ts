@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Невірний запит" }, { status: 400 });
   }
 
-  const quotes = await quoteItemsBatch(firmId, parsed.data.items, 6);
+  // concurrency=3 (плюс semaphore у anthropic-throttle глобально обмежує).
+  const quotes = await quoteItemsBatch(firmId, parsed.data.items, 3);
   return NextResponse.json({ quotes });
 }

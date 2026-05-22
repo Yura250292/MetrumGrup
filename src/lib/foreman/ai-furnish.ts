@@ -11,6 +11,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { withAnthropicSlot } from "./anthropic-throttle";
 
 export type RoomClass =
   | "kitchen"
@@ -486,21 +487,23 @@ async function furnishRoom(
 
   const userPrompt = `Кімната: ${roomInput}\nКласифікуй і запропонуй меблювання. Поверни лише JSON.`;
 
-  // 30s per-room timeout, щоб одна кімната не зжерла весь budget
+  // 35s per-room timeout + global Anthropic semaphore + 429 retry.
   let response: Anthropic.Messages.Message;
   try {
-    const callPromise = anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 900,
-      system: SYSTEM_PROMPT_ROOM,
-      messages: [{ role: "user", content: userPrompt }],
+    response = await withAnthropicSlot(() => {
+      const callPromise = anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 900,
+        system: SYSTEM_PROMPT_ROOM,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+      return Promise.race([
+        callPromise,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("timeout")), 35_000),
+        ),
+      ]);
     });
-    response = await Promise.race([
-      callPromise,
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 35_000),
-      ),
-    ]);
   } catch (e) {
     console.warn(
       `[ai-furnish] room "${room.name}" (${room.id}) call failed:`,
@@ -652,8 +655,8 @@ export async function aiFurnish(req: FurnishRequest): Promise<FurnishResult> {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-  // Per-room concurrency cap — Anthropic має ліміт на конкурентні з'єднання
-  // (429 errors при паралельних викликах). Беремо 2 одночасних запитів.
+  // Per-room concurrency cap. Тепер semaphore у anthropic-throttle глобально
+  // обмежує паралелізм; тут можна лишити 2 (буде стояти у черзі семафора).
   const CONCURRENCY = 2;
   const results: PromiseSettledResult<RoomPromptResult>[] = new Array(
     req.rooms.length,
