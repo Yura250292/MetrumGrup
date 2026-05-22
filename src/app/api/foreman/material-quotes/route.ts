@@ -8,7 +8,7 @@ import {
 import { quoteItemsBatch } from "@/lib/foreman/market-quote";
 
 export const runtime = "nodejs";
-// Vercel Pro дає до 300s; web_search для кожного item може зайняти 5-20s.
+// Vercel Pro дає до 300s; Gemini Flash + Google Search ~3-10s на item.
 export const maxDuration = 300;
 
 const bodySchema = z.object({
@@ -28,8 +28,8 @@ const bodySchema = z.object({
 
 /**
  * Batch quote: для кожного elementу спершу шукає у SupplierMaterial цієї фірми,
- * потім (якщо порожньо або labor) звертається до Claude Haiku з нативним
- * web_search_20250305 для української роздрібної ціни / розцінки.
+ * потім (якщо порожньо або labor) звертається до Gemini 3 Flash з Google Search
+ * grounding для української роздрібної ціни / розцінки.
  * Concurrency обмежена сервером, відповіді кешуються 24h in-memory.
  */
 export async function POST(request: NextRequest) {
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Невірний запит" }, { status: 400 });
   }
 
-  // concurrency=3 (плюс semaphore у anthropic-throttle глобально обмежує).
-  const quotes = await quoteItemsBatch(firmId, parsed.data.items, 3);
+  // concurrency=6 — Gemini Flash швидкий і без спільного Anthropic-семафора.
+  const quotes = await quoteItemsBatch(firmId, parsed.data.items, 6);
   return NextResponse.json({ quotes });
 }

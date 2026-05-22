@@ -3,15 +3,21 @@
  *
  * Pipeline:
  *  1. Локальний довідник постачальників (SupplierMaterial, scope=firmId)
- *  2. Якщо порожньо → Claude Haiku з нативним інструментом web_search_20250305,
+ *  2. Якщо порожньо → Gemini 3 Flash з реальним Google Search grounding,
  *     promptом обмежений до Ukrainian retail; модель повертає JSON
- *     { price, unit, source_url, source_title, source_date }.
+ *     { price, unit, source_url, source_title, source_date, confidence }.
  *  3. In-memory LRU-cache з TTL 24h щоб не довбати API на повторні запити.
+ *
+ * Чому Gemini Flash, а не Claude Haiku web_search: Haiku web_search повільний
+ * (агентний, 5-20s/виклик) і всі виклики ділили глобальний Anthropic-семафор
+ * на 3 слоти — для ~20 позицій кошторису це 5-7 хв. Gemini 3 Flash швидкий,
+ * без спільного семафора, а Google Search grounding дає реальні роздрібні
+ * ціни з українських магазинів.
  */
 
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { Tool } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-import { withAnthropicSlot } from "./anthropic-throttle";
 
 export interface MaterialQuote {
   source: "supplier" | "market" | "none";
@@ -111,36 +117,33 @@ async function lookupSupplier(
   };
 }
 
-const MARKET_SYSTEM_PROMPT_MATERIAL = `Ти експерт по будівельних матеріалах в Україні. Користувач питає поточну роздрібну ціну на матеріал.
+const MARKET_SYSTEM_PROMPT_MATERIAL = `Ти асистент із цінами на будівельні матеріали в Україні. Маєш інструмент Google Search — користуйся ним, щоб знайти поточну роздрібну ціну.
 
 Правила:
-- Шукай тільки на українських сайтах (epicentr.com.ua, leroymerlin.ua, novabud.com.ua, prom.ua, allo.ua, foxtrot.ua тощо).
-- Бери НАЙСВІЖІШУ дату (не старішу за 6 місяців від сьогодні).
-- Ціна — у гривнях за фактичну одиницю товару (шт/кг/л/м²/мішок).
-- Якщо знайдено кілька — обери середню/типову ціну в Україні (не елітну, не дамповану).
-- Дата перевіряється: якщо на сторінці нема дати — використай дату публікації товару або не пиши дату.
+- Шукай в українських магазинах: Епіцентр, Leroy Merlin, OBI, Нова Лінія, Rozetka, Prom.ua, будівельні інтернет-магазини.
+- Дай ТИПОВУ (середню) роздрібну ціну в гривнях за вказану одиницю. Не елітний і не демпінговий сегмент.
+- Якщо точного товару немає — візьми найближчий аналог тієї ж категорії.
+- ВАЖЛИВО: майже завжди повертай число. Якщо пошук дав чіткі ціни — confidence 0.7-1.0. Якщо пошук неоднозначний — все одно дай свою найкращу оцінку типової ціни 2026 року в Україні і постав confidence 0.3-0.5.
+- price=null лише якщо назва зовсім незрозуміла.
 
-Поверни ВИКЛЮЧНО однорядковий JSON без markdown-обгорток, такого формату:
-{"price": число_грн_або_null, "unit": "<одиниця>", "source_url": "<url>", "source_title": "<коротка назва сайту/товару>", "source_date": "YYYY-MM-DD"|null}
+Поверни ВИКЛЮЧНО однорядковий JSON без markdown:
+{"price": число_грн, "unit": "<одиниця>", "source_url": "<url або null>", "source_title": "<магазин/товар>", "source_date": "YYYY-MM-DD"|null, "confidence": 0.0-1.0}
 
-Якщо не вдалося знайти достовірну ціну → {"price": null, "reason": "<коротко чому>"}
+Тільки JSON, без пояснень.`;
 
-Без пояснень. Тільки JSON.`;
-
-const MARKET_SYSTEM_PROMPT_LABOR = `Ти експерт по будівельних роботах в Україні. Користувач питає поточну ринкову розцінку (вартість роботи без матеріалу) за вид робіт у грн за м².
+const MARKET_SYSTEM_PROMPT_LABOR = `Ти асистент із розцінками на будівельні роботи в Україні. Маєш інструмент Google Search — користуйся ним. Користувач питає вартість РОБОТИ (без матеріалу) за вид робіт, у грн за м².
 
 Правила:
-- Шукай тільки на українських сайтах (prom.ua, novabud.com.ua, remontnik.ua, profilan.com.ua, biz.liga.net, прайс-листи будівельних компаній, OLX послуги, тощо).
-- Бери НАЙСВІЖІШУ дату (не старішу за 6 місяців від сьогодні).
-- Ціна = типова РОЗЦІНКА в Україні за 1 м² (не VIP-сегмент, не екстра-дешеві).
+- Шукай прайси будівельних бригад/компаній, OLX послуги, калькулятори ремонту, форуми.
+- Дай ТИПОВУ розцінку в Україні за 1 м² (не VIP, не екстра-дешево). Орієнтир — Київ/обласні центри.
 - Якщо є діапазон — бери середину.
+- ВАЖЛИВО: майже завжди повертай число. Чіткі джерела → confidence 0.7-1.0. Неоднозначно → все одно дай найкращу оцінку типової розцінки 2026 року і confidence 0.3-0.5.
+- price=null лише якщо вид робіт зовсім незрозумілий.
 
-Поверни ВИКЛЮЧНО однорядковий JSON без markdown-обгорток:
-{"price": число_грн_за_м²_або_null, "unit": "м²", "source_url": "<url>", "source_title": "<коротко>", "source_date": "YYYY-MM-DD"|null}
+Поверни ВИКЛЮЧНО однорядковий JSON без markdown:
+{"price": число_грн_за_м², "unit": "м²", "source_url": "<url або null>", "source_title": "<коротко>", "source_date": "YYYY-MM-DD"|null, "confidence": 0.0-1.0}
 
-Якщо не знайдено → {"price": null, "reason": "<коротко>"}
-
-Без пояснень. Тільки JSON.`;
+Тільки JSON, без пояснень.`;
 
 interface MarketJson {
   price?: number | null;
@@ -148,6 +151,7 @@ interface MarketJson {
   source_url?: string;
   source_title?: string;
   source_date?: string | null;
+  confidence?: number | null;
   reason?: string;
 }
 
@@ -196,80 +200,107 @@ function extractJson(text: string): MarketJson | null {
   }
 }
 
+// Моделі за пріоритетом. gemini-2.5-flash — основна: у тестах стабільно
+// вмикає реальний Google Search grounding (grounded:true). gemini-3-flash-preview
+// — резерв: швидка, але grounding не завжди спрацьовує, тоді це оцінка з
+// знань моделі (все одно повертає число — краще ніж порожньо).
+const GEMINI_PRICE_MODELS = ["gemini-2.5-flash", "gemini-3-flash-preview"] as const;
+
+// Реальний Google Search grounding. SDK 0.24 типізує лише старий
+// googleSearchRetrieval (Gemini 1.5); для Gemini 2.0+/3 потрібен googleSearch —
+// передаємо через каст, REST API його приймає.
+const SEARCH_TOOL = [{ googleSearch: {} }] as unknown as Tool[];
+
+let geminiClient: GoogleGenerativeAI | null = null;
+function getGemini(): GoogleGenerativeAI {
+  if (!geminiClient) {
+    geminiClient = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+  }
+  return geminiClient;
+}
+
 async function lookupMarket(
   name: string,
   unit?: string,
   kind: "material" | "labor" = "material",
 ): Promise<MaterialQuote> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return { source: "none", price: null, unit: null, note: "ANTHROPIC_API_KEY не налаштований" };
+  if (!process.env.GEMINI_API_KEY) {
+    return { source: "none", price: null, unit: null, note: "GEMINI_API_KEY не налаштований" };
   }
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const systemPrompt =
+    kind === "labor" ? MARKET_SYSTEM_PROMPT_LABOR : MARKET_SYSTEM_PROMPT_MATERIAL;
   const userPrompt =
     kind === "labor"
-      ? `Знайди поточну ринкову розцінку за м² в Україні для роботи: «${name}». Поверни лише JSON.`
-      : `Знайди поточну роздрібну ціну в Україні за ${unit ?? "одиницю"} для матеріалу: «${name}». Поверни лише JSON.`;
+      ? `Знайди типову ринкову розцінку за м² в Україні (2026) для роботи: «${name}». Спершу пошукай у Google, потім поверни лише JSON.`
+      : `Знайди типову роздрібну ціну в Україні (2026) за ${unit ?? "одиницю"} для матеріалу: «${name}». Спершу пошукай у Google, потім поверни лише JSON.`;
 
-  let response: Anthropic.Messages.Message;
-  try {
-    // Per-call timeout 50s + global Anthropic semaphore + 429 retry.
-    response = await withAnthropicSlot(() => {
-      const callPromise = anthropic.messages.create({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 700,
-        system: kind === "labor" ? MARKET_SYSTEM_PROMPT_LABOR : MARKET_SYSTEM_PROMPT_MATERIAL,
-        tools: [
-          {
-            type: "web_search_20250305",
-            name: "web_search",
-            max_uses: 2,
-          } as unknown as Anthropic.Messages.Tool,
-        ],
-        messages: [{ role: "user", content: userPrompt }],
-      });
-      return Promise.race([
-        callPromise,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 50_000),
-        ),
-      ]);
-    });
-  } catch (e) {
-    return {
-      source: "none",
-      price: null,
-      unit: null,
-      note: friendlyErrorMessage(e),
-    };
-  }
+  const genAI = getGemini();
+  let lastError: unknown = null;
 
-  // collect text blocks
-  const finalText = response.content
-    .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("\n");
-
-  const parsed = extractJson(finalText);
-  if (!parsed) {
-    return { source: "none", price: null, unit: null, note: "Не вдалося розпарсити відповідь" };
-  }
-  if (parsed.price == null || !Number.isFinite(parsed.price) || parsed.price <= 0) {
-    return {
-      source: "none",
-      price: null,
-      unit: null,
-      note: parsed.reason ?? "Ціну не знайдено",
-    };
+  // Перебір моделей; на кожній — 1 повтор при 429/перевантаженні.
+  for (const modelName of GEMINI_PRICE_MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          systemInstruction: systemPrompt,
+          tools: SEARCH_TOOL,
+          generationConfig: { temperature: 0.2, maxOutputTokens: 800 },
+        });
+        const result = await Promise.race([
+          model.generateContent(userPrompt),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("timeout")), 35_000),
+          ),
+        ]);
+        const parsed = extractJson(result.response.text());
+        if (!parsed) {
+          return {
+            source: "none",
+            price: null,
+            unit: null,
+            note: "Не вдалося розпарсити відповідь",
+          };
+        }
+        if (parsed.price == null || !Number.isFinite(parsed.price) || parsed.price <= 0) {
+          return {
+            source: "none",
+            price: null,
+            unit: null,
+            note: parsed.reason ?? "Ціну не знайдено",
+          };
+        }
+        const conf = typeof parsed.confidence === "number" ? parsed.confidence : null;
+        return {
+          source: "market",
+          price: Number(parsed.price),
+          unit: parsed.unit ?? unit ?? null,
+          sourceUrl: parsed.source_url,
+          sourceTitle: parsed.source_title,
+          sourceDate: parsed.source_date ?? null,
+          query: name,
+          note: conf != null && conf < 0.55 ? "приблизна оцінка" : undefined,
+        };
+      } catch (e) {
+        lastError = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (
+          attempt === 0 &&
+          /429|rate|quota|resource.?exhausted|503|overload|unavailable/i.test(msg)
+        ) {
+          await new Promise((r) => setTimeout(r, 1500 + Math.random() * 1500));
+          continue; // повтор на тій самій моделі
+        }
+        break; // інша помилка — пробуємо наступну модель
+      }
+    }
   }
 
   return {
-    source: "market",
-    price: Number(parsed.price),
-    unit: parsed.unit ?? unit ?? null,
-    sourceUrl: parsed.source_url,
-    sourceTitle: parsed.source_title,
-    sourceDate: parsed.source_date ?? null,
-    query: name,
+    source: "none",
+    price: null,
+    unit: null,
+    note: friendlyErrorMessage(lastError),
   };
 }
 
