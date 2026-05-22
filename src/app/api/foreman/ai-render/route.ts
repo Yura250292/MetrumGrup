@@ -163,10 +163,14 @@ export async function POST(request: NextRequest) {
   }
 
   // Prompt оптимізований для Seedream v4 edit моделі.
+  // Ключове повідомлення: PRESERVE — model має точно відтворити входину
+  // структуру. Дублюємо інструкцію 3 рази у різних формулюваннях для більшої
+  // ваги.
   const prompt = [
-    "Transform this 2D architectural floor plan into a photorealistic 3D axonometric top-down rendered interior view.",
-    "Show the apartment from a slight aerial perspective (top-down with 25-30° tilt), as if walls were cut at 1.5m height — revealing floors, furniture and walls.",
-    "STRICTLY PRESERVE: every wall position, room layout, door and window placements, furniture positions and orientations exactly as in the input plan. Do not move, add or remove anything structural.",
+    "Convert this 2D architectural floor plan image into a photorealistic 3D axonometric top-down interior rendering.",
+    "Camera angle: cabinet/dollhouse view — top-down with 30° tilt, walls visible at 1.5m height showing their thickness, floors and furniture clearly visible.",
+    "ABSOLUTELY CRITICAL — STRUCTURAL FIDELITY: Every wall, room boundary, door position, window position, and piece of furniture in the input plan MUST appear in EXACTLY the same location and orientation in the 3D render. DO NOT rearrange the layout. DO NOT add or remove rooms. DO NOT shift walls. The 3D render must be an exact volumetric reconstruction of the 2D plan.",
+    "Match the input image 1:1 in geometry — only transform the visual style from flat 2D to photorealistic 3D.",
     layoutDescription,
     "RENDERING per room type:",
     "- Kitchen: marble or quartz countertops, stainless steel appliances, tile splashback, wooden cabinets, hanging pendant lights",

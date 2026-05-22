@@ -17,6 +17,10 @@ import { formatMoney, formatNum } from "@/lib/foreman/format";
 import type { FloorPlan, Opening, PricesConfig, WorksConfig } from "./_types";
 import { PlanSvg } from "./_plan-svg";
 import { Collapsible } from "./_collapsible";
+import {
+  acquireWakeLock,
+  installWakeLockResumeHandler,
+} from "@/lib/foreman/wake-lock";
 
 interface Props {
   plan: FloorPlan;
@@ -77,6 +81,9 @@ function areaFor(room: Room, surface: Surface, openings: Opening[]): number {
 
 export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Props) {
   const [exporting, setExporting] = useState<null | "pdf" | "xlsx">(null);
+
+  // Утримуємо екран увімкненим поки шукаються ціни (особливо на iOS PWA)
+  useEffect(() => installWakeLockResumeHandler(), []);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
@@ -212,16 +219,20 @@ export function Results({ plan, works, prices, firmId, onSetPrice, onReset }: Pr
       }
     };
 
+    let releaseLock: (() => Promise<void>) | null = null;
     (async () => {
+      releaseLock = await acquireWakeLock();
       try {
         await Promise.all(chunks.map(fetchChunk));
       } finally {
         if (!aborted) setQuoteLoading(false);
+        if (releaseLock) await releaseLock();
       }
     })();
 
     return () => {
       aborted = true;
+      if (releaseLock) void releaseLock();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uniqueQuoteRequests]);

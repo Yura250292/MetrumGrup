@@ -1,6 +1,10 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  acquireWakeLock,
+  installWakeLockResumeHandler,
+} from "@/lib/foreman/wake-lock";
 
 /** 20 scenario IDs (mirror серверного списку). Клієнт вибирає різний за раз
  *  при кожному "Перегенерувати". */
@@ -79,6 +83,9 @@ export function Visualize({
   );
   const lastScenarioIdRef = useRef<string | null>(null);
 
+  // Resume wake-lock коли документ знову видимий
+  useEffect(() => installWakeLockResumeHandler(), []);
+
   // Photoreal state
   const [photorealLoading, setPhotorealLoading] = useState(false);
   const [photorealError, setPhotorealError] = useState<string | null>(null);
@@ -90,6 +97,7 @@ export function Visualize({
   const handleFurnish = async () => {
     setLoading(true);
     setError(null);
+    const release = await acquireWakeLock();
     try {
       // Обираємо РАНДОМНИЙ сценарій, але уникаємо одразу того самого, що
       // був попереднього разу — щоб користувач бачив варіативність.
@@ -149,6 +157,7 @@ export function Visualize({
       setError(e instanceof Error ? e.message : "Помилка");
     } finally {
       setLoading(false);
+      await release();
     }
   };
 
@@ -163,6 +172,7 @@ export function Visualize({
     setPhotorealLoading(true);
     setPhotorealError(null);
     setPhotoreal(null);
+    const release = await acquireWakeLock();
     try {
       // Знімаємо ЧИСТУ snapshot-версію (без grid сітки) — для fal.ai кращий
       // вхід. Інтерактивна канва (зі сіткою) забивала контраст при PNG.
@@ -285,6 +295,7 @@ export function Visualize({
       );
     } finally {
       setPhotorealLoading(false);
+      await release();
     }
   };
 
