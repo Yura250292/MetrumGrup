@@ -124,8 +124,9 @@ export function SelfContainedTaskDrawer({
     (detail.assignees ?? []).some((a) => a.user?.id === currentUserId);
 
   // ── Edit mode ──
-  // Активується клацанням «Редагувати». У цьому стані title/description/due/
-  // priority/hours стають інпутами; натиск Save → PATCH /api/admin/tasks/[id].
+  // Авто-увімкнено для своїх задач (canEditOrDelete=true): автор/адмін одразу
+  // редагує поля без зайвого кліку «Редагувати». Save bar зʼявляється лише
+  // коли є зміни (isDirty); підтвердження «Зберегти зміни?» при сейві.
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDescription, setEditDescription] = useState("");
@@ -213,6 +214,42 @@ export function SelfContainedTaskDrawer({
     void load();
   }, [load]);
 
+  // Авто-enable edit-режиму для своїх задач після завантаження detail.
+  // Активне поки drawer відкритий; коли користувач закриває drawer без
+  // змін — нічого не зберігається.
+  useEffect(() => {
+    if (!detail || editing) return;
+    if (canEditOrDelete) {
+      startEdit();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.id, canEditOrDelete]);
+
+  // Чи є несейвлені зміни — щоб показувати Save-bar тільки коли є що
+  // зберігати. Порівнюємо edit-state з оригінальним detail.
+  const isDirty = (() => {
+    if (!detail || !editing) return false;
+    if (editTitle.trim() !== detail.title) return true;
+    if ((editDescription || "") !== (detail.description ?? "")) return true;
+    if (editPriority !== detail.priority) return true;
+    // Дедлайн — порівнюємо ISO без секунд
+    const originalIso = detail.dueDate
+      ? new Date(detail.dueDate).toISOString().slice(0, 16)
+      : "";
+    const editIso = editDueDate
+      ? (() => {
+          const [hStr, mStr] = (editDueTime || "18:00").split(":");
+          const d = new Date(editDueDate);
+          d.setHours(Number(hStr) || 18, Number(mStr) || 0, 0, 0);
+          return d.toISOString().slice(0, 16);
+        })()
+      : "";
+    if (originalIso !== editIso) return true;
+    // editHours може відрізнятися від detail (drawerDetail не має поля).
+    // Поки skip — користувач явно бачить число у полі.
+    return false;
+  })();
+
   const rewriteSpec = async () => {
     if (!detail) return;
     if (
@@ -288,8 +325,13 @@ export function SelfContainedTaskDrawer({
     setEditing(true);
   };
 
+  /**
+   * Відкотити несейвлені зміни — заповнити edit-state з оригінального detail.
+   * НЕ вимикає edit mode (він тепер завжди увімкнений для своїх задач).
+   */
   const cancelEdit = () => {
-    setEditing(false);
+    if (!detail) return;
+    startEdit(); // повторне заповнення оригінальними даними з detail
     setEditSaveError(null);
   };
 
@@ -299,6 +341,7 @@ export function SelfContainedTaskDrawer({
       setEditSaveError("Назва не може бути порожньою");
       return;
     }
+    if (!window.confirm("Зберегти зміни?")) return;
     setSaving(true);
     setEditSaveError(null);
     try {
@@ -333,7 +376,8 @@ export function SelfContainedTaskDrawer({
       }
       await load();
       onUpdate();
-      setEditing(false);
+      // Лишаємо edit ON — користувач продовжує редагувати інші поля без
+      // натиску «Редагувати» знову. Save bar просто зникне (isDirty=false).
     } catch (e) {
       setEditSaveError(e instanceof Error ? e.message : "Помилка збереження");
     } finally {
@@ -460,22 +504,7 @@ export function SelfContainedTaskDrawer({
             Задача
           </h2>
           <div className="flex items-center gap-1">
-            {detail && !editing && canEditOrDelete && (
-              <button
-                onClick={startEdit}
-                className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold"
-                style={{
-                  backgroundColor: T.panelElevated,
-                  color: T.accentPrimary,
-                  border: `1px solid ${T.borderSoft}`,
-                }}
-                title="Редагувати поля задачі"
-              >
-                <Pencil size={11} />
-                Редагувати
-              </button>
-            )}
-            {detail && !editing && canEditOrDelete && (
+            {detail && canEditOrDelete && (
                 <button
                   onClick={async () => {
                     if (!confirm(`Видалити задачу «${detail.title}»?`)) return;
@@ -1112,8 +1141,8 @@ export function SelfContainedTaskDrawer({
               </details>
             )}
 
-            {/* Edit Save/Cancel bar — sticky-bottom при редагуванні */}
-            {editing && (
+            {/* Save bar — зʼявляється тільки коли є несейвлені зміни. */}
+            {editing && isDirty && (
               <div
                 className="sticky bottom-0 flex items-center justify-end gap-2 -mx-5 px-5 py-3 mt-1"
                 style={{
@@ -1139,8 +1168,9 @@ export function SelfContainedTaskDrawer({
                     color: T.textPrimary,
                     border: `1px solid ${T.borderSoft}`,
                   }}
+                  title="Повернути до оригінальних значень"
                 >
-                  Скасувати
+                  Відкотити
                 </button>
                 <button
                   type="button"
