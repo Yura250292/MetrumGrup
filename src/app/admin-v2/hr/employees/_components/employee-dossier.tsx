@@ -13,6 +13,7 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
+  FileText,
   KeyRound,
   Link2,
   Link2Off,
@@ -898,12 +899,13 @@ export function EmployeeDossier({
         <SalarySection
           employeeId={id}
           salaries={employee.salaries}
+          payrollPeriods={employee.payrollPeriods}
           canEdit={canEdit}
           onChanged={() => void load()}
         />
       )}
 
-      {canSeeSalary && employee.payrollPeriods.length > 0 && (
+      {canSeeSalary && employee.payrollPeriods.length > 1 && (
         <PayrollPeriodsSection periods={employee.payrollPeriods} />
       )}
       </div>
@@ -1959,17 +1961,21 @@ function SalaryHistorySection({
 }
 
 /**
- * Огортає підсумковий блок (актуальна ЗП — оклад/премія/офіційна частина) +
- * існуючу `SalaryHistorySection`. Показується у вкладці «Зарплата» дос'є.
+ * Дві картки side-by-side за макетом:
+ *   ЗАРПЛАТА — неофіційна частина (НА РУКИ = ОКЛАД + ПРЕМІЯ) з EmployeeSalary.
+ *   ОФІЦІЙНА ЧАСТИНА — з останнього EmployeePayrollPeriod (1С breakdown).
+ * Нижче — `SalaryHistorySection` (історія неофіційних змін).
  */
 function SalarySection({
   employeeId,
   salaries,
+  payrollPeriods,
   canEdit,
   onChanged,
 }: {
   employeeId: string;
   salaries: SalaryPeriod[];
+  payrollPeriods: PayrollPeriod[];
   canEdit: boolean;
   onChanged: () => void;
 }) {
@@ -1988,43 +1994,118 @@ function SalarySection({
     );
   }, [salaries]);
 
+  const latestPayroll = useMemo(() => {
+    if (payrollPeriods.length === 0) return null;
+    return [...payrollPeriods].sort((a, b) => (a.period < b.period ? 1 : -1))[0];
+  }, [payrollPeriods]);
+
   const base = active ? Number(active.baseSalary) : 0;
   const coef = active ? Number(active.coefficient ?? 0) : 0;
-  const official = active && active.officialPart != null ? Number(active.officialPart) : null;
-  const total = base + coef;
+  const onHand = base + coef;
   const currency = active?.currency ?? "UAH";
+
+  const numOrNull = (v: number | string | null | undefined): number | null => {
+    if (v == null) return null;
+    const n = typeof v === "string" ? Number(v) : v;
+    return Number.isFinite(n) ? n : null;
+  };
+  const off = latestPayroll
+    ? {
+        gross: numOrNull(latestPayroll.officialPart),
+        pdfo: numOrNull(latestPayroll.pdfo),
+        vz: numOrNull(latestPayroll.vz),
+        esv: numOrNull(latestPayroll.esv),
+        onCard: numOrNull(latestPayroll.salaryToCard),
+        total: numOrNull(latestPayroll.totalSum),
+      }
+    : null;
 
   return (
     <div className="flex flex-col gap-4">
-      <div
-        className="overflow-hidden rounded-2xl"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
-      >
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* === ЗАРПЛАТА (неофіційна) === */}
         <div
-          className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
-          style={{
-            color: T.textSecondary,
-            backgroundColor: T.panelSoft,
-            borderBottom: `1px solid ${T.borderSoft}`,
-          }}
+          className="overflow-hidden rounded-2xl"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
         >
-          <Wallet size={12} />
-          <span>Зарплата</span>
-          <span className="ml-auto text-[15px] font-bold tabular-nums" style={{ color: T.textPrimary }}>
-            {active ? `${formatCurrency(total)} ${currency}` : "—"}
-          </span>
+          <div
+            className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+            style={{
+              color: T.textSecondary,
+              backgroundColor: T.panelSoft,
+              borderBottom: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            <Wallet size={12} />
+            <span>Зарплата</span>
+          </div>
+          <div className="flex flex-col">
+            <SalaryRow label="На руки" value={active ? `${formatCurrency(onHand)} ₴` : "—"} emphasis />
+            <SalaryRow label="Оклад" value={active ? `${formatCurrency(base)} ₴` : "—"} />
+            <SalaryRow
+              label="Премія"
+              value={active ? (coef === 0 ? "—" : `${formatCurrency(coef)} ₴`) : "—"}
+              tone={coef < 0 ? "danger" : undefined}
+            />
+            {!active && (
+              <div
+                className="px-4 py-2 text-[11px]"
+                style={{ color: T.textMuted, borderTop: `1px solid ${T.borderSoft}` }}
+              >
+                Неофіційна частина ще не задана. Додайте через історію нижче.
+              </div>
+            )}
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 divide-x" style={{ borderColor: T.borderSoft }}>
-          <SalarySummaryCell label="Оклад (на руки)" value={active ? formatCurrency(base) : "—"} />
-          <SalarySummaryCell
-            label="Премія / індексація"
-            value={active ? (coef === 0 ? "—" : formatCurrency(coef)) : "—"}
-            tone={coef < 0 ? "danger" : undefined}
-          />
-          <SalarySummaryCell
-            label="Офіційна частина"
-            value={official != null ? formatCurrency(official) : "—"}
-          />
+
+        {/* === ОФІЦІЙНА ЧАСТИНА (з 1С) === */}
+        <div
+          className="overflow-hidden rounded-2xl"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+        >
+          <div
+            className="flex items-center gap-2 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider"
+            style={{
+              color: T.textSecondary,
+              backgroundColor: T.panelSoft,
+              borderBottom: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            <FileText size={12} />
+            <span>Офіційна частина</span>
+            {latestPayroll && (
+              <span
+                className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-normal tracking-normal"
+                style={{ backgroundColor: T.panelSoft, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
+              >
+                {latestPayroll.period}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col">
+            <SalaryRow label="Оф. зарплата" value={off?.gross != null ? `${formatCurrency(off.gross)} ₴` : "—"} emphasis />
+            <SalaryRow label="ПДФО" value={off?.pdfo != null ? `${formatCurrency(off.pdfo)} ₴` : "—"} muted />
+            <SalaryRow label="ВЗ" value={off?.vz != null ? `${formatCurrency(off.vz)} ₴` : "—"} muted />
+            <SalaryRow label="ЄСВ" value={off?.esv != null ? `${formatCurrency(off.esv)} ₴` : "—"} muted />
+            <SalaryRow label="На карту" value={off?.onCard != null ? `${formatCurrency(off.onCard)} ₴` : "—"} />
+            <SalaryRow label="Оф. разом" value={off?.total != null ? `${formatCurrency(off.total)} ₴` : "—"} emphasis />
+            {!latestPayroll && (
+              <div
+                className="px-4 py-2 text-[11px]"
+                style={{ color: T.textMuted, borderTop: `1px solid ${T.borderSoft}` }}
+              >
+                Немає даних з 1С. Імпортується через штатний розклад + ЗП-файл.
+              </div>
+            )}
+            {latestPayroll?.isVacation && (
+              <div
+                className="px-4 py-2 text-[11px]"
+                style={{ color: T.warning, borderTop: `1px solid ${T.borderSoft}` }}
+              >
+                Період позначений як ВІДПУСТКА — нарахування не виконувалися.
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -2061,6 +2142,54 @@ function SalarySummaryCell({
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Рядок «label: value» у блоках ЗАРПЛАТА / ОФІЦІЙНА ЧАСТИНА.
+ *  - emphasis: великий жирний value (для головних чисел: НА РУКИ, ОФ. ЗАРПЛАТА, ОФ. РАЗОМ)
+ *  - muted: блідіший value (податки ПДФО/ВЗ/ЄСВ)
+ *  - tone="danger": негативна премія
+ */
+function SalaryRow({
+  label,
+  value,
+  emphasis,
+  muted,
+  tone,
+}: {
+  label: string;
+  value: string;
+  emphasis?: boolean;
+  muted?: boolean;
+  tone?: "danger";
+}) {
+  const valueColor =
+    tone === "danger"
+      ? T.danger
+      : muted
+        ? T.textSecondary
+        : T.textPrimary;
+  return (
+    <div
+      className="flex items-baseline justify-between gap-4 px-4 py-2"
+      style={{ borderTop: `1px solid ${T.borderSoft}` }}
+    >
+      <span
+        className="text-[10px] font-bold uppercase tracking-wider"
+        style={{ color: T.textMuted }}
+      >
+        {label}
+      </span>
+      <span
+        className={
+          emphasis ? "text-[18px] font-bold tabular-nums" : "text-[13px] font-semibold tabular-nums"
+        }
+        style={{ color: valueColor }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
