@@ -638,11 +638,12 @@ export function PlanSvg({
           height={layout.vb.h}
           fill="#ffffff"
         />
-        {/* Snapshot: робимо контури меблів жирними й масштабованими — CSS
-            перекриває non-scaling-stroke та тонку px-товщину кожного шейпа
-            одним правилом, без правки 50+ елементів у _furniture-shapes. */}
+        {/* Snapshot: меблі мають читатись як суцільні обʼєкти — інакше
+            Seedream бачить порожні кімнати й домальовує зайве. CSS одним
+            правилом: жирні масштабовані контури + суцільна сіра заливка тіл
+            меблів (прозорі деталі-обведення лишаються контурами). */}
         {snapshot && (
-          <style>{`.snap-furn [stroke]{vector-effect:none;stroke-width:${snapFurnSW};}`}</style>
+          <style>{`.snap-furn [stroke]{vector-effect:none;stroke-width:${snapFurnSW};stroke:#1a1a1a;}.snap-furn [fill]:not([fill="none"]):not([fill="transparent"]){fill:#bdbdbd;}`}</style>
         )}
         <defs>
           {!snapshot && (

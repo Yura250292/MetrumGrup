@@ -31,6 +31,11 @@ interface Props {
   topLeftOverlay?: React.ReactNode;
   /** Бажане співвідношення сторін канви; "auto" → з bbox. */
   aspect?: "auto" | "square" | "4/3" | "2/1";
+  /**
+   * Жорстка висота канви (Tailwind клас, напр. "h-[240px]") — перекриває
+   * aspect. Для компактного прев'ю там, де канва не головний елемент.
+   */
+  heightClass?: string;
   /** Реактивний key — коли план суттєво змінився, view resets. Default: rooms.length. */
   resetKey?: string | number;
 }
@@ -49,6 +54,7 @@ export function InteractivePlanView({
   viewMode = "rooms",
   topLeftOverlay,
   aspect = "auto",
+  heightClass,
   resetKey,
 }: Props) {
   const b = bbox(plan.rooms);
@@ -224,7 +230,7 @@ export function InteractivePlanView({
 
   const innerClass = fullscreen
     ? "rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none flex-1"
-    : `rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none ${aspectClass}`;
+    : `rounded-2xl bg-white border border-zinc-700/40 overflow-hidden touch-none ${heightClass ?? aspectClass}`;
 
   return (
     <div className={wrapperClass}>

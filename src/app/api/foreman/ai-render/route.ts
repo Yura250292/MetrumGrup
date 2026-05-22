@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const userPrompt = parsed.data.prompt?.trim() || "";
+  const userNote = parsed.data.prompt?.trim() || "";
 
   // Той самий промпт і модель, що й у проектній AI-візуалізації:
   // buildPrompt(FLOOR_PLAN_TO_3D) → fal-ai/bytedance/seedream/v4/edit.
@@ -89,6 +89,13 @@ export async function POST(request: NextRequest) {
   // та типи кімнат). За тестами команди (коментар у src/lib/ai-render/index.ts)
   // згодовування Seedream семантики кімнат ЗАПЛУТУЄ модель — вона сама добре
   // читає креслення. Тепер foreman 1:1 повторює проектний пайплайн.
+  //
+  // Підсилення проти найчастішої галюцинації Seedream — поділ однієї великої
+  // кімнати на кілька і вигадування внутрішніх стін. Інструкція йде через
+  // userPrompt (НЕ чіпаємо спільний buildPrompt, від якого залежать проекти).
+  const FIDELITY_NOTE =
+    "CRITICAL: keep the EXACT same number of rooms and walls as in the plan. Do NOT split one room into several. Do NOT add internal walls or partitions. Do NOT merge rooms. One large room must stay one single large room. Render furniture only where it is already drawn — do not invent kitchens, bathrooms or extra rooms.";
+  const userPrompt = [FIDELITY_NOTE, userNote].filter(Boolean).join(" ");
   const { prompt, negativePrompt } = buildPrompt({
     stylePreset: null,
     userPrompt,
