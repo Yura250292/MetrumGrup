@@ -130,11 +130,23 @@ export function Visualize({
         );
       if (!svgEl) throw new Error("Не вдалося знайти SVG плану");
 
-      // Конвертуємо SVG → PNG dataURL
+      // Готуємо SVG для рендера в PNG:
+      //  1) Клонуємо
+      //  2) Виставляємо явні width/height (інакше браузер дає intrinsic
+      //     розмір "6×10" з viewBox у метрах і drawImage все спотворює).
+      //  3) Тримаємо xmlns для коректного XML
+      const vb = svgEl.viewBox.baseVal;
+      const aspect = vb && vb.width > 0 ? vb.height / vb.width : 0.75;
+      const targetW = 1024;
+      const targetH = Math.max(256, Math.min(2048, Math.round(targetW * aspect)));
+
       const cloned = svgEl.cloneNode(true) as SVGSVGElement;
       if (!cloned.getAttribute("xmlns")) {
         cloned.setAttribute("xmlns", "http://www.w3.org/2000/svg");
       }
+      cloned.setAttribute("width", String(targetW));
+      cloned.setAttribute("height", String(targetH));
+
       const serialized = new XMLSerializer().serializeToString(cloned);
       const svgBlob = new Blob([serialized], {
         type: "image/svg+xml;charset=utf-8",
@@ -148,21 +160,30 @@ export function Visualize({
           im.onerror = reject;
           im.src = url;
         });
-        const vb = svgEl.viewBox.baseVal;
-        const aspect =
-          vb && vb.width > 0
-            ? vb.height / vb.width
-            : (svgEl.clientHeight || 600) / (svgEl.clientWidth || 800);
-        const w = 1024;
-        const h = Math.round(w * aspect);
         const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = targetW;
+        canvas.height = targetH;
         const ctx = canvas.getContext("2d");
         if (!ctx) throw new Error("Canvas не доступний");
-        ctx.fillStyle = "#0a0a0a";
-        ctx.fillRect(0, 0, w, h);
-        ctx.drawImage(img, 0, 0, w, h);
+
+        // Білий фон — fal.ai FLOOR_PLAN_TO_3D model тренована на класичних
+        // архітектурних кресленнях (чорні лінії на білому). Наша темна тема
+        // (білі лінії на чорному) спричиняла спотворені результати.
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, targetW, targetH);
+        ctx.drawImage(img, 0, 0, targetW, targetH);
+
+        // Інвертуємо кольори (білий ↔ чорний), щоб AI отримав звичний формат
+        // плану. Зберігаємо альфу, інвертуємо лише RGB.
+        const data = ctx.getImageData(0, 0, targetW, targetH);
+        const px = data.data;
+        for (let i = 0; i < px.length; i += 4) {
+          px[i] = 255 - px[i];
+          px[i + 1] = 255 - px[i + 1];
+          px[i + 2] = 255 - px[i + 2];
+        }
+        ctx.putImageData(data, 0, 0);
+
         const dataUrl = canvas.toDataURL("image/png");
         pngBase64 = dataUrl.replace(/^data:image\/png;base64,/, "");
       } finally {
