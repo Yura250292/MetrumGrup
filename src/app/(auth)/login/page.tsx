@@ -133,14 +133,17 @@ function LoginForm() {
 
             <div>
               <label htmlFor="email" className="mb-2 block text-sm font-semibold text-slate-200">
-                Email
+                Логін або Email
               </label>
               <input
                 id="email"
-                type="email"
+                type="text"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
+                placeholder="логін або your@email.com"
                 required
                 autoFocus
                 className="w-full rounded-xl border border-slate-700 bg-slate-800 px-5 py-3.5 text-base text-white placeholder:text-slate-500 outline-none transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
