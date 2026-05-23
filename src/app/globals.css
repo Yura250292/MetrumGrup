@@ -1,3 +1,4 @@
+@import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap");
 @import "tailwindcss";
 
 /*
@@ -177,6 +178,7 @@
   --font-sans: "Montserrat", system-ui, -apple-system, sans-serif;
   --font-heading: "Space Grotesk", "Montserrat", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", "Menlo", monospace;
+  --font-cinematic: "Cormorant Garamond", "Times New Roman", Georgia, serif;
 
   /* === Admin-v2 token aliases for Tailwind v4 utilities ===
      Maps the `--t-*` CSS vars (defined per-theme on :root / .admin-dark)
@@ -228,6 +230,9 @@
     font-family: var(--font-sans);
     overflow-x: hidden;
     width: 100%;
+    /* Disable Safari trackpad back/forward navigation gesture (2-finger swipe).
+       Otherwise scrolling back during the cinematic triggers browser history. */
+    overscroll-behavior-x: none;
   }
 
   :focus-visible {
@@ -264,6 +269,13 @@
 
   .font-mono {
     font-family: var(--font-mono);
+  }
+
+  .font-cinematic {
+    font-family: var(--font-cinematic);
+    text-transform: none;
+    letter-spacing: -0.015em;
+    font-feature-settings: "ss01" 1, "liga" 1, "dlig" 1;
   }
 
   .glass {

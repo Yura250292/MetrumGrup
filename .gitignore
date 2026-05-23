@@ -19,6 +19,10 @@
 .DS_Store
 *.pem
 
+# Large cinematic video masters — served from Cloudflare R2 in prod.
+# Keep locally for offline dev fallback, but don't ship them in git.
+/public/videos/*.mp4
+
 # debug
 npm-debug.log*
 yarn-debug.log*
