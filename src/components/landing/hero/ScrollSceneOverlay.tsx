@@ -36,7 +36,26 @@ export function ScrollSceneOverlay({
         transition: "filter 220ms linear",
       }}
     >
-      <div className="mx-auto w-full max-w-[1320px] px-6 sm:px-10 lg:px-14 pb-24 md:pb-0 grid grid-cols-12 gap-6 md:gap-12 items-end md:items-center">
+      {/* Left-anchored scrim — keeps editorial text legible on bright frames
+          (e.g. office, lobby) without darkening the whole frame. */}
+      <div
+        aria-hidden
+        className="absolute inset-y-0 left-0 w-full md:w-[68%] pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(8,8,8,0.78) 0%, rgba(8,8,8,0.62) 32%, rgba(8,8,8,0.32) 62%, rgba(8,8,8,0) 100%)",
+        }}
+      />
+      {/* Bottom scrim for mobile (text stacks at bottom) */}
+      <div
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-[58%] md:hidden pointer-events-none"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(8,8,8,0) 0%, rgba(8,8,8,0.45) 40%, rgba(8,8,8,0.85) 100%)",
+        }}
+      />
+      <div className="relative mx-auto w-full max-w-[1320px] px-6 sm:px-10 lg:px-14 pb-24 md:pb-0 grid grid-cols-12 gap-6 md:gap-12 items-end md:items-center">
         {/* ───── Editorial column ───── */}
         <div className="col-span-12 md:col-span-7 max-w-[760px]">
           {/* Eyebrow + amber accent line */}

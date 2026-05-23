@@ -37,7 +37,7 @@ type Props = {
 const WHEEL_SENSITIVITY = 0.00045; // deltaY pixels → fraction of full video
 const TOUCH_SENSITIVITY = 0.0018; // touch deltaY → fraction of full video
 
-const DEBUG_HUD = true;
+const DEBUG_HUD = false;
 
 // Served from Cloudflare R2 — long-cache immutable, range requests supported.
 const R2_BASE = "https://pub-5a3b46357b004b00a737ee06f5ca9ad2.r2.dev/cinematic/v2";
@@ -207,8 +207,18 @@ export default function ScrollVideoHero({
     };
 
     let touchY = 0;
+    let userActivated = false;
     const onTouchStart = (e: TouchEvent) => {
       touchY = e.touches[0].clientY;
+      // First touch: poke the video so iOS Safari finally streams real bytes.
+      // Without a user gesture, iOS often shows only the poster.
+      if (!userActivated) {
+        userActivated = true;
+        const v = videoRef.current;
+        if (v) {
+          v.play().then(() => v.pause()).catch(() => {});
+        }
+      }
     };
     const onTouchMove = (e: TouchEvent) => {
       if (!isCinematicActive()) return;
@@ -370,6 +380,7 @@ export default function ScrollVideoHero({
           poster={posterSrc}
           muted
           playsInline
+          autoPlay
           preload="auto"
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           {...({ "webkit-playsinline": "true", "x-webkit-airplay": "deny" } as any)}
