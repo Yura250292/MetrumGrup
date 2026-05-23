@@ -68,6 +68,10 @@ export default function ScrollVideoHero({
   const [activeLabel, setActiveLabel] = useState(SCENES[0].eyebrow);
   // When true: wheel hijack released, page scrolls normally.
   const [unlocked, setUnlocked] = useState(false);
+  // When true: enough of the video is buffered for smooth scrub.
+  const [videoReady, setVideoReady] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0); // 0..1
+  const videoReadyRef = useRef(false);
 
   const isMobileViewport = useMediaQuery("(max-width: 768px)");
   const reducedMotion = useReducedMotion();
@@ -184,6 +188,9 @@ export default function ScrollVideoHero({
     };
 
     const advance = (deltaProgress: number) => {
+      // Block scrub until the video is buffered enough that seeks won't stall.
+      // We still preventDefault on wheel/touch so the page doesn't drift.
+      if (!videoReadyRef.current) return;
       const next = Math.min(1, Math.max(0, virtualProgressRef.current + deltaProgress));
       virtualProgressRef.current = next;
       scheduleRef.current();
@@ -309,10 +316,41 @@ export default function ScrollVideoHero({
       v.play().then(() => v.pause()).catch(() => {});
     };
 
+    // Track how much of the video is buffered. Only enable scrub once the
+    // whole thing is downloaded — otherwise each new seek triggers a slow
+    // range request and scrubbing feels glitchy.
+    const updateBuffered = () => {
+      const dur = durationRef.current;
+      if (!dur || dur <= 0) return;
+      let bufferedEnd = 0;
+      for (let i = 0; i < v.buffered.length; i++) {
+        const end = v.buffered.end(i);
+        if (end > bufferedEnd) bufferedEnd = end;
+      }
+      const ratio = Math.min(1, bufferedEnd / dur);
+      setLoadProgress(ratio);
+      // Threshold: 92% buffered is enough. canplaythrough is a stronger signal
+      // when fired, but iOS Safari sometimes never fires it for large files.
+      if (ratio >= 0.92 && !videoReadyRef.current) {
+        videoReadyRef.current = true;
+        setVideoReady(true);
+      }
+    };
+
+    const onCanPlayThrough = () => {
+      if (!videoReadyRef.current) {
+        videoReadyRef.current = true;
+        setVideoReady(true);
+        setLoadProgress(1);
+      }
+    };
+
     v.addEventListener("loadedmetadata", captureDuration);
     v.addEventListener("durationchange", captureDuration);
     v.addEventListener("loadeddata", captureDuration);
     v.addEventListener("canplay", onCanPlay);
+    v.addEventListener("progress", updateBuffered);
+    v.addEventListener("canplaythrough", onCanPlayThrough);
 
     // Immediate attempt in case events already fired before this effect ran.
     captureDuration();
@@ -333,6 +371,8 @@ export default function ScrollVideoHero({
       v.removeEventListener("durationchange", captureDuration);
       v.removeEventListener("loadeddata", captureDuration);
       v.removeEventListener("canplay", onCanPlay);
+      v.removeEventListener("progress", updateBuffered);
+      v.removeEventListener("canplaythrough", onCanPlayThrough);
       clearInterval(poll);
     };
   }, [mounted, reducedMotion, videoSrc]);
@@ -440,6 +480,53 @@ export default function ScrollVideoHero({
           {unlocked ? "↓ скрол для продовження" : "Скрол ↓ керує камерою"}
         </p>
       </div>
+
+      {/* Loading overlay — visible while the video is still streaming in.
+          Once buffered enough (>=92%), it fades out and the scrub unlocks. */}
+      {!videoReady && (
+        <div
+          aria-live="polite"
+          className="pointer-events-none absolute inset-0 z-40 flex items-end justify-center pb-28 sm:pb-36"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(10,10,10,0.5) 0%, rgba(10,10,10,0.25) 50%, rgba(10,10,10,0.7) 100%)",
+            transition: "opacity 600ms ease",
+          }}
+        >
+          <div className="flex flex-col items-center gap-4">
+            <p
+              className="font-mono text-[10px] sm:text-[11px] uppercase"
+              style={{
+                letterSpacing: "0.38em",
+                color: "rgba(255,217,176,0.85)",
+              }}
+            >
+              Завантаження кінотуру
+            </p>
+            <div className="relative h-px w-48 sm:w-64 overflow-hidden bg-white/10">
+              <div
+                className="absolute left-0 top-0 h-full origin-left"
+                style={{
+                  transform: `scaleX(${loadProgress})`,
+                  background:
+                    "linear-gradient(90deg, #FFB070 0%, #FF8400 100%)",
+                  transition: "transform 250ms ease",
+                  width: "100%",
+                }}
+              />
+            </div>
+            <p
+              className="font-mono text-[10px] uppercase"
+              style={{
+                letterSpacing: "0.32em",
+                color: "rgba(255,255,255,0.45)",
+              }}
+            >
+              {Math.round(loadProgress * 100)}%
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* DEBUG HUD */}
       {DEBUG_HUD && (
