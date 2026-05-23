@@ -40,11 +40,11 @@ const WHEEL_SENSITIVITY = 0.00045; // deltaY pixels → fraction of full video
 // of phone size. 0.38 ≈ ~2.5 swipes to traverse the whole cinematic.
 const TOUCH_FULL_SWIPE_FRACTION = 0.38;
 
-// Touch-release momentum: after the user lifts the finger, the video slowly
-// auto-advances in the last swipe direction until they touch again (or it
-// reaches a boundary). Lower = slower, more cinematic. 50 = full traversal
-// in 50 seconds at 60 fps.
-const MOMENTUM_TRAVERSAL_SECONDS = 50;
+// Touch-release momentum: after the user lifts the finger, the video keeps
+// drifting in the last swipe direction until they touch again (or it reaches
+// a boundary). Lower = faster. 28s ≈ slightly faster than natural 33.6s
+// playback — feels like the cinematic is gently "playing itself".
+const MOMENTUM_TRAVERSAL_SECONDS = 28;
 
 const DEBUG_HUD = false;
 
