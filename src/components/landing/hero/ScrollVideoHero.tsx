@@ -241,6 +241,8 @@ export default function ScrollVideoHero({
       }
     };
 
+    let lastWheelDir: 1 | -1 = 1;
+    let wheelStopTimeout: ReturnType<typeof setTimeout> | null = null;
     const onWheel = (e: WheelEvent) => {
       if (!isCinematicActive()) return;
       const goingForward = e.deltaY > 0;
@@ -251,7 +253,22 @@ export default function ScrollVideoHero({
       if (goingForward && p >= 0.999) return;
       if (!goingForward && p <= 0.001) return;
       e.preventDefault();
+      if (e.deltaY !== 0) lastWheelDir = goingForward ? 1 : -1;
+      // Fresh input cancels any drifting momentum — user takes control back.
+      momentumRef.current.active = false;
       advance(e.deltaY * WHEEL_SENSITIVITY);
+      // Debounce: if no wheel arrives for 150ms, treat as gesture-end and
+      // start the same drift the touch flow has.
+      if (wheelStopTimeout) clearTimeout(wheelStopTimeout);
+      wheelStopTimeout = setTimeout(() => {
+        if (!isCinematicActive() || !videoReadyRef.current) return;
+        const cur = virtualProgressRef.current;
+        if (lastWheelDir > 0 && cur >= 0.999) return;
+        if (lastWheelDir < 0 && cur <= 0.001) return;
+        momentumRef.current.active = true;
+        momentumRef.current.dir = lastWheelDir;
+        scheduleRef.current();
+      }, 150);
     };
 
     let touchY = 0;
@@ -332,6 +349,7 @@ export default function ScrollVideoHero({
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("touchcancel", onTouchEnd);
       window.removeEventListener("keydown", onKey);
+      if (wheelStopTimeout) clearTimeout(wheelStopTimeout);
     };
   }, [mounted, reducedMotion]);
 
