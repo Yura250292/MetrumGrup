@@ -35,7 +35,10 @@ type Props = {
 
 // How sensitive scrubbing is to wheel + touch input.
 const WHEEL_SENSITIVITY = 0.00045; // deltaY pixels → fraction of full video
-const TOUCH_SENSITIVITY = 0.0018; // touch deltaY → fraction of full video
+// Touch scrub is normalised against viewport height at runtime so that one
+// full-screen swipe scrubs ~TOUCH_FULL_SWIPE_FRACTION of the video, regardless
+// of phone size. 0.55 ≈ 2 swipes to traverse the whole cinematic.
+const TOUCH_FULL_SWIPE_FRACTION = 0.55;
 
 const DEBUG_HUD = false;
 
@@ -236,7 +239,9 @@ export default function ScrollVideoHero({
       if (delta > 0 && p >= 0.999) return;
       if (delta < 0 && p <= 0.001) return;
       e.preventDefault();
-      advance(delta * TOUCH_SENSITIVITY);
+      // Normalise against viewport height so sensitivity is device-independent.
+      const vh = window.innerHeight || 800;
+      advance((delta / vh) * TOUCH_FULL_SWIPE_FRACTION);
     };
 
     const onKey = (e: KeyboardEvent) => {
