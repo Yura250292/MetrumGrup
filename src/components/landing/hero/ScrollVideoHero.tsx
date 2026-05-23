@@ -37,8 +37,14 @@ type Props = {
 const WHEEL_SENSITIVITY = 0.00045; // deltaY pixels → fraction of full video
 // Touch scrub is normalised against viewport height at runtime so that one
 // full-screen swipe scrubs ~TOUCH_FULL_SWIPE_FRACTION of the video, regardless
-// of phone size. 0.55 ≈ 2 swipes to traverse the whole cinematic.
-const TOUCH_FULL_SWIPE_FRACTION = 0.55;
+// of phone size. 0.38 ≈ ~2.5 swipes to traverse the whole cinematic.
+const TOUCH_FULL_SWIPE_FRACTION = 0.38;
+
+// Touch-release momentum: after the user lifts the finger, the video slowly
+// auto-advances in the last swipe direction until they touch again (or it
+// reaches a boundary). Lower = slower, more cinematic. 50 = full traversal
+// in 50 seconds at 60 fps.
+const MOMENTUM_TRAVERSAL_SECONDS = 50;
 
 const DEBUG_HUD = false;
 
@@ -63,6 +69,11 @@ export default function ScrollVideoHero({
   const durationRef = useRef(0);
   const lastSeekRef = useRef(-1);
   const lastActiveSceneRef = useRef(-1);
+  // Touch-release momentum: keeps the video drifting after the finger lifts.
+  const momentumRef = useRef<{ active: boolean; dir: 1 | -1 }>({
+    active: false,
+    dir: 1,
+  });
   const tickCountRef = useRef(0);
 
   const [mounted, setMounted] = useState(false);
@@ -91,6 +102,26 @@ export default function ScrollVideoHero({
   // Single rAF tick that applies virtualProgress to video + overlays.
   const tick = useCallback(() => {
     rafRef.current = null;
+
+    // Momentum: if the user released their finger mid-cinematic, slowly drift
+    // in the last swipe direction. Runs ~60fps, so divide the per-second
+    // increment by 60 to get the per-frame step.
+    const mo = momentumRef.current;
+    if (mo.active && videoReadyRef.current) {
+      const perFrame = 1 / (MOMENTUM_TRAVERSAL_SECONDS * 60);
+      const next = virtualProgressRef.current + perFrame * mo.dir;
+      if (next >= 1) {
+        virtualProgressRef.current = 1;
+        mo.active = false;
+        setUnlocked((prev) => (prev ? prev : true));
+      } else if (next <= 0) {
+        virtualProgressRef.current = 0;
+        mo.active = false;
+      } else {
+        virtualProgressRef.current = next;
+      }
+    }
+
     const p = virtualProgressRef.current;
     const video = videoRef.current;
 
@@ -160,6 +191,13 @@ export default function ScrollVideoHero({
         `ticks ${tickCountRef.current}  •  ` +
         `${unlocked ? "UNLOCKED" : "LOCKED"}`;
     }
+
+    // 6. Self-schedule next frame if momentum is still drifting.
+    if (momentumRef.current.active) {
+      if (rafRef.current == null) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    }
   }, [unlocked]);
 
   const schedule = useCallback(() => {
@@ -217,9 +255,12 @@ export default function ScrollVideoHero({
     };
 
     let touchY = 0;
+    let lastTouchDir: 1 | -1 = 1;
     let userActivated = false;
     const onTouchStart = (e: TouchEvent) => {
       touchY = e.touches[0].clientY;
+      // Touching cancels any drifting momentum — user takes back control.
+      momentumRef.current.active = false;
       // First touch: poke the video so iOS Safari finally streams real bytes.
       // Without a user gesture, iOS often shows only the poster.
       if (!userActivated) {
@@ -235,6 +276,7 @@ export default function ScrollVideoHero({
       const y = e.touches[0].clientY;
       const delta = touchY - y; // positive = swipe up = scrub forward
       touchY = y;
+      if (delta !== 0) lastTouchDir = delta > 0 ? 1 : -1;
       const p = virtualProgressRef.current;
       if (delta > 0 && p >= 0.999) return;
       if (delta < 0 && p <= 0.001) return;
@@ -242,6 +284,18 @@ export default function ScrollVideoHero({
       // Normalise against viewport height so sensitivity is device-independent.
       const vh = window.innerHeight || 800;
       advance((delta / vh) * TOUCH_FULL_SWIPE_FRACTION);
+    };
+    const onTouchEnd = () => {
+      // Continue drifting in the last swipe direction until the user touches
+      // again or we hit a boundary. Only kick in if the cinematic is still in
+      // view and the video is buffered enough to scrub smoothly.
+      if (!isCinematicActive() || !videoReadyRef.current) return;
+      const p = virtualProgressRef.current;
+      if (lastTouchDir > 0 && p >= 0.999) return;
+      if (lastTouchDir < 0 && p <= 0.001) return;
+      momentumRef.current.active = true;
+      momentumRef.current.dir = lastTouchDir;
+      scheduleRef.current();
     };
 
     const onKey = (e: KeyboardEvent) => {
@@ -265,6 +319,8 @@ export default function ScrollVideoHero({
     window.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("touchstart", onTouchStart, { passive: false });
     window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", onTouchEnd, { passive: true });
     window.addEventListener("keydown", onKey);
 
     schedule();
@@ -273,6 +329,8 @@ export default function ScrollVideoHero({
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
       window.removeEventListener("keydown", onKey);
     };
   }, [mounted, reducedMotion]);
