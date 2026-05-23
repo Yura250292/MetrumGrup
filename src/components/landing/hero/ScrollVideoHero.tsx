@@ -481,49 +481,65 @@ export default function ScrollVideoHero({
         </p>
       </div>
 
-      {/* Loading overlay — visible while the video is still streaming in.
-          Once buffered enough (>=92%), it fades out and the scrub unlocks. */}
+      {/* Intro overlay — cinematic 3-beat reveal while the video buffers.
+          Each line fades in sequentially over the first 3 seconds. Once the
+          video is sufficiently buffered, the whole overlay fades out. */}
       {!videoReady && (
         <div
           aria-live="polite"
-          className="pointer-events-none absolute inset-0 z-40 flex items-end justify-center pb-28 sm:pb-36"
+          className="cinematic-intro pointer-events-none absolute inset-0 z-40 flex items-center justify-center"
           style={{
             background:
-              "linear-gradient(180deg, rgba(10,10,10,0.5) 0%, rgba(10,10,10,0.25) 50%, rgba(10,10,10,0.7) 100%)",
-            transition: "opacity 600ms ease",
+              "linear-gradient(180deg, rgba(10,10,10,0.55) 0%, rgba(10,10,10,0.30) 50%, rgba(10,10,10,0.75) 100%)",
           }}
         >
-          <div className="flex flex-col items-center gap-4">
-            <p
-              className="font-mono text-[10px] sm:text-[11px] uppercase"
-              style={{
-                letterSpacing: "0.38em",
-                color: "rgba(255,217,176,0.85)",
-              }}
-            >
-              Завантаження кінотуру
-            </p>
-            <div className="relative h-px w-48 sm:w-64 overflow-hidden bg-white/10">
-              <div
-                className="absolute left-0 top-0 h-full origin-left"
+          <div className="flex flex-col items-center gap-6 text-center px-6">
+            {["This is 3D.", "Just scroll.", "Enjoy."].map((line, i) => (
+              <p
+                key={line}
+                className="font-cinematic cinematic-intro-line"
                 style={{
-                  transform: `scaleX(${loadProgress})`,
+                  fontSize: "clamp(2rem, 5vw, 4.5rem)",
+                  fontWeight: 300,
+                  lineHeight: 1,
+                  letterSpacing: "-0.02em",
                   background:
-                    "linear-gradient(90deg, #FFB070 0%, #FF8400 100%)",
-                  transition: "transform 250ms ease",
-                  width: "100%",
+                    "linear-gradient(180deg, #F5E6CE 0%, #EFD7B5 60%, #E2C39A 100%)",
+                  WebkitBackgroundClip: "text",
+                  backgroundClip: "text",
+                  color: "transparent",
+                  textShadow: "0 24px 60px rgba(0,0,0,0.55)",
+                  animationDelay: `${i * 0.9}s`,
                 }}
-              />
+              >
+                {line}
+              </p>
+            ))}
+
+            {/* Subtle progress bar — anchored well below the headlines */}
+            <div className="mt-10 flex flex-col items-center gap-3 opacity-80">
+              <div className="relative h-px w-40 sm:w-56 overflow-hidden bg-white/10">
+                <div
+                  className="absolute left-0 top-0 h-full origin-left"
+                  style={{
+                    transform: `scaleX(${loadProgress})`,
+                    background:
+                      "linear-gradient(90deg, #FFB070 0%, #FF8400 100%)",
+                    transition: "transform 250ms ease",
+                    width: "100%",
+                  }}
+                />
+              </div>
+              <p
+                className="font-mono text-[9px] uppercase"
+                style={{
+                  letterSpacing: "0.34em",
+                  color: "rgba(255,255,255,0.35)",
+                }}
+              >
+                {Math.round(loadProgress * 100)}%
+              </p>
             </div>
-            <p
-              className="font-mono text-[10px] uppercase"
-              style={{
-                letterSpacing: "0.32em",
-                color: "rgba(255,255,255,0.45)",
-              }}
-            >
-              {Math.round(loadProgress * 100)}%
-            </p>
           </div>
         </div>
       )}

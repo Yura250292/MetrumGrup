@@ -574,6 +574,34 @@
 
 /* === ANIMATIONS === */
 
+/* Cinematic intro lines — soft rise + fade in. The container also fades the
+   whole overlay out gracefully when JS removes the .cinematic-intro element. */
+@keyframes cinematicIntroLineIn {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+    filter: blur(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.cinematic-intro {
+  animation: cinematicIntroFadeIn 600ms ease-out both;
+}
+@keyframes cinematicIntroFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.cinematic-intro-line {
+  opacity: 0;
+  animation: cinematicIntroLineIn 1100ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
 @keyframes fadeUp {
   from {
     opacity: 0;
