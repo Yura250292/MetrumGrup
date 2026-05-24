@@ -439,7 +439,9 @@ export function NewTaskModal({
   };
 
   const hasSpec = !!specJson;
-  const modalWidth = hasSpec ? "max-w-5xl" : "max-w-lg";
+  // Modal wider за дефолтом — у задачах часто длинні описи (з протоколів,
+  // переписок). max-w-2xl ≈ 672px, у 1.6× ширше за попередній max-w-lg.
+  const modalWidth = hasSpec ? "max-w-5xl" : "max-w-2xl";
 
   return (
     <div
@@ -482,52 +484,77 @@ export function NewTaskModal({
               />
             </RequiredField>
 
-            {/* ── Description (optional) ── інколи заголовку достатньо */}
+            {/* ── Description (optional) ── інколи заголовку достатньо.
+                Підтримує Markdown — користувачі часто вставляють текст з
+                AI-протоколів нарад, де є # заголовки, * списки тощо.
+                Toggle Текст / Перегляд щоб бачити як виглядатиме. */}
             <Field label="Короткий опис (необовʼязково)">
               <div className="flex flex-col gap-1.5">
-                <div className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setDescMode("edit")}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase"
-                    style={{
-                      backgroundColor:
-                        descMode === "edit" ? T.accentPrimary : T.panelElevated,
-                      color: descMode === "edit" ? "#fff" : T.textMuted,
-                    }}
+                <div className="flex items-center justify-between gap-2">
+                  <span
+                    className="text-[10px]"
+                    style={{ color: T.textMuted }}
                   >
-                    <Pencil size={10} /> Текст
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDescMode("preview")}
-                    disabled={!description.trim()}
-                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase disabled:opacity-40"
-                    style={{
-                      backgroundColor:
-                        descMode === "preview" ? T.accentPrimary : T.panelElevated,
-                      color: descMode === "preview" ? "#fff" : T.textMuted,
-                    }}
-                  >
-                    <Eye size={10} /> Перегляд
-                  </button>
+                    Підтримує markdown (#, **, списки)
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setDescMode("edit")}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase"
+                      style={{
+                        backgroundColor:
+                          descMode === "edit" ? T.accentPrimary : T.panelElevated,
+                        color: descMode === "edit" ? "#fff" : T.textMuted,
+                      }}
+                    >
+                      <Pencil size={10} /> Текст
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDescMode("preview")}
+                      disabled={!description.trim()}
+                      className="flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase disabled:opacity-40"
+                      style={{
+                        backgroundColor:
+                          descMode === "preview" ? T.accentPrimary : T.panelElevated,
+                        color: descMode === "preview" ? "#fff" : T.textMuted,
+                      }}
+                    >
+                      <Eye size={10} /> Перегляд
+                    </button>
+                  </div>
                 </div>
                 {descMode === "edit" ? (
                   <textarea
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    rows={hasSpec ? 12 : 3}
-                    placeholder="Що саме треба зробити?"
+                    onPaste={(e) => {
+                      // Якщо вставили markdown-структурований текст (заголовки,
+                      // списки) — автоматично перемикаємо на Перегляд щоб
+                      // користувач одразу побачив що # рендериться.
+                      const pasted = e.clipboardData?.getData("text") ?? "";
+                      if (/^#{1,6}\s|^\*\s|^-\s|^\d+\.\s/m.test(pasted)) {
+                        // Відстрочуємо setDescription уже обробив paste
+                        setTimeout(() => setDescMode("preview"), 0);
+                      }
+                    }}
+                    rows={hasSpec ? 14 : 8}
+                    placeholder={`Що саме треба зробити?\n\nМожна вставляти текст з протоколу наради — markdown (## заголовки, - списки) рендериться.`}
                     className="rounded-lg px-3 py-2 text-sm outline-none font-mono"
-                    style={{ ...inputStyle, minHeight: hasSpec ? 280 : 90 }}
+                    style={{
+                      ...inputStyle,
+                      minHeight: hasSpec ? 320 : 220,
+                      maxHeight: "50vh",
+                    }}
                   />
                 ) : (
                   <div
                     className="rounded-lg px-3 py-2 text-sm overflow-y-auto prose prose-invert prose-sm max-w-none"
                     style={{
                       ...inputStyle,
-                      minHeight: hasSpec ? 280 : 90,
-                      maxHeight: 400,
+                      minHeight: hasSpec ? 320 : 220,
+                      maxHeight: "50vh",
                       color: T.textPrimary,
                     }}
                   >
