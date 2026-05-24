@@ -37,7 +37,11 @@ export default async function AdminV2ProjectsDashboardPage() {
 
   const [projects, managers] = await Promise.all([
     prisma.project.findMany({
-      where: firmWhereForProject(firmId),
+      where: {
+        // Personal Inbox bakets ховаємо — це не справжні проєкти.
+        personalInboxUserId: null,
+        ...firmWhereForProject(firmId),
+      },
       include: {
         client: { select: { id: true, name: true } },
         clientCounterparty: { select: { id: true, name: true } },

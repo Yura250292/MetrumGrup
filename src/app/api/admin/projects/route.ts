@@ -37,10 +37,13 @@ export async function GET(request: NextRequest) {
       return forbiddenResponse();
     }
     const projects = await prisma.project.findMany({
-      // Hide auto-generated AI-estimate scratch projects from the picker.
+      // Hide:
+      //  - AI-estimate scratch projects (slug temp-*)
+      //  - Personal Inbox bakets (приватні бакети без проєкту)
       // Scoped by firm: studio managers see only their firm's projects.
       where: {
         slug: { not: { startsWith: "temp-" } },
+        personalInboxUserId: null,
         ...firmWhereForProject(firmId),
       },
       orderBy: { createdAt: "desc" },

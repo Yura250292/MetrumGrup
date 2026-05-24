@@ -5,6 +5,7 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { addProjectMember, deactivateMember } from "@/lib/projects/members-service";
 import { notifyProjectMembers } from "@/lib/notifications/create";
+import { getOrCreatePersonalInbox } from "@/lib/tasks/personal-inbox";
 import {
   updateProjectMirror,
   syncProjectBudgetEntry,
@@ -268,10 +269,41 @@ export async function DELETE(
   try {
     const existing = await prisma.project.findUnique({
       where: { id },
-      select: { id: true, title: true },
+      select: { id: true, title: true, personalInboxUserId: true },
     });
     if (!existing) {
       return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
+    }
+
+    // ── Rescue tasks: переносимо у Personal Inbox автора, щоб видалення
+    //    проєкту НЕ знищувало задачі. Тільки якщо це не сам Inbox.
+    const tasksToRescue = existing.personalInboxUserId
+      ? []
+      : await prisma.task.findMany({
+          where: { projectId: id },
+          select: { id: true, createdById: true },
+        });
+
+    // Створюємо Inbox для кожного унікального автора (idempotent).
+    const inboxByUser = new Map<
+      string,
+      { projectId: string; defaultStageId: string; defaultStatusId: string }
+    >();
+    for (const t of tasksToRescue) {
+      if (inboxByUser.has(t.createdById)) continue;
+      const inbox = await getOrCreatePersonalInbox(t.createdById);
+      // Знаходимо default-статус створеного Inbox'а — потрібен для оновлення
+      // task.statusId (старий статус належав проєкту і буде каскадно видалений).
+      const defaultStatus = await prisma.taskStatus.findFirst({
+        where: { projectId: inbox.projectId, isDefault: true },
+        select: { id: true },
+      });
+      if (!defaultStatus) continue;
+      inboxByUser.set(t.createdById, {
+        projectId: inbox.projectId,
+        defaultStageId: inbox.defaultStageId,
+        defaultStatusId: defaultStatus.id,
+      });
     }
 
     // Phase 3+: видалення проєкту = повне очищення всіх його даних.
@@ -306,8 +338,29 @@ export async function DELETE(
       });
       await tx.$executeRaw`UPDATE "audit_logs" SET "projectId" = NULL WHERE "projectId" = ${id}`;
 
+      // 3.5. Переносимо задачі у Inbox авторів — щоб видалення проєкту
+      //      не знищило їх. Status/Stage перепризначаємо на default
+      //      Inbox'а (старі — каскадно зникнуть з проєктом).
+      for (const t of tasksToRescue) {
+        const target = inboxByUser.get(t.createdById);
+        if (!target) continue;
+        await tx.task.update({
+          where: { id: t.id },
+          data: {
+            projectId: target.projectId,
+            stageId: target.defaultStageId,
+            statusId: target.defaultStatusId,
+          },
+        });
+      }
+      // TaskLabelAssignment ↔ TaskLabel (project-scoped) — каскад через
+      // TaskLabel.delete (cascade from Project). Custom field JSON на Task
+      // лишається але посилається на видалені визначення — UI просто
+      // не покаже їх. Прийнятна втрата метаданих.
+
       // 4. project.delete каскадно зносить решту: stages, estimates, payments,
-      //    members, tasks, conversations, files, KB2/3, etc.
+      //    members, conversations, files, KB2/3, etc.
+      //    Tasks вже перенесені вище, тому НЕ зникнуть.
       await tx.project.delete({ where: { id } });
     });
 

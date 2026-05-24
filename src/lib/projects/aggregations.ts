@@ -62,10 +62,15 @@ export async function listProjectsWithAggregations(
     },
   };
 
-  // Hide auto-generated AI-estimate scratch projects (slug `temp-…`) from
-  // every listing — they are an implementation detail of the chunked
-  // generation flow and should never appear as user-facing projects.
-  const where: Record<string, unknown> = { slug: { not: { startsWith: "temp-" } } };
+  // Hide:
+  //  - AI-estimate scratch projects (slug `temp-…`) — implementation detail
+  //    of chunked generation flow, never user-facing.
+  //  - Personal Inbox bakets — приватні баkети для standalone-задач, не
+  //    «справжні» проєкти; не мають бути у переліку.
+  const where: Record<string, unknown> = {
+    slug: { not: { startsWith: "temp-" } },
+    personalInboxUserId: null,
+  };
   if (opts?.folderId !== undefined) {
     where.folderId = opts.folderId;
   }
