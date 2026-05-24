@@ -19,6 +19,8 @@ import {
   Check,
   X,
   Calendar,
+  Clock,
+  MoreHorizontal,
 } from "lucide-react";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -369,252 +371,31 @@ export default function MeetingDetailPage() {
         <ArrowLeft size={14} /> До списку нарад
       </Link>
 
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="flex-1">
-          <h1
-            className="flex items-center gap-2 text-2xl font-bold"
-            style={{ color: T.textPrimary }}
-          >
-            {isTextMeeting ? (
-              <FileText size={22} style={{ color: T.accentPrimary }} />
-            ) : (
-              <Mic size={22} style={{ color: T.accentPrimary }} />
-            )}
-            {editingTitle ? (
-              <span className="flex flex-1 items-center gap-2">
-                <input
-                  type="text"
-                  value={titleDraft}
-                  onChange={(e) => setTitleDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveTitle();
-                    if (e.key === "Escape") setEditingTitle(false);
-                  }}
-                  autoFocus
-                  disabled={savingTitle}
-                  className="min-w-0 flex-1 rounded-lg px-3 py-1.5 text-2xl font-bold outline-none"
-                  style={{
-                    background: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                />
-                <button
-                  onClick={saveTitle}
-                  disabled={savingTitle}
-                  className="rounded-lg p-2"
-                  style={{ background: T.successSoft, color: T.success }}
-                  title="Зберегти"
-                >
-                  {savingTitle ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                </button>
-                <button
-                  onClick={() => setEditingTitle(false)}
-                  disabled={savingTitle}
-                  className="rounded-lg p-2"
-                  style={{ background: T.panelElevated, color: T.textSecondary }}
-                  title="Скасувати"
-                >
-                  <X size={16} />
-                </button>
-              </span>
-            ) : (
-              <button
-                onClick={startEditTitle}
-                className="group flex flex-1 items-center gap-2 rounded-lg px-2 -mx-2 py-1 text-left hover:bg-[var(--t-panel-el)]"
-                style={{ color: T.textPrimary }}
-                title="Натисніть, щоб перейменувати"
-              >
-                <span className="flex-1">{meeting.title}</span>
-                <Pencil
-                  size={14}
-                  className="opacity-0 transition-opacity group-hover:opacity-100"
-                  style={{ color: T.textMuted }}
-                />
-              </button>
-            )}
-          </h1>
-          <div
-            className="mt-1 flex items-center gap-3 text-sm"
-            style={{ color: T.textMuted }}
-          >
-            {meeting.folder ? (
-              <button
-                onClick={() => setMoveOpen(true)}
-                className="flex items-center gap-1 hover:underline"
-                title="Змінити папку"
-              >
-                <Folder size={14} /> {meeting.folder.name}
-              </button>
-            ) : (
-              <button
-                onClick={() => setMoveOpen(true)}
-                className="flex items-center gap-1 hover:underline"
-                title="Додати у папку"
-              >
-                <Folder size={14} /> Без папки
-              </button>
-            )}
-            {editingDate ? (
-              <span className="flex items-center gap-1">
-                <input
-                  type="datetime-local"
-                  lang="uk"
-                  value={dateDraft}
-                  onChange={(e) => setDateDraft(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") saveDate();
-                    if (e.key === "Escape") setEditingDate(false);
-                  }}
-                  autoFocus
-                  disabled={savingDate}
-                  className="rounded-md px-1.5 py-0.5 text-xs outline-none"
-                  style={{
-                    background: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                />
-                <button
-                  onClick={saveDate}
-                  disabled={savingDate}
-                  className="rounded-md p-1"
-                  style={{ background: T.successSoft, color: T.success }}
-                  title="Зберегти дату"
-                >
-                  {savingDate ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Check size={12} />
-                  )}
-                </button>
-                <button
-                  onClick={() => setEditingDate(false)}
-                  disabled={savingDate}
-                  className="rounded-md p-1"
-                  style={{ background: T.panelElevated, color: T.textSecondary }}
-                  title="Скасувати"
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ) : (
-              <button
-                onClick={startEditDate}
-                className="flex items-center gap-1 hover:underline"
-                title="Змінити дату наради"
-              >
-                <Calendar size={13} />
-                {new Date(meeting.recordedAt).toLocaleString("uk-UA")}
-              </button>
-            )}
-            {meeting.audioDurationMs && (
-              <span>{formatDuration(meeting.audioDurationMs)}</span>
-            )}
-            {meeting.speakerCount && meeting.speakerCount > 0 && (
-              <span
-                className="flex items-center gap-1"
-                title="AssemblyAI розпізнав окремих спікерів через діаризацію"
-              >
-                <Users size={12} /> {meeting.speakerCount}{" "}
-                {meeting.speakerCount === 1
-                  ? "учасник"
-                  : meeting.speakerCount < 5
-                    ? "учасники"
-                    : "учасників"}
-              </span>
-            )}
-          </div>
-          {meeting.description && (
-            <p className="mt-2 text-sm" style={{ color: T.textSecondary }}>
-              {meeting.description}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="rounded-full px-2.5 py-1 text-xs font-medium"
-            style={{
-              background:
-                meeting.status === "READY"
-                  ? T.successSoft
-                  : meeting.status === "FAILED"
-                  ? T.dangerSoft
-                  : T.panelElevated,
-              color:
-                meeting.status === "READY"
-                  ? T.success
-                  : meeting.status === "FAILED"
-                  ? T.danger
-                  : T.textSecondary,
-            }}
-          >
-            {STATUS_LABELS[meeting.status]}
-          </span>
-          {(meeting.transcript || meeting.noteText) && (
-            <button
-              onClick={regenerateSummary}
-              disabled={regenerating || retranscribing || processing}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
-              style={{
-                background: T.accentPrimarySoft,
-                color: T.accentPrimary,
-              }}
-              title={
-                isTextMeeting
-                  ? "Перезапустити AI-аналіз тексту наради — оригінальна нотатка не зміниться"
-                  : "Перезапустити AI-аналіз з тим же транскриптом, щоб отримати глибший підсумок"
-              }
-            >
-              {regenerating ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <Sparkles size={14} />
-              )}
-              {meeting.structured
-                ? "Перегенерувати"
-                : isTextMeeting
-                  ? "АІ покращення"
-                  : "Сформувати підсумок"}
-            </button>
-          )}
-          {meeting.audioUrl && (
-            <button
-              onClick={retranscribeFromScratch}
-              disabled={regenerating || retranscribing || processing}
-              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-50"
-              style={{
-                background: T.panelElevated,
-                color: T.textPrimary,
-              }}
-              title="Прослухати аудіо ще раз і повністю переробити транскрипт + підсумок (наприклад, якщо імена розпізнало неправильно)"
-            >
-              {retranscribing ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <RefreshCw size={14} />
-              )}
-              Перетранскрибувати
-            </button>
-          )}
-          <button
-            onClick={() => setMoveOpen(true)}
-            className="rounded-lg p-2"
-            style={{ background: T.panelElevated, color: T.textSecondary }}
-            title="Перемістити в папку"
-          >
-            <FolderInput size={16} />
-          </button>
-          <button
-            onClick={handleDelete}
-            className="rounded-lg p-2"
-            style={{ background: T.panelElevated, color: T.danger }}
-            title="Видалити"
-          >
-            <Trash2 size={16} />
-          </button>
-        </div>
-      </div>
+      <MeetingHeader
+        meeting={meeting}
+        isTextMeeting={isTextMeeting}
+        editingTitle={editingTitle}
+        titleDraft={titleDraft}
+        savingTitle={savingTitle}
+        setTitleDraft={setTitleDraft}
+        startEditTitle={startEditTitle}
+        saveTitle={saveTitle}
+        setEditingTitle={setEditingTitle}
+        editingDate={editingDate}
+        dateDraft={dateDraft}
+        savingDate={savingDate}
+        setDateDraft={setDateDraft}
+        startEditDate={startEditDate}
+        saveDate={saveDate}
+        setEditingDate={setEditingDate}
+        regenerating={regenerating}
+        retranscribing={retranscribing}
+        processing={processing}
+        regenerateSummary={regenerateSummary}
+        retranscribeFromScratch={retranscribeFromScratch}
+        onMove={() => setMoveOpen(true)}
+        onDelete={handleDelete}
+      />
 
       {meeting.audioUrl && (
         <div
@@ -817,6 +598,381 @@ export default function MeetingDetailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// MeetingHeader — компактний, мобільно-дружній блок заголовка наради.
+// Десктоп: заголовок + chip-meta зліва, дії справа. Mobile: усе стекається,
+// вторинні дії ховаються в overflow-меню.
+// ────────────────────────────────────────────────────────────────────────
+type MeetingHeaderProps = {
+  meeting: Meeting;
+  isTextMeeting: boolean;
+  editingTitle: boolean;
+  titleDraft: string;
+  savingTitle: boolean;
+  setTitleDraft: (v: string) => void;
+  startEditTitle: () => void;
+  saveTitle: () => void | Promise<void>;
+  setEditingTitle: (v: boolean) => void;
+  editingDate: boolean;
+  dateDraft: string;
+  savingDate: boolean;
+  setDateDraft: (v: string) => void;
+  startEditDate: () => void;
+  saveDate: () => void | Promise<void>;
+  setEditingDate: (v: boolean) => void;
+  regenerating: boolean;
+  retranscribing: boolean;
+  processing: boolean;
+  regenerateSummary: () => void | Promise<void>;
+  retranscribeFromScratch: () => void | Promise<void>;
+  onMove: () => void;
+  onDelete: () => void;
+};
+
+function MeetingHeader({
+  meeting,
+  isTextMeeting,
+  editingTitle,
+  titleDraft,
+  savingTitle,
+  setTitleDraft,
+  startEditTitle,
+  saveTitle,
+  setEditingTitle,
+  editingDate,
+  dateDraft,
+  savingDate,
+  setDateDraft,
+  startEditDate,
+  saveDate,
+  setEditingDate,
+  regenerating,
+  retranscribing,
+  processing,
+  regenerateSummary,
+  retranscribeFromScratch,
+  onMove,
+  onDelete,
+}: MeetingHeaderProps) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDocClick(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [menuOpen]);
+
+  const statusStyle =
+    meeting.status === "READY"
+      ? { bg: T.successSoft, fg: T.success }
+      : meeting.status === "FAILED"
+        ? { bg: T.dangerSoft, fg: T.danger }
+        : { bg: T.panelElevated, fg: T.textSecondary };
+
+  const hasSummary = !!meeting.structured;
+  const canSummarize = !!(meeting.transcript || meeting.noteText);
+  const summaryLabel = hasSummary
+    ? "Перегенерувати"
+    : isTextMeeting
+      ? "АІ покращення"
+      : "Сформувати підсумок";
+
+  return (
+    <section
+      className="mb-4 rounded-2xl p-3 sm:p-4"
+      style={{
+        background: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      {/* TITLE ROW */}
+      <div className="flex items-start gap-3">
+        <span
+          className="hidden sm:flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl"
+          style={{ background: T.accentPrimarySoft, color: T.accentPrimary }}
+        >
+          {isTextMeeting ? <FileText size={18} /> : <Mic size={18} />}
+        </span>
+        <div className="min-w-0 flex-1">
+          {editingTitle ? (
+            <div className="flex items-center gap-1.5">
+              <input
+                type="text"
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") saveTitle();
+                  if (e.key === "Escape") setEditingTitle(false);
+                }}
+                autoFocus
+                disabled={savingTitle}
+                className="min-w-0 flex-1 rounded-lg px-2.5 py-1.5 text-lg sm:text-xl font-bold outline-none"
+                style={{
+                  background: T.panelElevated,
+                  color: T.textPrimary,
+                  border: `1px solid ${T.borderSoft}`,
+                }}
+              />
+              <button
+                onClick={saveTitle}
+                disabled={savingTitle}
+                className="flex-shrink-0 rounded-lg p-2"
+                style={{ background: T.successSoft, color: T.success }}
+                title="Зберегти"
+              >
+                {savingTitle ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              </button>
+              <button
+                onClick={() => setEditingTitle(false)}
+                disabled={savingTitle}
+                className="flex-shrink-0 rounded-lg p-2"
+                style={{ background: T.panelElevated, color: T.textSecondary }}
+                title="Скасувати"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={startEditTitle}
+              className="group flex w-full items-start gap-1.5 rounded-lg px-1 -mx-1 py-0.5 text-left hover:bg-[var(--t-panel-el)]"
+              title="Натисніть, щоб перейменувати"
+            >
+              <h1
+                className="min-w-0 flex-1 text-lg sm:text-xl md:text-[22px] font-bold leading-tight"
+                style={{ color: T.textPrimary }}
+              >
+                {meeting.title}
+              </h1>
+              <Pencil
+                size={13}
+                className="mt-1.5 flex-shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                style={{ color: T.textMuted }}
+              />
+            </button>
+          )}
+
+          {/* META CHIPS */}
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span
+              className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+              style={{ background: statusStyle.bg, color: statusStyle.fg }}
+            >
+              {STATUS_LABELS[meeting.status]}
+            </span>
+
+            <button
+              onClick={onMove}
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11.5px] hover:bg-[var(--t-panel-el)]"
+              style={{ color: T.textSecondary }}
+              title={meeting.folder ? "Змінити папку" : "Додати у папку"}
+            >
+              <Folder size={11} />
+              <span className="truncate max-w-[140px]">
+                {meeting.folder?.name ?? "Без папки"}
+              </span>
+            </button>
+
+            {editingDate ? (
+              <span className="flex items-center gap-1">
+                <input
+                  type="datetime-local"
+                  lang="uk"
+                  value={dateDraft}
+                  onChange={(e) => setDateDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveDate();
+                    if (e.key === "Escape") setEditingDate(false);
+                  }}
+                  autoFocus
+                  disabled={savingDate}
+                  className="rounded-md px-1.5 py-0.5 text-[11px] outline-none"
+                  style={{
+                    background: T.panelElevated,
+                    color: T.textPrimary,
+                    border: `1px solid ${T.borderSoft}`,
+                  }}
+                />
+                <button
+                  onClick={saveDate}
+                  disabled={savingDate}
+                  className="rounded-md p-0.5"
+                  style={{ background: T.successSoft, color: T.success }}
+                  title="Зберегти дату"
+                >
+                  {savingDate ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <Check size={11} />
+                  )}
+                </button>
+                <button
+                  onClick={() => setEditingDate(false)}
+                  disabled={savingDate}
+                  className="rounded-md p-0.5"
+                  style={{ background: T.panelElevated, color: T.textSecondary }}
+                  title="Скасувати"
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ) : (
+              <button
+                onClick={startEditDate}
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11.5px] hover:bg-[var(--t-panel-el)]"
+                style={{ color: T.textSecondary }}
+                title="Змінити дату наради"
+              >
+                <Calendar size={11} />
+                {new Date(meeting.recordedAt).toLocaleString("uk-UA", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </button>
+            )}
+
+            {meeting.audioDurationMs ? (
+              <span
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11.5px]"
+                style={{ color: T.textMuted }}
+              >
+                <Clock size={11} /> {formatDuration(meeting.audioDurationMs)}
+              </span>
+            ) : null}
+
+            {meeting.speakerCount && meeting.speakerCount > 0 ? (
+              <span
+                className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11.5px]"
+                style={{ color: T.textMuted }}
+                title="AssemblyAI розпізнав окремих спікерів через діаризацію"
+              >
+                <Users size={11} /> {meeting.speakerCount}{" "}
+                {meeting.speakerCount === 1
+                  ? "учасник"
+                  : meeting.speakerCount < 5
+                    ? "учасники"
+                    : "учасників"}
+              </span>
+            ) : null}
+          </div>
+
+          {meeting.description && (
+            <p
+              className="mt-2 text-[13px] leading-relaxed"
+              style={{ color: T.textSecondary }}
+            >
+              {meeting.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ACTIONS ROW — на mobile під заголовком, на desktop теж під ним */}
+      {(canSummarize || meeting.audioUrl) && (
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          {canSummarize && (
+            <button
+              onClick={regenerateSummary}
+              disabled={regenerating || retranscribing || processing}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold disabled:opacity-50"
+              style={{
+                background: T.accentPrimarySoft,
+                color: T.accentPrimary,
+              }}
+              title={
+                isTextMeeting
+                  ? "Перезапустити AI-аналіз тексту наради — оригінальна нотатка не зміниться"
+                  : "Перезапустити AI-аналіз з тим же транскриптом, щоб отримати глибший підсумок"
+              }
+            >
+              {regenerating ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Sparkles size={13} />
+              )}
+              {summaryLabel}
+            </button>
+          )}
+          {meeting.audioUrl && (
+            <button
+              onClick={retranscribeFromScratch}
+              disabled={regenerating || retranscribing || processing}
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-semibold disabled:opacity-50"
+              style={{
+                background: T.panelElevated,
+                color: T.textPrimary,
+              }}
+              title="Прослухати аудіо ще раз і повністю переробити транскрипт + підсумок (наприклад, якщо імена розпізнало неправильно)"
+            >
+              {retranscribing ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <RefreshCw size={13} />
+              )}
+              <span className="hidden sm:inline">Перетранскрибувати</span>
+              <span className="sm:hidden">Перетранскр.</span>
+            </button>
+          )}
+          <div className="relative ml-auto" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              className="rounded-lg p-2"
+              style={{ background: T.panelElevated, color: T.textSecondary }}
+              title="Більше дій"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
+              <MoreHorizontal size={16} />
+            </button>
+            {menuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 z-20 mt-1 min-w-[180px] rounded-lg p-1 shadow-lg"
+                style={{
+                  background: T.panel,
+                  border: `1px solid ${T.borderSoft}`,
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onMove();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-[var(--t-panel-el)]"
+                  style={{ color: T.textPrimary }}
+                  role="menuitem"
+                >
+                  <FolderInput size={14} style={{ color: T.textSecondary }} />
+                  Перемістити в папку
+                </button>
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDelete();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[12.5px] hover:bg-[var(--t-danger-soft)]"
+                  style={{ color: T.danger }}
+                  role="menuitem"
+                >
+                  <Trash2 size={14} />
+                  Видалити нараду
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 

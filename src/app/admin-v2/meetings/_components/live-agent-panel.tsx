@@ -163,6 +163,9 @@ const CHUNK_FLUSH_INTERVAL_MS = 30_000;
 const CONTEXT_WINDOW_CHARS = 4000;
 
 export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
+  // Згорнутий за замовчуванням, щоб не займати екран. Розгортається коли
+  // юзер тицяє по хедеру. Якщо агент уже активний — лишаємо розгорнутим.
+  const [expanded, setExpanded] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [mode, setMode] = useState<TranscribeMode>("browser");
   const [supported, setSupported] = useState(true);
@@ -688,18 +691,31 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
   const allCategories = Array.from(new Set(insights.map((i) => i.category)));
   const allPriorities = Array.from(new Set(insights.map((i) => i.priority)));
 
+  // Авто-розгортаємо коли агент активний — щоб юзер бачив live-буфер і факти.
+  useEffect(() => {
+    if (enabled) setExpanded(true);
+  }, [enabled]);
+
+  const insightCount = insights.filter((i) => !i.isHidden).length;
+
   return (
     <div
-      className="rounded-2xl p-4"
+      className="rounded-2xl"
       style={{
         background: T.panel,
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
+      {/* HEADER — завжди видимий. Клік по лівій частині — розгорнути/згорнути. */}
+      <div className="flex items-center gap-2 p-3 sm:p-4">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          aria-expanded={expanded}
+          title={expanded ? "Згорнути" : "Розгорнути Live AI Agent"}
+        >
           <span
-            className="flex h-9 w-9 items-center justify-center rounded-xl"
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
             style={{
               background: enabled ? T.accentPrimarySoft : T.panelElevated,
               color: enabled ? T.accentPrimary : T.textMuted,
@@ -707,15 +723,30 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
           >
             <Bot size={18} />
           </span>
-          <div className="flex flex-col">
+          <div className="flex min-w-0 flex-1 flex-col">
             <span
-              className="text-sm font-bold"
+              className="flex items-center gap-1.5 text-sm font-bold"
               style={{ color: T.textPrimary }}
             >
               Live AI Agent
+              {enabled && (
+                <span
+                  className="inline-flex h-1.5 w-1.5 animate-pulse rounded-full"
+                  style={{ background: T.accentPrimary }}
+                  aria-hidden
+                />
+              )}
+              {!expanded && insightCount > 0 && (
+                <span
+                  className="rounded-full px-1.5 py-0 text-[10px] font-bold"
+                  style={{ background: T.accentPrimarySoft, color: T.accentPrimary }}
+                >
+                  {insightCount}
+                </span>
+              )}
             </span>
             <span
-              className="text-[11px] flex items-center gap-1"
+              className="truncate text-[11px] flex items-center gap-1"
               style={{
                 color:
                   statusMessage.startsWith("Помилка")
@@ -725,16 +756,26 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
                       : T.textMuted,
               }}
             >
-              {busy && <Loader2 size={10} className="animate-spin" />}
-              {statusMessage}
+              {busy && <Loader2 size={10} className="animate-spin flex-shrink-0" />}
+              <span className="truncate">{statusMessage}</span>
             </span>
           </div>
-        </div>
+          <span
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md"
+            style={{ color: T.textMuted }}
+          >
+            {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </span>
+        </button>
 
         <button
-          onClick={() => (enabled ? void stop() : void start())}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!enabled && !expanded) setExpanded(true);
+            return enabled ? void stop() : void start();
+          }}
           disabled={mode === "browser" && !supported}
-          className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold disabled:opacity-50"
+          className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-[12.5px] font-semibold disabled:opacity-50"
           style={{
             background: enabled ? T.dangerSoft : T.accentPrimary,
             color: enabled ? T.danger : "#fff",
@@ -747,10 +788,14 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
                 : "Запустити агента"
           }
         >
-          {enabled ? <Pause size={14} /> : <Play size={14} />}
-          {enabled ? "Зупинити" : "Увімкнути"}
+          {enabled ? <Pause size={13} /> : <Play size={13} />}
+          <span className="hidden sm:inline">{enabled ? "Зупинити" : "Увімкнути"}</span>
         </button>
       </div>
+
+      {/* BODY — рендериться лише коли expanded */}
+      {expanded && (
+      <div className="px-3 sm:px-4 pb-3 sm:pb-4">
 
       {/* Toggle режиму транскрипції */}
       <div className="mt-3 flex items-center gap-1 rounded-lg p-1" style={{ background: T.panelElevated }}>
@@ -1179,6 +1224,8 @@ export function LiveAgentPanel({ meetingId }: { meetingId: string }) {
             />
           ))}
         </div>
+      )}
+      </div>
       )}
     </div>
   );
