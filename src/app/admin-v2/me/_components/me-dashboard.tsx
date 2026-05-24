@@ -34,10 +34,17 @@ import { SectionsView } from "./sections-view";
 import { AiDaySummary } from "./ai-day-summary";
 import { groupBySection } from "../_lib/sections";
 
-const SCOPE_DEFS: { id: Scope; label: string }[] = [
+// Порядок tabs зліва направо. Для адмінів — «Всі задачі» першими.
+// Для інших ролей — «Мені призначено» першим (особистий фокус).
+const SCOPE_DEFS_DEFAULT: { id: Scope; label: string }[] = [
   { id: "assigned", label: "Мені призначено" },
   { id: "created", label: "Я поставив" },
   { id: "all", label: "Всі задачі" },
+];
+const SCOPE_DEFS_ADMIN: { id: Scope; label: string }[] = [
+  { id: "all", label: "Всі задачі" },
+  { id: "assigned", label: "Мені призначено" },
+  { id: "created", label: "Я поставив" },
 ];
 
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
@@ -300,6 +307,9 @@ export function MeDashboard({
   //  - автор задачі (task.createdById === currentUserId) — свою
   // Інші ролі (MANAGER/ENGINEER/...) — НЕ бачать кнопку видалення.
   const isAdmin = currentUserRole === "SUPER_ADMIN";
+  // Для адмінів — таби й дефолтний scope перевпорядковані щоб «Всі задачі»
+  // були першими і вибраними за замовчуванням (повний огляд > особистий).
+  const SCOPE_DEFS = isAdmin ? SCOPE_DEFS_ADMIN : SCOPE_DEFS_DEFAULT;
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
@@ -337,7 +347,10 @@ export function MeDashboard({
     markDone,
     deleteTask,
     acceptTask,
-  } = useMeTasks({ projectIds: projectIds.length > 0 ? projectIds : undefined });
+  } = useMeTasks({
+    projectIds: projectIds.length > 0 ? projectIds : undefined,
+    initialScope: isAdmin ? "all" : "assigned",
+  });
 
   // Load projects for filter
   useState(() => {

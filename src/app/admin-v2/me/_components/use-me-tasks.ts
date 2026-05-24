@@ -140,11 +140,14 @@ export function isDueToday(t: TaskItem): boolean {
 
 /* ───────── hook ───────── */
 
-export function useMeTasks({ projectIds }: { projectIds?: string[] } = {}) {
+export function useMeTasks({
+  projectIds,
+  initialScope = "assigned",
+}: { projectIds?: string[]; initialScope?: Scope } = {}) {
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [activeTimer, setActiveTimer] = useState<ActiveTimer | null>(null);
-  const [scope, setScope] = useState<Scope>("assigned");
+  const [scope, setScope] = useState<Scope>(initialScope);
   const [focus, setFocus] = useState<Focus>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("sections");
   const [includeCompleted, setIncludeCompleted] = useState(false);
