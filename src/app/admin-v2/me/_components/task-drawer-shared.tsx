@@ -153,6 +153,13 @@ export function SelfContainedTaskDrawer({
     [],
   );
 
+  // Коли клікнули на іншу задачу у списку — миттєво очищаємо detail щоб
+  // не показувати дані попередньої. Завантаження нової стартує у load().
+  useEffect(() => {
+    setDetail(null);
+    setLoadError(null);
+  }, [taskId]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setLoadError(null);
@@ -480,19 +487,19 @@ export function SelfContainedTaskDrawer({
   const totalHours = (totalMinutes / 60).toFixed(2);
 
   return (
+    // Side-panel (не модал) — список зліва лишається клікабельним.
+    // На мобільному займає весь екран, на десктопі — права частина (60vw,
+    // максимум 1000px). Закривається тільки кнопкою X — клік по списку не
+    // закриває drawer, можна вільно перемикатись між задачами.
     <div
-      className="fixed inset-0 z-50 flex justify-end"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-      onClick={onClose}
+      className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[60vw] sm:max-w-[1000px] overflow-y-auto"
+      style={{
+        backgroundColor: T.panel,
+        borderLeft: `1px solid ${T.borderStrong}`,
+        boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
+      }}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="h-full w-full sm:w-[560px] overflow-y-auto"
-        style={{
-          backgroundColor: T.panel,
-          borderLeft: `1px solid ${T.borderStrong}`,
-        }}
-      >
+      <div className="h-full">
         <div
           className="sticky top-0 flex items-center justify-between p-4 z-10"
           style={{
@@ -819,8 +826,8 @@ export function SelfContainedTaskDrawer({
                     color: T.textPrimary,
                     backgroundColor: T.panelElevated,
                     border: `1px solid ${T.borderSoft}`,
-                    minHeight: 180,
-                    maxHeight: 360,
+                    minHeight: 220,
+                    maxHeight: "50vh",
                   }}
                 >
                   {/* Зберігаємо переноси рядків як у textarea: одиночний \n
