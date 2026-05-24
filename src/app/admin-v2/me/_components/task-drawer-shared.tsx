@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   X,
   Loader2,
@@ -487,18 +487,7 @@ export function SelfContainedTaskDrawer({
   const totalHours = (totalMinutes / 60).toFixed(2);
 
   return (
-    // Side-panel (не модал) — список зліва лишається клікабельним.
-    // На мобільному займає весь екран, на десктопі — права частина (60vw,
-    // максимум 1000px). Закривається тільки кнопкою X — клік по списку не
-    // закриває drawer, можна вільно перемикатись між задачами.
-    <div
-      className="fixed right-0 top-0 bottom-0 z-50 w-full sm:w-[60vw] sm:max-w-[1000px] overflow-y-auto"
-      style={{
-        backgroundColor: T.panel,
-        borderLeft: `1px solid ${T.borderStrong}`,
-        boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
-      }}
-    >
+    <ResizableDrawerWrapper>
       <div className="h-full">
         <div
           className="sticky top-0 flex items-center justify-between p-4 z-10"
@@ -1197,6 +1186,75 @@ export function SelfContainedTaskDrawer({
           </div>
         )}
       </div>
+    </ResizableDrawerWrapper>
+  );
+}
+
+/**
+ * Side-panel зі змінним розміром (drag за ліву межу). Ширина зберігається у
+ * localStorage, тож наступного відкриття drawer повертає її. Обмеження:
+ * мін 420px, макс 90vw. На мобільному — повна ширина без resize handle.
+ */
+function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
+  const STORAGE_KEY = "taskDrawer.width";
+  const DEFAULT_WIDTH = 720;
+  const MIN_WIDTH = 420;
+  const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    const saved = Number(localStorage.getItem(STORAGE_KEY));
+    if (!isNaN(saved) && saved >= MIN_WIDTH) setWidth(saved);
+  }, []);
+
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    const maxWidth = Math.floor(window.innerWidth * 0.9);
+    const onMove = (ev: MouseEvent) => {
+      if (!draggingRef.current) return;
+      const next = Math.max(MIN_WIDTH, Math.min(maxWidth, window.innerWidth - ev.clientX));
+      setWidth(next);
+    };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      // персистимо тільки після відпускання — щоб не спамити localStorage
+      // на кожному mousemove.
+      setWidth((curr) => {
+        try {
+          localStorage.setItem(STORAGE_KEY, String(curr));
+        } catch {}
+        return curr;
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
+
+  return (
+    <div
+      className="fixed right-0 top-0 bottom-0 z-50 overflow-y-auto"
+      style={{
+        // На мобільному 720px перевищить viewport → maxWidth обрізає у 100vw,
+        // тобто візуально drawer займе весь екран. На desktop працює як треба.
+        width,
+        maxWidth: "100vw",
+        backgroundColor: T.panel,
+        borderLeft: `1px solid ${T.borderStrong}`,
+        boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
+      }}
+    >
+      {/* Drag-handle на лівій межі — тільки на desktop (sm+). */}
+      <div
+        onMouseDown={startDrag}
+        className="hidden sm:block absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-10 hover:bg-blue-500/40 transition"
+        style={{ backgroundColor: "transparent" }}
+        title="Перетягніть щоб змінити ширину"
+        aria-label="Змінити ширину панелі"
+      />
+      {children}
     </div>
   );
 }
