@@ -48,6 +48,10 @@ export type TaskItem = {
   incomingDepsCount?: number;
   outgoingDepsCount?: number;
   hasAiSpec?: boolean;
+  /** Шаблон повторюваної задачі (template, не instance). */
+  isRecurring?: boolean;
+  /** Якщо це instance, тут id шаблону. */
+  recurrenceParentId?: string | null;
 };
 
 export type NotificationItem = {

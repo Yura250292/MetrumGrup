@@ -323,6 +323,13 @@ export type CreateInput = {
   /** @deprecated Використовуй `assignees`. Залишене для legacy callers. */
   assigneeIds?: string[];
   labelIds?: string[];
+  /**
+   * Повторюване завдання — створюємо шаблон, з якого cron-spawner буде
+   * генерувати наступні occurrences (горизонт 24h, lib/tasks/recurring.ts).
+   * `recurrenceRule` — у форматі iCal RRULE (наприклад "FREQ=WEEKLY;BYDAY=MO").
+   */
+  isRecurring?: boolean;
+  recurrenceRule?: string | null;
 };
 
 export async function createTask(input: CreateInput, actorId: string): Promise<TaskDetail> {
@@ -447,6 +454,8 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         dueDate: input.dueDate ?? null,
         estimatedHours: input.estimatedHours ?? null,
         isPrivate: input.isPrivate ?? false,
+        isRecurring: input.isRecurring ?? false,
+        recurrenceRule: input.isRecurring && input.recurrenceRule ? input.recurrenceRule : null,
         position,
         createdById: actorId,
       },

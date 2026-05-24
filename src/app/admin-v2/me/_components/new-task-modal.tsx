@@ -157,6 +157,14 @@ export function NewTaskModal({
   type ReminderPreset = "none" | "p50" | "p75" | "h24" | "h1";
   const [reminder, setReminder] = useState<ReminderPreset>("p75");
 
+  // ── Повторення ── (recurring task). Якщо чекбокс на → створюється
+  // template, з якого cron-spawner у /api/cron/tick кожні 5 хв перевіряє
+  // чи треба додати наступний instance. Horizon — 24h, тому календар
+  // не заспамиться вперед: тільки 1 запис на день перед наступним.
+  type RecurrencePreset = "daily" | "weekly" | "monthly";
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrencePreset, setRecurrencePreset] = useState<RecurrencePreset>("weekly");
+
   // ── AI ──
   const [generatingSpec, setGeneratingSpec] = useState(false);
   const [specJson, setSpecJson] = useState<AiSpec | null>(null);
@@ -415,6 +423,7 @@ export function NewTaskModal({
         assignees: payload.length > 0 ? payload : undefined,
         checklist: checklist && checklist.length > 0 ? checklist : undefined,
         reminder: reminderSpec,
+        recurrence: isRecurring ? { preset: recurrencePreset } : undefined,
       };
       if (projectId) {
         body.projectId = projectId;
@@ -597,6 +606,57 @@ export function NewTaskModal({
                 </select>
               </div>
             </RequiredField>
+
+            {/* ── Повторення ── одразу під дедлайном бо логічно повʼязано */}
+            <Field label="">
+              <label
+                className="flex items-center gap-2 text-[12px] cursor-pointer"
+                style={{ color: T.textPrimary }}
+              >
+                <input
+                  type="checkbox"
+                  checked={isRecurring}
+                  onChange={(e) => setIsRecurring(e.target.checked)}
+                />
+                <span>🔁 Повторювана задача</span>
+              </label>
+              {isRecurring && (
+                <div className="flex flex-col gap-1.5 mt-1">
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { id: "daily", label: "Щодня" },
+                        { id: "weekly", label: "Щотижня" },
+                        { id: "monthly", label: "Щомісяця" },
+                      ] as { id: RecurrencePreset; label: string }[]
+                    ).map((p) => {
+                      const active = recurrencePreset === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setRecurrencePreset(p.id)}
+                          className="rounded-full px-2.5 py-1 text-[11px] font-semibold transition"
+                          style={{
+                            backgroundColor: active
+                              ? T.accentPrimarySoft
+                              : T.panelElevated,
+                            color: active ? T.accentPrimary : T.textMuted,
+                            border: `1px solid ${active ? T.accentPrimary + "40" : T.borderSoft}`,
+                          }}
+                        >
+                          {p.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[10px]" style={{ color: T.textMuted }}>
+                    Наступний екземпляр зʼявиться автоматично за день до
+                    дедлайну — календар не спамиться вперед.
+                  </span>
+                </div>
+              )}
+            </Field>
 
             {/* ── Reminder (optional, default 75% часу) ── */}
             <Field label="Нагадати про дедлайн">

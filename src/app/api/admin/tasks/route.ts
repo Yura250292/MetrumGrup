@@ -105,6 +105,24 @@ export async function POST(request: NextRequest) {
     : [];
 
   try {
+    // Recurrence: приймаємо presets з UI ("daily"/"weekly"/"monthly") і
+    // мапимо у iCal RRULE. Якщо передали повний rule — приймаємо як є.
+    let recurrenceRule: string | null = null;
+    let isRecurring = false;
+    if (body.recurrence && typeof body.recurrence === "object") {
+      const r = body.recurrence as { preset?: string; rule?: string };
+      const ruleFromPreset =
+        r.preset === "daily"
+          ? "FREQ=DAILY"
+          : r.preset === "weekly"
+            ? "FREQ=WEEKLY"
+            : r.preset === "monthly"
+              ? "FREQ=MONTHLY"
+              : null;
+      recurrenceRule = ruleFromPreset ?? (typeof r.rule === "string" ? r.rule : null);
+      isRecurring = !!recurrenceRule;
+    }
+
     const task = await createTask(
       {
         projectId,
@@ -118,6 +136,8 @@ export async function POST(request: NextRequest) {
             ? undefined
             : Number(body.estimatedHours),
         assignees: assignees.length > 0 ? assignees : undefined,
+        isRecurring,
+        recurrenceRule,
       },
       session.user.id,
     );

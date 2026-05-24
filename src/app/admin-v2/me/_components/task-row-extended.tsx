@@ -209,6 +209,28 @@ export function TaskRowExtended({
               ТЗ
             </span>
           )}
+          {task.isRecurring && (
+            <span
+              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textSecondary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+              title="Шаблон повторюваної задачі. Наступні екземпляри спавняться автоматично за день до дедлайну."
+            >
+              🔁 ПОВТОР
+            </span>
+          )}
+          {task.recurrenceParentId && (
+            <span
+              className="text-[9px]"
+              style={{ color: T.textMuted }}
+              title="Екземпляр повторюваної задачі"
+            >
+              🔁
+            </span>
+          )}
           {incoming > 0 && (
             <span
               className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-semibold"
