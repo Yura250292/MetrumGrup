@@ -2334,6 +2334,9 @@ function AccountSection({
   const [error, setError] = useState<string | null>(null);
   const [tempPassword, setTempPassword] = useState<string | null>(null);
   const [editingRole, setEditingRole] = useState(false);
+  /// Буферизована нова роль (не зберігається до натискання «Зберегти»).
+  /// null = не редагується. Уникає race onChange↔onBlur, що крашив сторінку.
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
 
   const linked = employee.user;
   const allowedRoles = useMemo(
@@ -2449,10 +2452,22 @@ function AccountSection({
         return;
       }
       setEditingRole(false);
+      setPendingRole(null);
       onChanged();
     } finally {
       setSaving(false);
     }
+  }
+
+  function startEditingRole() {
+    if (!linked) return;
+    setPendingRole(linked.role);
+    setEditingRole(true);
+  }
+
+  function cancelEditingRole() {
+    setPendingRole(null);
+    setEditingRole(false);
   }
 
   async function handleToggleActive() {
@@ -2564,33 +2579,55 @@ function AccountSection({
                 Роль:
               </span>
               {editingRole && canTouch ? (
-                <select
-                  autoFocus
-                  defaultValue={linked.role}
-                  onBlur={() => setEditingRole(false)}
-                  onChange={(e) => void handleRoleChange(e.target.value)}
-                  className="rounded-md px-2 py-0.5 text-[11px] outline-none"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    border: `1px solid ${T.borderStrong}`,
-                    color: T.textPrimary,
-                  }}
-                >
-                  {allowedRoles.map((r) => (
-                    <option key={r} value={r}>
-                      {ROLE_LABELS[r]}
-                    </option>
-                  ))}
-                  {/* Якщо поточна роль недоступна для редактора — показати її як read-only пункт */}
-                  {!allowedRoles.includes(linked.role as never) && (
-                    <option value={linked.role} disabled>
-                      {ROLE_LABELS[linked.role] ?? linked.role}
-                    </option>
+                <>
+                  <select
+                    autoFocus
+                    value={pendingRole ?? linked.role}
+                    onChange={(e) => setPendingRole(e.target.value)}
+                    disabled={saving}
+                    className="rounded-md px-2 py-0.5 text-[11px] outline-none"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      border: `1px solid ${T.borderStrong}`,
+                      color: T.textPrimary,
+                    }}
+                  >
+                    {allowedRoles.map((r) => (
+                      <option key={r} value={r}>
+                        {ROLE_LABELS[r]}
+                      </option>
+                    ))}
+                    {/* Поточна роль, недоступна для редактора, — показати як disabled. */}
+                    {!allowedRoles.includes(linked.role as never) && (
+                      <option value={linked.role} disabled>
+                        {ROLE_LABELS[linked.role] ?? linked.role}
+                      </option>
+                    )}
+                  </select>
+                  {pendingRole && pendingRole !== linked.role && (
+                    <button
+                      type="button"
+                      onClick={() => void handleRoleChange(pendingRole)}
+                      disabled={saving}
+                      className="rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white disabled:opacity-50"
+                      style={{ backgroundColor: T.accentPrimary }}
+                    >
+                      Зберегти
+                    </button>
                   )}
-                </select>
+                  <button
+                    type="button"
+                    onClick={cancelEditingRole}
+                    disabled={saving}
+                    className="rounded-md px-2 py-0.5 text-[10px] font-semibold disabled:opacity-50"
+                    style={{ color: T.textMuted }}
+                  >
+                    Скасувати
+                  </button>
+                </>
               ) : (
                 <button
-                  onClick={() => canTouch && setEditingRole(true)}
+                  onClick={() => canTouch && startEditingRole()}
                   disabled={!canTouch}
                   className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase"
                   style={{
