@@ -18,6 +18,7 @@ import {
   Mic,
   ScanLine,
   TrendingUp,
+  Inbox,
   type LucideIcon,
 } from "lucide-react";
 
@@ -83,6 +84,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES },
       { href: "/admin-v2/financing/suppliers", label: "Облік постачальників", icon: Truck, roles: SUPPLIERS_ACCESS_ROLES },
+      { href: "/admin-v2/documents/inbox", label: "Документи / Inbox", icon: Inbox, roles: SUPPLIERS_ACCESS_ROLES, pillBadge: { text: "AI", color: "accent" } },
       // Кошториси: один пункт. Вхід «AI генератор» — primary CTA на самій сторінці.
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
     ],

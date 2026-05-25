@@ -114,6 +114,10 @@ model User {
   ownerChatFolders        OwnerChatFolder[]         @relation("OwnerChatFolderUser")
   supplierPaymentsCreated SupplierPayment[]         @relation("SupplierPaymentCreator")
   supplierPaymentsVoided  SupplierPayment[]         @relation("SupplierPaymentVoider")
+  documentsUploaded       IncomingDocument[]        @relation("DocUploader")
+  documentsReviewed       IncomingDocument[]        @relation("DocReviewer")
+  counterpartyReviews     CounterpartyReview[]      @relation("CounterpartyReviewAuthor")
+  counterpartyDocuments   CounterpartyDocument[]    @relation("CounterpartyDocumentUploader")
 
   @@index([firmId])
   @@map("users")
@@ -218,6 +222,7 @@ model Project {
   kb3Forms               KB3Form[]               @relation("ProjectKB3Forms")
   foremanReports         ForemanReport[]
   supplierPayments       SupplierPayment[]
+  counterpartyReviews    CounterpartyReview[]    @relation("CounterpartyReviewProject")
 
   @@unique([telegramChatId, telegramThreadId], name: "project_telegram_chat_thread_unique")
   @@index([folderId])
@@ -1688,6 +1693,7 @@ enum FinanceEntrySource {
   PROJECT_BUDGET
   STAGE_AUTO
   FOREMAN_REPORT
+  DOCUMENT_INBOX
 }
 
 /// Semantic accounting layer (Safe Finance Migration, Phase 2). Nullable
@@ -1748,6 +1754,7 @@ model Firm {
   supplierPayments  SupplierPayment[]
   supplierMaterials SupplierMaterial[]
   meetings          Meeting[]
+  incomingDocuments IncomingDocument[]
 
   @@map("firms")
 }
@@ -3265,6 +3272,40 @@ enum SupplierPaymentStatus {
   VOIDED
 }
 
+/// Організаційно-правова форма українського контрагента (SRM rev.1).
+enum LegalForm {
+  FOP    // фізична особа-підприємець
+  TOV    // товариство з обмеженою відповідальністю
+  PE     // приватне підприємство
+  PJSC   // публічне акціонерне товариство
+  PRJSC  // приватне акціонерне товариство
+  STATE  // державне підприємство
+  OTHER
+}
+
+/// Податковий/бізнес-статус контрагента (з open data: clarity-project / opendatabot).
+/// UNKNOWN — ще не звіряли. Решта — результат останнього compliance check.
+enum CounterpartyTaxStatus {
+  ACTIVE
+  PROBLEM     // борги перед бюджетом / проблемне
+  SUSPENDED   // призупинено
+  BANKRUPT
+  LIQUIDATED
+  UNKNOWN
+}
+
+/// Типи документів, що зберігаються у дос'є контрагента (R2).
+enum CounterpartyDocumentType {
+  LICENSE
+  PERMIT
+  CERTIFICATE
+  INSURANCE
+  CONTRACT
+  STATUTE       // статут
+  REGISTRATION  // витяг з реєстру
+  OTHER
+}
+
 model Counterparty {
   id                      String             @id @default(cuid())
   name                    String
@@ -3292,6 +3333,36 @@ model Counterparty {
   /// Фірма-власник (Group / Studio). Контрагенти ізольовані між фірмами;
   /// один SUPPLIER може існувати окремо в Group і в Studio (різні рядки).
   firmId                  String?
+
+  // ===== SRM rev.1 (subcontractor relationship management) =====
+  /// Організаційно-правова форма (TOV/FOP/PJSC...). Backfill можна інferнути
+  /// з name (regex "ТОВ "/"ФОП ") окремим скриптом.
+  legalForm               LegalForm?
+  /// ІНН/РНОКПП (10 цифр) — для FOP. Для юр.осіб використовується `edrpou`.
+  ipn                     String?
+  /// Назва банку (UI зручність; iban вже є).
+  bankName                String?
+  /// Номер ліцензії ДАБІ (е-licensing.dabi.gov.ua).
+  licenseNumber           String?
+  /// Кінець дії ліцензії — основа для cron expiry-нагадувань.
+  licenseValidUntil       DateTime?
+  /// Реєстраційний номер ДАБІ (інший від licenseNumber у деяких випадках).
+  dabiRegistration        String?
+  /// Поточний статус за open data; UNKNOWN = ще не перевіряли.
+  taxStatus               CounterpartyTaxStatus @default(UNKNOWN)
+  /// Час останньої успішної звірки з clarity-project / opendatabot.
+  taxStatusCheckedAt      DateTime?
+  /// Спеціалізації для пошуку: ["concrete", "electrical", "facade", ...].
+  /// Hybrid taxonomy: вільні строки + suggested autocomplete на UI.
+  specializations         String[]              @default([])
+  /// Денормалізований середній рейтинг (1.00..5.00). Перераховується після
+  /// кожного insert/update/delete у CounterpartyReview через recomputeRating().
+  avgRating               Decimal?              @db.Decimal(3, 2)
+  /// Денормалізований лічильник унікальних проєктів з reviews.
+  totalProjects           Int                   @default(0)
+  /// Денормалізований лічильник reviews.
+  totalReviews            Int                   @default(0)
+
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
 
@@ -3305,13 +3376,93 @@ model Counterparty {
   supplierPayments   SupplierPayment[]
   foremanReportItems ForemanReportItem[]      @relation("ForemanItemSupplier")
   supplierMaterials  SupplierMaterial[]       @relation("CounterpartyMaterials")
+  reviews            CounterpartyReview[]
+  documents          CounterpartyDocument[]
+  complianceChecks   CounterpartyComplianceCheck[]
 
   @@index([isActive])
   @@index([type])
   @@index([name])
   @@index([firmId])
   @@index([roles], type: Gin)
+  @@index([taxStatus])
   @@map("counterparties")
+}
+
+/// Відгук по контрагенту в контексті конкретного проєкту. 4 критерії 1..5 +
+/// overall (середнє арифметичне з HALF_UP округленням, зберігається як Decimal(2,1)).
+/// Унікальність (counterpartyId, byUserId, projectId) гарантує: один автор —
+/// один відгук на пару (контрагент, проєкт). Повторний POST оновлює існуючий.
+model CounterpartyReview {
+  id                  String   @id @default(cuid())
+  counterpartyId      String
+  byUserId            String
+  projectId           String
+  /// Overall 1..5 (округляється з component scores).
+  rating              Decimal  @db.Decimal(2, 1)
+  qualityScore        Int
+  timelinessScore     Int
+  priceScore          Int
+  communicationScore  Int
+  comment             String?  @db.Text
+  reviewedAt          DateTime @default(now())
+
+  counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  by           User         @relation("CounterpartyReviewAuthor", fields: [byUserId], references: [id])
+  project      Project      @relation("CounterpartyReviewProject", fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([counterpartyId, byUserId, projectId])
+  @@index([counterpartyId])
+  @@index([projectId])
+  @@map("counterparty_reviews")
+}
+
+/// Документ контрагента у R2 (ліцензії, страховки, статут, виписки). Cron job
+/// `counterparty-document-expiry` сканує `validUntil` і шле нотифікацію
+/// (`notified30dAt`/`notified7dAt`/`notifiedExpiredAt` — idempotency timestamps).
+model CounterpartyDocument {
+  id                 String   @id @default(cuid())
+  counterpartyId     String
+  type               CounterpartyDocumentType
+  title              String
+  fileUrl            String
+  fileName           String
+  fileSize           Int
+  mimeType           String
+  issuedAt           DateTime?
+  validUntil         DateTime?
+  isActive           Boolean  @default(true)
+  notified30dAt      DateTime?
+  notified7dAt       DateTime?
+  notifiedExpiredAt  DateTime?
+  uploadedById       String
+  uploadedAt         DateTime @default(now())
+
+  counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+  uploadedBy   User         @relation("CounterpartyDocumentUploader", fields: [uploadedById], references: [id])
+
+  @@index([counterpartyId, type])
+  @@index([validUntil])
+  @@map("counterparty_documents")
+}
+
+/// Лог auto-перевірок compliance (для аудиту, дебагу і 24h-кешу).
+model CounterpartyComplianceCheck {
+  id              String   @id @default(cuid())
+  counterpartyId  String
+  /// Джерело: "clarity-project" | "opendatabot" | "dabi" | "manual".
+  source          String
+  rawResponse     Json
+  /// Короткий результат: змінив taxStatus / licenseValidUntil / no change.
+  resultSummary   String
+  success         Boolean
+  errorMessage    String?
+  checkedAt       DateTime @default(now())
+
+  counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
+
+  @@index([counterpartyId, checkedAt])
+  @@map("counterparty_compliance_checks")
 }
 
 /// Платіж постачальнику. Сума розкидається FIFO по несплачених FinanceEntry
@@ -3783,4 +3934,116 @@ model OwnerChatMessage {
   @@index([conversationId, createdAt])
   @@index([isBookmarked])
   @@map("owner_chat_messages")
+}
+
+// ---------------------------------------------------------------------------
+// Task 06 — AI Document Control
+// ---------------------------------------------------------------------------
+
+enum IncomingDocumentType {
+  INVOICE
+  CONTRACT
+  ACT
+  COMMERCIAL_OFFER
+  RECEIPT
+  KB2V
+  KB3
+  WAYBILL
+  OTHER
+}
+
+enum IncomingDocumentSource {
+  UPLOAD
+  EMAIL
+  FOREMAN
+  SCAN
+  API
+}
+
+enum IncomingDocumentStatus {
+  PROCESSING
+  PARSED
+  REVIEWED
+  LINKED
+  ARCHIVED
+  FAILED
+}
+
+enum LinkedEntityType {
+  FINANCE_ENTRY
+  PROJECT
+  CHANGE_ORDER
+  KB2_FORM
+  KB3_FORM
+  COUNTERPARTY
+  NONE
+}
+
+model IncomingDocument {
+  id     String                 @id @default(cuid())
+  firmId String
+  type   IncomingDocumentType
+  source IncomingDocumentSource
+  status IncomingDocumentStatus @default(PROCESSING)
+
+  originalFileUrl  String
+  originalFileName String
+  fileSizeBytes    Int
+  mimeType         String
+  /// SHA-256 hex digest для дедуплікації (один документ не імпортується двічі).
+  fileHash         String?
+
+  /// Сирий JSON з AI: counterparty, edrpou, amount, vat, date, items[], etc.
+  extractedData Json?
+  /// 0..1 — впевненість AI у extract'і (середнє по полям). <0.7 → manual review.
+  confidence    Decimal? @db.Decimal(3, 2)
+
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+
+  reviewedById String?
+  reviewedAt   DateTime?
+
+  linkedEntityType LinkedEntityType @default(NONE)
+  linkedEntityId   String?
+
+  emailFrom      String?
+  emailSubject   String?
+  emailMessageId String? @unique
+
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  firm           Firm                    @relation(fields: [firmId], references: [id])
+  uploadedBy     User                    @relation("DocUploader", fields: [uploadedById], references: [id])
+  reviewedBy     User?                   @relation("DocReviewer", fields: [reviewedById], references: [id])
+  extractionLogs DocumentExtractionLog[]
+
+  @@unique([firmId, fileHash])
+  @@index([firmId, status])
+  @@index([firmId, type])
+  @@index([uploadedAt])
+  @@index([linkedEntityType, linkedEntityId])
+  @@map("incoming_documents")
+}
+
+model DocumentExtractionLog {
+  id           String   @id @default(cuid())
+  documentId   String
+  model        String
+  prompt       String   @db.Text
+  response     String   @db.Text
+  tokensInput  Int?
+  tokensOutput Int?
+  durationMs   Int
+  success      Boolean
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  document IncomingDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([model, success])
+  @@map("document_extraction_logs")
 }

@@ -29,6 +29,12 @@ const UserDrawerContentLazy = lazy(() =>
   })),
 );
 
+const IncomingDocumentDrawerContentLazy = lazy(() =>
+  import("./renderers/IncomingDocumentDrawerContent").then((m) => ({
+    default: m.IncomingDocumentDrawerContent,
+  })),
+);
+
 export const DRAWER_REGISTRY: Record<string, RegistryEntry> = {
   task: {
     Renderer: TaskDrawerContentLazy,
@@ -44,7 +50,12 @@ export const DRAWER_REGISTRY: Record<string, RegistryEntry> = {
     pageHref: (id) => `/admin-v2/team/${id}`,
     defaultBreadcrumb: "Користувач",
   },
-  // Інші модулі (counterparty, costCode, changeOrder, equipment, rfi, document,
+  incomingDocument: {
+    Renderer: IncomingDocumentDrawerContentLazy,
+    pageHref: (id) => `/admin-v2/documents/${id}`,
+    defaultBreadcrumb: "Документ",
+  },
+  // Інші модулі (counterparty, costCode, changeOrder, equipment, rfi,
   // incident, ...) — додаються у task-ах 01-15 з roadmap-2026.
 };
 
