@@ -9,10 +9,11 @@ const config: Config = {
   coverageProvider: 'v8',
   testEnvironment: 'jest-environment-node',
 
-  // Модульні тести для src/lib/**
+  // Модульні тести для src/lib/** + чистий-TS у src/components/**
   testMatch: [
     '<rootDir>/src/lib/**/__tests__/**/*.test.ts',
     '<rootDir>/src/lib/**/*.test.ts',
+    '<rootDir>/src/components/**/__tests__/**/*.test.ts',
   ],
 
   // Ignore patterns

@@ -17,9 +17,9 @@ import {
   Trash2,
   Pencil,
 } from "lucide-react";
-import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { useDrillDown } from "@/components/drawer/use-drill-down";
 import { TaskAttachmentsPanel } from "./task-attachments-panel";
 import { CommentThread } from "@/components/collab/CommentThread";
 import { TaskAiActions } from "./task-ai-actions";
@@ -87,13 +87,18 @@ export function SelfContainedTaskDrawer({
   currentUserRole,
   onClose,
   onUpdate,
+  embedded = false,
 }: {
   taskId: string;
   currentUserId?: string;
   currentUserRole?: string;
   onClose: () => void;
   onUpdate: () => void;
+  /** Якщо true — без власної ResizableDrawerWrapper (зовнішній shell
+   *  <DrillDownDrawer> надає каркас + resize). Default — legacy standalone. */
+  embedded?: boolean;
 }) {
+  const drillDown = useDrillDown();
   const [detail, setDetail] = useState<DrawerDetail | null>(null);
   const [rewritingSpec, setRewritingSpec] = useState(false);
   const [specError, setSpecError] = useState<string | null>(null);
@@ -486,9 +491,10 @@ export function SelfContainedTaskDrawer({
   const totalMinutes = logs.reduce((sum, l) => sum + (l.minutes ?? 0), 0);
   const totalHours = (totalMinutes / 60).toFixed(2);
 
+  const Wrapper = embedded ? EmbeddedWrapper : ResizableDrawerWrapper;
+
   return (
-    <ResizableDrawerWrapper>
-      <div className="h-full">
+    <Wrapper>
         <div
           className="sticky top-0 flex items-center justify-between p-4 z-10"
           style={{
@@ -592,14 +598,18 @@ export function SelfContainedTaskDrawer({
                   detail.project.personalInboxUserId &&
                   detail.project.personalInboxUserId === currentUserId
                 ) && (
-                  <Link
-                    href={`/admin-v2/projects/${detail.project.id}?tab=tasks`}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      detail.project &&
+                      drillDown.open({ type: "project", id: detail.project.id })
+                    }
                     className="inline-flex items-center gap-1 text-[11px] mt-1"
                     style={{ color: T.accentPrimary }}
                   >
                     <ExternalLink size={10} />
                     {detail.project.title}
-                  </Link>
+                  </button>
                 )}
             </div>
 
@@ -985,30 +995,49 @@ export function SelfContainedTaskDrawer({
                     const name = isExternal
                       ? (a.externalName ?? "—")
                       : (a.user?.name ?? "—");
-                    return (
-                      <span
-                        key={a.id}
-                        className="rounded-full px-3 py-1 text-[11px] font-semibold"
-                        style={
-                          isExternal
-                            ? {
-                                backgroundColor: T.panelElevated,
-                                color: T.textSecondary,
-                                border: `1px dashed ${T.borderStrong}`,
-                              }
-                            : {
-                                backgroundColor: T.panelElevated,
-                                color: T.textPrimary,
-                              }
+                    const userId = a.user?.id;
+                    const baseStyle: React.CSSProperties = isExternal
+                      ? {
+                          backgroundColor: T.panelElevated,
+                          color: T.textSecondary,
+                          border: `1px dashed ${T.borderStrong}`,
                         }
-                        title={isExternal ? "Зовнішній виконавець" : undefined}
-                      >
+                      : {
+                          backgroundColor: T.panelElevated,
+                          color: T.textPrimary,
+                        };
+                    const content = (
+                      <>
                         {name}
                         {isExternal && (
                           <span style={{ color: T.textMuted, marginLeft: 4 }}>
                             · зовн.
                           </span>
                         )}
+                      </>
+                    );
+                    if (!isExternal && userId) {
+                      return (
+                        <button
+                          key={a.id}
+                          type="button"
+                          onClick={() => drillDown.open({ type: "user", id: userId })}
+                          className="rounded-full px-3 py-1 text-[11px] font-semibold transition hover:brightness-110"
+                          style={{ ...baseStyle, cursor: "pointer" }}
+                          title="Відкрити профіль виконавця"
+                        >
+                          {content}
+                        </button>
+                      );
+                    }
+                    return (
+                      <span
+                        key={a.id}
+                        className="rounded-full px-3 py-1 text-[11px] font-semibold"
+                        style={baseStyle}
+                        title={isExternal ? "Зовнішній виконавець" : undefined}
+                      >
+                        {content}
                       </span>
                     );
                   })}
@@ -1021,10 +1050,20 @@ export function SelfContainedTaskDrawer({
               <Section label="ЗАЛЕЖНОСТІ" icon={<Link2 size={11} />}>
                 <ul className="flex flex-col gap-1">
                   {deps.incoming.map((d) => (
-                    <DepRow key={"in-" + d.id} label="← залежить від" task={d.predecessor} />
+                    <DepRow
+                      key={"in-" + d.id}
+                      label="← залежить від"
+                      task={d.predecessor}
+                      onOpen={(id) => drillDown.open({ type: "task", id })}
+                    />
                   ))}
                   {deps.outgoing.map((d) => (
-                    <DepRow key={"out-" + d.id} label="блокує →" task={d.successor} />
+                    <DepRow
+                      key={"out-" + d.id}
+                      label="блокує →"
+                      task={d.successor}
+                      onOpen={(id) => drillDown.open({ type: "task", id })}
+                    />
                   ))}
                 </ul>
               </Section>
@@ -1185,27 +1224,31 @@ export function SelfContainedTaskDrawer({
             <CommentThread entityType="TASK" entityId={taskId} />
           </div>
         )}
-      </div>
-    </ResizableDrawerWrapper>
+    </Wrapper>
   );
 }
 
-/**
- * Side-panel зі змінним розміром (drag за ліву межу). Ширина зберігається у
- * localStorage, тож наступного відкриття drawer повертає її. Обмеження:
- * мін 420px, макс 90vw. На мобільному — повна ширина без resize handle.
- */
-function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
-  const STORAGE_KEY = "taskDrawer.width";
-  const DEFAULT_WIDTH = 720;
-  const MIN_WIDTH = 420;
-  const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
-  const draggingRef = useRef(false);
+/** Legacy standalone-mode каркас: fixed правий drawer з drag-resize. Лишено
+ *  для backward-compat — нові call-sites мають передавати embedded={true} і
+ *  рендеритись усередині <DrillDownDrawer>. */
+const LEGACY_DRAWER_STORAGE_KEY = "taskDrawer.width";
+const LEGACY_DRAWER_DEFAULT_WIDTH = 720;
+const LEGACY_DRAWER_MIN_WIDTH = 420;
 
-  useEffect(() => {
-    const saved = Number(localStorage.getItem(STORAGE_KEY));
-    if (!isNaN(saved) && saved >= MIN_WIDTH) setWidth(saved);
-  }, []);
+function readLegacyDrawerWidth(): number {
+  if (typeof window === "undefined") return LEGACY_DRAWER_DEFAULT_WIDTH;
+  try {
+    const saved = Number(window.localStorage.getItem(LEGACY_DRAWER_STORAGE_KEY));
+    if (!isNaN(saved) && saved >= LEGACY_DRAWER_MIN_WIDTH) return saved;
+  } catch {
+    // ignore privacy / quota errors
+  }
+  return LEGACY_DRAWER_DEFAULT_WIDTH;
+}
+
+function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
+  const [width, setWidth] = useState<number>(readLegacyDrawerWidth);
+  const draggingRef = useRef(false);
 
   const startDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1213,18 +1256,16 @@ function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
     const maxWidth = Math.floor(window.innerWidth * 0.9);
     const onMove = (ev: MouseEvent) => {
       if (!draggingRef.current) return;
-      const next = Math.max(MIN_WIDTH, Math.min(maxWidth, window.innerWidth - ev.clientX));
+      const next = Math.max(LEGACY_DRAWER_MIN_WIDTH, Math.min(maxWidth, window.innerWidth - ev.clientX));
       setWidth(next);
     };
     const onUp = () => {
       draggingRef.current = false;
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
-      // персистимо тільки після відпускання — щоб не спамити localStorage
-      // на кожному mousemove.
       setWidth((curr) => {
         try {
-          localStorage.setItem(STORAGE_KEY, String(curr));
+          localStorage.setItem(LEGACY_DRAWER_STORAGE_KEY, String(curr));
         } catch {}
         return curr;
       });
@@ -1237,8 +1278,6 @@ function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
     <div
       className="fixed right-0 top-0 bottom-0 z-50 overflow-y-auto"
       style={{
-        // На мобільному 720px перевищить viewport → maxWidth обрізає у 100vw,
-        // тобто візуально drawer займе весь екран. На desktop працює як треба.
         width,
         maxWidth: "100vw",
         backgroundColor: T.panel,
@@ -1246,7 +1285,6 @@ function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
         boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
       }}
     >
-      {/* Drag-handle на лівій межі — тільки на desktop (sm+). */}
       <div
         onMouseDown={startDrag}
         className="hidden sm:block absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-10 hover:bg-blue-500/40 transition"
@@ -1254,9 +1292,15 @@ function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
         title="Перетягніть щоб змінити ширину"
         aria-label="Змінити ширину панелі"
       />
-      {children}
+      <div className="h-full">{children}</div>
     </div>
   );
+}
+
+/** Embedded-mode каркас: drawer не задає власну position/resize/shadow —
+ *  усе це робить зовнішній <DrillDownDrawer>. */
+function EmbeddedWrapper({ children }: { children: React.ReactNode }) {
+  return <div className="flex h-full flex-col">{children}</div>;
 }
 
 function Section({
@@ -1285,15 +1329,35 @@ function Section({
 function DepRow({
   label,
   task,
+  onOpen,
 }: {
   label: string;
   task?: { id: string; title: string; status: { name: string; color: string } };
+  onOpen?: (id: string) => void;
 }) {
   if (!task) return null;
+  const taskId = task.id;
   return (
     <li
-      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px]"
-      style={{ backgroundColor: T.panelElevated }}
+      onClick={onOpen ? () => onOpen(taskId) : undefined}
+      role={onOpen ? "button" : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      onKeyDown={
+        onOpen
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onOpen(taskId);
+              }
+            }
+          : undefined
+      }
+      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px] transition hover:brightness-110"
+      style={{
+        backgroundColor: T.panelElevated,
+        cursor: onOpen ? "pointer" : undefined,
+      }}
+      title={onOpen ? "Відкрити задачу" : undefined}
     >
       <span style={{ color: T.textMuted }}>{label}</span>
       <span className="font-semibold truncate" style={{ color: T.textPrimary }}>

@@ -1,29 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import { TaskPeopleGlobal } from "@/app/admin-v2/me/_components/task-people-global";
-import { SelfContainedTaskDrawer } from "@/app/admin-v2/me/_components/task-drawer-shared";
+import { useDrillDown } from "@/components/drawer/use-drill-down";
 
-/**
- * Клієнтський wrapper: рендерить by-people view і керує drawer'ом, коли
- * клікають по задачі. Сесія/роль drawer'у не передаються — це view "тільки
- * на читання+коментарі"; видалення доступне з /admin-v2/me.
- */
 export function TeamView() {
-  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
-
+  const drawer = useDrillDown();
   return (
-    <>
-      <TaskPeopleGlobal onOpenDrawer={setDrawerTaskId} />
-      {drawerTaskId && (
-        <SelfContainedTaskDrawer
-          taskId={drawerTaskId}
-          onClose={() => setDrawerTaskId(null)}
-          onUpdate={() => {
-            // no-op: by-people fetch не reactive, drawer оновить себе сам
-          }}
-        />
-      )}
-    </>
+    <TaskPeopleGlobal
+      onOpenDrawer={(taskId) => drawer.open({ type: "task", id: taskId })}
+    />
   );
 }

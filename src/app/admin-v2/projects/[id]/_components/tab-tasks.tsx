@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
@@ -9,19 +8,19 @@ import type { ProjectStage } from "@prisma/client";
 import {
   Plus,
   X,
-  Loader2,
-  CheckCircle2,
-  Circle,
   List,
   Columns,
   Calendar as CalendarIcon,
   Users as UsersIcon,
   Download,
-  Play,
-  Square,
-  Clock,
   GanttChartSquare,
+  Loader2,
+  CheckCircle2,
+  Circle,
   Link2,
+  Clock,
+  Square,
+  Play,
   Trash2,
 } from "lucide-react";
 import { TaskKanban, type KanbanCard, type KanbanStatus } from "./task-kanban";
@@ -36,7 +35,8 @@ const TaskGantt = dynamic(() => import("./task-gantt").then((m) => m.TaskGantt),
   ),
 });
 import { useProjectRealtime } from "@/hooks/useProjectRealtime";
-import { CommentThread } from "@/components/collab/CommentThread";
+import { useDrillDown } from "@/components/drawer/use-drill-down";
+import { TASK_UPDATED_EVENT } from "@/components/drawer/renderers/TaskDrawerContent";
 
 type StageLite = {
   id: string;
@@ -118,16 +118,11 @@ export function TabTasks({
   const [quickTitle, setQuickTitle] = useState("");
   const [quickStageId, setQuickStageId] = useState(stages[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
-  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const searchParams = useSearchParams();
-
-  // Open TaskDrawer if ?task=<id> is in URL (e.g. from notification deep-link)
-  useEffect(() => {
-    const taskParam = searchParams.get("task");
-    if (taskParam) {
-      setActiveTaskId(taskParam);
-    }
-  }, [searchParams]);
+  const drawer = useDrillDown();
+  const openTask = useCallback(
+    (id: string) => drawer.open({ type: "task", id }),
+    [drawer],
+  );
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -198,6 +193,17 @@ export function TabTasks({
   useEffect(() => {
     if (view === "gantt") void loadGantt();
   }, [view, loadGantt]);
+
+  // Drawer (TaskDrawerContent) кидає `metrum:task-updated` після кожної мутації —
+  // перезавантажуємо список і Gantt, щоб підхопити зміни.
+  useEffect(() => {
+    const handler = () => {
+      void loadAll();
+      if (view === "gantt") void loadGantt();
+    };
+    window.addEventListener(TASK_UPDATED_EVENT, handler);
+    return () => window.removeEventListener(TASK_UPDATED_EVENT, handler);
+  }, [loadAll, loadGantt, view]);
 
   // Real-time updates — refresh list when task events fire
   useProjectRealtime(projectId, (evt) => {
@@ -425,13 +431,13 @@ export function TabTasks({
           statuses={kanbanStatuses}
           cards={kanbanCards}
           onMove={(id, s, p) => void moveCard(id, s, p)}
-          onOpen={(id) => setActiveTaskId(id)}
+          onOpen={openTask}
         />
       ) : view === "gantt" ? (
         gantt ? (
           <TaskGantt
             items={gantt.items}
-            onTaskClick={(id) => setActiveTaskId(id)}
+            onTaskClick={openTask}
             onDateChange={async (id, start, end) => {
               await fetch(`/api/admin/tasks/${id}`, {
                 method: "PATCH",
@@ -461,7 +467,7 @@ export function TabTasks({
             status: { name: t.status.name, color: t.status.color },
             priority: t.priority,
           }))}
-          onOpen={(id) => setActiveTaskId(id)}
+          onOpen={openTask}
         />
       ) : view === "people" ? (
         <TaskPeopleView
@@ -477,7 +483,7 @@ export function TabTasks({
             priority: t.priority,
             assignees: t.assignees,
           }))}
-          onOpen={(id) => setActiveTaskId(id)}
+          onOpen={openTask}
         />
       ) : (
         // list
@@ -516,7 +522,7 @@ export function TabTasks({
                     <TaskRow
                       key={t.id}
                       task={t}
-                      onOpen={() => setActiveTaskId(t.id)}
+                      onOpen={() => openTask(t.id)}
                     />
                   ))}
                 </ul>
@@ -526,18 +532,6 @@ export function TabTasks({
         })
       )}
 
-      {activeTaskId && (
-        <TaskDrawer
-          taskId={activeTaskId}
-          projectId={projectId}
-          statuses={statuses}
-          labels={labels}
-          onClose={() => {
-            setActiveTaskId(null);
-            void loadAll();
-          }}
-        />
-      )}
     </div>
   );
 }
@@ -595,788 +589,5 @@ function TaskRow({ task, onOpen }: { task: TaskListItem; onOpen: () => void }) {
         </span>
       )}
     </li>
-  );
-}
-
-type TaskDetail = TaskListItem & {
-  description: string | null;
-  checklist: {
-    id: string;
-    content: string;
-    isDone: boolean;
-    position: number;
-  }[];
-  stage: { stage: ProjectStage };
-  customFields: Record<string, unknown> | null;
-};
-
-type TimeLogEntry = {
-  id: string;
-  startedAt: string;
-  endedAt: string | null;
-  minutes: number | null;
-  description: string | null;
-  billable: boolean;
-  costSnapshot: string | null;
-  user: { id: string; name: string; avatar: string | null };
-};
-
-type DependencyEntry = {
-  id: string;
-  type: "FS" | "SS" | "FF" | "SF";
-  lagDays: number;
-  predecessor?: { id: string; title: string; status: { name: string; color: string } };
-  successor?: { id: string; title: string; status: { name: string; color: string } };
-};
-
-type CustomFieldDef = {
-  id: string;
-  name: string;
-  type: "TEXT" | "NUMBER" | "DATE" | "SELECT" | "MULTI_SELECT" | "URL" | "USER";
-  options: { values?: string[] } | null;
-  isRequired: boolean;
-};
-
-function TaskDrawer({
-  taskId,
-  projectId,
-  statuses,
-  labels: _labels,
-  onClose,
-}: {
-  taskId: string;
-  projectId: string;
-  statuses: TaskStatus[];
-  labels: TaskLabel[];
-  onClose: () => void;
-}) {
-  const [detail, setDetail] = useState<TaskDetail | null>(null);
-  const [logs, setLogs] = useState<TimeLogEntry[]>([]);
-  const [deps, setDeps] = useState<{ incoming: DependencyEntry[]; outgoing: DependencyEntry[] }>({
-    incoming: [],
-    outgoing: [],
-  });
-  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
-  const [activeTimerId, setActiveTimerId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [timerBusy, setTimerBusy] = useState(false);
-  const [depPickerOpen, setDepPickerOpen] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [detailRes, logsRes, currentRes, depsRes, cfRes] = await Promise.all([
-        fetch(`/api/admin/tasks/${taskId}`),
-        fetch(`/api/admin/tasks/${taskId}/time`),
-        fetch(`/api/admin/time/timer/current`),
-        fetch(`/api/admin/tasks/${taskId}/dependencies`),
-        fetch(`/api/admin/projects/${projectId}/custom-fields`),
-      ]);
-      if (detailRes.ok) {
-        const j = await detailRes.json();
-        setDetail(j.data);
-      }
-      if (logsRes.ok) {
-        const j = await logsRes.json();
-        setLogs(j.data ?? []);
-      }
-      if (currentRes.ok) {
-        const j = await currentRes.json();
-        setActiveTimerId(
-          j.data && j.data.task?.id === taskId ? j.data.id : null,
-        );
-      }
-      if (depsRes.ok) {
-        const j = await depsRes.json();
-        setDeps(j.data ?? { incoming: [], outgoing: [] });
-      }
-      if (cfRes.ok) {
-        const j = await cfRes.json();
-        setCustomFieldDefs(j.data ?? []);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [taskId, projectId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const setStatus = async (statusId: string) => {
-    setSaving(true);
-    try {
-      await fetch(`/api/admin/tasks/${taskId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ statusId }),
-      });
-      await load();
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const addChecklist = async () => {
-    if (!newChecklistItem.trim()) return;
-    await fetch(`/api/admin/tasks/${taskId}/checklist`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: newChecklistItem }),
-    });
-    setNewChecklistItem("");
-    await load();
-  };
-
-  const toggleChecklist = async (itemId: string) => {
-    await fetch(`/api/admin/tasks/${taskId}/checklist/${itemId}`, {
-      method: "PATCH",
-    });
-    await load();
-  };
-
-  const addDependency = async (otherTaskId: string, role: "predecessor" | "successor") => {
-    const res = await fetch(`/api/admin/tasks/${taskId}/dependencies`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ otherTaskId, role, type: "FS", lagDays: 0 }),
-    });
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      alert(j.error ?? "Не вдалось додати залежність");
-      return;
-    }
-    setDepPickerOpen(false);
-    await load();
-  };
-
-  const removeDependency = async (depId: string) => {
-    await fetch(`/api/admin/tasks/${taskId}/dependencies/${depId}`, {
-      method: "DELETE",
-    });
-    await load();
-  };
-
-  const startTimer = async () => {
-    setTimerBusy(true);
-    try {
-      await fetch(`/api/admin/time/timer/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ taskId }),
-      });
-      window.dispatchEvent(new Event("timer:refresh"));
-      await load();
-    } finally {
-      setTimerBusy(false);
-    }
-  };
-
-  const stopTimer = async () => {
-    setTimerBusy(true);
-    try {
-      await fetch(`/api/admin/time/timer/stop`, { method: "POST" });
-      window.dispatchEvent(new Event("timer:refresh"));
-      await load();
-    } finally {
-      setTimerBusy(false);
-    }
-  };
-
-  const setCustomField = async (fieldId: string, value: unknown) => {
-    const currentCf = detail?.customFields ?? {};
-    const next = { ...currentCf, [fieldId]: value };
-    await fetch(`/api/admin/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ customFields: next }),
-    });
-    await load();
-  };
-
-  const totalMinutes = logs.reduce((sum, l) => sum + (l.minutes ?? 0), 0);
-  const totalHours = (totalMinutes / 60).toFixed(2);
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex justify-end"
-      style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-      onClick={onClose}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="h-full w-full sm:w-[560px] overflow-y-auto"
-        style={{
-          backgroundColor: T.panel,
-          borderLeft: `1px solid ${T.borderStrong}`,
-        }}
-      >
-        <div
-          className="sticky top-0 flex items-center justify-between p-4 z-10"
-          style={{
-            backgroundColor: T.panel,
-            borderBottom: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          <h2 className="text-sm font-bold" style={{ color: T.textPrimary }}>
-            Задача
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-2 tap-highlight-none"
-            style={{ color: T.textMuted }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {loading || !detail ? (
-          <div
-            className="p-8 text-center text-sm"
-            style={{ color: T.textMuted }}
-          >
-            Завантаження…
-          </div>
-        ) : (
-          <div className="p-5 flex flex-col gap-5">
-            <h3
-              className="text-lg font-bold"
-              style={{ color: T.textPrimary }}
-            >
-              {detail.title}
-            </h3>
-
-            {detail.description && (
-              <p
-                className="text-sm whitespace-pre-wrap"
-                style={{ color: T.textSecondary }}
-              >
-                {detail.description}
-              </p>
-            )}
-
-            {/* Status selector */}
-            <div className="flex flex-col gap-2">
-              <label
-                className="text-[11px] font-bold tracking-wider"
-                style={{ color: T.textMuted }}
-              >
-                СТАТУС
-              </label>
-              <div className="flex flex-wrap gap-2">
-                {statuses.map((s) => {
-                  const active = s.id === detail.status.id;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => void setStatus(s.id)}
-                      disabled={saving}
-                      className="rounded-full px-3 py-1.5 text-[11px] font-semibold disabled:opacity-60"
-                      style={{
-                        backgroundColor: active
-                          ? s.color + "33"
-                          : T.panelElevated,
-                        color: active ? s.color : T.textMuted,
-                        border: `1px solid ${active ? s.color : T.borderSoft}`,
-                      }}
-                    >
-                      {s.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Checklist */}
-            <div className="flex flex-col gap-2">
-              <label
-                className="text-[11px] font-bold tracking-wider"
-                style={{ color: T.textMuted }}
-              >
-                ЧЕК-ЛИСТ
-              </label>
-              <ul className="flex flex-col gap-1">
-                {detail.checklist.map((ci) => (
-                  <li
-                    key={ci.id}
-                    onClick={() => void toggleChecklist(ci.id)}
-                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm cursor-pointer"
-                    style={{
-                      color: ci.isDone ? T.textMuted : T.textPrimary,
-                      textDecoration: ci.isDone ? "line-through" : "none",
-                    }}
-                  >
-                    {ci.isDone ? (
-                      <CheckCircle2 size={14} color={T.success} />
-                    ) : (
-                      <Circle size={14} color={T.textMuted} />
-                    )}
-                    {ci.content}
-                  </li>
-                ))}
-              </ul>
-              <div className="flex gap-2">
-                <input
-                  value={newChecklistItem}
-                  onChange={(e) => setNewChecklistItem(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") void addChecklist();
-                  }}
-                  placeholder="Новий пункт…"
-                  className="flex-1 rounded-lg px-3 py-2 text-sm outline-none"
-                  style={{
-                    backgroundColor: T.panelElevated,
-                    color: T.textPrimary,
-                    border: `1px solid ${T.borderSoft}`,
-                  }}
-                />
-                <button
-                  onClick={() => void addChecklist()}
-                  className="rounded-lg px-3 py-2 text-sm font-semibold"
-                  style={{
-                    backgroundColor: T.accentPrimarySoft,
-                    color: T.accentPrimary,
-                  }}
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-            </div>
-
-            {/* Assignees */}
-            {detail.assignees.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <label
-                  className="text-[11px] font-bold tracking-wider"
-                  style={{ color: T.textMuted }}
-                >
-                  ВИКОНАВЦІ
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {detail.assignees.map((a) => (
-                    <span
-                      key={a.user.id}
-                      className="rounded-full px-3 py-1 text-[11px] font-semibold"
-                      style={{
-                        backgroundColor: T.panelElevated,
-                        color: T.textPrimary,
-                      }}
-                    >
-                      {a.user.name}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Dependencies */}
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label
-                  className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider"
-                  style={{ color: T.textMuted }}
-                >
-                  <Link2 size={11} />
-                  ЗАЛЕЖНОСТІ
-                </label>
-                <button
-                  onClick={() => setDepPickerOpen((v) => !v)}
-                  className="rounded-lg px-2 py-1 text-[11px] font-semibold"
-                  style={{
-                    backgroundColor: T.accentPrimarySoft,
-                    color: T.accentPrimary,
-                  }}
-                >
-                  {depPickerOpen ? "Скасувати" : "+ Додати"}
-                </button>
-              </div>
-              {depPickerOpen && (
-                <DepPicker
-                  projectId={projectId}
-                  currentTaskId={taskId}
-                  onPick={(otherId, role) => void addDependency(otherId, role)}
-                />
-              )}
-              {deps.incoming.length === 0 && deps.outgoing.length === 0 && !depPickerOpen ? (
-                <p className="text-[11px]" style={{ color: T.textMuted }}>
-                  Без залежностей
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {deps.incoming.map((d) => (
-                    <DepRow
-                      key={"in-" + d.id}
-                      label="← залежить від"
-                      task={d.predecessor}
-                      onRemove={() => void removeDependency(d.id)}
-                    />
-                  ))}
-                  {deps.outgoing.map((d) => (
-                    <DepRow
-                      key={"out-" + d.id}
-                      label="блокує →"
-                      task={d.successor}
-                      onRemove={() => void removeDependency(d.id)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Custom fields */}
-            {customFieldDefs.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <label
-                  className="text-[11px] font-bold tracking-wider"
-                  style={{ color: T.textMuted }}
-                >
-                  КАСТОМНІ ПОЛЯ
-                </label>
-                <div className="flex flex-col gap-2">
-                  {customFieldDefs.map((def) => (
-                    <CustomFieldInput
-                      key={def.id}
-                      def={def}
-                      value={(detail.customFields ?? {})[def.id]}
-                      onChange={(v) => void setCustomField(def.id, v)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Time tracking */}
-            <div className="flex flex-col gap-2">
-              <label
-                className="flex items-center gap-1.5 text-[11px] font-bold tracking-wider"
-                style={{ color: T.textMuted }}
-              >
-                <Clock size={11} />
-                ТАЙМ-ТРЕКІНГ · {totalHours} год
-              </label>
-              <div className="flex gap-2">
-                {activeTimerId ? (
-                  <button
-                    onClick={() => void stopTimer()}
-                    disabled={timerBusy}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
-                    style={{ backgroundColor: "#ef4444", color: "#fff" }}
-                  >
-                    {timerBusy ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Square size={14} />
-                    )}
-                    Зупинити таймер
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => void startTimer()}
-                    disabled={timerBusy}
-                    className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold"
-                    style={{
-                      backgroundColor: T.accentPrimary,
-                      color: "#fff",
-                    }}
-                  >
-                    {timerBusy ? (
-                      <Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Play size={14} />
-                    )}
-                    Старт
-                  </button>
-                )}
-              </div>
-              {logs.length > 0 && (
-                <ul className="flex flex-col gap-1 mt-1">
-                  {logs.slice(0, 10).map((l) => (
-                    <li
-                      key={l.id}
-                      className="flex items-center justify-between rounded-lg px-2.5 py-1.5 text-[11px]"
-                      style={{
-                        backgroundColor: T.panelElevated,
-                        color: T.textSecondary,
-                      }}
-                    >
-                      <span className="truncate flex-1">
-                        {l.user.name} ·{" "}
-                        {new Date(l.startedAt).toLocaleDateString("uk-UA")}
-                        {l.description ? ` · ${l.description}` : ""}
-                      </span>
-                      <span
-                        className="font-mono font-bold ml-2"
-                        style={{ color: T.textPrimary }}
-                      >
-                        {l.minutes !== null
-                          ? `${Math.floor(l.minutes / 60)}:${(l.minutes % 60).toString().padStart(2, "0")}`
-                          : "⏱️"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Task discussion thread */}
-            <div className="flex flex-col gap-2">
-              <CommentThread entityType="TASK" entityId={taskId} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function DepRow({
-  label,
-  task,
-  onRemove,
-}: {
-  label: string;
-  task?: { id: string; title: string; status: { name: string; color: string } };
-  onRemove: () => void;
-}) {
-  if (!task) return null;
-  return (
-    <li
-      className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[11px]"
-      style={{
-        backgroundColor: T.panelElevated,
-        border: `1px solid ${T.borderSoft}`,
-      }}
-    >
-      <span
-        className="text-[9px] font-bold uppercase flex-shrink-0"
-        style={{ color: T.textMuted }}
-      >
-        {label}
-      </span>
-      <span className="flex-1 truncate" style={{ color: T.textPrimary }}>
-        {task.title}
-      </span>
-      <span
-        className="rounded-full px-2 py-0.5 text-[9px] font-bold flex-shrink-0"
-        style={{
-          backgroundColor: task.status.color + "22",
-          color: task.status.color,
-        }}
-      >
-        {task.status.name}
-      </span>
-      <button
-        onClick={onRemove}
-        className="p-1 rounded-md flex-shrink-0"
-        style={{ color: T.textMuted }}
-        title="Видалити залежність"
-      >
-        <Trash2 size={12} />
-      </button>
-    </li>
-  );
-}
-
-function DepPicker({
-  projectId,
-  currentTaskId,
-  onPick,
-}: {
-  projectId: string;
-  currentTaskId: string;
-  onPick: (taskId: string, role: "predecessor" | "successor") => void;
-}) {
-  const [q, setQ] = useState("");
-  const [list, setList] = useState<{ id: string; title: string }[]>([]);
-  const [role, setRole] = useState<"predecessor" | "successor">("predecessor");
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const r = await fetch(
-        `/api/admin/projects/${projectId}/tasks?take=30${q ? `&search=${encodeURIComponent(q)}` : ""}`,
-      );
-      if (!r.ok) return;
-      const j = await r.json();
-      if (cancelled) return;
-      const items = (j.data?.items ?? [])
-        .filter((t: { id: string }) => t.id !== currentTaskId)
-        .slice(0, 15);
-      setList(items);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, currentTaskId, q]);
-
-  return (
-    <div
-      className="rounded-lg p-2 flex flex-col gap-2"
-      style={{
-        backgroundColor: T.panelElevated,
-        border: `1px solid ${T.borderSoft}`,
-      }}
-    >
-      <div className="flex gap-1">
-        {(["predecessor", "successor"] as const).map((r) => (
-          <button
-            key={r}
-            onClick={() => setRole(r)}
-            className="rounded-md px-2 py-1 text-[10px] font-semibold"
-            style={{
-              backgroundColor: role === r ? T.accentPrimarySoft : "transparent",
-              color: role === r ? T.accentPrimary : T.textMuted,
-              border: `1px solid ${role === r ? T.accentPrimary : T.borderSoft}`,
-            }}
-          >
-            {r === "predecessor" ? "Поточна ← залежить від" : "Поточна блокує →"}
-          </button>
-        ))}
-      </div>
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Пошук задачі…"
-        className="rounded-md px-2 py-1.5 text-sm outline-none"
-        style={{
-          backgroundColor: T.panel,
-          color: T.textPrimary,
-          border: `1px solid ${T.borderSoft}`,
-        }}
-      />
-      <ul className="flex flex-col gap-0.5 max-h-48 overflow-y-auto">
-        {list.map((t) => (
-          <li key={t.id}>
-            <button
-              onClick={() => onPick(t.id, role)}
-              className="w-full rounded-md px-2 py-1.5 text-left text-[12px]"
-              style={{ color: T.textPrimary }}
-            >
-              {t.title}
-            </button>
-          </li>
-        ))}
-        {list.length === 0 && (
-          <li className="text-[11px] text-center" style={{ color: T.textMuted }}>
-            Немає задач
-          </li>
-        )}
-      </ul>
-    </div>
-  );
-}
-
-function CustomFieldInput({
-  def,
-  value,
-  onChange,
-}: {
-  def: CustomFieldDef;
-  value: unknown;
-  onChange: (v: unknown) => void;
-}) {
-  const labelEl = (
-    <label
-      className="text-[10px] font-semibold uppercase"
-      style={{ color: T.textMuted }}
-    >
-      {def.name}
-      {def.isRequired && <span style={{ color: "#ef4444" }}> *</span>}
-    </label>
-  );
-
-  const inputStyle: React.CSSProperties = {
-    backgroundColor: T.panelElevated,
-    color: T.textPrimary,
-    border: `1px solid ${T.borderSoft}`,
-  };
-
-  if (def.type === "TEXT" || def.type === "URL") {
-    return (
-      <div className="flex flex-col gap-1">
-        {labelEl}
-        <input
-          type={def.type === "URL" ? "url" : "text"}
-          defaultValue={typeof value === "string" ? value : ""}
-          onBlur={(e) => onChange(e.target.value || null)}
-          className="rounded-md px-2 py-1.5 text-sm outline-none"
-          style={inputStyle}
-        />
-      </div>
-    );
-  }
-  if (def.type === "NUMBER") {
-    return (
-      <div className="flex flex-col gap-1">
-        {labelEl}
-        <input
-          type="number"
-          defaultValue={typeof value === "number" ? value : ""}
-          onBlur={(e) =>
-            onChange(e.target.value === "" ? null : Number(e.target.value))
-          }
-          className="rounded-md px-2 py-1.5 text-sm outline-none"
-          style={inputStyle}
-        />
-      </div>
-    );
-  }
-  if (def.type === "DATE") {
-    return (
-      <div className="flex flex-col gap-1">
-        {labelEl}
-        <input
-          type="date"
-          defaultValue={typeof value === "string" ? value.slice(0, 10) : ""}
-          onBlur={(e) => onChange(e.target.value || null)}
-          className="rounded-md px-2 py-1.5 text-sm outline-none"
-          style={inputStyle}
-        />
-      </div>
-    );
-  }
-  if (def.type === "SELECT") {
-    const opts = def.options?.values ?? [];
-    return (
-      <div className="flex flex-col gap-1">
-        {labelEl}
-        <select
-          defaultValue={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value || null)}
-          className="rounded-md px-2 py-1.5 text-sm outline-none"
-          style={inputStyle}
-        >
-          <option value="">—</option>
-          {opts.map((o) => (
-            <option key={o} value={o}>
-              {o}
-            </option>
-          ))}
-        </select>
-      </div>
-    );
-  }
-  // MULTI_SELECT / USER render as comma-separated text as a simple fallback
-  return (
-    <div className="flex flex-col gap-1">
-      {labelEl}
-      <input
-        type="text"
-        defaultValue={Array.isArray(value) ? (value as string[]).join(", ") : ""}
-        placeholder="val1, val2"
-        onBlur={(e) =>
-          onChange(
-            e.target.value
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          )
-        }
-        className="rounded-md px-2 py-1.5 text-sm outline-none"
-        style={inputStyle}
-      />
-    </div>
   );
 }

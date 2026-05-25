@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useMemo, useEffect, useCallback } from "react";
+import { useDrillDown } from "@/components/drawer/use-drill-down";
+import { TASK_UPDATED_EVENT, type TaskUpdatedDetail } from "@/components/drawer/renderers/TaskDrawerContent";
 import {
   AlertTriangle,
   Clock,
@@ -28,7 +29,6 @@ import {
 } from "./use-me-tasks";
 import { FocusBanner } from "./dashboard-kpi";
 import { NewTaskModal } from "./new-task-modal";
-import { SelfContainedTaskDrawer } from "./task-drawer-shared";
 import { TaskTableView } from "./task-table-view";
 import { SectionsView } from "./sections-view";
 import { AiDaySummary } from "./ai-day-summary";
@@ -312,17 +312,13 @@ export function MeDashboard({
   const SCOPE_DEFS = isAdmin ? SCOPE_DEFS_ADMIN : SCOPE_DEFS_DEFAULT;
   const [projectIds, setProjectIds] = useState<string[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
-  const [drawerTaskId, setDrawerTaskId] = useState<string | null>(null);
 
-  // Якщо URL містить ?task=<id> — відкрити drawer одразу (для deep-link'ів з
-  // Telegram / push-нотифікацій). Auth уже виконав middleware (next-auth);
-  // сам drawer додатково гейтить через getProjectAccessContext у API.
-  const searchParams = useSearchParams();
-  useEffect(() => {
-    const tId = searchParams?.get("task");
-    if (tId && tId !== drawerTaskId) setDrawerTaskId(tId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  const drawer = useDrillDown();
+  const openTaskDrawer = useCallback(
+    (id: string) => drawer.open({ type: "task", id }),
+    [drawer],
+  );
+
   const [showFilters, setShowFilters] = useState(false);
   const [allProjects, setAllProjects] = useState<ProjectOption[]>([]);
 
@@ -351,6 +347,17 @@ export function MeDashboard({
     projectIds: projectIds.length > 0 ? projectIds : undefined,
     initialScope: isAdmin ? "all" : "assigned",
   });
+
+  // Drawer (TaskDrawerContent) кидає `metrum:task-updated` після кожної мутації.
+  // Тут перезавантажуємо список задач, щоб поточний рядок підхопив зміни.
+  useEffect(() => {
+    const handler = (_e: Event) => {
+      void load();
+    };
+    window.addEventListener(TASK_UPDATED_EVENT, handler as EventListener);
+    return () =>
+      window.removeEventListener(TASK_UPDATED_EVENT, handler as EventListener);
+  }, [load]);
 
   // Load projects for filter
   useState(() => {
@@ -597,7 +604,7 @@ export function MeDashboard({
           loading={loading}
           activeTimerTaskId={activeTimer?.task.id ?? null}
           pendingId={pendingId}
-          onOpenDrawer={setDrawerTaskId}
+          onOpenDrawer={openTaskDrawer}
           onStartTimer={(id) => void startTimer(id)}
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
@@ -612,23 +619,15 @@ export function MeDashboard({
           loading={loading}
           activeTimerTaskId={activeTimer?.task.id ?? null}
           pendingId={pendingId}
-          onOpenDrawer={setDrawerTaskId}
+          onOpenDrawer={openTaskDrawer}
           onStartTimer={(id) => void startTimer(id)}
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
         />
       )}
 
-      {/* Task drawer */}
-      {drawerTaskId && (
-        <SelfContainedTaskDrawer
-          taskId={drawerTaskId}
-          currentUserId={currentUserId}
-          currentUserRole={currentUserRole}
-          onClose={() => setDrawerTaskId(null)}
-          onUpdate={() => void load()}
-        />
-      )}
+      {/* Task drawer rendered globally by <DrillDownDrawer /> in layout.
+          Listen for mutations to refresh the list. */}
 
       {/* New task modal */}
       {createOpen && (
