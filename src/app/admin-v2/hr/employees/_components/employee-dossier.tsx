@@ -290,9 +290,12 @@ function toDateInput(iso: string | null): string {
 export function EmployeeDossier({
   id,
   currentUserRole,
+  inPanel = false,
 }: {
   id: string;
   currentUserRole: string;
+  /** Якщо рендериться у бічній панелі — приховує back-link «До списку». */
+  inPanel?: boolean;
 }) {
   const router = useRouter();
   const [employee, setEmployee] = useState<Employee | null>(null);
@@ -396,17 +399,19 @@ export function EmployeeDossier({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Back link */}
-      <div className="flex items-center gap-2">
-        <Link
-          href="/admin-v2/hr/employees"
-          className="flex items-center gap-1.5 text-[12px] hover:underline"
-          style={{ color: T.textSecondary }}
-        >
-          <ArrowLeft size={14} />
-          До списку співробітників
-        </Link>
-      </div>
+      {/* Back link — приховано у режимі бічної панелі (там є власна X). */}
+      {!inPanel && (
+        <div className="flex items-center gap-2">
+          <Link
+            href="/admin-v2/hr/employees"
+            className="flex items-center gap-1.5 text-[12px] hover:underline"
+            style={{ color: T.textSecondary }}
+          >
+            <ArrowLeft size={14} />
+            До списку співробітників
+          </Link>
+        </div>
+      )}
 
       {/* Slim header */}
       <div className="flex flex-wrap items-center gap-3">

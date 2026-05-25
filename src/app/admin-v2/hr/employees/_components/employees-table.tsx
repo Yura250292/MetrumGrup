@@ -153,10 +153,13 @@ export function EmployeesTable({
   items,
   mode,
   canSeeSalary,
+  onSelectEmployee,
 }: {
   items: EmployeeRow[];
   mode: DisplayMode;
   canSeeSalary: boolean;
+  /** Якщо передано — клік по імені відкриває бічну панель замість переходу. */
+  onSelectEmployee?: (id: string) => void;
 }) {
   const [sortKey, setSortKey] = useState<ColumnKey>("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -391,6 +394,7 @@ export function EmployeesTable({
                     return next;
                   })
                 }
+                onSelectEmployee={onSelectEmployee}
               />
             ))
           ) : (
@@ -402,6 +406,7 @@ export function EmployeesTable({
                 gridTemplate={gridTemplate}
                 canSeeSalary={canSeeSalary}
                 density={density}
+                onSelectEmployee={onSelectEmployee}
               />
             ))
           )}
@@ -747,6 +752,7 @@ function DepartmentGroup({
   density,
   collapsed,
   onToggle,
+  onSelectEmployee,
 }: {
   name: string;
   items: EmployeeRow[];
@@ -756,6 +762,7 @@ function DepartmentGroup({
   density: Density;
   collapsed: boolean;
   onToggle: () => void;
+  onSelectEmployee?: (id: string) => void;
 }) {
   const open = !collapsed;
   return (
@@ -792,6 +799,7 @@ function DepartmentGroup({
             gridTemplate={gridTemplate}
             canSeeSalary={canSeeSalary}
             density={density}
+            onSelectEmployee={onSelectEmployee}
           />
         ))}
     </div>
@@ -804,12 +812,14 @@ function EmployeeRowView({
   gridTemplate,
   canSeeSalary,
   density,
+  onSelectEmployee,
 }: {
   employee: EmployeeRow;
   columns: Column[];
   gridTemplate: string;
   canSeeSalary: boolean;
   density: Density;
+  onSelectEmployee?: (id: string) => void;
 }) {
   const href = `/admin-v2/hr/employees/${employee.id}`;
 
@@ -845,6 +855,7 @@ function EmployeeRowView({
             employee={employee}
             href={href}
             canSeeSalary={canSeeSalary}
+            onSelectEmployee={onSelectEmployee}
           />
         </div>
       ))}
@@ -858,21 +869,18 @@ function Cell({
   employee,
   href,
   canSeeSalary,
+  onSelectEmployee,
 }: {
   col: Column;
   employee: EmployeeRow;
   href: string;
   canSeeSalary: boolean;
+  onSelectEmployee?: (id: string) => void;
 }) {
   switch (col.key) {
-    case "name":
-      return (
-        <Link
-          href={href}
-          className="flex min-w-0 items-center gap-2 font-medium transition-colors duration-150 hover:underline"
-          style={{ color: T.textPrimary }}
-          title={employee.fullName}
-        >
+    case "name": {
+      const inner = (
+        <>
           <EmployeeAvatar
             fullName={employee.fullName}
             lastName={employee.lastName}
@@ -882,8 +890,31 @@ function Cell({
             dimmed={!employee.isActive}
           />
           <span className="min-w-0 truncate">{shortName(employee)}</span>
+        </>
+      );
+      const sharedClass =
+        "flex min-w-0 items-center gap-2 font-medium text-left transition-colors duration-150 hover:underline";
+      return onSelectEmployee ? (
+        <button
+          type="button"
+          onClick={() => onSelectEmployee(employee.id)}
+          className={sharedClass}
+          style={{ color: T.textPrimary }}
+          title={employee.fullName}
+        >
+          {inner}
+        </button>
+      ) : (
+        <Link
+          href={href}
+          className={sharedClass}
+          style={{ color: T.textPrimary }}
+          title={employee.fullName}
+        >
+          {inner}
         </Link>
       );
+    }
 
     case "position":
       return (

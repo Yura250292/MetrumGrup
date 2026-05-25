@@ -20,6 +20,7 @@ import { ExcelImportModal } from "../../_components/excel-import-modal";
 import { ROLE_COLORS, ROLE_LABELS } from "../../../_lib/role-display";
 import { EmployeesTable, type DisplayMode } from "./employees-table";
 import { DepartmentsPanel } from "./departments-panel";
+import { EmployeeDrawer } from "./employee-drawer";
 import { useHideSalaries } from "./use-hide-salaries";
 
 type LinkedUser = {
@@ -137,6 +138,8 @@ export function EmployeesList({
   const [accountFilter, setAccountFilter] = useState<AccountFilter>("all");
   const [displayMode, setDisplayMode] = useState<DisplayMode>("grouped");
   const [showImport, setShowImport] = useState(false);
+  /// id співробітника, відкритого в бічній панелі (null = закрита).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -499,6 +502,7 @@ export function EmployeesList({
             items={filtered}
             mode={displayMode}
             canSeeSalary={canSeeSalary}
+            onSelectEmployee={setSelectedId}
           />
         )
       )}
@@ -507,6 +511,17 @@ export function EmployeesList({
         <ExternalAccountsTable
           users={filteredExternal}
           searchActive={Boolean(search.trim())}
+        />
+      )}
+
+      {selectedId && (
+        <EmployeeDrawer
+          id={selectedId}
+          currentUserRole={currentUserRole}
+          onClose={() => {
+            setSelectedId(null);
+            void load();
+          }}
         />
       )}
     </div>
