@@ -84,6 +84,21 @@ export function classifyTask(task: TaskItem, userId: string): Set<SectionKey> {
   return sections;
 }
 
+/**
+ * Пріоритет секцій (зверху — найвища, тобто перемагає при дедупі).
+ * Задача потрапляє у ПЕРШУ секцію зі списку, де вона матчиться,
+ * а не у всі одразу. Інакше «синхронізація на сьогодні де я виконавець»
+ * показувалась і в «Роби зараз», і в «На сьогодні».
+ */
+const SECTION_PRIORITY: SectionKey[] = [
+  "overdue", // дедлайн минув — найкритичніше
+  "today", // дедлайн сьогодні — друге за критичністю
+  "blocked-by", // я чекаю чужу залежність
+  "blocking-others", // я тримаю команду
+  "delegated", // поставив іншим, чекаю
+  "do-now", // дефолт: я виконавець без блокерів і термінів
+];
+
 export function groupBySection(
   tasks: TaskItem[],
   userId: string,
@@ -98,7 +113,10 @@ export function groupBySection(
   };
   for (const task of tasks) {
     const keys = classifyTask(task, userId);
-    for (const key of keys) buckets[key].push(task);
+    if (keys.size === 0) continue;
+    // ОДНА секція на задачу — за пріоритетом.
+    const chosen = SECTION_PRIORITY.find((k) => keys.has(k));
+    if (chosen) buckets[chosen].push(task);
   }
   return buckets;
 }
