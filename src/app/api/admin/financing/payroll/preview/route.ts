@@ -41,6 +41,9 @@ export async function GET(request: NextRequest) {
   const month = Number(url.searchParams.get("month") ?? new Date().getMonth() + 1);
   const modeRaw = (url.searchParams.get("mode") ?? "cash") as Mode;
   const mode: Mode = MODE_VALUES.includes(modeRaw) ? modeRaw : "cash";
+  // Default: показуємо лише тих, у кого є активний EmployeeSalary
+  // ("обрані" — постійний штат на ЗП). `?onlyWithSalary=false` — повний список.
+  const onlyWithSalary = url.searchParams.get("onlyWithSalary") !== "false";
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return NextResponse.json({ error: "Невірний рік" }, { status: 400 });
@@ -72,7 +75,10 @@ export async function GET(request: NextRequest) {
     },
   });
 
-  const fullNames = employees.map((e) => e.fullName);
+  const visibleEmployees = onlyWithSalary
+    ? employees.filter((e) => e.salaries.length > 0)
+    : employees;
+  const fullNames = visibleEmployees.map((e) => e.fullName);
   const existing = await prisma.financeEntry.findMany({
     where: {
       type: "EXPENSE",
@@ -116,7 +122,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     period: { year, month },
     mode,
-    rows: employees.map((e) => {
+    totalEmployees: employees.length,
+    favoritesCount: employees.filter((e) => e.salaries.length > 0).length,
+    onlyWithSalary,
+    rows: visibleEmployees.map((e) => {
       const cashPaid = cashByName.get(e.fullName) ?? { count: 0, total: 0 };
       const taxRecord = taxByName.get(e.fullName);
       const active = e.salaries[0] ?? null;

@@ -61,12 +61,16 @@ export function PayrollModal({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ created: number; skipped: number } | null>(null);
   const [kind, setKind] = useState<"PLAN" | "FACT">("PLAN");
+  // "Обрані" — лише з активним EmployeeSalary (default). "Всі" — повний штат.
+  const [showAll, setShowAll] = useState(false);
+  const [favoritesCount, setFavoritesCount] = useState(0);
+  const [totalEmployees, setTotalEmployees] = useState(0);
 
   useEffect(() => {
     if (!open) return;
     void loadPreview();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, year, month, mode]);
+  }, [open, year, month, mode, showAll]);
 
   async function loadPreview() {
     setLoading(true);
@@ -74,13 +78,15 @@ export function PayrollModal({
     setResult(null);
     try {
       const res = await fetch(
-        `/api/admin/financing/payroll/preview?year=${year}&month=${month}&mode=${mode}`,
+        `/api/admin/financing/payroll/preview?year=${year}&month=${month}&mode=${mode}&onlyWithSalary=${!showAll}`,
         { cache: "no-store" }
       );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       const data: PreviewRow[] = json.rows ?? [];
       setRows(data);
+      setFavoritesCount(json.favoritesCount ?? 0);
+      setTotalEmployees(json.totalEmployees ?? 0);
       const sel: DraftSelected = {};
       const amt: DraftAmounts = {};
       const nts: DraftNotes = {};
@@ -317,6 +323,30 @@ export function PayrollModal({
             ))}
           </div>
 
+          {/* Favorites filter: Обрані (з активною ЗП) / Всі */}
+          <div className="flex items-center gap-1 rounded-lg p-0.5" style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderStrong}` }}>
+            {([
+              { key: false, label: `Обрані${favoritesCount ? ` (${favoritesCount})` : ""}`, hint: "з активною ЗП" },
+              { key: true, label: `Всі${totalEmployees ? ` (${totalEmployees})` : ""}`, hint: "повний штат" },
+            ] as const).map((t) => {
+              const active = showAll === t.key;
+              return (
+                <button
+                  key={String(t.key)}
+                  onClick={() => setShowAll(t.key)}
+                  title={t.hint}
+                  className="rounded-md px-2.5 py-1 text-[11px] font-semibold transition"
+                  style={{
+                    backgroundColor: active ? T.accentPrimary : "transparent",
+                    color: active ? "#fff" : T.textSecondary,
+                  }}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
           <div className="ml-auto flex items-center gap-1.5">
             <button
               onClick={toggleAll}
@@ -356,11 +386,22 @@ export function PayrollModal({
             <div className="flex flex-col items-center gap-2 py-8 text-center" style={{ color: T.textMuted }}>
               <Users size={28} style={{ color: T.textMuted }} />
               <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
-                Немає активних співробітників
+                {showAll ? "Немає активних співробітників" : "Немає обраних"}
               </span>
               <span className="text-[11px]">
-                Додайте їх у HR → Співробітники, з вказанням посади та зарплати
+                {showAll
+                  ? "Додайте їх у HR → Співробітники, з вказанням посади та зарплати"
+                  : `У режимі "Обрані" показуються тільки ті, у кого встановлено ЗП. ${totalEmployees ? `Перемкніть на "Всі (${totalEmployees})" або задайте ЗП у HR.` : ""}`}
               </span>
+              {!showAll && totalEmployees > 0 && (
+                <button
+                  onClick={() => setShowAll(true)}
+                  className="mt-2 rounded-lg px-3 py-1.5 text-[11px] font-semibold"
+                  style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
+                >
+                  Показати всіх ({totalEmployees})
+                </button>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
