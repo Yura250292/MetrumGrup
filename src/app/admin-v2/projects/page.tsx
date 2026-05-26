@@ -8,7 +8,6 @@ import { formatCurrency } from "@/lib/utils";
 import { FolderKanban } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { EmptyState } from "@/components/shared/states";
-import { ProjectFoldersClient } from "./_components/project-folders-client";
 import { ProjectsView } from "./_components/projects-view";
 import { SectionTabs } from "../_components/section-tabs";
 import { PageIntroCard } from "../_components/help/PageIntroCard";
@@ -112,54 +111,13 @@ export default async function AdminV2ProjectsPage({
     <div className="flex flex-col gap-6">
       <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
-      <section
-        className={`grid ${showFinance ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4`}
-      >
-        <KpiCard
-          label="ВСЬОГО"
-          value={String(projects.length)}
-          sub={`${activeCount} активн${
-            activeCount === 1 ? "ий" : activeCount >= 2 && activeCount <= 4 ? "их" : "их"
-          }`}
-          accent={T.sky}
-          gradient="var(--kpi-sky)"
-        />
-        {showFinance ? (
-          <>
-            <KpiCard
-              label="ЗАГАЛЬНИЙ БЮДЖЕТ"
-              value={formatCurrency(totalBudget)}
-              sub={`${formatCurrency(totalPaid)} сплачено`}
-              accent={T.violet}
-              gradient="var(--kpi-violet)"
-            />
-            <KpiCard
-              label="ВИКОНАННЯ ОПЛАТ"
-              value={`${totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0}%`}
-              sub="від загальної суми"
-              accent={T.emerald}
-              gradient="var(--kpi-emerald)"
-            />
-          </>
-        ) : (
-          <KpiCard
-            label="АКТИВНІ"
-            value={String(activeCount)}
-            sub="зараз ведуться"
-            accent={T.emerald}
-            gradient="var(--kpi-emerald)"
-          />
-        )}
-      </section>
-
-      <div>
-        <ProjectFoldersClient
-          folders={JSON.parse(JSON.stringify(folders))}
-          breadcrumbs={breadcrumbs}
-          currentFolderId={folderId}
-          isSuperAdmin={isSuperAdmin}
-        />
-      </div>
+      <KpiStrip
+        totalCount={projects.length}
+        activeCount={activeCount}
+        showFinance={showFinance}
+        totalBudget={totalBudget}
+        totalPaid={totalPaid}
+      />
 
       {projects.length === 0 && folders.length === 0 ? (
         <EmptyState
@@ -169,58 +127,103 @@ export default async function AdminV2ProjectsPage({
           action={{ label: "Створити проєкт", href: "/admin-v2/projects/new" }}
         />
       ) : (
-        <div>
-          <ProjectsView
-            projects={rows}
-            canDelete={isSuperAdmin}
-            currentFolderId={folderId}
-            totalCount={projects.length}
-            activeCount={activeCount}
-          />
-        </div>
+        <ProjectsView
+          projects={rows}
+          canDelete={isSuperAdmin}
+          currentFolderId={folderId}
+          totalCount={projects.length}
+          activeCount={activeCount}
+          folders={JSON.parse(JSON.stringify(folders))}
+          breadcrumbs={breadcrumbs}
+          isSuperAdmin={isSuperAdmin}
+        />
       )}
     </div>
   );
 }
 
-function KpiCard({
+function KpiStrip({
+  totalCount,
+  activeCount,
+  showFinance,
+  totalBudget,
+  totalPaid,
+}: {
+  totalCount: number;
+  activeCount: number;
+  showFinance: boolean;
+  totalBudget: number;
+  totalPaid: number;
+}) {
+  const paidPct =
+    showFinance && totalBudget > 0
+      ? Math.round((totalPaid / totalBudget) * 100)
+      : 0;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg px-3.5 py-2 text-[12px]"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderSoft}`,
+        color: T.textSecondary,
+      }}
+    >
+      <KpiInline label="Усього" value={String(totalCount)} accent={T.sky} />
+      <Sep />
+      <KpiInline
+        label="Активних"
+        value={String(activeCount)}
+        accent={T.emerald}
+      />
+      {showFinance && (
+        <>
+          <Sep />
+          <KpiInline
+            label="Бюджет"
+            value={formatCurrency(totalBudget)}
+            accent={T.violet}
+          />
+          <Sep />
+          <KpiInline
+            label="Сплачено"
+            value={`${formatCurrency(totalPaid)} (${paidPct}%)`}
+            accent={T.textPrimary}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+function KpiInline({
   label,
   value,
-  sub,
-  accent = T.textPrimary,
-  gradient,
+  accent,
 }: {
   label: string;
   value: string;
-  sub: string;
-  accent?: string;
-  gradient?: string;
+  accent: string;
 }) {
   return (
-    <div
-      className="flex flex-col gap-0.5 rounded-xl sm:rounded-2xl p-2.5 sm:p-5 min-w-0 overflow-hidden"
-      style={{
-        background: gradient || T.panel,
-        border: `1px solid ${accent}20`,
-        boxShadow: `0 2px 8px ${accent}12`,
-      }}
-    >
+    <span className="inline-flex items-baseline gap-1.5 min-w-0">
       <span
-        className="text-[8px] sm:text-[10px] font-bold tracking-wider truncate uppercase"
-        style={{ color: T.textSecondary }}
+        className="text-[10px] uppercase tracking-wider"
+        style={{ color: T.textMuted }}
       >
         {label}
       </span>
-      <span
-        className="text-sm sm:text-2xl font-bold mt-0.5 sm:mt-1 truncate"
-        style={{ color: accent }}
-      >
+      <span className="font-semibold tabular-nums" style={{ color: accent }}>
         {value}
       </span>
-      <span className="text-[9px] sm:text-[11px] truncate" style={{ color: T.textSecondary }}>
-        {sub}
-      </span>
-    </div>
+    </span>
+  );
+}
+
+function Sep() {
+  return (
+    <span aria-hidden style={{ color: T.borderStrong }}>
+      ·
+    </span>
   );
 }
 

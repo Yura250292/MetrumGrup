@@ -17,6 +17,8 @@ import { formatDateShort } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DeleteProjectButton } from "./delete-project-button";
 import { MoveProjectButton } from "./project-folders-client";
+import { FolderCard } from "@/components/folders/FolderCard";
+import type { FolderItem } from "@/hooks/useFolders";
 import type { ProjectExtra, ProjectRow } from "./projects-types";
 import { motion } from "framer-motion";
 import { gridStagger, flyInUp, useReducedMotionVariants } from "@/lib/motion";
@@ -25,24 +27,60 @@ export function ProjectsCards({
   projects,
   canDelete,
   currentFolderId,
+  folders = [],
+  isSuperAdmin,
+  onRenameFolder,
+  onDeleteFolder,
+  onMoveFolder,
 }: {
   projects: ProjectRow[];
   canDelete: boolean;
   currentFolderId: string | null;
+  folders?: FolderItem[];
+  isSuperAdmin?: boolean;
+  onRenameFolder?: (id: string, name: string) => void;
+  onDeleteFolder?: (id: string) => void;
+  onMoveFolder?: (id: string) => void;
 }) {
-  const animateUntil = Math.min(projects.length, 24);
+  const animateUntil = Math.min(projects.length + folders.length, 24);
   const containerVariants = useReducedMotionVariants(gridStagger);
   const itemVariants = useReducedMotionVariants(flyInUp);
 
   return (
     <motion.section
+      // Унифікований grid: папки + проєкти в одній сітці.
       className="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5"
       initial="hidden"
       animate="visible"
       variants={containerVariants}
     >
-      {projects.map((p, i) =>
+      {folders.map((f, i) =>
         i < animateUntil ? (
+          <motion.div key={`folder-${f.id}`} variants={itemVariants}>
+            <FolderCard
+              folder={f}
+              href={`/admin-v2/projects?folderId=${f.id}`}
+              onRename={onRenameFolder}
+              onDelete={onDeleteFolder}
+              onMove={onMoveFolder}
+              bypassLocks={isSuperAdmin}
+            />
+          </motion.div>
+        ) : (
+          <FolderCard
+            key={`folder-${f.id}`}
+            folder={f}
+            href={`/admin-v2/projects?folderId=${f.id}`}
+            onRename={onRenameFolder}
+            onDelete={onDeleteFolder}
+            onMove={onMoveFolder}
+            bypassLocks={isSuperAdmin}
+          />
+        ),
+      )}
+      {projects.map((p, i) => {
+        const animIdx = i + folders.length;
+        return animIdx < animateUntil ? (
           <motion.div key={p.id} variants={itemVariants}>
             <ProjectCard
               project={p}
@@ -59,8 +97,8 @@ export function ProjectsCards({
             canDelete={canDelete}
             currentFolderId={currentFolderId}
           />
-        ),
-      )}
+        );
+      })}
     </motion.section>
   );
 }

@@ -9,6 +9,8 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatDateShort } from "@/lib/utils";
 import { STAGE_LABELS } from "@/lib/constants";
 import { StatusBadge } from "./projects-cards";
+import { FolderCard } from "@/components/folders/FolderCard";
+import type { FolderItem } from "@/hooks/useFolders";
 import type { ProjectRow } from "./projects-types";
 
 type DebtSummary = { outstanding: number; supplierCount: number };
@@ -42,7 +44,21 @@ function useSupplierDebtsSummary(projectIds: string[]): Map<string, DebtSummary>
   return data;
 }
 
-export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
+export function ProjectsTable({
+  projects,
+  folders = [],
+  isSuperAdmin,
+  onRenameFolder,
+  onDeleteFolder,
+  onMoveFolder,
+}: {
+  projects: ProjectRow[];
+  folders?: FolderItem[];
+  isSuperAdmin?: boolean;
+  onRenameFolder?: (id: string, name: string) => void;
+  onDeleteFolder?: (id: string) => void;
+  onMoveFolder?: (id: string) => void;
+}) {
   const router = useRouter();
   const debtMap = useSupplierDebtsSummary(projects.map((p) => p.id));
 
@@ -234,6 +250,22 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
   };
 
   return (
+    <div className="flex flex-col gap-3">
+      {folders.length > 0 && (
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5">
+          {folders.map((f) => (
+            <FolderCard
+              key={f.id}
+              folder={f}
+              href={`/admin-v2/projects?folderId=${f.id}`}
+              onRename={onRenameFolder}
+              onDelete={onDeleteFolder}
+              onMove={onMoveFolder}
+              bypassLocks={isSuperAdmin}
+            />
+          ))}
+        </div>
+      )}
     <DataTable
       data={projects}
       columns={columns}
@@ -286,5 +318,6 @@ export function ProjectsTable({ projects }: { projects: ProjectRow[] }) {
         </Link>
       )}
     />
+    </div>
   );
 }
