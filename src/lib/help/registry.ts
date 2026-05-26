@@ -227,6 +227,11 @@ const FOREMAN_REPORTS: PageHelpConfig = {
         "Якщо AI не зміг розпізнати — поля будуть порожні. Можна заповнити вручну й затвердити, або повернути виконробу з коментарем «перефотографуй у кращому світлі».",
     },
   ],
+  intro: {
+    enabled: true,
+    dismissKey: "/admin-v2/foreman-reports",
+    version: 1,
+  },
 };
 
 const MEETINGS: PageHelpConfig = {
@@ -254,6 +259,11 @@ const MEETINGS: PageHelpConfig = {
         "Орієнтовно $0.37 за годину запису. Деталі затрат видно у Фінансуванні в категорії «Адмін витрати».",
     },
   ],
+  intro: {
+    enabled: true,
+    dismissKey: "/admin-v2/meetings",
+    version: 1,
+  },
 };
 
 const COUNTERPARTIES: PageHelpConfig = {
@@ -280,6 +290,11 @@ const COUNTERPARTIES: PageHelpConfig = {
         "Так — у нього один запис із кількома ролями. На картці видно всі ролі одночасно.",
     },
   ],
+  intro: {
+    enabled: true,
+    dismissKey: "/admin-v2/counterparties",
+    version: 1,
+  },
 };
 
 const CATALOGS_MATERIALS: PageHelpConfig = {
@@ -299,6 +314,11 @@ const CATALOGS_MATERIALS: PageHelpConfig = {
     "Якщо ні — «Додати». Назва, одиниця (м², т, шт), ціна, категорія (метал, бетон, гіпсокартон тощо).",
     "За потреби прив'яжіть постачальника — це покращує точність AI-кошторису.",
   ],
+  intro: {
+    enabled: true,
+    dismissKey: "/admin-v2/catalogs/materials",
+    version: 1,
+  },
 };
 
 const RECEIPTS: PageHelpConfig = {
@@ -318,6 +338,11 @@ const RECEIPTS: PageHelpConfig = {
     "Знайдіть потрібний чек у списку — можна фільтрувати по проєкту.",
     "Натисніть на чек — побачите фото, розпізнані поля й пов'язаний фінансовий запис.",
   ],
+  intro: {
+    enabled: true,
+    dismissKey: "/admin-v2/receipts",
+    version: 1,
+  },
 };
 
 export const HELP_REGISTRY: Record<string, PageHelpConfig> = {

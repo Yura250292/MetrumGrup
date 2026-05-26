@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { MoveToFolderDialog } from "@/components/folders/MoveToFolderDialog";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 import {
   formatDuration,
   STATUS_LABELS,
@@ -229,6 +230,9 @@ export default function MeetingsListPage() {
 
   return (
     <div className="mx-auto max-w-[1800px]">
+      <div className="mb-4">
+        <PageIntroCard />
+      </div>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1

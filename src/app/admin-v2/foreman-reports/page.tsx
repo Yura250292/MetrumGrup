@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 
 type ReportRow = {
   id: string;
@@ -73,6 +74,9 @@ export default function ForemanReportsPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      <div className="mb-4">
+        <PageIntroCard />
+      </div>
       <div className="mb-6">
         <h1 className="text-2xl font-bold mb-1">Звіти виконробів</h1>
         <p className="text-sm text-zinc-500">

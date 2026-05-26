@@ -10,6 +10,7 @@ import {
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { GlobalMaterialsList } from "./_components/global-materials-list";
 import { SuppliersCatalog } from "../suppliers/_components/suppliers-catalog";
+import { PageIntroCard } from "../../_components/help/PageIntroCard";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export default async function MaterialsCatalogPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <PageIntroCard />
       <div className="flex items-center gap-2">
         <Link
           href="/admin-v2/catalogs"

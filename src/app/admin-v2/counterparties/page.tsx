@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { CounterpartyList } from "./_components/counterparty-list";
 import { SectionTabs } from "../_components/section-tabs";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export default async function CounterpartiesPage() {
 
   return (
     <div className="flex flex-col gap-4">
+      <PageIntroCard />
       <SectionTabs tabs={PARTNERS_TABS} />
       <CounterpartyList currentUserRole={session.user.role} />
     </div>

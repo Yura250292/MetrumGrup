@@ -6,6 +6,7 @@ import { formatCurrency } from "@/lib/utils";
 import { ScanLine, Plus, FileText, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ReceiptScanStatus } from "@prisma/client";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function AdminV2ReceiptsListPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <PageIntroCard />
       <section className="flex flex-col gap-2">
         <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
           СКАН НАКЛАДНИХ
