@@ -1,0 +1,591 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import {
+  Check,
+  ChevronDown,
+  Hammer,
+  Loader2,
+  Package,
+  Sparkles,
+  X,
+} from "lucide-react";
+import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { formatCurrency } from "@/lib/utils";
+import { stageDisplayName } from "@/lib/constants";
+import type { StageRow } from "./stage-table";
+
+/**
+ * AI-помічник для розділу «Етапи виконання».
+ *
+ * Користувач описує вільним текстом виконані роботи / закуплені матеріали
+ * («Залив 200 м³ бетону на фундамент, купив 50 кг цвяхів за 1200 грн»).
+ * AI (Gemini) парсить, класифікує LABOR/MATERIAL і пропонує куди розмістити.
+ * Користувач коригує у preview-таблиці і застосовує — це створює нові етапи
+ * (за потреби), оновлює fact-поля існуючих або додає матеріали через
+ * standard materials API.
+ *
+ * Параметри:
+ *   open / onClose — controlled state з parent (stages-section toolbar)
+ *   stages         — дерево для UI-валідації стейдж-селекту
+ *   onApplied      — викликається після успішного apply (parent робить refetch)
+ */
+
+type AiParseItem = {
+  tempId: string;
+  costType: "MATERIAL" | "LABOR";
+  title: string;
+  quantity: number | null | undefined;
+  unit: string | null | undefined;
+  unitPrice: number | null | undefined;
+  amount: number | null | undefined;
+  supplier: string | null | undefined;
+  confidence: number;
+  rawLine: string;
+  proposedStageId: string | null | undefined;
+  proposedNewStageTempId: string | null | undefined;
+  reasoning: string | null | undefined;
+};
+
+type AiParseNewStage = {
+  tempId: string;
+  name: string;
+  parentTempId: string | null | undefined;
+};
+
+type ApplyResult = {
+  stagesCreated: number;
+  stagesUpdated: number;
+  materialsCreated: number;
+};
+
+type Props = {
+  projectId: string;
+  open: boolean;
+  onClose: () => void;
+  stages: StageRow[];
+  onApplied: () => void | Promise<void>;
+};
+
+type DraftItem = AiParseItem & {
+  accepted: boolean;
+  // Поточний вибір користувача — окремо від AI-пропозиції щоб дозволити edit.
+  targetStageRef: string; // existing-id АБО tempId з newStages
+};
+
+export function StagesAiAssistant({
+  projectId,
+  open,
+  onClose,
+  stages,
+  onApplied,
+}: Props) {
+  const [text, setText] = useState("");
+  const [parsing, setParsing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<DraftItem[]>([]);
+  const [newStages, setNewStages] = useState<AiParseNewStage[]>([]);
+  const [result, setResult] = useState<ApplyResult | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      // Reset при закритті
+      setText("");
+      setItems([]);
+      setNewStages([]);
+      setError(null);
+      setResult(null);
+    }
+  }, [open]);
+
+  // Map stageId → display label (для dropdown).
+  const stageOptions = useMemo(() => {
+    const byId = new Map(stages.map((s) => [s.id, s]));
+    const indent = (id: string): string => {
+      let depth = 0;
+      let cur = byId.get(id)?.parentStageId ?? null;
+      while (cur) {
+        depth++;
+        cur = byId.get(cur)?.parentStageId ?? null;
+        if (depth > 4) break;
+      }
+      return "  ".repeat(depth);
+    };
+    return stages
+      .filter((s) => !s.isHidden)
+      .map((s) => ({
+        value: s.id,
+        label: indent(s.id) + stageDisplayName(s),
+      }));
+  }, [stages]);
+
+  async function handleParse() {
+    if (text.trim().length < 5) {
+      setError("Введи більше тексту (мінімум 5 символів)");
+      return;
+    }
+    setError(null);
+    setParsing(true);
+    setResult(null);
+    try {
+      const res = await fetch(
+        `/api/admin/projects/${projectId}/stages/ai-parse`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        },
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error ?? `Помилка ${res.status}`);
+      }
+      const data = json.data as {
+        items: AiParseItem[];
+        newStages: AiParseNewStage[];
+      };
+      setNewStages(data.newStages);
+      setItems(
+        data.items.map((it) => {
+          // Резолвимо початковий targetStageRef
+          let targetRef =
+            it.proposedStageId ?? it.proposedNewStageTempId ?? "";
+          if (!targetRef && data.newStages.length > 0) {
+            targetRef = data.newStages[0].tempId;
+          }
+          if (!targetRef && stages.length > 0) {
+            targetRef = stages[0].id;
+          }
+          return { ...it, accepted: true, targetStageRef: targetRef };
+        }),
+      );
+      if (data.items.length === 0) {
+        setError("AI не зміг розпізнати позиції. Спробуй детальніше описати.");
+      }
+    } catch (err) {
+      console.error("[ai-parse] failed:", err);
+      setError(err instanceof Error ? err.message : "Помилка парсингу");
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  async function handleApply() {
+    const accepted = items.filter((it) => it.accepted && it.targetStageRef);
+    if (accepted.length === 0) {
+      setError("Немає прийнятих позицій для застосування");
+      return;
+    }
+    // Збираємо тільки newStages які реально використовуються.
+    const usedTempIds = new Set<string>();
+    for (const it of accepted) {
+      if (it.targetStageRef.startsWith("new-")) {
+        usedTempIds.add(it.targetStageRef);
+      }
+    }
+    // Додаємо предків (parentTempId) рекурсивно.
+    const allNewByTempId = new Map(newStages.map((n) => [n.tempId, n]));
+    const expand = (tempId: string) => {
+      const ns = allNewByTempId.get(tempId);
+      if (!ns) return;
+      if (ns.parentTempId && ns.parentTempId.startsWith("new-")) {
+        usedTempIds.add(ns.parentTempId);
+        expand(ns.parentTempId);
+      }
+    };
+    for (const t of [...usedTempIds]) expand(t);
+
+    const newStagesPayload = newStages.filter((n) => usedTempIds.has(n.tempId));
+
+    setError(null);
+    setApplying(true);
+    try {
+      const res = await fetch(
+        `/api/admin/projects/${projectId}/stages/ai-apply`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: accepted.map((it) => ({
+              costType: it.costType,
+              title: it.title,
+              quantity: it.quantity,
+              unit: it.unit,
+              unitPrice: it.unitPrice,
+              supplier: it.supplier,
+              targetStageRef: it.targetStageRef,
+            })),
+            newStages: newStagesPayload,
+          }),
+        },
+      );
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error ?? `Помилка ${res.status}`);
+      }
+      setResult(json.data as ApplyResult);
+      setItems([]);
+      setNewStages([]);
+      setText("");
+      await onApplied();
+    } catch (err) {
+      console.error("[ai-apply] failed:", err);
+      setError(err instanceof Error ? err.message : "Помилка застосування");
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <>
+      {/* Backdrop (light, Notion-style) */}
+      <div
+        className="fixed inset-0 z-40"
+        style={{ backgroundColor: "rgba(0,0,0,0.2)" }}
+        onClick={onClose}
+        aria-hidden
+      />
+      <aside
+        className="fixed right-0 top-0 z-50 flex h-screen w-full sm:w-[min(92vw,540px)] flex-col shadow-2xl"
+        style={{
+          backgroundColor: T.panel,
+          borderLeft: `1px solid ${T.borderStrong}`,
+        }}
+      >
+        <header
+          className="flex items-center justify-between gap-3 px-5 py-3"
+          style={{ borderBottom: `1px solid ${T.borderSoft}` }}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles size={16} style={{ color: T.violet }} />
+            <h2
+              className="text-[14px] font-bold"
+              style={{ color: T.textPrimary }}
+            >
+              AI помічник етапів
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1.5"
+            style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
+            aria-label="Закрити"
+          >
+            <X size={16} />
+          </button>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <p
+            className="mb-3 text-[12px]"
+            style={{ color: T.textSecondary }}
+          >
+            Опиши що виконано чи що купили — AI класифікує позиції на роботи /
+            матеріали та запропонує до яких етапів додати. Наприклад:{" "}
+            <em>«Залили 200 м³ бетону на фундамент за 80 грн/м³. Купили
+            50 кг цвяхів за 24 грн/кг у Епіцентрі.»</em>
+          </p>
+
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Опиши вільним текстом..."
+            rows={4}
+            disabled={parsing || applying}
+            className="w-full resize-y rounded-lg border px-3 py-2 text-[13px] outline-none"
+            style={{
+              backgroundColor: T.panel,
+              borderColor: T.borderSoft,
+              color: T.textPrimary,
+              minHeight: 100,
+            }}
+          />
+
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleParse}
+              disabled={parsing || applying || text.trim().length < 5}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-50"
+              style={{ backgroundColor: T.accentPrimary, color: "white" }}
+            >
+              {parsing ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Sparkles size={14} />
+              )}
+              {parsing ? "AI думає…" : "Розпізнати"}
+            </button>
+            {items.length > 0 && (
+              <span className="text-[11px]" style={{ color: T.textMuted }}>
+                {items.filter((it) => it.accepted).length} / {items.length}{" "}
+                прийнято
+              </span>
+            )}
+          </div>
+
+          {error && (
+            <div
+              className="mt-3 rounded-lg px-3 py-2 text-[12px]"
+              style={{
+                backgroundColor: T.dangerSoft ?? "#fee2e2",
+                color: T.danger,
+                border: `1px solid ${T.danger}55`,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {result && (
+            <div
+              className="mt-3 rounded-lg px-3 py-2 text-[12px] flex items-start gap-2"
+              style={{
+                backgroundColor: T.successSoft,
+                color: T.success,
+                border: `1px solid ${T.success}55`,
+              }}
+            >
+              <Check size={14} className="mt-0.5 flex-shrink-0" />
+              <span>
+                Застосовано: <b>{result.stagesCreated}</b> нових етапів,{" "}
+                <b>{result.stagesUpdated}</b> оновлень,{" "}
+                <b>{result.materialsCreated}</b> матеріалів додано.
+              </span>
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <div className="mt-4">
+              <div
+                className="mb-2 text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                Розпізнані позиції ({items.length})
+              </div>
+              <div className="flex flex-col gap-2">
+                {items.map((it, idx) => (
+                  <ItemRow
+                    key={it.tempId}
+                    item={it}
+                    stageOptions={stageOptions}
+                    newStages={newStages}
+                    onChange={(next) => {
+                      setItems((prev) => {
+                        const copy = prev.slice();
+                        copy[idx] = next;
+                        return copy;
+                      });
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {newStages.length > 0 && (
+            <div className="mt-4">
+              <div
+                className="mb-2 text-[10px] font-bold uppercase tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                Нові етапи запропоновано ({newStages.length})
+              </div>
+              <ul className="flex flex-col gap-1">
+                {newStages.map((ns) => (
+                  <li
+                    key={ns.tempId}
+                    className="rounded-lg px-2 py-1 text-[11px]"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      border: `1px solid ${T.borderSoft}`,
+                      color: T.textPrimary,
+                    }}
+                  >
+                    <span style={{ color: T.textMuted }}>+ </span>
+                    {ns.name}
+                    {ns.parentTempId && (
+                      <span style={{ color: T.textMuted }}>
+                        {" "}
+                        ↳ вкладено
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        <footer
+          className="flex items-center justify-between gap-3 px-5 py-3"
+          style={{ borderTop: `1px solid ${T.borderSoft}` }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={applying}
+            className="rounded-lg px-3 py-1.5 text-[12px] font-medium transition"
+            style={{ backgroundColor: T.panelElevated, color: T.textPrimary }}
+          >
+            Закрити
+          </button>
+          <button
+            type="button"
+            onClick={handleApply}
+            disabled={
+              applying ||
+              parsing ||
+              items.filter((it) => it.accepted && it.targetStageRef).length === 0
+            }
+            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-50"
+            style={{ backgroundColor: T.success, color: "white" }}
+          >
+            {applying ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Check size={14} />
+            )}
+            {applying ? "Застосовую…" : "Застосувати"}
+          </button>
+        </footer>
+      </aside>
+    </>
+  );
+}
+
+function ItemRow({
+  item,
+  stageOptions,
+  newStages,
+  onChange,
+}: {
+  item: DraftItem;
+  stageOptions: Array<{ value: string; label: string }>;
+  newStages: AiParseNewStage[];
+  onChange: (next: DraftItem) => void;
+}) {
+  const Icon = item.costType === "LABOR" ? Hammer : Package;
+  const iconColor = item.costType === "LABOR" ? T.accentPrimary : T.warning;
+
+  return (
+    <div
+      className="rounded-lg px-3 py-2"
+      style={{
+        backgroundColor: item.accepted ? T.panelSoft : T.panel,
+        border: `1px solid ${item.accepted ? T.borderSoft : T.borderSoft}`,
+        opacity: item.accepted ? 1 : 0.5,
+      }}
+    >
+      <div className="flex items-start gap-2">
+        <input
+          type="checkbox"
+          checked={item.accepted}
+          onChange={(e) => onChange({ ...item, accepted: e.target.checked })}
+          className="mt-1 flex-shrink-0"
+          style={{ accentColor: T.accentPrimary }}
+        />
+        <Icon size={14} className="mt-1 flex-shrink-0" style={{ color: iconColor }} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span
+              className="text-[12px] font-semibold"
+              style={{ color: T.textPrimary }}
+            >
+              {item.title}
+            </span>
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+              style={{
+                backgroundColor:
+                  item.costType === "LABOR"
+                    ? T.accentPrimarySoft
+                    : T.warningSoft,
+                color: iconColor,
+              }}
+            >
+              {item.costType === "LABOR" ? "Робота" : "Матеріал"}
+            </span>
+          </div>
+          <div
+            className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]"
+            style={{ color: T.textMuted }}
+          >
+            {item.quantity !== null && item.quantity !== undefined && (
+              <span>
+                {item.quantity}
+                {item.unit ? ` ${item.unit}` : ""}
+              </span>
+            )}
+            {item.unitPrice !== null && item.unitPrice !== undefined && (
+              <span>× {formatCurrency(item.unitPrice)}</span>
+            )}
+            {item.amount !== null && item.amount !== undefined && (
+              <span style={{ color: T.textSecondary, fontWeight: 600 }}>
+                = {formatCurrency(item.amount)}
+              </span>
+            )}
+            {item.supplier && <span>· {item.supplier}</span>}
+          </div>
+          {item.reasoning && (
+            <div
+              className="mt-0.5 text-[10.5px] italic"
+              style={{ color: T.textMuted }}
+            >
+              {item.reasoning}
+            </div>
+          )}
+          <div className="mt-2 flex items-center gap-1">
+            <label
+              className="text-[10px]"
+              style={{ color: T.textMuted }}
+            >
+              →
+            </label>
+            <div className="relative flex-1">
+              <select
+                value={item.targetStageRef}
+                onChange={(e) =>
+                  onChange({ ...item, targetStageRef: e.target.value })
+                }
+                disabled={!item.accepted}
+                className="w-full appearance-none rounded border px-2 py-1 pr-6 text-[11px] outline-none"
+                style={{
+                  backgroundColor: T.panel,
+                  borderColor: T.borderSoft,
+                  color: T.textPrimary,
+                }}
+              >
+                {newStages.length > 0 && (
+                  <optgroup label="Нові етапи">
+                    {newStages.map((ns) => (
+                      <option key={ns.tempId} value={ns.tempId}>
+                        + {ns.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Існуючі етапи">
+                  {stageOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+              <ChevronDown
+                size={11}
+                className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2"
+                style={{ color: T.textMuted }}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

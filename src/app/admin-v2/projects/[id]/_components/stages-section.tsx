@@ -11,6 +11,7 @@ import {
   Save,
   CheckCircle2,
   MoreHorizontal,
+  Sparkles,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useDrillDown } from "@/components/drawer/use-drill-down";
@@ -30,6 +31,7 @@ import { StageMobileList } from "./stage-mobile-list";
 import { ImportEstimateModal } from "./import-estimate-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
 import { PublishFinanceDialog } from "./publish-finance-dialog";
+import { StagesAiAssistant } from "./stages-ai-assistant";
 
 export type ResponsibleCandidate = { id: string; name: string };
 
@@ -90,6 +92,7 @@ export function StagesSection({
   const [importOpen, setImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [dirtyStageIds, setDirtyStageIds] = useState<Set<string>>(() => new Set());
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [, startTransition] = useTransition();
@@ -448,6 +451,20 @@ export function StagesSection({
           <div className="-mx-1 overflow-x-auto sm:mx-0 sm:overflow-visible">
             <ViewModeSwitch value={viewMode} onChange={setViewMode} />
           </div>
+          <button
+            type="button"
+            onClick={() => setAiAssistantOpen(true)}
+            title="AI помічник: розпізнає роботи й матеріали з вільного тексту"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition hover:brightness-95"
+            style={{
+              backgroundColor: T.violet,
+              color: "white",
+            }}
+          >
+            <Sparkles size={12} />
+            <span className="hidden sm:inline">AI помічник</span>
+            <span className="sm:hidden">AI</span>
+          </button>
           <div className="relative">
             <button
               type="button"
@@ -621,6 +638,15 @@ export function StagesSection({
         stages={stages}
         onClose={() => setPublishOpen(false)}
         onPublished={onPublished}
+      />
+      <StagesAiAssistant
+        projectId={projectId}
+        open={aiAssistantOpen}
+        onClose={() => setAiAssistantOpen(false)}
+        stages={stages}
+        onApplied={async () => {
+          await refetch();
+        }}
       />
     </div>
   );
