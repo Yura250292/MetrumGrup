@@ -853,20 +853,23 @@ export function StagesSection({
           dirtyStageIds={dirtyStageIds}
           viewMode={viewMode}
           onMoveStage={moveStage}
+          excelMode={excelMode}
         />
-        <button
-          type="button"
-          onClick={() => addChild(null)}
-          className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[12px] font-medium transition hover:brightness-95"
-          style={{
-            borderColor: T.borderSoft,
-            color: T.accentPrimary,
-            backgroundColor: T.panelSoft,
-          }}
-        >
-          <Plus size={14} />
-          Додати етап
-        </button>
+        {!excelMode && (
+          <button
+            type="button"
+            onClick={() => addChild(null)}
+            className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-[12px] font-medium transition hover:brightness-95"
+            style={{
+              borderColor: T.borderSoft,
+              color: T.accentPrimary,
+              backgroundColor: T.panelSoft,
+            }}
+          >
+            <Plus size={14} />
+            Додати етап
+          </button>
+        )}
       </div>
 
       {/* Mobile (<lg): card-list */}

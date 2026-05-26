@@ -93,6 +93,12 @@ type StageTableProps = {
     targetId: string,
     position: DropPosition,
   ) => Promise<void>;
+  /**
+   * Excel-mode: рендерить додаткові порожні рядки після даних щоб таблиця
+   * виглядала як «справжній» аркуш Excel із сіткою. Клік по ghost-рядку
+   * викликає onAddChild(null) (створення нового top-level етапу).
+   */
+  excelMode?: boolean;
 };
 
 export const STATUS_STYLE: Record<StageStatus, { bg: string; fg: string; icon: typeof Check }> = {
@@ -236,6 +242,7 @@ export function StageTable({
   dirtyStageIds,
   viewMode = "all",
   onMoveStage,
+  excelMode = false,
 }: StageTableProps) {
   const showPlan = viewMode === "all" || viewMode === "plan";
   const showFact = viewMode === "all" || viewMode === "fact";
@@ -346,6 +353,21 @@ export function StageTable({
 
   const visible = useMemo(() => flattenVisible(tree, expanded), [tree, expanded]);
 
+  // Скільки `<td>` повинен мати ghost-рядок щоб не зруйнувати grid-розмітку
+  // (Excel-mode). Підрахунок дзеркалить логіку рендеру header/body:
+  //   3 фікс-колонки (Назва / Відповідальний / Статус) + columns × group(s) + 1 (Нотатка).
+  // У compare-режимі кожна метрика = 3 колонки (План/Факт/Дельта).
+  const ghostColCount = useMemo(() => {
+    const base = 3; // name + responsible + status
+    const notes = 1;
+    if (isCompare) return base + COMPARE_METRICS.length * 3 + notes;
+    const cols = (showPlan ? planOrder.length : 0) + (showFact ? factOrder.length : 0);
+    return base + cols + notes;
+  }, [isCompare, showPlan, showFact, planOrder.length, factOrder.length]);
+
+  // Скільки порожніх рядків додавати в Excel-режимі.
+  const GHOST_ROW_COUNT = 30;
+
   const toggleExpand = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -355,7 +377,7 @@ export function StageTable({
     });
   };
 
-  if (visible.length === 0) {
+  if (visible.length === 0 && !excelMode) {
     return (
       <div
         className="rounded-lg border border-dashed p-6 text-center text-[12px]"
@@ -786,9 +808,65 @@ export function StageTable({
               </tr>
             );
           })}
+          {excelMode &&
+            Array.from({ length: GHOST_ROW_COUNT }).map((_, idx) => (
+              <GhostRow
+                key={`ghost-${idx}`}
+                colCount={ghostColCount}
+                rowIndex={visible.length + idx + 1}
+                onActivate={() => onAddChild(null)}
+              />
+            ))}
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Порожній рядок у Excel-режимі. Має таку ж кількість `<td>` що й дані,
+ * тому grid (вертикальні лінії) ідеально вирівнюються. Клік активує
+ * створення нового top-level етапу через існуючий `onAddChild(null)`.
+ */
+function GhostRow({
+  colCount,
+  rowIndex,
+  onActivate,
+}: {
+  colCount: number;
+  rowIndex: number;
+  onActivate: () => void;
+}) {
+  return (
+    <tr
+      onClick={onActivate}
+      className="cursor-pointer transition"
+      style={{ height: 32 }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.backgroundColor = T.panelSoft;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.backgroundColor = "transparent";
+      }}
+      title="Натисніть щоб додати новий етап"
+    >
+      {Array.from({ length: colCount }).map((_, ci) => (
+        <td
+          key={ci}
+          style={{
+            padding: "4px 8px",
+            borderRight: `1px solid ${T.borderSoft}`,
+            borderBottom: `1px solid ${T.borderSoft}`,
+            color: T.textMuted,
+            fontSize: 11,
+          }}
+        >
+          {ci === 0 ? (
+            <span style={{ opacity: 0.45 }}>{rowIndex}</span>
+          ) : null}
+        </td>
+      ))}
+    </tr>
   );
 }
 
