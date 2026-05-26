@@ -186,37 +186,46 @@ export function TemplateConstructor({
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <div
-        className="flex items-center justify-between gap-2 px-4 py-3 border-b"
-        style={{ borderColor: T.borderSoft, backgroundColor: T.panelElevated }}
+        className="flex items-center justify-between gap-3 px-5 py-4 border-b"
+        style={{ borderColor: T.borderSoft }}
       >
-        <div className="flex items-center gap-2 min-w-0">
-          <Zap size={15} style={{ color: T.accentPrimary }} className="flex-shrink-0" />
-          <span className="text-[13px] font-bold truncate" style={{ color: T.textPrimary }}>
-            Швидке додавання — {folderName}
-          </span>
-          <span className="text-[10px] hidden sm:inline" style={{ color: T.textMuted }}>
-            шаблони одним кліком
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[14px] font-semibold tracking-tight" style={{ color: T.textPrimary }}>
+              Шаблони повторних витрат
+            </span>
+            {templates.length > 0 && (
+              <span
+                className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums"
+                style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
+              >
+                {templates.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px]" style={{ color: T.textMuted }}>
+            {folderName} · повторні нарахування одним кліком
           </span>
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <button
             onClick={() => setShowPayroll(true)}
             title="Нарахування ЗП за період — пакетне створення витрат для активних співробітників"
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:bg-black/[0.04]"
             style={{
-              backgroundColor: T.panel,
+              backgroundColor: "transparent",
               color: T.textPrimary,
               border: `1px solid ${T.borderStrong}`,
             }}
           >
-            <Users size={11} /> ЗП
+            <Users size={13} /> Нарахувати ЗП
           </button>
           <button
             onClick={() => openForm()}
-            className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold text-white"
+            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
             style={{ backgroundColor: T.accentPrimary }}
           >
-            <Plus size={11} /> Новий шаблон
+            <Plus size={13} /> Новий шаблон
           </button>
         </div>
       </div>
@@ -230,30 +239,41 @@ export function TemplateConstructor({
         }}
       />
 
-      <div className="p-4">
+      <div className="p-5">
         {loading ? (
           <div className="flex items-center gap-2 text-[12px]" style={{ color: T.textMuted }}>
             <Loader2 size={13} className="animate-spin" /> Завантаження…
           </div>
         ) : templates.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-6 text-center" style={{ color: T.textMuted }}>
-            <Zap size={24} style={{ color: T.accentPrimary }} />
-            <span className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
-              Немає шаблонів
-            </span>
-            <span className="text-[11px]">
-              Створіть шаблони частих витрат (чай, оренда, зарплата...) щоб додавати їх одним кліком
-            </span>
+          <div
+            className="flex flex-col items-center gap-3 py-10 px-6 text-center rounded-xl border-dashed border"
+            style={{ borderColor: T.borderStrong, color: T.textMuted }}
+          >
+            <div
+              className="rounded-full p-2.5"
+              style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
+            >
+              <Zap size={20} style={{ color: T.textSecondary }} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-[13.5px] font-semibold" style={{ color: T.textPrimary }}>
+                Шаблонів поки немає
+              </span>
+              <span className="text-[11.5px] max-w-[420px]" style={{ color: T.textMuted }}>
+                Оренда, інтернет, бухпослуги, готівкові ЗП — все що повторюється щомісяця.
+                Створіть один раз — далі додавайте у фінанси одним кліком.
+              </span>
+            </div>
             <button
               onClick={() => openForm()}
-              className="mt-1 flex items-center gap-1 rounded-lg px-3 py-1.5 text-[11px] font-bold text-white"
+              className="mt-1 flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[12px] font-semibold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <Plus size={11} /> Створити перший шаблон
+              <Plus size={13} /> Створити перший шаблон
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {templates.map((t) => (
               <TemplateCard
                 key={t.id}
@@ -344,75 +364,108 @@ function TemplateCard({
 
   return (
     <div
-      className="group rounded-xl p-3 flex flex-col gap-2 transition"
+      className="group rounded-xl p-4 flex flex-col gap-3.5 transition relative"
       style={{
-        backgroundColor: isIncome ? "rgba(22,163,74,0.06)" : "rgba(220,38,38,0.05)",
-        border: `1px solid ${isIncome ? "rgba(22,163,74,0.25)" : "rgba(220,38,38,0.25)"}`,
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
       }}
     >
-      <div className="flex items-start gap-2">
-        <span className="text-[18px] leading-none flex-shrink-0 w-6 text-center">
-          {template.emoji || (isIncome ? "💰" : "💸")}
-        </span>
+      {/* Type indicator — тонка ліва смуга замість кольорового фону */}
+      <div
+        className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r"
+        style={{ backgroundColor: tint, opacity: 0.85 }}
+      />
+
+      {/* Header: emoji + назва + edit */}
+      <div className="flex items-start gap-3 pl-2">
+        {template.emoji && (
+          <span className="text-[20px] leading-none flex-shrink-0 mt-0.5 select-none">
+            {template.emoji}
+          </span>
+        )}
         <div className="flex-1 min-w-0">
-          <div className="text-[12.5px] font-bold truncate" style={{ color: T.textPrimary }}>
+          <div
+            className="text-[13.5px] font-semibold leading-tight tracking-tight truncate"
+            style={{ color: T.textPrimary }}
+          >
             {template.name}
           </div>
-          <div className="text-[10px]" style={{ color: T.textMuted }}>
-            {isIncome ? "Дохід" : "Витрата"}
-            {template.counterparty && ` · ${template.counterparty}`}
+          <div className="mt-1 flex items-center gap-1.5 text-[10.5px]" style={{ color: T.textMuted }}>
+            <span
+              className="rounded px-1.5 py-0.5 font-semibold uppercase tracking-wider text-[9.5px]"
+              style={{
+                color: tint,
+                backgroundColor: isIncome ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.07)",
+              }}
+            >
+              {isIncome ? "Дохід" : "Витрата"}
+            </span>
+            {template.counterparty && (
+              <span className="truncate" title={template.counterparty}>
+                {template.counterparty}
+              </span>
+            )}
           </div>
         </div>
         <button
           onClick={onEdit}
-          className="opacity-0 group-hover:opacity-100 transition"
+          className="opacity-0 group-hover:opacity-100 transition rounded-md p-1 hover:bg-black/5"
           style={{ color: T.textMuted }}
           title="Редагувати"
         >
-          <Edit2 size={12} />
+          <Edit2 size={13} />
         </button>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-[15px] font-bold" style={{ color: tint }}>
+      {/* Сума — головна цифра картки */}
+      <div className="pl-2 flex items-baseline gap-1.5">
+        <span
+          className="text-[22px] font-bold tabular-nums leading-none tracking-tight"
+          style={{ color: T.textPrimary }}
+        >
           {isIncome ? "+" : "−"}
           {formatCurrency(template.defaultAmount)}
         </span>
-        <div className="flex items-stretch rounded-lg overflow-hidden" style={{ border: `1px solid ${tint}` }}>
-          <button
-            onClick={() => onApply("PLAN")}
-            disabled={busy}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] font-bold transition hover:bg-black/5 disabled:opacity-50"
-            style={{ color: tint, backgroundColor: "transparent" }}
-            title="Запланувати — створить запис у статусі План"
-          >
-            {applyingKind === "PLAN" ? (
-              <Loader2 size={10} className="animate-spin" />
-            ) : justAppliedKind === "PLAN" ? (
-              <CheckCircle2 size={10} />
-            ) : (
-              <Plus size={10} />
-            )}
-            {justAppliedKind === "PLAN" ? "План ✓" : "План"}
-          </button>
-          <div className="w-px" style={{ backgroundColor: tint, opacity: 0.4 }} />
-          <button
-            onClick={() => onApply("FACT")}
-            disabled={busy}
-            className="flex items-center gap-1 px-2.5 py-1.5 text-[10.5px] font-bold text-white transition hover:brightness-110 disabled:opacity-50"
-            style={{ backgroundColor: tint }}
-            title="Зафіксувати факт — створить запис у статусі Факт"
-          >
-            {applyingKind === "FACT" ? (
-              <Loader2 size={10} className="animate-spin" />
-            ) : justAppliedKind === "FACT" ? (
-              <CheckCircle2 size={10} />
-            ) : (
-              <Plus size={10} />
-            )}
-            {justAppliedKind === "FACT" ? "Факт ✓" : "Факт"}
-          </button>
-        </div>
+        <span className="text-[10.5px] font-medium" style={{ color: T.textMuted }}>
+          за замовчуванням
+        </span>
+      </div>
+
+      {/* Дії — primary FACT + secondary PLAN */}
+      <div className="grid grid-cols-2 gap-2 pl-2">
+        <button
+          onClick={() => onApply("PLAN")}
+          disabled={busy}
+          className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-50"
+          style={{
+            color: T.textSecondary,
+            backgroundColor: "transparent",
+            border: `1px solid ${T.borderStrong}`,
+          }}
+          title="Запланувати — створить запис у статусі План"
+        >
+          {applyingKind === "PLAN" ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : justAppliedKind === "PLAN" ? (
+            <CheckCircle2 size={12} style={{ color: T.success }} />
+          ) : null}
+          {justAppliedKind === "PLAN" ? "Заплановано" : "Запланувати"}
+        </button>
+        <button
+          onClick={() => onApply("FACT")}
+          disabled={busy}
+          className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+          style={{ backgroundColor: tint }}
+          title="Зафіксувати факт — створить запис у статусі Факт"
+        >
+          {applyingKind === "FACT" ? (
+            <Loader2 size={12} className="animate-spin" />
+          ) : justAppliedKind === "FACT" ? (
+            <CheckCircle2 size={12} />
+          ) : null}
+          {justAppliedKind === "FACT" ? "Додано" : "Зафіксувати"}
+        </button>
       </div>
     </div>
   );
