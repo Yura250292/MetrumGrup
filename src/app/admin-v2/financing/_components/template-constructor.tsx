@@ -3,11 +3,6 @@
 import { useEffect, useState } from "react";
 import {
   Loader2,
-  Plus,
-  Zap,
-  Edit2,
-  CheckCircle2,
-  Users,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
@@ -211,21 +206,21 @@ export function TemplateConstructor({
           <button
             onClick={() => setShowPayroll(true)}
             title="Нарахування ЗП за період — пакетне створення витрат для активних співробітників"
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:bg-black/[0.04]"
+            className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:bg-black/[0.04]"
             style={{
               backgroundColor: "transparent",
               color: T.textPrimary,
               border: `1px solid ${T.borderStrong}`,
             }}
           >
-            <Users size={13} /> Нарахувати ЗП
+            Нарахувати ЗП
           </button>
           <button
             onClick={() => openForm()}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
+            className="rounded-lg px-3 py-1.5 text-[12px] font-semibold text-white transition hover:brightness-110"
             style={{ backgroundColor: T.accentPrimary }}
           >
-            <Plus size={13} /> Новий шаблон
+            Новий шаблон
           </button>
         </div>
       </div>
@@ -249,12 +244,6 @@ export function TemplateConstructor({
             className="flex flex-col items-center gap-3 py-10 px-6 text-center rounded-xl border-dashed border"
             style={{ borderColor: T.borderStrong, color: T.textMuted }}
           >
-            <div
-              className="rounded-full p-2.5"
-              style={{ backgroundColor: T.panelSoft, border: `1px solid ${T.borderSoft}` }}
-            >
-              <Zap size={20} style={{ color: T.textSecondary }} />
-            </div>
             <div className="flex flex-col gap-1">
               <span className="text-[13.5px] font-semibold" style={{ color: T.textPrimary }}>
                 Шаблонів поки немає
@@ -266,10 +255,10 @@ export function TemplateConstructor({
             </div>
             <button
               onClick={() => openForm()}
-              className="mt-1 flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[12px] font-semibold text-white transition hover:brightness-110"
+              className="mt-1 rounded-lg px-3.5 py-2 text-[12px] font-semibold text-white transition hover:brightness-110"
               style={{ backgroundColor: T.accentPrimary }}
             >
-              <Plus size={13} /> Створити перший шаблон
+              Створити перший шаблон
             </button>
           </div>
         ) : (
@@ -364,107 +353,85 @@ function TemplateCard({
 
   return (
     <div
-      className="group rounded-xl p-4 flex flex-col gap-3.5 transition relative"
+      className="group rounded-lg p-3 flex flex-col gap-2.5 transition"
       style={{
         backgroundColor: T.panel,
         border: `1px solid ${T.borderSoft}`,
-        boxShadow: "0 1px 2px rgba(0,0,0,0.03)",
       }}
     >
-      {/* Type indicator — тонка ліва смуга замість кольорового фону */}
-      <div
-        className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r"
-        style={{ backgroundColor: tint, opacity: 0.85 }}
-      />
-
-      {/* Header: emoji + назва + edit */}
-      <div className="flex items-start gap-3 pl-2">
-        {template.emoji && (
-          <span className="text-[20px] leading-none flex-shrink-0 mt-0.5 select-none">
-            {template.emoji}
-          </span>
-        )}
-        <div className="flex-1 min-w-0">
-          <div
-            className="text-[13.5px] font-semibold leading-tight tracking-tight truncate"
-            style={{ color: T.textPrimary }}
-          >
-            {template.name}
-          </div>
-          <div className="mt-1 flex items-center gap-1.5 text-[10.5px]" style={{ color: T.textMuted }}>
-            <span
-              className="rounded px-1.5 py-0.5 font-semibold uppercase tracking-wider text-[9.5px]"
-              style={{
-                color: tint,
-                backgroundColor: isIncome ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.07)",
-              }}
-            >
-              {isIncome ? "Дохід" : "Витрата"}
-            </span>
-            {template.counterparty && (
-              <span className="truncate" title={template.counterparty}>
-                {template.counterparty}
-              </span>
-            )}
-          </div>
-        </div>
+      {/* Type label + edit on hover */}
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="text-[9.5px] font-semibold uppercase tracking-[0.08em]"
+          style={{ color: tint }}
+        >
+          {isIncome ? "Дохід" : "Витрата"}
+        </span>
         <button
           onClick={onEdit}
-          className="opacity-0 group-hover:opacity-100 transition rounded-md p-1 hover:bg-black/5"
+          className="opacity-0 group-hover:opacity-100 transition text-[10.5px] font-medium"
           style={{ color: T.textMuted }}
           title="Редагувати"
         >
-          <Edit2 size={13} />
+          Змінити
         </button>
       </div>
 
-      {/* Сума — головна цифра картки */}
-      <div className="pl-2 flex items-baseline gap-1.5">
-        <span
-          className="text-[22px] font-bold tabular-nums leading-none tracking-tight"
+      {/* Назва + контрагент */}
+      <div className="flex flex-col gap-0.5 min-w-0">
+        <div
+          className="text-[13px] font-semibold leading-snug tracking-tight truncate"
           style={{ color: T.textPrimary }}
         >
-          {isIncome ? "+" : "−"}
-          {formatCurrency(template.defaultAmount)}
-        </span>
-        <span className="text-[10.5px] font-medium" style={{ color: T.textMuted }}>
-          за замовчуванням
-        </span>
+          {template.name}
+        </div>
+        {template.counterparty && (
+          <div className="text-[10.5px] truncate" style={{ color: T.textMuted }} title={template.counterparty}>
+            {template.counterparty}
+          </div>
+        )}
       </div>
 
-      {/* Дії — primary FACT + secondary PLAN */}
-      <div className="grid grid-cols-2 gap-2 pl-2">
+      {/* Сума */}
+      <div
+        className="text-[18px] font-bold tabular-nums leading-none tracking-tight"
+        style={{ color: T.textPrimary }}
+      >
+        {isIncome ? "+" : "−"}
+        {formatCurrency(template.defaultAmount)}
+      </div>
+
+      {/* Дії — компактні без іконок */}
+      <div className="grid grid-cols-2 gap-1.5 pt-0.5">
         <button
           onClick={() => onApply("PLAN")}
           disabled={busy}
-          className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-50"
+          className="rounded-md px-2 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
           style={{
             color: T.textSecondary,
             backgroundColor: "transparent",
             border: `1px solid ${T.borderStrong}`,
           }}
-          title="Запланувати — створить запис у статусі План"
+          title="Створити запис у статусі План"
         >
-          {applyingKind === "PLAN" ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : justAppliedKind === "PLAN" ? (
-            <CheckCircle2 size={12} style={{ color: T.success }} />
-          ) : null}
-          {justAppliedKind === "PLAN" ? "Заплановано" : "Запланувати"}
+          {applyingKind === "PLAN"
+            ? "..."
+            : justAppliedKind === "PLAN"
+              ? "Заплановано"
+              : "План"}
         </button>
         <button
           onClick={() => onApply("FACT")}
           disabled={busy}
-          className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
+          className="rounded-md px-2 py-1.5 text-[11px] font-semibold text-white transition hover:brightness-110 disabled:opacity-50"
           style={{ backgroundColor: tint }}
-          title="Зафіксувати факт — створить запис у статусі Факт"
+          title="Створити запис у статусі Факт"
         >
-          {applyingKind === "FACT" ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : justAppliedKind === "FACT" ? (
-            <CheckCircle2 size={12} />
-          ) : null}
-          {justAppliedKind === "FACT" ? "Додано" : "Зафіксувати"}
+          {applyingKind === "FACT"
+            ? "..."
+            : justAppliedKind === "FACT"
+              ? "Додано"
+              : "Факт"}
         </button>
       </div>
     </div>
