@@ -100,10 +100,14 @@ export default function MeetingsListPage() {
   async function refreshMeetings(folderId: string | null) {
     setLoadingMeetings(true);
     try {
-      const folderParam = folderId ?? "root";
-      const res = await fetch(
-        `/api/admin/meetings?folderId=${encodeURIComponent(folderParam)}`,
-      );
+      // Без вибраної папки — показуємо ВСІ наради по фірмі (а не лише ті,
+      // що в корені). Юзери скаржилися що "наради зникають", бо нарада,
+      // створена з-під папки, не була видна на головному екрані /meetings.
+      // Тепер: root view = «Усі наради»; вибір конкретної папки звужує до неї.
+      const url = folderId
+        ? `/api/admin/meetings?folderId=${encodeURIComponent(folderId)}`
+        : "/api/admin/meetings";
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Не вдалося завантажити наради");
       const data = await res.json();
       setMeetings(data.meetings || []);

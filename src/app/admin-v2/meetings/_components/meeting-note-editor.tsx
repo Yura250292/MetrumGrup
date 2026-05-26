@@ -46,7 +46,14 @@ export function MeetingNoteEditor({
           style={{ color: T.textPrimary }}
         >
           <FileText size={16} style={{ color: T.accentPrimary }} />
-          Текст наради
+          Зміст наради
+          <span style={{ color: T.danger, marginLeft: 2 }}>*</span>
+          <span
+            className="ml-1 text-xs font-normal"
+            style={{ color: T.textMuted }}
+          >
+            (обовʼязково — це і є нарада)
+          </span>
         </div>
         <div
           className="flex gap-0.5 rounded-lg p-0.5"

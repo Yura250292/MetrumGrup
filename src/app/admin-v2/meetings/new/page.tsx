@@ -277,7 +277,9 @@ export default function NewMeetingPage() {
   async function saveTextMeeting(analyze: boolean) {
     const text = noteText.trim();
     if (!text) {
-      setError("Спершу введіть текст наради");
+      setError(
+        "Заповніть «Зміст наради» — це обовʼязкове поле. «Підказка для AI» — окреме, опціональне.",
+      );
       return;
     }
     setError(null);
@@ -565,14 +567,17 @@ export default function NewMeetingPage() {
                       className="mb-1 block text-xs font-medium"
                       style={{ color: T.textSecondary }}
                     >
-                      Опис
+                      Підказка для AI{" "}
+                      <span style={{ color: T.textMuted }}>
+                        — можна залишити порожньою
+                      </span>
                     </label>
                     <textarea
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       disabled={busy}
                       rows={2}
-                      placeholder="Короткий контекст для AI (опційно)…"
+                      placeholder="Тільки контекст для AI (учасники, тема). Сам зміст наради — у полі «Текст наради» вище."
                       className="w-full rounded-lg px-3 py-2 text-sm outline-none"
                       style={{
                         background: T.panelElevated,
@@ -580,6 +585,14 @@ export default function NewMeetingPage() {
                         border: `1px solid ${T.borderSoft}`,
                       }}
                     />
+                    <p
+                      className="mt-1 text-xs"
+                      style={{ color: T.textMuted }}
+                    >
+                      Не плутати зі змістом наради — це лише коротка підказка
+                      для AI (наприклад: «Зустріч із замовником М», «Тема —
+                      бюджет»).
+                    </p>
                   </div>
                 </div>
               )}
