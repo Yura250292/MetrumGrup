@@ -302,16 +302,16 @@ export function FinancingView({
             <div className="flex gap-2 flex-shrink-0 items-center">
               <button
                 onClick={() => setShowEstimateUpload(true)}
-                title="Завантажити кошторис"
+                title="Завантажити кошторис (PDF/XLSX) — AI парс у бюджет"
                 className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
                 style={{ backgroundColor: T.accentPrimary }}
               >
                 <FileSpreadsheet size={13} />
-                Кошторис
+                AI-кошторис
               </button>
               <button
                 onClick={() => setShowOcrScan(true)}
-                title="Сканувати чек"
+                title="Сканувати чек з AI → додати у факт-витрати"
                 className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-[0.97]"
                 style={{
                   backgroundColor: T.panelElevated,
@@ -320,7 +320,7 @@ export function FinancingView({
                 }}
               >
                 <Sparkles size={13} style={{ color: T.accentPrimary }} />
-                Scan AI
+                Скан чека
               </button>
               {folderId && (
                 <div className="hidden sm:block">
@@ -361,7 +361,7 @@ export function FinancingView({
               style={{ backgroundColor: T.accentPrimary }}
             >
               <FileSpreadsheet size={13} />
-              Кошторис
+              AI-кошторис
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
@@ -373,7 +373,7 @@ export function FinancingView({
               }}
             >
               <Sparkles size={13} style={{ color: T.accentPrimary }} />
-              Scan AI
+              Скан чека
             </button>
             {folderId && (
               <div className="w-full">
@@ -419,7 +419,7 @@ export function FinancingView({
               style={{ backgroundColor: T.accentPrimary }}
             >
               <FileSpreadsheet size={12} />
-              Кошторис
+              AI-кошторис
             </button>
             <button
               onClick={() => setShowOcrScan(true)}
@@ -427,7 +427,7 @@ export function FinancingView({
               style={{ backgroundColor: T.accentPrimary }}
             >
               <Sparkles size={12} />
-              Scan чек з AI
+              Скан чека
             </button>
           </div>
         </section>

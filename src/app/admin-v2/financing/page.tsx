@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowRight, ListTodo, AlertCircle, FlaskConical, Plus, FolderKanban, ClipboardList } from "lucide-react";
+import { ArrowRight, ListTodo, AlertCircle, FlaskConical, FolderKanban } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FinancingView } from "./_components/financing-view";
@@ -91,9 +91,6 @@ export default async function AdminV2FinancingPage({
     assertCanAccessFirm(session, activeProject.firmId);
   }
 
-  const canCreateProject =
-    session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
-
   return (
     <div className="flex flex-col gap-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
@@ -111,32 +108,6 @@ export default async function AdminV2FinancingPage({
           >
             — одна база з Проєктами
           </span>
-        </div>
-        <div className="flex items-center gap-2">
-          {session.user.role === "SUPER_ADMIN" && (
-            <Link
-              href="/admin-v2/financing/migration-audit"
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition hover:brightness-95"
-              style={{
-                backgroundColor: T.panel,
-                color: T.textSecondary,
-                border: `1px solid ${T.borderSoft}`,
-              }}
-              title="Аудит фінансової міграції · Phase 0 — інвентаризація ledger перед backfill"
-            >
-              <ClipboardList size={14} /> Аудит міграції
-            </Link>
-          )}
-          {canCreateProject && (
-            <Link
-              href="/admin-v2/projects/new"
-              className="flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white transition active:scale-[0.97]"
-              style={{ backgroundColor: T.accentPrimary }}
-              title="Створити новий проєкт (з'явиться і тут, і у Проєктах)"
-            >
-              <Plus size={14} /> Новий проєкт
-            </Link>
-          )}
         </div>
       </header>
       {activeProject && (

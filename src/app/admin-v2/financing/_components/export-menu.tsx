@@ -38,7 +38,7 @@ export function ExportMenu({
         type="button"
         onClick={() => onExport("xlsx")}
         disabled={exporting || disabled}
-        title="Завантажити Excel (за поточними фільтрами)"
+        title="Експортувати у Excel (за поточними фільтрами)"
         className="flex items-center justify-center rounded-l-xl h-10 px-3 text-xs font-semibold disabled:opacity-50 transition hover:brightness-105"
         style={{
           backgroundColor: T.panelElevated,
@@ -48,7 +48,7 @@ export function ExportMenu({
         }}
       >
         {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-        {!compact && <span className="ml-1.5">Excel</span>}
+        {!compact && <span className="ml-1.5">Експорт</span>}
       </button>
       <button
         type="button"
