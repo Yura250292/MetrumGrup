@@ -16,6 +16,7 @@ import {
 import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { tryEvaluateFormula } from "@/lib/formulas/eval";
 import type { ProjectStage, StageStatus } from "@prisma/client";
 
 const UNIT_OPTIONS = ["", "шт", "м", "м²", "м³", "кг", "т", "л", "пог.м", "год"];
@@ -1379,19 +1380,44 @@ function NumCell({
   format: "money" | "volume";
 }) {
   const [editing, setEditing] = useState(false);
+  const [formulaError, setFormulaError] = useState<string | null>(null);
   if (editing) {
     return (
       <input
         autoFocus
-        type="number"
+        // type="text" замість number, щоб приймати `=2*3` формули. inputMode
+        // лишає мобільний keypad числовим, тому UX на телефоні не страждає.
+        type="text"
         inputMode="decimal"
         defaultValue={value ?? ""}
-        step={format === "volume" ? "0.001" : "0.01"}
-        min={0}
         onClick={(e) => e.stopPropagation()}
         onBlur={(e) => {
-          const raw = e.target.value;
-          const parsed = raw === "" ? null : Number(raw);
+          const raw = e.target.value.trim();
+          let parsed: number | null = null;
+          let err: string | null = null;
+          if (raw === "") {
+            parsed = null;
+          } else if (raw.startsWith("=")) {
+            try {
+              const evaluated = tryEvaluateFormula(raw);
+              if (evaluated === null) parsed = Number(raw);
+              else parsed = evaluated;
+              if (parsed !== null && parsed < 0) {
+                err = "Результат < 0";
+                parsed = (value ?? null);
+              }
+            } catch (ex) {
+              err = ex instanceof Error ? ex.message : "Невалідна формула";
+              parsed = value ?? null;
+            }
+          } else {
+            const n = Number(raw.replace(",", "."));
+            parsed = Number.isFinite(n) ? n : (value ?? null);
+          }
+          if (err) {
+            setFormulaError(err);
+            setTimeout(() => setFormulaError(null), 3000);
+          }
           if (parsed !== (value ?? null)) void onCommit(parsed);
           setEditing(false);
         }}
@@ -1399,6 +1425,7 @@ function NumCell({
           if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           if (e.key === "Escape") setEditing(false);
         }}
+        title="Підтримує формули: =100*1.2, =(50+30)/2, =ROUND(1.23,1)"
         className="w-full rounded border px-1.5 py-0.5 text-right text-[12px] outline-none"
         style={{
           backgroundColor: T.panel,
@@ -1406,6 +1433,23 @@ function NumCell({
           color: T.textPrimary,
         }}
       />
+    );
+  }
+  if (formulaError) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+          setFormulaError(null);
+        }}
+        title={formulaError}
+        className="w-full text-right text-[11px] underline"
+        style={{ color: T.danger }}
+      >
+        формула?
+      </button>
     );
   }
   const display =

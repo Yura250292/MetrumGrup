@@ -19,6 +19,8 @@ import {
   CheckCircle2,
   MoreHorizontal,
   Sparkles,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
@@ -63,8 +65,8 @@ export function StagesSection({
   const searchParams = useSearchParams();
   const drawer = useDrillDown();
 
-  // ── Backward-compat: старі `?fs=1` URL (fullscreen mode) — soft-strip,
-  //    бо новий drawer-патерн не потребує fullscreen-режиму.
+  // ── Backward-compat: старі `?fs=1` URL (legacy fullscreen mode) — soft-strip.
+  //    Новий Excel-mode використовує `?excel=1`.
   const stripFsFlagRef = useRef(false);
   useEffect(() => {
     if (stripFsFlagRef.current) return;
@@ -76,6 +78,51 @@ export function StagesSection({
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }
   }, [searchParams, router, pathname]);
+
+  const excelMode = searchParams.get("excel") === "1";
+  const setExcelMode = useCallback(
+    (next: boolean) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next) params.set("excel", "1");
+      else params.delete("excel");
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [router, pathname, searchParams],
+  );
+
+  // Lock body scroll у Excel-режимі (повноекранний overlay).
+  useEffect(() => {
+    if (!excelMode) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [excelMode]);
+
+  // ESC виходить з Excel-режиму (тільки коли фокус не в інпуті — щоб не
+  // конфліктувати з drawer ESC).
+  useEffect(() => {
+    if (!excelMode) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      setExcelMode(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [excelMode, setExcelMode]);
 
   const [stages, setStages] = useState<StageRow[]>(initialStages);
   const [showHidden, setShowHidden] = useState(false);
@@ -598,10 +645,31 @@ export function StagesSection({
 
   return (
     <div
-      className="rounded-2xl p-5"
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+      className={
+        excelMode
+          ? "fixed inset-0 z-[100] flex flex-col"
+          : "rounded-2xl p-5"
+      }
+      style={{
+        backgroundColor: T.panel,
+        border: excelMode ? "none" : `1px solid ${T.borderSoft}`,
+      }}
     >
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:flex-wrap">
+      <div
+        className={
+          excelMode
+            ? "sticky top-0 z-20 flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:flex-wrap"
+            : "mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3 sm:flex-wrap"
+        }
+        style={
+          excelMode
+            ? {
+                backgroundColor: T.panel,
+                borderBottom: `1px solid ${T.borderStrong}`,
+              }
+            : undefined
+        }
+      >
         <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
             Етапи виконання
@@ -641,6 +709,20 @@ export function StagesSection({
             <Sparkles size={12} />
             <span className="hidden sm:inline">AI помічник</span>
             <span className="sm:hidden">AI</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setExcelMode(!excelMode)}
+            title={excelMode ? "Вийти з Excel-режиму (Esc)" : "Excel-режим: повноекранна таблиця"}
+            className="hidden lg:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition hover:brightness-95"
+            style={{
+              backgroundColor: excelMode ? T.accentPrimarySoft : T.panelSoft,
+              color: excelMode ? T.accentPrimary : T.textSecondary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            {excelMode ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+            {excelMode ? "Згорнути" : "Excel-режим"}
           </button>
           <div className="relative">
             <button
@@ -750,7 +832,11 @@ export function StagesSection({
           const id = tr?.getAttribute("data-stage-id");
           if (id) setFocusedStageId(id);
         }}
-        className="hidden lg:block outline-none"
+        className={
+          excelMode
+            ? "hidden lg:block outline-none flex-1 min-h-0 overflow-auto px-4 py-3"
+            : "hidden lg:block outline-none"
+        }
       >
         <StageTable
           stages={filteredStages}
