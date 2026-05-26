@@ -127,69 +127,77 @@ export default async function AdminV2ProjectDetailPage({
           <ArrowLeft size={14} /> До списку проєктів
         </Link>
 
-        {/* Cover + title + actions: 1 primary (Photo) + overflow menu (Дії).
-            На мобайлі — стек: cover, далі title-блок (нижче) і дії. */}
+        {/* Cover ліворуч | Title-блок посередині | Actions праворуч.
+            Це усуває пусту смугу що раніше була праворуч від «Дії» — title
+            тепер заповнює centрalну зону, actions притиснуті до правого краю.
+            Mobile (<sm) — вертикальний стек. */}
         <div className="flex flex-col sm:flex-row gap-4 items-start">
-          <div className="w-full sm:w-56 md:w-64 flex-shrink-0">
+          <div className="w-full sm:w-44 md:w-56 flex-shrink-0">
             <ProjectCoverUpload
               projectId={project.id}
               currentUrl={project.coverImageUrl ?? null}
             />
           </div>
-          <div className="flex flex-1 flex-col gap-3 min-w-0">
+          <div className="flex flex-1 flex-col gap-2 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="text-[11px] font-bold tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                ПРОЄКТ #{project.id.slice(0, 8).toUpperCase()}
+              </span>
+              <StatusBadge status={project.status} />
+              {project.isTestProject && <TestBadge />}
+            </div>
+            <h1
+              className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-tight break-words"
+              style={{ color: T.textPrimary }}
+            >
+              {project.title}
+            </h1>
+            <div
+              className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]"
+              style={{ color: T.textMuted }}
+            >
+              <span className="flex items-center gap-1 min-w-0">
+                <User size={12} className="flex-shrink-0" />
+                <span className="truncate">
+                  {project.clientName ??
+                    project.clientCounterparty?.name ??
+                    project.client?.name ??
+                    "—"}
+                </span>
+              </span>
+              {project.manager?.name && (
+                <>
+                  <span>·</span>
+                  <span className="flex items-center gap-1 min-w-0">
+                    <Briefcase size={12} className="flex-shrink-0" />
+                    <span className="truncate">{project.manager.name}</span>
+                  </span>
+                </>
+              )}
+              {project.address && (
+                <>
+                  <span className="hidden sm:inline">·</span>
+                  <span className="hidden sm:flex items-center gap-1 min-w-0">
+                    <MapPin size={12} className="flex-shrink-0" />
+                    <span className="truncate">{project.address}</span>
+                  </span>
+                </>
+              )}
+              <span>·</span>
+              <span className="truncate">
+                Етап: {STAGE_LABELS[project.currentStage]}
+              </span>
+            </div>
+          </div>
+          <div className="flex-shrink-0">
             <ProjectHeaderActions
               projectId={project.id}
               isTestProject={project.isTestProject}
               tasksEnabled={tasksEnabled}
             />
-          </div>
-        </div>
-
-        {/* Title block — назва й мета під cover/actions, на всю ширину */}
-        <div className="flex flex-col gap-2 min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>
-              ПРОЄКТ #{project.id.slice(0, 8).toUpperCase()}
-            </span>
-            <StatusBadge status={project.status} />
-            {project.isTestProject && <TestBadge />}
-          </div>
-          <h1
-            className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-tight break-words"
-            style={{ color: T.textPrimary }}
-          >
-            {project.title}
-          </h1>
-          <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1 text-[11px] sm:text-[12px]" style={{ color: T.textMuted }}>
-            <span className="flex items-center gap-1 min-w-0">
-              <User size={12} className="flex-shrink-0" />
-              <span className="truncate">
-                {project.clientName ??
-                  project.clientCounterparty?.name ??
-                  project.client?.name ??
-                  "—"}
-              </span>
-            </span>
-            {project.manager?.name && (
-              <>
-                <span>·</span>
-                <span className="flex items-center gap-1 min-w-0">
-                  <Briefcase size={12} className="flex-shrink-0" />
-                  <span className="truncate">{project.manager.name}</span>
-                </span>
-              </>
-            )}
-            {project.address && (
-              <>
-                <span className="hidden sm:inline">·</span>
-                <span className="hidden sm:flex items-center gap-1 min-w-0">
-                  <MapPin size={12} className="flex-shrink-0" />
-                  <span className="truncate">{project.address}</span>
-                </span>
-              </>
-            )}
-            <span>·</span>
-            <span className="truncate">Етап: {STAGE_LABELS[project.currentStage]}</span>
           </div>
         </div>
 
