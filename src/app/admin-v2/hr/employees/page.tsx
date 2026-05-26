@@ -1,10 +1,17 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { EmployeesList } from "./_components/employees-list";
+import { SectionTabs } from "../../_components/section-tabs";
 
 export const dynamic = "force-dynamic";
 
 const ALLOWED = ["SUPER_ADMIN", "MANAGER", "HR"];
+
+export const PERSONNEL_TABS = [
+  { href: "/admin-v2/hr/employees", label: "Співробітники", exact: true },
+  { href: "/admin-v2/hr/subcontractors", label: "Підрядники" },
+  { href: "/admin-v2/resources/workers", label: "Бригади та робітники" },
+];
 
 export default async function HrEmployeesPage({
   searchParams,
@@ -20,9 +27,12 @@ export default async function HrEmployeesPage({
   const initialTab = tabParam === "external" ? "external" : "employees";
 
   return (
-    <EmployeesList
-      currentUserRole={session.user.role}
-      initialTab={initialTab}
-    />
+    <div className="flex flex-col gap-4">
+      <SectionTabs tabs={PERSONNEL_TABS} />
+      <EmployeesList
+        currentUserRole={session.user.role}
+        initialTab={initialTab}
+      />
+    </div>
   );
 }

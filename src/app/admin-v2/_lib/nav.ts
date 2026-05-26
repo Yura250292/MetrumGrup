@@ -7,8 +7,6 @@ import {
   Warehouse,
   HardHat,
   Globe,
-  Settings,
-  Table,
   MessageSquare,
   Activity,
   Building2,
@@ -19,6 +17,10 @@ import {
   ScanLine,
   TrendingUp,
   Inbox,
+  ClipboardList,
+  ClipboardCheck,
+  FileSignature,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +34,8 @@ export type NavItem = {
   /** Allowlist of roles. If set, ONLY listed roles see the item; other flags ignored. */
   roles?: readonly string[];
   showUnreadBadge?: boolean;
+  /** Якщо задано — у sidebar додаємо pending-count бейдж з useInboxCounts(). */
+  inboxKey?: "foremanReports" | "documents" | "receipts" | "formSubmissions";
   /** Static pill badge — e.g. "NEW", "BETA". `color` picks the soft palette. */
   pillBadge?: {
     text: string;
@@ -49,82 +53,80 @@ const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN", "FINANCIER"] as const;
 // Облік постачальників (Invoice/SupplierPayment): MANAGER + FINANCIER + SUPER_ADMIN.
 // Збігається з SUPPLIER_LEDGER_ROLES у auth-utils. 2026-05-21.
 const SUPPLIERS_ACCESS_ROLES = ["SUPER_ADMIN", "MANAGER", "FINANCIER"] as const;
-// Manager-only analytics overlays на проєктному списку (огляд по проєктах).
-const PROJECTS_MANAGER_ROLES = ["SUPER_ADMIN", "MANAGER"] as const;
 
 export type NavGroup = {
   label: string;
   items: NavItem[];
+  /** Якщо true — група згорнута на першому візиті (юзер ще не клацав).
+   *  Користувачева перевага у localStorage завжди має пріоритет. */
+  collapsedByDefault?: boolean;
 };
 
-// Sidebar navigation — 7-group intent-first structure.
-// Plan: ADMIN_V2_UX_UI_SIMPLIFICATION_PLAN.md (Phase 1 IA cleanup, 2026-05-14).
-// Принципи: сценарій > модуль; одна предметна область = одна група; рідкісне → «Ще».
+// Sidebar navigation — після аудиту дублів 2026-05-26.
+// Принципи:
+// • 15 видимих пунктів замість 30 — рідкісне через табування дублів.
+// • Кошториси / Дод. угоди / Довідкові — таби на /estimates.
+// • Штат / Підрядники / Бригади — таби на /hr/employees.
+// • Контрагенти / Клієнти — таби на /counterparties.
+// • Мої / Усі задачі — таби на /me (раніше окреме «Команда»).
+// • Документи AI / Накладні / Форми / CMS — в «Менш популярне» (default-collapsed).
+// • inbox-counts бейджі (amber) лишаються на 4 чергах через inboxKey.
 export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Головне",
     items: [
       { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true, hrAllowed: true },
       { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo, hrAllowed: true },
-      { href: "/admin-v2/team", label: "Команда", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true, hrAllowed: true },
+      { href: "/admin-v2/feed", label: "Стрічка активності", icon: Activity },
     ],
   },
   {
     label: "Проєкти",
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
-      // «Огляд проєктів» — manager-only analytics; ховаємо у звичайних користувачів,
-      // щоб не виглядало як дубль пункту «Проєкти».
-      { href: "/admin-v2/projects/dashboard", label: "Огляд проєктів", icon: Table, roles: PROJECTS_MANAGER_ROLES },
+      { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
+      { href: "/admin-v2/rfis", label: "RFI (запити)", icon: HelpCircle },
+      { href: "/admin-v2/meetings", label: "Наради", icon: Mic, superAdminOnly: true },
+      { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES, inboxKey: "foremanReports" },
     ],
   },
   {
     label: "Фінанси",
     items: [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
-      { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES },
-      { href: "/admin-v2/financing/suppliers", label: "Облік постачальників", icon: Truck, roles: SUPPLIERS_ACCESS_ROLES },
-      { href: "/admin-v2/documents/inbox", label: "Документи / Inbox", icon: Inbox, roles: SUPPLIERS_ACCESS_ROLES, pillBadge: { text: "AI", color: "accent" } },
-      // Кошториси: один пункт. Вхід «AI генератор» — primary CTA на самій сторінці.
-      { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
-    ],
-  },
-  {
-    label: "Комунікація",
-    items: [
-      { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true, hrAllowed: true },
-      { href: "/admin-v2/meetings", label: "Наради", icon: Mic, superAdminOnly: true },
-      { href: "/admin-v2/feed", label: "Активність", icon: Activity },
-    ],
-  },
-  {
-    label: "Довідники",
-    items: [
-      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
-      { href: "/admin-v2/catalogs/materials", label: "Матеріали та ціни", icon: Package },
-      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
-      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
-      { href: "/admin-v2/resources/workers", label: "Робітники", icon: HardHat, hrAllowed: true },
-    ],
-  },
-  {
-    label: "HR",
-    items: [
-      { href: "/admin-v2/hr/employees", label: "Співробітники та акаунти", icon: Users, hrAllowed: true },
-      { href: "/admin-v2/hr/subcontractors", label: "Підрядники", icon: HardHat, hrAllowed: true },
-      { href: "/admin-v2/clients", label: "Клієнти", icon: Users, hrAllowed: true },
-    ],
-  },
-  {
-    label: "Ще",
-    items: [
+      { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, roles: SUPPLIERS_ACCESS_ROLES },
       { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/reports", label: "Звіти", icon: FileText, roles: FINANCE_VIEW_ROLES },
-      { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine },
-      { href: "/admin-v2/reference-estimates", label: "Довідкові кошториси", icon: FileText },
+    ],
+  },
+  {
+    label: "Персонал",
+    items: [
+      // «Штат» — основна точка входу, всередині таби: Співробітники / Підрядники / Бригади
+      { href: "/admin-v2/hr/employees", label: "Штат", icon: Users, hrAllowed: true },
+      // «Партнери» — Контрагенти + Клієнти в одному вікні
+      { href: "/admin-v2/counterparties", label: "Партнери", icon: Building2, hrAllowed: true },
+    ],
+  },
+  {
+    label: "Ресурси",
+    items: [
+      { href: "/admin-v2/catalogs/materials", label: "Матеріали і ціни", icon: Package },
+      { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
+      { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
+      { href: "/admin-v2/catalogs/form-templates", label: "Шаблони форм", icon: ClipboardList, hrAllowed: true },
+    ],
+  },
+  {
+    label: "Менш популярне",
+    collapsedByDefault: true,
+    items: [
+      { href: "/admin-v2/documents/inbox", label: "Документи AI", icon: Inbox, roles: SUPPLIERS_ACCESS_ROLES, pillBadge: { text: "AI", color: "accent" }, inboxKey: "documents" },
+      { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine, inboxKey: "receipts" },
+      { href: "/admin-v2/queue/form-submissions", label: "Заповнені форми", icon: ClipboardCheck, hrAllowed: true, inboxKey: "formSubmissions" },
       { href: "/admin-v2/cms/portfolio", label: "Портфоліо", icon: Globe },
       { href: "/admin-v2/cms/news", label: "Новини", icon: Globe },
-      { href: "/admin-v2/settings", label: "Налаштування", icon: Settings, superAdminOnly: true },
     ],
   },
 ];
@@ -163,6 +165,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/settings": "Налаштування",
   "/admin-v2/feed": "Активність",
   "/admin-v2/chat": "Чат",
+  "/admin-v2/rfis": "RFI (Запити)",
+  "/admin-v2/settings/firm/rfi-sla": "SLA для RFI",
   "/admin-v2/finance": "Фінансовий облік",
   "/admin-v2/finance/templates": "Шаблони",
   "/admin-v2/profile": "Мій профіль",
@@ -173,6 +177,8 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/counterparties": "Контрагенти",
   "/admin-v2/financing/suppliers": "Постачальники",
   "/admin-v2/catalogs": "Довідники",
+  "/admin-v2/catalogs/form-templates": "Шаблони форм",
+  "/admin-v2/queue/form-submissions": "Заповнені форми",
   "/admin-v2/receipts": "Накладні (скан)",
   "/admin-v2/receipts/scan": "Сканувати накладну",
   "/admin-v2/meetings": "Наради",

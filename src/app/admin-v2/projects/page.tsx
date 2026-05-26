@@ -10,6 +10,7 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { EmptyState } from "@/components/shared/states";
 import { ProjectFoldersClient } from "./_components/project-folders-client";
 import { ProjectsView } from "./_components/projects-view";
+import { SectionTabs } from "../_components/section-tabs";
 import type { ProjectExtra, ProjectRow } from "./_components/projects-types";
 import { firmWhereForProject, isHomeFirmFor } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
@@ -93,8 +94,16 @@ export default async function AdminV2ProjectsPage({
   const totalPaid = projects.reduce((sum, p) => sum + p.totalPaid, 0);
   const activeCount = projects.filter((p) => p.status === "ACTIVE").length;
 
+  const canSeeOverview =
+    session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
+  const projectTabs = [
+    { href: "/admin-v2/projects", label: "Список", exact: true },
+    ...(canSeeOverview ? [{ href: "/admin-v2/projects/dashboard", label: "Огляд" }] : []),
+  ];
+
   return (
     <div className="flex flex-col gap-6">
+      {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
       <section className="grid grid-cols-3 gap-2 sm:gap-4">
         <KpiCard
           label="ВСЬОГО"

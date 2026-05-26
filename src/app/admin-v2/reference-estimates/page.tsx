@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { Calculator } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ReferenceEstimatesClient } from "./_components/reference-estimates-client";
+import { SectionTabs } from "../_components/section-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,13 @@ export default async function AdminV2ReferenceEstimatesPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionTabs
+        tabs={[
+          { href: "/admin-v2/estimates", label: "Робочі", exact: true },
+          { href: "/admin-v2/reference-estimates", label: "Довідкові" },
+          { href: "/admin-v2/change-orders", label: "Дод. угоди" },
+        ]}
+      />
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <span

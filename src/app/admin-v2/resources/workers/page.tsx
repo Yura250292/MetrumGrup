@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import { Plus, HardHat, Search, Phone, Loader2, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { SectionTabs } from "../../_components/section-tabs";
+
+const PERSONNEL_TABS = [
+  { href: "/admin-v2/hr/employees", label: "Співробітники", exact: true },
+  { href: "/admin-v2/hr/subcontractors", label: "Підрядники" },
+  { href: "/admin-v2/resources/workers", label: "Бригади та робітники" },
+];
 
 type Worker = {
   id: string;
@@ -69,6 +76,7 @@ export default function AdminV2WorkersPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionTabs tabs={PERSONNEL_TABS} />
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>

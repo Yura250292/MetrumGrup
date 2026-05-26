@@ -15,6 +15,7 @@ import {
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DeleteProjectButton } from "./_components/delete-project-button";
+import { SectionTabs } from "../../_components/section-tabs";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import {
   isHomeFirmFor,
@@ -90,6 +91,12 @@ export default async function AdminV2ProjectsDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionTabs
+        tabs={[
+          { href: "/admin-v2/projects", label: "Список", exact: true },
+          { href: "/admin-v2/projects/dashboard", label: "Огляд" },
+        ]}
+      />
       {/* Hero */}
       <section className="flex flex-col gap-2">
         <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>

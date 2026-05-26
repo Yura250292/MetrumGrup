@@ -5,6 +5,12 @@ import { Plus, Search, Mail, Phone, Users, Loader2, X } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { motion } from "framer-motion";
 import { gridStagger, flyInUp, useReducedMotionVariants } from "@/lib/motion";
+import { SectionTabs } from "../_components/section-tabs";
+
+const PARTNERS_TABS = [
+  { href: "/admin-v2/counterparties", label: "Контрагенти", exact: true },
+  { href: "/admin-v2/clients", label: "Клієнти" },
+];
 
 type Client = {
   id: string;
@@ -78,6 +84,7 @@ export default function AdminV2ClientsPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionTabs tabs={PARTNERS_TABS} />
       {/* Hero */}
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">

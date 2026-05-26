@@ -17,6 +17,13 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "../_components/excel-import-modal";
+import { SectionTabs } from "../../_components/section-tabs";
+
+const PERSONNEL_TABS = [
+  { href: "/admin-v2/hr/employees", label: "Співробітники", exact: true },
+  { href: "/admin-v2/hr/subcontractors", label: "Підрядники" },
+  { href: "/admin-v2/resources/workers", label: "Бригади та робітники" },
+];
 
 type RateType = "PER_HOUR" | "PER_DAY" | "PER_MONTH" | "PER_SQM" | "PER_PIECE";
 
@@ -208,6 +215,7 @@ export default function HrSubcontractorsPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <SectionTabs tabs={PERSONNEL_TABS} />
       <section className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-2">
           <span className="text-[11px] font-bold tracking-wider" style={{ color: T.textMuted }}>

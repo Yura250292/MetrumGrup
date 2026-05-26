@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, Menu, LogOut, Settings } from "lucide-react";
 import { useUnreadChatCount } from "@/hooks/useChat";
+import { useInboxCounts } from "@/hooks/useInboxCounts";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { NAV_GROUPS, isItemActive, isItemVisibleForRole, type NavItem } from "../_lib/nav";
@@ -31,15 +32,20 @@ type SidebarProps = {
 
 const COLLAPSED_GROUPS_KEY = "admin-v2:sidebar:collapsed-groups";
 
+function defaultCollapsedGroups(): Set<string> {
+  return new Set(NAV_GROUPS.filter((g) => g.collapsedByDefault).map((g) => g.label));
+}
+
 function loadCollapsedGroups(): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
     const raw = window.localStorage.getItem(COLLAPSED_GROUPS_KEY);
-    if (!raw) return new Set();
+    // На першому візиті (немає запису) — згортаємо default-collapsed групи.
+    if (raw === null) return defaultCollapsedGroups();
     const arr = JSON.parse(raw);
     return Array.isArray(arr) ? new Set(arr.filter((x) => typeof x === "string")) : new Set();
   } catch {
-    return new Set();
+    return defaultCollapsedGroups();
   }
 }
 
@@ -56,6 +62,7 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
   const { data: session } = useSession();
   const [collapsed, setCollapsed] = useState(false);
   const unreadCount = useUnreadChatCount();
+  const inboxCounts = useInboxCounts();
   const reduceMotion = useReducedMotion();
 
   // Згорнуті групи — set їх labels. localStorage persisted.
@@ -214,7 +221,11 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
                     <div className="flex flex-col gap-px px-2">
                 {visible.map((item) => {
                   const active = isItemActive(item.href, item.exact, pathname);
-                  const badge = item.showUnreadBadge ? unreadCount : 0;
+                  const badge = item.showUnreadBadge
+                    ? unreadCount
+                    : item.inboxKey
+                      ? inboxCounts[item.inboxKey]
+                      : 0;
                   const pill = item.pillBadge;
                   const Icon = item.icon;
                   return (
@@ -266,7 +277,9 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
                         <span
                           className="relative z-10 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold"
                           style={{
-                            backgroundColor: T.accentPrimary,
+                            // Inbox-queue badges = amber (треба перевірити);
+                            // chat unread = accent (нові повідомлення).
+                            backgroundColor: item.inboxKey ? "#D97706" : T.accentPrimary,
                             color: "#FFFFFF",
                             position: collapsed ? "absolute" : "static",
                             top: collapsed ? 2 : undefined,
@@ -308,14 +321,16 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
             </Link>
           )}
           <div className="flex items-center gap-1">
-            <Link
-              href="/admin-v2/profile"
-              className="rounded-lg p-2 transition hover:brightness-[0.97]"
-              style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
-              title="Мій профіль"
-            >
-              <Settings size={16} />
-            </Link>
+            {role === "SUPER_ADMIN" && (
+              <Link
+                href="/admin-v2/settings"
+                className="rounded-lg p-2 transition hover:brightness-[0.97]"
+                style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
+                title="Налаштування системи"
+              >
+                <Settings size={16} />
+              </Link>
+            )}
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
               className="rounded-lg p-2 transition hover:brightness-[0.97]"
