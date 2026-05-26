@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
@@ -272,6 +272,28 @@ export function TabTasks({
     [statuses],
   );
 
+  const changeStatus = useCallback(
+    async (taskId: string, statusId: string) => {
+      const prevTasks = tasks;
+      const newStatus = statuses.find((s) => s.id === statusId);
+      if (!newStatus) return;
+      setTasks((p) =>
+        p.map((t) => (t.id === taskId ? { ...t, statusId, status: newStatus } : t)),
+      );
+      try {
+        const res = await fetch(`/api/admin/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ statusId }),
+        });
+        if (!res.ok) throw new Error("patch failed");
+      } catch {
+        setTasks(prevTasks);
+      }
+    },
+    [tasks, statuses],
+  );
+
   const kanbanStatuses: KanbanStatus[] = useMemo(
     () =>
       statuses.map((s) => ({
@@ -528,7 +550,9 @@ export function TabTasks({
                     <TaskRow
                       key={t.id}
                       task={t}
+                      statuses={statuses}
                       onOpen={() => openTask(t.id)}
+                      onChangeStatus={(sid) => void changeStatus(t.id, sid)}
                     />
                   ))}
                 </ul>
@@ -542,8 +566,17 @@ export function TabTasks({
   );
 }
 
-function TaskRow({ task, onOpen }: { task: TaskListItem; onOpen: () => void }) {
-  const statusColor = task.status.color ?? T.textMuted;
+function TaskRow({
+  task,
+  statuses,
+  onOpen,
+  onChangeStatus,
+}: {
+  task: TaskListItem;
+  statuses: TaskStatus[];
+  onOpen: () => void;
+  onChangeStatus: (statusId: string) => void;
+}) {
   return (
     <li
       onClick={onOpen}
@@ -577,15 +610,11 @@ function TaskRow({ task, onOpen }: { task: TaskListItem; onOpen: () => void }) {
           ))}
         </div>
       )}
-      <span
-        className="rounded-full px-2.5 py-1 text-[10px] font-bold flex-shrink-0"
-        style={{
-          backgroundColor: statusColor + "22",
-          color: statusColor,
-        }}
-      >
-        {task.status.name}
-      </span>
+      <StatusPicker
+        current={task.status}
+        statuses={statuses}
+        onChange={onChangeStatus}
+      />
       {task._count.checklist > 0 && (
         <span
           className="text-[10px] font-semibold flex-shrink-0"
@@ -595,5 +624,88 @@ function TaskRow({ task, onOpen }: { task: TaskListItem; onOpen: () => void }) {
         </span>
       )}
     </li>
+  );
+}
+
+function StatusPicker({
+  current,
+  statuses,
+  onChange,
+}: {
+  current: TaskStatus;
+  statuses: TaskStatus[];
+  onChange: (statusId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  const color = current.color ?? T.textMuted;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-full px-2.5 py-1 text-[10px] font-bold transition hover:brightness-110"
+        style={{
+          backgroundColor: color + "22",
+          color,
+          border: `1px solid ${color}33`,
+        }}
+        title="Змінити статус"
+      >
+        {current.name}
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 z-30 mt-1 flex min-w-[160px] flex-col gap-0.5 rounded-xl p-1 shadow-lg"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          {statuses.map((s) => {
+            const active = s.id === current.id;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => {
+                  if (!active) onChange(s.id);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold transition hover:brightness-110"
+                style={{
+                  backgroundColor: active ? s.color + "22" : "transparent",
+                  color: active ? s.color : T.textPrimary,
+                }}
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: s.color }}
+                />
+                <span className="flex-1 truncate">{s.name}</span>
+                {active && <span style={{ color: s.color }}>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
