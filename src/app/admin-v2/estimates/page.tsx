@@ -15,6 +15,7 @@ import {
 import type { EstimateStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { SectionTabs } from "../_components/section-tabs";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 
 const ESTIMATE_TABS = [
   { href: "/admin-v2/estimates", label: "Робочі", exact: true },
@@ -56,6 +57,7 @@ export default async function AdminV2EstimatesPage() {
 
   return (
     <div className="flex flex-col gap-8">
+      <PageIntroCard />
       <SectionTabs tabs={ESTIMATE_TABS} />
       {/* Hero */}
       <section className="flex flex-wrap items-end justify-between gap-4">

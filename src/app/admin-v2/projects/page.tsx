@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/shared/states";
 import { ProjectFoldersClient } from "./_components/project-folders-client";
 import { ProjectsView } from "./_components/projects-view";
 import { SectionTabs } from "../_components/section-tabs";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 import type { ProjectExtra, ProjectRow } from "./_components/projects-types";
 import { firmWhereForProject, isHomeFirmFor } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
@@ -103,6 +104,7 @@ export default async function AdminV2ProjectsPage({
 
   return (
     <div className="flex flex-col gap-6">
+      <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
       <section className="grid grid-cols-3 gap-2 sm:gap-4">
         <KpiCard
@@ -128,12 +130,14 @@ export default async function AdminV2ProjectsPage({
         />
       </section>
 
-      <ProjectFoldersClient
-        folders={JSON.parse(JSON.stringify(folders))}
-        breadcrumbs={breadcrumbs}
-        currentFolderId={folderId}
-        isSuperAdmin={isSuperAdmin}
-      />
+      <div data-help-id="projects-filters">
+        <ProjectFoldersClient
+          folders={JSON.parse(JSON.stringify(folders))}
+          breadcrumbs={breadcrumbs}
+          currentFolderId={folderId}
+          isSuperAdmin={isSuperAdmin}
+        />
+      </div>
 
       {projects.length === 0 && folders.length === 0 ? (
         <EmptyState
@@ -143,13 +147,15 @@ export default async function AdminV2ProjectsPage({
           action={{ label: "Створити проєкт", href: "/admin-v2/projects/new" }}
         />
       ) : (
-        <ProjectsView
-          projects={rows}
-          canDelete={isSuperAdmin}
-          currentFolderId={folderId}
-          totalCount={projects.length}
-          activeCount={activeCount}
-        />
+        <div data-help-id="projects-list">
+          <ProjectsView
+            projects={rows}
+            canDelete={isSuperAdmin}
+            currentFolderId={folderId}
+            totalCount={projects.length}
+            activeCount={activeCount}
+          />
+        </div>
       )}
     </div>
   );

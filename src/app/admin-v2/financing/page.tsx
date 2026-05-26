@@ -4,6 +4,7 @@ import { ArrowRight, ListTodo, AlertCircle, FlaskConical, FolderKanban } from "l
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { FinancingView } from "./_components/financing-view";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
   assertCanAccessFirm,
@@ -93,6 +94,7 @@ export default async function AdminV2FinancingPage({
 
   return (
     <div className="flex flex-col gap-4">
+      <PageIntroCard />
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <FolderKanban size={18} style={{ color: T.accentPrimary }} />

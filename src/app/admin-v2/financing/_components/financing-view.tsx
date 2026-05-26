@@ -323,11 +323,13 @@ export function FinancingView({
                 Скан чека
               </button>
               {folderId && (
-                <div className="hidden sm:block">
+                <div className="hidden sm:block" data-help-id="financing-add-entry">
                   <QuickAddSplit onPick={(p) => setCreatePreset(p)} />
                 </div>
               )}
-              <ExportMenu onExport={handleExport} exporting={exporting} disabled={loading} />
+              <div data-help-id="financing-export">
+                <ExportMenu onExport={handleExport} exporting={exporting} disabled={loading} />
+              </div>
             </div>
           </div>
 
@@ -582,23 +584,27 @@ export function FinancingView({
 
       {/* Filters: на Огляді — спрощений LensBar; на Операціях — повний FilterBar */}
       {activeTab === "overview" && (
-        <LensBar
-          filters={filters}
-          setFilters={setFilters}
-          projects={projects}
-          users={users}
-          scope={scope}
-        />
+        <div data-help-id="financing-filters">
+          <LensBar
+            filters={filters}
+            setFilters={setFilters}
+            projects={projects}
+            users={users}
+            scope={scope}
+          />
+        </div>
       )}
       {activeTab === "operations" && (
-        <FilterBar
-          filters={filters}
-          setFilters={setFilters}
-          resetFilters={resetFilters}
-          projects={projects}
-          users={users}
-          scope={scope}
-        />
+        <div data-help-id="financing-filters">
+          <FilterBar
+            filters={filters}
+            setFilters={setFilters}
+            resetFilters={resetFilters}
+            projects={projects}
+            users={users}
+            scope={scope}
+          />
+        </div>
       )}
 
       {/* Tab content — wrapped with key so each switch replays the slide-down */}

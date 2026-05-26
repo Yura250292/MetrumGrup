@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AiChatButton } from "@/components/ai-assistant/AiChatButton";
 import { SearchModal } from "./search-modal";
 import { TelegramQuickAction } from "./telegram-quick-action";
+import { HelpButton } from "./help/HelpButton";
 
 export function Header() {
   const pathname = usePathname();
@@ -160,10 +161,12 @@ export function Header() {
             buttonStyle={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
           />
           <ThemeToggle />
+          <HelpButton />
         </div>
         {/* CTA: New project (desktop only) */}
         <Link
           href="/admin-v2/projects/new"
+          data-help-id="projects-new-project"
           className="btn-shimmer hidden md:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-shadow duration-200 active:scale-95"
           style={{
             backgroundColor: T.accentPrimary,

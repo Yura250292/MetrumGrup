@@ -19,6 +19,8 @@ import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { MotionProvider } from "@/components/motion";
 import { DrillDownDrawerProvider } from "@/components/drawer/DrillDownDrawerProvider";
 import { DrillDownDrawer } from "@/components/drawer/DrillDownDrawer";
+import { HelpProvider } from "@/contexts/HelpContext";
+import { HelpDrawer } from "./_components/help/HelpDrawer";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 import "@/styles/premium.css";
@@ -48,6 +50,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
       <DrillDownDrawerProvider>
       <AiPanelProvider>
         <UserProfileProvider>
+          <HelpProvider activeFirmId={activeFirmId}>
           <MeetingRecordingProvider>
             <SqueezeWrapper>
               <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
@@ -66,7 +69,9 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
             </SqueezeWrapper>
             <DrillDownDrawer />
             <AiPanelPortal />
+            <HelpDrawer />
           </MeetingRecordingProvider>
+          </HelpProvider>
         </UserProfileProvider>
       </AiPanelProvider>
       </DrillDownDrawerProvider>
