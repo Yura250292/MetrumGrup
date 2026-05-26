@@ -69,8 +69,17 @@ export async function GET(req: NextRequest) {
     orderBy: [{ startDate: { sort: "asc", nulls: "last" } }, { dueDate: "asc" }],
   });
 
+  const tasksWithoutDates = tasks
+    .filter((t) => !t.startDate && !t.dueDate)
+    .map((t) => ({
+      id: t.id,
+      title: `${t.project.title}: ${t.title}`,
+      status: { name: t.status.name, color: t.status.color },
+    }));
+  const datedTasks = tasks.filter((t) => t.startDate || t.dueDate);
+
   const today = new Date();
-  const items = tasks
+  const items = datedTasks
     .map((t) => {
       const start = t.startDate ?? t.dueDate ?? today;
       const end = t.dueDate ?? t.startDate ?? today;
@@ -113,5 +122,5 @@ export async function GET(req: NextRequest) {
     })
     .filter((t) => t.start && t.end);
 
-  return NextResponse.json({ data: { items, criticalIds: [] } });
+  return NextResponse.json({ data: { items, criticalIds: [], tasksWithoutDates } });
 }

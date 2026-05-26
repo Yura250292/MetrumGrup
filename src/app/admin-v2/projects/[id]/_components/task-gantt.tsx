@@ -36,11 +36,19 @@ type FrappeGanttCtor = new (
 
 export function TaskGantt({
   items,
+  tasksWithoutDates = [],
   onTaskClick,
   onDateChange,
   projectId,
 }: {
   items: GanttItem[];
+  /** Задачі без startDate/dueDate — показуємо їх окремим списком над
+   *  Gantt, щоб не зникали мовчки. Клік відкриває drawer задачі. */
+  tasksWithoutDates?: {
+    id: string;
+    title: string;
+    status: { name: string; color: string };
+  }[];
   onTaskClick: (id: string) => void;
   onDateChange: (id: string, start: Date, end: Date) => void;
   /** Якщо передано — у toolbar з'являються кнопки Експорт XML/CSV та
@@ -99,7 +107,7 @@ export function TaskGantt({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemsKey, mode]);
 
-  if (items.length === 0) {
+  if (items.length === 0 && tasksWithoutDates.length === 0) {
     return (
       <div
         className="rounded-2xl p-8 text-center text-sm"
@@ -109,8 +117,16 @@ export function TaskGantt({
           color: T.textMuted,
         }}
       >
-        Немає задач з датами для відображення на Gantt. Додайте startDate та dueDate.
+        Немає задач у проєкті.
       </div>
+    );
+  }
+
+  if (items.length === 0) {
+    // Тільки задачі без дат — Gantt малювати немає чого, але показуємо
+    // список «без дат» щоб користувач міг призначити дати кліком.
+    return (
+      <NoDatesBanner tasks={tasksWithoutDates} onTaskClick={onTaskClick} standalone />
     );
   }
 
@@ -155,6 +171,9 @@ export function TaskGantt({
 
   return (
     <div className="flex flex-col gap-3">
+      {tasksWithoutDates.length > 0 && (
+        <NoDatesBanner tasks={tasksWithoutDates} onTaskClick={onTaskClick} />
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <div
           className="flex gap-1 rounded-xl p-1"
@@ -289,6 +308,90 @@ export function TaskGantt({
           }
         `}</style>
       </div>
+    </div>
+  );
+}
+
+function NoDatesBanner({
+  tasks,
+  onTaskClick,
+  standalone = false,
+}: {
+  tasks: { id: string; title: string; status: { name: string; color: string } }[];
+  onTaskClick: (id: string) => void;
+  standalone?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(standalone);
+  const visible = expanded ? tasks : tasks.slice(0, 0);
+  return (
+    <div
+      className="rounded-2xl p-3"
+      style={{
+        backgroundColor: standalone ? T.panel : T.panelElevated,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 text-[12px]" style={{ color: T.textPrimary }}>
+          <span
+            className="rounded-full px-2 py-0.5 text-[10px] font-bold"
+            style={{ backgroundColor: "#f59e0b22", color: "#f59e0b" }}
+          >
+            {tasks.length}
+          </span>
+          <span className="font-semibold">
+            {standalone
+              ? "Задач без дат — призначте, щоб побачити на Gantt"
+              : "задач без дат — не показані на таймлайні"}
+          </span>
+        </div>
+        {!standalone && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="rounded-lg px-2.5 py-1 text-[11px] font-semibold"
+            style={{
+              backgroundColor: T.panel,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          >
+            {expanded ? "Згорнути" : "Показати"}
+          </button>
+        )}
+      </div>
+      {(expanded || standalone) && (
+        <ul className="mt-3 flex flex-col gap-1.5">
+          {(standalone ? tasks : visible).map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                onClick={() => onTaskClick(t.id)}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition hover:brightness-110"
+                style={{
+                  backgroundColor: T.panelElevated,
+                  color: T.textPrimary,
+                  border: `1px solid ${T.borderSoft}`,
+                }}
+              >
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px] font-bold flex-shrink-0"
+                  style={{
+                    backgroundColor: t.status.color + "22",
+                    color: t.status.color,
+                  }}
+                >
+                  {t.status.name}
+                </span>
+                <span className="flex-1 truncate">{t.title}</span>
+                <span className="text-[11px]" style={{ color: T.accentPrimary }}>
+                  Призначити дати →
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -22,10 +22,16 @@ import {
   Square,
   Play,
   Trash2,
+  Search,
+  Archive,
+  ArchiveRestore,
+  Flag,
+  CalendarPlus,
 } from "lucide-react";
 import { TaskKanban, type KanbanCard, type KanbanStatus } from "./task-kanban";
 import { TaskCalendar } from "./task-calendar";
 import { TaskPeopleView } from "./task-people";
+import { InlineStatusPicker } from "./inline-status-picker";
 // Gantt is heavy (frappe-gantt + vendor CSS) and only mounted when the
 // "gantt" tab is selected — defer the bundle.
 const TaskGantt = dynamic(() => import("./task-gantt").then((m) => m.TaskGantt), {
@@ -66,10 +72,24 @@ type TaskListItem = {
   stageId: string;
   statusId: string;
   status: TaskStatus;
+  isArchived: boolean;
   assignees: { user: { id: string; name: string; avatar: string | null } }[];
   labels: { label: TaskLabel }[];
   _count: { subtasks: number; checklist: number };
 };
+
+const PRIORITY_LABEL: Record<TaskListItem["priority"], string> = {
+  LOW: "Низький",
+  NORMAL: "Звичайний",
+  HIGH: "Високий",
+  URGENT: "Терміновий",
+};
+const PRIORITY_ORDER: TaskListItem["priority"][] = [
+  "LOW",
+  "NORMAL",
+  "HIGH",
+  "URGENT",
+];
 
 const PRIORITY_COLOR: Record<TaskListItem["priority"], string> = {
   LOW: "#64748b",
@@ -110,6 +130,11 @@ export function TabTasks({
       custom_class?: string;
     }[];
     criticalIds: string[];
+    tasksWithoutDates: {
+      id: string;
+      title: string;
+      status: { name: string; color: string };
+    }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadedCount, setLoadedCount] = useState(0);
@@ -118,6 +143,15 @@ export function TabTasks({
   const [quickTitle, setQuickTitle] = useState("");
   const [quickStageId, setQuickStageId] = useState(stages[0]?.id ?? "");
   const [creating, setCreating] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const [search, setSearch] = useState("");
+  const [includeArchived, setIncludeArchived] = useState(false);
+
+  // Debounce — щоб не дьоргати API на кожен символ.
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
   const drawer = useDrillDown();
   const openTask = useCallback(
     (id: string) => drawer.open({ type: "task", id }),
@@ -131,9 +165,13 @@ export function TabTasks({
     setError(null);
     const PAGE_SIZE = 200;
     const MAX_PAGES = 50; // hard safety cap = 10 000 tasks
+    const baseParams = new URLSearchParams();
+    baseParams.set("take", String(PAGE_SIZE));
+    if (search) baseParams.set("search", search);
+    if (includeArchived) baseParams.set("includeArchived", "true");
     try {
       const [firstTasksRes, statusesRes, labelsRes] = await Promise.all([
-        fetch(`/api/admin/projects/${projectId}/tasks?take=${PAGE_SIZE}`),
+        fetch(`/api/admin/projects/${projectId}/tasks?${baseParams.toString()}`),
         fetch(`/api/admin/projects/${projectId}/statuses`),
         fetch(`/api/admin/projects/${projectId}/labels`),
       ]);
@@ -152,8 +190,10 @@ export function TabTasks({
       setLoadedCount(collected.length);
 
       for (let page = 1; page < MAX_PAGES && nextCursor; page++) {
+        const pagedParams = new URLSearchParams(baseParams);
+        pagedParams.set("cursor", nextCursor);
         const res = await fetch(
-          `/api/admin/projects/${projectId}/tasks?take=${PAGE_SIZE}&cursor=${encodeURIComponent(nextCursor)}`,
+          `/api/admin/projects/${projectId}/tasks?${pagedParams.toString()}`,
         );
         if (!res.ok) break;
         const json = await res.json();
@@ -174,7 +214,7 @@ export function TabTasks({
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, search, includeArchived]);
 
   useEffect(() => {
     void loadAll();
@@ -185,7 +225,11 @@ export function TabTasks({
       const r = await fetch(`/api/admin/projects/${projectId}/gantt`);
       if (r.ok) {
         const j = await r.json();
-        setGantt({ items: j.data.items, criticalIds: j.data.criticalIds });
+        setGantt({
+          items: j.data.items,
+          criticalIds: j.data.criticalIds,
+          tasksWithoutDates: j.data.tasksWithoutDates ?? [],
+        });
       }
     } catch {}
   }, [projectId]);
@@ -294,6 +338,41 @@ export function TabTasks({
     [tasks, statuses],
   );
 
+  const patchTask = useCallback(
+    async (taskId: string, patch: Record<string, unknown>) => {
+      const prev = tasks;
+      setTasks((p) =>
+        p.map((t) => (t.id === taskId ? { ...t, ...patch } : t)) as TaskListItem[],
+      );
+      try {
+        const res = await fetch(`/api/admin/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error("patch failed");
+      } catch {
+        setTasks(prev);
+      }
+    },
+    [tasks],
+  );
+
+  const restoreTask = useCallback(
+    async (taskId: string) => {
+      try {
+        const res = await fetch(`/api/admin/tasks/${taskId}/restore`, {
+          method: "POST",
+        });
+        if (!res.ok) throw new Error("restore failed");
+        await loadAll();
+      } catch {
+        // silent
+      }
+    },
+    [loadAll],
+  );
+
   const kanbanStatuses: KanbanStatus[] = useMemo(
     () =>
       statuses.map((s) => ({
@@ -363,6 +442,43 @@ export function TabTasks({
             );
           })}
         </div>
+        <div
+          className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <Search size={13} style={{ color: T.textMuted }} />
+          <input
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Пошук по задачах…"
+            className="bg-transparent outline-none placeholder:opacity-60 w-44"
+            style={{ color: T.textPrimary }}
+          />
+          {searchInput && (
+            <button
+              type="button"
+              onClick={() => setSearchInput("")}
+              title="Очистити"
+              style={{ color: T.textMuted }}
+            >
+              <X size={12} />
+            </button>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setIncludeArchived((v) => !v)}
+          className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition"
+          style={{
+            backgroundColor: includeArchived ? T.accentPrimarySoft : T.panel,
+            color: includeArchived ? T.accentPrimary : T.textMuted,
+            border: `1px solid ${includeArchived ? T.accentPrimary + "55" : T.borderSoft}`,
+          }}
+          title="Показати архівні задачі"
+        >
+          <Archive size={13} />
+          Архів
+        </button>
         <a
           href={`/api/admin/projects/${projectId}/tasks/export?format=xlsx`}
           className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold"
@@ -459,6 +575,7 @@ export function TabTasks({
         gantt ? (
           <TaskGantt
             items={gantt.items}
+            tasksWithoutDates={gantt.tasksWithoutDates}
             projectId={projectId}
             onTaskClick={openTask}
             onDateChange={async (id, start, end) => {
@@ -504,6 +621,7 @@ export function TabTasks({
             title: t.title,
             dueDate: t.dueDate,
             status: {
+              id: t.status.id,
               name: t.status.name,
               color: t.status.color,
               isDone: t.status.isDone,
@@ -511,7 +629,9 @@ export function TabTasks({
             priority: t.priority,
             assignees: t.assignees,
           }))}
+          statuses={statuses}
           onOpen={openTask}
+          onChangeStatus={(taskId, statusId) => void changeStatus(taskId, statusId)}
         />
       ) : (
         // list
@@ -553,6 +673,13 @@ export function TabTasks({
                       statuses={statuses}
                       onOpen={() => openTask(t.id)}
                       onChangeStatus={(sid) => void changeStatus(t.id, sid)}
+                      onChangePriority={(p) =>
+                        void patchTask(t.id, { priority: p })
+                      }
+                      onChangeDueDate={(d) =>
+                        void patchTask(t.id, { dueDate: d })
+                      }
+                      onRestore={() => void restoreTask(t.id)}
                     />
                   ))}
                 </ul>
@@ -571,11 +698,17 @@ function TaskRow({
   statuses,
   onOpen,
   onChangeStatus,
+  onChangePriority,
+  onChangeDueDate,
+  onRestore,
 }: {
   task: TaskListItem;
   statuses: TaskStatus[];
   onOpen: () => void;
   onChangeStatus: (statusId: string) => void;
+  onChangePriority: (priority: TaskListItem["priority"]) => void;
+  onChangeDueDate: (iso: string | null) => void;
+  onRestore: () => void;
 }) {
   return (
     <li
@@ -584,16 +717,31 @@ function TaskRow({
       style={{
         backgroundColor: T.panelElevated,
         border: `1px solid ${T.borderSoft}`,
+        opacity: task.isArchived ? 0.6 : 1,
       }}
     >
+      <PriorityPicker current={task.priority} onChange={onChangePriority} />
       <span
-        className="inline-block h-2 w-2 rounded-full flex-shrink-0"
-        style={{ backgroundColor: PRIORITY_COLOR[task.priority] }}
-        title={task.priority}
-      />
-      <span className="text-sm truncate flex-1" style={{ color: T.textPrimary }}>
+        className="text-sm truncate flex-1"
+        style={{
+          color: T.textPrimary,
+          textDecoration: task.isArchived ? "line-through" : "none",
+        }}
+      >
         {task.title}
       </span>
+      {task.isArchived && (
+        <span
+          className="rounded-full px-2 py-0.5 text-[10px] font-bold flex-shrink-0"
+          style={{
+            backgroundColor: T.textMuted + "22",
+            color: T.textMuted,
+          }}
+        >
+          Архів
+        </span>
+      )}
+      <DueDatePicker current={task.dueDate} onChange={onChangeDueDate} />
       {task.labels.length > 0 && (
         <div className="flex gap-1 flex-shrink-0">
           {task.labels.slice(0, 3).map((l) => (
@@ -610,7 +758,7 @@ function TaskRow({
           ))}
         </div>
       )}
-      <StatusPicker
+      <InlineStatusPicker
         current={task.status}
         statuses={statuses}
         onChange={onChangeStatus}
@@ -623,23 +771,38 @@ function TaskRow({
           ☑ {task._count.checklist}
         </span>
       )}
+      {task.isArchived && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRestore();
+          }}
+          className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:brightness-110 flex-shrink-0"
+          style={{
+            backgroundColor: T.panel,
+            color: T.accentPrimary,
+            border: `1px solid ${T.accentPrimary}55`,
+          }}
+          title="Відновити з архіву"
+        >
+          <ArchiveRestore size={11} />
+          Відновити
+        </button>
+      )}
     </li>
   );
 }
 
-function StatusPicker({
+function PriorityPicker({
   current,
-  statuses,
   onChange,
 }: {
-  current: TaskStatus;
-  statuses: TaskStatus[];
-  onChange: (statusId: string) => void;
+  current: TaskListItem["priority"];
+  onChange: (p: TaskListItem["priority"]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-  const color = current.color ?? T.textMuted;
-
   useEffect(() => {
     if (!open) return;
     const onDoc = (e: MouseEvent) => {
@@ -661,46 +824,39 @@ function StatusPicker({
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="rounded-full px-2.5 py-1 text-[10px] font-bold transition hover:brightness-110"
-        style={{
-          backgroundColor: color + "22",
-          color,
-          border: `1px solid ${color}33`,
-        }}
-        title="Змінити статус"
+        className="flex h-5 w-5 items-center justify-center rounded-full transition hover:brightness-110"
+        style={{ backgroundColor: PRIORITY_COLOR[current] + "33" }}
+        title={`Пріоритет: ${PRIORITY_LABEL[current]}`}
       >
-        {current.name}
+        <Flag size={11} style={{ color: PRIORITY_COLOR[current] }} />
       </button>
       {open && (
         <div
-          className="absolute right-0 z-30 mt-1 flex min-w-[160px] flex-col gap-0.5 rounded-xl p-1 shadow-lg"
+          className="absolute left-0 z-30 mt-1 flex min-w-[150px] flex-col gap-0.5 rounded-xl p-1 shadow-lg"
           style={{
             backgroundColor: T.panel,
             border: `1px solid ${T.borderSoft}`,
           }}
         >
-          {statuses.map((s) => {
-            const active = s.id === current.id;
+          {PRIORITY_ORDER.map((p) => {
+            const active = p === current;
             return (
               <button
-                key={s.id}
+                key={p}
                 type="button"
                 onClick={() => {
-                  if (!active) onChange(s.id);
+                  if (!active) onChange(p);
                   setOpen(false);
                 }}
                 className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold transition hover:brightness-110"
                 style={{
-                  backgroundColor: active ? s.color + "22" : "transparent",
-                  color: active ? s.color : T.textPrimary,
+                  backgroundColor: active ? PRIORITY_COLOR[p] + "22" : "transparent",
+                  color: active ? PRIORITY_COLOR[p] : T.textPrimary,
                 }}
               >
-                <span
-                  className="inline-block h-2 w-2 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: s.color }}
-                />
-                <span className="flex-1 truncate">{s.name}</span>
-                {active && <span style={{ color: s.color }}>✓</span>}
+                <Flag size={11} style={{ color: PRIORITY_COLOR[p] }} />
+                <span className="flex-1">{PRIORITY_LABEL[p]}</span>
+                {active && <span style={{ color: PRIORITY_COLOR[p] }}>✓</span>}
               </button>
             );
           })}
@@ -709,3 +865,109 @@ function StatusPicker({
     </div>
   );
 }
+
+function DueDatePicker({
+  current,
+  onChange,
+}: {
+  current: string | null;
+  onChange: (iso: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = current ? new Date(current) : null;
+  const overdue = due ? due.getTime() < today.getTime() : false;
+  const valueStr = due ? due.toISOString().slice(0, 10) : "";
+  const label = due
+    ? due.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })
+    : "Додати дату";
+  const color = !due
+    ? T.textMuted
+    : overdue
+      ? T.danger ?? "#ef4444"
+      : T.accentPrimary;
+
+  return (
+    <div ref={wrapRef} className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:brightness-110"
+        style={{
+          backgroundColor: due ? color + "22" : "transparent",
+          color,
+          border: `1px solid ${due ? color + "55" : T.borderSoft}`,
+        }}
+        title={due ? `Дедлайн: ${due.toLocaleDateString("uk-UA")}` : "Призначити дедлайн"}
+      >
+        <CalendarPlus size={11} />
+        {label}
+      </button>
+      {open && (
+        <div
+          className="absolute right-0 z-30 mt-1 flex flex-col gap-2 rounded-xl p-2 shadow-lg"
+          style={{
+            backgroundColor: T.panel,
+            border: `1px solid ${T.borderSoft}`,
+          }}
+        >
+          <input
+            type="date"
+            value={valueStr}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (!v) {
+                onChange(null);
+              } else {
+                onChange(new Date(v + "T00:00:00").toISOString());
+              }
+              setOpen(false);
+            }}
+            className="rounded-lg px-2 py-1.5 text-[12px] outline-none"
+            style={{
+              backgroundColor: T.panelElevated,
+              color: T.textPrimary,
+              border: `1px solid ${T.borderSoft}`,
+            }}
+          />
+          {due && (
+            <button
+              type="button"
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className="rounded-lg px-2 py-1 text-[11px] font-semibold"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textMuted,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+            >
+              Прибрати дату
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+

@@ -450,8 +450,20 @@ export async function getGanttData(projectId: string) {
     incomingBySuccessor.set(d.successorId, arr);
   }
 
+  // Задачі без жодної дати не малюємо в Gantt-баром — показуємо окремим
+  // списком «Без дат» над таймлайном, щоб не зникали мовчки.
+  const tasksWithoutDates = tasks
+    .filter((t) => !t.startDate && !t.dueDate)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      status: { name: t.status.name, color: t.status.color },
+    }));
+
+  const datedTasks = tasks.filter((t) => t.startDate || t.dueDate);
+
   const today = new Date();
-  const items = tasks
+  const items = datedTasks
     .map((t) => {
       // Actual range (drag-edited)
       const actualStart = t.startDate ?? t.dueDate ?? today;
@@ -508,5 +520,5 @@ export async function getGanttData(projectId: string) {
     })
     .filter((t) => t.start && t.end);
 
-  return { items, criticalIds: critical.criticalIds, deps };
+  return { items, criticalIds: critical.criticalIds, deps, tasksWithoutDates };
 }

@@ -3,12 +3,13 @@
 import { useMemo } from "react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { InlineStatusPicker, type InlineStatus } from "./inline-status-picker";
 
 type PeopleTask = {
   id: string;
   title: string;
   dueDate: string | null;
-  status: { name: string; color: string; isDone: boolean };
+  status: { id: string; name: string; color: string; isDone: boolean };
   priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
   assignees: { user: { id: string; name: string; avatar: string | null } }[];
 };
@@ -22,10 +23,14 @@ const PRIORITY_COLOR: Record<PeopleTask["priority"], string> = {
 
 export function TaskPeopleView({
   tasks,
+  statuses,
   onOpen,
+  onChangeStatus,
 }: {
   tasks: PeopleTask[];
+  statuses: InlineStatus[];
   onOpen: (id: string) => void;
+  onChangeStatus: (taskId: string, statusId: string) => void;
 }) {
   // Group tasks by assignee. Tasks without assignee go into "Unassigned"
   const groups = useMemo(() => {
@@ -134,15 +139,12 @@ export function TaskPeopleView({
                       {new Date(t.dueDate).toLocaleDateString("uk-UA")}
                     </span>
                   )}
-                  <span
-                    className="rounded-full px-2 py-0.5 text-[9px] font-bold flex-shrink-0"
-                    style={{
-                      backgroundColor: t.status.color + "22",
-                      color: t.status.color,
-                    }}
-                  >
-                    {t.status.name}
-                  </span>
+                  <InlineStatusPicker
+                    current={{ id: t.status.id, name: t.status.name, color: t.status.color }}
+                    statuses={statuses}
+                    onChange={(sid) => onChangeStatus(t.id, sid)}
+                    size="sm"
+                  />
                 </li>
               ))}
             </ul>
