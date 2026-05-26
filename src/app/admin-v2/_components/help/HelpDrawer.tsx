@@ -2,11 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronDown, Play, Target, ListChecks, HelpCircle } from "lucide-react";
+import { X, ChevronDown, Target, ListChecks, HelpCircle } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useReducedMotion, useMediaQuery } from "@/components/landing/three/hooks/useReducedMotion";
 import { useHelp } from "@/contexts/HelpContext";
-import { GuidedTour } from "@/components/help/GuidedTour";
 import { trackHelpEvent } from "@/lib/help/analytics";
 import { usePageHelp } from "./usePageHelp";
 
@@ -14,7 +13,7 @@ const Z_BACKDROP = 9998;
 const Z_DRAWER = 9999;
 
 export function HelpDrawer() {
-  const { isOpen, close, activeTour, startTour, endTour } = useHelp();
+  const { isOpen, close } = useHelp();
   const { help, pathname, role } = usePageHelp();
   const reduced = useReducedMotion();
   const isMobile = useMediaQuery("(max-width: 767px)");
@@ -259,59 +258,6 @@ export function HelpDrawer() {
                 </Section>
               )}
 
-              {help.tours && help.tours.length > 0 && (
-                <Section title="Запустити тур" icon={<Play size={14} />}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {help.tours.map((tour) => (
-                      <button
-                        key={tour.id}
-                        onClick={() => startTour(tour, { route: pathname, role })}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: 12,
-                          padding: "10px 12px",
-                          borderRadius: 12,
-                          backgroundColor: T.panelElevated,
-                          border: `1px solid ${T.borderSoft}`,
-                          textAlign: "left",
-                          cursor: "pointer",
-                          width: "100%",
-                        }}
-                      >
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
-                          <span
-                            style={{
-                              fontSize: 12.5,
-                              fontWeight: 600,
-                              color: T.textPrimary,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {tour.title}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: 11,
-                              color: T.textMuted,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {tour.description}
-                          </span>
-                        </div>
-                        <Play size={14} style={{ color: T.accentPrimary, flexShrink: 0 }} />
-                      </button>
-                    ))}
-                  </div>
-                </Section>
-              )}
-
               {help.faq.length > 0 && (
                 <Section title="Питання й відповіді" icon={<HelpCircle size={14} />}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -387,19 +333,7 @@ export function HelpDrawer() {
     </>
   );
 
-  return (
-    <>
-      {createPortal(drawerContent, document.body)}
-      {activeTour &&
-        createPortal(
-          <GuidedTour
-            tour={activeTour}
-            onClose={(completed) => endTour(completed, { route: pathname, role })}
-          />,
-          document.body,
-        )}
-    </>
-  );
+  return createPortal(drawerContent, document.body);
 }
 
 const listStyle: React.CSSProperties = {

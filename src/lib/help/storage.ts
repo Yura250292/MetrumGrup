@@ -29,10 +29,6 @@ export function introKey(route: string, version: number): string {
   return `help:intro:${route}:v${version}`;
 }
 
-export function tourKey(tourId: string, version: number): string {
-  return `help:tour:${tourId}:completed:v${version}`;
-}
-
 export function isIntroDismissed(route: string, version: number): boolean {
   return safeGet(introKey(route, version)) === "dismissed";
 }
@@ -43,12 +39,4 @@ export function dismissIntro(route: string, version: number): void {
 
 export function resetIntro(route: string, version: number): void {
   safeRemove(introKey(route, version));
-}
-
-export function isTourCompleted(tourId: string, version: number): boolean {
-  return safeGet(tourKey(tourId, version)) === "1";
-}
-
-export function markTourCompleted(tourId: string, version: number): void {
-  safeSet(tourKey(tourId, version), "1");
 }

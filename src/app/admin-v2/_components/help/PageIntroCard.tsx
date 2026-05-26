@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HelpCircle, Play, ArrowRight, X, ChevronDown } from "lucide-react";
+import { HelpCircle, ArrowRight, X, ChevronDown } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useHelp } from "@/contexts/HelpContext";
 import { isIntroDismissed, dismissIntro } from "@/lib/help/storage";
@@ -10,7 +10,7 @@ import { usePageHelp } from "./usePageHelp";
 
 export function PageIntroCard() {
   const { help, pathname, role } = usePageHelp();
-  const { open: openDrawer, startTour } = useHelp();
+  const { open: openDrawer } = useHelp();
   const [hydrated, setHydrated] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -28,8 +28,6 @@ export function PageIntroCard() {
   if (!help || help.isFallback) return null;
   if (!help.intro?.enabled) return null;
   if (dismissed) return null;
-
-  const firstTour = help.tours?.[0];
 
   const handleDismiss = (e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -153,26 +151,6 @@ export function PageIntroCard() {
       </p>
 
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 6 }}>
-        {firstTour && (
-          <button
-            onClick={() => startTour(firstTour, { route: pathname, role })}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "4px 10px",
-              borderRadius: 8,
-              fontSize: 11.5,
-              fontWeight: 600,
-              color: "#fff",
-              backgroundColor: T.accentPrimary,
-              border: "none",
-              cursor: "pointer",
-            }}
-          >
-            <Play size={11} /> Тур
-          </button>
-        )}
         <button
           onClick={() => {
             trackHelpEvent("help_opened", { route: pathname, role });

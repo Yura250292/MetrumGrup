@@ -1,15 +1,7 @@
 /**
  * @jest-environment jsdom
  */
-import {
-  dismissIntro,
-  isIntroDismissed,
-  introKey,
-  markTourCompleted,
-  isTourCompleted,
-  tourKey,
-  resetIntro,
-} from "../storage";
+import { dismissIntro, isIntroDismissed, introKey, resetIntro } from "../storage";
 
 describe("help storage", () => {
   beforeEach(() => {
@@ -31,13 +23,6 @@ describe("help storage", () => {
     dismissIntro("/admin-v2/projects", 1);
     resetIntro("/admin-v2/projects", 1);
     expect(isIntroDismissed("/admin-v2/projects", 1)).toBe(false);
-  });
-
-  it("tour completion is versioned", () => {
-    expect(tourKey("financing-add", 1)).toBe("help:tour:financing-add:completed:v1");
-    markTourCompleted("financing-add", 1);
-    expect(isTourCompleted("financing-add", 1)).toBe(true);
-    expect(isTourCompleted("financing-add", 2)).toBe(false);
   });
 
   it("survives when localStorage throws (e.g. private mode)", () => {

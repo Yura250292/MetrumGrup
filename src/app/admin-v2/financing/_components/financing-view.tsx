@@ -303,7 +303,7 @@ export function FinancingView({
               <button
                 onClick={() => setShowEstimateUpload(true)}
                 title="Завантажити кошторис (PDF/XLSX) — AI парс у бюджет"
-                data-help-id="financing-ai-estimate"
+
                 className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
                 style={{ backgroundColor: T.accentPrimary }}
               >
@@ -313,7 +313,7 @@ export function FinancingView({
               <button
                 onClick={() => setShowOcrScan(true)}
                 title="Сканувати чек з AI → додати у факт-витрати"
-                data-help-id="financing-ocr-scan"
+
                 className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-[0.97]"
                 style={{
                   backgroundColor: T.panelElevated,
@@ -325,11 +325,11 @@ export function FinancingView({
                 Скан чека
               </button>
               {folderId && (
-                <div className="hidden sm:block" data-help-id="financing-add-entry">
+                <div className="hidden sm:block">
                   <QuickAddSplit onPick={(p) => setCreatePreset(p)} />
                 </div>
               )}
-              <div data-help-id="financing-export">
+              <div>
                 <ExportMenu onExport={handleExport} exporting={exporting} disabled={loading} />
               </div>
             </div>
@@ -339,7 +339,7 @@ export function FinancingView({
               Рендериться лише на глобальному view, тому scope тут завжди undefined. */}
           <Link
             href="/admin-v2/financing/pivot"
-            data-help-id="financing-pivot"
+
             className="group inline-flex items-center gap-2 self-start rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition hover:brightness-[0.97]"
             style={{
               borderColor: T.borderSoft,
@@ -587,7 +587,7 @@ export function FinancingView({
 
       {/* Filters: на Огляді — спрощений LensBar; на Операціях — повний FilterBar */}
       {activeTab === "overview" && (
-        <div data-help-id="financing-filters">
+        <div>
           <LensBar
             filters={filters}
             setFilters={setFilters}
@@ -598,7 +598,7 @@ export function FinancingView({
         </div>
       )}
       {activeTab === "operations" && (
-        <div data-help-id="financing-filters">
+        <div>
           <FilterBar
             filters={filters}
             setFilters={setFilters}
@@ -849,7 +849,7 @@ function FinancingTabsBar({
     // Зовнішній flex з border-b — щоб «Більше» сидів НА тій самій лінії, але
     // ПОЗА overflow-контейнером primary tabs (інакше dropdown обрізається).
     <div
-      data-help-id="financing-tabs"
+
       className="flex items-stretch gap-0 border-b"
       style={{ borderColor: T.borderSoft }}
     >

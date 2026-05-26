@@ -106,7 +106,7 @@ export default async function AdminV2ProjectsPage({
     <div className="flex flex-col gap-6">
       <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
-      <section data-help-id="projects-kpi" className="grid grid-cols-3 gap-2 sm:gap-4">
+      <section className="grid grid-cols-3 gap-2 sm:gap-4">
         <KpiCard
           label="ВСЬОГО"
           value={String(projects.length)}
@@ -130,7 +130,7 @@ export default async function AdminV2ProjectsPage({
         />
       </section>
 
-      <div data-help-id="projects-filters">
+      <div>
         <ProjectFoldersClient
           folders={JSON.parse(JSON.stringify(folders))}
           breadcrumbs={breadcrumbs}
@@ -147,7 +147,7 @@ export default async function AdminV2ProjectsPage({
           action={{ label: "Створити проєкт", href: "/admin-v2/projects/new" }}
         />
       ) : (
-        <div data-help-id="projects-list">
+        <div>
           <ProjectsView
             projects={rows}
             canDelete={isSuperAdmin}
