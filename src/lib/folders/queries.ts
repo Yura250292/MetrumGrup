@@ -22,7 +22,10 @@ export type FolderListItem = {
  * Build folder where-clause to scope folders by active firm.
  *
  * Кожна папка має власний firmId (присвоюється при створенні + bcakfill).
- * Тут просто AND-имо firmId або null (для legacy перед backfill).
+ * Виняток — system-папки (seed): вони з firmId=null і свідомо спільні
+ * як контейнери. Унікальний slug робить дублювання per-firm неможливим
+ * (`@@unique([domain, slug])`), а ізоляція даних відбувається на рівні
+ * записів усередині (FinanceEntry.firmId).
  *
  * firmId=null у виклику → cross-firm view (SUPER_ADMIN), без фільтра.
  */
@@ -31,7 +34,7 @@ function firmAwareFolderWhere(
   firmId: string | null,
 ): Prisma.FolderWhereInput {
   if (!firmId) return {};
-  return { firmId };
+  return { OR: [{ firmId }, { firmId: null, isSystem: true }] };
 }
 
 export async function listFolders(
