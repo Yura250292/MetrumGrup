@@ -15,6 +15,7 @@ import { PageIntroCard } from "../_components/help/PageIntroCard";
 import type { ProjectExtra, ProjectRow } from "./_components/projects-types";
 import { firmWhereForProject, isHomeFirmFor } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
+import { canViewFinance } from "@/lib/auth-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -91,8 +92,13 @@ export default async function AdminV2ProjectsPage({
     },
   }));
 
-  const totalBudget = projects.reduce((sum, p) => sum + p.totalBudget, 0);
-  const totalPaid = projects.reduce((sum, p) => sum + p.totalPaid, 0);
+  const showFinance = canViewFinance(session.user.role);
+  const totalBudget = showFinance
+    ? projects.reduce((sum, p) => sum + p.totalBudget, 0)
+    : 0;
+  const totalPaid = showFinance
+    ? projects.reduce((sum, p) => sum + p.totalPaid, 0)
+    : 0;
   const activeCount = projects.filter((p) => p.status === "ACTIVE").length;
 
   const canSeeOverview =
@@ -106,28 +112,44 @@ export default async function AdminV2ProjectsPage({
     <div className="flex flex-col gap-6">
       <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
-      <section className="grid grid-cols-3 gap-2 sm:gap-4">
+      <section
+        className={`grid ${showFinance ? "grid-cols-3" : "grid-cols-2"} gap-2 sm:gap-4`}
+      >
         <KpiCard
           label="ВСЬОГО"
           value={String(projects.length)}
-          sub="у системі"
+          sub={`${activeCount} активн${
+            activeCount === 1 ? "ий" : activeCount >= 2 && activeCount <= 4 ? "их" : "их"
+          }`}
           accent={T.sky}
           gradient="var(--kpi-sky)"
         />
-        <KpiCard
-          label="ЗАГАЛЬНИЙ БЮДЖЕТ"
-          value={formatCurrency(totalBudget)}
-          sub={`${formatCurrency(totalPaid)} сплачено`}
-          accent={T.violet}
-          gradient="var(--kpi-violet)"
-        />
-        <KpiCard
-          label="ВИКОНАННЯ ОПЛАТ"
-          value={`${totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0}%`}
-          sub="від загальної суми"
-          accent={T.emerald}
-          gradient="var(--kpi-emerald)"
-        />
+        {showFinance ? (
+          <>
+            <KpiCard
+              label="ЗАГАЛЬНИЙ БЮДЖЕТ"
+              value={formatCurrency(totalBudget)}
+              sub={`${formatCurrency(totalPaid)} сплачено`}
+              accent={T.violet}
+              gradient="var(--kpi-violet)"
+            />
+            <KpiCard
+              label="ВИКОНАННЯ ОПЛАТ"
+              value={`${totalBudget > 0 ? Math.round((totalPaid / totalBudget) * 100) : 0}%`}
+              sub="від загальної суми"
+              accent={T.emerald}
+              gradient="var(--kpi-emerald)"
+            />
+          </>
+        ) : (
+          <KpiCard
+            label="АКТИВНІ"
+            value={String(activeCount)}
+            sub="зараз ведуться"
+            accent={T.emerald}
+            gradient="var(--kpi-emerald)"
+          />
+        )}
       </section>
 
       <div>

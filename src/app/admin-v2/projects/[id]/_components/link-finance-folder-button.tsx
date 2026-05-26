@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Link2, Loader2, X, Search, Check, AlertCircle } from "lucide-react";
+// File kept as-is; default export name remains 'link-finance-folder-button.tsx' for git history.
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 type Candidate = {
@@ -15,12 +16,20 @@ type Candidate = {
 };
 
 /**
- * Кнопка + модалка для привʼязки існуючої FINANCE-папки до існуючого проекту.
+ * Контрольована модалка прив'язки існуючої FINANCE-папки до проекту.
+ * Trigger (відкриття) керується ззовні через `open`/`onClose` props.
  * Корисно коли проект створили БЕЗ обʼєднання, але потім зрозуміли що є окрема
  * папка фінансів зі своїми операціями. Зливає її з mirror папкою проекту.
  */
-export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
-  const [open, setOpen] = useState(false);
+export function LinkFinanceFolderModal({
+  projectId,
+  open,
+  onClose,
+}: {
+  projectId: string;
+  open: boolean;
+  onClose: () => void;
+}) {
   const [q, setQ] = useState("");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,7 +39,11 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPicked(null);
+      setQ("");
+      return;
+    }
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       setLoading(true);
@@ -80,7 +93,7 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
         throw new Error(body.error ?? "Не вдалось привʼязати");
       }
       router.refresh();
-      setOpen(false);
+      onClose();
       setPicked(null);
       setQ("");
     } catch (err) {
@@ -90,28 +103,15 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
     }
   }
 
+  if (!open) return null;
+
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex flex-1 sm:flex-initial items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
-        style={{
-          backgroundColor: T.panelElevated,
-          color: T.textPrimary,
-          border: `1px solid ${T.borderStrong}`,
-        }}
-        title="Привʼязати існуючу папку фінансування"
-      >
-        <Link2 size={16} /> Привʼязати папку
-      </button>
-
-      {open && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ backgroundColor: "rgba(0,0,0,0.55)" }}
           onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
+            if (e.target === e.currentTarget) onClose();
           }}
         >
           <div
@@ -136,7 +136,7 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
               </div>
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => onClose()}
                 className="rounded-lg p-1.5 transition hover:brightness-[0.97]"
                 style={{ color: T.textMuted, backgroundColor: T.panelElevated }}
               >
@@ -304,7 +304,7 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
             >
               <button
                 type="button"
-                onClick={() => setOpen(false)}
+                onClick={() => onClose()}
                 disabled={applying}
                 className="rounded-xl px-4 py-2 text-sm font-medium"
                 style={{
@@ -328,7 +328,6 @@ export function LinkFinanceFolderButton({ projectId }: { projectId: string }) {
             </div>
           </div>
         </div>
-      )}
     </>
   );
 }

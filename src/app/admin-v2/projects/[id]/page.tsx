@@ -9,20 +9,18 @@ import {
   MapPin,
   User,
   Briefcase,
-  Camera,
-  BarChart3,
 } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectTabs } from "./_components/tabs";
-import { SyncFinanceButton } from "./_components/sync-finance-button";
-import { LinkFinanceFolderButton } from "./_components/link-finance-folder-button";
+import { ProjectHeaderActions } from "./_components/project-header-actions";
+import { ProjectKpiStrip } from "./_components/project-kpi-strip";
 import { FinanceDiagnosticsCard } from "./_components/finance-diagnostics-card";
-import { TestProjectToggle } from "./_components/test-project-toggle";
 import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
+import { canViewFinance } from "@/lib/auth-utils";
 import { computeStageFinanceAggregates } from "@/lib/projects/stages-helpers";
 
 export const dynamic = "force-dynamic";
@@ -97,6 +95,7 @@ export default async function AdminV2ProjectDetailPage({
   const factBalance = factIncomeTotal - factExpenseTotal;
 
   const tasksEnabled = await isTasksEnabledForProject(project.id);
+  const showFinance = canViewFinance(session.user.role);
 
   const stageAggregates = await computeStageFinanceAggregates(
     project.id,
@@ -128,43 +127,21 @@ export default async function AdminV2ProjectDetailPage({
           <ArrowLeft size={14} /> До списку проєктів
         </Link>
 
-        {/* Cover + actions row: cover ліворуч (фікс ширина на десктопі),
-            кнопки праворуч у grid. На мобайлі — стек: cover зверху, далі кнопки. */}
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-          <div className="w-full sm:w-64 md:w-72 flex-shrink-0">
+        {/* Cover + title + actions: 1 primary (Photo) + overflow menu (Дії).
+            На мобайлі — стек: cover, далі title-блок (нижче) і дії. */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start">
+          <div className="w-full sm:w-56 md:w-64 flex-shrink-0">
             <ProjectCoverUpload
               projectId={project.id}
               currentUrl={project.coverImageUrl ?? null}
             />
           </div>
-          <div className="grid grid-cols-2 auto-rows-min gap-2 flex-1 content-start">
-            <TestProjectToggle projectId={project.id} initial={project.isTestProject} />
-            <Link
-              href={`/admin-v2/projects/${project.id}/photos/new`}
-              className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
-              style={{
-                backgroundColor: T.panelElevated,
-                color: T.textPrimary,
-                border: `1px solid ${T.borderStrong}`,
-              }}
-            >
-              <Camera size={16} /> Додати фото
-            </Link>
-            <LinkFinanceFolderButton projectId={project.id} />
-            <SyncFinanceButton projectId={project.id} />
-            {tasksEnabled && (
-              <Link
-                href={`/admin-v2/projects/${project.id}/reports`}
-                className="flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold tap-highlight-none active:scale-[0.97] col-span-2"
-                style={{
-                  backgroundColor: T.panelElevated,
-                  color: T.textPrimary,
-                  border: `1px solid ${T.borderStrong}`,
-                }}
-              >
-                <BarChart3 size={16} /> Звіти
-              </Link>
-            )}
+          <div className="flex flex-1 flex-col gap-3 min-w-0">
+            <ProjectHeaderActions
+              projectId={project.id}
+              isTestProject={project.isTestProject}
+              tasksEnabled={tasksEnabled}
+            />
           </div>
         </div>
 
@@ -216,44 +193,19 @@ export default async function AdminV2ProjectDetailPage({
           </div>
         </div>
 
-        {/* KPI strip: план (Payment) */}
+        {/* Єдиний KPI-strip — заміняє дві старі стопки і `FinanceKpiStrip` */}
         <ProjectHeroItem>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KpiPill label="Бюджет" value={formatCurrency(totalBudget)} glow="blue" />
-          <KpiPill
-            label="Сплачено"
-            value={formatCurrency(totalPaid)}
-            sub={`${paidPercent}%`}
-            accent={T.success}
-            glow="emerald"
+          <ProjectKpiStrip
+            projectId={project.id}
+            totalBudget={totalBudget}
+            totalPaid={totalPaid}
+            paidPercent={paidPercent}
+            stagesCount={project.stages.length}
+            factIncome={factIncomeTotal}
+            factExpense={factExpenseTotal}
+            factBalance={factBalance}
+            canViewFinance={showFinance}
           />
-          <KpiPill label="Етапів" value={String(project.stages.length)} glow="violet" />
-          <KpiPill label="Файлів" value={String(project._count.files)} glow="cyan" />
-        </div>
-        </ProjectHeroItem>
-
-        {/* KPI strip: факт (FinanceEntry) */}
-        <ProjectHeroItem>
-        <div className="grid grid-cols-3 gap-3">
-          <KpiPill
-            label="Факт · дохід"
-            value={formatCurrency(factIncomeTotal)}
-            accent={T.success}
-            glow="emerald"
-          />
-          <KpiPill
-            label="Факт · витрата"
-            value={formatCurrency(factExpenseTotal)}
-            accent={T.danger}
-            glow="rose"
-          />
-          <KpiPill
-            label="Факт · баланс"
-            value={formatCurrency(factBalance)}
-            accent={factBalance >= 0 ? T.success : T.danger}
-            glow={factBalance >= 0 ? "emerald" : "rose"}
-          />
-        </div>
         </ProjectHeroItem>
       </header>
       </ProjectHeroAnimator>
@@ -397,38 +349,3 @@ function StatusBadge({ status }: { status: ProjectStatus }) {
   );
 }
 
-function KpiPill({
-  label,
-  value,
-  sub,
-  accent = T.textPrimary,
-  glow,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  accent?: string;
-  glow?: "blue" | "emerald" | "rose" | "amber" | "violet" | "cyan";
-}) {
-  const glowClass = glow ? `premium-glow premium-glow-${glow}` : "";
-  return (
-    <div
-      className={`premium-card ${glowClass} flex flex-col gap-1 rounded-xl px-3 sm:px-4 py-3 min-w-0 overflow-hidden`}
-      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-    >
-      <span className="text-[9px] sm:text-[10px] font-bold tracking-wider truncate" style={{ color: T.textMuted }}>
-        {label.toUpperCase()}
-      </span>
-      <div className="flex items-baseline gap-1 sm:gap-2 min-w-0">
-        <span className="text-base sm:text-lg font-bold truncate" style={{ color: accent }}>
-          {value}
-        </span>
-        {sub && (
-          <span className="text-[10px] sm:text-[11px] flex-shrink-0" style={{ color: T.textMuted }}>
-            {sub}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}

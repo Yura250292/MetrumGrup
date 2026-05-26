@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Package, Plus, Trash2, X } from "lucide-react";
+import { Loader2, Package, Plus, Trash2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
 
@@ -24,13 +24,10 @@ type MaterialRow = {
   status: string;
 };
 
-type Props = {
+export type StageMaterialsContentProps = {
   projectId: string;
   stageId: string;
   stageName: string;
-  onClose: () => void;
-  /** Сховати X-кнопку (для fullscreen split-view, де панель завжди видима). */
-  hideClose?: boolean;
 };
 
 const STATUS_TONE: Record<string, { bg: string; fg: string }> = {
@@ -40,17 +37,14 @@ const STATUS_TONE: Record<string, { bg: string; fg: string }> = {
 };
 
 /**
- * Презентаційний body матеріалів етапу. Без позиціонування — батьківський
- * wrapper (`StageMaterialsPopup` для floating mobile або `StageMaterialsEmbedded`
- * для pinned desktop) задає layout. Fetch виконується при mount + зміні stageId.
+ * Матеріали етапу — таблиця плану/факту з можливістю додавання. Рендериться
+ * як sub-tab всередині `StageDrawerContent`. Без власного header/positioning.
  */
-function StageMaterialsBody({
+export function StageMaterialsContent({
   projectId,
   stageId,
   stageName,
-  onClose,
-  hideClose,
-}: Props) {
+}: StageMaterialsContentProps) {
   const [rows, setRows] = useState<MaterialRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -146,28 +140,21 @@ function StageMaterialsBody({
         background: T.panel,
         display: "flex",
         flexDirection: "column",
-        overflow: "hidden",
-        height: "100%",
         width: "100%",
       }}
     >
       {/* Header */}
       <div
         style={{
-          padding: "10px 16px",
+          padding: "8px 4px",
           borderBottom: `1px solid ${T.borderSoft}`,
           display: "flex",
           alignItems: "center",
           gap: 10,
-          flexShrink: 0,
-          background: T.panelSoft,
+          flexWrap: "wrap",
         }}
       >
-        <Package size={16} style={{ color: T.accentPrimary }} />
-        <span style={{ fontWeight: 700, fontSize: 13, color: T.textPrimary }}>
-          Матеріали етапу
-        </span>
-        <span style={{ color: T.textMuted, fontSize: 12 }}>·</span>
+        <Package size={14} style={{ color: T.accentPrimary }} />
         <span
           style={{
             color: T.textSecondary,
@@ -177,6 +164,7 @@ function StageMaterialsBody({
             textOverflow: "ellipsis",
             whiteSpace: "nowrap",
           }}
+          title={stageName}
         >
           {stageName}
         </span>
@@ -203,27 +191,6 @@ function StageMaterialsBody({
           <Plus size={12} />
           {adding ? "Скасувати" : "Додати матеріал"}
         </button>
-        {!hideClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Закрити"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: 24,
-              height: 24,
-              borderRadius: 4,
-              background: "transparent",
-              border: "none",
-              color: T.textMuted,
-              cursor: "pointer",
-            }}
-          >
-            <X size={14} />
-          </button>
-        )}
       </div>
 
       {adding && (
@@ -352,7 +319,7 @@ function StageMaterialsBody({
       )}
 
       {/* Body */}
-      <div style={{ flex: 1, overflow: "auto" }}>
+      <div style={{ overflowX: "auto" }}>
         {loading ? (
           <div
             style={{
@@ -642,47 +609,3 @@ function StageMaterialsBody({
   );
 }
 
-/**
- * Floating-режим (mobile fallback): фіксований унизу viewport.
- * Mount керує батько (зазвичай `{selected && !materialsHidden && <Popup />}`).
- */
-export function StageMaterialsPopup(props: Props) {
-  return (
-    <div
-      style={{
-        position: "fixed",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 260,
-        zIndex: 40,
-        boxShadow: "0 -8px 24px rgba(0,0,0,0.25)",
-        borderTop: `1px solid ${T.borderStrong}`,
-      }}
-    >
-      <StageMaterialsBody {...props} />
-    </div>
-  );
-}
-
-/**
- * Embedded-режим: pinned панель усередині батьківського layout.
- * Висота керується батьком (h-full + max-h обмеження).
- */
-export function StageMaterialsEmbedded({
-  className,
-  style,
-  ...props
-}: Props & { className?: string; style?: React.CSSProperties }) {
-  return (
-    <div
-      className={`overflow-hidden rounded-xl shadow-sm ${className ?? ""}`}
-      style={{
-        border: `1px solid ${T.borderSoft}`,
-        ...style,
-      }}
-    >
-      <StageMaterialsBody {...props} />
-    </div>
-  );
-}

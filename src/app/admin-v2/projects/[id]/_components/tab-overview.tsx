@@ -5,7 +5,6 @@ import { formatCurrency } from "@/lib/utils";
 import { ProjectClientEditButton } from "@/components/projects/ProjectClientEditButton";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectStatus, ProjectStage, StageStatus } from "@prisma/client";
-import { FinanceKpiStrip } from "./finance-kpi-strip";
 import { StagesSection, type ResponsibleCandidate } from "./stages-section";
 import { SupplierDebtsSection } from "./supplier-debts-section";
 import type { StageRow } from "./stage-table";
@@ -54,9 +53,6 @@ export function TabOverview({ project }: { project: ProjectDetailData }) {
   const remaining = project.totalBudget - project.totalPaid;
   return (
     <div className="flex flex-col gap-6">
-      {/* Finance KPI strip — пов'язує матрицю Plan vs Fact + cashflow в один погляд */}
-      <FinanceKpiStrip projectId={project.id} />
-
       {/* Phase 4: Борги перед постачальниками з drill-down по матеріалах +
           інлайн-кнопка "Оплатити" → SupplierPaymentModal у scope цього проєкту. */}
       <SupplierDebtsSection projectId={project.id} projectTitle={project.title} />

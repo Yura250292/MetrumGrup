@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { X, Check, Calendar, User2, Loader2, History, Ruler, ChevronRight } from "lucide-react";
-import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
+import { Check, Calendar, User2, Loader2, History, Ruler } from "lucide-react";
+import { STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { StageStatus } from "@prisma/client";
@@ -14,17 +13,14 @@ import { CommentThread } from "@/components/collab/CommentThread";
 
 const UNIT_OPTIONS = ["", "шт", "м", "м²", "м³", "кг", "т", "л", "пог.м", "год"];
 
-type StageDetailDrawerProps = {
+export type StageDetailContentProps = {
   projectId: string;
-  projectTitle: string;
   stage: StageRow;
-  /** Назва батьківського етапу — для повного breadcrumb коли відкритий підетап. */
-  parentStageName?: string | null;
   candidates: ResponsibleCandidate[];
-  onClose: () => void;
+  /** Викликається після успішних PATCH/POST у формі (refetch + sync events). */
   onChanged: () => Promise<void> | void;
-  /** Сховати X-кнопку та "Закрити" у footer (для fullscreen split-view, де панель завжди видима). */
-  hideClose?: boolean;
+  /** Викликається коли користувач натискає "Закрити задачу" (status=COMPLETED). */
+  onCloseTask?: () => void;
 };
 
 type FinanceHistoryEntry = {
@@ -46,16 +42,13 @@ const STATUS_COLORS: Record<StageStatus, { bg: string; fg: string }> = {
   COMPLETED: { bg: T.successSoft, fg: T.success },
 };
 
-function StageDetailPanelBody({
+export function StageDetailContent({
   projectId,
-  projectTitle,
   stage,
-  parentStageName,
   candidates,
-  onClose,
   onChanged,
-  hideClose,
-}: StageDetailDrawerProps) {
+  onCloseTask,
+}: StageDetailContentProps) {
   const [history, setHistory] = useState<FinanceHistoryEntry[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [savingField, setSavingField] = useState<string | null>(null);
@@ -110,14 +103,14 @@ function StageDetailPanelBody({
 
   async function handleClose() {
     if (stage.status === "COMPLETED") {
-      onClose();
+      onCloseTask?.();
       return;
     }
     if (!confirm("Закрити цей етап? Він буде позначений як «Завершено» (100%).")) return;
     setClosing(true);
     await patchStage({ status: "COMPLETED", progress: 100 }, "close");
     setClosing(false);
-    onClose();
+    onCloseTask?.();
   }
 
   async function handleQuickAddSubmitted() {
@@ -132,72 +125,8 @@ function StageDetailPanelBody({
   const overrun = planRef > 0 && factExpense > planRef;
 
   return (
-    <div className="flex h-full w-full flex-col">
-        {/* Header */}
-        <div
-          className="flex items-start justify-between gap-3 border-b px-5 py-4"
-          style={{ borderColor: T.borderSoft }}
-        >
-          <div className="min-w-0 flex-1">
-            {/* Breadcrumb: Проєкти › {project} › [{Підетап батько} ›] Етап */}
-            <nav
-              className="flex flex-wrap items-center gap-1 text-[11px]"
-              style={{ color: T.textMuted }}
-              aria-label="Шлях"
-            >
-              <Link
-                href="/admin-v2/projects"
-                className="transition hover:underline"
-                style={{ color: T.textMuted }}
-              >
-                Проєкти
-              </Link>
-              <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
-              <Link
-                href={`/admin-v2/projects/${projectId}`}
-                className="max-w-[120px] sm:max-w-[160px] truncate transition hover:underline"
-                style={{ color: T.textSecondary, fontWeight: 500 }}
-                title={projectTitle}
-              >
-                {projectTitle}
-              </Link>
-              {parentStageName && (
-                <>
-                  <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
-                  <span
-                    className="max-w-[100px] sm:max-w-[140px] truncate"
-                    style={{ color: T.textSecondary }}
-                    title={parentStageName}
-                  >
-                    {parentStageName}
-                  </span>
-                </>
-              )}
-              <ChevronRight size={11} aria-hidden style={{ opacity: 0.6 }} />
-              <span style={{ color: T.textMuted }}>Етап</span>
-            </nav>
-            <h3
-              className="mt-1.5 truncate text-[16px] font-bold"
-              style={{ color: T.textPrimary }}
-            >
-              {stageDisplayName(stage)}
-            </h3>
-          </div>
-          {!hideClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition hover:brightness-95"
-              style={{ color: T.textMuted, backgroundColor: T.panelSoft }}
-              aria-label="Закрити"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+    <div className="flex w-full flex-col">
+        <div className="px-1">
           {/* Properties */}
           <Section title="Параметри">
             <Row label="Статус">
@@ -568,97 +497,25 @@ function StageDetailPanelBody({
           <Section title="Обговорення">
             <CommentThread entityType="STAGE_RECORD" entityId={stage.id} />
           </Section>
-        </div>
 
-        {/* Footer */}
-        <div
-          className="flex items-center justify-between gap-2 border-t px-5 py-3"
-          style={{ borderColor: T.borderSoft }}
-        >
-          {hideClose ? (
-            <span />
-          ) : (
+          {/* Footer action — закрити задачу */}
+          <div className="mt-4 flex justify-end">
             <button
               type="button"
-              onClick={onClose}
-              className="rounded px-3 py-1.5 text-[12px] font-medium transition"
+              onClick={handleClose}
+              disabled={closing || stage.status === "COMPLETED"}
+              className="flex items-center gap-1.5 rounded px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50"
               style={{
-                backgroundColor: T.panelSoft,
-                color: T.textSecondary,
+                backgroundColor: stage.status === "COMPLETED" ? T.successSoft : T.success,
+                color: stage.status === "COMPLETED" ? T.success : "white",
               }}
             >
-              Закрити
+              {closing ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              {stage.status === "COMPLETED" ? "Завершено" : "Закрити задачу"}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={closing || stage.status === "COMPLETED"}
-            className="flex items-center gap-1.5 rounded px-3 py-1.5 text-[12px] font-semibold transition disabled:opacity-50"
-            style={{
-              backgroundColor: stage.status === "COMPLETED" ? T.successSoft : T.success,
-              color: stage.status === "COMPLETED" ? T.success : "white",
-            }}
-          >
-            {closing ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-            {stage.status === "COMPLETED" ? "Завершено" : "Закрити задачу"}
-          </button>
+          </div>
         </div>
     </div>
-  );
-}
-
-/**
- * Floating-режим (mobile fallback): fixed-overlay з backdrop і власним ESC.
- * Зберігає поточну поведінку для зворотної сумісності.
- */
-export function StageDetailDrawer(props: StageDetailDrawerProps) {
-  // ESC закриває drawer (тільки у floating-режимі).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") props.onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [props]);
-
-  return (
-    <>
-      <div
-        className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
-        onClick={props.onClose}
-        aria-hidden
-      />
-      <aside
-        className="fixed right-0 top-0 z-50 flex h-screen w-[min(92vw,360px)] flex-col shadow-2xl"
-        style={{ backgroundColor: T.panel, borderLeft: `1px solid ${T.borderSoft}` }}
-      >
-        <StageDetailPanelBody {...props} />
-      </aside>
-    </>
-  );
-}
-
-/**
- * Embedded-режим: pinned панель усередині батьківського grid (без fixed/backdrop).
- * Висота керується батьком (зазвичай h-full + max-h обмеження).
- */
-export function StageDetailEmbedded({
-  className,
-  style,
-  ...props
-}: StageDetailDrawerProps & { className?: string; style?: React.CSSProperties }) {
-  return (
-    <aside
-      className={`flex flex-col overflow-hidden rounded-xl shadow-sm ${className ?? ""}`}
-      style={{
-        backgroundColor: T.panel,
-        border: `1px solid ${T.borderSoft}`,
-        ...style,
-      }}
-    >
-      <StageDetailPanelBody {...props} />
-    </aside>
   );
 }
 

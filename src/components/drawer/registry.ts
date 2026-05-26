@@ -59,6 +59,12 @@ const RFIDrawerContentLazy = lazy(() =>
   })),
 );
 
+const StageDrawerContentLazy = lazy(() =>
+  import("./renderers/StageDrawerContent").then((m) => ({
+    default: m.StageDrawerContent,
+  })),
+);
+
 export const DRAWER_REGISTRY: Record<string, RegistryEntry> = {
   task: {
     Renderer: TaskDrawerContentLazy,
@@ -97,6 +103,10 @@ export const DRAWER_REGISTRY: Record<string, RegistryEntry> = {
   rfi: {
     Renderer: RFIDrawerContentLazy,
     defaultBreadcrumb: "RFI",
+  },
+  stage: {
+    Renderer: StageDrawerContentLazy,
+    defaultBreadcrumb: "Етап",
   },
   // Інші модулі (counterparty, costCode, equipment, incident, ...) —
   // додаються у task-ах 01-15 з roadmap-2026.
