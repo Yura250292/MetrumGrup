@@ -1,0 +1,155 @@
+<svg width="1600" height="1200" viewBox="0 0 1600 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1600" height="1200" fill="#F4F1EA"/>
+
+  <rect x="40" y="36" width="1520" height="124" rx="26" fill="#FFF9F0" stroke="#D9CCB7" stroke-width="2"/>
+  <text x="76" y="88" fill="#1F2937" font-family="Arial, sans-serif" font-size="42" font-weight="700">
+    CRM: Ролі та фінансовий контур
+  </text>
+  <text x="76" y="126" fill="#5B6472" font-family="Arial, sans-serif" font-size="22">
+    Проста модель на 5 ролей для команди 10-15 людей
+  </text>
+  <rect x="998" y="62" width="520" height="66" rx="16" fill="#FCEAEA" stroke="#E6B9B9"/>
+  <text x="1022" y="89" fill="#7A271A" font-family="Arial, sans-serif" font-size="20" font-weight="700">
+    Лише SUPER_ADMIN бачить зарплати
+  </text>
+  <text x="1022" y="113" fill="#7A271A" font-family="Arial, sans-serif" font-size="20" font-weight="700">
+    і фінансування всіх проєктів
+  </text>
+
+  <rect x="40" y="190" width="1520" height="220" rx="24" fill="#FFFDF8" stroke="#D9CCB7" stroke-width="2"/>
+  <text x="72" y="236" fill="#1F2937" font-family="Arial, sans-serif" font-size="30" font-weight="700">
+    1. Основні ролі
+  </text>
+
+  <rect x="72" y="270" width="275" height="108" rx="18" fill="#F7EFE1" stroke="#D9CCB7"/>
+  <text x="94" y="305" fill="#8B5E3C" font-family="Arial, sans-serif" font-size="24" font-weight="700">SUPER_ADMIN</text>
+  <text x="94" y="336" fill="#1F2937" font-family="Arial, sans-serif" font-size="18">Бачить усе, керує всім</text>
+  <text x="94" y="363" fill="#5B6472" font-family="Arial, sans-serif" font-size="16">Фінанси, ролі, налаштування, контроль</text>
+
+  <rect x="367" y="270" width="275" height="108" rx="18" fill="#F7EFE1" stroke="#D9CCB7"/>
+  <text x="389" y="305" fill="#8B5E3C" font-family="Arial, sans-serif" font-size="24" font-weight="700">ESTIMATOR</text>
+  <text x="389" y="336" fill="#1F2937" font-family="Arial, sans-serif" font-size="18">Кошториси та бюджет</text>
+  <text x="389" y="363" fill="#5B6472" font-family="Arial, sans-serif" font-size="16">AI-генерація, редагування, версії</text>
+
+  <rect x="662" y="270" width="275" height="108" rx="18" fill="#F7EFE1" stroke="#D9CCB7"/>
+  <text x="684" y="305" fill="#8B5E3C" font-family="Arial, sans-serif" font-size="24" font-weight="700">PROCUREMENT</text>
+  <text x="684" y="336" fill="#1F2937" font-family="Arial, sans-serif" font-size="18">Постачальники та витрати</text>
+  <text x="684" y="363" fill="#5B6472" font-family="Arial, sans-serif" font-size="16">Рахунки, накладні, борги, оплати</text>
+
+  <rect x="957" y="270" width="275" height="108" rx="18" fill="#F7EFE1" stroke="#D9CCB7"/>
+  <text x="979" y="305" fill="#8B5E3C" font-family="Arial, sans-serif" font-size="24" font-weight="700">PROJECT_MANAGER</text>
+  <text x="979" y="336" fill="#1F2937" font-family="Arial, sans-serif" font-size="18">Лише свої проєкти</text>
+  <text x="979" y="363" fill="#5B6472" font-family="Arial, sans-serif" font-size="16">Контроль виконробів і підтвердження</text>
+
+  <rect x="1252" y="270" width="275" height="108" rx="18" fill="#F7EFE1" stroke="#D9CCB7"/>
+  <text x="1274" y="305" fill="#8B5E3C" font-family="Arial, sans-serif" font-size="24" font-weight="700">FOREMAN</text>
+  <text x="1274" y="336" fill="#1F2937" font-family="Arial, sans-serif" font-size="18">Польові дані</text>
+  <text x="1274" y="363" fill="#5B6472" font-family="Arial, sans-serif" font-size="16">Роботи, матеріали, чеки, фото</text>
+
+  <rect x="40" y="438" width="1520" height="260" rx="24" fill="#FFFDF8" stroke="#D9CCB7" stroke-width="2"/>
+  <text x="72" y="484" fill="#1F2937" font-family="Arial, sans-serif" font-size="30" font-weight="700">
+    2. Як рухаються дані
+  </text>
+
+  <rect x="74" y="530" width="250" height="128" rx="20" fill="#FFFFFF" stroke="#D9CCB7"/>
+  <circle cx="116" cy="570" r="20" fill="#8B5E3C"/>
+  <text x="110" y="577" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">1</text>
+  <text x="146" y="565" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">ESTIMATOR</text>
+  <text x="96" y="604" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">Створює кошторис</text>
+  <text x="96" y="632" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">і формує Budget</text>
+
+  <path d="M324 594H376" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round"/>
+  <path d="M364 582L380 594L364 606" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="390" y="530" width="250" height="128" rx="20" fill="#FFFFFF" stroke="#D9CCB7"/>
+  <circle cx="432" cy="570" r="20" fill="#8B5E3C"/>
+  <text x="426" y="577" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">2</text>
+  <text x="462" y="565" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">FOREMAN</text>
+  <text x="412" y="604" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">Подає фактичні</text>
+  <text x="412" y="632" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">польові звіти</text>
+
+  <path d="M640 594H692" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round"/>
+  <path d="M680 582L696 594L680 606" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="706" y="530" width="250" height="128" rx="20" fill="#FFFFFF" stroke="#D9CCB7"/>
+  <circle cx="748" cy="570" r="20" fill="#8B5E3C"/>
+  <text x="742" y="577" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">3</text>
+  <text x="778" y="565" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">PROJECT_MANAGER</text>
+  <text x="728" y="604" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">Перевіряє і</text>
+  <text x="728" y="632" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">підтверджує звіт</text>
+
+  <path d="M956 594H1008" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round"/>
+  <path d="M996 582L1012 594L996 606" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="1022" y="530" width="250" height="128" rx="20" fill="#FFFFFF" stroke="#D9CCB7"/>
+  <circle cx="1064" cy="570" r="20" fill="#8B5E3C"/>
+  <text x="1058" y="577" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">4</text>
+  <text x="1094" y="565" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">PROCUREMENT</text>
+  <text x="1044" y="604" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">Додає постачальника,</text>
+  <text x="1044" y="632" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">борг або оплату</text>
+
+  <path d="M1272 594H1324" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1312 582L1328 594L1312 606" stroke="#8B5E3C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="1338" y="530" width="184" height="128" rx="20" fill="#FFFFFF" stroke="#D9CCB7"/>
+  <circle cx="1380" cy="570" r="20" fill="#8B5E3C"/>
+  <text x="1374" y="577" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="18" font-weight="700">5</text>
+  <text x="1410" y="565" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">Фінанси</text>
+  <text x="1360" y="604" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">Запис у CRM як</text>
+  <text x="1360" y="632" fill="#5B6472" font-family="Arial, sans-serif" font-size="18">Committed / Actual</text>
+
+  <rect x="40" y="726" width="1520" height="186" rx="24" fill="#FFFDF8" stroke="#D9CCB7" stroke-width="2"/>
+  <text x="72" y="772" fill="#1F2937" font-family="Arial, sans-serif" font-size="30" font-weight="700">
+    3. Фінансова логіка
+  </text>
+
+  <rect x="74" y="808" width="340" height="72" rx="18" fill="#E8F5EE" stroke="#B9D9C6"/>
+  <text x="96" y="837" fill="#175C39" font-family="Arial, sans-serif" font-size="24" font-weight="700">BUDGET</text>
+  <text x="96" y="862" fill="#175C39" font-family="Arial, sans-serif" font-size="18">План із кошторису</text>
+
+  <path d="M414 844H486" stroke="#2F6B57" stroke-width="4" stroke-linecap="round"/>
+  <path d="M474 832L490 844L474 856" stroke="#2F6B57" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="500" y="808" width="340" height="72" rx="18" fill="#FFF4DB" stroke="#E8CC88"/>
+  <text x="522" y="837" fill="#8A5A00" font-family="Arial, sans-serif" font-size="24" font-weight="700">COMMITTED</text>
+  <text x="522" y="862" fill="#8A5A00" font-family="Arial, sans-serif" font-size="18">Є рахунок / борг, але ще не оплачено</text>
+
+  <path d="M840 844H912" stroke="#2F6B57" stroke-width="4" stroke-linecap="round"/>
+  <path d="M900 832L916 844L900 856" stroke="#2F6B57" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="926" y="808" width="340" height="72" rx="18" fill="#E8F5EE" stroke="#B9D9C6"/>
+  <text x="948" y="837" fill="#175C39" font-family="Arial, sans-serif" font-size="24" font-weight="700">ACTUAL</text>
+  <text x="948" y="862" fill="#175C39" font-family="Arial, sans-serif" font-size="18">Реально оплачено / понесено</text>
+
+  <path d="M1266 844H1338" stroke="#2F6B57" stroke-width="4" stroke-linecap="round"/>
+  <path d="M1326 832L1342 844L1326 856" stroke="#2F6B57" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <rect x="1352" y="808" width="170" height="72" rx="18" fill="#FFF4DB" stroke="#E8CC88"/>
+  <text x="1374" y="837" fill="#8A5A00" font-family="Arial, sans-serif" font-size="24" font-weight="700">VARIANCE</text>
+  <text x="1374" y="862" fill="#8A5A00" font-family="Arial, sans-serif" font-size="18">Відхилення</text>
+
+  <rect x="40" y="940" width="1520" height="220" rx="24" fill="#FFFDF8" stroke="#D9CCB7" stroke-width="2"/>
+  <text x="72" y="986" fill="#1F2937" font-family="Arial, sans-serif" font-size="30" font-weight="700">
+    4. Хто що бачить
+  </text>
+
+  <text x="82" y="1034" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">SUPER_ADMIN</text>
+  <text x="300" y="1034" fill="#175C39" font-family="Arial, sans-serif" font-size="20">Усе: проєкти, кошториси, витрати, cashflow, маржа, ролі</text>
+
+  <text x="82" y="1072" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">ESTIMATOR</text>
+  <text x="300" y="1072" fill="#8A5A00" font-family="Arial, sans-serif" font-size="20">Кошториси + довідники + budget/fact read-only без оплат і payroll</text>
+
+  <text x="82" y="1110" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">PROCUREMENT</text>
+  <text x="300" y="1110" fill="#8A5A00" font-family="Arial, sans-serif" font-size="20">Постачальники, рахунки, борги, оплати, витрати з/без проєкту</text>
+
+  <text x="850" y="1034" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">PROJECT_MANAGER</text>
+  <text x="1160" y="1034" fill="#8A5A00" font-family="Arial, sans-serif" font-size="20">Лише свої проєкти, approve звітів, budget vs actual своїх</text>
+
+  <text x="850" y="1072" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">FOREMAN</text>
+  <text x="1160" y="1072" fill="#B42318" font-family="Arial, sans-serif" font-size="20">Лише подача польових даних, без підтвердження фінансів</text>
+
+  <text x="850" y="1110" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">Ключове правило</text>
+  <text x="1160" y="1110" fill="#175C39" font-family="Arial, sans-serif" font-size="20">Витрата без проєкту = company overhead, не губити в проєктах</text>
+  <text x="850" y="1142" fill="#1F2937" font-family="Arial, sans-serif" font-size="22" font-weight="700">Фіндоступ</text>
+  <text x="1160" y="1142" fill="#B42318" font-family="Arial, sans-serif" font-size="20">Payroll + company-wide finance = тільки SUPER_ADMIN</text>
+</svg>

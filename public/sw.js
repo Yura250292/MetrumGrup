@@ -10,7 +10,7 @@
  *  - Other: NetworkFirst with offline fallback
  */
 
-const VERSION = 'v5.5.0';
+const VERSION = 'v5.6.0';
 const STATIC_CACHE = `metrum-static-${VERSION}`;
 const HTML_CACHE = `metrum-html-${VERSION}`;
 const ASSET_CACHE = `metrum-assets-${VERSION}`;
@@ -300,4 +300,30 @@ self.addEventListener('notificationclick', (event) => {
         return clients.openWindow(url);
       }),
   );
+});
+
+// === Site Forms Builder — background sync для outbox (v5.6.0) ===
+// Викликається браузером, коли мережа повертається (Chrome — реально працює;
+// Safari — fallback на window 'online' у клієнтському коді, див.
+// src/lib/forms/offline-queue.ts → autoFlushOnOnline).
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'forms-outbox') {
+    event.waitUntil(
+      (async () => {
+        const clientsList = await self.clients.matchAll({ type: 'window' });
+        // Сигналимо живим вкладкам зробити flush. Якщо вкладок немає —
+        // нічого не робимо: outbox flush-неться при наступному mount-і.
+        clientsList.forEach((c) => c.postMessage({ type: 'forms-outbox:flush' }));
+      })(),
+    );
+  }
+});
+
+// Контрольоване skipWaiting через postMessage із клієнта.
+// UI-toast показує "Оновлено — перезавантажте"; foreman так не втрачає
+// несинхронізовані draft-и форм.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });

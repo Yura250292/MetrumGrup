@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { dispatchEvent } from "@/lib/automations/engine";
 import { notifyFinanceApprovers } from "@/lib/financing/notify-approval";
 import { fireTaskReminders } from "@/lib/tasks/reminders";
+import { fireRFIEscalations } from "@/lib/cron/rfi-escalation";
+import { fireCounterpartyDocumentExpiry } from "@/lib/counterparties/cron/document-expiry";
+import { fireCounterpartyEdrpouRefresh } from "@/lib/counterparties/cron/edrpou-refresh";
 
 /**
  * Vercel cron endpoint — fires every minute (configured in vercel.json).
@@ -53,6 +56,24 @@ export async function GET(request: NextRequest) {
     out.taskRemindersSent = await fireTaskReminders();
   } catch (err) {
     out.taskRemindersError = String(err);
+  }
+
+  try {
+    out.rfiEscalations = await fireRFIEscalations();
+  } catch (err) {
+    out.rfiEscalationsError = String(err);
+  }
+
+  try {
+    out.counterpartyDocumentExpiry = await fireCounterpartyDocumentExpiry();
+  } catch (err) {
+    out.counterpartyDocumentExpiryError = String(err);
+  }
+
+  try {
+    out.counterpartyEdrpouRefresh = await fireCounterpartyEdrpouRefresh();
+  } catch (err) {
+    out.counterpartyEdrpouRefreshError = String(err);
   }
 
   return NextResponse.json({ ok: true, ...out });

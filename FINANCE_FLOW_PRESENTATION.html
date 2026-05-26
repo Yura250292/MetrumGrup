@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Metrum Безпечна Міграція Фінансів</title>
+    <style>
+      :root {
+        --bg: #f3eee4;
+        --paper: #fffaf1;
+        --panel: rgba(255, 255, 255, 0.74);
+        --ink: #1c231f;
+        --muted: #647069;
+        --line: #d8cfbf;
+        --blue: #245f84;
+        --teal: #2f7d74;
+        --green: #2f6849;
+        --amber: #b87731;
+        --red: #9a4f43;
+        --gold: #c79a43;
+        --shadow: 0 26px 60px rgba(28, 35, 31, 0.08);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(199, 154, 67, 0.16), transparent 24%),
+          radial-gradient(circle at top right, rgba(36, 95, 132, 0.12), transparent 26%),
+          linear-gradient(180deg, #f7f2e8 0%, #eee6d8 100%);
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0 0 14px;
+        line-height: 1.02;
+        font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
+        font-weight: 700;
+      }
+
+      h1 {
+        font-size: clamp(46px, 7.2vw, 84px);
+        max-width: 10ch;
+      }
+
+      h2 {
+        font-size: clamp(32px, 4.4vw, 56px);
+        max-width: 14ch;
+      }
+
+      h3 {
+        font-size: 25px;
+      }
+
+      p,
+      li {
+        margin: 0;
+        font-size: 20px;
+        line-height: 1.55;
+      }
+
+      code {
+        display: inline-block;
+        padding: 0.08em 0.42em;
+        border: 1px solid rgba(36, 95, 132, 0.18);
+        border-radius: 0.42em;
+        background: rgba(36, 95, 132, 0.08);
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+        font-size: 0.88em;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 22px;
+      }
+
+      .deck {
+        width: min(1240px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 48px;
+      }
+
+      .slide {
+        position: relative;
+        overflow: hidden;
+        min-height: 88vh;
+        margin: 0 0 28px;
+        padding: 40px;
+        border: 1px solid var(--line);
+        border-radius: 30px;
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.9)),
+          var(--paper);
+        box-shadow: var(--shadow);
+      }
+
+      .slide::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto auto 0;
+        width: 100%;
+        height: 9px;
+        background: linear-gradient(
+          90deg,
+          var(--gold),
+          var(--blue),
+          var(--teal),
+          var(--amber),
+          var(--green)
+        );
+      }
+
+      .eyebrow {
+        margin: 0 0 12px;
+        font-size: 12px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .lead {
+        max-width: 34ch;
+        font-size: 24px;
+        color: var(--muted);
+      }
+
+      .hero,
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .dual-flow,
+      .matrix,
+      .phase-grid,
+      .stake-grid {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero {
+        grid-template-columns: 1.15fr 0.85fr;
+        align-items: end;
+      }
+
+      .grid-2,
+      .dual-flow {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .grid-3,
+      .stake-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid-4,
+      .phase-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .card,
+      .phase,
+      .layer,
+      .principle,
+      .stake,
+      .timeline-box {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 22px;
+        background: var(--panel);
+      }
+
+      .card strong,
+      .phase strong,
+      .stake strong,
+      .timeline-box strong {
+        display: block;
+        margin-bottom: 10px;
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .hero-note {
+        padding: 26px;
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(36, 95, 132, 0.1), rgba(47, 125, 116, 0.12));
+      }
+
+      .hero-stats {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .hero-stat {
+        padding: 16px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid var(--line);
+      }
+
+      .hero-stat span {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+
+      .hero-stat strong {
+        font-size: 18px;
+        line-height: 1.25;
+      }
+
+      .warning-card {
+        background: linear-gradient(180deg, rgba(154, 79, 67, 0.08), rgba(184, 119, 49, 0.08));
+      }
+
+      .ok-card {
+        background: linear-gradient(180deg, rgba(36, 95, 132, 0.08), rgba(47, 125, 116, 0.1));
+      }
+
+      .impact-list li + li,
+      .checklist li + li {
+        margin-top: 8px;
+      }
+
+      .layer {
+        min-height: 230px;
+        color: white;
+      }
+
+      .layer small {
+        display: block;
+        margin-bottom: 14px;
+        font-size: 13px;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        opacity: 0.86;
+      }
+
+      .estimate {
+        background: linear-gradient(180deg, #7b5f2f, #9a793c);
+      }
+
+      .budget {
+        background: linear-gradient(180deg, #245f84, #214f6e);
+      }
+
+      .commitment {
+        background: linear-gradient(180deg, #b87731, #9d6122);
+      }
+
+      .actual {
+        background: linear-gradient(180deg, #2f6849, #27563d);
+      }
+
+      .flow {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 26px;
+      }
+
+      .step {
+        flex: 1 1 208px;
+        padding: 18px;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .step .num,
+      .phase .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        margin-bottom: 12px;
+        border-radius: 999px;
+        color: white;
+        font-weight: 700;
+        background: var(--blue);
+      }
+
+      .phase .num {
+        width: 34px;
+        height: 34px;
+        font-size: 14px;
+      }
+
+      .arrow {
+        align-self: center;
+        font-size: 28px;
+        color: var(--muted);
+      }
+
+      .mapping-card {
+        min-height: 180px;
+      }
+
+      .pill {
+        display: inline-block;
+        padding: 7px 13px;
+        border-radius: 999px;
+        border: 1px solid currentColor;
+        font-size: 13px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .blue {
+        color: var(--blue);
+      }
+
+      .teal {
+        color: var(--teal);
+      }
+
+      .green {
+        color: var(--green);
+      }
+
+      .amber {
+        color: var(--amber);
+      }
+
+      .red {
+        color: var(--red);
+      }
+
+      .callout {
+        margin-top: 24px;
+        padding: 18px 20px;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .quote {
+        font-size: clamp(28px, 3vw, 44px);
+        line-height: 1.22;
+      }
+
+      .timeline {
+        display: grid;
+        gap: 14px;
+        margin-top: 20px;
+      }
+
+      .timeline-row {
+        display: grid;
+        grid-template-columns: 180px 1fr;
+        gap: 16px;
+      }
+
+      .timeline-label {
+        padding: 14px 16px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: #efe3cb;
+        font-size: 17px;
+        font-weight: 700;
+      }
+
+      .timeline-content {
+        padding: 14px 18px;
+        border-radius: 18px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .principle {
+        min-height: 180px;
+      }
+
+      .principle .num {
+        display: inline-block;
+        margin-bottom: 12px;
+        color: var(--muted);
+        font-size: 14px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .phase {
+        min-height: 180px;
+      }
+
+      .stake {
+        min-height: 200px;
+      }
+
+      .footer-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .footer-strip .card {
+        padding: 18px;
+      }
+
+      .closing {
+        display: grid;
+        gap: 28px;
+        align-content: center;
+        min-height: 72vh;
+      }
+
+      @media (max-width: 980px) {
+        .slide {
+          min-height: auto;
+          padding: 28px;
+        }
+
+        .hero,
+        .grid-2,
+        .grid-3,
+        .grid-4,
+        .dual-flow,
+        .phase-grid,
+        .stake-grid,
+        .footer-strip,
+        .hero-stats {
+          grid-template-columns: 1fr;
+        }
+
+        .timeline-row {
+          grid-template-columns: 1fr;
+        }
+
+        h2 {
+          max-width: none;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .deck {
+          width: 100%;
+          padding: 0;
+        }
+
+        .slide {
+          min-height: auto;
+          margin: 0 0 12px;
+          box-shadow: none;
+          page-break-after: always;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck">
+      <section class="slide">
+        <p class="eyebrow">Metrum • Безпечна Міграція Фінансів</p>
+        <div class="hero">
+          <div>
+            <h1>Як безпечно перевести фінанси Metrum на нову логіку</h1>
+            <p class="lead">
+              Переходимо від змішаного <strong><code>PLAN / FACT</code></strong> до 4
+              окремих бізнес-шарів: кошторис, бюджет, зобов'язання, реальні гроші.
+            </p>
+          </div>
+          <div class="hero-note">
+            <p class="quote">
+              Не переписуємо все заново. Виправляємо семантику так, щоб не
+              втратити дані і не зламати звіти.
+            </p>
+          </div>
+        </div>
+        <div class="hero-stats">
+          <div class="hero-stat">
+            <span>Обмеження №1</span>
+            <strong>Міграція без втрати даних і без переприсвоєння старих полів на льоту</strong>
+          </div>
+          <div class="hero-stat">
+            <span>Обмеження №2</span>
+            <strong>Сумісний перехід через паралельну роботу старого і нового читання</strong>
+          </div>
+          <div class="hero-stat">
+            <span>Обмеження №3</span>
+            <strong>Без повного переписування системи, лише контрольований смисловий шар</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Проблема</p>
+        <h2>Старий <code>PLAN / FACT</code> означає різні речі в різних потоках</h2>
+        <div class="grid-2" style="margin-top: 24px;">
+          <div class="card warning-card">
+            <strong>Що відбувається сьогодні</strong>
+            <ul class="impact-list">
+              <li><strong><code>FACT</code></strong> інколи означає реальну оплату</li>
+              <li><strong><code>FACT</code></strong> інколи означає виконані роботи або прогрес етапу</li>
+              <li><strong><code>FACT</code></strong> інколи означає неоплачений рахунок постачальника</li>
+              <li><strong><code>PLAN</code></strong> інколи означає чорновий кошторис</li>
+              <li><strong><code>PLAN</code></strong> інколи означає погоджений бюджет</li>
+            </ul>
+          </div>
+          <div class="card ok-card">
+            <strong>Чим це б’є по бізнесу</strong>
+            <ul class="impact-list">
+              <li>грошовий потік змішує очікування, борги і реальні гроші</li>
+              <li>маржа по проєкту виглядає неправдиво в часі</li>
+              <li>прострочення боргів не відділяється від реальних витрат</li>
+              <li>дашборд власника втрачає довіру до цифр</li>
+              <li>автоматизація стає ризикованою, бо дані двозначні</li>
+            </ul>
+          </div>
+        </div>
+        <div class="callout">
+          <p>
+            Головна проблема не у відсутності функцій. Головна проблема в тому,
+            що одна і та сама цифра потрапляє в різні бізнес-сенси.
+          </p>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Нова Модель</p>
+        <h2>Фінанси треба розкласти на 4 прості шари</h2>
+        <div class="grid-4" style="margin-top: 24px;">
+          <article class="layer estimate">
+            <small>1. Оцінка</small>
+            <h3>Кошторис</h3>
+            <p>Попередній або уточнений розрахунок. Він допомагає рахувати, але ще не є фінансовим обліком.</p>
+          </article>
+          <article class="layer budget">
+            <small>2. Бюджет</small>
+            <h3>Бюджет</h3>
+            <p>Погоджений план: скільки клієнт має заплатити і скільки компанія планує витратити.</p>
+          </article>
+          <article class="layer commitment">
+            <small>3. Зобов'язання</small>
+            <h3>Борг / зобов'язання</h3>
+            <p>Роботи, матеріали або акти вже є, але гроші ще реально не рухнулись.</p>
+          </article>
+          <article class="layer actual">
+            <small>4. Реальні гроші</small>
+            <h3>Факт грошей</h3>
+            <p>Гроші реально сплачені або реально отримані. Тільки це є справжній фінансовий факт.</p>
+          </article>
+        </div>
+        <div class="callout">
+          <p>
+            Ключове правило: <strong>прогрес етапу не дорівнює обліку реальних грошей</strong>.
+            Те, що роботи виконані, ще не означає, що гроші вже пройшли по банку.
+          </p>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Головний Потік</p>
+        <h2>Після міграції логіка рухається в одному напрямку</h2>
+        <div class="flow">
+          <div class="step">
+            <div class="num">1</div>
+            <h3>AI / людина рахує</h3>
+            <p>Створюється попередній або уточнений кошторис.</p>
+          </div>
+          <div class="arrow">→</div>
+          <div class="step">
+            <div class="num">2</div>
+            <h3>Клієнт і компанія погоджують</h3>
+            <p>Окремо фіксується комерційна ціна і внутрішній робочий бюджет.</p>
+          </div>
+          <div class="arrow">→</div>
+          <div class="step">
+            <div class="num">3</div>
+            <h3>План стає бюджетом</h3>
+            <p>У системі з'являються budget income і budget expense.</p>
+          </div>
+          <div class="arrow">→</div>
+          <div class="step">
+            <div class="num">4</div>
+            <h3>Йдуть поставки, акти, виконання</h3>
+            <p>Формуються commitments: вже винні ми або вже винні нам.</p>
+          </div>
+          <div class="arrow">→</div>
+          <div class="step">
+            <div class="num">5</div>
+            <h3>Відбуваються оплати</h3>
+            <p>Лише після реальної оплати або надходження з'являється actual cash.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Мапінг</p>
+        <h2>Кожен процес отримує свій чіткий смисловий клас</h2>
+        <div class="grid-3" style="margin-top: 24px;">
+          <div class="card mapping-card">
+            <strong>Погоджений кошторис клієнта</strong>
+            <p>Комерційна сума, за якою клієнт погодився працювати.</p>
+            <p style="margin-top: 16px;"><span class="pill blue">Бюджетний дохід</span></p>
+          </div>
+          <div class="card mapping-card">
+            <strong>Погоджений внутрішній кошторис</strong>
+            <p>Офіційний план витрат фірми на виконання проєкту.</p>
+            <p style="margin-top: 16px;"><span class="pill teal">Бюджетна витрата</span></p>
+          </div>
+          <div class="card mapping-card">
+            <strong>Підписаний КБ-2 / акт</strong>
+            <p>Доход уже зароблений, але гроші від клієнта ще можуть не зайти.</p>
+            <p style="margin-top: 16px;"><span class="pill amber">Підтверджений дохід</span></p>
+          </div>
+          <div class="card mapping-card">
+            <strong>Неоплачений рахунок постачальника</strong>
+            <p>Матеріал або роботи вже є, але платіж ще не проведений.</p>
+            <p style="margin-top: 16px;"><span class="pill amber">Підтверджена витрата</span></p>
+          </div>
+          <div class="card mapping-card">
+            <strong>Реальна оплата / реальне надходження</strong>
+            <p>Банк уже провів гроші, отже це реальний рух коштів.</p>
+            <p style="margin-top: 16px;">
+              <span class="pill green">Фактична витрата</span>
+              <span class="pill green">Фактичний дохід</span>
+            </p>
+          </div>
+          <div class="card mapping-card">
+            <strong><code>STAGE_AUTO FACT</code></strong>
+            <p>Залишається операційним шаром прогресу і не повинен потрапляти в облік реальних грошей.</p>
+            <p style="margin-top: 16px;"><span class="pill red">Не є грошовим фактом</span></p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Приклади</p>
+        <h2>На двох живих сценаріях різниця видно одразу</h2>
+        <div class="dual-flow" style="margin-top: 24px;">
+          <div class="timeline-box">
+            <strong>Постачальник</strong>
+            <div class="timeline">
+              <div class="timeline-row">
+                <div class="timeline-label">Крок 1</div>
+                <div class="timeline-content">Плитку привезли на <strong>120 000</strong>.</div>
+              </div>
+              <div class="timeline-row">
+                <div class="timeline-label">Крок 2</div>
+                <div class="timeline-content">У системі з'явився <strong>борг постачальнику 120 000</strong>.</div>
+              </div>
+              <div class="timeline-row">
+                <div class="timeline-label">Крок 3</div>
+                <div class="timeline-content">Оплатили <strong>40 000</strong> і тільки ця сума стала actual expense.</div>
+              </div>
+              <div class="timeline-row">
+                <div class="timeline-label">Залишок</div>
+                <div class="timeline-content">У commitment ще висить <strong>80 000</strong> неоплаченого боргу.</div>
+              </div>
+            </div>
+          </div>
+          <div class="timeline-box">
+            <strong>Клієнт</strong>
+            <div class="timeline">
+              <div class="timeline-row">
+                <div class="timeline-label">Крок 1</div>
+                <div class="timeline-content">Клієнт погодив ціну <strong>2 150 000</strong>.</div>
+              </div>
+              <div class="timeline-row">
+                <div class="timeline-label">Крок 2</div>
+                <div class="timeline-content">Підписали КБ-2 на <strong>600 000</strong> і з'явився committed income.</div>
+              </div>
+              <div class="timeline-row">
+                <div class="timeline-label">Крок 3</div>
+                <div class="timeline-content">Клієнт оплатив <strong>500 000</strong> і тільки ця сума стала actual income.</div>
+              </div>
+              <div class="timeline-row">
+                <div class="timeline-label">Висновок</div>
+                <div class="timeline-content">Підписаний акт <strong>не дорівнює</strong> грошам на рахунку.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="callout">
+          <p>
+            Найважливіше для команди: <strong>матеріал привезли ≠ гроші заплатили</strong>,
+            <strong>акт підписали ≠ гроші отримали</strong>.
+          </p>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Safety Rules</p>
+        <h2>5 правил, без яких цю міграцію не можна запускати</h2>
+        <div class="grid-3" style="margin-top: 24px;">
+          <div class="principle">
+            <span class="num">Правило 1</span>
+            <h3>Не міняти сенс старого поля посеред переходу</h3>
+            <p>Старий <code>FACT</code> не можна тихо перепризначити на новий сенс, поки старі звіти ще живі.</p>
+          </div>
+          <div class="principle">
+            <span class="num">Правило 2</span>
+            <h3>Старе і нове читання мають підтримувати нову логіку раніше за нові записи</h3>
+            <p>Спочатку сумісність, потім нові записи. Інакше дашборди зламаються.</p>
+          </div>
+          <div class="principle">
+            <span class="num">Правило 3</span>
+            <h3>Settlement engine постачальників не чіпаємо</h3>
+            <p><code>SupplierPayment</code> і allocations вже дають idempotent settlement, їх не можна обходити.</p>
+          </div>
+          <div class="principle">
+            <span class="num">Правило 4</span>
+            <h3>Прогрес етапу не стає грошовим фактом</h3>
+            <p><code>STAGE_AUTO FACT</code> можна читати як аналітику прогресу, але не як реальні гроші.</p>
+          </div>
+          <div class="principle">
+            <span class="num">Правило 5</span>
+            <h3>Жодного destructive backfill без snapshot</h3>
+            <p>Перед bulk update потрібні snapshot, контрольні totals і replayable лог.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Rollout</p>
+        <h2>Міграція йде хвилями, а не одним небезпечним релізом</h2>
+        <div class="phase-grid" style="margin-top: 24px;">
+          <div class="phase">
+            <div class="num">0</div>
+            <strong>Аудит</strong>
+            <p>Рахуємо реальний склад даних і смислові перекоси до будь-яких змін.</p>
+          </div>
+          <div class="phase">
+            <div class="num">1</div>
+            <strong>Зупинка неправильних записів</strong>
+            <p>Зупиняємо нові записи з поганою семантикою, особливо автосинхронізацію чернеток.</p>
+          </div>
+          <div class="phase">
+            <div class="num">2</div>
+            <strong>Add <code>financeNature</code></strong>
+            <p>Додаємо нове необов'язкове смислове поле без поломки старих екранів.</p>
+          </div>
+          <div class="phase">
+            <div class="num">3</div>
+            <strong>Обережне заповнення історії</strong>
+            <p>Класифікуємо лише ті історичні записи, де правило однозначне.</p>
+          </div>
+          <div class="phase">
+            <div class="num">4</div>
+            <strong>Перемикання читання</strong>
+            <p>Спочатку борги, потім грошовий потік, бюджетна матриця і нова зведена аналітика.</p>
+          </div>
+          <div class="phase">
+            <div class="num">5</div>
+            <strong>Перемикання запису</strong>
+            <p>По одному процесу: рахунки, КБ-2, кошториси, виконроб, логіка етапів.</p>
+          </div>
+          <div class="phase">
+            <div class="num">6</div>
+            <strong>Узгодження інтерфейсу і API</strong>
+            <p>Позначки, типи даних, фільтри і назви мають показувати бюджет, зобов'язання і факт.</p>
+          </div>
+          <div class="phase">
+            <div class="num">7</div>
+            <strong>Відмова від старих назв</strong>
+            <p>Лише після звірки прибираємо misleading use of <code>PLAN / FACT</code>.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Контроль Ризику</p>
+        <h2>Під час переходу мають працювати окремі контрольні звіти</h2>
+        <div class="grid-2" style="margin-top: 24px;">
+          <div class="card">
+            <strong>Аудит фінансової семантики</strong>
+            <ul class="checklist">
+              <li>кількість за джерелами</li>
+              <li>кількість за kind / type / status</li>
+              <li>рядки <code>FACT</code> за джерелами</li>
+              <li>зрізи, де <code>financeNature</code> порожнє</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>Звірка боргів</strong>
+            <ul class="checklist">
+              <li>сирі неоплачені суми</li>
+              <li>залишок після рознесення оплат</li>
+              <li>різниця по кожному контрагенту</li>
+              <li>реальна сума боргу для власника</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>Звіт про конфлікт бюджетних шарів</strong>
+            <ul class="checklist">
+              <li>де одночасно є <code>ESTIMATE_AUTO</code> plan</li>
+              <li>і <code>STAGE_AUTO</code> plan</li>
+              <li>які проєкти мають дубльований бюджетний шар</li>
+            </ul>
+          </div>
+          <div class="card">
+            <strong>Звіт про витоки процесів</strong>
+            <ul class="checklist">
+              <li>рядки з draft estimates</li>
+              <li>події автопублікації</li>
+              <li>неоднозначні історичні рядки</li>
+              <li>помилки нових записів у тіньовому режимі</li>
+            </ul>
+          </div>
+        </div>
+        <div class="footer-strip">
+          <div class="card">
+            <strong>Rollback</strong>
+            <p>Прапорці функцій і повернення на старе читання, без видалення нових даних.</p>
+          </div>
+          <div class="card">
+            <strong>Тіньовий режим</strong>
+            <p>Старі екрани лишаються активними, нова класифікація накопичується паралельно.</p>
+          </div>
+          <div class="card">
+            <strong>Safety</strong>
+            <p>Жодного релізу, який одночасно міняє і читання, і запис, і всі KPI відразу.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Результат</p>
+        <h2>Після переходу кожна роль отримує чеснішу картину фінансів</h2>
+        <div class="stake-grid" style="margin-top: 24px;">
+          <div class="stake">
+            <strong>Власник</strong>
+            <p>Бачить 4 окремі цифри: бюджетний дохід, бюджетні витрати, поточний борг, реальні гроші.</p>
+          </div>
+          <div class="stake">
+            <strong>Менеджер</strong>
+            <p>Контролює відхилення між бюджетом, зобов'язаннями і фактом, а не одну змішану колонку.</p>
+          </div>
+          <div class="stake">
+            <strong>Фінансист</strong>
+            <p>Окремо працює з боргами до сплати й отримання і окремо з фактичним рухом грошей.</p>
+          </div>
+          <div class="stake">
+            <strong>Виконроб</strong>
+            <p>Фіксує реальність на об'єкті, але не імітує банківський факт там, де ще не було оплати.</p>
+          </div>
+          <div class="stake">
+            <strong>Адмін</strong>
+            <p>Має екран аудиту, екран розбіжностей і контроль, які процеси вже переведені на нову логіку.</p>
+          </div>
+          <div class="stake">
+            <strong>Система</strong>
+            <p>Стає придатною до безпечної автоматизації, аналітики і майбутнього ШІ без смислової плутанини.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <p class="eyebrow">Наступні Кроки</p>
+        <h2>Що робимо прямо зараз, до будь-якої масової міграції даних</h2>
+        <div class="timeline">
+          <div class="timeline-row">
+            <div class="timeline-label">Крок 1</div>
+            <div class="timeline-content">Погодити словник: <strong>Бюджет / Зобов'язання / Факт</strong> і <code>financeNature</code>.</div>
+          </div>
+          <div class="timeline-row">
+            <div class="timeline-label">Крок 2</div>
+            <div class="timeline-content">Побудувати аудит нульової фази і зафіксувати базові підсумки до зміни схеми.</div>
+          </div>
+          <div class="timeline-row">
+            <div class="timeline-label">Крок 3</div>
+            <div class="timeline-content">Прийняти одну бізнес-розвилку: чи foreman-approved expense це <code>COMMITTED_EXPENSE</code>, чи <code>ACTUAL_EXPENSE</code>.</div>
+          </div>
+          <div class="timeline-row">
+            <div class="timeline-label">Крок 4</div>
+            <div class="timeline-content">Вимкнути автосинхронізацію чернеток кошторисів у фінанси через прапорець функції.</div>
+          </div>
+          <div class="timeline-row">
+            <div class="timeline-label">Крок 5</div>
+            <div class="timeline-content">Випустити тільки зміну схеми і діагностику, а не повне перемикання всіх читань і записів за один раз.</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide">
+        <div class="closing">
+          <p class="eyebrow">Фінал</p>
+          <h2>Це не повне переписування системи. Це контрольований перехід до правильного змісту цифр.</h2>
+          <div class="card" style="padding: 32px;">
+            <p class="quote">
+              Один новий смисловий шар + поетапна міграція читання і запису
+              = довіра до цифр без втрати даних і без ризикованого великого вибуху.
+            </p>
+          </div>
+          <div class="footer-strip">
+            <div class="card">
+              <strong>Для бізнесу</strong>
+              <p>Фінанси стають зрозумілими і придатними до управління.</p>
+            </div>
+            <div class="card">
+              <strong>Для команди</strong>
+              <p>Кожна роль бачить свій правильний шар замість змішаного <code>FACT</code>.</p>
+            </div>
+            <div class="card">
+              <strong>Для продакшену</strong>
+              <p>Міграція проходить через аудит, тіньовий режим, прапорці функцій і шлях відкату.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,10 +1,10 @@
 "use client";
 
-import { Suspense, useRef } from "react";
+import { Suspense, useCallback, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Loader2 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
-import { MOTION_DURATION, MOTION_EASING } from "@/lib/motion";
+import { MOTION_EASING } from "@/lib/motion";
 import { useDrillDown } from "./use-drill-down";
 import { useIsMobile } from "./hooks/use-is-mobile";
 import { useDrawerWidth } from "./hooks/use-drawer-width";
@@ -13,6 +13,17 @@ import { getRegistryEntry, type RegistryEntry } from "./registry";
 import type { DrawerStackItem, RendererProps } from "./types";
 
 const EDGE_SWIPE_THRESHOLD = 40;
+
+// Спека Task 00: 300ms cubic-bezier(0.32, 0.72, 0, 1) iOS-like spring.
+// Тримаємо локально, бо глобальний MOTION_DURATION.base = 0.4s — інтенційний
+// bump 2026-04-27 (motion system), не хочемо регресити інші поверхні.
+const DRAWER_DURATION = 0.3;
+const DRAWER_EXIT_DURATION = 0.24;
+const DRAWER_EASING: [number, number, number, number] = [0.32, 0.72, 0, 1];
+
+// Stack depth visual: попередній рівень scale + opacity (Notion-style).
+const PREV_STACK_SCALE = 0.97;
+const PREV_STACK_OPACITY = 0.6;
 
 function UnknownTypeFallback({ id }: RendererProps) {
   return (
@@ -50,9 +61,23 @@ export function DrillDownDrawer() {
 
   const stack = drawer.stack;
   const top: DrawerStackItem | undefined = stack[stack.length - 1];
+  const prev: DrawerStackItem | undefined =
+    stack.length >= 2 ? stack[stack.length - 2] : undefined;
   const isOpen = !!top;
 
-  useDrawerKeyboard({ enabled: isOpen, onBack: () => drawer.back() });
+  const onHistoryBack = useCallback(() => {
+    if (typeof window !== "undefined") window.history.back();
+  }, []);
+  const onHistoryForward = useCallback(() => {
+    if (typeof window !== "undefined") window.history.forward();
+  }, []);
+
+  useDrawerKeyboard({
+    enabled: isOpen,
+    onBack: () => drawer.back(),
+    onHistoryBack,
+    onHistoryForward,
+  });
 
   // Edge-swipe right (mobile) — back/close
   const touchStartXRef = useRef<number | null>(null);
@@ -77,6 +102,7 @@ export function DrillDownDrawer() {
         <DrawerShell
           key="drawer-shell"
           top={top}
+          prev={prev}
           stackSize={stack.length}
           isMobile={isMobile}
           width={width}
@@ -93,6 +119,7 @@ export function DrillDownDrawer() {
 
 function DrawerShell({
   top,
+  prev,
   stackSize,
   isMobile,
   width,
@@ -103,6 +130,7 @@ function DrawerShell({
   onTouchEnd,
 }: {
   top: DrawerStackItem;
+  prev: DrawerStackItem | undefined;
   stackSize: number;
   isMobile: boolean;
   width: number;
@@ -114,6 +142,11 @@ function DrawerShell({
 }) {
   const entry: RegistryEntry | undefined = getRegistryEntry(top.type);
   const Renderer = entry?.Renderer ?? UnknownTypeFallback;
+
+  const prevEntry: RegistryEntry | undefined = prev
+    ? getRegistryEntry(prev.type)
+    : undefined;
+  const PrevRenderer = prevEntry?.Renderer;
 
   // Motion variants — switch by viewport. Reduced motion → opacity only.
   const panelVariants = reduceMotion
@@ -128,14 +161,14 @@ function DrawerShell({
           visible: {
             y: 0,
             transition: {
-              duration: MOTION_DURATION.base,
-              ease: MOTION_EASING.cinema,
+              duration: DRAWER_DURATION,
+              ease: DRAWER_EASING,
             },
           },
           exit: {
             y: "100%",
             transition: {
-              duration: MOTION_DURATION.fast,
+              duration: DRAWER_EXIT_DURATION,
               ease: MOTION_EASING.inOut,
             },
           },
@@ -145,14 +178,14 @@ function DrawerShell({
           visible: {
             x: 0,
             transition: {
-              duration: MOTION_DURATION.base,
-              ease: MOTION_EASING.cinema,
+              duration: DRAWER_DURATION,
+              ease: DRAWER_EASING,
             },
           },
           exit: {
             x: "100%",
             transition: {
-              duration: MOTION_DURATION.fast,
+              duration: DRAWER_EXIT_DURATION,
               ease: MOTION_EASING.inOut,
             },
           },
@@ -163,6 +196,31 @@ function DrawerShell({
     visible: { opacity: 0.18, transition: { duration: 0.2 } },
     exit: { opacity: 0, transition: { duration: 0.15 } },
   };
+
+  // Variants для попереднього drawer'a у стеку (під верхнім).
+  // Notion-style: масштабується/тьмяніє, щоб відчувалася глибина.
+  const prevPanelVariants = reduceMotion
+    ? {
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: PREV_STACK_OPACITY,
+          transition: { duration: 0.15 },
+        },
+        exit: { opacity: 0, transition: { duration: 0.1 } },
+      }
+    : {
+        hidden: { opacity: 0, scale: 1 },
+        visible: {
+          opacity: PREV_STACK_OPACITY,
+          scale: PREV_STACK_SCALE,
+          transition: { duration: DRAWER_DURATION, ease: DRAWER_EASING },
+        },
+        exit: {
+          opacity: 0,
+          scale: 1,
+          transition: { duration: DRAWER_EXIT_DURATION, ease: MOTION_EASING.inOut },
+        },
+      };
 
   return (
     <>
@@ -176,6 +234,46 @@ function DrawerShell({
         onClick={onBackdropClick}
         aria-hidden="true"
       />
+
+      {/* Previous stack item — рендериться під верхнім, scale + opacity. */}
+      {prev && PrevRenderer ? (
+        <motion.aside
+          aria-hidden="true"
+          className={
+            isMobile
+              ? "fixed inset-0 z-40 flex flex-col"
+              : "fixed right-0 top-0 bottom-0 z-40 flex flex-col"
+          }
+          style={
+            isMobile
+              ? {
+                  backgroundColor: T.panel,
+                  color: T.textPrimary,
+                  pointerEvents: "none",
+                  transformOrigin: "center center",
+                }
+              : {
+                  width,
+                  maxWidth: "100vw",
+                  backgroundColor: T.panel,
+                  color: T.textPrimary,
+                  borderLeft: `1px solid ${T.borderStrong}`,
+                  boxShadow: "-12px 0 32px rgba(0,0,0,0.18)",
+                  pointerEvents: "none",
+                  transformOrigin: "left center",
+                }
+          }
+          variants={prevPanelVariants}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          data-drawer-prev-stack="true"
+        >
+          <Suspense fallback={<RendererSkeleton />}>
+            <PrevRenderer key={`${prev.type}:${prev.id}`} id={prev.id} />
+          </Suspense>
+        </motion.aside>
+      ) : null}
 
       {/* Panel */}
       <motion.aside

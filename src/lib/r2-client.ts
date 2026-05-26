@@ -180,6 +180,27 @@ export async function downloadFileFromR2(key: string): Promise<Buffer> {
 }
 
 /**
+ * Завантажити готовий Buffer на R2 за фіксованим ключем (без timestamp/random).
+ * Використовується сервер-сайд для згенерованих файлів (PDF, експорти),
+ * де ключ узгоджений з ID сутності.
+ */
+export async function uploadBufferToR2(
+  key: string,
+  buffer: Buffer,
+  contentType: string,
+): Promise<string> {
+  await r2Client.send(
+    new PutObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: key,
+      Body: buffer,
+      ContentType: contentType,
+    }),
+  );
+  return `${R2_PUBLIC_URL}/${key}`;
+}
+
+/**
  * Зберегти JSON-обʼєкт у R2 (для кешу обмірів тощо).
  */
 export async function putJsonToR2(key: string, data: unknown): Promise<void> {

@@ -15,6 +15,7 @@ import {
   Sparkles,
   ListTodo,
   FileText,
+  HelpCircle,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { TabOverview, type ProjectDetailData } from "./tab-overview";
@@ -28,6 +29,9 @@ import { TabFinancing } from "./tab-financing";
 import { TabAiRender } from "./tab-ai-render";
 import { TabTasks } from "./tab-tasks";
 import { TabKB2 } from "./tab-kb2";
+import { TabChangeOrders } from "./tab-change-orders";
+import { TabRfis } from "./tab-rfis";
+import { FileSignature } from "lucide-react";
 
 const BASE_TAB_DEFS = [
   { id: "overview", label: "Огляд", icon: LayoutDashboard },
@@ -38,6 +42,8 @@ const BASE_TAB_DEFS = [
   { id: "activity", label: "Активність", icon: Activity },
   { id: "estimates", label: "Кошториси", icon: Calculator },
   { id: "finances", label: "Платежі / Фінанси", icon: Wallet },
+  { id: "change-orders", label: "Дод. угоди", icon: FileSignature },
+  { id: "rfis", label: "RFI", icon: HelpCircle },
   { id: "kb2", label: "Акти КБ-2в", icon: FileText },
   { id: "ai-render", label: "AI Візуалізація", icon: Sparkles },
   { id: "tasks", label: "Задачі", icon: ListTodo },
@@ -159,6 +165,8 @@ export function ProjectTabs({
         {current === "kb2" && (
           <TabKB2 projectId={projectId} retentionPercentDefault={5} />
         )}
+        {current === "change-orders" && <TabChangeOrders projectId={projectId} />}
+        {current === "rfis" && <TabRfis projectId={projectId} />}
         {current === "ai-render" && <TabAiRender projectId={projectId} />}
         {current === "tasks" && tasksEnabled && (
           <TabTasks

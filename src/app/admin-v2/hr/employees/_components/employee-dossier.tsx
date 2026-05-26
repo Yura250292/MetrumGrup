@@ -312,6 +312,9 @@ export function EmployeeDossier({
   const [salariesHidden, setSalariesHidden] = useHideSalaries();
   // Опенспейс-режим: див. employees-list — toggle спільний через localStorage.
   const canSeeSalary = hasSalaryAccess && !salariesHidden;
+  // Повний профіль (вся історія, проєкти, акаунт, engagement) — лише адмін.
+  // Усі інші бачать тільки ПІБ + телефон + email.
+  const canSeeFullProfile = currentUserRole === "SUPER_ADMIN";
 
   async function load() {
     setLoading(true);
@@ -396,6 +399,66 @@ export function EmployeeDossier({
 
   const age = calcAge(employee.birthDate);
   const tenure = formatTenure(employee.hiredAt, employee.terminatedAt);
+
+  // RBAC: не-адмін → мінімальний вигляд (ПІБ + телефон + email).
+  // Без зарплат, історії, проєктів, акаунту, посади, відділу тощо.
+  if (!canSeeFullProfile) {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <EmployeeAvatar
+            fullName={employee.fullName}
+            lastName={employee.lastName}
+            firstName={employee.firstName}
+            avatarUrl={employee.user?.avatar}
+            size={44}
+            dimmed={!employee.isActive}
+          />
+          <h1 className="text-lg font-bold" style={{ color: T.textPrimary }}>
+            {employee.fullName}
+          </h1>
+        </div>
+        <div
+          className="overflow-hidden rounded-2xl"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+        >
+          <div
+            className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-2 p-4 text-[13px]"
+            style={{ color: T.textPrimary }}
+          >
+            <span style={{ color: T.textMuted }}>Телефон</span>
+            {employee.phone ? (
+              <a
+                href={`tel:${employee.phone}`}
+                className="font-medium tabular-nums hover:underline"
+                style={{ color: T.accentPrimary }}
+              >
+                {employee.phone}
+              </a>
+            ) : (
+              <span style={{ color: T.textMuted }}>—</span>
+            )}
+            <span style={{ color: T.textMuted }}>Email</span>
+            {employee.email ? (
+              <a
+                href={`mailto:${employee.email}`}
+                className="font-medium hover:underline"
+                style={{ color: T.accentPrimary }}
+              >
+                {employee.email}
+              </a>
+            ) : (
+              <span style={{ color: T.textMuted }}>—</span>
+            )}
+          </div>
+        </div>
+        <p className="text-[11px]" style={{ color: T.textMuted }}>
+          Розширена інформація (зарплата, проєкти, історія) доступна лише
+          адміністратору.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -905,15 +968,18 @@ export function EmployeeDossier({
       )}
       </div>
 
+      {canSeeSalary && employee.payrollPeriods.length > 1 && (
+        <PayrollPeriodsSection periods={employee.payrollPeriods} />
+      )}
+
+      {/* "Користувач" — після всієї зарплатної інформації (включно з історією
+       *  і місячними періодами). Свідомо нижче — це адмінська секція доступу,
+       *  не основна інфо про співробітника. */}
       <AccountSection
         employee={employee}
         currentUserRole={currentUserRole}
         onChanged={() => void load()}
       />
-
-      {canSeeSalary && employee.payrollPeriods.length > 1 && (
-        <PayrollPeriodsSection periods={employee.payrollPeriods} />
-      )}
 
       {engagement && <EngagementPanel data={engagement} />}
 
@@ -2331,6 +2397,20 @@ function AccountSection({
 }) {
   const [mode, setMode] = useState<"idle" | "create" | "link">("idle");
   const [form, setForm] = useState({ email: "", password: "", role: "USER" });
+
+  // Ініціалізуємо/скидаємо форму при зміні співробітника (drawer тепер
+  // використовується для різних людей без закриття).
+  useEffect(() => {
+    if (!employee.user) {
+      setForm({
+        email: employee.email ?? "",
+        password: "",
+        role: assignableRolesFor(currentUserRole)[0] ?? "USER",
+      });
+      setError(null);
+    }
+  }, [employee.id, employee.email, employee.user, currentUserRole]);
+
   const [linkSearch, setLinkSearch] = useState("");
   const [linkResults, setLinkResults] = useState<
     Array<{ id: string; name: string; email: string; role: string }>
@@ -2809,40 +2889,125 @@ function AccountSection({
             </button>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            <span className="text-[12px]" style={{ color: T.textMuted }}>
-              Без акаунта.
-            </span>
-            {canTouch && (
-              <div className="flex flex-wrap gap-1.5">
-                <button
-                  onClick={() => {
-                    setForm({
-                      email: employee.email ?? "",
-                      password: "",
-                      role: allowedRoles[0] ?? "USER",
-                    });
-                    setMode("create");
-                  }}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-white"
-                  style={{ backgroundColor: T.accentPrimary }}
-                >
-                  <UserPlus size={11} /> Створити
-                </button>
-                <button
-                  onClick={() => setMode("link")}
-                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
-                  style={{
-                    backgroundColor: T.panelSoft,
-                    color: T.textSecondary,
-                    border: `1px solid ${T.borderStrong}`,
-                  }}
-                >
-                  <Link2 size={11} /> Привʼязати
-                </button>
+          /* Без акаунта + адмін → одразу inline-форма (без проміжної
+           *  кнопки «Створити»). Dirty-state: коли email/пароль/роль
+           *  відрізняються від початкових значень — світиться «Зберегти». */
+          (() => {
+            const initialEmail = employee.email ?? "";
+            const initialRole = allowedRoles[0] ?? "USER";
+            // useEffect-init форми робиться у блоці батьківського компонента
+            // через useState initializer — тут просто рендеримо.
+            if (!canTouch) {
+              return (
+                <span className="text-[12px]" style={{ color: T.textMuted }}>
+                  Без акаунта. У вас немає прав створювати акаунт цьому
+                  співробітнику.
+                </span>
+              );
+            }
+            const isDirty =
+              form.email.trim() !== initialEmail.trim() ||
+              form.password.trim().length > 0 ||
+              form.role !== initialRole;
+            return (
+              <div className="flex flex-col gap-2">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: T.textMuted }}>
+                      Логін (email)
+                    </span>
+                    <input
+                      value={form.email}
+                      onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))}
+                      placeholder="email@example.com"
+                      type="email"
+                      className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelSoft,
+                        border: `1px solid ${T.borderStrong}`,
+                        color: T.textPrimary,
+                      }}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: T.textMuted }}>
+                      Пароль
+                    </span>
+                    <input
+                      value={form.password}
+                      onChange={(e) => setForm((p) => ({ ...p, password: e.target.value }))}
+                      placeholder="Згенерується якщо порожньо"
+                      type="text"
+                      className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelSoft,
+                        border: `1px solid ${T.borderStrong}`,
+                        color: T.textPrimary,
+                      }}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: T.textMuted }}>
+                      Роль
+                    </span>
+                    <select
+                      value={form.role}
+                      onChange={(e) => setForm((p) => ({ ...p, role: e.target.value }))}
+                      className="rounded-lg px-2.5 py-1.5 text-sm outline-none"
+                      style={{
+                        backgroundColor: T.panelSoft,
+                        border: `1px solid ${T.borderStrong}`,
+                        color: T.textPrimary,
+                      }}
+                    >
+                      {allowedRoles.map((r) => (
+                        <option key={r} value={r}>
+                          {ROLE_LABELS[r]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void handleCreate()}
+                    disabled={saving || !isDirty}
+                    className="inline-flex items-center gap-1.5 rounded-xl px-4 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed transition"
+                    style={{ backgroundColor: T.accentPrimary }}
+                    title={isDirty ? "Зберегти акаунт" : "Немає змін"}
+                  >
+                    {saving ? <Loader2 size={12} className="animate-spin" /> : <UserPlus size={12} />}
+                    Зберегти
+                  </button>
+                  {isDirty && (
+                    <button
+                      onClick={() => setForm({ email: initialEmail, password: "", role: initialRole })}
+                      disabled={saving}
+                      className="rounded-xl px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+                      style={{ color: T.textMuted }}
+                    >
+                      Скасувати
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setMode("link")}
+                    type="button"
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold"
+                    style={{
+                      backgroundColor: T.panelSoft,
+                      color: T.textSecondary,
+                      border: `1px solid ${T.borderStrong}`,
+                    }}
+                  >
+                    <Link2 size={11} /> Привʼязати існуючий
+                  </button>
+                </div>
+                <p className="text-[11px]" style={{ color: T.textMuted }}>
+                  ПІБ і телефон скопіюються зі співробітника. Якщо пароль порожній — буде згенерований одноразовий.
+                </p>
               </div>
-            )}
-          </div>
+            );
+          })()
         )}
       </div>
     </div>

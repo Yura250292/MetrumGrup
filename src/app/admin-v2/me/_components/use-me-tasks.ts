@@ -93,7 +93,7 @@ export type Focus = "all" | "overdue" | "today" | "next";
  * «Проєкти» дублює пункт сайдбару «Огляд проєктів», «Люди» переїхали
  * на окрему сторінку /admin-v2/team.
  */
-export type ViewMode = "sections" | "table";
+export type ViewMode = "sections" | "table" | "gantt";
 
 export const PRIORITY_COLOR: Record<TaskItem["priority"], string> = {
   LOW: "#64748b",

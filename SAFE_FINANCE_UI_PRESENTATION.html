@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="uk">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Metrum - Безпечна Міграція Фінансів</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: #121a2f;
+        --panel-2: #18223d;
+        --panel-3: #1d2947;
+        --text: #eef4ff;
+        --text-2: #b9c7e6;
+        --text-3: #8b9ab9;
+        --border: rgba(143, 168, 222, 0.18);
+        --blue: #3b5bff;
+        --blue-soft: rgba(59, 91, 255, 0.14);
+        --green: #16a34a;
+        --green-soft: rgba(22, 163, 74, 0.14);
+        --amber: #d97706;
+        --amber-soft: rgba(217, 119, 6, 0.14);
+        --red: #dc2626;
+        --red-soft: rgba(220, 38, 38, 0.14);
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(59, 91, 255, 0.18), transparent 28%),
+          radial-gradient(circle at top left, rgba(22, 163, 74, 0.1), transparent 24%),
+          linear-gradient(180deg, #09111f 0%, #0b1020 100%);
+      }
+
+      .page {
+        width: min(1320px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0 40px;
+      }
+
+      .hero,
+      .section,
+      .card,
+      .layer,
+      .phase,
+      .step {
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow);
+      }
+
+      .hero,
+      .section {
+        background: linear-gradient(180deg, rgba(18, 26, 47, 0.98), rgba(14, 22, 40, 0.98));
+        border-radius: 28px;
+      }
+
+      .hero {
+        padding: 32px;
+        overflow: hidden;
+      }
+
+      .hero-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 28px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 10px 14px;
+        background: var(--blue-soft);
+        color: #dbe4ff;
+        border: 1px solid rgba(59, 91, 255, 0.22);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .firm {
+        border-radius: 999px;
+        padding: 9px 14px;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--text-2);
+        border: 1px solid var(--border);
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .hero-grid,
+      .two-col,
+      .four-col,
+      .phases,
+      .steps {
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero-grid {
+        grid-template-columns: 1.2fr 0.8fr;
+      }
+
+      .two-col {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .four-col {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .phases {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        line-height: 1.06;
+      }
+
+      h1 {
+        font-size: clamp(38px, 5vw, 64px);
+        max-width: 12ch;
+      }
+
+      h2 {
+        font-size: clamp(24px, 3vw, 36px);
+        margin-bottom: 10px;
+      }
+
+      h3 {
+        font-size: 20px;
+        margin-bottom: 8px;
+      }
+
+      p,
+      li {
+        font-size: 17px;
+        line-height: 1.65;
+        color: var(--text-2);
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      code {
+        display: inline-block;
+        padding: 0.1em 0.4em;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 0.92em;
+      }
+
+      .lead {
+        max-width: 46ch;
+        margin-top: 16px;
+        font-size: 19px;
+      }
+
+      .hero-note {
+        border-radius: 24px;
+        padding: 24px;
+        background: linear-gradient(180deg, rgba(59, 91, 255, 0.13), rgba(22, 163, 74, 0.08));
+        border: 1px solid var(--border);
+      }
+
+      .hero-note strong {
+        display: block;
+        margin-bottom: 12px;
+        color: var(--text);
+        font-size: 15px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .hero-stats {
+        margin-top: 22px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .stat {
+        border-radius: 22px;
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
+      }
+
+      .stat span {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 12px;
+        color: var(--text-3);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .stat strong {
+        color: var(--text);
+        font-size: 16px;
+        line-height: 1.5;
+      }
+
+      .section {
+        margin-top: 22px;
+        padding: 26px;
+      }
+
+      .card {
+        border-radius: 24px;
+        padding: 20px;
+        background: var(--panel-2);
+      }
+
+      .warn {
+        background: linear-gradient(180deg, rgba(220, 38, 38, 0.12), rgba(217, 119, 6, 0.09));
+      }
+
+      .ok {
+        background: linear-gradient(180deg, rgba(22, 163, 74, 0.1), rgba(59, 91, 255, 0.1));
+      }
+
+      .layer {
+        border-radius: 24px;
+        padding: 22px;
+        min-height: 220px;
+      }
+
+      .layer small {
+        display: block;
+        margin-bottom: 12px;
+        color: rgba(255, 255, 255, 0.72);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        font-size: 12px;
+      }
+
+      .layer-1 {
+        background: linear-gradient(180deg, #8a5a0a, #6d4300);
+      }
+
+      .layer-2 {
+        background: linear-gradient(180deg, #2441b8, #1b2f85);
+      }
+
+      .layer-3 {
+        background: linear-gradient(180deg, #b86612, #8a4c0a);
+      }
+
+      .layer-4 {
+        background: linear-gradient(180deg, #15803d, #115f2e);
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .step {
+        border-radius: 20px;
+        padding: 16px 18px;
+        background: var(--panel-3);
+      }
+
+      .step strong,
+      .phase strong {
+        display: block;
+        color: var(--text);
+        margin-bottom: 6px;
+      }
+
+      .phase {
+        border-radius: 22px;
+        padding: 18px;
+        background: var(--panel-2);
+      }
+
+      .phase-num {
+        display: inline-flex;
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 10px;
+        background: var(--blue);
+        color: white;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .principles {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .principle {
+        border-radius: 20px;
+        padding: 18px;
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+      }
+
+      .principle span {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--text-3);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .footer-note {
+        margin-top: 18px;
+        border-radius: 22px;
+        padding: 22px;
+        background: linear-gradient(180deg, rgba(59, 91, 255, 0.12), rgba(22, 163, 74, 0.08));
+        border: 1px solid var(--border);
+      }
+
+      @media (max-width: 1100px) {
+        .hero-grid,
+        .two-col,
+        .four-col,
+        .phases,
+        .principles,
+        .hero-stats {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media print {
+        body {
+          background: white;
+        }
+
+        .page {
+          width: 100%;
+        }
+
+        .hero,
+        .section,
+        .card,
+        .layer,
+        .phase,
+        .step,
+        .principle {
+          box-shadow: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <div class="hero-top">
+          <div class="badge">Metrum • Безпечна міграція фінансів</div>
+          <div class="firm">UI-версія для перегляду без dev server</div>
+        </div>
+
+        <div class="hero-grid">
+          <div>
+            <h1>Як пояснити нову фінансову логіку просто і зрозуміло</h1>
+            <p class="lead">
+              Проблема не в тому, що в системі мало функцій. Проблема в тому,
+              що один і той самий запис сьогодні може означати і план, і борг,
+              і реальні гроші.
+            </p>
+          </div>
+
+          <div class="hero-note">
+            <strong>Головна ідея</strong>
+            <p>
+              Ми не переписуємо всю систему з нуля. Ми додаємо правильний
+              смисл до цифр і переводимо фінанси поетапно, без втрати даних.
+            </p>
+          </div>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat">
+            <span>Обмеження 1</span>
+            <strong>Міграція без втрати даних і без тихого перепризначення старих полів</strong>
+          </div>
+          <div class="stat">
+            <span>Обмеження 2</span>
+            <strong>Старе і нове читання мають деякий час працювати паралельно</strong>
+          </div>
+          <div class="stat">
+            <span>Обмеження 3</span>
+            <strong>Без повного переписування системи, лише правильний смисловий шар</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="two-col">
+          <article class="card warn">
+            <h2>Що не так зараз</h2>
+            <ul>
+              <li><code>FACT</code> інколи означає реальну оплату</li>
+              <li><code>FACT</code> інколи означає прогрес робіт або неоплачений рахунок</li>
+              <li><code>PLAN</code> інколи означає чернетку, а інколи погоджений бюджет</li>
+              <li>Через це борги, дашборд і грошовий потік можуть показувати змішану картину</li>
+            </ul>
+          </article>
+
+          <article class="card ok">
+            <h2>Що має бути після переходу</h2>
+            <ul>
+              <li>Кошторис окремо від бюджету</li>
+              <li>Борг і зобов'язання окремо від реальної оплати</li>
+              <li>Факт показує тільки те, що реально пройшло по грошах</li>
+              <li>Кожна роль бачить правдиву картину, а не один змішаний стовпець</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>4 шари фінансової логіки</h2>
+        <div class="four-col">
+          <article class="layer layer-1">
+            <small>1. Що порахували</small>
+            <h3>Кошторис</h3>
+            <p>Попередній або уточнений розрахунок. Допомагає оцінити проєкт, але ще не є фінансовим обліком.</p>
+          </article>
+          <article class="layer layer-2">
+            <small>2. Що погодили</small>
+            <h3>Бюджет</h3>
+            <p>Офіційний план доходу і витрат, по якому компанія реально домовилась працювати.</p>
+          </article>
+          <article class="layer layer-3">
+            <small>3. Що вже відбулося</small>
+            <h3>Зобов'язання</h3>
+            <p>Матеріали, роботи або акти вже є, але гроші ще не сплачені або не отримані.</p>
+          </article>
+          <article class="layer layer-4">
+            <small>4. Що реально пройшло</small>
+            <h3>Факт</h3>
+            <p>Гроші реально заплатили або реально отримали. Лише це є грошовим фактом.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="two-col">
+          <article class="card">
+            <h2>Простий приклад з постачальником</h2>
+            <div class="timeline">
+              <div class="step"><strong>1.</strong> Привезли матеріал на <b>120 000</b>.</div>
+              <div class="step"><strong>2.</strong> У системі з'явився борг постачальнику на <b>120 000</b>.</div>
+              <div class="step"><strong>3.</strong> Заплатили <b>40 000</b>. Лише ця сума стала фактом.</div>
+              <div class="step"><strong>4.</strong> Решта <b>80 000</b> лишається в зобов'язаннях.</div>
+            </div>
+          </article>
+
+          <article class="card">
+            <h2>Простий приклад з клієнтом</h2>
+            <div class="timeline">
+              <div class="step"><strong>1.</strong> Клієнт погодив ціну <b>2 150 000</b>.</div>
+              <div class="step"><strong>2.</strong> Підписали КБ-2 на <b>600 000</b>. Це ще не гроші, а підтверджений дохід.</div>
+              <div class="step"><strong>3.</strong> Клієнт оплатив <b>500 000</b>. Оце вже реальний факт доходу.</div>
+              <div class="step"><strong>4.</strong> Підписаний акт не дорівнює грошам на рахунку.</div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>5 правил безпеки</h2>
+        <div class="principles">
+          <div class="principle">
+            <span>Правило 1</span>
+            <p>Не змінювати сенс старого поля посеред переходу.</p>
+          </div>
+          <div class="principle">
+            <span>Правило 2</span>
+            <p>Спочатку сумісність у читанні, потім нові записи.</p>
+          </div>
+          <div class="principle">
+            <span>Правило 3</span>
+            <p>Не ламати механіку оплат постачальникам і рознесення платежів.</p>
+          </div>
+          <div class="principle">
+            <span>Правило 4</span>
+            <p>Прогрес етапів не вважати реальними грошима.</p>
+          </div>
+          <div class="principle">
+            <span>Правило 5</span>
+            <p>Не запускати масове оновлення без знімка і контрольних сум.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Етапи переходу</h2>
+        <div class="phases">
+          <div class="phase">
+            <div class="phase-num">0</div>
+            <strong>Аудит</strong>
+            <p>Рахуємо поточні дані і фіксуємо базові підсумки до будь-яких змін.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">1</div>
+            <strong>Стоп неправильним записам</strong>
+            <p>Зупиняємо нові записи з неправильною семантикою.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">2</div>
+            <strong>Додаємо <code>financeNature</code></strong>
+            <p>Новий смисловий шар додається без поломки старих екранів.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">3</div>
+            <strong>Обережно заповнюємо історію</strong>
+            <p>Класифікуємо тільки ті старі записи, де правило однозначне.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">4</div>
+            <strong>Перемикаємо читання</strong>
+            <p>Спочатку звіти і підсумки починають правильно читати нові сенси.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">5</div>
+            <strong>Перемикаємо запис</strong>
+            <p>Потім по одному переводимо процеси на правильне створення нових записів.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">6</div>
+            <strong>Оновлюємо інтерфейс</strong>
+            <p>Користувач починає бачити бюджет, зобов'язання і факт окремо.</p>
+          </div>
+          <div class="phase">
+            <div class="phase-num">7</div>
+            <strong>Прибираємо старі назви</strong>
+            <p>Лише після звірки відмовляємось від старого змішаного трактування.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Що робимо прямо зараз</h2>
+        <div class="steps">
+          <div class="step"><strong>1.</strong> Погодити простий словник: бюджет, зобов'язання, факт.</div>
+          <div class="step"><strong>2.</strong> Зібрати аудит нульової фази і зберегти базовий знімок.</div>
+          <div class="step"><strong>3.</strong> Прийняти одне бізнес-рішення: що означає підтверджена витрата виконроба.</div>
+          <div class="step"><strong>4.</strong> Вимкнути автосинхронізацію чернеток кошторисів у фінанси.</div>
+          <div class="step"><strong>5.</strong> Спочатку випустити діагностику і нове поле, а не весь перехід одразу.</div>
+        </div>
+
+        <div class="footer-note">
+          <h3>Підсумок для власника</h3>
+          <p>
+            Після переходу система показує не одну змішану цифру, а окремо:
+            що ми порахували, що погодили, що вже висить у боргах, і що реально
+            пройшло по грошах. Це повертає довіру до фінансового екрана.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

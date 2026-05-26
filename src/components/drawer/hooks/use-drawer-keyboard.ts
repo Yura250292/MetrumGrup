@@ -13,9 +13,13 @@ function isTypingTarget(el: Element | null): boolean {
 export function useDrawerKeyboard({
   enabled,
   onBack,
+  onHistoryBack,
+  onHistoryForward,
 }: {
   enabled: boolean;
   onBack: () => void;
+  onHistoryBack?: () => void;
+  onHistoryForward?: () => void;
 }) {
   useEffect(() => {
     if (!enabled) return;
@@ -26,12 +30,25 @@ export function useDrawerKeyboard({
         onBack();
         return;
       }
-      if (e.key === "ArrowLeft" && (e.metaKey || e.altKey)) {
-        // Не перехоплюємо native Cmd+[/]; ArrowLeft alone — теж не чіпаємо,
-        // бо у текстових полях це навігація. Pop тільки на Esc.
+      // Cmd/Ctrl + [ / ] — history nav через browser back/forward.
+      // popstate listener у DrillDownDrawerProvider підхопить стек із URL.
+      // ArrowLeft alone не біндимо (clash з caret у текстових полях).
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey) {
+        if (e.key === "[" && onHistoryBack) {
+          if (isTypingTarget(document.activeElement)) return;
+          e.preventDefault();
+          onHistoryBack();
+          return;
+        }
+        if (e.key === "]" && onHistoryForward) {
+          if (isTypingTarget(document.activeElement)) return;
+          e.preventDefault();
+          onHistoryForward();
+          return;
+        }
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, onBack]);
+  }, [enabled, onBack, onHistoryBack, onHistoryForward]);
 }

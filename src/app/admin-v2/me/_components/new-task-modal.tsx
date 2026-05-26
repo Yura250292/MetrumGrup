@@ -186,9 +186,12 @@ export function NewTaskModal({
   useEffect(() => {
     (async () => {
       try {
+        // Без role-filter: assignee може бути ХТО завгодно (раніше FOREMAN/HR/
+        // CLIENT випадали, бо filter обмежував SUPER_ADMIN/MANAGER/ENGINEER/
+        // FINANCIER). Тепер фільтруємо лише за isActive.
         const [projRes, usersRes, empRes] = await Promise.all([
           fetch("/api/admin/me/projects"),
-          fetch("/api/admin/users?role=SUPER_ADMIN,MANAGER,ENGINEER,FINANCIER"),
+          fetch("/api/admin/users"),
           fetch("/api/admin/employees/picker"),
         ]);
         if (projRes.ok) {
@@ -219,12 +222,21 @@ export function NewTaskModal({
           const j = await empRes.json();
           for (const e of j.data ?? []) {
             if (e.linkedUserId) {
-              // Employee має акаунт → вже у списку як User; додамо посаду як підпис
               const key = `user:${e.linkedUserId}`;
               const existing = merged.get(key);
               if (existing) {
+                // Employee має акаунт + вже у списку → додаємо посаду
                 merged.set(key, {
                   ...existing,
+                  subtitle: e.position ?? undefined,
+                });
+              } else {
+                // Linked User не повернувся у /users (через ACL чи бо неактивний
+                // user-side) — додаємо за рахунок employee-picker.
+                merged.set(key, {
+                  kind: "user",
+                  id: e.linkedUserId,
+                  name: e.linkedUserName ?? e.fullName,
                   subtitle: e.position ?? undefined,
                 });
               }
@@ -377,12 +389,16 @@ export function NewTaskModal({
     setSaving(true);
     setError(null);
     try {
-      // Build assignees payload. У моделі — ОДИН виконавець (User).
+      // Build assignees payload. У моделі — ОДИН виконавець.
+      // { userId } для User'а; { externalName } для Employee без акаунту
+      // (API нормалізує обидва шейпи).
       const payload: Array<{ userId?: string; externalName?: string }> = [];
       if (assignToMe) {
         payload.push({ userId: currentUserId });
       } else if (assignee?.kind === "user") {
         payload.push({ userId: assignee.userId });
+      } else if (assignee?.kind === "external") {
+        payload.push({ externalName: assignee.name });
       }
 
       const checklist =
@@ -769,29 +785,50 @@ export function NewTaskModal({
                               Не знайдено
                             </div>
                           ) : (
-                            filteredCandidates
-                              // Тимчасово ховаємо Employee без акаунту (kind="employee").
-                              // Зовнішніх виконавців прибрано наразі — повернеться
-                              // коли буде окремий Contact-довідник.
-                              .filter((c) => c.kind === "user")
-                              .map((c) => {
+                            // Усі кандидати: і User'и, і Employees без акаунту
+                            // (вибір employee створює external-assignee — у
+                            // нотифікації йому не пушаться, але задача показує
+                            // ПІБ як виконавця).
+                            filteredCandidates.map((c) => {
                                 const isCurrent =
-                                  c.id === currentUserId
-                                    ? assignToMe
-                                    : assignee?.kind === "user" && assignee.userId === c.id;
+                                  c.kind === "user"
+                                    ? c.id === currentUserId
+                                      ? assignToMe
+                                      : assignee?.kind === "user" && assignee.userId === c.id
+                                    : assignee?.kind === "external" && assignee.name === c.name;
+                                const onClick =
+                                  c.kind === "user"
+                                    ? () => setUserAssignee(c.id, c.name)
+                                    : () => {
+                                        setAssignToMe(false);
+                                        setAssignee({ kind: "external", name: c.name });
+                                      };
                                 return (
                                   <button
                                     key={`${c.kind}:${c.id}`}
                                     type="button"
-                                    onClick={() => setUserAssignee(c.id, c.name)}
+                                    onClick={onClick}
                                     className="flex items-center justify-between rounded-md px-2 py-1.5 text-left text-xs hover:brightness-95"
                                     style={{ color: T.textPrimary }}
                                   >
                                     <span className="flex flex-col leading-tight">
                                       <span className="flex items-center gap-1.5">
                                         {c.name}
-                                        {c.id === currentUserId && (
+                                        {c.kind === "user" && c.id === currentUserId && (
                                           <span style={{ color: T.textMuted }}>(ви)</span>
+                                        )}
+                                        {c.kind === "employee" && (
+                                          <span
+                                            className="rounded px-1 text-[9px] font-bold uppercase"
+                                            style={{
+                                              backgroundColor: T.panelElevated,
+                                              color: T.textMuted,
+                                              border: `1px solid ${T.borderSoft}`,
+                                            }}
+                                            title="Співробітник без акаунту — нотифікація не піде"
+                                          >
+                                            без акаунту
+                                          </span>
                                         )}
                                       </span>
                                       {c.subtitle && (

@@ -502,6 +502,7 @@ export function EmployeesList({
             items={filtered}
             mode={displayMode}
             canSeeSalary={canSeeSalary}
+            canSeeFullProfile={currentUserRole === "SUPER_ADMIN"}
             onSelectEmployee={setSelectedId}
           />
         )

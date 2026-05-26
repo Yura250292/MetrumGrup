@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { LayoutDashboard, FolderKanban, Wallet, Bell, User, LogOut } from "lucide-react";
+import { LayoutDashboard, FolderKanban, Wallet, Bell, User, LogOut, FileSignature } from "lucide-react";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const navItems = [
   { href: "/dashboard", label: "Огляд", icon: LayoutDashboard },
   { href: "/dashboard/projects", label: "Проєкти", icon: FolderKanban },
   { href: "/dashboard/finance", label: "Фінанси", icon: Wallet },
+  { href: "/dashboard/change-orders", label: "Дод. угоди", icon: FileSignature },
   { href: "/dashboard/notifications", label: "Сповіщення", icon: Bell },
   { href: "/dashboard/profile", label: "Профіль", icon: User },
 ];

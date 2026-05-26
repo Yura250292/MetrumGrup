@@ -8,116 +8,139 @@ datasource db {
 }
 
 model User {
-  id                      String                    @id @default(cuid())
-  email                   String                    @unique
-  password                String
-  name                    String
-  phone                   String?
-  avatar                  String?
-  firstName               String?
-  lastName                String?
-  bio                     String?                   @db.Text
-  jobTitle                String?
-  timezone                String                    @default("Europe/Kyiv")
-  locale                  String                    @default("uk")
-  dateFormat              String                    @default("DD.MM.YYYY")
-  weekStartsOn            Int                       @default(1)
-  defaultTaskView         String                    @default("list")
-  defaultLandingPage      String                    @default("dashboard")
-  notificationPrefsJson   Json?
-  workPrefsJson           Json?
-  productivityPrefsJson   Json?
-  dashboardLayoutJson     Json?
-  role                    Role                      @default(CLIENT)
-  firmId                  String?
-  firm                    Firm?                     @relation(fields: [firmId], references: [id])
-  isActive                Boolean                   @default(true)
-  createdAt               DateTime                  @default(now())
-  updatedAt               DateTime                  @updatedAt
-  auditLogs               AuditLog[]
-  createdEstimates        Estimate[]                @relation("EstimateCreator")
-  engineerReviews         Estimate[]                @relation("EngineerReviews")
-  financeReviews          Estimate[]                @relation("FinanceReviews")
-  financialTemplates      FinancialTemplate[]       @relation("TemplateCreator")
-  inventoryTx             InventoryTransaction[]
-  newsArticles            NewsArticle[]
-  notifications           Notification[]
-  pushSubscriptions       PushSubscription[]
-  payments                Payment[]
-  photoReports            PhotoReport[]
-  projectFiles            ProjectFile[]
-  clientProjects          Project[]                 @relation("ClientProjects")
-  managedProjects         Project[]                 @relation("ManagerProjects")
-  personalInboxProject    Project?                  @relation("PersonalInboxOwner")
-  aiRenderJobs            AiRenderJob[]
-  estimateVersions        EstimateVersion[]
-  approvalSteps           EstimateApprovalStep[]
-  criticalChanges         EstimateCriticalChange[]
-  chatMessages            ChatMessage[]
-  chatParticipations      ConversationParticipant[]
-  authoredComments        Comment[]                 @relation("CommentAuthor")
-  reactions               Reaction[]
-  refineHistory           EstimateRefineHistory[]   @relation("RefineHistoryUser")
-  projectMemberships      ProjectMember[]           @relation("ProjectMemberUser")
-  invitedMembers          ProjectMember[]           @relation("ProjectMemberInviter")
-  referenceEstimates      ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
-  createdTasks            Task[]                    @relation("TaskCreator")
-  taskAssignments         TaskAssignee[]            @relation("TaskAssigneeUser")
-  taskAssignerOf          TaskAssignee[]            @relation("TaskAssigneeAssigner")
-  taskAttachmentsUploaded TaskAttachment[]          @relation("TaskAttachmentUploader")
-  taskWatchers            TaskWatcher[]             @relation("TaskWatcherUser")
-  checklistItems          ChecklistItem[]           @relation("ChecklistAssignee")
-  checklistCompletions    ChecklistItem[]           @relation("ChecklistCompletedBy")
-  savedViews              SavedView[]               @relation("SavedViewUser")
-  timeLogs                TimeLog[]                 @relation("TimeLogUser")
-  timeLogsApproved        TimeLog[]                 @relation("TimeLogApprover")
-  hourlyRates             UserHourlyRate[]          @relation("UserHourlyRateUser")
-  workSchedule            UserWorkSchedule?         @relation("UserWorkScheduleUser")
-  timeOff                 TimeOff[]                 @relation("TimeOffUser")
-  timeOffApproved         TimeOff[]                 @relation("TimeOffApprover")
-  automations             Automation[]              @relation("AutomationCreator")
-  webhooks                Webhook[]                 @relation("WebhookCreator")
-  projectTemplates        ProjectTemplate[]         @relation("ProjectTemplateCreator")
-  taskTemplates           TaskTemplate[]            @relation("TaskTemplateCreator")
-  departmentsHead         Department[]              @relation("DepartmentHead")
-  teamsLead               Team[]                    @relation("TeamLead")
-  teamMemberships         TeamMember[]              @relation("TeamMemberUser")
-  integrations            UserIntegration[]         @relation("UserIntegrationUser")
-  financeEntriesCreated   FinanceEntry[]            @relation("FinanceEntryCreator")
-  financeEntriesUpdated   FinanceEntry[]            @relation("FinanceEntryUpdater")
-  financeEntriesApproved  FinanceEntry[]            @relation("FinanceEntryApprover")
-  financeAttachments      FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
-  financeTemplates        FinanceExpenseTemplate[]  @relation("FinanceTemplateCreator")
-  timesheetsCreated       Timesheet[]               @relation("TimesheetCreator")
-  timesheetsUpdated       Timesheet[]               @relation("TimesheetUpdater")
-  timesheetsApproved      Timesheet[]               @relation("TimesheetApprover")
-  kb2FormsCreated         KB2Form[]                 @relation("KB2FormCreator")
-  kb2FormsApproved        KB2Form[]                 @relation("KB2FormApprover")
-  kb3FormsCreated         KB3Form[]                 @relation("KB3FormCreator")
-  kb3FormsApproved        KB3Form[]                 @relation("KB3FormApprover")
-  estimateFinanceSyncs    Estimate[]                @relation("EstimateFinanceSyncer")
-  commentReadStates       CommentReadState[]
-  aiConversations         AiConversation[]          @relation("AiConversationUser")
-  meetings                Meeting[]                 @relation("MeetingCreator")
-  meetingAttachments      MeetingAttachment[]       @relation("MeetingAttachmentUploader")
-  employeeProfile         Employee?                 @relation("EmployeeUser")
-  materialPriceSnapshots  MaterialPriceSnapshot[]   @relation("PriceSnapshotCreator")
-  receiptScansCreated     ReceiptScan[]             @relation("ReceiptScanCreator")
-  receiptScansApproved    ReceiptScan[]             @relation("ReceiptScanApprover")
-  telegramBotUser         TelegramBotUser?          @relation("TelegramBotUserLink")
-  stagesResponsible       ProjectStageRecord[]      @relation("ProjectStageResponsible")
-  firmAccess              UserFirmAccess[]
-  foremanReportsCreated   ForemanReport[]           @relation("ForemanReportCreator")
-  foremanReportsReviewed  ForemanReport[]           @relation("ForemanReportReviewer")
-  foremanReportFiles      ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
-  ownerConversations      OwnerConversation[]       @relation("OwnerConversationUser")
-  ownerChatFolders        OwnerChatFolder[]         @relation("OwnerChatFolderUser")
-  supplierPaymentsCreated SupplierPayment[]         @relation("SupplierPaymentCreator")
-  supplierPaymentsVoided  SupplierPayment[]         @relation("SupplierPaymentVoider")
-  documentsUploaded       IncomingDocument[]        @relation("DocUploader")
-  documentsReviewed       IncomingDocument[]        @relation("DocReviewer")
-  counterpartyReviews     CounterpartyReview[]      @relation("CounterpartyReviewAuthor")
-  counterpartyDocuments   CounterpartyDocument[]    @relation("CounterpartyDocumentUploader")
+  id                        String                    @id @default(cuid())
+  email                     String                    @unique
+  password                  String
+  name                      String
+  phone                     String?
+  avatar                    String?
+  firstName                 String?
+  lastName                  String?
+  bio                       String?                   @db.Text
+  jobTitle                  String?
+  timezone                  String                    @default("Europe/Kyiv")
+  locale                    String                    @default("uk")
+  dateFormat                String                    @default("DD.MM.YYYY")
+  weekStartsOn              Int                       @default(1)
+  defaultTaskView           String                    @default("list")
+  defaultLandingPage        String                    @default("dashboard")
+  notificationPrefsJson     Json?
+  workPrefsJson             Json?
+  productivityPrefsJson     Json?
+  dashboardLayoutJson       Json?
+  role                      Role                      @default(CLIENT)
+  firmId                    String?
+  firm                      Firm?                     @relation(fields: [firmId], references: [id])
+  isActive                  Boolean                   @default(true)
+  createdAt                 DateTime                  @default(now())
+  updatedAt                 DateTime                  @updatedAt
+  auditLogs                 AuditLog[]
+  createdEstimates          Estimate[]                @relation("EstimateCreator")
+  engineerReviews           Estimate[]                @relation("EngineerReviews")
+  financeReviews            Estimate[]                @relation("FinanceReviews")
+  financialTemplates        FinancialTemplate[]       @relation("TemplateCreator")
+  inventoryTx               InventoryTransaction[]
+  newsArticles              NewsArticle[]
+  notifications             Notification[]
+  pushSubscriptions         PushSubscription[]
+  payments                  Payment[]
+  photoReports              PhotoReport[]
+  projectFiles              ProjectFile[]
+  clientProjects            Project[]                 @relation("ClientProjects")
+  managedProjects           Project[]                 @relation("ManagerProjects")
+  personalInboxProject      Project?                  @relation("PersonalInboxOwner")
+  aiRenderJobs              AiRenderJob[]
+  estimateVersions          EstimateVersion[]
+  approvalSteps             EstimateApprovalStep[]
+  criticalChanges           EstimateCriticalChange[]
+  chatMessages              ChatMessage[]
+  chatParticipations        ConversationParticipant[]
+  authoredComments          Comment[]                 @relation("CommentAuthor")
+  reactions                 Reaction[]
+  refineHistory             EstimateRefineHistory[]   @relation("RefineHistoryUser")
+  projectMemberships        ProjectMember[]           @relation("ProjectMemberUser")
+  invitedMembers            ProjectMember[]           @relation("ProjectMemberInviter")
+  referenceEstimates        ReferenceEstimate[]       @relation("ReferenceEstimateCreator")
+  createdTasks              Task[]                    @relation("TaskCreator")
+  taskAssignments           TaskAssignee[]            @relation("TaskAssigneeUser")
+  taskAssignerOf            TaskAssignee[]            @relation("TaskAssigneeAssigner")
+  taskAttachmentsUploaded   TaskAttachment[]          @relation("TaskAttachmentUploader")
+  taskWatchers              TaskWatcher[]             @relation("TaskWatcherUser")
+  checklistItems            ChecklistItem[]           @relation("ChecklistAssignee")
+  checklistCompletions      ChecklistItem[]           @relation("ChecklistCompletedBy")
+  savedViews                SavedView[]               @relation("SavedViewUser")
+  timeLogs                  TimeLog[]                 @relation("TimeLogUser")
+  timeLogsApproved          TimeLog[]                 @relation("TimeLogApprover")
+  hourlyRates               UserHourlyRate[]          @relation("UserHourlyRateUser")
+  workSchedule              UserWorkSchedule?         @relation("UserWorkScheduleUser")
+  timeOff                   TimeOff[]                 @relation("TimeOffUser")
+  timeOffApproved           TimeOff[]                 @relation("TimeOffApprover")
+  automations               Automation[]              @relation("AutomationCreator")
+  webhooks                  Webhook[]                 @relation("WebhookCreator")
+  projectTemplates          ProjectTemplate[]         @relation("ProjectTemplateCreator")
+  taskTemplates             TaskTemplate[]            @relation("TaskTemplateCreator")
+  departmentsHead           Department[]              @relation("DepartmentHead")
+  teamsLead                 Team[]                    @relation("TeamLead")
+  teamMemberships           TeamMember[]              @relation("TeamMemberUser")
+  integrations              UserIntegration[]         @relation("UserIntegrationUser")
+  financeEntriesCreated     FinanceEntry[]            @relation("FinanceEntryCreator")
+  financeEntriesUpdated     FinanceEntry[]            @relation("FinanceEntryUpdater")
+  financeEntriesApproved    FinanceEntry[]            @relation("FinanceEntryApprover")
+  financeAttachments        FinanceEntryAttachment[]  @relation("FinanceAttachmentUploader")
+  financeTemplates          FinanceExpenseTemplate[]  @relation("FinanceTemplateCreator")
+  timesheetsCreated         Timesheet[]               @relation("TimesheetCreator")
+  timesheetsUpdated         Timesheet[]               @relation("TimesheetUpdater")
+  timesheetsApproved        Timesheet[]               @relation("TimesheetApprover")
+  kb2FormsCreated           KB2Form[]                 @relation("KB2FormCreator")
+  kb2FormsApproved          KB2Form[]                 @relation("KB2FormApprover")
+  kb3FormsCreated           KB3Form[]                 @relation("KB3FormCreator")
+  kb3FormsApproved          KB3Form[]                 @relation("KB3FormApprover")
+  estimateFinanceSyncs      Estimate[]                @relation("EstimateFinanceSyncer")
+  commentReadStates         CommentReadState[]
+  aiConversations           AiConversation[]          @relation("AiConversationUser")
+  meetings                  Meeting[]                 @relation("MeetingCreator")
+  meetingAttachments        MeetingAttachment[]       @relation("MeetingAttachmentUploader")
+  employeeProfile           Employee?                 @relation("EmployeeUser")
+  materialPriceSnapshots    MaterialPriceSnapshot[]   @relation("PriceSnapshotCreator")
+  receiptScansCreated       ReceiptScan[]             @relation("ReceiptScanCreator")
+  receiptScansApproved      ReceiptScan[]             @relation("ReceiptScanApprover")
+  telegramBotUser           TelegramBotUser?          @relation("TelegramBotUserLink")
+  stagesResponsible         ProjectStageRecord[]      @relation("ProjectStageResponsible")
+  firmAccess                UserFirmAccess[]
+  foremanReportsCreated     ForemanReport[]           @relation("ForemanReportCreator")
+  foremanReportsReviewed    ForemanReport[]           @relation("ForemanReportReviewer")
+  foremanReportFiles        ForemanReportAttachment[] @relation("ForemanReportAttachmentUploader")
+  ownerConversations        OwnerConversation[]       @relation("OwnerConversationUser")
+  ownerChatFolders          OwnerChatFolder[]         @relation("OwnerChatFolderUser")
+  supplierPaymentsCreated   SupplierPayment[]         @relation("SupplierPaymentCreator")
+  supplierPaymentsVoided    SupplierPayment[]         @relation("SupplierPaymentVoider")
+  documentsUploaded         IncomingDocument[]        @relation("DocUploader")
+  documentsReviewed         IncomingDocument[]        @relation("DocReviewer")
+  formTemplatesCreated      FormTemplate[]            @relation("FormTemplateCreator")
+  formRevisionsAuthored     FormTemplateRevision[]    @relation("FormTemplateRevisionAuthor")
+  formSubmissionsAuthored   FormSubmission[]          @relation("FormSubmissionAuthor")
+  formSubmissionsReviewed   FormSubmission[]          @relation("FormSubmissionReviewer")
+  changeOrdersRequested     ChangeOrder[]             @relation("CORequestedBy")
+  changeOrdersPMApproved    ChangeOrder[]             @relation("COPMApprovedBy")
+  changeOrdersAdmApproved   ChangeOrder[]             @relation("COAdminApprovedBy")
+  changeOrdersCliApproved   ChangeOrder[]             @relation("COClientApprovedBy")
+  changeOrdersRejected      ChangeOrder[]             @relation("CORejectedBy")
+  changeOrdersCancelled     ChangeOrder[]             @relation("COCancelledBy")
+  changeOrderAttachments    ChangeOrderAttachment[]   @relation("COAttachmentUploader")
+  changeOrderTransitions    ChangeOrderTransition[]   @relation("COTransitionActor")
+  rfisAsked                 RFI[]                     @relation("RFIAsker")
+  rfisAssigned              RFI[]                     @relation("RFIAssignee")
+  rfisAnswered              RFI[]                     @relation("RFIAnswerer")
+  rfisClosed                RFI[]                     @relation("RFICloser")
+  rfisCancelled             RFI[]                     @relation("RFICanceller")
+  rfiComments               RFIComment[]              @relation("RFICommentAuthor")
+  rfiAttachments            RFIAttachment[]           @relation("RFIAttachmentUploader")
+  purchaseRequestsRequested PurchaseRequest[]         @relation("PurchaseRequestRequester")
+  rfqsClosed                RFQ[]                     @relation("RFQCloser")
+  bidsAwarded               Bid[]                     @relation("BidAwarder")
+  purchaseOrdersCreated     PurchaseOrder[]           @relation("PurchaseOrderCreator")
+  counterpartyReviews       CounterpartyReview[]      @relation("CounterpartyReviewAuthor")
+  counterpartyDocuments     CounterpartyDocument[]    @relation("CounterpartyDocumentUploader")
 
   @@index([firmId])
   @@map("users")
@@ -218,10 +241,19 @@ model Project {
   timesheets             Timesheet[]             @relation("ProjectTimesheets")
   /// Default retention % for KB-2 forms generated under this project (0–100).
   retentionPercent       Decimal                 @default(0) @db.Decimal(5, 2)
+  /// Atomic per-project counter for RFI numbering ("RFI-001", "RFI-002", ...).
+  /// Bump via `tx.project.update({ data: { rfiCounter: { increment: 1 } } })`
+  /// inside the create-RFI transaction; row lock guarantees uniqueness.
+  rfiCounter             Int                     @default(0)
   kb2Forms               KB2Form[]               @relation("ProjectKB2Forms")
   kb3Forms               KB3Form[]               @relation("ProjectKB3Forms")
   foremanReports         ForemanReport[]
   supplierPayments       SupplierPayment[]
+  formSubmissions        FormSubmission[]
+  changeOrders           ChangeOrder[]           @relation("ProjectChangeOrders")
+  rfis                   RFI[]                   @relation("ProjectRFIs")
+  purchaseRequests       PurchaseRequest[]       @relation("ProjectPurchaseRequests")
+  purchaseOrders         PurchaseOrder[]         @relation("ProjectPurchaseOrders")
   counterpartyReviews    CounterpartyReview[]    @relation("CounterpartyReviewProject")
 
   @@unique([telegramChatId, telegramThreadId], name: "project_telegram_chat_thread_unique")
@@ -647,6 +679,10 @@ model FinanceEntry {
   /// сторінкою діагностики. Backfill і міграція читачів — окремі фази.
   financeNature FinanceNature?
 
+  /// FK to ChangeOrder when this entry was created by the approved-cascade of a CO.
+  /// Allows tracing FACT/PLAN entries back to their originating ДУ.
+  changeOrderId String?
+
   project            Project?                    @relation(fields: [projectId], references: [id], onDelete: SetNull)
   firm               Firm?                       @relation(fields: [firmId], references: [id])
   stageRecord        ProjectStageRecord?         @relation("StageFinanceEntries", fields: [stageRecordId], references: [id], onDelete: SetNull)
@@ -658,6 +694,7 @@ model FinanceEntry {
   estimateItem       EstimateItem?               @relation(fields: [estimateItemId], references: [id], onDelete: SetNull)
   costCode           CostCode?                   @relation(fields: [costCodeId], references: [id], onDelete: SetNull)
   counterpartyEntity Counterparty?               @relation(fields: [counterpartyId], references: [id], onDelete: SetNull)
+  changeOrder        ChangeOrder?                @relation("ChangeOrderFinanceEntries", fields: [changeOrderId], references: [id], onDelete: SetNull)
   attachments        FinanceEntryAttachment[]
   receiptScan        ReceiptScan?                @relation("FinanceEntryReceiptScan")
   priceSnapshots     MaterialPriceSnapshot[]
@@ -687,6 +724,7 @@ model FinanceEntry {
   @@index([stageRecordId])
   @@index([invoiceNumber])
   @@index([firmId, counterpartyId, invoiceNumber])
+  @@index([changeOrderId])
   @@map("finance_entries")
 }
 
@@ -762,12 +800,13 @@ model ForemanReport {
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 
-  project     Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  firm        Firm?                     @relation(fields: [firmId], references: [id])
-  createdBy   User                      @relation("ForemanReportCreator", fields: [createdById], references: [id])
-  reviewedBy  User?                     @relation("ForemanReportReviewer", fields: [reviewedById], references: [id])
-  items       ForemanReportItem[]
-  attachments ForemanReportAttachment[]
+  project         Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  firm            Firm?                     @relation(fields: [firmId], references: [id])
+  createdBy       User                      @relation("ForemanReportCreator", fields: [createdById], references: [id])
+  reviewedBy      User?                     @relation("ForemanReportReviewer", fields: [reviewedById], references: [id])
+  items           ForemanReportItem[]
+  attachments     ForemanReportAttachment[]
+  formSubmissions FormSubmission[]
 
   @@index([projectId])
   @@index([firmId])
@@ -1694,6 +1733,8 @@ enum FinanceEntrySource {
   STAGE_AUTO
   FOREMAN_REPORT
   DOCUMENT_INBOX
+  CHANGE_ORDER
+  PURCHASE_ORDER
 }
 
 /// Semantic accounting layer (Safe Finance Migration, Phase 2). Nullable
@@ -1755,6 +1796,13 @@ model Firm {
   supplierMaterials SupplierMaterial[]
   meetings          Meeting[]
   incomingDocuments IncomingDocument[]
+  formTemplates     FormTemplate[]
+  formSubmissions   FormSubmission[]
+  changeOrders      ChangeOrder[]      @relation("FirmChangeOrders")
+  rfis              RFI[]              @relation("FirmRFIs")
+  rfiSla            FirmRFISLA?
+  purchaseRequests  PurchaseRequest[]  @relation("FirmPurchaseRequests")
+  purchaseOrders    PurchaseOrder[]    @relation("FirmPurchaseOrders")
 
   @@map("firms")
 }
@@ -2094,6 +2142,14 @@ model Task {
   completedAt        DateTime?
   estimatedHours     Decimal?     @db.Decimal(8, 2)
   actualHours        Decimal      @default(0) @db.Decimal(10, 2)
+  // Baseline (план vs факт) для Gantt. Заповнюється при freeze; nullable
+  // означає, що задача ще без зафіксованого плану — UI fallback до start/dueDate.
+  plannedStartAt     DateTime?
+  plannedEndAt       DateTime?
+  /// 0..100. Якщо 0 і є estimatedHours/actualHours — UI обчислить автоматично.
+  progressPercent    Int          @default(0)
+  /// Якщо != null — baseline зафіксовано; зміни planned* потребують rebaseline.
+  baselineFrozenAt   DateTime?
   customFields       Json?
   position           Int          @default(0)
   isRecurring        Boolean      @default(false)
@@ -2105,7 +2161,11 @@ model Task {
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
 
+  /// Якщо задача згенерована з ChangeOrder (через окрему кнопку "Створити задачі з CO").
+  changeOrderId String?
+
   project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  changeOrder        ChangeOrder?          @relation("ChangeOrderTasks", fields: [changeOrderId], references: [id], onDelete: SetNull)
   stage              ProjectStageRecord    @relation(fields: [stageId], references: [id], onDelete: Restrict)
   parentTask         Task?                 @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks           Task[]                @relation("TaskHierarchy")
@@ -2122,12 +2182,15 @@ model Task {
   timeLogs           TimeLog[]
   attachments        TaskAttachment[]
   reminders          TaskReminder[]
+  formSubmissions    FormSubmission[]
 
   @@index([projectId, stageId, isArchived])
   @@index([projectId, statusId])
   @@index([parentTaskId])
   @@index([dueDate])
   @@index([createdById])
+  @@index([projectId, plannedStartAt])
+  @@index([changeOrderId])
   @@map("tasks")
 }
 
@@ -2906,7 +2969,7 @@ model Meeting {
   /// Вкладення до наради — фото, PDF, Excel, документи (довідкові
   /// матеріали). AI-аналіз їх НЕ читає — підсумок будується лише з
   /// аудіо-транскрипту або текстової нотатки.
-  attachments       MeetingAttachment[]
+  attachments MeetingAttachment[]
 
   /// Live AI Agent: інсайти що генеруються в режимі live під час запису.
   liveInsights      LiveMeetingInsight[]
@@ -3274,35 +3337,34 @@ enum SupplierPaymentStatus {
 
 /// Організаційно-правова форма українського контрагента (SRM rev.1).
 enum LegalForm {
-  FOP    // фізична особа-підприємець
-  TOV    // товариство з обмеженою відповідальністю
-  PE     // приватне підприємство
-  PJSC   // публічне акціонерне товариство
-  PRJSC  // приватне акціонерне товариство
-  STATE  // державне підприємство
+  FOP
+  TOV
+  PE
+  PJSC
+  PRJSC
+  STATE
   OTHER
 }
 
-/// Податковий/бізнес-статус контрагента (з open data: clarity-project / opendatabot).
-/// UNKNOWN — ще не звіряли. Решта — результат останнього compliance check.
+/// Податковий/бізнес-статус контрагента (з open data).
 enum CounterpartyTaxStatus {
   ACTIVE
-  PROBLEM     // борги перед бюджетом / проблемне
-  SUSPENDED   // призупинено
+  PROBLEM
+  SUSPENDED
   BANKRUPT
   LIQUIDATED
   UNKNOWN
 }
 
-/// Типи документів, що зберігаються у дос'є контрагента (R2).
+/// Типи документів у дос'є контрагента (R2).
 enum CounterpartyDocumentType {
   LICENSE
   PERMIT
   CERTIFICATE
   INSURANCE
   CONTRACT
-  STATUTE       // статут
-  REGISTRATION  // витяг з реєстру
+  STATUTE
+  REGISTRATION
   OTHER
 }
 
@@ -3335,47 +3397,35 @@ model Counterparty {
   firmId                  String?
 
   // ===== SRM rev.1 (subcontractor relationship management) =====
-  /// Організаційно-правова форма (TOV/FOP/PJSC...). Backfill можна інferнути
-  /// з name (regex "ТОВ "/"ФОП ") окремим скриптом.
-  legalForm               LegalForm?
-  /// ІНН/РНОКПП (10 цифр) — для FOP. Для юр.осіб використовується `edrpou`.
-  ipn                     String?
-  /// Назва банку (UI зручність; iban вже є).
-  bankName                String?
-  /// Номер ліцензії ДАБІ (е-licensing.dabi.gov.ua).
-  licenseNumber           String?
-  /// Кінець дії ліцензії — основа для cron expiry-нагадувань.
-  licenseValidUntil       DateTime?
-  /// Реєстраційний номер ДАБІ (інший від licenseNumber у деяких випадках).
-  dabiRegistration        String?
-  /// Поточний статус за open data; UNKNOWN = ще не перевіряли.
-  taxStatus               CounterpartyTaxStatus @default(UNKNOWN)
-  /// Час останньої успішної звірки з clarity-project / opendatabot.
-  taxStatusCheckedAt      DateTime?
-  /// Спеціалізації для пошуку: ["concrete", "electrical", "facade", ...].
-  /// Hybrid taxonomy: вільні строки + suggested autocomplete на UI.
-  specializations         String[]              @default([])
-  /// Денормалізований середній рейтинг (1.00..5.00). Перераховується після
-  /// кожного insert/update/delete у CounterpartyReview через recomputeRating().
-  avgRating               Decimal?              @db.Decimal(3, 2)
-  /// Денормалізований лічильник унікальних проєктів з reviews.
-  totalProjects           Int                   @default(0)
-  /// Денормалізований лічильник reviews.
-  totalReviews            Int                   @default(0)
+  legalForm          LegalForm?
+  ipn                String?
+  bankName           String?
+  licenseNumber      String?
+  licenseValidUntil  DateTime?
+  dabiRegistration   String?
+  taxStatus          CounterpartyTaxStatus @default(UNKNOWN)
+  taxStatusCheckedAt DateTime?
+  specializations    String[]              @default([])
+  avgRating          Decimal?              @db.Decimal(3, 2)
+  totalProjects      Int                   @default(0)
+  totalReviews       Int                   @default(0)
 
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  firm               Firm?                    @relation(fields: [firmId], references: [id])
+  firm               Firm?                         @relation(fields: [firmId], references: [id])
   financeEntries     FinanceEntry[]
   financeTemplates   FinanceExpenseTemplate[]
-  kb2Forms           KB2Form[]                @relation("KB2FormCounterparty")
-  kb3Forms           KB3Form[]                @relation("KB3FormCounterparty")
+  kb2Forms           KB2Form[]                     @relation("KB2FormCounterparty")
+  kb3Forms           KB3Form[]                     @relation("KB3FormCounterparty")
   /// Проекти, де цей контрагент виступає клієнтом (Project.clientCounterpartyId).
-  clientProjects     Project[]                @relation("ProjectClientCounterparty")
+  clientProjects     Project[]                     @relation("ProjectClientCounterparty")
   supplierPayments   SupplierPayment[]
-  foremanReportItems ForemanReportItem[]      @relation("ForemanItemSupplier")
-  supplierMaterials  SupplierMaterial[]       @relation("CounterpartyMaterials")
+  foremanReportItems ForemanReportItem[]           @relation("ForemanItemSupplier")
+  supplierMaterials  SupplierMaterial[]            @relation("CounterpartyMaterials")
+  rfqRecipients      RFQRecipient[]                @relation("CounterpartyRFQRecipients")
+  bids               Bid[]                         @relation("CounterpartyBids")
+  purchaseOrders     PurchaseOrder[]               @relation("CounterpartyPurchaseOrders")
   reviews            CounterpartyReview[]
   documents          CounterpartyDocument[]
   complianceChecks   CounterpartyComplianceCheck[]
@@ -3389,23 +3439,19 @@ model Counterparty {
   @@map("counterparties")
 }
 
-/// Відгук по контрагенту в контексті конкретного проєкту. 4 критерії 1..5 +
-/// overall (середнє арифметичне з HALF_UP округленням, зберігається як Decimal(2,1)).
-/// Унікальність (counterpartyId, byUserId, projectId) гарантує: один автор —
-/// один відгук на пару (контрагент, проєкт). Повторний POST оновлює існуючий.
+/// Відгук по контрагенту в контексті конкретного проєкту (SRM rev.1).
 model CounterpartyReview {
-  id                  String   @id @default(cuid())
-  counterpartyId      String
-  byUserId            String
-  projectId           String
-  /// Overall 1..5 (округляється з component scores).
-  rating              Decimal  @db.Decimal(2, 1)
-  qualityScore        Int
-  timelinessScore     Int
-  priceScore          Int
-  communicationScore  Int
-  comment             String?  @db.Text
-  reviewedAt          DateTime @default(now())
+  id                 String   @id @default(cuid())
+  counterpartyId     String
+  byUserId           String
+  projectId          String
+  rating             Decimal  @db.Decimal(2, 1)
+  qualityScore       Int
+  timelinessScore    Int
+  priceScore         Int
+  communicationScore Int
+  comment            String?  @db.Text
+  reviewedAt         DateTime @default(now())
 
   counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
   by           User         @relation("CounterpartyReviewAuthor", fields: [byUserId], references: [id])
@@ -3417,26 +3463,24 @@ model CounterpartyReview {
   @@map("counterparty_reviews")
 }
 
-/// Документ контрагента у R2 (ліцензії, страховки, статут, виписки). Cron job
-/// `counterparty-document-expiry` сканує `validUntil` і шле нотифікацію
-/// (`notified30dAt`/`notified7dAt`/`notifiedExpiredAt` — idempotency timestamps).
+/// Документ контрагента у R2 (SRM rev.1). Cron-job шле expiry-нотифікації.
 model CounterpartyDocument {
-  id                 String   @id @default(cuid())
-  counterpartyId     String
-  type               CounterpartyDocumentType
-  title              String
-  fileUrl            String
-  fileName           String
-  fileSize           Int
-  mimeType           String
-  issuedAt           DateTime?
-  validUntil         DateTime?
-  isActive           Boolean  @default(true)
-  notified30dAt      DateTime?
-  notified7dAt       DateTime?
-  notifiedExpiredAt  DateTime?
-  uploadedById       String
-  uploadedAt         DateTime @default(now())
+  id                String                   @id @default(cuid())
+  counterpartyId    String
+  type              CounterpartyDocumentType
+  title             String
+  fileUrl           String
+  fileName          String
+  fileSize          Int
+  mimeType          String
+  issuedAt          DateTime?
+  validUntil        DateTime?
+  isActive          Boolean                  @default(true)
+  notified30dAt     DateTime?
+  notified7dAt      DateTime?
+  notifiedExpiredAt DateTime?
+  uploadedById      String
+  uploadedAt        DateTime                 @default(now())
 
   counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
   uploadedBy   User         @relation("CounterpartyDocumentUploader", fields: [uploadedById], references: [id])
@@ -3446,18 +3490,16 @@ model CounterpartyDocument {
   @@map("counterparty_documents")
 }
 
-/// Лог auto-перевірок compliance (для аудиту, дебагу і 24h-кешу).
+/// Лог auto-перевірок compliance (24h cache + аудит).
 model CounterpartyComplianceCheck {
-  id              String   @id @default(cuid())
-  counterpartyId  String
-  /// Джерело: "clarity-project" | "opendatabot" | "dabi" | "manual".
-  source          String
-  rawResponse     Json
-  /// Короткий результат: змінив taxStatus / licenseValidUntil / no change.
-  resultSummary   String
-  success         Boolean
-  errorMessage    String?
-  checkedAt       DateTime @default(now())
+  id             String   @id @default(cuid())
+  counterpartyId String
+  source         String
+  rawResponse    Json
+  resultSummary  String
+  success        Boolean
+  errorMessage   String?
+  checkedAt      DateTime @default(now())
 
   counterparty Counterparty @relation(fields: [counterpartyId], references: [id], onDelete: Cascade)
 
@@ -3725,6 +3767,7 @@ model CostCode {
   timesheets         Timesheet[]         @relation("CostCodeTimesheets")
   kb2Items           KB2FormItem[]       @relation("CostCodeKB2")
   foremanReportItems ForemanReportItem[] @relation("ForemanItemCostCode")
+  changeOrderItems   ChangeOrderItem[]   @relation("CostCodeChangeOrderItems")
 
   @@index([parentId, sortOrder])
   @@index([isActive])
@@ -4046,4 +4089,635 @@ model DocumentExtractionLog {
   @@index([documentId])
   @@index([model, success])
   @@map("document_extraction_logs")
+}
+
+// === Site Forms Builder (roadmap-2026 Task 03) ===
+//
+// Категорії шаблонів. CUSTOM — користувацький; решта — pre-built з seed.
+enum FormCategory {
+  DAILY_REPORT
+  SAFETY
+  QUALITY
+  ACCEPTANCE
+  KB2V
+  KB3
+  CUSTOM
+}
+
+// Статус заповненої форми.
+// DRAFT — foreman ще не submit-нув (в локальному IndexedDB або на сервері).
+// SUBMITTED — чекає на review.
+// APPROVED / REJECTED — фінальний стан після менеджерського рев'ю.
+enum FormSubmissionStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+}
+
+/// Шаблон форми. `schema` — JSON: { fields: FieldDef[], meta: {...} }.
+/// `version` інкрементиться на КОЖНУ зміну schema (immutable history у
+/// FormTemplateRevision). isActive=false — soft-delete (не показуємо у списку
+/// foreman, але старі submissions усе ще лінкуються через templateVersion +
+/// revision snapshot).
+model FormTemplate {
+  id          String       @id @default(cuid())
+  firmId      String?
+  name        String
+  description String?
+  category    FormCategory @default(CUSTOM)
+  schema      Json
+  version     Int          @default(1)
+  isActive    Boolean      @default(true)
+  createdById String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  firm        Firm?                  @relation(fields: [firmId], references: [id])
+  createdBy   User                   @relation("FormTemplateCreator", fields: [createdById], references: [id])
+  submissions FormSubmission[]
+  revisions   FormTemplateRevision[]
+
+  @@index([firmId, category, isActive])
+  @@index([createdById])
+  @@map("form_templates")
+}
+
+/// Immutable snapshot минулих версій schema. Лінкується до submission
+/// (через `FormSubmission.templateVersion`), щоб через рік можна було
+/// рендерити стару форму в layout, як її подавали.
+model FormTemplateRevision {
+  id          String   @id @default(cuid())
+  templateId  String
+  version     Int
+  schema      Json
+  changeNote  String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  template  FormTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  createdBy User         @relation("FormTemplateRevisionAuthor", fields: [createdById], references: [id])
+
+  @@unique([templateId, version])
+  @@index([templateId])
+  @@map("form_template_revisions")
+}
+
+/// Заповнена форма. `templateVersion` — snapshot версія для backward compat.
+/// `data` — JSON map fieldKey → value
+/// (string | number | bool | string[] | { lat, lng } | attachmentId[]).
+/// `clientUuid` — UUID, згенерований у foreman PWA для idempotent sync з
+/// IndexedDB outbox. Дозволяє повторити POST і отримати той самий запис.
+model FormSubmission {
+  id              String               @id @default(cuid())
+  firmId          String?
+  templateId      String
+  templateVersion Int
+  projectId       String?
+  taskId          String?
+  foremanReportId String?
+  submittedById   String
+  data            Json
+  status          FormSubmissionStatus @default(DRAFT)
+  submittedAt     DateTime?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  reviewNote      String?
+  clientUuid      String?              @unique
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  firm          Firm?                      @relation(fields: [firmId], references: [id])
+  template      FormTemplate               @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  project       Project?                   @relation(fields: [projectId], references: [id])
+  task          Task?                      @relation(fields: [taskId], references: [id])
+  foremanReport ForemanReport?             @relation(fields: [foremanReportId], references: [id])
+  submittedBy   User                       @relation("FormSubmissionAuthor", fields: [submittedById], references: [id])
+  reviewedBy    User?                      @relation("FormSubmissionReviewer", fields: [reviewedById], references: [id])
+  attachments   FormSubmissionAttachment[]
+
+  @@index([firmId, status])
+  @@index([templateId, templateVersion])
+  @@index([projectId])
+  @@index([submittedById, status])
+  @@map("form_submissions")
+}
+
+/// Вкладення (фото поля photo, файли поля file). Підпис canvas/signature
+/// зберігається inline у `data` JSON як base64 PNG ≤ 30KB; якщо більше —
+/// теж сюди.
+model FormSubmissionAttachment {
+  id           String   @id @default(cuid())
+  submissionId String
+  fieldKey     String
+  r2Key        String
+  fileName     String
+  contentType  String
+  sizeBytes    Int
+  createdAt    DateTime @default(now())
+
+  submission FormSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+  @@map("form_submission_attachments")
+}
+
+// =====================================================================
+// === Change Orders (Дод. угоди) — roadmap-2026 Task 02
+// =====================================================================
+//
+// Workflow: DRAFT → PENDING_PM → PENDING_ADMIN → PENDING_CLIENT → APPROVED
+//                                                              ↘ REJECTED / CANCELLED (final)
+// На APPROVED виконується каскад: створює FinanceEntry(kind=PLAN,
+// source=CHANGE_ORDER) на кожен ChangeOrderItem, оновлює Project.endDate
+// на scheduleImpactDays. Ідемпотентно — повторний APPROVE не дублює.
+// Multi-firm: number унікальний у межах фірми (CO-YYYY-NNN per firm).
+
+enum ChangeOrderType {
+  ADD // додати обсяг
+  REMOVE // прибрати обсяг
+  SWAP // заміна (одне на інше)
+}
+
+enum ChangeOrderStatus {
+  DRAFT // створено, ще не подано
+  PENDING_PM // на затвердженні PM
+  PENDING_ADMIN // на затвердженні SUPER_ADMIN
+  PENDING_CLIENT // на затвердженні клієнта
+  APPROVED // повністю затверджено — каскад спрацював
+  REJECTED // відхилено (на будь-якому етапі)
+  CANCELLED // ініціатор скасував до APPROVED
+}
+
+model ChangeOrder {
+  id                 String            @id @default(cuid())
+  firmId             String
+  projectId          String
+  /// CO-YYYY-NNN; унікальний у межах firm (див. @@unique).
+  number             String
+  type               ChangeOrderType
+  title              String
+  description        String            @db.Text
+  /// Опціональна дослівна цитата клієнта чому потрібна зміна.
+  reasonFromClient   String?           @db.Text
+  /// Підрахована сума impact (sum of items.totalPrice). Може бути від'ємною
+  /// для REMOVE. Маскується у не-SUPER_ADMIN responses.
+  costImpact         Decimal           @db.Decimal(14, 2)
+  /// +/- днів до Project.endDate при APPROVED.
+  scheduleImpactDays Int               @default(0)
+  status             ChangeOrderStatus @default(DRAFT)
+
+  // Audit who/when
+  requestedById      String
+  requestedAt        DateTime  @default(now())
+  pmApprovedById     String?
+  pmApprovedAt       DateTime?
+  adminApprovedById  String?
+  adminApprovedAt    DateTime?
+  clientApprovedById String?
+  clientApprovedAt   DateTime?
+  rejectedById       String?
+  rejectedAt         DateTime?
+  rejectionReason    String?   @db.Text
+  cancelledById      String?
+  cancelledAt        DateTime?
+
+  // AI provenance
+  aiGenerated    Boolean @default(false)
+  aiSourceChatId String?
+  aiConfidence   Float?
+
+  // Generated artifacts (R2 URLs)
+  pdfUrl       String?
+  signedPdfUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  firm             Firm                    @relation("FirmChangeOrders", fields: [firmId], references: [id])
+  project          Project                 @relation("ProjectChangeOrders", fields: [projectId], references: [id], onDelete: Cascade)
+  requestedBy      User                    @relation("CORequestedBy", fields: [requestedById], references: [id])
+  pmApprovedBy     User?                   @relation("COPMApprovedBy", fields: [pmApprovedById], references: [id])
+  adminApprovedBy  User?                   @relation("COAdminApprovedBy", fields: [adminApprovedById], references: [id])
+  clientApprovedBy User?                   @relation("COClientApprovedBy", fields: [clientApprovedById], references: [id])
+  rejectedBy       User?                   @relation("CORejectedBy", fields: [rejectedById], references: [id])
+  cancelledBy      User?                   @relation("COCancelledBy", fields: [cancelledById], references: [id])
+  items            ChangeOrderItem[]
+  attachments      ChangeOrderAttachment[]
+  transitions      ChangeOrderTransition[]
+  financeEntries   FinanceEntry[]          @relation("ChangeOrderFinanceEntries")
+  generatedTasks   Task[]                  @relation("ChangeOrderTasks")
+
+  @@unique([firmId, number])
+  @@index([firmId, projectId, status])
+  @@index([firmId, status, requestedAt])
+  @@map("change_orders")
+}
+
+model ChangeOrderItem {
+  id            String  @id @default(cuid())
+  changeOrderId String
+  costCodeId    String
+  description   String
+  unit          String
+  qty           Decimal @db.Decimal(14, 4)
+  unitPrice     Decimal @db.Decimal(14, 2)
+  /// computed: qty * unitPrice * sign. sign=+1 для ADD, -1 для REMOVE,
+  /// SWAP має по два item-и (один +, один -).
+  totalPrice    Decimal @db.Decimal(14, 2)
+  sign          Int
+  sortOrder     Int     @default(0)
+
+  changeOrder ChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  costCode    CostCode    @relation("CostCodeChangeOrderItems", fields: [costCodeId], references: [id], onDelete: Restrict)
+
+  @@index([changeOrderId])
+  @@index([costCodeId])
+  @@map("change_order_items")
+}
+
+model ChangeOrderAttachment {
+  id            String   @id @default(cuid())
+  changeOrderId String
+  fileName      String
+  r2Url         String
+  mimeType      String
+  fileSize      Int
+  uploadedById  String
+  uploadedAt    DateTime @default(now())
+
+  changeOrder ChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  uploadedBy  User        @relation("COAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([changeOrderId])
+  @@map("change_order_attachments")
+}
+
+model ChangeOrderTransition {
+  id            String            @id @default(cuid())
+  changeOrderId String
+  fromStatus    ChangeOrderStatus
+  toStatus      ChangeOrderStatus
+  actorId       String
+  comment       String?           @db.Text
+  createdAt     DateTime          @default(now())
+
+  changeOrder ChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  actor       User        @relation("COTransitionActor", fields: [actorId], references: [id])
+
+  @@index([changeOrderId, createdAt])
+  @@map("change_order_transitions")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RFI (Request for Information) — структуровані офіційні запити інформації
+// між підрядником і проєктантом/ГІП із SLA, ескалаціями, реєстром.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum RFIStatus {
+  OPEN
+  IN_PROGRESS
+  ANSWERED
+  CLOSED
+  CANCELLED
+}
+
+enum RFIPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model RFI {
+  id        String @id @default(cuid())
+  firmId    String
+  projectId String
+  /// Per-project: "RFI-001", "RFI-002", ... atomic via Project.rfiCounter.
+  number    String
+
+  subject  String
+  question String @db.Text
+
+  askedById String
+  askedAt   DateTime @default(now())
+
+  assignedToId String?
+  /// SLA deadline — обчислюється з priority + FirmRFISLA при створенні.
+  dueAt        DateTime?
+
+  status   RFIStatus   @default(OPEN)
+  priority RFIPriority @default(NORMAL)
+
+  answer       String?   @db.Text
+  answeredById String?
+  answeredAt   DateTime?
+
+  closedById String?
+  closedAt   DateTime?
+
+  cancelledById String?
+  cancelledAt   DateTime?
+  cancelReason  String?   @db.Text
+
+  impactsSchedule Boolean @default(false)
+  impactsBudget   Boolean @default(false)
+
+  /// 80% deadline reminder — single-shot.
+  reminderSentAt DateTime?
+  /// After-deadline escalation — single-shot.
+  escalatedAt    DateTime?
+
+  /// Optional linked ChangeOrder, created from this RFI.
+  changeOrderId String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  firm        Firm    @relation("FirmRFIs", fields: [firmId], references: [id])
+  project     Project @relation("ProjectRFIs", fields: [projectId], references: [id], onDelete: Cascade)
+  askedBy     User    @relation("RFIAsker", fields: [askedById], references: [id])
+  assignedTo  User?   @relation("RFIAssignee", fields: [assignedToId], references: [id])
+  answeredBy  User?   @relation("RFIAnswerer", fields: [answeredById], references: [id])
+  closedBy    User?   @relation("RFICloser", fields: [closedById], references: [id])
+  cancelledBy User?   @relation("RFICanceller", fields: [cancelledById], references: [id])
+
+  attachments RFIAttachment[]
+  comments    RFIComment[]
+
+  @@unique([projectId, number])
+  @@index([firmId, status])
+  @@index([projectId, status])
+  @@index([assignedToId, status])
+  @@index([dueAt])
+  @@map("rfis")
+}
+
+model RFIAttachment {
+  id           String   @id @default(cuid())
+  rfiId        String
+  fileName     String
+  r2Key        String
+  fileSize     Int
+  mimeType     String
+  uploadedById String
+  uploadedAt   DateTime @default(now())
+  /// "QUESTION" — додано до питання; "ANSWER" — до відповіді.
+  context      String   @default("QUESTION")
+
+  rfi        RFI  @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+  uploadedBy User @relation("RFIAttachmentUploader", fields: [uploadedById], references: [id])
+
+  @@index([rfiId])
+  @@map("rfi_attachments")
+}
+
+model RFIComment {
+  id        String   @id @default(cuid())
+  rfiId     String
+  authorId  String
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  rfi    RFI  @relation(fields: [rfiId], references: [id], onDelete: Cascade)
+  author User @relation("RFICommentAuthor", fields: [authorId], references: [id])
+
+  @@index([rfiId, createdAt])
+  @@map("rfi_comments")
+}
+
+/// SLA конфіг на рівні фірми. Якщо запису немає — defaults (72/48/24/8).
+/// Не перераховує існуючі RFI — діє тільки на нові.
+model FirmRFISLA {
+  id          String   @id @default(cuid())
+  firmId      String   @unique
+  hoursLow    Int      @default(72)
+  hoursNormal Int      @default(48)
+  hoursHigh   Int      @default(24)
+  hoursUrgent Int      @default(8)
+  updatedAt   DateTime @updatedAt
+
+  firm Firm @relation(fields: [firmId], references: [id])
+
+  @@map("firm_rfi_sla")
+}
+
+// =============================================================================
+// PROCUREMENT (Task 09) — PurchaseRequest → RFQ → Bid → PurchaseOrder
+// =============================================================================
+
+enum PurchaseRequestStatus {
+  DRAFT
+  RFQ_SENT
+  BIDS_COLLECTED
+  PO_ISSUED
+  CLOSED
+  CANCELLED
+}
+
+enum RFQStatus {
+  DRAFT
+  SENT
+  COLLECTING
+  CLOSED
+}
+
+enum BidStatus {
+  DRAFT
+  SUBMITTED
+  WON
+  LOST
+  WITHDRAWN
+}
+
+enum PurchaseOrderStatus {
+  DRAFT
+  SENT
+  CONFIRMED
+  PARTIALLY_DELIVERED
+  DELIVERED
+  CANCELLED
+}
+
+model PurchaseRequest {
+  id              String                @id @default(cuid())
+  firmId          String
+  firm            Firm                  @relation("FirmPurchaseRequests", fields: [firmId], references: [id])
+  projectId       String?
+  project         Project?              @relation("ProjectPurchaseRequests", fields: [projectId], references: [id], onDelete: SetNull)
+  requestedById   String
+  requestedBy     User                  @relation("PurchaseRequestRequester", fields: [requestedById], references: [id])
+  status          PurchaseRequestStatus @default(DRAFT)
+  /// Дата, до якої потрібен матеріал на майданчику.
+  neededBy        DateTime?
+  /// Орієнтовний бюджет (внутрішній sanity-check).
+  estimatedBudget Decimal?              @db.Decimal(12, 2)
+  notes           String?
+  /// "PR-2026-0001", унікально per firm+year (генерується через Sequence).
+  internalNumber  String                @unique
+  items           PurchaseRequestItem[]
+  rfqs            RFQ[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([firmId, status])
+  @@index([projectId])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id             String          @id @default(cuid())
+  requestId      String
+  request        PurchaseRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  /// Lazy ref на CostCode (Task 01). FK додається окремою міграцією
+  /// (procurement_phase_b_costcode_fk) після того як Task 01 у main.
+  costCodeId     String?
+  description    String
+  qty            Decimal         @db.Decimal(12, 3)
+  unit           String
+  /// JSON: марка, ДСТУ, морозостійкість тощо.
+  specifications Json?
+  sortOrder      Int             @default(0)
+  bidItems       BidItem[]
+
+  @@index([requestId])
+  @@index([costCodeId])
+  @@map("purchase_request_items")
+}
+
+model RFQ {
+  id                String          @id @default(cuid())
+  purchaseRequestId String
+  purchaseRequest   PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  deadline          DateTime
+  status            RFQStatus       @default(DRAFT)
+  /// Read-only preview токен (cuid вистачає, бо це не бідовий канал).
+  publicLinkToken   String          @unique @default(cuid())
+  /// "RFQ-2026-0001".
+  internalNumber    String          @unique
+  recipients        RFQRecipient[]
+  bids              Bid[]
+  closedAt          DateTime?
+  closedById        String?
+  closedBy          User?           @relation("RFQCloser", fields: [closedById], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([status, deadline])
+  @@map("rfqs")
+}
+
+model RFQRecipient {
+  id             String       @id @default(cuid())
+  rfqId          String
+  rfq            RFQ          @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  counterpartyId String
+  counterparty   Counterparty @relation("CounterpartyRFQRecipients", fields: [counterpartyId], references: [id])
+  /// Email на момент відправки (snapshot — Counterparty.email може змінитись).
+  emailSnapshot  String
+  /// 32-байтний крипто-токен (base64url, 256 біт) — бідовий канал постачальника.
+  accessToken    String       @unique
+  sentAt         DateTime     @default(now())
+  viewedAt       DateTime?
+  bidSubmittedAt DateTime?
+  lastReminderAt DateTime?
+  remindersCount Int          @default(0)
+
+  @@unique([rfqId, counterpartyId])
+  @@map("rfq_recipients")
+}
+
+model Bid {
+  id                     String         @id @default(cuid())
+  rfqId                  String
+  rfq                    RFQ            @relation(fields: [rfqId], references: [id], onDelete: Cascade)
+  counterpartyId         String
+  counterparty           Counterparty   @relation("CounterpartyBids", fields: [counterpartyId], references: [id])
+  status                 BidStatus      @default(DRAFT)
+  /// Сума по всіх BidItem (denormalised для ORDER BY).
+  totalPrice             Decimal        @default(0) @db.Decimal(14, 2)
+  currency               String         @default("UAH")
+  validUntil             DateTime?
+  paymentTerms           String?
+  deliveryTermsDays      Int?
+  notes                  String?
+  items                  BidItem[]
+  submittedAt            DateTime?
+  /// Якщо переможець — PO, що з нього виник.
+  resultingPurchaseOrder PurchaseOrder? @relation("BidWinningPO")
+  awardedAt              DateTime?
+  awardedById            String?
+  awardedBy              User?          @relation("BidAwarder", fields: [awardedById], references: [id])
+  /// IP постачальника на момент сабміту (audit).
+  submittedFromIp        String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  @@unique([rfqId, counterpartyId])
+  @@index([status])
+  @@map("bids")
+}
+
+model BidItem {
+  id                          String              @id @default(cuid())
+  bidId                       String
+  bid                         Bid                 @relation(fields: [bidId], references: [id], onDelete: Cascade)
+  purchaseRequestItemId       String
+  purchaseRequestItem         PurchaseRequestItem @relation(fields: [purchaseRequestItemId], references: [id], onDelete: Cascade)
+  unitPrice                   Decimal             @db.Decimal(12, 2)
+  deliveryDate                DateTime?
+  /// Постачальник може запропонувати альтернативу (напр. М300 замість М250).
+  alternativeOfferDescription String?
+  alternativeOfferPrice       Decimal?            @db.Decimal(12, 2)
+  notes                       String?
+
+  @@unique([bidId, purchaseRequestItemId])
+  @@map("bid_items")
+}
+
+model PurchaseOrder {
+  id                String              @id @default(cuid())
+  firmId            String
+  firm              Firm                @relation("FirmPurchaseOrders", fields: [firmId], references: [id])
+  projectId         String?
+  project           Project?            @relation("ProjectPurchaseOrders", fields: [projectId], references: [id], onDelete: SetNull)
+  /// UNIQUE — double-award guard: повторний клік на Award впаде з P2002.
+  winningBidId      String              @unique
+  winningBid        Bid                 @relation("BidWinningPO", fields: [winningBidId], references: [id])
+  counterpartyId    String
+  counterparty      Counterparty        @relation("CounterpartyPurchaseOrders", fields: [counterpartyId], references: [id])
+  totalAmount       Decimal             @db.Decimal(14, 2)
+  currency          String              @default("UAH")
+  status            PurchaseOrderStatus @default(DRAFT)
+  /// "PO-2026-0001".
+  internalNumber    String              @unique
+  paymentTerms      String?
+  issuedAt          DateTime?
+  /// Очікувана дата доставки.
+  deliveryDueAt     DateTime?
+  actualDeliveredAt DateTime?
+  /// R2 URL до згенерованого PDF (Phase B).
+  pdfUrl            String?
+  cancelledAt       DateTime?
+  cancelReason      String?
+  createdById       String
+  createdBy         User                @relation("PurchaseOrderCreator", fields: [createdById], references: [id])
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@index([firmId, status])
+  @@index([counterpartyId])
+  @@index([projectId])
+  @@map("purchase_orders")
+}
+
+/// Atomic counter для генерації внутрішніх номерів (PR/RFQ/PO) per firm+year.
+/// Scope key формату "PR:metrum-group:2026". Інкремент через
+/// `UPDATE ... SET lastValue = lastValue + 1 RETURNING lastValue` у транзакції.
+model Sequence {
+  scope     String   @id
+  lastValue Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("sequences")
 }

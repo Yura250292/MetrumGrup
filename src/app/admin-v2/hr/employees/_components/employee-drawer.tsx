@@ -9,12 +9,20 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { useSession } from "next-auth/react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { EmployeeDossier } from "./employee-dossier";
 
-const STORAGE_KEY = "employeeDrawer.width";
+// Префікс ключа localStorage додає userId — налаштування зберігаються
+// окремо для кожного юзера (різні люди на одному браузері не перетирають
+// одне одному ширину).
+const STORAGE_PREFIX = "employeeDrawer.width";
 const DEFAULT_WIDTH = 880;
 const MIN_WIDTH = 480;
+
+function storageKeyFor(userId: string | undefined): string {
+  return userId ? `${STORAGE_PREFIX}:${userId}` : STORAGE_PREFIX;
+}
 
 export function EmployeeDrawer({
   id,
@@ -25,13 +33,16 @@ export function EmployeeDrawer({
   currentUserRole: string;
   onClose: () => void;
 }) {
+  const { data: session } = useSession();
+  const userId = session?.user?.id;
   const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
   const draggingRef = useRef(false);
 
   useEffect(() => {
-    const saved = Number(localStorage.getItem(STORAGE_KEY));
+    if (typeof window === "undefined") return;
+    const saved = Number(localStorage.getItem(storageKeyFor(userId)));
     if (!isNaN(saved) && saved >= MIN_WIDTH) setWidth(saved);
-  }, []);
+  }, [userId]);
 
   // ESC закриває панель.
   useEffect(() => {
@@ -45,10 +56,10 @@ export function EmployeeDrawer({
   const startDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     draggingRef.current = true;
-    const maxWidth = Math.floor(window.innerWidth * 0.9);
+    // Без жорсткого max — лиш не дозволяємо панель ширшу за viewport.
     const onMove = (ev: MouseEvent) => {
       if (!draggingRef.current) return;
-      const next = Math.max(MIN_WIDTH, Math.min(maxWidth, window.innerWidth - ev.clientX));
+      const next = Math.max(MIN_WIDTH, Math.min(window.innerWidth, window.innerWidth - ev.clientX));
       setWidth(next);
     };
     const onUp = () => {
@@ -57,7 +68,7 @@ export function EmployeeDrawer({
       window.removeEventListener("mouseup", onUp);
       setWidth((curr) => {
         try {
-          localStorage.setItem(STORAGE_KEY, String(curr));
+          localStorage.setItem(storageKeyFor(userId), String(curr));
         } catch {}
         return curr;
       });
@@ -68,12 +79,8 @@ export function EmployeeDrawer({
 
   return (
     <>
-      {/* Backdrop — клік поза панеллю закриває. */}
-      <div
-        onClick={onClose}
-        className="fixed inset-0 z-40 bg-black/30 transition-opacity"
-        aria-hidden
-      />
+      {/* Без backdrop — список ліворуч лишається активним: клік на іншого
+       *  співробітника просто перемикає id у drawer'і (контролюється батьком). */}
       <div
         className="fixed right-0 top-0 bottom-0 z-50 overflow-y-auto"
         style={{

@@ -38,14 +38,19 @@ export function TaskGantt({
   items,
   onTaskClick,
   onDateChange,
+  projectId,
 }: {
   items: GanttItem[];
   onTaskClick: (id: string) => void;
   onDateChange: (id: string, start: Date, end: Date) => void;
+  /** Якщо передано — у toolbar з'являються кнопки Експорт XML/CSV та
+   *  Заморозити baseline. */
+  projectId?: string;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const ganttRef = useRef<FrappeGanttInstance | null>(null);
   const [mode, setMode] = useState<ViewMode>("Week");
+  const [busy, setBusy] = useState<null | "freeze" | "clear">(null);
 
   // Snapshot of items — re-render gantt when items or mode change
   const itemsKey = useMemo(
@@ -109,6 +114,45 @@ export function TaskGantt({
     );
   }
 
+  async function doFreeze() {
+    if (!projectId) return;
+    if (!confirm("Зафіксувати baseline для всіх задач проєкту? Після цього зміни планових дат потребуватимуть розморозки.")) return;
+    setBusy("freeze");
+    try {
+      const r = await fetch(
+        `/api/admin/projects/${projectId}/baseline/freeze`,
+        { method: "POST" },
+      );
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(j.error ?? "Не вдалось зафіксувати baseline");
+      } else {
+        const j = await r.json();
+        alert(`Baseline зафіксовано (${j.data?.tasksFrozen ?? 0} задач).`);
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function doClear() {
+    if (!projectId) return;
+    if (!confirm("Розморозити baseline? Це дозволить редагувати планові дати без обмежень.")) return;
+    setBusy("clear");
+    try {
+      const r = await fetch(
+        `/api/admin/projects/${projectId}/baseline/clear`,
+        { method: "POST" },
+      );
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(j.error ?? "Не вдалось розморозити baseline");
+      }
+    } finally {
+      setBusy(null);
+    }
+  }
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -134,6 +178,61 @@ export function TaskGantt({
           })}
         </div>
         <Legend />
+        {projectId && (
+          <div className="ml-auto flex items-center gap-2">
+            <a
+              href={`/api/admin/projects/${projectId}/gantt/export.xml`}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold transition"
+              style={{
+                backgroundColor: T.panel,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+              title="MS Project XML"
+            >
+              ↓ XML
+            </a>
+            <a
+              href={`/api/admin/projects/${projectId}/gantt/export.csv`}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold transition"
+              style={{
+                backgroundColor: T.panel,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+              title="CSV для Excel/Google Sheets"
+            >
+              ↓ CSV
+            </a>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void doFreeze()}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
+              style={{
+                backgroundColor: T.accentPrimarySoft,
+                color: T.accentPrimary,
+              }}
+              title="Зафіксувати поточні дати як план (baseline)"
+            >
+              {busy === "freeze" ? "…" : "Заморозити baseline"}
+            </button>
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void doClear()}
+              className="rounded-lg px-3 py-1.5 text-[11px] font-semibold transition disabled:opacity-50"
+              style={{
+                backgroundColor: T.panel,
+                color: T.textMuted,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+              title="Розморозити baseline (дозволити редагування планових дат)"
+            >
+              {busy === "clear" ? "…" : "Розморозити"}
+            </button>
+          </div>
+        )}
       </div>
       <div
         className="metrum-gantt rounded-2xl overflow-x-auto"

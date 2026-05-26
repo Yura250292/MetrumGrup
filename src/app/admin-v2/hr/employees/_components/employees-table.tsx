@@ -153,11 +153,15 @@ export function EmployeesTable({
   items,
   mode,
   canSeeSalary,
+  canSeeFullProfile = true,
   onSelectEmployee,
 }: {
   items: EmployeeRow[];
   mode: DisplayMode;
   canSeeSalary: boolean;
+  /** Якщо false — лише name/phone/email (для не-адміна). Default true для
+   *  backward compat — старі call-sites не передають prop. */
+  canSeeFullProfile?: boolean;
   /** Якщо передано — клік по імені відкриває бічну панель замість переходу. */
   onSelectEmployee?: (id: string) => void;
 }) {
@@ -212,6 +216,16 @@ export function EmployeesTable({
   );
 
   const columns = useMemo<Column[]>(() => {
+    // RBAC: не-адмін бачить тільки ПІБ + телефон + email (без посади,
+    // підрозділу, користувача, ролі, відстрочки, зарплати, нотаток).
+    if (!canSeeFullProfile) {
+      const minimal: Column[] = [
+        { key: "name", label: "ПІБ скорочено", sortable: true },
+        { key: "phone", label: "Телефон" },
+        { key: "email", label: "Електронна пошта" },
+      ];
+      return minimal.filter((c) => !hiddenCols.has(c.key));
+    }
     const cols: Column[] = [
       { key: "name", label: "ПІБ скорочено", sortable: true },
       { key: "position", label: "Посада", sortable: true },
@@ -231,7 +245,7 @@ export function EmployeesTable({
     }
     cols.push({ key: "notes", label: "Додатково" });
     return cols.filter((c) => !hiddenCols.has(c.key));
-  }, [mode, canSeeSalary, hiddenCols]);
+  }, [mode, canSeeSalary, canSeeFullProfile, hiddenCols]);
 
   const sorted = useMemo(() => {
     const arr = [...items];
@@ -823,9 +837,37 @@ function EmployeeRowView({
 }) {
   const href = `/admin-v2/hr/employees/${employee.id}`;
 
+  const rowClickable = !!onSelectEmployee;
   return (
     <div
-      className="row group grid items-stretch transition-colors duration-150 hover:bg-black/[0.025]"
+      role={rowClickable ? "button" : undefined}
+      tabIndex={rowClickable ? 0 : undefined}
+      onClick={
+        rowClickable
+          ? (e) => {
+              // Не перехоплюємо клік, якщо потрапили в інтерактивний дочірній
+              // елемент (a/button/input) — напр. `tel:`, копіювання email тощо.
+              if (
+                (e.target as HTMLElement).closest(
+                  "a, button, input, select, textarea, [data-row-stop]",
+                )
+              )
+                return;
+              onSelectEmployee!(employee.id);
+            }
+          : undefined
+      }
+      onKeyDown={
+        rowClickable
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onSelectEmployee!(employee.id);
+              }
+            }
+          : undefined
+      }
+      className={`row group grid items-stretch transition-colors duration-150 hover:bg-black/[0.025] ${rowClickable ? "cursor-pointer" : ""}`}
       style={{
         gridTemplateColumns: gridTemplate,
         borderBottom: `1px solid ${T.borderSoft}`,

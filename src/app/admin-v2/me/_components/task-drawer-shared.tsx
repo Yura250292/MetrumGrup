@@ -1298,9 +1298,11 @@ function ResizableDrawerWrapper({ children }: { children: React.ReactNode }) {
 }
 
 /** Embedded-mode каркас: drawer не задає власну position/resize/shadow —
- *  усе це робить зовнішній <DrillDownDrawer>. */
+ *  усе це робить зовнішній <DrillDownDrawer>.
+ *  `overflow-y-auto` робить wrapper scroll-container, щоб контент під sticky-header
+ *  скролився, а sticky-header лишався зверху. */
 function EmbeddedWrapper({ children }: { children: React.ReactNode }) {
-  return <div className="flex h-full flex-col">{children}</div>;
+  return <div className="flex h-full flex-col overflow-y-auto">{children}</div>;
 }
 
 function Section({

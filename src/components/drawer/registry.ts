@@ -35,6 +35,30 @@ const IncomingDocumentDrawerContentLazy = lazy(() =>
   })),
 );
 
+const FormTemplateDrawerContentLazy = lazy(() =>
+  import("./renderers/FormTemplateDrawerContent").then((m) => ({
+    default: m.FormTemplateDrawerContent,
+  })),
+);
+
+const FormSubmissionDrawerContentLazy = lazy(() =>
+  import("./renderers/FormSubmissionDrawerContent").then((m) => ({
+    default: m.FormSubmissionDrawerContent,
+  })),
+);
+
+const ChangeOrderDrawerContentLazy = lazy(() =>
+  import("./renderers/ChangeOrderDrawerContent").then((m) => ({
+    default: m.ChangeOrderDrawerContent,
+  })),
+);
+
+const RFIDrawerContentLazy = lazy(() =>
+  import("./renderers/RFIDrawerContent").then((m) => ({
+    default: m.RFIDrawerContent,
+  })),
+);
+
 export const DRAWER_REGISTRY: Record<string, RegistryEntry> = {
   task: {
     Renderer: TaskDrawerContentLazy,
@@ -55,8 +79,27 @@ export const DRAWER_REGISTRY: Record<string, RegistryEntry> = {
     pageHref: (id) => `/admin-v2/documents/${id}`,
     defaultBreadcrumb: "Документ",
   },
-  // Інші модулі (counterparty, costCode, changeOrder, equipment, rfi,
-  // incident, ...) — додаються у task-ах 01-15 з roadmap-2026.
+  formTemplate: {
+    Renderer: FormTemplateDrawerContentLazy,
+    pageHref: (id) => `/admin-v2/catalogs/form-templates/${id}`,
+    defaultBreadcrumb: "Шаблон форми",
+  },
+  formSubmission: {
+    Renderer: FormSubmissionDrawerContentLazy,
+    pageHref: (id) => `/admin-v2/queue/form-submissions/${id}`,
+    defaultBreadcrumb: "Заповнена форма",
+  },
+  changeOrder: {
+    Renderer: ChangeOrderDrawerContentLazy,
+    pageHref: (id) => `/admin-v2/change-orders/${id}`,
+    defaultBreadcrumb: "Дод. угода",
+  },
+  rfi: {
+    Renderer: RFIDrawerContentLazy,
+    defaultBreadcrumb: "RFI",
+  },
+  // Інші модулі (counterparty, costCode, equipment, incident, ...) —
+  // додаються у task-ах 01-15 з roadmap-2026.
 };
 
 export function getRegistryEntry(type: string): RegistryEntry | undefined {

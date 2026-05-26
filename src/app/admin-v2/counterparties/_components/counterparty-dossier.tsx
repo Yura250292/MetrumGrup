@@ -20,6 +20,11 @@ import { uk } from "date-fns/locale";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency, formatCurrencyCompact } from "@/lib/utils";
 import { SupplierPaymentModal } from "./supplier-payment-modal";
+import { RatingStars } from "./rating-stars";
+import { SrmReviewsTab } from "./srm-reviews-tab";
+import { SrmDocumentsTab } from "./srm-documents-tab";
+import { SrmComplianceTab } from "./srm-compliance-tab";
+import type { CounterpartyTaxStatusLabel } from "./compliance-badge";
 
 type CounterpartyType = "LEGAL" | "INDIVIDUAL" | "FOP";
 type CounterpartyRole = "CLIENT" | "SUPPLIER" | "CONTRACTOR" | "EMPLOYEE" | "OTHER";
@@ -40,7 +45,19 @@ type Counterparty = {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+  // SRM rev.1 (optional — додаються після SRM міграції; null-safe)
+  avgRating?: number | string | null;
+  totalReviews?: number;
+  totalProjects?: number;
+  taxStatus?: CounterpartyTaxStatusLabel;
+  taxStatusCheckedAt?: string | null;
+  licenseNumber?: string | null;
+  licenseValidUntil?: string | null;
+  specializations?: string[];
+  legalForm?: string | null;
 };
+
+type DossierTab = "overview" | "reviews" | "documents" | "compliance";
 
 type Stats = {
   count: number;
@@ -164,6 +181,8 @@ export function CounterpartyDossier({
     outstandingHint: number;
   } | null>(null);
   const [voidingId, setVoidingId] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<DossierTab>("overview");
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "FINANCIER", "HR"].includes(currentUserRole);
   const canDelete = currentUserRole === "SUPER_ADMIN";
@@ -361,6 +380,16 @@ export function CounterpartyDossier({
             )}
           </div>
         </div>
+        {cp.avgRating != null && (
+          <div className="ml-auto sm:ml-0">
+            <RatingStars value={cp.avgRating} />
+            {(cp.totalReviews ?? 0) > 0 && (
+              <span className="ml-1 text-[11px]" style={{ color: T.textMuted }}>
+                ({cp.totalReviews} відг.)
+              </span>
+            )}
+          </div>
+        )}
         {canDelete && cp.isActive && (
           <button
             onClick={softDelete}
@@ -373,6 +402,64 @@ export function CounterpartyDossier({
         )}
       </div>
 
+      {/* SRM tabs */}
+      <div
+        className="flex flex-wrap items-center gap-1 rounded-2xl p-1"
+        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderStrong}` }}
+      >
+        {(
+          [
+            { key: "overview", label: "Огляд" },
+            { key: "reviews", label: "Відгуки" },
+            { key: "documents", label: "Документи" },
+            { key: "compliance", label: "Compliance" },
+          ] as Array<{ key: DossierTab; label: string }>
+        ).map((t) => {
+          const active = activeTab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setActiveTab(t.key)}
+              className="rounded-xl px-3 py-1.5 text-[12px] font-semibold transition-colors"
+              style={{
+                backgroundColor: active ? T.accentPrimary : "transparent",
+                color: active ? "white" : T.textSecondary,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {activeTab === "reviews" && (
+        <SrmReviewsTab
+          counterpartyId={cp.id}
+          canWrite={canEdit}
+          projects={projects.map((p) => ({ id: p.id, title: p.title }))}
+        />
+      )}
+
+      {activeTab === "documents" && (
+        <SrmDocumentsTab counterpartyId={cp.id} canWrite={canEdit} />
+      )}
+
+      {activeTab === "compliance" && (
+        <SrmComplianceTab
+          counterpartyId={cp.id}
+          canWrite={canEdit}
+          initial={{
+            taxStatus: cp.taxStatus ?? "UNKNOWN",
+            taxStatusCheckedAt: cp.taxStatusCheckedAt ?? null,
+            edrpou: cp.edrpou,
+            licenseNumber: cp.licenseNumber ?? null,
+            licenseValidUntil: cp.licenseValidUntil ?? null,
+          }}
+        />
+      )}
+
+      {activeTab === "overview" && (
+        <>
       {/* Property table */}
       <div
         className="overflow-hidden rounded-2xl"
@@ -1185,6 +1272,8 @@ export function CounterpartyDossier({
         <span>·</span>
         <span>Операцій: {stats.count}</span>
       </div>
+        </>
+      )}
     </div>
   );
 }

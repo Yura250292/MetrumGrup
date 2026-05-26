@@ -65,6 +65,9 @@ export const TOOL_REGISTRY: ToolMeta[] = [
   // ── External ──
   { name: "web_search", type: "read", domain: "external", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Веб-пошук" },
   { name: "read_webpage", type: "read", domain: "external", requiresConfirmation: false, allowedRoles: ALL_STAFF, description: "Читання веб-сторінки" },
+
+  // ── Change Orders ──
+  { name: "suggest_change_order", type: "read", domain: "finance", requiresConfirmation: false, allowedRoles: ["SUPER_ADMIN", "MANAGER", "ENGINEER"], description: "Запропонувати чернетку дод. угоди з контексту чату" },
 ];
 
 export function getToolMeta(name: AiToolName): ToolMeta | undefined {

@@ -15,7 +15,9 @@ type MyProject = {
   stages: { id: string; stage: ProjectStage; status: string }[];
 };
 
-type TeamUser = { id: string; name: string };
+type TeamUser =
+  | { kind: "user"; id: string; name: string; subtitle?: string }
+  | { kind: "employee"; id: string; name: string; subtitle?: string };
 
 type Priority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 
@@ -68,9 +70,12 @@ export function DelegateTaskModal({
   useEffect(() => {
     (async () => {
       try {
-        const [projRes, usersRes] = await Promise.all([
+        // Аналогічно new-task-modal: assignee може бути ХТО завгодно — User
+        // будь-якої ролі, або Employee без акаунту.
+        const [projRes, usersRes, empRes] = await Promise.all([
           fetch("/api/admin/me/projects"),
-          fetch("/api/admin/users?role=SUPER_ADMIN,MANAGER,ENGINEER,FINANCIER"),
+          fetch("/api/admin/users"),
+          fetch("/api/admin/employees/picker"),
         ]);
         if (projRes.ok) {
           const j = await projRes.json();
@@ -82,17 +87,47 @@ export function DelegateTaskModal({
             setSelectedProjectId(items[0].id);
           }
         }
+
+        const merged = new Map<string, TeamUser>();
         if (usersRes.ok) {
           const j = await usersRes.json();
-          setTeamUsers(
-            (j.data ?? [])
-              .filter((u: { isActive?: boolean }) => u.isActive)
-              .map((u: { id: string; name: string }) => ({
-                id: u.id,
-                name: u.name,
-              }))
-          );
+          for (const u of (j.data ?? []).filter((u: { isActive?: boolean }) => u.isActive)) {
+            merged.set(`user:${u.id}`, { kind: "user", id: u.id, name: u.name });
+          }
         }
+        if (empRes.ok) {
+          const j = await empRes.json();
+          for (const e of (j.data ?? []) as Array<{
+            id: string;
+            fullName: string;
+            position: string | null;
+            linkedUserId: string | null;
+            linkedUserName: string | null;
+          }>) {
+            if (e.linkedUserId) {
+              const key = `user:${e.linkedUserId}`;
+              const existing = merged.get(key);
+              if (existing) {
+                merged.set(key, { ...existing, subtitle: e.position ?? undefined });
+              } else {
+                merged.set(key, {
+                  kind: "user",
+                  id: e.linkedUserId,
+                  name: e.linkedUserName ?? e.fullName,
+                  subtitle: e.position ?? undefined,
+                });
+              }
+            } else {
+              merged.set(`emp:${e.id}`, {
+                kind: "employee",
+                id: e.id,
+                name: e.fullName,
+                subtitle: e.position ?? "співробітник без акаунту",
+              });
+            }
+          }
+        }
+        setTeamUsers([...merged.values()]);
       } catch (e) {
         setLoadError(e instanceof Error ? e.message : "Помилка завантаження");
       } finally {
@@ -121,9 +156,12 @@ export function DelegateTaskModal({
     );
   }, [task.assignee, teamUsers]);
 
+  // assigneeId зберігаємо як "user:<id>" або "emp:<id>" — щоб знати, який
+  // шейп слати в API (userId vs externalName).
   useEffect(() => {
     if (suggestedAssignee && !assigneeId) {
-      setAssigneeId(suggestedAssignee.id);
+      const prefix = suggestedAssignee.kind === "user" ? "user" : "emp";
+      setAssigneeId(`${prefix}:${suggestedAssignee.id}`);
     }
   }, [suggestedAssignee, assigneeId]);
 
@@ -132,6 +170,19 @@ export function DelegateTaskModal({
     setSaving(true);
     setError(null);
     try {
+      // Парсимо assigneeId → правильний payload
+      let assigneesPayload: Array<{ userId?: string; externalName?: string }> | undefined;
+      if (assigneeId) {
+        const [kind, rawId] = assigneeId.split(":");
+        if (kind === "user") {
+          assigneesPayload = [{ userId: rawId }];
+        } else if (kind === "emp") {
+          const emp = teamUsers.find(
+            (u) => u.kind === "employee" && u.id === rawId,
+          );
+          if (emp) assigneesPayload = [{ externalName: emp.name }];
+        }
+      }
       const res = await fetch(`/api/admin/projects/${project.id}/tasks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -141,7 +192,7 @@ export function DelegateTaskModal({
           stageId,
           priority,
           dueDate: dueDate ? new Date(dueDate).toISOString() : undefined,
-          assigneeIds: assigneeId ? [assigneeId] : undefined,
+          assignees: assigneesPayload,
         }),
       });
       if (!res.ok) {
@@ -278,12 +329,20 @@ export function DelegateTaskModal({
                 style={inputStyle}
               >
                 <option value="">— без виконавця —</option>
-                {teamUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                    {suggestedAssignee?.id === u.id ? " · AI підказує" : ""}
-                  </option>
-                ))}
+                {teamUsers.map((u) => {
+                  const key = `${u.kind === "user" ? "user" : "emp"}:${u.id}`;
+                  const isSuggested = suggestedAssignee?.id === u.id;
+                  const suffix = u.kind === "employee"
+                    ? " · без акаунту"
+                    : isSuggested
+                      ? " · AI підказує"
+                      : "";
+                  return (
+                    <option key={key} value={key}>
+                      {u.name}{suffix}
+                    </option>
+                  );
+                })}
               </select>
             </Field>
 

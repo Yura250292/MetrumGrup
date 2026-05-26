@@ -42,6 +42,11 @@ export function relatedEntityLink(n: {
     case "Conversation":
     case "CONVERSATION":
       return `/admin-v2/chat?conversation=${n.relatedId}`;
+    case "ChangeOrder":
+    case "CHANGE_ORDER":
+      return `/admin-v2/change-orders?d=changeOrder:${n.relatedId}`;
+    case "RFI":
+      return `/admin-v2/rfis?d=rfi:${n.relatedId}`;
     default:
       return "/dashboard/notifications";
   }

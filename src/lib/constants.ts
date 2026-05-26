@@ -1,4 +1,4 @@
-import { ProjectStage, ProjectStatus, PaymentStatus, EstimateStatus, EquipmentStatus, StageStatus } from "@prisma/client";
+import { ProjectStage, ProjectStatus, PaymentStatus, EstimateStatus, EquipmentStatus, StageStatus, FormCategory, FormSubmissionStatus } from "@prisma/client";
 
 export const STAGE_LABELS: Record<ProjectStage, string> = {
   DESIGN: "Проєктування",
@@ -182,3 +182,39 @@ export const FINANCE_CATEGORY_LABELS: Record<string, string> =
 export function financeCategoriesForType(type: "INCOME" | "EXPENSE") {
   return FINANCE_CATEGORIES.filter((c) => c.applicableTo === type);
 }
+
+/**
+ * UI-labels для TaskDependencyType. Використовується у dependency-picker у
+ * drawer і у Gantt tooltip'ах.
+ */
+export const DEPENDENCY_TYPE_LABELS: Record<"FS" | "SS" | "FF" | "SF", string> = {
+  FS: "Закінчити → Почати",
+  SS: "Почати → Почати",
+  FF: "Закінчити → Закінчити",
+  SF: "Почати → Закінчити",
+};
+
+/**
+ * UA-лейбли категорій шаблонів форм (Site Forms Builder, Task 03).
+ * Використовуються у foreman cards, admin builder list, badge у drawer.
+ */
+export const FORM_CATEGORY_LABELS: Record<FormCategory, string> = {
+  DAILY_REPORT: "Щоденний рапорт",
+  SAFETY: "Охорона праці",
+  QUALITY: "Якість",
+  ACCEPTANCE: "Приймання",
+  KB2V: "КБ-2в",
+  KB3: "КБ-3",
+  CUSTOM: "Користувацька",
+};
+
+/**
+ * UA-лейбли статусів заповнених форм. Використовуються у review queue,
+ * submission detail, foreman history.
+ */
+export const FORM_SUBMISSION_STATUS_LABELS: Record<FormSubmissionStatus, string> = {
+  DRAFT: "Чернетка",
+  SUBMITTED: "На розгляді",
+  APPROVED: "Схвалено",
+  REJECTED: "Відхилено",
+};

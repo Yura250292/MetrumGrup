@@ -437,16 +437,22 @@ export function TabTasks({
         gantt ? (
           <TaskGantt
             items={gantt.items}
+            projectId={projectId}
             onTaskClick={openTask}
             onDateChange={async (id, start, end) => {
-              await fetch(`/api/admin/tasks/${id}`, {
-                method: "PATCH",
+              // PUT /dates: snap-to-day + перевірка baseline lock на сервері.
+              const res = await fetch(`/api/admin/tasks/${id}/dates`, {
+                method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   startDate: start.toISOString(),
                   dueDate: end.toISOString(),
                 }),
               });
+              if (res.status === 409) {
+                const j = await res.json().catch(() => ({}));
+                alert(j.message ?? "Baseline зафіксовано — розморозьте перш ніж рухати бар.");
+              }
               void loadGantt();
             }}
           />

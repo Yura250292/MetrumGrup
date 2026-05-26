@@ -47,7 +47,9 @@ export type AiToolName =
   | "send_notification"
   // Memory
   | "save_memory"
-  | "get_memories";
+  | "get_memories"
+  // Change Orders
+  | "suggest_change_order";
 
 export type AiChatRequest = {
   conversationId?: string;

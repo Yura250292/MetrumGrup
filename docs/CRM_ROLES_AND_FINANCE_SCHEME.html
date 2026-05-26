@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Схема ролей і фінансів CRM</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #f8f3e8;
+      --text: #1f2937;
+      --muted: #5b6472;
+      --line: #ddd3c2;
+      --accent: #8b5e3c;
+      --accent-2: #2f6b57;
+      --warn: #a16207;
+      --danger: #b42318;
+      --ok-bg: #e8f5ee;
+      --no-bg: #fceaea;
+      --limited-bg: #fff4db;
+      --shadow: 0 12px 32px rgba(31, 41, 55, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: linear-gradient(180deg, #f7f3eb 0%, #f1ede4 100%);
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    .page {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 40px 28px 64px;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #fffaf1 0%, #f7efe1 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 32px;
+      box-shadow: var(--shadow);
+    }
+
+    h1, h2, h3 { margin: 0; }
+
+    h1 {
+      font-size: 40px;
+      line-height: 1.05;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 26px;
+      margin-bottom: 16px;
+    }
+
+    h3 {
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+
+    p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: 1.3fr 0.7fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: #fff;
+      border: 1px solid var(--line);
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .summary-card {
+      background: rgba(255,255,255,0.72);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+    }
+
+    .summary-card ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--text);
+    }
+
+    .section {
+      margin-top: 26px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+
+    .roles {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .role-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--panel-2);
+      padding: 16px;
+    }
+
+    .role-card h3 {
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .role-card p strong {
+      color: var(--text);
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .flow-step {
+      border-radius: 18px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      background: #fff;
+      position: relative;
+      min-height: 140px;
+    }
+
+    .flow-step .num {
+      width: 34px;
+      height: 34px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .legend {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .legend span {
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+    }
+
+    .yes { background: var(--ok-bg); }
+    .limited { background: var(--limited-bg); }
+    .no { background: var(--no-bg); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      overflow: hidden;
+      border-radius: 16px;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 14px 12px;
+      background: #f1e7d7;
+      border-bottom: 1px solid var(--line);
+      vertical-align: top;
+    }
+
+    tbody td {
+      padding: 12px;
+      border-bottom: 1px solid #e8dece;
+      vertical-align: top;
+    }
+
+    tbody tr:nth-child(even) {
+      background: #fffaf4;
+    }
+
+    .cell-yes, .cell-limited, .cell-no {
+      font-weight: 700;
+      border-radius: 10px;
+      display: inline-block;
+      padding: 4px 10px;
+      font-size: 12px;
+    }
+
+    .cell-yes { background: var(--ok-bg); color: #175c39; }
+    .cell-limited { background: var(--limited-bg); color: #8a5a00; }
+    .cell-no { background: var(--no-bg); color: var(--danger); }
+
+    .finance-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .finance-box {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: #fff;
+      padding: 16px;
+    }
+
+    .finance-box h3 {
+      color: var(--accent-2);
+    }
+
+    .notes ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+    }
+
+    .footer {
+      margin-top: 20px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 1100px) {
+      .hero-grid, .roles, .flow, .finance-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+      .page {
+        max-width: none;
+        padding: 12mm;
+      }
+      .section, .hero {
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <div class="hero-grid">
+        <div>
+          <h1>Схема ролей і фінансів для CRM</h1>
+          <p>
+            Проста модель на 5 ролей для команди 10-15 людей. Ціль:
+            кожен бачить лише свій функціонал, а фінанси рахуються без плутанини між бюджетом, боргом і фактом.
+          </p>
+          <div class="pill-row">
+            <span class="pill">5 ролей</span>
+            <span class="pill">Проєктний scope</span>
+            <span class="pill">Бюджет / Зобов'язання / Факт</span>
+            <span class="pill">Мінімум зайвої складності</span>
+          </div>
+        </div>
+        <div class="summary-card">
+          <h3>Головна ідея</h3>
+          <ul>
+            <li><strong>Адміністратор</strong> бачить усе</li>
+            <li><strong>Кошторисник</strong> веде кошториси</li>
+            <li><strong>Закупівельник</strong> веде постачальників і витрати</li>
+            <li><strong>Менеджер проєкту</strong> веде лише свої проєкти</li>
+            <li><strong>Виконроб</strong> подає польові дані</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:18px;padding:14px 16px;border-radius:16px;background:#FCEAEA;border:1px solid #E6B9B9;color:#7A271A;font-weight:700;">
+        Жорстке правило: тільки <strong>Адміністратор</strong> бачить зарплати, загальне фінансування компанії і фінансування всіх проєктів.
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>1. Ролі</h2>
+      <div class="roles">
+        <div class="role-card">
+          <h3>Адміністратор</h3>
+          <p><strong>Хто це:</strong> керівник системи / власник повного доступу</p>
+          <p><strong>Фокус:</strong> усі модулі, усі цифри, користувачі, налаштування, контроль</p>
+        </div>
+        <div class="role-card">
+          <h3>Кошторисник</h3>
+          <p><strong>Хто це:</strong> кошторисник</p>
+          <p><strong>Фокус:</strong> генерація ШІ-кошторисів, редагування, версії, підготовка бюджету</p>
+        </div>
+        <div class="role-card">
+          <h3>Закупівельник</h3>
+          <p><strong>Хто це:</strong> закупівлі / постачальники / витрати</p>
+          <p><strong>Фокус:</strong> рахунки, накладні, борги, оплати, контрагенти</p>
+        </div>
+        <div class="role-card">
+          <h3>Менеджер проєкту</h3>
+          <p><strong>Хто це:</strong> менеджер проєкту</p>
+          <p><strong>Фокус:</strong> свої проєкти, виконроби, підтвердження витрат і матеріалів</p>
+        </div>
+        <div class="role-card">
+          <h3>Виконроб</h3>
+          <p><strong>Хто це:</strong> виконроб</p>
+          <p><strong>Фокус:</strong> польові звіти, використані матеріали, виконані роботи, чеки, фото</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>2. Хто з чим працює</h2>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="num">1</div>
+          <h3>Кошторисник</h3>
+          <p>Створює кошторис, уточнює позиції, формує планову модель витрат.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">2</div>
+          <h3>Адміністратор</h3>
+          <p>Погоджує правила, має контроль над фінальним доступом і всіма цифрами.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">3</div>
+          <h3>Виконроб</h3>
+          <p>Подає фактичні польові дані: роботи, матеріали, чеки, накладні, фото.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">4</div>
+          <h3>Менеджер проєкту</h3>
+          <p>Перевіряє звіти виконроба, підтверджує, що відноситься до конкретного проєкту.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">5</div>
+          <h3>Закупівельник</h3>
+          <p>Прив’язує постачальника, ставить борг/оплату, формує фактичні фінансові записи.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>3. Матриця доступів</h2>
+      <div class="legend">
+        <span class="yes">Так</span>
+        <span class="limited">Обмежено</span>
+        <span class="no">Ні</span>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Модуль / дія</th>
+            <th>Адміністратор</th>
+            <th>Кошторисник</th>
+            <th>Закупівельник</th>
+            <th>Менеджер проєкту</th>
+            <th>Виконроб</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Перегляд усіх проєктів</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Обмежено</span></td>
+            <td><span class="cell-limited">Обмежено</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Перегляд своїх проєктів</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+          </tr>
+          <tr>
+            <td>Створення / редагування проєкту</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-limited">Лише свої</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Призначення людей на проєкт</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Перегляд кошторисів</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Лише перегляд</span></td>
+            <td><span class="cell-limited">Лише свої проєкти</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Генерація ШІ-кошторису</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Редагування кошторису</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-limited">Коментар / перевірка</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Затвердження кошторису в бюджет</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Так, якщо дозволите</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Довідник матеріалів і цін</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Лише перегляд</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Постачальники / контрагенти</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Лише перегляд</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Лише перегляд</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Створення витрати</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Так, по своїх проєктах</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Створення витрати без проєкту</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Позначити борг / не оплачено</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Так, по своїх</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Позначити оплачено</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Краще ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Подати звіт виконроба</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так</span></td>
+          </tr>
+          <tr>
+            <td>Підтвердити звіт виконроба</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-yes">Так, по своїх проєктах</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Бюджет проти факту</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Лише перегляд</span></td>
+            <td><span class="cell-limited">Лише перегляд</span></td>
+            <td><span class="cell-yes">Так, лише свої</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Фінансування всіх проєктів / фінанси компанії</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Cashflow компанії</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Маржа / прибуток</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-limited">Лише по кошторису, без фінансів компанії</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-limited">Лише свої проєкти</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Зарплати</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+          <tr>
+            <td>Налаштування системи / ролі / користувачі</td>
+            <td><span class="cell-yes">Так</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+            <td><span class="cell-no">Ні</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>4. Як правильно рахувати фінанси</h2>
+      <div class="finance-grid">
+        <div class="finance-box">
+          <h3>Бюджет</h3>
+          <p>План з кошторису. Це затверджена планова цифра по проєкту або по статтях.</p>
+        </div>
+        <div class="finance-box">
+          <h3>Зобов'язання</h3>
+          <p>Уже взяте зобов’язання: рахунок, накладна, погоджена закупівля, але ще не оплачено.</p>
+        </div>
+        <div class="finance-box">
+          <h3>Факт</h3>
+          <p>Фактичні витрати: реально оплачено, реально списано, реально понесено.</p>
+        </div>
+        <div class="finance-box">
+          <h3>Відхилення</h3>
+          <p>Відхилення між планом і фактом / між планом і прогнозом.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>5. Правильний фінансовий контур</h2>
+      <div class="flow">
+        <div class="flow-step">
+          <div class="num">A</div>
+          <h3>Кошторис</h3>
+          <p>Кошторисник формує планову модель. Після погодження це стає <strong>бюджетом</strong>.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">B</div>
+          <h3>Рахунок / накладна</h3>
+          <p>Закупівельник або менеджер проєкту вносить документ. Якщо не оплачено, це <strong>зобов'язання</strong>.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">C</div>
+          <h3>Звіт виконроба</h3>
+          <p>Виконроб подає дані. Вони ще не фінанси, поки менеджер проєкту їх не підтвердив.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">D</div>
+          <h3>Підтвердження</h3>
+          <p>Менеджер проєкту підтверджує, до якого проєкту це належить і що саме сталося.</p>
+        </div>
+        <div class="flow-step">
+          <div class="num">E</div>
+          <h3>Оплата</h3>
+          <p>Коли витрату оплачено, вона переходить у <strong>факт</strong>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section notes">
+      <h2>6. Ключові правила</h2>
+      <ul>
+        <li><strong>Менеджер проєкту</strong> бачить тільки свої проєкти.</li>
+        <li><strong>Виконроб</strong> ніколи не підтверджує фінанси самостійно.</li>
+        <li><strong>Закупівельник</strong> веде постачальників, борги і оплати.</li>
+        <li><strong>Кошторисник</strong> не повинен керувати оплатами.</li>
+        <li><strong>Адміністратор</strong> єдина роль з доступом до зарплат, загального фінансування компанії, руху коштів по всіх проєктах і системних налаштувань.</li>
+        <li>Витрата без проєкту має йти окремо як <strong>загальногосподарська витрата компанії</strong>, а не губитися серед проєктних витрат.</li>
+      </ul>
+      <div class="footer">
+        Документ зроблений у форматі HTML для зручного перегляду і друку в PDF через браузер.
+      </div>
+    </section>
+  </div>
+</body>
+</html>

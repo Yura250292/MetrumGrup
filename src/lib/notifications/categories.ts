@@ -35,6 +35,22 @@ const TYPE_TO_CATEGORY: Record<string, NotificationCategory> = {
   FINANCE_APPROVAL_REMINDER: "financeReview",
   FINANCE_APPROVED: "financeReview",
   FINANCE_REJECTED: "financeReview",
+  CHANGE_ORDER_SUBMITTED: "financeReview",
+  CHANGE_ORDER_PM_APPROVED: "financeReview",
+  CHANGE_ORDER_ADMIN_APPROVED: "financeReview",
+  CHANGE_ORDER_APPROVED: "financeReview",
+  CHANGE_ORDER_REJECTED: "financeReview",
+  CHANGE_ORDER_CANCELLED: "financeReview",
+  RFI_ASSIGNED: "taskAssignment",
+  RFI_DUE_SOON: "deadlineToday",
+  RFI_OVERDUE: "overdueTask",
+  RFI_ANSWERED: "projectChange",
+  RFI_COMMENT: "taskComment",
+  RFI_CLOSED: "projectChange",
+  COUNTERPARTY_LICENSE_EXPIRING_30: "deadlineToday",
+  COUNTERPARTY_LICENSE_EXPIRING_7: "deadlineToday",
+  COUNTERPARTY_LICENSE_EXPIRED: "overdueTask",
+  COUNTERPARTY_TAX_STATUS_CHANGED: "systemEvent",
 };
 
 export function notificationTypeToCategory(type: string): NotificationCategory {

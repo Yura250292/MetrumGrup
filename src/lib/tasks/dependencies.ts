@@ -423,7 +423,12 @@ export async function getGanttData(projectId: string) {
         title: true,
         startDate: true,
         dueDate: true,
+        plannedStartAt: true,
+        plannedEndAt: true,
+        baselineFrozenAt: true,
+        progressPercent: true,
         estimatedHours: true,
+        actualHours: true,
         status: { select: { isDone: true, color: true, name: true } },
         priority: true,
         _count: { select: { checklist: true } },
@@ -448,8 +453,9 @@ export async function getGanttData(projectId: string) {
   const today = new Date();
   const items = tasks
     .map((t) => {
-      const start = t.startDate ?? t.dueDate ?? today;
-      const end =
+      // Actual range (drag-edited)
+      const actualStart = t.startDate ?? t.dueDate ?? today;
+      const actualEnd =
         t.dueDate ??
         (t.startDate && t.estimatedHours
           ? new Date(
@@ -460,12 +466,33 @@ export async function getGanttData(projectId: string) {
                   1000,
             )
           : t.startDate ?? today);
+
+      // Auto-compute progress якщо явно не задано вручну (0): беремо ratio
+      // actualHours/estimatedHours. Manual override (явно ≠ 0) має пріоритет.
+      let progress = t.progressPercent;
+      if (progress === 0) {
+        if (t.status.isDone) {
+          progress = 100;
+        } else if (t.estimatedHours && Number(t.estimatedHours) > 0) {
+          const ratio = Number(t.actualHours) / Number(t.estimatedHours);
+          progress = Math.min(100, Math.max(0, Math.round(ratio * 100)));
+        }
+      }
+
+      const baseline =
+        t.plannedStartAt && t.plannedEndAt
+          ? {
+              start: t.plannedStartAt.toISOString().slice(0, 10),
+              end: t.plannedEndAt.toISOString().slice(0, 10),
+            }
+          : null;
+
       return {
         id: t.id,
         name: t.title,
-        start: start.toISOString().slice(0, 10),
-        end: end.toISOString().slice(0, 10),
-        progress: t.status.isDone ? 100 : 0,
+        start: actualStart.toISOString().slice(0, 10),
+        end: actualEnd.toISOString().slice(0, 10),
+        progress,
         custom_class: critical.criticalIds.includes(t.id) ? "critical" : "",
         dependencies: (incomingBySuccessor.get(t.id) ?? []).join(","),
         _meta: {
@@ -474,6 +501,8 @@ export async function getGanttData(projectId: string) {
           priority: t.priority,
           isDone: t.status.isDone,
           checklistCount: t._count.checklist,
+          baseline,
+          baselineFrozenAt: t.baselineFrozenAt?.toISOString() ?? null,
         },
       };
     })

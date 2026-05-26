@@ -16,6 +16,7 @@ import {
   ChevronUp,
   X,
   LayoutGrid,
+  GanttChartSquare,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import {
@@ -31,6 +32,7 @@ import { FocusBanner } from "./dashboard-kpi";
 import { NewTaskModal } from "./new-task-modal";
 import { TaskTableView } from "./task-table-view";
 import { SectionsView } from "./sections-view";
+import { MeGanttView } from "./me-gantt-view";
 import { AiDaySummary } from "./ai-day-summary";
 import { groupBySection } from "../_lib/sections";
 
@@ -50,6 +52,7 @@ const SCOPE_DEFS_ADMIN: { id: Scope; label: string }[] = [
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "sections", label: "Пріоритети", icon: LayoutGrid },
   { id: "table", label: "Таблиця", icon: Table2 },
+  { id: "gantt", label: "Gantt", icon: GanttChartSquare },
 ];
 
 /* ─── Project filter with search + collapsible ─── */
@@ -625,6 +628,8 @@ export function MeDashboard({
           onMarkDone={(t) => void markDone(t)}
         />
       )}
+
+      {viewMode === "gantt" && <MeGanttView />}
 
       {/* Task drawer rendered globally by <DrillDownDrawer /> in layout.
           Listen for mutations to refresh the list. */}
