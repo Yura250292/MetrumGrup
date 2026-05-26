@@ -566,6 +566,7 @@ export function StageTable({
             return (
               <tr
                 key={node.id}
+                data-stage-id={node.id}
                 onClick={() => onStageClick(node.id)}
                 className="cursor-pointer transition"
                 style={{

@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Eye,
@@ -14,6 +21,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { stageDisplayName } from "@/lib/constants";
 import { useDrillDown } from "@/components/drawer/use-drill-down";
 import {
   buildStageDrawerId,
@@ -73,6 +81,13 @@ export function StagesSection({
   const [showHidden, setShowHidden] = useState(false);
   const [hideCompleted, setHideCompleted] = useState(false);
   const [overflowOpen, setOverflowOpen] = useState(false);
+  const [focusedStageId, setFocusedStageId] = useState<string | null>(null);
+  const tableWrapRef = useRef<HTMLDivElement | null>(null);
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [toast, setToast] = useState<{
+    kind: "info" | "ok" | "err";
+    text: string;
+  } | null>(null);
 
   useEffect(() => {
     try {
@@ -419,6 +434,168 @@ export function StagesSection({
     ? stages.filter((s) => s.status !== "COMPLETED")
     : stages;
 
+  // ── Excel-like keyboard nav: Arrow Up/Down — focus rows; Enter — open drawer;
+  //    Cmd/Ctrl+C — copy focused row as TSV; Cmd/Ctrl+V — paste TSV (одну або
+  //    декілька рядків — оновлює existing stages by sequential order starting
+  //    from focused row).
+  function showToast(kind: "info" | "ok" | "err", text: string) {
+    setToast({ kind, text });
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = setTimeout(() => setToast(null), 2500);
+  }
+
+  const visibleOrderedIds = useMemo(() => {
+    // Порядок DOM-рядків: top-level stages → children (рекурсивно), фільтр
+    // приховані/завершені.
+    const byParent = new Map<string | null, StageRow[]>();
+    for (const s of filteredStages) {
+      const arr = byParent.get(s.parentStageId) ?? [];
+      arr.push(s);
+      byParent.set(s.parentStageId, arr);
+    }
+    for (const arr of byParent.values()) {
+      arr.sort((a, b) => a.sortOrder - b.sortOrder);
+    }
+    const out: string[] = [];
+    const walk = (parent: string | null) => {
+      const arr = byParent.get(parent) ?? [];
+      for (const s of arr) {
+        if (!showHidden && s.isHidden) continue;
+        out.push(s.id);
+        walk(s.id);
+      }
+    };
+    walk(null);
+    return out;
+  }, [filteredStages, showHidden]);
+
+  // Серіалізує етап у TSV-рядок: name<TAB>status<TAB>volume<TAB>unit<TAB>unitPrice<TAB>clientPrice
+  function stageToTsv(s: StageRow): string {
+    const fields = [
+      stageDisplayName(s),
+      s.status,
+      s.factVolume ?? s.planVolume ?? "",
+      s.factUnit ?? s.unit ?? "",
+      s.factUnitPrice ?? s.planUnitPrice ?? "",
+      s.factClientUnitPrice ?? s.planClientUnitPrice ?? "",
+    ];
+    return fields.map((v) => String(v ?? "")).join("\t");
+  }
+
+  // Парсить TSV-рядок назад у часткове оновлення.
+  function tsvToUpdate(line: string): StageInlineUpdate {
+    const cols = line.split("\t");
+    const out: StageInlineUpdate = {};
+    // Index map: 0=name, 1=status, 2=volume, 3=unit, 4=unitPrice, 5=clientPrice
+    if (cols[1] && ["PENDING", "IN_PROGRESS", "COMPLETED"].includes(cols[1])) {
+      out.status = cols[1] as StageRow["status"];
+    }
+    const v2 = cols[2]?.trim();
+    if (v2) {
+      const n = Number(v2.replace(",", "."));
+      if (Number.isFinite(n) && n >= 0) out.factVolume = n;
+    }
+    const v3 = cols[3]?.trim();
+    if (v3) out.factUnit = v3;
+    const v4 = cols[4]?.trim();
+    if (v4) {
+      const n = Number(v4.replace(",", "."));
+      if (Number.isFinite(n) && n >= 0) out.factUnitPrice = n;
+    }
+    const v5 = cols[5]?.trim();
+    if (v5) {
+      const n = Number(v5.replace(",", "."));
+      if (Number.isFinite(n) && n >= 0) out.factClientUnitPrice = n;
+    }
+    return out;
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // Якщо фокус у textarea/input/select — не перехоплюємо (нехай редагується).
+      const tag = target.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        (target as HTMLElement).isContentEditable
+      ) {
+        return;
+      }
+      // Кеуbord-навігація працює лише коли курсор у межах таблиці етапів.
+      const wrap = tableWrapRef.current;
+      if (!wrap || !wrap.contains(target)) return;
+
+      const idx = focusedStageId ? visibleOrderedIds.indexOf(focusedStageId) : -1;
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = idx < 0 ? 0 : Math.min(visibleOrderedIds.length - 1, idx + 1);
+        const id = visibleOrderedIds[next];
+        if (id) setFocusedStageId(id);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = idx < 0 ? 0 : Math.max(0, idx - 1);
+        const id = visibleOrderedIds[next];
+        if (id) setFocusedStageId(id);
+      } else if (e.key === "Enter") {
+        if (focusedStageId) {
+          e.preventDefault();
+          openStage(focusedStageId);
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c") {
+        // Copy focused row → TSV
+        if (focusedStageId) {
+          const s = stages.find((x) => x.id === focusedStageId);
+          if (s) {
+            e.preventDefault();
+            navigator.clipboard
+              .writeText(stageToTsv(s))
+              .then(() =>
+                showToast("ok", `Рядок «${stageDisplayName(s)}» скопійовано як TSV`),
+              )
+              .catch(() => showToast("err", "Не вдалось скопіювати"));
+          }
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v") {
+        if (focusedStageId) {
+          e.preventDefault();
+          navigator.clipboard
+            .readText()
+            .then(async (raw) => {
+              if (!raw.trim()) return;
+              const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0);
+              const startIdx = visibleOrderedIds.indexOf(focusedStageId);
+              if (startIdx < 0) return;
+              let updated = 0;
+              for (let i = 0; i < lines.length; i++) {
+                const targetId = visibleOrderedIds[startIdx + i];
+                if (!targetId) break;
+                const update = tsvToUpdate(lines[i]);
+                if (Object.keys(update).length === 0) continue;
+                await inlineUpdate(targetId, update);
+                updated++;
+              }
+              showToast("ok", `Оновлено ${updated} рядків з TSV`);
+            })
+            .catch((err) => {
+              console.error("[stages paste] failed:", err);
+              showToast("err", "Не вдалось вставити TSV");
+            });
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    focusedStageId,
+    visibleOrderedIds,
+    stages,
+    openStage,
+    inlineUpdate,
+  ]);
+
   return (
     <div
       className="rounded-2xl p-5"
@@ -562,11 +739,26 @@ export function StagesSection({
       </div>
 
       {/* Desktop (lg+): таблиця */}
-      <div className="hidden lg:block">
+      <div
+        ref={tableWrapRef}
+        tabIndex={0}
+        onClick={(e) => {
+          // Підхопити focusedStageId з кліку на рядок (на додачу до openStage,
+          // що теж викликається завдяки propagation з <tr>).
+          const target = e.target as HTMLElement | null;
+          const tr = target?.closest("tr[data-stage-id]") as HTMLElement | null;
+          const id = tr?.getAttribute("data-stage-id");
+          if (id) setFocusedStageId(id);
+        }}
+        className="hidden lg:block outline-none"
+      >
         <StageTable
           stages={filteredStages}
-          selectedStageId={null}
-          onStageClick={openStage}
+          selectedStageId={focusedStageId}
+          onStageClick={(id) => {
+            setFocusedStageId(id);
+            openStage(id);
+          }}
           onInlineUpdate={inlineUpdate}
           onAddChild={addChild}
           onDelete={deleteStage}
@@ -648,6 +840,23 @@ export function StagesSection({
           await refetch();
         }}
       />
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] rounded-lg px-3 py-2 text-[12px] font-medium shadow-lg"
+          style={{
+            backgroundColor:
+              toast.kind === "ok"
+                ? T.success
+                : toast.kind === "err"
+                  ? T.danger
+                  : T.accentPrimary,
+            color: "white",
+          }}
+          role="status"
+        >
+          {toast.text}
+        </div>
+      )}
     </div>
   );
 }

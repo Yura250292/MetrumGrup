@@ -29,9 +29,29 @@ export async function getForemanPutUrl(params: {
   originalName: string;
   mimeType: string;
 }): Promise<{ key: string; putUrl: string }> {
+  return getR2PutUrl({
+    userId: params.userId,
+    originalName: params.originalName,
+    mimeType: params.mimeType,
+    prefix: "foreman",
+    source: "foreman-report",
+  });
+}
+
+/**
+ * Універсальний пресайн для R2 PUT. Викликається з різних модулів
+ * (foreman, admin stages AI). Префікс контролює namespace ключа в бакеті.
+ */
+export async function getR2PutUrl(params: {
+  userId: string;
+  originalName: string;
+  mimeType: string;
+  prefix: string;
+  source: string;
+}): Promise<{ key: string; putUrl: string }> {
   const timestamp = Date.now();
   const sanitized = params.originalName.replace(/[^a-zA-Z0-9.-]/g, "_");
-  const key = `foreman/${params.userId}/${timestamp}_${sanitized}`;
+  const key = `${params.prefix}/${params.userId}/${timestamp}_${sanitized}`;
 
   const command = new PutObjectCommand({
     Bucket: FOREMAN_BUCKET,
@@ -39,7 +59,7 @@ export async function getForemanPutUrl(params: {
     ContentType: params.mimeType,
     Metadata: {
       uploadedBy: params.userId,
-      source: "foreman-report",
+      source: params.source,
       uploadedAt: new Date().toISOString(),
     },
   });

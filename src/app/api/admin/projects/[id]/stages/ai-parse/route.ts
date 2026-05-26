@@ -6,6 +6,11 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { safeParseJson } from "@/lib/ai/json-parse";
+import { downloadFromR2 } from "@/lib/foreman/r2";
+import { classifyExpenseImage } from "@/lib/ai/classify-expense-image";
+import { ocrReceiptStructured } from "@/lib/ocr/receipt-ocr";
+import { parseExcelEstimate } from "@/lib/parsers/excel-estimate-parser";
+import { parseKB2ActExcel } from "@/lib/parsers/kb2-act-parser";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -110,11 +115,27 @@ export async function POST(
     return forbiddenResponse();
   }
 
-  const body = (await request.json()) as { text?: unknown };
+  const body = (await request.json()) as {
+    text?: unknown;
+    fileKeys?: unknown;
+  };
   const text = typeof body.text === "string" ? body.text.trim() : "";
-  if (!text || text.length < 5) {
+  const fileKeys = Array.isArray(body.fileKeys)
+    ? (body.fileKeys as unknown[])
+        .filter(
+          (f): f is { key: string; mime: string; name: string } =>
+            !!f &&
+            typeof f === "object" &&
+            typeof (f as { key?: unknown }).key === "string" &&
+            typeof (f as { mime?: unknown }).mime === "string" &&
+            typeof (f as { name?: unknown }).name === "string",
+        )
+        .slice(0, 5)
+    : [];
+
+  if ((!text || text.length < 5) && fileKeys.length === 0) {
     return NextResponse.json(
-      { error: "Замало тексту для розпізнавання" },
+      { error: "Введи текст або додай файл" },
       { status: 400 },
     );
   }
@@ -149,13 +170,139 @@ export async function POST(
     );
   }
 
+  // ── Pre-extract items з файлів (зображення / PDF / Excel) паралельно.
+  //    Класифікація MATERIAL/LABOR уже зроблена в helper-ах foreman pipeline.
+  type PreItem = {
+    source: string;
+    costType: "MATERIAL" | "LABOR";
+    title: string;
+    quantity: number | null;
+    unit: string | null;
+    unitPrice: number | null;
+    amount: number;
+    supplier: string | null;
+  };
+  const preItems: PreItem[] = [];
+  const fileErrors: string[] = [];
+
+  await Promise.all(
+    fileKeys.map(async (f) => {
+      try {
+        const buf = await downloadFromR2(f.key);
+        if (f.mime.startsWith("image/")) {
+          const cls = await classifyExpenseImage(buf, f.mime);
+          if (cls.type === "expense_table") {
+            for (const it of cls.items) {
+              preItems.push({
+                source: f.name,
+                costType: it.costType,
+                title: it.title,
+                quantity: it.quantity ?? null,
+                unit: it.unit ?? null,
+                unitPrice: it.unitPrice ?? null,
+                amount: it.amount,
+                supplier: it.supplier ?? null,
+              });
+            }
+          } else if (cls.type === "expense_total_only" && cls.totalAmount) {
+            preItems.push({
+              source: f.name,
+              costType: "MATERIAL",
+              title: cls.summary || "Витрата з чека",
+              quantity: null,
+              unit: null,
+              unitPrice: null,
+              amount: cls.totalAmount,
+              supplier: null,
+            });
+          }
+        } else if (f.mime === "application/pdf") {
+          const ocr = await ocrReceiptStructured(buf, f.mime);
+          for (const it of ocr.parsed.items) {
+            const amount =
+              it.totalPrice ??
+              (it.quantity && it.unitPrice ? it.quantity * it.unitPrice : 0);
+            if (amount > 0) {
+              preItems.push({
+                source: f.name,
+                costType: "MATERIAL",
+                title: it.name,
+                quantity: it.quantity ?? null,
+                unit: it.unit ?? null,
+                unitPrice: it.unitPrice ?? null,
+                amount,
+                supplier: null,
+              });
+            }
+          }
+        } else if (
+          f.mime ===
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+          f.mime === "application/vnd.ms-excel" ||
+          /\.(xlsx|xls)$/i.test(f.name)
+        ) {
+          const ab = buf.buffer.slice(
+            buf.byteOffset,
+            buf.byteOffset + buf.byteLength,
+          ) as ArrayBuffer;
+          let added = 0;
+          try {
+            const xls = await parseExcelEstimate(ab);
+            for (const it of xls.items) {
+              if (it.totalPrice > 0) {
+                preItems.push({
+                  source: f.name,
+                  costType: "MATERIAL",
+                  title: it.description,
+                  quantity: it.quantity,
+                  unit: it.unit,
+                  unitPrice: it.unitPrice,
+                  amount: it.totalPrice,
+                  supplier: null,
+                });
+                added++;
+              }
+            }
+          } catch {
+            /* спробуємо КБ-2в */
+          }
+          if (added === 0) {
+            const kb2 = parseKB2ActExcel(ab);
+            for (const it of kb2) {
+              const ct: "MATERIAL" | "LABOR" =
+                it.costType === "LABOR" ? "LABOR" : "MATERIAL";
+              preItems.push({
+                source: f.name,
+                costType: ct,
+                title: it.title,
+                quantity: it.quantity ?? null,
+                unit: it.unit ?? null,
+                unitPrice: it.unitPrice ?? null,
+                amount: it.amount,
+                supplier: null,
+              });
+            }
+          }
+        } else {
+          fileErrors.push(`${f.name}: непідтримуваний формат (${f.mime})`);
+        }
+      } catch (err) {
+        console.error(`[ai-parse] file ${f.key} failed:`, err);
+        fileErrors.push(
+          `${f.name}: ${err instanceof Error ? err.message : "помилка обробки"}`,
+        );
+      }
+    }),
+  );
+
   const userPrompt = `Дерево етапів проекту "${project.title}":
 ${JSON.stringify(stagesPayload, null, 2)}
 
-Текст від виконроба:
-"""
-${text}
-"""`;
+${text ? `Текст від виконроба:\n"""\n${text}\n"""\n` : ""}${
+    preItems.length > 0
+      ? `\nПозиції вже витягнуто з файлів (класифікація costType вже зроблена, її НЕ міняй — лиш признач етап + tempId; quantity/unit/unitPrice/amount теж залиш):\n${JSON.stringify(preItems, null, 2)}\n\nДля КОЖНОЇ pre-extracted позиції створи відповідний item у відповіді: костомний tempId (i-N), costType/title/quantity/unit/unitPrice/amount/supplier СКОПІЮЙ з вхідних даних, заповни proposedStageId або proposedNewStageTempId.`
+      : ""
+  }`;
 
   let parsed: AiParseResponse;
   try {
@@ -237,6 +384,7 @@ ${text}
       items: filteredItems,
       newStages: validNewStages,
       stages: stagesPayload,
+      fileErrors,
     },
   });
 }

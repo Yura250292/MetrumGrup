@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronDown,
+  FileText,
   Hammer,
+  Image as ImageIcon,
   Loader2,
   Package,
+  Paperclip,
   Sparkles,
   X,
 } from "lucide-react";
@@ -73,6 +76,18 @@ type DraftItem = AiParseItem & {
   targetStageRef: string; // existing-id АБО tempId з newStages
 };
 
+type UploadedFile = {
+  key: string;
+  name: string;
+  mime: string;
+  size: number;
+};
+
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20 МБ
+const MAX_FILES = 5;
+const ACCEPT =
+  "image/*,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.xlsx,.xls";
+
 export function StagesAiAssistant({
   projectId,
   open,
@@ -87,6 +102,10 @@ export function StagesAiAssistant({
   const [items, setItems] = useState<DraftItem[]>([]);
   const [newStages, setNewStages] = useState<AiParseNewStage[]>([]);
   const [result, setResult] = useState<ApplyResult | null>(null);
+  const [files, setFiles] = useState<UploadedFile[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [fileErrors, setFileErrors] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -96,8 +115,81 @@ export function StagesAiAssistant({
       setNewStages([]);
       setError(null);
       setResult(null);
+      setFiles([]);
+      setFileErrors([]);
     }
   }, [open]);
+
+  async function handleFilePick(picked: FileList | null) {
+    if (!picked || picked.length === 0) return;
+    const arr = Array.from(picked);
+    const slots = MAX_FILES - files.length;
+    if (slots <= 0) {
+      setError(`Максимум ${MAX_FILES} файлів`);
+      return;
+    }
+    setError(null);
+    setUploading(true);
+    try {
+      for (const file of arr.slice(0, slots)) {
+        if (file.size > MAX_FILE_SIZE) {
+          setError(`${file.name}: завеликий файл (>20 МБ)`);
+          continue;
+        }
+        // 1) Get presigned PUT URL
+        const presignRes = await fetch(
+          `/api/admin/projects/${projectId}/stages/ai-upload`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              originalName: file.name,
+              mimeType: file.type || "application/octet-stream",
+              size: file.size,
+            }),
+          },
+        );
+        if (!presignRes.ok) {
+          const j = await presignRes.json().catch(() => ({}));
+          throw new Error(j.error ?? `Помилка presign ${presignRes.status}`);
+        }
+        const { key, putUrl } = (await presignRes.json()) as {
+          key: string;
+          putUrl: string;
+        };
+        // 2) Direct PUT to R2
+        const putRes = await fetch(putUrl, {
+          method: "PUT",
+          body: file,
+          headers: {
+            "Content-Type": file.type || "application/octet-stream",
+          },
+        });
+        if (!putRes.ok) {
+          throw new Error(`Помилка завантаження (${putRes.status})`);
+        }
+        setFiles((prev) => [
+          ...prev,
+          {
+            key,
+            name: file.name,
+            mime: file.type || "application/octet-stream",
+            size: file.size,
+          },
+        ]);
+      }
+    } catch (err) {
+      console.error("[ai-upload] failed:", err);
+      setError(err instanceof Error ? err.message : "Помилка завантаження файлу");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeFile(key: string) {
+    setFiles((prev) => prev.filter((f) => f.key !== key));
+  }
 
   // Map stageId → display label (для dropdown).
   const stageOptions = useMemo(() => {
@@ -121,11 +213,12 @@ export function StagesAiAssistant({
   }, [stages]);
 
   async function handleParse() {
-    if (text.trim().length < 5) {
-      setError("Введи більше тексту (мінімум 5 символів)");
+    if (text.trim().length < 5 && files.length === 0) {
+      setError("Введи більше тексту або додай файл");
       return;
     }
     setError(null);
+    setFileErrors([]);
     setParsing(true);
     setResult(null);
     try {
@@ -134,7 +227,14 @@ export function StagesAiAssistant({
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({
+            text,
+            fileKeys: files.map((f) => ({
+              key: f.key,
+              mime: f.mime,
+              name: f.name,
+            })),
+          }),
         },
       );
       const json = await res.json();
@@ -144,8 +244,12 @@ export function StagesAiAssistant({
       const data = json.data as {
         items: AiParseItem[];
         newStages: AiParseNewStage[];
+        fileErrors?: string[];
       };
       setNewStages(data.newStages);
+      if (Array.isArray(data.fileErrors) && data.fileErrors.length > 0) {
+        setFileErrors(data.fileErrors);
+      }
       setItems(
         data.items.map((it) => {
           // Резолвимо початковий targetStageRef
@@ -305,11 +409,16 @@ export function StagesAiAssistant({
             }}
           />
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleParse}
-              disabled={parsing || applying || text.trim().length < 5}
+              disabled={
+                parsing ||
+                applying ||
+                uploading ||
+                (text.trim().length < 5 && files.length === 0)
+              }
               className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-50"
               style={{ backgroundColor: T.accentPrimary, color: "white" }}
             >
@@ -320,6 +429,33 @@ export function StagesAiAssistant({
               )}
               {parsing ? "AI думає…" : "Розпізнати"}
             </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={parsing || applying || uploading || files.length >= MAX_FILES}
+              title="Додати фото / PDF / Excel"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition disabled:opacity-50"
+              style={{
+                backgroundColor: T.panelElevated,
+                color: T.textPrimary,
+                border: `1px solid ${T.borderSoft}`,
+              }}
+            >
+              {uploading ? (
+                <Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Paperclip size={14} />
+              )}
+              {uploading ? "Завантаження…" : `Додати файл${files.length > 0 ? ` (${files.length}/${MAX_FILES})` : ""}`}
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPT}
+              multiple
+              onChange={(e) => void handleFilePick(e.target.files)}
+              className="hidden"
+            />
             {items.length > 0 && (
               <span className="text-[11px]" style={{ color: T.textMuted }}>
                 {items.filter((it) => it.accepted).length} / {items.length}{" "}
@@ -327,6 +463,39 @@ export function StagesAiAssistant({
               </span>
             )}
           </div>
+
+          {files.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {files.map((f) => (
+                <FileChip
+                  key={f.key}
+                  file={f}
+                  onRemove={() => removeFile(f.key)}
+                  disabled={parsing || applying}
+                />
+              ))}
+            </div>
+          )}
+
+          {fileErrors.length > 0 && (
+            <div
+              className="mt-2 rounded-lg px-3 py-2 text-[11px]"
+              style={{
+                backgroundColor: T.warningSoft,
+                color: T.warning,
+                border: `1px solid ${T.warning}55`,
+              }}
+            >
+              <div className="font-semibold">
+                Не всі файли вдалось обробити:
+              </div>
+              <ul className="mt-1 list-disc pl-4">
+                {fileErrors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {error && (
             <div
@@ -455,6 +624,45 @@ export function StagesAiAssistant({
         </footer>
       </aside>
     </>
+  );
+}
+
+function FileChip({
+  file,
+  onRemove,
+  disabled,
+}: {
+  file: UploadedFile;
+  onRemove: () => void;
+  disabled?: boolean;
+}) {
+  const isImage = file.mime.startsWith("image/");
+  const isPdf = file.mime === "application/pdf";
+  const Icon = isImage ? ImageIcon : isPdf ? FileText : Paperclip;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[11px]"
+      style={{
+        backgroundColor: T.accentPrimarySoft,
+        color: T.accentPrimary,
+        border: `1px solid ${T.accentPrimary}33`,
+      }}
+    >
+      <Icon size={12} />
+      <span className="max-w-[160px] truncate" title={file.name}>
+        {file.name}
+      </span>
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className="ml-0.5 rounded p-0.5 disabled:opacity-40"
+        style={{ color: T.accentPrimary }}
+        aria-label="Видалити файл"
+      >
+        <X size={11} />
+      </button>
+    </span>
   );
 }
 
