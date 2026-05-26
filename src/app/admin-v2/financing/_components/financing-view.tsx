@@ -303,6 +303,7 @@ export function FinancingView({
               <button
                 onClick={() => setShowEstimateUpload(true)}
                 title="Завантажити кошторис (PDF/XLSX) — AI парс у бюджет"
+                data-help-id="financing-ai-estimate"
                 className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-110 text-white"
                 style={{ backgroundColor: T.accentPrimary }}
               >
@@ -312,6 +313,7 @@ export function FinancingView({
               <button
                 onClick={() => setShowOcrScan(true)}
                 title="Сканувати чек з AI → додати у факт-витрати"
+                data-help-id="financing-ocr-scan"
                 className="hidden sm:flex items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition hover:brightness-[0.97]"
                 style={{
                   backgroundColor: T.panelElevated,
@@ -337,6 +339,7 @@ export function FinancingView({
               Рендериться лише на глобальному view, тому scope тут завжди undefined. */}
           <Link
             href="/admin-v2/financing/pivot"
+            data-help-id="financing-pivot"
             className="group inline-flex items-center gap-2 self-start rounded-lg border px-3 py-2 text-[12.5px] font-semibold transition hover:brightness-[0.97]"
             style={{
               borderColor: T.borderSoft,
@@ -846,6 +849,7 @@ function FinancingTabsBar({
     // Зовнішній flex з border-b — щоб «Більше» сидів НА тій самій лінії, але
     // ПОЗА overflow-контейнером primary tabs (інакше dropdown обрізається).
     <div
+      data-help-id="financing-tabs"
       className="flex items-stretch gap-0 border-b"
       style={{ borderColor: T.borderSoft }}
     >

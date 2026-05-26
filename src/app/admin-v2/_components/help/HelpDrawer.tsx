@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { AnimatePresence, motion } from "framer-motion";
 import { X, ChevronDown, Play, Target, ListChecks, HelpCircle } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useReducedMotion, useMediaQuery } from "@/components/landing/three/hooks/useReducedMotion";
@@ -10,6 +9,9 @@ import { useHelp } from "@/contexts/HelpContext";
 import { GuidedTour } from "@/components/help/GuidedTour";
 import { trackHelpEvent } from "@/lib/help/analytics";
 import { usePageHelp } from "./usePageHelp";
+
+const Z_BACKDROP = 9998;
+const Z_DRAWER = 9999;
 
 export function HelpDrawer() {
   const { isOpen, close, activeTour, startTour, endTour } = useHelp();
@@ -22,9 +24,13 @@ export function HelpDrawer() {
 
   useEffect(() => setMounted(true), []);
 
-  // Keyboard: ESC closes, Tab cycles focus inside panel.
   useEffect(() => {
     if (!isOpen) return;
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusTimeout = setTimeout(() => {
+      panelRef.current?.querySelector<HTMLElement>("button, [href]")?.focus();
+    }, 50);
+
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -48,241 +54,337 @@ export function HelpDrawer() {
       }
     };
     window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      clearTimeout(focusTimeout);
+      window.removeEventListener("keydown", handler);
+      document.body.style.overflow = prevOverflow;
+      previouslyFocused?.focus?.();
+    };
   }, [isOpen, close]);
 
-  // Reset FAQ accordion when route changes.
   useEffect(() => {
     setOpenFaq(null);
   }, [pathname]);
 
   if (!mounted) return null;
 
+  const transition = reduced ? "none" : "transform 280ms cubic-bezier(0.22,1,0.36,1), opacity 200ms ease-out";
+
   const drawerContent = (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.div
-            className="fixed inset-0 z-[60]"
-            style={{ backgroundColor: "rgba(0,0,0,0.45)" }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: reduced ? 0 : 0.2 }}
-            onClick={close}
-          />
-          <motion.div
-            ref={panelRef}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Допомога по сторінці"
-            className={
-              isMobile
-                ? "fixed bottom-0 left-0 right-0 z-[61] flex flex-col"
-                : "fixed right-0 top-0 z-[61] flex h-screen flex-col"
-            }
-            style={
-              isMobile
-                ? {
-                    maxHeight: "85vh",
-                    backgroundColor: T.panel,
-                    borderTop: `1px solid ${T.borderSoft}`,
-                    borderRadius: "20px 20px 0 0",
-                  }
-                : {
-                    width: 420,
-                    backgroundColor: T.panel,
-                    borderLeft: `1px solid ${T.borderSoft}`,
-                  }
-            }
-            initial={isMobile ? { y: "100%" } : { x: "100%" }}
-            animate={isMobile ? { y: 0 } : { x: 0 }}
-            exit={isMobile ? { y: "100%" } : { x: "100%" }}
-            transition={
-              reduced
-                ? { duration: 0 }
-                : { type: "spring", damping: 32, stiffness: 240, mass: 0.8 }
-            }
-          >
-            {/* Header */}
-            <div
-              className="flex items-center justify-between px-5 py-4"
-              style={{ borderBottom: `1px solid ${T.borderSoft}` }}
+    <>
+      {/* Backdrop */}
+      <div
+        onClick={close}
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: "rgba(0,0,0,0.45)",
+          opacity: isOpen ? 1 : 0,
+          pointerEvents: isOpen ? "auto" : "none",
+          transition: reduced ? "none" : "opacity 200ms ease-out",
+          zIndex: Z_BACKDROP,
+        }}
+      />
+
+      {/* Drawer */}
+      <div
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Допомога по сторінці"
+        aria-hidden={!isOpen}
+        style={
+          isMobile
+            ? {
+                position: "fixed",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                maxHeight: "85vh",
+                height: "85vh",
+                backgroundColor: T.panel,
+                borderTop: `1px solid ${T.borderSoft}`,
+                borderRadius: "20px 20px 0 0",
+                transform: isOpen ? "translateY(0)" : "translateY(100%)",
+                transition,
+                zIndex: Z_DRAWER,
+                display: "flex",
+                flexDirection: "column",
+                pointerEvents: isOpen ? "auto" : "none",
+                visibility: isOpen ? "visible" : "hidden",
+                boxShadow: "0 -20px 60px rgba(0,0,0,0.25)",
+              }
+            : {
+                position: "fixed",
+                right: 0,
+                top: 0,
+                width: 460,
+                maxWidth: "100vw",
+                height: "100vh",
+                backgroundColor: T.panel,
+                borderLeft: `1px solid ${T.borderSoft}`,
+                transform: isOpen ? "translateX(0)" : "translateX(100%)",
+                transition,
+                zIndex: Z_DRAWER,
+                display: "flex",
+                flexDirection: "column",
+                pointerEvents: isOpen ? "auto" : "none",
+                visibility: isOpen ? "visible" : "hidden",
+                boxShadow: "-20px 0 60px rgba(0,0,0,0.18)",
+              }
+        }
+      >
+        {/* Header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 20px",
+            borderBottom: `1px solid ${T.borderSoft}`,
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+            <HelpCircle size={18} style={{ color: T.accentPrimary, flexShrink: 0 }} />
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 15,
+                fontWeight: 700,
+                color: T.textPrimary,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
             >
-              <div className="flex items-center gap-2 min-w-0">
-                <HelpCircle size={18} style={{ color: T.accentPrimary, flexShrink: 0 }} />
-                <h2
-                  className="truncate text-[15px] font-bold"
-                  style={{ color: T.textPrimary }}
-                >
-                  {help?.title ?? "Допомога"}
-                </h2>
-              </div>
-              <button
-                onClick={close}
-                className="rounded-lg p-1.5 transition hover:brightness-95"
-                style={{ color: T.textSecondary, backgroundColor: T.panelElevated }}
-                aria-label="Закрити"
+              {help?.title ?? "Допомога"}
+            </h2>
+          </div>
+          <button
+            onClick={close}
+            aria-label="Закрити"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              color: T.textSecondary,
+              backgroundColor: T.panelElevated,
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body — scrollable */}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            overflowX: "hidden",
+            padding: "16px 20px 24px",
+            overscrollBehavior: "contain",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {!help && (
+            <p style={{ fontSize: 13, color: T.textSecondary, margin: 0 }}>
+              Для цієї сторінки контекстну довідку ще не підготували для вашої ролі.
+            </p>
+          )}
+          {help && (
+            <>
+              <p
+                style={{
+                  fontSize: 13,
+                  lineHeight: 1.55,
+                  color: T.textSecondary,
+                  margin: 0,
+                }}
               >
-                <X size={16} />
-              </button>
-            </div>
+                {help.summary}
+              </p>
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {!help && (
-                <p className="text-[13px]" style={{ color: T.textSecondary }}>
-                  Для цієї сторінки контекстну довідку ще не підготували для вашої ролі.
-                </p>
+              {help.jobsToBeDone.length > 0 && (
+                <Section title="Що тут можна зробити" icon={<Target size={14} />}>
+                  <ul style={listStyle}>
+                    {help.jobsToBeDone.map((j, i) => (
+                      <li key={i} style={bulletStyle}>
+                        <span style={{ color: T.accentPrimary, marginTop: 6 }}>•</span>
+                        <span>{j.text}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Section>
               )}
-              {help && (
-                <>
-                  <p
-                    className="text-[13px] leading-relaxed"
-                    style={{ color: T.textSecondary }}
-                  >
-                    {help.summary}
-                  </p>
 
-                  {help.jobsToBeDone.length > 0 && (
-                    <Section title="Що тут можна зробити" icon={<Target size={14} />}>
-                      <ul className="flex flex-col gap-1.5">
-                        {help.jobsToBeDone.map((j, i) => (
-                          <li
-                            key={i}
-                            className="text-[12.5px] leading-snug flex items-start gap-2"
-                            style={{ color: T.textSecondary }}
-                          >
-                            <span style={{ color: T.accentPrimary, marginTop: 6 }}>•</span>
-                            <span>{j.text}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </Section>
-                  )}
+              {help.firstSteps.length > 0 && (
+                <Section title="З чого почати" icon={<ListChecks size={14} />}>
+                  <ol style={listStyle}>
+                    {help.firstSteps.map((s, i) => (
+                      <li key={i} style={bulletStyle}>
+                        <span
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            width: 16,
+                            height: 16,
+                            borderRadius: 999,
+                            fontSize: 9,
+                            fontWeight: 700,
+                            backgroundColor: T.accentPrimarySoft,
+                            color: T.accentPrimary,
+                            flexShrink: 0,
+                            marginTop: 2,
+                          }}
+                        >
+                          {i + 1}
+                        </span>
+                        <span>{s}</span>
+                      </li>
+                    ))}
+                  </ol>
+                </Section>
+              )}
 
-                  {help.firstSteps.length > 0 && (
-                    <Section title="З чого почати" icon={<ListChecks size={14} />}>
-                      <ol className="flex flex-col gap-1.5">
-                        {help.firstSteps.map((s, i) => (
-                          <li
-                            key={i}
-                            className="text-[12.5px] leading-snug flex items-start gap-2"
-                            style={{ color: T.textSecondary }}
-                          >
-                            <span
-                              className="flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold flex-shrink-0"
-                              style={{
-                                backgroundColor: T.accentPrimarySoft,
-                                color: T.accentPrimary,
-                                marginTop: 2,
-                              }}
-                            >
-                              {i + 1}
-                            </span>
-                            <span>{s}</span>
-                          </li>
-                        ))}
-                      </ol>
-                    </Section>
-                  )}
-
-                  {help.tours && help.tours.length > 0 && (
-                    <Section title="Запустити тур" icon={<Play size={14} />}>
-                      <div className="flex flex-col gap-2">
-                        {help.tours.map((tour) => (
-                          <button
-                            key={tour.id}
-                            onClick={() => {
-                              startTour(tour, { route: pathname, role });
-                            }}
-                            className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left transition hover:brightness-95"
+              {help.tours && help.tours.length > 0 && (
+                <Section title="Запустити тур" icon={<Play size={14} />}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {help.tours.map((tour) => (
+                      <button
+                        key={tour.id}
+                        onClick={() => startTour(tour, { route: pathname, role })}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          padding: "10px 12px",
+                          borderRadius: 12,
+                          backgroundColor: T.panelElevated,
+                          border: `1px solid ${T.borderSoft}`,
+                          textAlign: "left",
+                          cursor: "pointer",
+                          width: "100%",
+                        }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+                          <span
                             style={{
-                              backgroundColor: T.panelElevated,
-                              border: `1px solid ${T.borderSoft}`,
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              color: T.textPrimary,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
                             }}
                           >
-                            <div className="flex flex-col gap-0.5 min-w-0">
-                              <span
-                                className="text-[12.5px] font-semibold truncate"
-                                style={{ color: T.textPrimary }}
-                              >
-                                {tour.title}
-                              </span>
-                              <span
-                                className="text-[11px] truncate"
-                                style={{ color: T.textMuted }}
-                              >
-                                {tour.description}
-                              </span>
-                            </div>
-                            <Play size={14} style={{ color: T.accentPrimary, flexShrink: 0 }} />
-                          </button>
-                        ))}
-                      </div>
-                    </Section>
-                  )}
+                            {tour.title}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 11,
+                              color: T.textMuted,
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {tour.description}
+                          </span>
+                        </div>
+                        <Play size={14} style={{ color: T.accentPrimary, flexShrink: 0 }} />
+                      </button>
+                    ))}
+                  </div>
+                </Section>
+              )}
 
-                  {help.faq.length > 0 && (
-                    <Section title="Питання й відповіді" icon={<HelpCircle size={14} />}>
-                      <div className="flex flex-col gap-1.5">
-                        {help.faq.map((item, i) => {
-                          const isOpen = openFaq === i;
-                          return (
-                            <div
-                              key={i}
-                              className="rounded-xl"
+              {help.faq.length > 0 && (
+                <Section title="Питання й відповіді" icon={<HelpCircle size={14} />}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {help.faq.map((item, i) => {
+                      const expanded = openFaq === i;
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            borderRadius: 12,
+                            backgroundColor: T.panelElevated,
+                            border: `1px solid ${T.borderSoft}`,
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              const nextV = expanded ? null : i;
+                              setOpenFaq(nextV);
+                              if (nextV !== null) {
+                                trackHelpEvent("help_faq_opened", { route: pathname, role });
+                              }
+                            }}
+                            style={{
+                              display: "flex",
+                              width: "100%",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              padding: "10px 12px",
+                              backgroundColor: "transparent",
+                              border: "none",
+                              textAlign: "left",
+                              cursor: "pointer",
+                            }}
+                            aria-expanded={expanded}
+                          >
+                            <span style={{ fontSize: 12.5, fontWeight: 600, color: T.textPrimary }}>
+                              {item.question}
+                            </span>
+                            <ChevronDown
+                              size={14}
                               style={{
-                                backgroundColor: T.panelElevated,
-                                border: `1px solid ${T.borderSoft}`,
+                                color: T.textMuted,
+                                flexShrink: 0,
+                                transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+                                transition: reduced ? "none" : "transform 200ms",
+                              }}
+                            />
+                          </button>
+                          {expanded && (
+                            <div
+                              style={{
+                                padding: "0 12px 12px",
+                                fontSize: 12,
+                                lineHeight: 1.55,
+                                color: T.textSecondary,
+                                whiteSpace: "pre-wrap",
                               }}
                             >
-                              <button
-                                onClick={() => {
-                                  const next = isOpen ? null : i;
-                                  setOpenFaq(next);
-                                  if (next !== null) {
-                                    trackHelpEvent("help_faq_opened", { route: pathname, role });
-                                  }
-                                }}
-                                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
-                              >
-                                <span
-                                  className="text-[12.5px] font-semibold"
-                                  style={{ color: T.textPrimary }}
-                                >
-                                  {item.question}
-                                </span>
-                                <ChevronDown
-                                  size={14}
-                                  style={{
-                                    color: T.textMuted,
-                                    transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-                                    transition: reduced ? "none" : "transform 200ms",
-                                  }}
-                                />
-                              </button>
-                              {isOpen && (
-                                <div
-                                  className="px-3 pb-3 text-[12px] leading-relaxed"
-                                  style={{ color: T.textSecondary }}
-                                >
-                                  {item.answer}
-                                </div>
-                              )}
+                              {item.answer}
                             </div>
-                          );
-                        })}
-                      </div>
-                    </Section>
-                  )}
-                </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Section>
               )}
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+            </>
+          )}
+        </div>
+      </div>
+    </>
   );
 
   return (
@@ -300,6 +402,24 @@ export function HelpDrawer() {
   );
 }
 
+const listStyle: React.CSSProperties = {
+  margin: 0,
+  padding: 0,
+  listStyle: "none",
+  display: "flex",
+  flexDirection: "column",
+  gap: 6,
+};
+
+const bulletStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: 8,
+  fontSize: 12.5,
+  lineHeight: 1.45,
+  color: "var(--t-text-2)",
+};
+
 function Section({
   title,
   icon,
@@ -310,12 +430,18 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-5">
-      <div className="mb-2 flex items-center gap-1.5">
+    <section style={{ marginTop: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         {icon && <span style={{ color: T.accentPrimary }}>{icon}</span>}
         <h3
-          className="text-[10.5px] font-bold uppercase tracking-wider"
-          style={{ color: T.textMuted }}
+          style={{
+            margin: 0,
+            fontSize: 10.5,
+            fontWeight: 700,
+            textTransform: "uppercase",
+            letterSpacing: 0.6,
+            color: T.textMuted,
+          }}
         >
           {title}
         </h3>

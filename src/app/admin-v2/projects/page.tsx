@@ -106,7 +106,7 @@ export default async function AdminV2ProjectsPage({
     <div className="flex flex-col gap-6">
       <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
-      <section className="grid grid-cols-3 gap-2 sm:gap-4">
+      <section data-help-id="projects-kpi" className="grid grid-cols-3 gap-2 sm:gap-4">
         <KpiCard
           label="ВСЬОГО"
           value={String(projects.length)}
