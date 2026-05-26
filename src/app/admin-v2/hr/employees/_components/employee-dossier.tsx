@@ -205,6 +205,8 @@ type PayrollPeriod = {
   currency: string;
   sourceFile: string | null;
   notes: string | null;
+  /** Дата імпорту запису — використовується як «дата закачки» в історії. */
+  createdAt: string;
 };
 
 type DeferralType = "NONE" | "RESERVATION" | "DEFERMENT";
@@ -1708,11 +1710,16 @@ function DepartmentSelect({
 function SalaryHistorySection({
   employeeId,
   salaries,
+  payrollPeriods,
   canEdit,
   onChanged,
 }: {
   employeeId: string;
   salaries: SalaryPeriod[];
+  /** Записи з 1С (EmployeePayrollPeriod) — рендеряться поруч із ручними
+   *  EmployeeSalary. Дата = імпорт (createdAt) — користувач прямо
+   *  попросив бачити «дату закачки» в історії. */
+  payrollPeriods: PayrollPeriod[];
   canEdit: boolean;
   onChanged: () => void;
 }) {
@@ -1784,6 +1791,41 @@ function SalaryHistorySection({
   const sorted = [...salaries].sort(
     (a, b) => new Date(b.effectiveFrom).getTime() - new Date(a.effectiveFrom).getTime(),
   );
+
+  // Уніфікований список для рендеру: ручні зміни (EmployeeSalary) + імпорти з 1С
+  // (EmployeePayrollPeriod). Сортуємо за датою-зайому (effectiveFrom / period)
+  // у порядку «найновіше зверху». PayrollPeriod показуємо в тій самій таблиці,
+  // щоб у користувача була ОДНА хронологія, а не два розрізнені блоки.
+  type HistoryRow =
+    | { kind: "manual"; sortMs: number; data: SalaryPeriod }
+    | { kind: "payroll"; sortMs: number; data: PayrollPeriod };
+  const periodToDate = (p: string): Date => {
+    const [y, m] = p.split("-").map(Number);
+    return new Date(y, (m || 1) - 1, 1);
+  };
+  const periodLabel = (p: string): string => {
+    const [y, m] = p.split("-");
+    const months = ["січ","лют","бер","квіт","трав","черв","лип","серп","вер","жовт","лист","груд"];
+    const mi = Number(m) - 1;
+    if (mi < 0 || mi > 11) return p;
+    return `${months[mi]} ${y}`;
+  };
+  const historyRows: HistoryRow[] = [
+    ...sorted.map(
+      (s): HistoryRow => ({
+        kind: "manual",
+        sortMs: new Date(s.effectiveFrom).getTime(),
+        data: s,
+      }),
+    ),
+    ...payrollPeriods.map(
+      (p): HistoryRow => ({
+        kind: "payroll",
+        sortMs: periodToDate(p.period).getTime(),
+        data: p,
+      }),
+    ),
+  ].sort((a, b) => b.sortMs - a.sortMs);
 
   const inputStyle: React.CSSProperties = {
     backgroundColor: T.panelSoft,
@@ -1953,7 +1995,62 @@ function SalaryHistorySection({
                 )}
               </>
             )}
-            {sorted.map((s) => {
+            {historyRows.map((row) => {
+              if (row.kind === "payroll") {
+                const p = row.data;
+                const official = p.officialPart != null ? Number(p.officialPart) : null;
+                const onCard = p.salaryToCard != null ? Number(p.salaryToCard) : null;
+                return (
+                  <tr key={`pp-${p.id}`} className="border-t" style={{ borderColor: T.borderSoft }}>
+                    <td className="px-4 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      <span className="whitespace-nowrap font-medium" style={{ color: T.textPrimary }}>
+                        {periodLabel(p.period)}
+                      </span>
+                      <span
+                        className="ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                        style={{ backgroundColor: T.panelSoft, color: T.textMuted, border: `1px solid ${T.borderSoft}` }}
+                        title={`Імпортовано ${formatDate(p.createdAt)}`}
+                      >
+                        1С · закачка {formatDate(p.createdAt)}
+                      </span>
+                      {p.isVacation && (
+                        <span
+                          className="ml-2 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+                          style={{ backgroundColor: T.warningSoft, color: T.warning }}
+                        >
+                          Відпустка
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textMuted }}>
+                      —
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textPrimary, fontWeight: 600 }}>
+                      {official != null ? formatCurrency(official) : "—"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textMuted }}>
+                      —
+                    </td>
+                    <td className="px-3 py-2.5 text-right tabular-nums" style={{ color: T.textPrimary }}>
+                      {onCard != null ? (
+                        <>
+                          {formatCurrency(onCard)}{" "}
+                          <span style={{ color: T.textMuted, fontSize: 10 }}>на карту</span>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 text-[12px]" style={{ color: T.textSecondary }}>
+                      {p.sourceFile ? `Імпорт з 1С: ${p.sourceFile}` : "Імпорт з 1С"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right" style={{ color: T.textMuted, fontSize: 10 }}>
+                      readonly
+                    </td>
+                  </tr>
+                );
+              }
+              const s = row.data;
               const total = Number(s.baseSalary) + Number(s.coefficient ?? 0);
               const isOpen = !s.effectiveTo;
               return (
@@ -2017,10 +2114,10 @@ function SalaryHistorySection({
                 </tr>
               );
             })}
-            {!creating && sorted.length === 0 && (
+            {!creating && historyRows.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: T.textMuted }}>
-                  Записів про ЗП ще немає. Додайте перший період.
+                  Записів про ЗП ще немає. Додайте перший період або імпортуйте з 1С.
                 </td>
               </tr>
             )}
@@ -2183,6 +2280,7 @@ function SalarySection({
       <SalaryHistorySection
         employeeId={employeeId}
         salaries={salaries}
+        payrollPeriods={payrollPeriods}
         canEdit={canEdit}
         onChanged={onChanged}
       />
