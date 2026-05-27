@@ -3594,7 +3594,7 @@ export default function AIEstimatePage() {
         throw new Error("No response body");
       }
 
-      let collectedSections: any[] = [];
+      const collectedSections: any[] = [];
       let buffer = ''; // 🆕 Буфер для збору неповних SSE messages
 
       while (true) {

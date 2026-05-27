@@ -53,7 +53,7 @@ async function loadContext(projectId: string) {
     }
   }
 
-  let mirrorDescendants: string[] = [];
+  const mirrorDescendants: string[] = [];
   if (mirror) {
     const stack = [mirror.id];
     while (stack.length > 0) {

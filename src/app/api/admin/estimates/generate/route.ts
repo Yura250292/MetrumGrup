@@ -3298,7 +3298,7 @@ ${JSON.stringify(analysisData, null, 2)}
       // Extract JSON from potential markdown code blocks
       const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, text];
       const jsonStr = (jsonMatch[1] || text).trim();
-      let parsed = JSON.parse(jsonStr);
+      const parsed = JSON.parse(jsonStr);
 
       // Handle case where AI returns an array instead of object
       if (Array.isArray(parsed)) {
@@ -3326,6 +3326,7 @@ ${JSON.stringify(analysisData, null, 2)}
         `${s.title}: ${s.items?.length || 0} items`).join(', '));
 
       // DEBUG: Write to file for inspection
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const fs = require('fs');
       const debugPath = '/tmp/metrum-debug.json';
       fs.writeFileSync(debugPath, JSON.stringify({
@@ -3513,7 +3514,7 @@ ${JSON.stringify(estimateData, null, 2)}
         // Parse supplementary response
         const supplementMatch = supplementText.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, supplementText];
         const supplementJson = (supplementMatch[1] || supplementText).trim();
-        let supplementParsed = JSON.parse(supplementJson);
+        const supplementParsed = JSON.parse(supplementJson);
 
         // Handle case where AI returns an array instead of object
         if (Array.isArray(supplementParsed)) {

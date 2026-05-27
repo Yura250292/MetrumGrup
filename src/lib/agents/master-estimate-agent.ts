@@ -1807,7 +1807,7 @@ ${spec.scope.map((s, i) => `${i + 1}. ${s}`).join('\n')}
       const enrichedItems: EstimateItem[] = [];
 
       for (const item of section.items) {
-        let enrichedItem = { ...item };
+        const enrichedItem = { ...item };
 
         try {
           const prozorroResult = await findSimilarPrices(item.description, item.unit, {

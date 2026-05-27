@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import {
   Upload,
   CheckCircle2,
@@ -773,13 +774,13 @@ function DoneBanner({ result }: { result: CommitResult }) {
               ` Помилок: ${result.errors.length}.`}
           </div>
           <div className="mt-3 flex items-center gap-3 text-[12px]">
-            <a
+            <Link
               href="/admin-v2/counterparties"
               className="inline-flex items-center gap-1 underline"
               style={{ color: T.accentPrimary }}
             >
               <ExternalLink size={12} /> Постачальники
-            </a>
+            </Link>
             <a
               href="/admin-v2/financing/suppliers"
               className="inline-flex items-center gap-1 underline"

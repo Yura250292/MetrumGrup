@@ -75,9 +75,6 @@ export function NeedsAttention({
   };
   const totalIssues = counts.overdue + counts.payments + counts.today + counts.stale;
 
-  // Preserve original behavior: do not render if no issues at all
-  if (totalIssues === 0) return null;
-
   // Default tab: first non-empty in TAB_DEFS order
   const defaultTab: TabId =
     (TAB_DEFS.find((t) => counts[t.id] > 0)?.id) ?? "overdue";
@@ -126,6 +123,10 @@ export function NeedsAttention({
 
   // Severity bar color: danger if there are overdue items/payments, else warn.
   const accentColor = counts.overdue + counts.payments > 0 ? T.danger : T.warning;
+
+  // Preserve original behavior: do not render if no issues at all.
+  // Moved AFTER hooks to satisfy rules-of-hooks.
+  if (totalIssues === 0) return null;
 
   return (
     <section

@@ -135,8 +135,8 @@ export async function POST(request: NextRequest) {
       try {
         let fullResponse = "";
         const toolCallRecords: ToolCallRecord[] = [];
-        let currentMessages = [...chatMessages];
-        let totalTokens = { inputTokens: 0, outputTokens: 0 };
+        const currentMessages = [...chatMessages];
+        const totalTokens = { inputTokens: 0, outputTokens: 0 };
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openai.chat.completions.create({

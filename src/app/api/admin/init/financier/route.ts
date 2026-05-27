@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const bcrypt = require("bcryptjs");
       const hashedPassword = await bcrypt.hash(password, 10);
 

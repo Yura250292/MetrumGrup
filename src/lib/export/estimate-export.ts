@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import pdfMake from "pdfmake/build/pdfmake";
 
 // Налаштування шрифтів для pdfMake (підтримка кирилиці)
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfFonts = require("pdfmake/build/vfs_fonts");
 (pdfMake as any).vfs = pdfFonts;
 
