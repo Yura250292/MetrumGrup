@@ -63,3 +63,7 @@ tmp/
 # Safe Finance Migration backfill logs (rollback markers містять FE ID-list,
 # не для репо — зберігаються локально у adminа що запустив backfill).
 /logs/
+
+# Артефакти скриптів імпорту ЗП — містять ПІБ і суми (PII).
+/unmatched-salaries.csv
+/staff-import-*.csv

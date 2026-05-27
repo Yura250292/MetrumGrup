@@ -656,7 +656,7 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
               <SortableTh
                 label="Оборот"
@@ -664,7 +664,7 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
               <SortableTh
                 label="Оплачено"
@@ -672,7 +672,7 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
               <SortableTh
                 label="Борг"
@@ -680,7 +680,7 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
               <SortableTh
                 label="Прострочка"
@@ -688,7 +688,7 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
               <SortableTh
                 label="Ост. рахунок"
@@ -696,7 +696,7 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
               <SortableTh
                 label="Ост. платіж"
@@ -704,9 +704,9 @@ function SectionTable({
                 active={sortKey}
                 dir={sortDir}
                 onClick={onSort}
-                align="right"
+                align="center"
               />
-              <th className="px-3 py-2.5 text-right">Дії</th>
+              <th className="px-3 py-2.5 text-center">Дії</th>
             </tr>
           </thead>
           <tbody>
@@ -747,14 +747,16 @@ function SortableTh({
   active: SortKey;
   dir: "asc" | "desc";
   onClick: (k: SortKey) => void;
-  align: "left" | "right";
+  align: "left" | "right" | "center";
 }) {
   const isActive = active === k;
+  const justify =
+    align === "center" ? "justify-center" : align === "right" ? "justify-end" : "justify-start";
   return (
     <th className={`px-3 py-2.5 text-${align} whitespace-nowrap`}>
       <button
         onClick={() => onClick(k)}
-        className="inline-flex items-center gap-1 hover:underline"
+        className={`inline-flex items-center gap-1 hover:underline w-full ${justify}`}
         style={{
           color: isActive ? T.accentPrimary : T.textMuted,
           fontWeight: isActive ? 700 : 600,
@@ -860,7 +862,7 @@ function Row({
           </Link>
         </td>
         <td
-          className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap"
+          className="px-3 py-2.5 text-center tabular-nums whitespace-nowrap"
           style={{ color: T.textSecondary }}
         >
           {c.invoiceCount > 0 ? (
@@ -880,14 +882,14 @@ function Row({
           )}
         </td>
         <td
-          className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap"
+          className="px-3 py-2.5 text-center tabular-nums whitespace-nowrap"
           style={{ color: T.textPrimary }}
         >
           {c.totalInvoiced > 0 ? formatCurrency(c.totalInvoiced) : "—"}
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
+        <td className="px-3 py-2.5 text-center tabular-nums whitespace-nowrap">
           {c.totalPaid > 0 ? (
-            <div className="flex flex-col items-end gap-0.5">
+            <div className="flex flex-col items-center gap-0.5">
               <span style={{ color: T.success }}>
                 {formatCurrency(c.totalPaid)}
               </span>
@@ -911,7 +913,7 @@ function Row({
             <span style={{ color: T.textMuted }}>—</span>
           )}
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums whitespace-nowrap">
+        <td className="px-3 py-2.5 text-center tabular-nums whitespace-nowrap">
           {hasDebt ? (
             <span className="font-bold" style={{ color: T.danger }}>
               {formatCurrency(c.outstanding)}
@@ -921,14 +923,14 @@ function Row({
           )}
         </td>
         <td
-          className="px-3 py-2.5 text-right text-[11px] whitespace-nowrap tabular-nums"
+          className="px-3 py-2.5 text-center text-[11px] whitespace-nowrap tabular-nums"
           style={{ color: overdueColor }}
         >
           {overdueDays === null
             ? "—"
             : overdueDays >= 30
               ? (
-                <div className="flex flex-col items-end leading-tight">
+                <div className="flex flex-col items-center leading-tight">
                   <span className="font-semibold">{overdueDays} дн</span>
                   <span className="text-[9.5px]" style={{ color: T.textMuted }}>
                     з {dateFmt(c.oldestDebtDate)}
@@ -938,18 +940,18 @@ function Row({
               : `${overdueDays} дн`}
         </td>
         <td
-          className="px-3 py-2.5 text-right text-[11px] tabular-nums whitespace-nowrap"
+          className="px-3 py-2.5 text-center text-[11px] tabular-nums whitespace-nowrap"
           style={{ color: T.textSecondary }}
         >
           {dateFmt(c.lastInvoiceDate)}
         </td>
         <td
-          className="px-3 py-2.5 text-right text-[11px] tabular-nums whitespace-nowrap"
+          className="px-3 py-2.5 text-center text-[11px] tabular-nums whitespace-nowrap"
           style={{ color: c.lastPaymentDate ? T.textSecondary : T.textMuted }}
         >
           {dateFmt(c.lastPaymentDate)}
         </td>
-        <td className="px-2 py-2.5 text-right whitespace-nowrap">
+        <td className="px-2 py-2.5 text-center whitespace-nowrap">
           {canPay && hasDebt && (
             <button
               onClick={(e) => {
