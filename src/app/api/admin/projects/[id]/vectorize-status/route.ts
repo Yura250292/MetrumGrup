@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { requireStaffAccess, forbiddenResponse, unauthorizedResponse } from '@/lib/auth-utils';
 
 export async function GET(
   request: NextRequest,
@@ -13,6 +14,7 @@ export async function GET(
   const { id: projectId } = await params;
 
   try {
+    await requireStaffAccess();
     // Статистика по файлах
     const fileStats = await prisma.$queryRawUnsafe<any[]>(`
       SELECT
@@ -74,6 +76,10 @@ export async function GET(
     });
 
   } catch (error) {
+    if (error instanceof Error) {
+      if (error.message === 'Unauthorized') return unauthorizedResponse();
+      if (error.message === 'Forbidden') return forbiddenResponse();
+    }
     console.error('Помилка перевірки векторизації:', error);
     return NextResponse.json(
       { error: 'Помилка перевірки статусу' },
