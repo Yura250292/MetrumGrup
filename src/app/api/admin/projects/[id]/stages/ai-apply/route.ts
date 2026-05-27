@@ -9,7 +9,11 @@ import { stageDisplayName } from "@/lib/constants";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300 sec — bulk apply створює N етапів + N materials записів через
+// `ensureStageMaterialsSection` (не-tx-safe). На 219-позицій кошторисі це
+// може бути 5-30 сек, але старий ліміт 60 теоретично пройде. Збільшено до
+// 300 для консистентності з ai-parse і запасу.
+export const maxDuration = 300;
 
 const MAX_DEPTH = 2;
 

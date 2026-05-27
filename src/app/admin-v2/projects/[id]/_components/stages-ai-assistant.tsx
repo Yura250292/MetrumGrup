@@ -140,46 +140,92 @@ export function StagesAiAssistant({
           setError(`${file.name}: завеликий файл (>20 МБ)`);
           continue;
         }
+        const mime = file.type || "application/octet-stream";
+
         // 1) Get presigned PUT URL
-        const presignRes = await fetch(
-          `/api/admin/projects/${projectId}/stages/ai-upload`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              originalName: file.name,
-              mimeType: file.type || "application/octet-stream",
-              size: file.size,
-            }),
-          },
-        );
+        let presignRes: Response;
+        try {
+          presignRes = await fetch(
+            `/api/admin/projects/${projectId}/stages/ai-upload`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                originalName: file.name,
+                mimeType: mime,
+                size: file.size,
+              }),
+            },
+          );
+        } catch (e) {
+          throw new Error(
+            `[presign network] ${file.name}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        }
         if (!presignRes.ok) {
           const j = await presignRes.json().catch(() => ({}));
-          throw new Error(j.error ?? `Помилка presign ${presignRes.status}`);
+          throw new Error(
+            `[presign ${presignRes.status}] ${file.name}: ${
+              j.error ?? "невідома помилка"
+            }`,
+          );
         }
-        const { key, putUrl } = (await presignRes.json()) as {
-          key: string;
-          putUrl: string;
-        };
+        let key: string;
+        let putUrl: string;
+        try {
+          const parsed = (await presignRes.json()) as {
+            key: string;
+            putUrl: string;
+          };
+          key = parsed.key;
+          putUrl = parsed.putUrl;
+        } catch (e) {
+          throw new Error(
+            `[presign json] ${file.name}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        }
+        if (!putUrl || typeof putUrl !== "string") {
+          throw new Error(`[presign empty] ${file.name}: backend не повернув putUrl`);
+        }
+        // Валідуємо URL — щоб діагностувати «The string did not match...»
+        try {
+          // eslint-disable-next-line no-new
+          new URL(putUrl);
+        } catch (e) {
+          throw new Error(
+            `[presign bad URL] ${file.name}: ${
+              e instanceof Error ? e.message : String(e)
+            } (url[0..120]=${putUrl.slice(0, 120)})`,
+          );
+        }
+
         // 2) Direct PUT to R2
-        const putRes = await fetch(putUrl, {
-          method: "PUT",
-          body: file,
-          headers: {
-            "Content-Type": file.type || "application/octet-stream",
-          },
-        });
+        let putRes: Response;
+        try {
+          putRes = await fetch(putUrl, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": mime },
+          });
+        } catch (e) {
+          throw new Error(
+            `[R2 PUT network] ${file.name}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        }
         if (!putRes.ok) {
-          throw new Error(`Помилка завантаження (${putRes.status})`);
+          throw new Error(
+            `[R2 PUT ${putRes.status}] ${file.name}: ${putRes.statusText}`,
+          );
         }
         setFiles((prev) => [
           ...prev,
-          {
-            key,
-            name: file.name,
-            mime: file.type || "application/octet-stream",
-            size: file.size,
-          },
+          { key, name: file.name, mime, size: file.size },
         ]);
       }
     } catch (err) {
@@ -226,30 +272,54 @@ export function StagesAiAssistant({
     setParsing(true);
     setResult(null);
     try {
-      const res = await fetch(
-        `/api/admin/projects/${projectId}/stages/ai-parse`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text,
-            fileKeys: files.map((f) => ({
-              key: f.key,
-              mime: f.mime,
-              name: f.name,
-            })),
-          }),
-        },
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error ?? `Помилка ${res.status}`);
+      let res: Response;
+      try {
+        res = await fetch(
+          `/api/admin/projects/${projectId}/stages/ai-parse`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              text,
+              fileKeys: files.map((f) => ({
+                key: f.key,
+                mime: f.mime,
+                name: f.name,
+              })),
+            }),
+          },
+        );
+      } catch (e) {
+        throw new Error(
+          `[ai-parse network] ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
-      const data = json.data as {
-        items: AiParseItem[];
-        newStages: AiParseNewStage[];
+      let json: {
+        data?: { items: AiParseItem[]; newStages: AiParseNewStage[]; fileErrors?: string[] };
+        error?: string;
         fileErrors?: string[];
       };
+      try {
+        json = await res.json();
+      } catch (e) {
+        throw new Error(
+          `[ai-parse bad JSON ${res.status}] ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+      if (!res.ok) {
+        if (Array.isArray(json.fileErrors) && json.fileErrors.length > 0) {
+          setFileErrors(json.fileErrors);
+        }
+        throw new Error(json.error ?? `[ai-parse ${res.status}] невідома помилка`);
+      }
+      if (!json.data) {
+        throw new Error(
+          `[ai-parse no data] response: ${JSON.stringify(json).slice(0, 200)}`,
+        );
+      }
+      const data = json.data;
       setNewStages(data.newStages);
       if (Array.isArray(data.fileErrors) && data.fileErrors.length > 0) {
         setFileErrors(data.fileErrors);
@@ -309,32 +379,53 @@ export function StagesAiAssistant({
     setError(null);
     setApplying(true);
     try {
-      const res = await fetch(
-        `/api/admin/projects/${projectId}/stages/ai-apply`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            items: accepted.map((it) => ({
-              costType: it.costType,
-              title: it.title,
-              quantity: it.quantity,
-              unit: it.unit,
-              unitPrice: it.unitPrice,
-              supplier: it.supplier,
-              targetStageRef: it.targetStageRef,
-              priority: it.priority ?? null,
-              estimatedHours: it.estimatedHours ?? null,
-            })),
-            newStages: newStagesPayload,
-          }),
-        },
-      );
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json.error ?? `Помилка ${res.status}`);
+      let res: Response;
+      try {
+        res = await fetch(
+          `/api/admin/projects/${projectId}/stages/ai-apply`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              items: accepted.map((it) => ({
+                costType: it.costType,
+                title: it.title,
+                quantity: it.quantity,
+                unit: it.unit,
+                unitPrice: it.unitPrice,
+                supplier: it.supplier,
+                targetStageRef: it.targetStageRef,
+                priority: it.priority ?? null,
+                estimatedHours: it.estimatedHours ?? null,
+              })),
+              newStages: newStagesPayload,
+            }),
+          },
+        );
+      } catch (e) {
+        throw new Error(
+          `[ai-apply network] ${e instanceof Error ? e.message : String(e)}`,
+        );
       }
-      setResult(json.data as ApplyResult);
+      let json: { data?: ApplyResult; error?: string };
+      try {
+        json = await res.json();
+      } catch (e) {
+        throw new Error(
+          `[ai-apply bad JSON ${res.status}] ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+      if (!res.ok) {
+        throw new Error(json.error ?? `[ai-apply ${res.status}] невідома помилка`);
+      }
+      if (!json.data) {
+        throw new Error(
+          `[ai-apply no data] response: ${JSON.stringify(json).slice(0, 200)}`,
+        );
+      }
+      setResult(json.data);
       setItems([]);
       setNewStages([]);
       setText("");

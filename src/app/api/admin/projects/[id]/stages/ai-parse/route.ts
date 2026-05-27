@@ -12,7 +12,11 @@ import { parseExcelEstimate } from "@/lib/parsers/excel-estimate-parser";
 import { parseKB2ActExcel } from "@/lib/parsers/kb2-act-parser";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300 sec — verbal description of Excel CSV + multimodal Gemini call (на
+// великих файлах 219+ рядків) часто бере 60-120 сек. Старий ліміт 60 викликав
+// 504 Gateway Timeout → клієнт отримував не-JSON і кидав DOMException
+// "The string did not match the expected pattern.".
+export const maxDuration = 300;
 
 const MODEL = "gemini-2.5-flash";
 
