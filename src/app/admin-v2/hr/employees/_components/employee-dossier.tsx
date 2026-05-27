@@ -359,6 +359,18 @@ export function EmployeeDossier({
     [employeeRaw, draft],
   );
 
+  // dirty-стан і його колбек у батька (drawer) — мають викликатись на
+  // КОЖНОМУ рендері, тому ПЕРЕД будь-якими ранніми return. Інакше React
+  // Rules of Hooks падає з помилкою #310 (rendered fewer/more hooks).
+  const dirtyKeys = useMemo(
+    () => Object.keys(draft) as FieldKey[],
+    [draft],
+  );
+  const isDirty = dirtyKeys.length > 0;
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
   /// Запис у чернетку. Якщо нове значення = поточному в БД — поле
   /// видаляється з draft (повернення до «без змін»).
   function setDraftField(field: FieldKey, value: unknown) {
@@ -441,15 +453,8 @@ export function EmployeeDossier({
     );
   }
 
-  // employee (computed) уже містить draft; render автоматично показує
-  // незбережені правки. `dirtyKeys` — для індикатора в Save-bar.
-  const dirtyKeys = Object.keys(draft) as FieldKey[];
-  const isDirty = dirtyKeys.length > 0;
-
-  useEffect(() => {
-    onDirtyChange?.(isDirty);
-  }, [isDirty, onDirtyChange]);
-
+  // dirtyKeys/isDirty/useEffect → винесено вище, перед early returns
+  // (Rules of Hooks). Тут лише похідні величини, що залежать від employee.
   const age = calcAge(employee.birthDate);
   const tenure = formatTenure(employee.hiredAt, employee.terminatedAt);
 
