@@ -65,12 +65,23 @@ export async function POST(request: NextRequest) {
   if (existing) {
     return NextResponse.json({ data: existing });
   }
-  const created = await prisma.department.create({
-    data: {
-      name,
-      description: parsed.data.description?.trim() || null,
-      headEmployeeId: parsed.data.headEmployeeId || null,
-    },
+  const headId = parsed.data.headEmployeeId || null;
+  const created = await prisma.$transaction(async (tx) => {
+    const dep = await tx.department.create({
+      data: {
+        name,
+        description: parsed.data.description?.trim() || null,
+        headEmployeeId: headId,
+      },
+    });
+    // Керівник підрозділу автоматично стає його працівником.
+    if (headId) {
+      await tx.employee.update({
+        where: { id: headId },
+        data: { departmentId: dep.id },
+      });
+    }
+    return dep;
   });
   return NextResponse.json({ data: created }, { status: 201 });
 }

@@ -102,17 +102,37 @@ export async function PATCH(
     }
   }
 
-  const updated = await prisma.department.update({
-    where: { id },
-    data: {
-      ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
-      ...(parsed.data.description !== undefined
-        ? { description: parsed.data.description?.trim() || null }
-        : {}),
-      ...(parsed.data.headEmployeeId !== undefined
-        ? { headEmployeeId: parsed.data.headEmployeeId || null }
-        : {}),
-    },
+  const newHeadId = parsed.data.headEmployeeId || null;
+  const updated = await prisma.$transaction(async (tx) => {
+    const dep = await tx.department.update({
+      where: { id },
+      data: {
+        ...(parsed.data.name ? { name: parsed.data.name.trim() } : {}),
+        ...(parsed.data.description !== undefined
+          ? { description: parsed.data.description?.trim() || null }
+          : {}),
+        ...(parsed.data.headEmployeeId !== undefined
+          ? { headEmployeeId: newHeadId }
+          : {}),
+      },
+    });
+    // Якщо призначили керівника — гарантуємо, що він є працівником цього
+    // підрозділу. Інакше виходить «директор підрозділу А, але не входить
+    // у склад А». Перевизначаємо departmentId лише якщо керівник зараз
+    // прив'язаний до іншого підрозділу (або взагалі без підрозділу).
+    if (parsed.data.headEmployeeId !== undefined && newHeadId) {
+      const head = await tx.employee.findUnique({
+        where: { id: newHeadId },
+        select: { departmentId: true },
+      });
+      if (head && head.departmentId !== id) {
+        await tx.employee.update({
+          where: { id: newHeadId },
+          data: { departmentId: id },
+        });
+      }
+    }
+    return dep;
   });
   return NextResponse.json({ data: updated });
 }

@@ -362,7 +362,14 @@ export function EmployeeDossier({
         return;
       }
       const j = await res.json();
-      setEmployee(j.data);
+      // PATCH /api/admin/hr/employees НЕ повертає salaries / payrollPeriods
+      // (вони лише в GET). Зливаємо нові поля з попереднім станом, щоб не
+      // зіпсувати масиви — інакше undefined.length крашить рендер.
+      setEmployee((prev) =>
+        prev
+          ? { ...prev, ...j.data, salaries: j.data.salaries ?? prev.salaries, payrollPeriods: j.data.payrollPeriods ?? prev.payrollPeriods }
+          : j.data,
+      );
     } finally {
       setSavingField(null);
       setEditingField(null);
@@ -962,16 +969,16 @@ export function EmployeeDossier({
       {canSeeSalary && (
         <SalarySection
           employeeId={id}
-          salaries={employee.salaries}
-          payrollPeriods={employee.payrollPeriods}
+          salaries={employee.salaries ?? []}
+          payrollPeriods={employee.payrollPeriods ?? []}
           canEdit={canEdit}
           onChanged={() => void load()}
         />
       )}
       </div>
 
-      {canSeeSalary && employee.payrollPeriods.length > 1 && (
-        <PayrollPeriodsSection periods={employee.payrollPeriods} />
+      {canSeeSalary && (employee.payrollPeriods ?? []).length > 1 && (
+        <PayrollPeriodsSection periods={employee.payrollPeriods ?? []} />
       )}
 
       {/* "Користувач" — після всієї зарплатної інформації (включно з історією
