@@ -49,7 +49,7 @@ export function Ai3DModelViewer({ src }: { src: string }) {
         >
           <div className="h-full rounded-full animate-pulse" style={{ backgroundColor: T.accentPrimary, width: "60%" }} />
         </div>
-      {/* @ts-expect-error */}
+      {/* @ts-expect-error custom element <model-viewer> not in JSX intrinsic elements */}
       </model-viewer>
       <div
         className="absolute bottom-2 right-2 text-[10px] font-medium px-2 py-0.5 rounded-lg"

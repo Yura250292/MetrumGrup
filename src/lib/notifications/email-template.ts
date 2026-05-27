@@ -209,6 +209,69 @@ export function buildTaskAssignedEmailHtml(opts: {
 </html>`;
 }
 
+export function buildPasswordResetEmailHtml(opts: {
+  userName?: string | null;
+  resetUrl: string;
+  expiresInMinutes: number;
+}): string {
+  const greeting = opts.userName
+    ? `Вітаємо, ${escapeHtml(opts.userName)}!`
+    : "Вітаємо!";
+
+  return `<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Відновлення паролю — Metrum Group</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <tr>
+            <td style="background:linear-gradient(135deg,#2563EB,#7C3AED);padding:24px 32px;">
+              <h1 style="margin:0;color:#ffffff;font-size:18px;font-weight:700;letter-spacing:0.5px;">
+                Metrum Group • Відновлення паролю
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px;">
+              <p style="margin:0 0 16px;color:#1a1a2e;font-size:15px;line-height:1.6;">
+                ${greeting}
+              </p>
+              <p style="margin:0 0 20px;color:#4a5568;font-size:14px;line-height:1.6;">
+                Ми отримали запит на відновлення паролю до вашого акаунту.
+                Якщо це були ви — натисніть кнопку нижче, щоб встановити новий пароль.
+                Посилання дійсне ${opts.expiresInMinutes} хвилин.
+              </p>
+              <a href="${escapeHtml(opts.resetUrl)}"
+                 style="display:inline-block;padding:12px 28px;background:#2563EB;color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+                Встановити новий пароль
+              </a>
+              <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;line-height:1.6;">
+                Якщо ви не запитували відновлення паролю — просто проігноруйте цей лист.
+                Ваш поточний пароль залишається без змін.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 32px;border-top:1px solid #e2e8f0;">
+              <p style="margin:0;color:#94a3b8;font-size:12px;line-height:1.5;">
+                Це автоматичний лист від Metrum Group. Будь ласка, не відповідайте на нього.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")

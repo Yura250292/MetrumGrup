@@ -15,10 +15,21 @@ const openai = new OpenAI({
 const MAX_HISTORY = 20;
 const MAX_TOOL_ROUNDS = 15;
 
+const AI_CHAT_ALLOWED_ROLES = new Set([
+  "SUPER_ADMIN",
+  "MANAGER",
+  "ENGINEER",
+  "FINANCIER",
+  "HR",
+]);
+
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session?.user) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
+  }
+  if (!session.user.role || !AI_CHAT_ALLOWED_ROLES.has(session.user.role)) {
+    return new Response(JSON.stringify({ error: "Forbidden" }), { status: 403 });
   }
 
   if (!process.env.OPENAI_API_KEY) {
@@ -135,8 +146,8 @@ export async function POST(request: NextRequest) {
       try {
         let fullResponse = "";
         const toolCallRecords: ToolCallRecord[] = [];
-        let currentMessages = [...chatMessages];
-        let totalTokens = { inputTokens: 0, outputTokens: 0 };
+        const currentMessages = [...chatMessages];
+        const totalTokens = { inputTokens: 0, outputTokens: 0 };
 
         for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
           const response = await openai.chat.completions.create({

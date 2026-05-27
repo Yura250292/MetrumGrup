@@ -1,6 +1,15 @@
 import { prisma } from "@/lib/prisma";
 
-type AuditAction = "CREATE" | "UPDATE" | "DELETE" | "STATUS_CHANGE" | "EXPORT" | "LOGIN";
+type AuditAction =
+  | "CREATE"
+  | "UPDATE"
+  | "DELETE"
+  | "STATUS_CHANGE"
+  | "EXPORT"
+  | "LOGIN"
+  | "PASSWORD_RESET_REQUESTED"
+  | "PASSWORD_RESET_COMPLETED"
+  | "PASSWORD_RESET_FAILED";
 
 export async function auditLog({
   userId,

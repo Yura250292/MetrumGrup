@@ -44,7 +44,7 @@ export class GeologicalParser {
       if (depthMatch) {
         // Look for soil type in this line or next few lines
         let type = 'Невизначено';
-        let description = line;
+        const description = line;
 
         const lowerLine = line.toLowerCase();
         if (lowerLine.includes('глин')) type = 'Глина';

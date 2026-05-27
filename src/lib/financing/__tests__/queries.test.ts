@@ -21,6 +21,12 @@ describe("computeSummary — PROJECT_BUDGET exclusion", () => {
     projectFindManyMock = setStub((prisma as any).project, "findMany");
     groupByMock = setStub((prisma as any).financeEntry, "groupBy");
     groupByMock.mockResolvedValue([] as never);
+    (prisma as any).supplierPayment = (prisma as any).supplierPayment ?? {};
+    const payAgg = setStub((prisma as any).supplierPayment, "aggregate");
+    payAgg.mockResolvedValue({
+      _sum: { amount: 0 },
+      _count: { _all: 0 },
+    } as never);
   });
 
   it("orphan PROJECT_BUDGET (projectId=null) виключається з агрегації", async () => {

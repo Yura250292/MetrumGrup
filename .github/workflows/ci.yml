@@ -35,4 +35,8 @@ jobs:
         run: npm run lint
 
       - name: Unit tests
+        env:
+          # Dummy URL — unit tests mock prisma; this only satisfies the
+          # @prisma/client schema-validation that fires at module load.
+          DATABASE_URL: postgresql://test:test@localhost:5432/test
         run: npm run test:ci

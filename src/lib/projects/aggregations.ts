@@ -161,7 +161,7 @@ export async function listProjectsWithAggregations(
 
       // Unread chat count for the current user (0 if no conversation or not a participant)
       let unreadChatCount = 0;
-      let lastChatMessageAt: Date | null = project.conversation?.lastMessageAt ?? null;
+      const lastChatMessageAt: Date | null = project.conversation?.lastMessageAt ?? null;
       if (project.conversation) {
         const myParticipation = project.conversation.participants.find(
           (p) => p.userId === currentUserId

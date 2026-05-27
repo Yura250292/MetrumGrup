@@ -14,7 +14,7 @@
  */
 export function counterpartyFirmWhere(
   firmId: string | null | undefined,
-): { firmId: string } | { OR: [{ firmId: string }, { firmId: null }] } | {} {
+): { firmId: string } | { OR: [{ firmId: string }, { firmId: null }] } | Record<string, never> {
   if (!firmId) return {};
   return { OR: [{ firmId }, { firmId: null }] };
 }
