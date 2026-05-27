@@ -22,24 +22,25 @@ const MODEL = "gemini-2.5-flash";
 
 const PrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH"]).nullable().optional();
 
+// Усі числові поля приймають 0 (Gemini часто ставить 0 для категорійних
+// заголовків кошторису) і null. Post-валідація нижче конвертує 0 → null
+// бо це невалідний реальний обсяг/ціна, але не блокує всю відповідь.
 const ParsedItemSchema = z.object({
   tempId: z.string().min(1),
   costType: z.enum(["MATERIAL", "LABOR"]),
   title: z.string().min(1).max(200),
-  quantity: z.number().positive().nullable().optional(),
+  quantity: z.number().nonnegative().nullable().optional(),
   unit: z.string().nullable().optional(),
-  unitPrice: z.number().positive().nullable().optional(),
+  unitPrice: z.number().nonnegative().nullable().optional(),
   amount: z.number().nonnegative().nullable().optional(),
   supplier: z.string().nullable().optional(),
   confidence: z.number().min(0).max(1).default(0.7),
   rawLine: z.string().default(""),
-  // AI proposal: один з двох заповнений (або обидва null = неможливо віднести)
   proposedStageId: z.string().nullable().optional(),
   proposedNewStageTempId: z.string().nullable().optional(),
   reasoning: z.string().nullable().optional(),
-  // Нові поля: пріоритет і час виконання (тільки для LABOR — для матеріалів зазвичай null).
   priority: PrioritySchema,
-  estimatedHours: z.number().positive().nullable().optional(),
+  estimatedHours: z.number().nonnegative().nullable().optional(),
 });
 
 const NewStageSchema = z.object({
@@ -436,8 +437,15 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
     );
   }
 
-  // Санітизація: тільки позиції з confidence ≥ 0.5; proposedStageId існує
-  // у дереві; proposedNewStageTempId існує у newStages.
+  // Санітизація:
+  //   1) Нормалізуємо 0 → null для quantity/unitPrice/amount/estimatedHours
+  //      (Gemini деяким категорійним заголовкам ставить 0 — це не справжній
+  //      обсяг/ціна).
+  //   2) confidence ≥ 0.5
+  //   3) proposedStageId існує у дереві; proposedNewStageTempId — у newStages.
+  const zeroToNull = (n: number | null | undefined): number | null =>
+    n === null || n === undefined || n === 0 ? null : n;
+
   const existingIds = new Set(stages.map((s) => s.id));
   const newStageTempIds = new Set(parsed.newStages.map((n) => n.tempId));
   const filteredItems = parsed.items
@@ -454,7 +462,15 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
       ) {
         proposedNewStageTempId = null;
       }
-      return { ...it, proposedStageId, proposedNewStageTempId };
+      return {
+        ...it,
+        quantity: zeroToNull(it.quantity),
+        unitPrice: zeroToNull(it.unitPrice),
+        amount: zeroToNull(it.amount),
+        estimatedHours: zeroToNull(it.estimatedHours),
+        proposedStageId,
+        proposedNewStageTempId,
+      };
     });
 
   // Валідуємо ієрархію newStages — parentTempId має посилатись на існуючий
