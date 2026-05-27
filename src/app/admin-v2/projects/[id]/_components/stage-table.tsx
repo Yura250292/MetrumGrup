@@ -12,6 +12,9 @@ import {
   Plus,
   Trash2,
   Pencil,
+  Flame,
+  Hammer,
+  Package,
 } from "lucide-react";
 import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
@@ -427,13 +430,16 @@ export function StageTable({
               Відповідальний
             </Th>
             <Th
-              width={90}
+              width={44}
               rowSpan={2}
               colKey="status"
               getWidth={widthFor}
               onResize={setColWidth}
+              align="center"
             >
-              Статус
+              <span title="Статус виконання" aria-label="Статус">
+                ●
+              </span>
             </Th>
             {isCompare ? (
               COMPARE_METRICS.map((metric) => (
@@ -579,14 +585,21 @@ export function StageTable({
             const isInvalidDropTarget = rowDescendants.has(node.id);
             const dropHere =
               rowDragOver?.id === node.id ? rowDragOver.position : null;
-            // costType tint: легкий зелений для LABOR, легкий синій для
-            // MATERIAL. Selected/drop-target/drag перебивають.
+            // costType: легкий tint як підкладка + box-shadow inset зліва
+            // як 3px кольорова смужка. Smysl смужки — швидко зчитувати тип
+            // навіть боковим зором, не вчитуючись у назву.
             const costTint =
               node.costType === "LABOR"
-                ? "rgba(34, 197, 94, 0.08)"
+                ? "rgba(34, 197, 94, 0.05)"
                 : node.costType === "MATERIAL"
-                  ? "rgba(59, 130, 246, 0.08)"
+                  ? "rgba(59, 130, 246, 0.05)"
                   : "transparent";
+            const costBar =
+              node.costType === "LABOR"
+                ? "inset 3px 0 0 0 rgb(34, 197, 94)"
+                : node.costType === "MATERIAL"
+                  ? "inset 3px 0 0 0 rgb(59, 130, 246)"
+                  : "none";
             const rowBg = isDragSource
               ? T.warningSoft
               : dropHere === "child"
@@ -603,6 +616,7 @@ export function StageTable({
                 className="cursor-pointer transition"
                 style={{
                   backgroundColor: rowBg,
+                  boxShadow: costBar !== "none" ? costBar : undefined,
                   opacity: isDragSource ? 0.5 : node.isHidden ? 0.55 : 1,
                   borderTop:
                     dropHere === "before"
@@ -723,8 +737,8 @@ export function StageTable({
                   />
                 </Td>
 
-                {/* Статус */}
-                <Td>
+                {/* Статус — компактна точка з tooltip + іконкою для розрізнення */}
+                <Td align="center">
                   <SelectCell
                     value={node.status}
                     options={(Object.keys(STAGE_STATUS_LABELS) as StageStatus[]).map((s) => ({
@@ -733,14 +747,15 @@ export function StageTable({
                     }))}
                     display={
                       <span
-                        className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full transition"
                         style={{
                           backgroundColor: STATUS_STYLE[node.status].bg,
                           color: STATUS_STYLE[node.status].fg,
                         }}
+                        title={STAGE_STATUS_LABELS[node.status]}
+                        aria-label={`Статус: ${STAGE_STATUS_LABELS[node.status]}`}
                       >
-                        <StatusIcon size={10} />
-                        {STAGE_STATUS_LABELS[node.status]}
+                        <StatusIcon size={11} />
                       </span>
                     }
                     onCommit={(v) =>
@@ -808,7 +823,7 @@ export function StageTable({
 
                 {/* Коментар */}
                 <Td>
-                  <TextCell
+                  <NotesCell
                     value={node.notes ?? ""}
                     onCommit={(v) => onInlineUpdate(node.id, { notes: v || null })}
                   />
@@ -1309,11 +1324,38 @@ function NameCell({
           }}
           className="flex h-4 w-4 items-center justify-center rounded hover:bg-black/5"
           style={{ color: T.textMuted }}
+          aria-label={isExpanded ? "Згорнути підетапи" : "Розгорнути підетапи"}
         >
           {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
       ) : (
         <span className="inline-block h-4 w-4" />
+      )}
+      {node.costType === "LABOR" && (
+        <span
+          className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded"
+          style={{
+            backgroundColor: "rgba(34,197,94,0.14)",
+            color: "rgb(22,163,74)",
+          }}
+          title="Робота (LABOR)"
+          aria-label="Робота"
+        >
+          <Hammer size={10} />
+        </span>
+      )}
+      {node.costType === "MATERIAL" && (
+        <span
+          className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded"
+          style={{
+            backgroundColor: "rgba(59,130,246,0.14)",
+            color: "rgb(37,99,235)",
+          }}
+          title="Матеріал (MATERIAL)"
+          aria-label="Матеріал"
+        >
+          <Package size={10} />
+        </span>
       )}
       {editing ? (
         <input
@@ -1735,6 +1777,151 @@ function TextCell({
   );
 }
 
+type AiNoteParsed = {
+  /** Notes без `[AI: ...]` префіксу — призначене для відображення в editor. */
+  display: string;
+  /** Distilled metadata extracted from [AI: ...] tag. */
+  priority: "HIGH" | "MEDIUM" | "LOW" | null;
+  hours: number | null;
+};
+
+function parseAiNote(raw: string): AiNoteParsed {
+  if (!raw) return { display: "", priority: null, hours: null };
+  const match = raw.match(/\[AI:\s*([^\]]+)\]/);
+  if (!match) return { display: raw, priority: null, hours: null };
+
+  const body = match[1];
+  let priority: "HIGH" | "MEDIUM" | "LOW" | null = null;
+  if (/висок/i.test(body)) priority = "HIGH";
+  else if (/середн/i.test(body)) priority = "MEDIUM";
+  else if (/низьк/i.test(body)) priority = "LOW";
+
+  let hours: number | null = null;
+  const hMatch = body.match(/~?(\d+(?:[.,]\d+)?)\s*год/);
+  if (hMatch) hours = Number(hMatch[1].replace(",", "."));
+
+  // display = raw без [AI:…] (з очищенням обрамляючих \n).
+  const display = raw.replace(/\[AI:[^\]]+\]/g, "").replace(/^\s*\n+|\n+\s*$/g, "").trim();
+  return { display, priority, hours };
+}
+
+const PRIORITY_STYLE: Record<
+  NonNullable<AiNoteParsed["priority"]>,
+  { bg: string; fg: string; label: string }
+> = {
+  HIGH: { bg: "rgba(239,68,68,0.12)", fg: "rgb(220,38,38)", label: "Високий пріоритет" },
+  MEDIUM: { bg: "rgba(245,158,11,0.12)", fg: "rgb(180,83,9)", label: "Середній пріоритет" },
+  LOW: { bg: "rgba(100,116,139,0.12)", fg: "rgb(71,85,105)", label: "Низький пріоритет" },
+};
+
+function NotesCell({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const parsed = parseAiNote(value);
+
+  if (editing) {
+    return (
+      <textarea
+        autoFocus
+        defaultValue={value}
+        rows={2}
+        onClick={(e) => e.stopPropagation()}
+        onBlur={(e) => {
+          const v = e.target.value;
+          if (v !== value) void onCommit(v);
+          setEditing(false);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className="w-full rounded border px-1.5 py-1 text-[11px] outline-none"
+        style={{
+          backgroundColor: T.panel,
+          borderColor: T.borderAccent,
+          color: T.textPrimary,
+        }}
+      />
+    );
+  }
+
+  const hasAi = parsed.priority || parsed.hours !== null;
+  const hasText = parsed.display.length > 0;
+
+  if (!hasAi && !hasText) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setEditing(true);
+        }}
+        className="block w-full text-left transition hover:underline"
+        title="Додати коментар"
+        aria-label="Додати коментар до етапу"
+      >
+        <span style={{ color: T.textMuted }}>—</span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        setEditing(true);
+      }}
+      className="flex w-full flex-wrap items-center gap-1 text-left transition"
+      title={value}
+      aria-label="Редагувати коментар"
+    >
+      {parsed.priority && (
+        <span
+          className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+          style={{
+            backgroundColor: PRIORITY_STYLE[parsed.priority].bg,
+            color: PRIORITY_STYLE[parsed.priority].fg,
+          }}
+          title={PRIORITY_STYLE[parsed.priority].label}
+        >
+          <Flame size={9} />
+          {parsed.priority === "HIGH"
+            ? "High"
+            : parsed.priority === "MEDIUM"
+              ? "Med"
+              : "Low"}
+        </span>
+      )}
+      {parsed.hours !== null && (
+        <span
+          className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-semibold leading-none"
+          style={{
+            backgroundColor: "rgba(59,130,246,0.10)",
+            color: "rgb(37,99,235)",
+          }}
+          title="Очікуваний час (людино-години)"
+        >
+          <Clock size={9} />
+          {parsed.hours}г
+        </span>
+      )}
+      {hasText && (
+        <span
+          className="line-clamp-1 min-w-0 flex-1"
+          style={{ color: T.textSecondary, fontSize: 11 }}
+        >
+          {parsed.display}
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ---------- Static cells ----------
 
 /**
@@ -1799,6 +1986,7 @@ function Th({
   colKey,
   onResize,
   getWidth,
+  align = "left",
 }: {
   children?: React.ReactNode;
   width?: number;
@@ -1809,6 +1997,7 @@ function Th({
   colKey?: string;
   onResize?: (key: string, w: number) => void;
   getWidth?: (key: string, fallback: number) => number;
+  align?: "left" | "center" | "right";
 }) {
   const fallback = width ?? 120;
   const effectiveWidth =
@@ -1817,7 +2006,7 @@ function Th({
   return (
     <th
       rowSpan={rowSpan}
-      className="px-2 py-1.5 text-left text-[10px] font-bold uppercase tracking-wider"
+      className={`px-2 py-1.5 text-${align} text-[10px] font-bold uppercase tracking-wider`}
       style={{
         color: T.textMuted,
         width: effectiveWidth,

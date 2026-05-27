@@ -731,19 +731,12 @@ export function StagesSection({
           <div className="-mx-1 overflow-x-auto sm:mx-0 sm:overflow-visible">
             <ViewModeSwitch value={viewMode} onChange={setViewMode} />
           </div>
+          <span
+            aria-hidden
+            className="hidden sm:inline-block h-5 w-px"
+            style={{ backgroundColor: T.borderSoft }}
+          />
           <CostFilterSwitch value={costFilter} onChange={setCostFilter} />
-          {viewMode === "all" && (
-            <span className="hidden lg:flex items-center gap-2 text-[10px]" style={{ color: T.textMuted }}>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "rgb(34,197,94)" }} />
-                робота
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "rgb(59,130,246)" }} />
-                матеріал
-              </span>
-            </span>
-          )}
           <button
             type="button"
             onClick={() => setAiAssistantOpen(true)}
@@ -1147,7 +1140,7 @@ const COST_FILTER_OPTIONS: {
   title: string;
   dotColor?: string;
 }[] = [
-  { value: "all", label: "Усі", title: "Показати всі позиції" },
+  { value: "all", label: "Усі типи", title: "Показати позиції всіх типів" },
   {
     value: "labor",
     label: "Роботи",
