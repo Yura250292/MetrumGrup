@@ -60,6 +60,14 @@ export type AiParseResponse = z.infer<typeof ResponseSchema>;
 
 const SYSTEM_PROMPT = `Ти — досвідчений виконроб-кошторисник будівельної компанії. Користувач описує виконані роботи та закуплені матеріали вільним текстом І/АБО додає файли (фото чек/накладна, PDF кошторис/акт, Excel). Твоя задача — РЕТЕЛЬНО проаналізувати все надане і структурувати у позиції.
 
+🚫 КАТЕГОРИЧНО ЗАБОРОНЕНО:
+- Узагальнювати назви позицій. ЯКЩО в файлі написано «Демонтаж бордюрів (із збереженням)» — у title має бути ТЕ Ж саме формулювання, а не «Демонтажні роботи», «Тип 06.1» або «Демонтаж загалом».
+- Об'єднувати кілька позицій в одну.
+- Створювати «ДБН-коди» (Тип XX.Y) чи інші коди, яких немає в файлі.
+- Видумувати назви етапів, якщо вони не написані у файлі/тексті.
+
+ЗАВЖДИ копіюй назви ДОСЛІВНО з джерела (з очищенням зайвих пробілів/спецсимволів, але БЕЗ перефразування).
+
 1. Розпізнати ВСІ окремі позиції (кожна = одна робота або один матеріал). Якщо файл містить кошторис/перелік — витягни КОЖЕН пункт, не пропускай. Якщо позицій багато (>20) — все одно повертай всі.
 
 2. Класифікувати кожну позицію:
@@ -214,8 +222,17 @@ export async function POST(
     unitPrice: number | null;
     amount: number;
     supplier: string | null;
+    /** Назва категорії з кошторису (для proposedNewStageTempId через mapping). */
+    category?: string;
+    /** Якщо це матеріал — назва робочого пункту, до якого належить. */
+    parentWork?: string;
   };
   const preItems: PreItem[] = [];
+  // Категорії з Excel (Демонтажні/Монтажні/...) → newStage пропозиції.
+  // Зберігаємо мапу name→tempId і description→tempId для матеріалів,
+  // щоб proposedStageId матеріалу = tempId його LABOR-роботи.
+  const categoryTempIds = new Map<string, string>();
+  const workTempIds = new Map<string, string>();
   const inlineFileParts: Part[] = [];
   const inlineFileNotes: string[] = [];
   const fileErrors: string[] = [];
@@ -257,19 +274,21 @@ export async function POST(
           try {
             const xls = await parseExcelEstimate(ab);
             for (const it of xls.items) {
-              if (it.totalPrice > 0) {
-                preItems.push({
-                  source: f.name,
-                  costType: "MATERIAL",
-                  title: it.description,
-                  quantity: it.quantity,
-                  unit: it.unit,
-                  unitPrice: it.unitPrice,
-                  amount: it.totalPrice,
-                  supplier: null,
-                });
-                added++;
-              }
+              // Не вимагаємо totalPrice — матеріали-замовника можуть бути
+              // без ціни (їх дає замовник).
+              preItems.push({
+                source: f.name,
+                costType: it.costType,
+                title: it.description,
+                quantity: it.quantity,
+                unit: it.unit,
+                unitPrice: it.unitPrice || null,
+                amount: it.totalPrice,
+                supplier: null,
+                category: it.category,
+                parentWork: it.parentWork,
+              });
+              added++;
             }
           } catch {
             /* спробуємо КБ-2в */
@@ -347,6 +366,52 @@ export async function POST(
     }),
   );
 
+  // Будуємо детерміновану мапу newStages з категорій preItems, щоб Gemini
+  // НЕ вигадував/узагальнював назви — а просто скопіював готові tempId.
+  // Категорія → top-level newStage. LABOR-позиція → child newStage під
+  // своєю категорією. MATERIAL → proposedStageId = tempId батьківської LABOR.
+  const prebuiltNewStages: Array<{
+    tempId: string;
+    name: string;
+    parentTempId: string | null;
+  }> = [];
+  if (preItems.length > 0) {
+    let tempCounter = 1;
+    for (const pi of preItems) {
+      if (pi.category && !categoryTempIds.has(pi.category)) {
+        const tid = `new-${tempCounter++}`;
+        categoryTempIds.set(pi.category, tid);
+        prebuiltNewStages.push({ tempId: tid, name: pi.category, parentTempId: null });
+      }
+    }
+    for (const pi of preItems) {
+      if (pi.costType !== "LABOR") continue;
+      if (workTempIds.has(pi.title)) continue;
+      const parent = pi.category ? categoryTempIds.get(pi.category) ?? null : null;
+      const tid = `new-${tempCounter++}`;
+      workTempIds.set(pi.title, tid);
+      prebuiltNewStages.push({ tempId: tid, name: pi.title, parentTempId: parent });
+    }
+  }
+  // Прив'язки для prompt: LABOR → новий новостворений stage; MATERIAL → під батьківську LABOR.
+  const preItemsForPrompt = preItems.map((pi, idx) => ({
+    tempId: `i-${idx + 1}`,
+    source: pi.source,
+    costType: pi.costType,
+    title: pi.title,
+    quantity: pi.quantity,
+    unit: pi.unit,
+    unitPrice: pi.unitPrice,
+    amount: pi.amount,
+    supplier: pi.supplier,
+    proposedNewStageTempId:
+      pi.costType === "LABOR" ? workTempIds.get(pi.title) ?? null : null,
+    proposedStageRefForMaterial:
+      pi.costType === "MATERIAL" && pi.parentWork
+        ? workTempIds.get(pi.parentWork) ?? null
+        : null,
+  }));
+
   const userPromptText = `Дерево етапів проекту "${project.title}":
 ${JSON.stringify(stagesPayload, null, 2)}
 
@@ -356,7 +421,7 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
       : ""
   }${
     preItems.length > 0
-      ? `\nПозиції витягнуто з Excel (структура чітка — costType/title/qty/price вже визначено). СКОПІЮЙ їх у items[] без змін, ТІЛЬКИ признач proposedStageId/proposedNewStageTempId і за можливістю додай priority/estimatedHours:\n${JSON.stringify(preItems, null, 2)}\n`
+      ? `\nПозиції витягнуто з Excel напряму (структурний парсер). СКОПІЮЙ ці позиції у items[] ДОСЛІВНО (title, quantity, unit, unitPrice, amount). НЕ узагальнюй назви («Тип 06.1» тощо — заборонено), НЕ змінюй формулювання.\n\nГотові newStages для дерева — повертай їх у newStages[] без змін:\n${JSON.stringify(prebuiltNewStages, null, 2)}\n\nДля кожної позиції:\n- якщо costType=LABOR і вказано proposedNewStageTempId → встав це значення\n- якщо costType=MATERIAL і вказано proposedStageRefForMaterial → це tempId батьківської LABOR-роботи; постав це у proposedNewStageTempId (тоді матеріал стане дочірнім до своєї роботи)\n- priority/estimatedHours — додай за можливості\n\nДані з парсера:\n${JSON.stringify(preItemsForPrompt, null, 2)}\n`
       : ""
   }${
     rawExcelGrids.length > 0

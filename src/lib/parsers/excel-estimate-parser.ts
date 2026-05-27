@@ -7,7 +7,12 @@ import * as XLSX from 'xlsx';
 
 export interface ParsedEstimateItem {
   rowNumber: number;
+  /** Категорія верхнього рівня з кошторису (напр. «Демонтажні роботи»). */
   category?: string;
+  /** Назва робочого пункту, до якого належить матеріал (напр. «Монтаж бордюрів»). */
+  parentWork?: string;
+  /** LABOR — рядок з кодом/№ і ціною; MATERIAL — підрядки «Матеріали по пункту». */
+  costType: "LABOR" | "MATERIAL";
   code?: string;
   description: string;
   unit: string;
@@ -39,88 +44,132 @@ export async function parseExcelEstimate(
   const items: ParsedEstimateItem[] = [];
 
   try {
-    // Прочитати Excel файл
     const workbook = XLSX.read(fileBuffer, { type: 'array' });
 
-    // Взяти перший лист
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-
-    if (!worksheet) {
+    if (workbook.SheetNames.length === 0) {
       throw new Error('Не знайдено жодного листа в файлі');
     }
 
-    // Конвертувати в JSON (масив масивів)
-    const data: any[][] = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1,
-      defval: '',
-      blankrows: false,
-    });
+    let totalRows = 0;
+    let totalHeaderOffset = 0;
 
-    console.log(`📊 Excel: ${data.length} рядків, перші 3:`, data.slice(0, 3));
+    // Парсимо КОЖЕН лист (часто кошторис розбитий на Table 1/Table 2).
+    for (const sheetName of workbook.SheetNames) {
+      const worksheet = workbook.Sheets[sheetName];
+      if (!worksheet) continue;
 
-    // Знайти рядок з заголовками таблиці
-    const headerRowIndex = findHeaderRow(data);
+      const data: any[][] = XLSX.utils.sheet_to_json(worksheet, {
+        header: 1,
+        defval: '',
+        blankrows: false,
+      });
 
-    if (headerRowIndex === -1) {
-      throw new Error('Не знайдено заголовків таблиці кошторису');
-    }
+      console.log(`📊 Лист "${sheetName}": ${data.length} рядків`);
 
-    console.log(`📋 Заголовки знайдено в рядку ${headerRowIndex + 1}`);
-
-    // Визначити індекси колонок
-    const columnMapping = mapColumns(data[headerRowIndex]);
-
-    if (!columnMapping.description || !columnMapping.unit || !columnMapping.quantity || !columnMapping.unitPrice) {
-      throw new Error('Не вдалося знайти всі необхідні колонки');
-    }
-
-    console.log('🗺️ Маппінг колонок:', columnMapping);
-
-    // Парсити рядки даних
-    let currentCategory: string | undefined;
-
-    for (let i = headerRowIndex + 1; i < data.length; i++) {
-      const row = data[i];
-
-      if (!row || row.length === 0) continue;
-
-      // Перевірити чи це заголовок категорії
-      const categoryCheck = detectCategory(row, columnMapping);
-      if (categoryCheck) {
-        currentCategory = categoryCheck;
-        console.log(`📂 Категорія: ${currentCategory}`);
+      const headerRowIndex = findHeaderRow(data);
+      if (headerRowIndex === -1) {
+        errors.push(`Лист "${sheetName}": заголовків таблиці не знайдено`);
         continue;
       }
-
-      // Парсити рядок позиції
-      const item = parseRow(row, i + 1, columnMapping, currentCategory);
-
-      if (item) {
-        items.push(item);
-      } else {
-        // Якщо не вдалося розпарсити - можливо порожній рядок або підсумок
-        const firstCell = String(row[0] || '').toLowerCase();
-        if (firstCell.includes('всього') || firstCell.includes('разом') || firstCell.includes('total')) {
-          console.log(`💰 Підсумок в рядку ${i + 1}: ${row.join(', ')}`);
-        }
+      const columnMapping = mapColumns(data[headerRowIndex]);
+      if (
+        columnMapping.description === undefined ||
+        columnMapping.unit === undefined ||
+        columnMapping.quantity === undefined ||
+        columnMapping.unitPrice === undefined
+      ) {
+        errors.push(
+          `Лист "${sheetName}": не знайдено колонок ` +
+            `(description=${columnMapping.description}, unit=${columnMapping.unit}, ` +
+            `quantity=${columnMapping.quantity}, unitPrice=${columnMapping.unitPrice})`,
+        );
+        continue;
       }
+      console.log(`📋 "${sheetName}" заголовки рядок ${headerRowIndex + 1}, мапінг:`, columnMapping);
+
+      // Парсимо рядки. category — верхній блок (Демонтажні / Монтажні),
+      // parentWork — остання LABOR-позиція; «Матеріали по пункту» —
+      // службовий маркер, переключає всі наступні рядки на MATERIAL під
+      // тим самим parentWork доки не зустрінемо новий LABOR.
+      let currentCategory: string | undefined;
+      let currentParentWork: string | undefined;
+      let materialsSection = false;
+
+      for (let i = headerRowIndex + 1; i < data.length; i++) {
+        const row = data[i];
+        if (!row || row.length === 0) continue;
+
+        const firstNonEmpty = String(
+          row[columnMapping.description] ?? row[0] ?? '',
+        )
+          .trim()
+          .toLowerCase();
+
+        // Маркер службового підпункту «Матеріали по пункту:» — наступні
+        // рядки до нового LABOR будуть MATERIAL.
+        if (
+          firstNonEmpty.startsWith('матеріал') &&
+          firstNonEmpty.includes('пункт')
+        ) {
+          materialsSection = true;
+          continue;
+        }
+
+        // Категорія: текст є тільки в description-колонці, інші порожні.
+        const categoryCheck = detectCategory(row, columnMapping);
+        if (categoryCheck) {
+          currentCategory = categoryCheck;
+          currentParentWork = undefined;
+          materialsSection = false;
+          console.log(`📂 Категорія: ${currentCategory}`);
+          continue;
+        }
+
+        const item = parseRow(row, i + 1, columnMapping, currentCategory);
+        if (!item) {
+          if (
+            firstNonEmpty.includes('всього') ||
+            firstNonEmpty.includes('разом') ||
+            firstNonEmpty.includes('total')
+          ) {
+            console.log(`💰 Підсумок: ${row.join(', ')}`);
+          }
+          continue;
+        }
+
+        // Класифікуємо: LABOR — має код/№ і ціну за од; MATERIAL — без
+        // ціни і всередині блоку «Матеріали по пункту».
+        const hasCodeOrPrice =
+          (item.code && item.code.length > 0) || item.unitPrice > 0;
+        if (materialsSection && !hasCodeOrPrice) {
+          item.costType = 'MATERIAL';
+          item.parentWork = currentParentWork;
+        } else {
+          item.costType = 'LABOR';
+          currentParentWork = item.description;
+          materialsSection = false;
+        }
+        items.push(item);
+      }
+
+      totalRows += data.length;
+      totalHeaderOffset += headerRowIndex + 1;
     }
 
-    // Розрахувати загальну суму
     const totalAmount = items.reduce((sum, item) => sum + item.totalPrice, 0);
-
-    console.log(`✅ Розпарсено ${items.length} позицій, загальна сума: ${totalAmount.toFixed(2)} ₴`);
+    console.log(
+      `✅ Розпарсено ${items.length} позицій з ${workbook.SheetNames.length} листів, сума: ${totalAmount.toFixed(2)} ₴`,
+    );
 
     return {
-      success: true,
+      success: items.length > 0,
       items,
       totalAmount,
       errors,
       metadata: {
-        totalRows: data.length,
+        totalRows,
         parsedRows: items.length,
-        skippedRows: data.length - items.length - headerRowIndex - 1,
+        skippedRows: Math.max(0, totalRows - items.length - totalHeaderOffset),
       },
     };
   } catch (error) {
@@ -202,13 +251,17 @@ function mapColumns(headerRow: any[]): {
     else if (cellStr.match(/(кільк|обсяг|quantity|qty)/)) {
       mapping.quantity = index;
     }
-    // Ціна за одиницю
-    else if (cellStr.match(/(ціна|price|вартість)/) && cellStr.match(/(одиниц|unit|од)/)) {
-      mapping.unitPrice = index;
-    }
-    // Загальна вартість
-    else if (cellStr.match(/(сума|всього|total|загальн)/)) {
+    // Загальна вартість (Сума/Total) — перевіряємо першою щоб не злити з «ціна»
+    else if (cellStr.match(/(сума|всього|total|загальн)/) && mapping.totalPrice === undefined) {
       mapping.totalPrice = index;
+    }
+    // Ціна за одиницю — український кошторис часто пише просто «Ціна» або
+    // «Вартість» без слова «одиниці». Не вимагаємо обох слів.
+    else if (
+      cellStr.match(/(ціна|price|вартість)/) &&
+      mapping.unitPrice === undefined
+    ) {
+      mapping.unitPrice = index;
     }
   });
 
@@ -262,13 +315,12 @@ function parseRow(
       totalPrice = quantity * unitPrice;
     }
 
-    // Валідація
+    // Валідація. Дозволяємо MATERIAL-підрядки без ціни (їх лиш помітимо).
     if (!description || description.length < 3) return null;
     if (!unit) return null;
     if (quantity <= 0) return null;
     if (unitPrice < 0) return null;
 
-    // Код позиції (якщо є)
     const code = mapping.code !== undefined
       ? String(row[mapping.code] || '').trim()
       : undefined;
@@ -276,6 +328,7 @@ function parseRow(
     return {
       rowNumber,
       category,
+      costType: 'LABOR',
       code: code || undefined,
       description,
       unit,
