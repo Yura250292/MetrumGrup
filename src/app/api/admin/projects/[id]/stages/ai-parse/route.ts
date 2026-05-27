@@ -218,10 +218,17 @@ export async function POST(
   // серіалізуємо лист у CSV-текст і додаємо до prompt — Gemini сам розбере.
   const rawExcelGrids: Array<{ name: string; csv: string }> = [];
 
+  console.log(
+    `[ai-parse] start projectId=${projectId} text-len=${text.length} files=${fileKeys.length}`,
+  );
+
   await Promise.all(
     fileKeys.map(async (f) => {
       try {
         const buf = await downloadFromR2(f.key);
+        console.log(
+          `[ai-parse] file "${f.name}" mime=${f.mime} size=${buf.length} bytes`,
+        );
         if (f.mime.startsWith("image/") || f.mime === "application/pdf") {
           // Gemini 2.5 нативно підтримує і image, і PDF як inlineData.
           inlineFileParts.push({
@@ -302,6 +309,9 @@ export async function POST(
                 );
               }
               const fullCsv = csvParts.join("\n\n").slice(0, 60_000);
+              console.log(
+                `[ai-parse] Excel "${f.name}" CSV-fallback: sheets=${workbook.SheetNames.length} csv-len=${fullCsv.length}`,
+              );
               if (fullCsv.length > 0) {
                 rawExcelGrids.push({ name: f.name, csv: fullCsv });
               } else {
@@ -356,6 +366,10 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
 
 ОБОВ'ЯЗКОВО: якщо є файли або текст з позиціями — поверни items[] НЕ порожнім. Якщо файл є, але не містить роботів/матеріалів — все одно поверни items[] з тим що бачиш (хоча б назви розділів/етапів).`;
 
+  console.log(
+    `[ai-parse] prompt: text-len=${userPromptText.length} inline-parts=${inlineFileParts.length} pre-items=${preItems.length} raw-grids=${rawExcelGrids.length}`,
+  );
+
   let parsed: AiParseResponse;
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -371,11 +385,20 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
     const parts: Part[] = [{ text: userPromptText }, ...inlineFileParts];
     const result = await model.generateContent(parts);
     const raw = result.response.text();
+    console.log(`[ai-parse] Gemini response len=${raw.length}`);
     const json = safeParseJson<unknown>(raw);
     if (!json.ok) {
-      console.error("[ai-parse] JSON parse failed:", json.error);
+      console.error(
+        "[ai-parse] JSON parse failed:",
+        json.error,
+        "raw[0..400]:",
+        raw.slice(0, 400),
+      );
       return NextResponse.json(
-        { error: "AI повернув некоректний JSON" },
+        {
+          error: `AI повернув некоректний JSON: ${json.error}`,
+          fileErrors,
+        },
         { status: 502 },
       );
     }
@@ -386,15 +409,25 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
         validated.error.issues,
       );
       return NextResponse.json(
-        { error: "AI повернув неочікувану структуру" },
+        {
+          error: `AI повернув неочікувану структуру: ${validated.error.issues
+            .slice(0, 3)
+            .map((i) => `${i.path.join(".")}: ${i.message}`)
+            .join("; ")}`,
+          fileErrors,
+        },
         { status: 502 },
       );
     }
     parsed = validated.data;
+    console.log(
+      `[ai-parse] parsed: items=${parsed.items.length} newStages=${parsed.newStages.length}`,
+    );
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("[ai-parse] Gemini error:", err);
     return NextResponse.json(
-      { error: "AI-сервіс недоступний, спробуйте пізніше" },
+      { error: `AI-помилка: ${msg}`, fileErrors },
       { status: 502 },
     );
   }
