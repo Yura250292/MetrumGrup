@@ -10,7 +10,7 @@
  *  - Other: NetworkFirst with offline fallback
  */
 
-const VERSION = 'v5.6.0';
+const VERSION = 'v5.7.0';
 const STATIC_CACHE = `metrum-static-${VERSION}`;
 const HTML_CACHE = `metrum-html-${VERSION}`;
 const ASSET_CACHE = `metrum-assets-${VERSION}`;
@@ -41,10 +41,15 @@ const NETWORK_TIMEOUT_MS = 5000;
 const LONG_RUNNING_API_PATTERNS = [
   /\/api\/admin\/projects\/[^/]+\/sync-finance(s)?(\/|$|\?)/,
   /\/api\/admin\/projects\/[^/]+\/ai-render(\/|$|\?)/,
+  /\/api\/admin\/projects\/[^/]+\/stages\/ai-parse(\/|$|\?)/,
+  /\/api\/admin\/projects\/[^/]+\/stages\/ai-apply(\/|$|\?)/,
+  /\/api\/admin\/projects\/[^/]+\/stages\/ai-upload(\/|$|\?)/,
+  /\/api\/admin\/projects\/[^/]+\/import-spreadsheet\/ai-parse(\/|$|\?)/,
   /\/api\/admin\/estimates\/[^/]+\/sync-to-financing(\/|$|\?)/,
   /\/api\/admin\/ai(\/|$|\?)/,
   /\/api\/admin\/chat\/ai(\/|$|\?)/,
   /\/api\/admin\/chat\/conversations\/[^/]+\/ai-invoke(\/|$|\?)/,
+  /\/api\/foreman\/reports\/parse(\/|$|\?)/,
 ];
 
 function isLongRunningApi(pathname) {

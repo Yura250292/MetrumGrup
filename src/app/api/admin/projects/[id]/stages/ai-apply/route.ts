@@ -13,6 +13,32 @@ export const maxDuration = 60;
 
 const MAX_DEPTH = 2;
 
+const PRIORITY_LABEL: Record<"LOW" | "MEDIUM" | "HIGH", string> = {
+  LOW: "низький",
+  MEDIUM: "середній",
+  HIGH: "високий",
+};
+
+/**
+ * Формує AI-нотатку для збереження в `stage.notes`. Видаляє стару AI-мітку
+ * (якщо була), додає нову. Префікс `[AI]` робить її пошуковою/видаленною.
+ */
+function mergeAiNote(
+  existing: string | null,
+  priority: "LOW" | "MEDIUM" | "HIGH" | null | undefined,
+  estimatedHours: number | null | undefined,
+): string | null {
+  const parts: string[] = [];
+  if (priority) parts.push(`пріоритет: ${PRIORITY_LABEL[priority]}`);
+  if (estimatedHours != null && estimatedHours > 0) {
+    parts.push(`~${Math.round(estimatedHours * 10) / 10} год`);
+  }
+  const cleaned = (existing ?? "").replace(/\s*\[AI[^\]]*\]\s*/g, "").trim();
+  if (parts.length === 0) return cleaned || null;
+  const aiTag = `[AI: ${parts.join(", ")}]`;
+  return cleaned ? `${aiTag}\n${cleaned}` : aiTag;
+}
+
 const NewStageSchema = z.object({
   tempId: z.string().min(1),
   name: z.string().min(1).max(200),
@@ -28,6 +54,8 @@ const ApplyItemSchema = z.object({
   supplier: z.string().nullable().optional(),
   /** id існуючого етапу АБО tempId з newStages (префікс "new-..."). */
   targetStageRef: z.string().min(1),
+  priority: z.enum(["LOW", "MEDIUM", "HIGH"]).nullable().optional(),
+  estimatedHours: z.number().positive().nullable().optional(),
 });
 
 const BodySchema = z.object({
@@ -194,7 +222,12 @@ export async function POST(
         // в UI має це покривати).
         const existing = await tx.projectStageRecord.findUnique({
           where: { id: stageId },
-          select: { factVolume: true, factUnit: true, factUnitPrice: true },
+          select: {
+            factVolume: true,
+            factUnit: true,
+            factUnitPrice: true,
+            notes: true,
+          },
         });
         if (!existing) continue;
         const newFactUnit = it.unit ?? existing.factUnit ?? null;
@@ -208,6 +241,10 @@ export async function POST(
             ? Number(existing.factVolume) + addedVolume
             : addedVolume || Number(existing.factVolume ?? 0);
         const nextUnitPrice = it.unitPrice ?? existing.factUnitPrice;
+        const nextNotes =
+          it.priority || (it.estimatedHours != null && it.estimatedHours > 0)
+            ? mergeAiNote(existing.notes, it.priority, it.estimatedHours)
+            : existing.notes;
 
         await tx.projectStageRecord.update({
           where: { id: stageId },
@@ -218,6 +255,7 @@ export async function POST(
               nextUnitPrice !== null && nextUnitPrice !== undefined
                 ? Number(nextUnitPrice)
                 : null,
+            notes: nextNotes,
           },
         });
         if (!updatedStageIds.has(stageId)) {

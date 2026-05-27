@@ -34,6 +34,8 @@ import type { StageRow } from "./stage-table";
  *   onApplied      — викликається після успішного apply (parent робить refetch)
  */
 
+type Priority = "LOW" | "MEDIUM" | "HIGH";
+
 type AiParseItem = {
   tempId: string;
   costType: "MATERIAL" | "LABOR";
@@ -48,6 +50,8 @@ type AiParseItem = {
   proposedStageId: string | null | undefined;
   proposedNewStageTempId: string | null | undefined;
   reasoning: string | null | undefined;
+  priority?: Priority | null;
+  estimatedHours?: number | null;
 };
 
 type AiParseNewStage = {
@@ -319,6 +323,8 @@ export function StagesAiAssistant({
               unitPrice: it.unitPrice,
               supplier: it.supplier,
               targetStageRef: it.targetStageRef,
+              priority: it.priority ?? null,
+              estimatedHours: it.estimatedHours ?? null,
             })),
             newStages: newStagesPayload,
           }),
@@ -792,8 +798,99 @@ function ItemRow({
               />
             </div>
           </div>
+
+          {/* Priority + estimated hours — лише для LABOR (для матеріалів зайве). */}
+          {item.costType === "LABOR" && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <PriorityPicker
+                value={item.priority ?? null}
+                disabled={!item.accepted}
+                onChange={(p) => onChange({ ...item, priority: p })}
+              />
+              <div
+                className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5"
+                style={{
+                  backgroundColor: T.panel,
+                  borderColor: T.borderSoft,
+                }}
+              >
+                <span className="text-[10px]" style={{ color: T.textMuted }}>
+                  Час, год:
+                </span>
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={item.estimatedHours ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    const n = v === "" ? null : Number(v);
+                    onChange({
+                      ...item,
+                      estimatedHours:
+                        n !== null && Number.isFinite(n) && n > 0 ? n : null,
+                    });
+                  }}
+                  disabled={!item.accepted}
+                  className="w-14 bg-transparent text-right text-[11px] outline-none"
+                  style={{ color: T.textPrimary }}
+                  placeholder="—"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    </div>
+  );
+}
+
+const PRIORITY_OPTIONS: Array<{
+  value: "LOW" | "MEDIUM" | "HIGH";
+  label: string;
+  bg: string;
+  fg: string;
+}> = [
+  { value: "LOW", label: "Низький", bg: T.panelElevated, fg: T.textMuted },
+  { value: "MEDIUM", label: "Середній", bg: T.accentPrimarySoft, fg: T.accentPrimary },
+  { value: "HIGH", label: "Високий", bg: T.warningSoft, fg: T.warning },
+];
+
+function PriorityPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: "LOW" | "MEDIUM" | "HIGH" | null;
+  onChange: (v: "LOW" | "MEDIUM" | "HIGH" | null) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div
+      className="inline-flex items-center gap-0.5 rounded border p-0.5"
+      style={{ backgroundColor: T.panel, borderColor: T.borderSoft }}
+    >
+      <span className="px-1 text-[10px]" style={{ color: T.textMuted }}>
+        Пріоритет:
+      </span>
+      {PRIORITY_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onChange(active ? null : opt.value)}
+            className="rounded px-1.5 py-0.5 text-[10px] font-semibold transition disabled:opacity-50"
+            style={{
+              backgroundColor: active ? opt.bg : "transparent",
+              color: active ? opt.fg : T.textMuted,
+            }}
+          >
+            {opt.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

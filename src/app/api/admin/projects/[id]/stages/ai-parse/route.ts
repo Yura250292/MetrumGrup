@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -7,8 +7,6 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { safeParseJson } from "@/lib/ai/json-parse";
 import { downloadFromR2 } from "@/lib/foreman/r2";
-import { classifyExpenseImage } from "@/lib/ai/classify-expense-image";
-import { ocrReceiptStructured } from "@/lib/ocr/receipt-ocr";
 import { parseExcelEstimate } from "@/lib/parsers/excel-estimate-parser";
 import { parseKB2ActExcel } from "@/lib/parsers/kb2-act-parser";
 
@@ -16,6 +14,8 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 const MODEL = "gemini-2.5-flash";
+
+const PrioritySchema = z.enum(["LOW", "MEDIUM", "HIGH"]).nullable().optional();
 
 const ParsedItemSchema = z.object({
   tempId: z.string().min(1),
@@ -32,6 +32,9 @@ const ParsedItemSchema = z.object({
   proposedStageId: z.string().nullable().optional(),
   proposedNewStageTempId: z.string().nullable().optional(),
   reasoning: z.string().nullable().optional(),
+  // Нові поля: пріоритет і час виконання (тільки для LABOR — для матеріалів зазвичай null).
+  priority: PrioritySchema,
+  estimatedHours: z.number().positive().nullable().optional(),
 });
 
 const NewStageSchema = z.object({
@@ -49,23 +52,44 @@ export type AiParseItem = z.infer<typeof ParsedItemSchema>;
 export type AiParseNewStage = z.infer<typeof NewStageSchema>;
 export type AiParseResponse = z.infer<typeof ResponseSchema>;
 
-const SYSTEM_PROMPT = `Ти — досвідчений виконроб-кошторисник будівельної компанії. Користувач описує виконані роботи та закуплені матеріали вільним текстом. Твоя задача:
+const SYSTEM_PROMPT = `Ти — досвідчений виконроб-кошторисник будівельної компанії. Користувач описує виконані роботи та закуплені матеріали вільним текстом І/АБО додає файли (фото чек/накладна, PDF кошторис/акт, Excel). Твоя задача — РЕТЕЛЬНО проаналізувати все надане і структурувати у позиції.
 
-1. Розпізнати окремі позиції (кожна = одна робота або один матеріал).
+1. Розпізнати ВСІ окремі позиції (кожна = одна робота або один матеріал). Якщо файл містить кошторис/перелік — витягни КОЖЕН пункт, не пропускай. Якщо позицій багато (>20) — все одно повертай всі.
+
 2. Класифікувати кожну позицію:
-   - LABOR — виконана робота, вимірюється обсягом (м², м³, пог.м, шт). Дієслова: «залив», «поклав», «штукатурив», «демонтував», «фарбував».
-   - MATERIAL — закуплений товар/матеріал. Слова: «купив», «взяв», «привезли», назви товарів (цемент, плитка, дошка).
-3. Для кожної позиції витягни поля: title (короткий опис), quantity (число), unit (одиниця: м², м³, шт, кг, т, л, пог.м, год), unitPrice (за одиницю в грн), amount (сума в грн), supplier (постачальник якщо явно вказаний).
-4. Спів́стави з існуючим деревом етапів проекту (вкладеність до 3 рівнів). Якщо позиція явно належить до існуючого етапу — постав proposedStageId = id того етапу. Якщо потрібен новий етап (наприклад, нової роботи ще немає в дереві) — створи запис у newStages з осмисленою назвою і вкажи його tempId у proposedNewStageTempId.
-5. tempId: тільки для позицій і нових етапів. Префікс "i-" для позицій, "new-" для нових етапів. Унікальні.
-6. Не вгадуй суми. Якщо в тексті немає кількості / ціни — лиши null.
-7. confidence: 0.9+ якщо все чітко; 0.6-0.8 якщо неоднозначно; нижче 0.5 — не повертай позицію.
+   - LABOR — виконана/планована робота: монтаж, демонтаж, заливка, кладка, штукатурка, фарбування, копання. Вимірюється обсягом виконання (м², м³, пог.м, шт, год).
+   - MATERIAL — товар/матеріал: цемент, плитка, дошка, фарба, кабель, труба, бордюр. Вимірюється закупкою (шт, кг, т, л, м, м², м³).
 
-Будівельна логіка (типові групування):
-- Демонтаж → Робота техніки → Паливо (підпідетап)
+3. Для кожної позиції витягни:
+   - title — короткий опис (≤80 симв)
+   - quantity — число або null
+   - unit — одиниця виміру (м²/м³/шт/кг/т/л/пог.м/год/мішок/упак)
+   - unitPrice — за одиницю в грн або null
+   - amount — підсумок в грн або null
+   - supplier — постачальник якщо явно вказаний
+
+4. ВАЖЛИВО — для LABOR додатково:
+   - priority — "HIGH" (критичний — блокує наступні роботи), "MEDIUM" (плановий), "LOW" (можна відкласти)
+   - estimatedHours — оцінка часу в людино-годинах. Орієнтири: 1 м² штукатурки ≈ 0.5 год; 1 м² плитки ≈ 1 год; 1 м³ бетону ≈ 1-2 год роботи; 1 м² фарби ≈ 0.3 год; демонтаж 1 м³ ≈ 1 год.
+   Якщо неможливо оцінити — null.
+
+5. Спів́стави з існуючим деревом етапів проекту (вкладеність до 3 рівнів):
+   - Якщо позиція належить існуючому етапу → proposedStageId = id того етапу
+   - Якщо потрібен новий етап → запис у newStages + proposedNewStageTempId
+   - Підпорядковуй матеріали тій же роботі: цемент+пісок→Фундамент; плитка+клей→Облицювання; кабель+розетки→Електрика
+
+6. tempId: "i-N" для позицій, "new-N" для нових етапів. Унікальні.
+
+7. Не вгадуй суми — якщо в файлі/тексті немає кількості/ціни → null.
+
+8. confidence: 0.9+ чітко; 0.6-0.8 неоднозначно; <0.5 — НЕ повертай позицію.
+
+Будівельна логіка типового групування етапів:
+- Демонтаж → Робота техніки → Паливо
 - Фундамент → Бетон (матеріали) + Заливка (робота)
 - Облицювання плиткою → Плитка/Клей/Фуга (матеріали) + Кладка (робота)
 - Електрика → Кабель/Розетки (матеріали) + Монтаж (робота)
+- Благоустрій → Бордюри/Покриття (матеріали) + Укладка/Демонтаж (роботи)
 
 Відповідай ВИКЛЮЧНО валідним JSON:
 {
@@ -74,20 +98,22 @@ const SYSTEM_PROMPT = `Ти — досвідчений виконроб-кошт
       "tempId": "i-1",
       "costType": "LABOR" | "MATERIAL",
       "title": "...",
-      "quantity": число або null,
-      "unit": "м²"|"м³"|"шт"|"кг"|"пог.м"|"л"|"т"|"год" або null,
-      "unitPrice": число або null,
-      "amount": число або null,
-      "supplier": "..." або null,
+      "quantity": число | null,
+      "unit": "м²" | "м³" | "шт" | "кг" | "пог.м" | "л" | "т" | "год" | null,
+      "unitPrice": число | null,
+      "amount": число | null,
+      "supplier": "..." | null,
       "confidence": 0.85,
-      "rawLine": "оригінальний фрагмент тексту",
-      "proposedStageId": "<existing-stage-id>" або null,
-      "proposedNewStageTempId": "new-1" або null,
-      "reasoning": "коротко чому саме цей етап"
+      "rawLine": "оригінальний фрагмент",
+      "proposedStageId": "<id>" | null,
+      "proposedNewStageTempId": "new-1" | null,
+      "reasoning": "коротко чому цей етап",
+      "priority": "HIGH" | "MEDIUM" | "LOW" | null,
+      "estimatedHours": число | null
     }
   ],
   "newStages": [
-    { "tempId": "new-1", "name": "Назва нового етапу", "parentTempId": null або "<id-існуючого-етапу>" або "new-<інший>" }
+    { "tempId": "new-1", "name": "Назва", "parentTempId": null | "<id>" | "new-<інший>" }
   ]
 }`;
 
@@ -170,8 +196,9 @@ export async function POST(
     );
   }
 
-  // ── Pre-extract items з файлів (зображення / PDF / Excel) паралельно.
-  //    Класифікація MATERIAL/LABOR уже зроблена в helper-ах foreman pipeline.
+  // ── Файли: фото/PDF — інлайн напряму у Gemini multimodal call (LLM сам
+  //    OCR-ить + класифікує + матчить етапи з повним контекстом).
+  //    Excel — pre-parse у JSON (Gemini не читає xlsx нативно).
   type PreItem = {
     source: string;
     costType: "MATERIAL" | "LABOR";
@@ -183,58 +210,23 @@ export async function POST(
     supplier: string | null;
   };
   const preItems: PreItem[] = [];
+  const inlineFileParts: Part[] = [];
+  const inlineFileNotes: string[] = [];
   const fileErrors: string[] = [];
 
   await Promise.all(
     fileKeys.map(async (f) => {
       try {
         const buf = await downloadFromR2(f.key);
-        if (f.mime.startsWith("image/")) {
-          const cls = await classifyExpenseImage(buf, f.mime);
-          if (cls.type === "expense_table") {
-            for (const it of cls.items) {
-              preItems.push({
-                source: f.name,
-                costType: it.costType,
-                title: it.title,
-                quantity: it.quantity ?? null,
-                unit: it.unit ?? null,
-                unitPrice: it.unitPrice ?? null,
-                amount: it.amount,
-                supplier: it.supplier ?? null,
-              });
-            }
-          } else if (cls.type === "expense_total_only" && cls.totalAmount) {
-            preItems.push({
-              source: f.name,
-              costType: "MATERIAL",
-              title: cls.summary || "Витрата з чека",
-              quantity: null,
-              unit: null,
-              unitPrice: null,
-              amount: cls.totalAmount,
-              supplier: null,
-            });
-          }
-        } else if (f.mime === "application/pdf") {
-          const ocr = await ocrReceiptStructured(buf, f.mime);
-          for (const it of ocr.parsed.items) {
-            const amount =
-              it.totalPrice ??
-              (it.quantity && it.unitPrice ? it.quantity * it.unitPrice : 0);
-            if (amount > 0) {
-              preItems.push({
-                source: f.name,
-                costType: "MATERIAL",
-                title: it.name,
-                quantity: it.quantity ?? null,
-                unit: it.unit ?? null,
-                unitPrice: it.unitPrice ?? null,
-                amount,
-                supplier: null,
-              });
-            }
-          }
+        if (f.mime.startsWith("image/") || f.mime === "application/pdf") {
+          // Gemini 2.5 нативно підтримує і image, і PDF як inlineData.
+          inlineFileParts.push({
+            inlineData: {
+              mimeType: f.mime,
+              data: buf.toString("base64"),
+            },
+          });
+          inlineFileNotes.push(`${f.name} (${f.mime})`);
         } else if (
           f.mime ===
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
@@ -283,8 +275,18 @@ export async function POST(
               });
             }
           }
+          if (added === 0 && !preItems.length) {
+            // Excel-парсер не знайшов структури — file probably arbitrary
+            // (план робіт, договір тощо). Excel не передається в Gemini
+            // (немає нативного support), тому повідомляємо помилку.
+            fileErrors.push(
+              `${f.name}: не вдалось витягти структуру з Excel. Збережи як PDF/фото або опиши текстом.`,
+            );
+          }
         } else {
-          fileErrors.push(`${f.name}: непідтримуваний формат (${f.mime})`);
+          fileErrors.push(
+            `${f.name}: непідтримуваний формат (${f.mime}). Підтримуються: фото, PDF, Excel.`,
+          );
         }
       } catch (err) {
         console.error(`[ai-parse] file ${f.key} failed:`, err);
@@ -295,14 +297,20 @@ export async function POST(
     }),
   );
 
-  const userPrompt = `Дерево етапів проекту "${project.title}":
+  const userPromptText = `Дерево етапів проекту "${project.title}":
 ${JSON.stringify(stagesPayload, null, 2)}
 
-${text ? `Текст від виконроба:\n"""\n${text}\n"""\n` : ""}${
-    preItems.length > 0
-      ? `\nПозиції вже витягнуто з файлів (класифікація costType вже зроблена, її НЕ міняй — лиш признач етап + tempId; quantity/unit/unitPrice/amount теж залиш):\n${JSON.stringify(preItems, null, 2)}\n\nДля КОЖНОЇ pre-extracted позиції створи відповідний item у відповіді: костомний tempId (i-N), costType/title/quantity/unit/unitPrice/amount/supplier СКОПІЮЙ з вхідних даних, заповни proposedStageId або proposedNewStageTempId.`
+${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
+    inlineFileNotes.length > 0
+      ? `\nДодано файлів (фото/PDF — інлайн нижче): ${inlineFileNotes.join(", ")}.\nПроаналізуй ВЕСЬ зміст файлів і витягни ВСІ позиції (роботи + матеріали).\n`
       : ""
-  }`;
+  }${
+    preItems.length > 0
+      ? `\nПозиції витягнуто з Excel (структура чітка — costType/title/qty/price вже визначено). СКОПІЮЙ їх у items[] без змін, ТІЛЬКИ признач proposedStageId/proposedNewStageTempId і за можливістю додай priority/estimatedHours:\n${JSON.stringify(preItems, null, 2)}\n`
+      : ""
+  }
+
+ОБОВ'ЯЗКОВО: якщо є файли або текст з позиціями — поверни items[] НЕ порожнім. Якщо файл є, але не містить роботів/матеріалів — все одно поверни items[] з тим що бачиш (хоча б назви розділів/етапів).`;
 
   let parsed: AiParseResponse;
   try {
@@ -315,7 +323,9 @@ ${text ? `Текст від виконроба:\n"""\n${text}\n"""\n` : ""}${
         temperature: 0.2,
       },
     });
-    const result = await model.generateContent(userPrompt);
+    // Multimodal request: text-part + inline file parts (image/PDF).
+    const parts: Part[] = [{ text: userPromptText }, ...inlineFileParts];
+    const result = await model.generateContent(parts);
     const raw = result.response.text();
     const json = safeParseJson<unknown>(raw);
     if (!json.ok) {
