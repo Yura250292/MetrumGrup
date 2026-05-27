@@ -346,6 +346,7 @@ export function MeDashboard({
     markDone,
     deleteTask,
     acceptTask,
+    patchTask,
   } = useMeTasks({
     projectIds: projectIds.length > 0 ? projectIds : undefined,
     initialScope: isAdmin ? "all" : "assigned",
@@ -626,6 +627,7 @@ export function MeDashboard({
           onStartTimer={(id) => void startTimer(id)}
           onStopTimer={() => void stopTimer()}
           onMarkDone={(t) => void markDone(t)}
+          onPatch={(id, patch) => void patchTask(id, patch)}
         />
       )}
 

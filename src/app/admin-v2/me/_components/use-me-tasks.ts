@@ -261,6 +261,48 @@ export function useMeTasks({
     }
   };
 
+  /**
+   * Оптимістично патчить задачу і шле PATCH /api/admin/tasks/{id}. Якщо
+   * сервер відповів помилкою — відкочує локальний стейт до попереднього.
+   * Використовується inline-pickers (status/priority/dueDate) у Таблиці.
+   */
+  const patchTask = useCallback(
+    async (taskId: string, patch: Record<string, unknown>) => {
+      const prev = tasks;
+      setTasks((current) =>
+        current.map((t) => {
+          if (t.id !== taskId) return t;
+          const next: TaskItem = { ...t };
+          if ("priority" in patch) {
+            next.priority = patch.priority as TaskItem["priority"];
+          }
+          if ("dueDate" in patch) {
+            next.dueDate = (patch.dueDate as string | null) ?? null;
+          }
+          // statusId-апдейт без знання кольору — лишаємо color/name старі,
+          // повне оновлення зробить наступний load() якщо потрібно.
+          return next;
+        }),
+      );
+      try {
+        const res = await fetch(`/api/admin/tasks/${taskId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) throw new Error("patch failed");
+        // Якщо статус змінено — підвантажуємо повну задачу, щоб взяти
+        // правильний status object (name/color/isDone) з бека.
+        if ("statusId" in patch) {
+          await load();
+        }
+      } catch {
+        setTasks(prev);
+      }
+    },
+    [tasks, load],
+  );
+
   /** Виконавець підтверджує що бере задачу: «Новий» → «В роботі». */
   const acceptTask = async (taskId: string) => {
     setPendingId(taskId);
@@ -293,5 +335,6 @@ export function useMeTasks({
     markDone,
     deleteTask,
     acceptTask,
+    patchTask,
   };
 }
