@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ClipboardList, FileText, Package, ArrowRight } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
+import { PageIntroCard } from "../_components/help/PageIntroCard";
 
 type PR = {
   id: string;
@@ -102,6 +103,7 @@ export default function ProcurementOverview() {
 
   return (
     <div className="flex flex-col gap-4 p-6">
+      <PageIntroCard />
       <div className="flex items-center gap-3">
         <span
           className="inline-flex items-center justify-center rounded-xl"
