@@ -42,6 +42,7 @@ import { ImportEstimateModal } from "./import-estimate-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
 import { PublishFinanceDialog } from "./publish-finance-dialog";
 import { StagesAiAssistant } from "./stages-ai-assistant";
+import { AiRestructureModal } from "./ai-restructure-modal";
 
 export type ResponsibleCandidate = { id: string; name: string };
 
@@ -153,6 +154,7 @@ export function StagesSection({
 
   const [importOpen, setImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [restructureOpen, setRestructureOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [aiAssistantOpen, setAiAssistantOpen] = useState(false);
   const [dirtyStageIds, setDirtyStageIds] = useState<Set<string>>(() => new Set());
@@ -796,6 +798,14 @@ export function StagesSection({
                       setOverflowOpen(false);
                     }}
                   />
+                  <OverflowItem
+                    icon={<Sparkles size={13} />}
+                    label="AI: побудувати дерево"
+                    onClick={() => {
+                      setRestructureOpen(true);
+                      setOverflowOpen(false);
+                    }}
+                  />
                 </div>
               </>
             )}
@@ -911,6 +921,17 @@ export function StagesSection({
           projectId={projectId}
           onClose={() => setPasteOpen(false)}
           onImported={refetch}
+        />
+      )}
+      {restructureOpen && (
+        <AiRestructureModal
+          projectId={projectId}
+          stages={stages.map((s) => ({
+            id: s.id,
+            name: stageDisplayName(s),
+          }))}
+          onClose={() => setRestructureOpen(false)}
+          onApplied={refetch}
         />
       )}
       <PublishFinanceDialog

@@ -65,6 +65,13 @@ const ApplyItemSchema = z.object({
 const BodySchema = z.object({
   items: z.array(ApplyItemSchema).default([]),
   newStages: z.array(NewStageSchema).default([]),
+  /**
+   * "plan" — кошторис: пишемо в planVolume / unit / planUnitPrice.
+   * "fact" — пост-факт опис: пишемо в factVolume / factUnit / factUnitPrice.
+   *
+   * Default — "fact" для зворотньої сумісності (стара поведінка).
+   */
+  targetMode: z.enum(["plan", "fact"]).default("fact"),
 });
 
 export async function POST(
@@ -221,46 +228,60 @@ export async function POST(
       if (!stageId) continue;
 
       if (it.costType === "LABOR") {
-        // Оновлюємо fact-поля етапу. Якщо вже є factVolume — підсумовуємо;
-        // якщо одиниці не співпадають — перезаписуємо (попереджувальна логіка
-        // в UI має це покривати).
+        // Оновлюємо план- або факт-поля етапу (за targetMode). Якщо вже
+        // є значення — підсумовуємо; якщо одиниці не співпадають —
+        // перезаписуємо (попереджувальна логіка в UI має це покривати).
+        const isPlan = body.targetMode === "plan";
         const existing = await tx.projectStageRecord.findUnique({
           where: { id: stageId },
           select: {
+            planVolume: true,
             factVolume: true,
+            unit: true,
             factUnit: true,
+            planUnitPrice: true,
             factUnitPrice: true,
             notes: true,
           },
         });
         if (!existing) continue;
-        const newFactUnit = it.unit ?? existing.factUnit ?? null;
-        const sameUnit =
-          !existing.factUnit ||
-          !it.unit ||
-          existing.factUnit === it.unit;
+        const existingVolume = isPlan ? existing.planVolume : existing.factVolume;
+        const existingUnit = isPlan ? existing.unit : existing.factUnit;
+        const existingUnitPrice = isPlan
+          ? existing.planUnitPrice
+          : existing.factUnitPrice;
+        const newUnit = it.unit ?? existingUnit ?? null;
+        const sameUnit = !existingUnit || !it.unit || existingUnit === it.unit;
         const addedVolume = it.quantity ?? 0;
         const nextVolume =
-          sameUnit && existing.factVolume !== null
-            ? Number(existing.factVolume) + addedVolume
-            : addedVolume || Number(existing.factVolume ?? 0);
-        const nextUnitPrice = it.unitPrice ?? existing.factUnitPrice;
+          sameUnit && existingVolume !== null
+            ? Number(existingVolume) + addedVolume
+            : addedVolume || Number(existingVolume ?? 0);
+        const nextUnitPrice = it.unitPrice ?? existingUnitPrice;
         const nextNotes =
           it.priority || (it.estimatedHours != null && it.estimatedHours > 0)
             ? mergeAiNote(existing.notes, it.priority, it.estimatedHours)
             : existing.notes;
 
+        const dataUpdate: Record<string, unknown> = { notes: nextNotes };
+        const volumeValue = nextVolume > 0 ? nextVolume : null;
+        const priceValue =
+          nextUnitPrice !== null && nextUnitPrice !== undefined
+            ? Number(nextUnitPrice)
+            : null;
+        if (isPlan) {
+          dataUpdate.planVolume = volumeValue;
+          dataUpdate.unit = newUnit;
+          dataUpdate.planUnitPrice = priceValue;
+        } else {
+          dataUpdate.factVolume = volumeValue;
+          dataUpdate.factUnit = newUnit;
+          dataUpdate.factUnitPrice = priceValue;
+        }
+
         await tx.projectStageRecord.update({
           where: { id: stageId },
-          data: {
-            factVolume: nextVolume > 0 ? nextVolume : null,
-            factUnit: newFactUnit,
-            factUnitPrice:
-              nextUnitPrice !== null && nextUnitPrice !== undefined
-                ? Number(nextUnitPrice)
-                : null,
-            notes: nextNotes,
-          },
+          data: dataUpdate,
         });
         if (!updatedStageIds.has(stageId)) {
           updatedStageIds.add(stageId);

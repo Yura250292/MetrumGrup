@@ -109,6 +109,17 @@ export function StagesAiAssistant({
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [uploading, setUploading] = useState(false);
   const [fileErrors, setFileErrors] = useState<string[]>([]);
+  // "plan" — пишемо planVolume/unit/planUnitPrice (попередній кошторис).
+  // "fact" — пишемо factVolume/factUnit/factUnitPrice (виконане).
+  // Default — "fact", але як тільки користувач додає файл — авто-перемикаємо
+  // на "plan" (бо файл = кошторис у >90% випадків).
+  const [targetMode, setTargetMode] = useState<"plan" | "fact">("fact");
+  const userOverrodeMode = useRef(false);
+  useEffect(() => {
+    if (userOverrodeMode.current) return;
+    if (files.length > 0) setTargetMode("plan");
+    else setTargetMode("fact");
+  }, [files.length]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -399,6 +410,7 @@ export function StagesAiAssistant({
                 estimatedHours: it.estimatedHours ?? null,
               })),
               newStages: newStagesPayload,
+              targetMode,
             }),
           },
         );
@@ -571,6 +583,44 @@ export function StagesAiAssistant({
                   disabled={parsing || applying}
                 />
               ))}
+            </div>
+          )}
+
+          {items.length > 0 && (
+            <div
+              className="mt-3 flex items-center gap-2 rounded-lg border p-2.5 text-[11px]"
+              style={{
+                backgroundColor: T.panelSoft,
+                borderColor: T.borderSoft,
+                color: T.textSecondary,
+              }}
+            >
+              <span className="font-semibold" style={{ color: T.textPrimary }}>
+                Записати як:
+              </span>
+              <div className="flex items-center gap-1">
+                {(["plan", "fact"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      userOverrodeMode.current = true;
+                      setTargetMode(m);
+                    }}
+                    className="rounded-md px-2 py-1 text-[11px] font-semibold transition"
+                    style={{
+                      backgroundColor:
+                        targetMode === m ? T.accentPrimary : "transparent",
+                      color: targetMode === m ? "white" : T.textSecondary,
+                      border: `1px solid ${
+                        targetMode === m ? T.accentPrimary : T.borderSoft
+                      }`,
+                    }}
+                  >
+                    {m === "plan" ? "План (кошторис)" : "Факт (виконане)"}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
