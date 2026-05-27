@@ -141,9 +141,24 @@ model User {
   purchaseOrdersCreated     PurchaseOrder[]           @relation("PurchaseOrderCreator")
   counterpartyReviews       CounterpartyReview[]      @relation("CounterpartyReviewAuthor")
   counterpartyDocuments     CounterpartyDocument[]    @relation("CounterpartyDocumentUploader")
+  passwordResetTokens       PasswordResetToken[]
 
   @@index([firmId])
   @@map("users")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 model Project {

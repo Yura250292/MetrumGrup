@@ -7,11 +7,29 @@ import { ArrowLeft, Mail } from "lucide-react";
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // TODO: implement password reset email sending
-    setSubmitted(true);
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (res.status === 429) {
+        setError("Забагато запитів. Спробуйте через кілька хвилин.");
+        return;
+      }
+      setSubmitted(true);
+    } catch {
+      setSubmitted(true);
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -54,11 +72,15 @@ export default function ForgotPasswordPage() {
                   />
                 </div>
               </div>
+              {error && (
+                <p className="text-[12px] text-[#FF6B6B]">{error}</p>
+              )}
               <button
                 type="submit"
-                className="rounded-xl bg-[#3B5BFF] py-3 text-[14px] font-bold text-white hover:opacity-90 transition"
+                disabled={loading}
+                className="rounded-xl bg-[#3B5BFF] py-3 text-[14px] font-bold text-white hover:opacity-90 transition disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Надіслати інструкції
+                {loading ? "Надсилаємо…" : "Надіслати інструкції"}
               </button>
             </form>
           </>
