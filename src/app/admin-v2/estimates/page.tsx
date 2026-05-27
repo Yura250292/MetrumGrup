@@ -2,20 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { formatCurrency, formatDateShort } from "@/lib/utils";
-import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
-import {
-  FileText,
-  Plus,
-  Sparkles,
-  Calculator,
-  ArrowRight,
-  Search,
-} from "lucide-react";
-import type { EstimateStatus } from "@prisma/client";
+import { formatCurrency } from "@/lib/utils";
+import { Plus, Sparkles } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { SectionTabs } from "../_components/section-tabs";
 import { PageIntroCard } from "../_components/help/PageIntroCard";
+import { EstimatesListClient, type EstimateRow } from "./_components/estimates-list-client";
 
 const ESTIMATE_TABS = [
   { href: "/admin-v2/estimates", label: "Робочі", exact: true },
@@ -54,6 +46,19 @@ export default async function AdminV2EstimatesPage() {
   const totalSum = estimates.reduce((sum, e) => sum + Number(e.finalAmount ?? 0), 0);
   const approvedCount = estimates.filter((e) => e.status === "APPROVED").length;
   const draftCount = estimates.filter((e) => e.status === "DRAFT").length;
+
+  const rows: EstimateRow[] = estimates.map((e) => ({
+    id: e.id,
+    number: e.number,
+    title: e.title,
+    status: e.status,
+    totalAmount: Number(e.totalAmount ?? 0),
+    discount: Number(e.discount ?? 0),
+    finalAmount: Number(e.finalAmount ?? 0),
+    createdAt: e.createdAt.toISOString(),
+    projectTitle: e.project?.title ?? null,
+    clientName: e.project?.client?.name ?? null,
+  }));
 
   return (
     <div className="flex flex-col gap-8">
@@ -106,99 +111,7 @@ export default async function AdminV2EstimatesPage() {
         />
       </section>
 
-      {/* List */}
-      <section
-        className="rounded-2xl"
-        style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-      >
-        <div
-          className="flex items-center justify-between gap-4 border-b px-6 py-4"
-          style={{ borderColor: T.borderSoft }}
-        >
-          <div className="flex items-center gap-2.5">
-            <FileText size={18} style={{ color: T.accentPrimary }} />
-            <span className="text-base font-bold" style={{ color: T.textPrimary }}>
-              Всі кошториси
-            </span>
-            <span
-              className="rounded-full px-2 py-0.5 text-[11px] font-medium"
-              style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-            >
-              {estimates.length}
-            </span>
-          </div>
-          <div
-            className="hidden md:flex items-center gap-2 rounded-xl px-3 py-2"
-            style={{ backgroundColor: T.panelElevated, border: `1px solid ${T.borderStrong}` }}
-          >
-            <Search size={14} style={{ color: T.textMuted }} />
-            <span className="text-xs" style={{ color: T.textMuted }}>
-              Пошук скоро з'явиться
-            </span>
-          </div>
-        </div>
-
-        {estimates.length === 0 ? (
-          <EmptyState />
-        ) : (
-          <div className="flex flex-col">
-            {estimates.map((est, i) => (
-              <Link
-                key={est.id}
-                href={`/admin-v2/estimates/${est.id}`}
-                className="flex items-center gap-4 px-6 py-4 transition hover:brightness-[0.97]"
-                style={{
-                  backgroundColor: i % 2 === 1 ? T.panelSoft : "transparent",
-                  borderTop: i === 0 ? "none" : `1px solid ${T.borderSoft}`,
-                }}
-              >
-                <div
-                  className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl"
-                  style={{ backgroundColor: T.accentPrimarySoft }}
-                >
-                  <Calculator size={20} style={{ color: T.accentPrimary }} />
-                </div>
-                <div className="flex flex-1 flex-col gap-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[14px] font-semibold truncate" style={{ color: T.textPrimary }}>
-                      {est.title}
-                    </span>
-                    <StatusBadge status={est.status} />
-                  </div>
-                  <div className="flex items-center gap-2 text-[11px] flex-wrap" style={{ color: T.textMuted }}>
-                    <span>{est.number}</span>
-                    {est.project?.title && (
-                      <>
-                        <span>·</span>
-                        <span className="truncate">{est.project.title}</span>
-                      </>
-                    )}
-                    {est.project?.client?.name && (
-                      <>
-                        <span>·</span>
-                        <span className="truncate">{est.project.client.name}</span>
-                      </>
-                    )}
-                    <span>·</span>
-                    <span>{formatDateShort(est.createdAt)}</span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-0.5 flex-shrink-0 max-w-[40%] sm:max-w-none">
-                  <span className="text-sm sm:text-base font-bold truncate max-w-full" style={{ color: T.textPrimary }}>
-                    {formatCurrency(Number(est.finalAmount ?? 0))}
-                  </span>
-                  {Number(est.discount ?? 0) > 0 && (
-                    <span className="text-[10px] line-through truncate max-w-full" style={{ color: T.textMuted }}>
-                      {formatCurrency(Number(est.totalAmount ?? 0))}
-                    </span>
-                  )}
-                </div>
-                <ArrowRight size={16} style={{ color: T.textMuted }} className="flex-shrink-0" />
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+      <EstimatesListClient estimates={rows} />
     </div>
   );
 }
@@ -228,69 +141,6 @@ function KpiCard({
       <span className="text-[10px] sm:text-[11px] hidden sm:block truncate" style={{ color: T.textMuted }}>
         {sub}
       </span>
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: EstimateStatus }) {
-  const label = ESTIMATE_STATUS_LABELS[status] ?? status;
-  const colors: Record<string, { bg: string; fg: string }> = {
-    DRAFT: { bg: T.panelElevated, fg: T.textMuted },
-    SENT: { bg: T.accentPrimarySoft, fg: T.accentPrimary },
-    APPROVED: { bg: T.successSoft, fg: T.success },
-    REJECTED: { bg: T.dangerSoft, fg: T.danger },
-    REVISION: { bg: T.warningSoft, fg: T.warning },
-    ENGINEER_REVIEW: { bg: T.warningSoft, fg: T.warning },
-    FINANCE_REVIEW: { bg: T.warningSoft, fg: T.warning },
-  };
-  const c = colors[status] ?? colors.DRAFT;
-  return (
-    <span
-      className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-wide flex-shrink-0"
-      style={{ backgroundColor: c.bg, color: c.fg }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function EmptyState() {
-  return (
-    <div
-      className="flex flex-col items-center gap-3 px-6 py-16 text-center"
-    >
-      <div
-        className="flex h-14 w-14 items-center justify-center rounded-full"
-        style={{ backgroundColor: T.accentPrimarySoft }}
-      >
-        <FileText size={28} style={{ color: T.accentPrimary }} />
-      </div>
-      <span className="text-[15px] font-semibold" style={{ color: T.textPrimary }}>
-        Кошторисів ще немає
-      </span>
-      <span className="text-[12px]" style={{ color: T.textMuted }}>
-        Створіть перший — швидко через AI або вручну
-      </span>
-      <div className="mt-3 flex gap-2">
-        <Link
-          href="/ai-estimate-v2"
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold text-white"
-          style={{ backgroundColor: T.accentPrimary }}
-        >
-          <Sparkles size={16} /> AI генератор
-        </Link>
-        <Link
-          href="/admin-v2/estimates/new"
-          className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold"
-          style={{
-            backgroundColor: T.panelElevated,
-            color: T.textPrimary,
-            border: `1px solid ${T.borderStrong}`,
-          }}
-        >
-          <Plus size={16} /> Вручну
-        </Link>
-      </div>
     </div>
   );
 }

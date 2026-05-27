@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { FileEdit } from "lucide-react";
 import type { ChangeOrderStatus } from "@prisma/client";
 import { COStatusBadge } from "./_components/StatusBadge";
 import { CostImpactBadge } from "@/components/CostImpactBadge";
 import { SectionTabs } from "../_components/section-tabs";
+import { EmptyState } from "@/components/shared/states/EmptyState";
 
 type CORow = {
   id: string;
@@ -115,8 +117,21 @@ export default function ChangeOrdersListPage() {
             )}
             {!loading && rows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-3 py-6 text-center text-zinc-400">
-                  Нічого не знайдено.
+                <td colSpan={8} className="px-3 py-8">
+                  <EmptyState
+                    icon={<FileEdit size={22} />}
+                    title={status ? "За цим фільтром нічого немає" : "Додаткових угод ще немає"}
+                    description={
+                      status
+                        ? "Спробуйте інший статус або скиньте фільтр."
+                        : "Створіть першу додаткову угоду — зафіксуйте зміни обсягу робіт із вартісним і часовим впливом."
+                    }
+                    action={
+                      status
+                        ? { label: "Скинути фільтр", onClick: () => setStatus("") }
+                        : { label: "Створити дод. угоду", href: "/admin-v2/change-orders/new" }
+                    }
+                  />
                 </td>
               </tr>
             )}

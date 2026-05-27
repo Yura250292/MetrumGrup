@@ -2,18 +2,46 @@
  * E2E test seed — IDEMPOTENT, NON-DESTRUCTIVE.
  *
  * Upserts:
- *   - Firm "metrum-group" (if missing)
- *   - 8 test users (one per role) with stable emails `e2e-<role>@metrum-group.local`
- *   - 1 SUPPLIER counterparty `e2e-supplier@metrum-group.local`
- *   - 1 test project owned by the MANAGER user
+ *   - Firms "metrum-group" + "metrum-studio" (if missing)
+ *   - 8 test users (one per role) for Group + 1 Studio MANAGER
+ *   - 1 SUPPLIER counterparty
+ *   - 1 Group test project + 1 Studio test project
  *
- * Existing rows are matched by stable unique keys (email, project title) so
+ * Existing rows are matched by stable unique keys (email, project slug) so
  * repeated runs converge. This script must NEVER call deleteMany / db push /
  * migrate reset — it's safe to run against any environment.
+ *
+ * Env loading: mirrors Next.js dev — .env.local overrides .env, so the seed
+ * always targets the same DB the dev server uses.
  *
  * Run: `npm run db:seed-e2e`
  * Login: see passwords below — `ChangeMe!2026` by default unless overridden.
  */
+import { readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
+
+function loadEnvFile(file: string) {
+  const p = resolve(process.cwd(), file);
+  if (!existsSync(p)) return;
+  for (const raw of readFileSync(p, "utf8").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    let val = line.slice(eq + 1).trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = val;
+  }
+}
+
+// Next.js dev precedence: .env.local wins over .env. Load .env.local first so
+// existing keys are claimed; .env then fills the gaps without overwriting.
+loadEnvFile(".env.local");
+loadEnvFile(".env");
+
 import { PrismaClient, type Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
@@ -21,6 +49,8 @@ const prisma = new PrismaClient();
 
 const PASSWORD = process.env.E2E_PASSWORD || "ChangeMe!2026";
 const FIRM_ID = "metrum-group";
+const STUDIO_FIRM_ID = "metrum-studio";
+const STUDIO_MANAGER_EMAIL = "e2e-studio-manager@metrum-group.local";
 
 const ROLES: Role[] = [
   "SUPER_ADMIN",
@@ -67,7 +97,7 @@ async function main() {
     const email = emailFor(role);
     const u = await prisma.user.upsert({
       where: { email },
-      update: { role, firmId: FIRM_ID, isActive: true },
+      update: { role, firmId: FIRM_ID, isActive: true, password: passwordHash },
       create: {
         email,
         password: passwordHash,
@@ -130,8 +160,58 @@ async function main() {
     console.log(`  ✓ project "${projectTitle}" (already exists)`);
   }
 
+  // Studio firm + Studio MANAGER + Studio-only project (firm-isolation tests).
+  await prisma.firm.upsert({
+    where: { id: STUDIO_FIRM_ID },
+    update: {},
+    create: {
+      id: STUDIO_FIRM_ID,
+      slug: STUDIO_FIRM_ID,
+      name: "Metrum Studio (E2E)",
+      isDefault: false,
+    },
+  });
+
+  const studioManager = await prisma.user.upsert({
+    where: { email: STUDIO_MANAGER_EMAIL },
+    update: { role: "MANAGER", firmId: STUDIO_FIRM_ID, isActive: true, password: passwordHash },
+    create: {
+      email: STUDIO_MANAGER_EMAIL,
+      password: passwordHash,
+      name: "E2E Studio MANAGER",
+      role: "MANAGER",
+      firmId: STUDIO_FIRM_ID,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  console.log(`  ✓ ${STUDIO_MANAGER_EMAIL} (Studio MANAGER)`);
+
+  const studioProjectSlug = "e2e-studio-project";
+  const existingStudioProject = await prisma.project.findUnique({
+    where: { slug: studioProjectSlug },
+    select: { id: true },
+  });
+  if (!existingStudioProject) {
+    await prisma.project.create({
+      data: {
+        slug: studioProjectSlug,
+        title: "E2E Studio Project",
+        firmId: STUDIO_FIRM_ID,
+        managerId: studioManager.id,
+        status: "ACTIVE",
+        currentStage: "DESIGN",
+        isTestProject: true,
+      },
+    });
+    console.log(`  ✓ project "E2E Studio Project"`);
+  } else {
+    console.log(`  ✓ project "E2E Studio Project" (already exists)`);
+  }
+
   console.log("✅ E2E seed complete.");
   console.log(`   Login with any of e2e-<role>@metrum-group.local`);
+  console.log(`   Studio MANAGER: ${STUDIO_MANAGER_EMAIL}`);
   console.log(`   Password: ${PASSWORD === "ChangeMe!2026" ? "<default>" : "<from $E2E_PASSWORD>"}`);
 }
 

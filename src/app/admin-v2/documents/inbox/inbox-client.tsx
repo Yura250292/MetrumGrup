@@ -5,6 +5,7 @@ import { Loader2, UploadCloud, AlertCircle, Inbox, Mail } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useDrillDown } from "@/components/drawer/use-drill-down";
 import { DocumentConfidenceBadge } from "@/components/document-confidence-badge";
+import { EmptyState } from "@/components/shared/states/EmptyState";
 import {
   DocumentListItem,
   DocumentListResponse,
@@ -209,11 +210,25 @@ export function InboxClient() {
             <Loader2 className="animate-spin" size={20} />
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-12 text-center">
-            <Inbox size={32} style={{ color: T.textMuted }} />
-            <p className="text-sm" style={{ color: T.textSecondary }}>
-              Документів у цій категорії поки немає.
-            </p>
+          <div className="p-4">
+            <EmptyState
+              icon={<Inbox size={22} />}
+              title={
+                activeTab === "ALL"
+                  ? "Інбокс порожній"
+                  : "У цій категорії документів немає"
+              }
+              description="Завантажте PDF чи фото — AI визначить поля і запропонує привʼязати документ до фінансового запису."
+              action={{
+                label: "Завантажити документ",
+                onClick: () => fileInputRef.current?.click(),
+              }}
+              secondaryAction={
+                activeTab !== "ALL"
+                  ? { label: "Показати всі", onClick: () => setActiveTab("ALL") }
+                  : undefined
+              }
+            />
           </div>
         ) : (
           <ul className="divide-y" style={{ borderColor: T.borderSoft }}>

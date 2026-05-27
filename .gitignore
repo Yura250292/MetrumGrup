@@ -54,6 +54,8 @@ next-env.d.ts
 # Testing
 coverage/
 *.log
+test-results/
+playwright-report/
 
 # MTProto backfill — local-only state and downloads
 scripts/.session*

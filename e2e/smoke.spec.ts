@@ -97,15 +97,15 @@ test.describe("Beta smoke — ACL enforcement", () => {
     expect(res.status()).toBe(401);
   });
 
-  test("CLIENT cannot view procurement", async ({ page, request }) => {
+  test("CLIENT cannot view procurement", async ({ page }) => {
     await login(page, "CLIENT");
-    const res = await request.get("/api/admin/purchase-requests");
+    const res = await page.request.get("/api/admin/purchase-requests");
     expect([401, 403]).toContain(res.status());
   });
 
-  test("SUPER_ADMIN can view procurement", async ({ page, request }) => {
+  test("SUPER_ADMIN can view procurement", async ({ page }) => {
     await login(page, "SUPER_ADMIN");
-    const res = await request.get("/api/admin/purchase-requests");
+    const res = await page.request.get("/api/admin/purchase-requests");
     expect(res.status()).toBe(200);
   });
 });

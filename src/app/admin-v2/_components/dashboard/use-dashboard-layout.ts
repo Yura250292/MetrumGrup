@@ -210,7 +210,10 @@ export function useDashboardLayout() {
 function useDebouncedCallback<T extends (...args: never[]) => void>(fn: T, delayMs: number) {
   const fnRef = useRef(fn);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  fnRef.current = fn;
+
+  useEffect(() => {
+    fnRef.current = fn;
+  }, [fn]);
 
   useEffect(
     () => () => {

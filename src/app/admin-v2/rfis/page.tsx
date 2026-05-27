@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock, AlertCircle } from "lucide-react";
+import { Clock, AlertCircle, MessageCircleQuestion } from "lucide-react";
 import type { RFIPriority, RFIStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { useDrillDown } from "@/components/drawer/use-drill-down";
+import { EmptyState } from "@/components/shared/states/EmptyState";
 
 type RFIRow = {
   id: string;
@@ -171,8 +172,23 @@ export default function RFIDashboardPage() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="py-6 text-center text-zinc-400 italic">
-                    Немає записів
+                  <td colSpan={7} className="py-8">
+                    <EmptyState
+                      icon={<MessageCircleQuestion size={22} />}
+                      title={
+                        tab === "assignedOverdue"
+                          ? "Прострочених RFI немає"
+                          : tab === "assigned"
+                            ? "На вас немає активних RFI"
+                            : tab === "asked"
+                              ? "Ви ще не створювали RFI"
+                              : tab === "firmOverdue"
+                                ? "Прострочених RFI по фірмі немає"
+                                : "RFI ще немає"
+                      }
+                      description="RFI створюються в контексті проєкту — відкрийте проєкт і натисніть «Новий RFI» у вкладці «RFI»."
+                      action={{ label: "Перейти до проєктів", href: "/admin-v2/projects" }}
+                    />
                   </td>
                 </tr>
               )}

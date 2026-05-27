@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ExcelImportModal } from "@/app/admin-v2/hr/_components/excel-import-modal";
+import { EmptyState } from "@/components/shared/states/EmptyState";
 import { formatCurrency } from "@/lib/utils";
 
 const formatUah = (n: number) => formatCurrency(n);
@@ -709,12 +710,49 @@ export function CounterpartyList({ currentUserRole }: { currentUserRole: string 
                 <tr>
                   <td
                     colSpan={roleFilter === "SUPPLIER" ? 10 : 9}
-                    className="px-4 py-12 text-center text-sm"
-                    style={{ color: T.textMuted }}
+                    className="px-4 py-10"
                   >
-                    {search.trim() || typeFilter || roleFilter || hasDebt
-                      ? "Нічого не знайдено за фільтрами."
-                      : "Список порожній. Додайте через кнопку «Новий контрагент» або імпортуйте з Excel."}
+                    {search.trim() || typeFilter || roleFilter || hasDebt ? (
+                      <EmptyState
+                        icon={<Building2 size={22} />}
+                        title="Нічого не знайдено за фільтрами"
+                        description="Спробуйте інший пошуковий запит або скиньте фільтри."
+                        action={{
+                          label: "Скинути фільтри",
+                          onClick: () => {
+                            setSearch("");
+                            setTypeFilter("");
+                            setRoleFilter("");
+                            setHasDebt(false);
+                          },
+                        }}
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={<Building2 size={22} />}
+                        title="Контрагентів ще немає"
+                        description="Додайте першого вручну або імпортуйте список з Excel."
+                        action={
+                          canCreate
+                            ? {
+                                label: "Додати контрагента",
+                                onClick: () => {
+                                  setCreating({ ...EMPTY_FORM });
+                                  setCreatingError(null);
+                                },
+                              }
+                            : undefined
+                        }
+                        secondaryAction={
+                          canCreate
+                            ? {
+                                label: "Імпорт з Excel",
+                                onClick: () => setShowImport(true),
+                              }
+                            : undefined
+                        }
+                      />
+                    )}
                   </td>
                 </tr>
               )}
