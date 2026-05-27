@@ -53,10 +53,6 @@ const FOREMAN_REVIEW_ROLES = ["SUPER_ADMIN", "FINANCIER"] as const;
 // Облік постачальників (Invoice/SupplierPayment): MANAGER + FINANCIER + SUPER_ADMIN.
 // Збігається з SUPPLIER_LEDGER_ROLES у auth-utils. 2026-05-21.
 const SUPPLIERS_ACCESS_ROLES = ["SUPER_ADMIN", "MANAGER", "FINANCIER"] as const;
-// Зміни в кошторисах: інженери + менеджери. SUPER_ADMIN бачить усе.
-const CHANGE_ORDER_ROLES = ["SUPER_ADMIN", "MANAGER", "ENGINEER"] as const;
-// Procurement (PR/RFQ/PO): тільки керівники закупівель.
-const PROCUREMENT_ROLES = ["SUPER_ADMIN", "MANAGER", "FINANCIER"] as const;
 
 export type NavGroup = {
   label: string;
@@ -90,7 +86,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
-      { href: "/admin-v2/change-orders", label: "Зміни в кошторисах", icon: FileSignature, roles: CHANGE_ORDER_ROLES },
       { href: "/admin-v2/rfis", label: "RFI (запити)", icon: HelpCircle },
       { href: "/admin-v2/meetings", label: "Наради", icon: Mic, superAdminOnly: true },
       { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES, inboxKey: "foremanReports" },
@@ -101,7 +96,6 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, roles: SUPPLIERS_ACCESS_ROLES },
-      { href: "/admin-v2/procurement", label: "Закупівлі (RFQ)", icon: ClipboardList, roles: PROCUREMENT_ROLES, pillBadge: { text: "BETA", color: "amber" } },
       { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/reports", label: "Звіти", icon: FileText, roles: FINANCE_VIEW_ROLES },
     ],
@@ -172,11 +166,6 @@ export const BREADCRUMB_MAP: Record<string, string> = {
   "/admin-v2/feed": "Активність",
   "/admin-v2/chat": "Чат",
   "/admin-v2/rfis": "RFI (Запити)",
-  "/admin-v2/change-orders": "Зміни в кошторисах",
-  "/admin-v2/procurement": "Закупівлі (RFQ)",
-  "/admin-v2/procurement/requests": "Заявки на закупівлю",
-  "/admin-v2/procurement/rfqs": "RFQ",
-  "/admin-v2/procurement/orders": "PO (замовлення)",
   "/admin-v2/settings/firm/rfi-sla": "SLA для RFI",
   "/admin-v2/finance": "Фінансовий облік",
   "/admin-v2/finance/templates": "Шаблони",

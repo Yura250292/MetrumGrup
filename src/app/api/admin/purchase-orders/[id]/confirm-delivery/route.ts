@@ -33,17 +33,7 @@ export async function POST(
 
   const po = await prisma.purchaseOrder.findFirst({
     where: { id, firmId: firmId ?? undefined },
-    select: {
-      id: true,
-      status: true,
-      firmId: true,
-      projectId: true,
-      counterpartyId: true,
-      totalAmount: true,
-      currency: true,
-      internalNumber: true,
-      counterparty: { select: { name: true } },
-    },
+    select: { id: true, status: true },
   });
   if (!po) return NextResponse.json({ error: "not-found" }, { status: 404 });
   if (po.status === "CANCELLED" || po.status === "DELIVERED") {
@@ -53,59 +43,16 @@ export async function POST(
     );
   }
 
-  const nowFinal = fullyDelivered;
   const updated = await prisma.purchaseOrder.update({
     where: { id },
     data: {
-      status: nowFinal ? "DELIVERED" : "PARTIALLY_DELIVERED",
-      actualDeliveredAt: nowFinal ? deliveredAt : po.status === "PARTIALLY_DELIVERED" ? undefined : null,
+      status: fullyDelivered ? "DELIVERED" : "PARTIALLY_DELIVERED",
+      actualDeliveredAt: fullyDelivered ? deliveredAt : po.status === "PARTIALLY_DELIVERED" ? undefined : null,
       paymentTerms: notes ?? undefined,
     },
     select: { id: true, status: true, actualDeliveredAt: true },
   });
 
-  // Finance sync: on full delivery, materialise a FACT EXPENSE entry tied to
-  // this PO. Idempotent — skip if an entry already exists for this PO.
-  if (nowFinal) {
-    try {
-      const existing = await prisma.financeEntry.findFirst({
-        where: {
-          source: "PURCHASE_ORDER",
-          description: { contains: `PO:${po.id}` },
-        },
-        select: { id: true },
-      });
-      if (!existing) {
-        await prisma.financeEntry.create({
-          data: {
-            occurredAt: deliveredAt,
-            kind: "FACT",
-            type: "EXPENSE",
-            amount: po.totalAmount,
-            currency: po.currency,
-            projectId: po.projectId,
-            firmId: po.firmId,
-            counterpartyId: po.counterpartyId,
-            counterparty: po.counterparty?.name ?? null,
-            category: "Закупівлі",
-            subcategory: "Поставка матеріалів",
-            title: `PO ${po.internalNumber}`,
-            description: `PO:${po.id} delivery confirmed`,
-            source: "PURCHASE_ORDER",
-            status: "APPROVED",
-            approvedAt: new Date(),
-            approvedById: session.user.id,
-            createdById: session.user.id,
-            isDerived: true,
-          },
-        });
-      }
-    } catch (err) {
-      // Finance sync failure does not roll back the delivery confirmation —
-      // log and surface in audit; manual reconciliation possible.
-      console.error("[confirm-delivery] finance sync failed:", err);
-    }
-  }
-
+  // TODO Phase B: finance-sync. На DELIVERED — створити FinanceEntry FACT.
   return NextResponse.json(updated);
 }

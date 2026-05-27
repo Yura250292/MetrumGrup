@@ -5,10 +5,6 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
 import { remindRfqSchema } from "@/lib/procurement/schemas";
-import {
-  getPublicBaseUrl,
-  sendRfqReminder,
-} from "@/lib/notifications/procurement-emails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -41,51 +37,25 @@ export async function POST(
 
   const rfq = await prisma.rFQ.findFirst({
     where: { id: rfqId, purchaseRequest: { firmId: firmId ?? undefined } },
-    select: { id: true, status: true, deadline: true, internalNumber: true },
+    select: { id: true, status: true, deadline: true },
   });
   if (!rfq) return NextResponse.json({ error: "not-found" }, { status: 404 });
   if (rfq.status !== "SENT" && rfq.status !== "COLLECTING") {
     return NextResponse.json({ error: "rfq-not-open" }, { status: 409 });
   }
 
-  const recipients = await prisma.rFQRecipient.findMany({
+  const updated = await prisma.rFQRecipient.updateMany({
     where: {
       rfqId,
       ...(recipientIds && recipientIds.length > 0 ? { id: { in: recipientIds } } : {}),
       bidSubmittedAt: null,
     },
-    select: {
-      id: true,
-      emailSnapshot: true,
-      accessToken: true,
-      counterparty: { select: { name: true } },
-    },
-  });
-
-  const updated = await prisma.rFQRecipient.updateMany({
-    where: { id: { in: recipients.map((r) => r.id) } },
     data: {
       lastReminderAt: new Date(),
       remindersCount: { increment: 1 },
     },
   });
 
-  const base = getPublicBaseUrl(req);
-  await Promise.all(
-    recipients.map(async (r) => {
-      try {
-        await sendRfqReminder({
-          to: r.emailSnapshot,
-          supplierName: r.counterparty?.name ?? "Постачальник",
-          rfqNumber: rfq.internalNumber,
-          deadline: rfq.deadline,
-          publicUrl: `${base}/public/rfq/${r.accessToken}`,
-        });
-      } catch (err) {
-        console.error("[remind] email failed:", err);
-      }
-    }),
-  );
-
+  // TODO Phase B: фактично відправити email-нагадування.
   return NextResponse.json({ ok: true, sent: updated.count });
 }

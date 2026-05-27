@@ -5,13 +5,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createPresignedUploadUrl, isR2Configured } from '@/lib/r2-client';
-import { requireEstimateAccess, forbiddenResponse, unauthorizedResponse } from '@/lib/auth-utils';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
   try {
-    await requireEstimateAccess();
     console.log('🔑 Presigned URL request received');
 
     // Перевірка чи налаштований R2
@@ -65,10 +63,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    if (error instanceof Error) {
-      if (error.message === 'Unauthorized') return unauthorizedResponse();
-      if (error.message === 'Forbidden') return forbiddenResponse();
-    }
     console.error('❌ Presigned URL generation error:', error);
 
     return NextResponse.json(

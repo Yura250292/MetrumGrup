@@ -7,10 +7,6 @@ import { getActiveRoleFromSession } from "@/lib/firm/scope";
 import { nextNumber } from "@/lib/procurement/numbering";
 import { generateAccessToken } from "@/lib/procurement/tokens";
 import { sendRfqSchema } from "@/lib/procurement/schemas";
-import {
-  getPublicBaseUrl,
-  sendRfqInvite,
-} from "@/lib/notifications/procurement-emails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -111,24 +107,9 @@ export async function POST(
     return created;
   });
 
-  const base = getPublicBaseUrl(req);
-  const supplierByCp = new Map(counterparties.map((c) => [c.id, c.name]));
-  await Promise.all(
-    rfq.recipients.map(async (r) => {
-      try {
-        await sendRfqInvite({
-          to: r.emailSnapshot,
-          supplierName: supplierByCp.get(r.counterpartyId) ?? "Постачальник",
-          rfqNumber: rfq.internalNumber,
-          deadline: rfq.deadline,
-          publicUrl: `${base}/public/rfq/${r.accessToken}`,
-        });
-      } catch (err) {
-        // Mail transport failures must not roll back the RFQ record.
-        console.error("[send-rfq] invite email failed:", err);
-      }
-    }),
-  );
+  // TODO Phase B: email invitations через `src/lib/notifications/email.ts`.
+  // Зараз повертаємо токени у відповідь — UI може показати «розіслати листи»
+  // вручну, або тест-середовище використати для перевірки токенів.
 
   return NextResponse.json(rfq, { status: 201 });
 }

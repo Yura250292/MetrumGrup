@@ -7,11 +7,6 @@ import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
 import { nextNumber } from "@/lib/procurement/numbering";
 import { awardBidSchema } from "@/lib/procurement/schemas";
-import {
-  getPublicBaseUrl,
-  sendBidLoser,
-  sendBidWinner,
-} from "@/lib/notifications/procurement-emails";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -146,52 +141,7 @@ export async function POST(
       { isolationLevel: "Serializable", timeout: 10_000 },
     );
 
-    // Notify winner + losers. Best-effort: email failures don't roll back award.
-    try {
-      const recipients = await prisma.rFQRecipient.findMany({
-        where: { rfqId },
-        select: {
-          counterpartyId: true,
-          emailSnapshot: true,
-          accessToken: true,
-          counterparty: { select: { name: true } },
-        },
-      });
-      const winningBid = await prisma.bid.findUnique({
-        where: { id: bidId },
-        select: { counterpartyId: true },
-      });
-      const winnerCpId = winningBid?.counterpartyId;
-      const base = getPublicBaseUrl(req);
-      await Promise.all(
-        recipients.map(async (r) => {
-          const publicUrl = `${base}/public/rfq/${r.accessToken}`;
-          const supplierName = r.counterparty?.name ?? "Постачальник";
-          try {
-            if (r.counterpartyId === winnerCpId) {
-              await sendBidWinner({
-                to: r.emailSnapshot,
-                supplierName,
-                rfqNumber: rfqId,
-                poNumber: result.internalNumber,
-                publicUrl,
-              });
-            } else {
-              await sendBidLoser({
-                to: r.emailSnapshot,
-                supplierName,
-                rfqNumber: rfqId,
-                publicUrl,
-              });
-            }
-          } catch (err) {
-            console.error("[award] notification email failed:", err);
-          }
-        }),
-      );
-    } catch (err) {
-      console.error("[award] failed to fetch recipients for notifications:", err);
-    }
+    // TODO Phase B: email winner/losers + finance-sync.
 
     return NextResponse.json(
       {
