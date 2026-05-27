@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -213,6 +214,9 @@ export async function POST(
   const inlineFileParts: Part[] = [];
   const inlineFileNotes: string[] = [];
   const fileErrors: string[] = [];
+  // Grid-fallback: коли структурні Excel-парсери не впізнали заголовків,
+  // серіалізуємо лист у CSV-текст і додаємо до prompt — Gemini сам розбере.
+  const rawExcelGrids: Array<{ name: string; csv: string }> = [];
 
   await Promise.all(
     fileKeys.map(async (f) => {
@@ -275,13 +279,44 @@ export async function POST(
               });
             }
           }
-          if (added === 0 && !preItems.length) {
-            // Excel-парсер не знайшов структури — file probably arbitrary
-            // (план робіт, договір тощо). Excel не передається в Gemini
-            // (немає нативного support), тому повідомляємо помилку.
-            fileErrors.push(
-              `${f.name}: не вдалось витягти структуру з Excel. Збережи як PDF/фото або опиши текстом.`,
-            );
+          if (added === 0) {
+            // Структурні парсери не впізнали заголовків (нестандартний формат
+            // українського кошторису, напр. «№ п/п | Найменування | Одиниця
+            // виміру | Кількість | Ціна | Сума»). Серіалізуємо лист у CSV
+            // і передаємо Gemini — він читає табличні дані відмінно.
+            try {
+              const workbook = XLSX.read(ab, { type: "array" });
+              const csvParts: string[] = [];
+              for (const sheetName of workbook.SheetNames) {
+                const sheet = workbook.Sheets[sheetName];
+                if (!sheet) continue;
+                const csv = XLSX.utils.sheet_to_csv(sheet, {
+                  blankrows: false,
+                  rawNumbers: true,
+                });
+                if (csv.trim().length === 0) continue;
+                csvParts.push(
+                  workbook.SheetNames.length > 1
+                    ? `### Лист "${sheetName}"\n${csv}`
+                    : csv,
+                );
+              }
+              const fullCsv = csvParts.join("\n\n").slice(0, 60_000);
+              if (fullCsv.length > 0) {
+                rawExcelGrids.push({ name: f.name, csv: fullCsv });
+              } else {
+                fileErrors.push(
+                  `${f.name}: Excel порожній або пошкоджений.`,
+                );
+              }
+            } catch (excelErr) {
+              console.error(`[ai-parse] Excel CSV fallback failed:`, excelErr);
+              fileErrors.push(
+                `${f.name}: не вдалось зчитати Excel (${
+                  excelErr instanceof Error ? excelErr.message : "помилка"
+                }).`,
+              );
+            }
           }
         } else {
           fileErrors.push(
@@ -307,6 +342,15 @@ ${text ? `Текст користувача:\n"""\n${text}\n"""\n` : ""}${
   }${
     preItems.length > 0
       ? `\nПозиції витягнуто з Excel (структура чітка — costType/title/qty/price вже визначено). СКОПІЮЙ їх у items[] без змін, ТІЛЬКИ признач proposedStageId/proposedNewStageTempId і за можливістю додай priority/estimatedHours:\n${JSON.stringify(preItems, null, 2)}\n`
+      : ""
+  }${
+    rawExcelGrids.length > 0
+      ? rawExcelGrids
+          .map(
+            (g) =>
+              `\nСирий зміст Excel-файлу "${g.name}" (структурний парсер не впізнав заголовків — розбери САМ цей CSV):\n\`\`\`csv\n${g.csv}\n\`\`\`\nВитягни КОЖНУ позицію. Український кошторис типово має колонки: «№ п/п», «Найменування», «Одиниця виміру», «Кількість», «Ціна», «Сума». Рядки що виглядають як категорії/розділи (без кількості і ціни, але з назвою типу «Демонтажні роботи», «Підготовчі роботи») — використовуй для proposedNewStageTempId, а позиції під ними прив'язуй до цього етапу.`,
+          )
+          .join("\n")
       : ""
   }
 
