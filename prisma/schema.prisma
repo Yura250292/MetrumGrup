@@ -187,6 +187,9 @@ model Project {
   lastPublishedAt        DateTime?
   lastPublishedById      String?
   publicationVersion     Int                     @default(0)
+  /// LEGACY: попередник publicationVersion (rename). У БД ще є 11 non-null
+  /// значень — лишаємо колонку, щоб не блокувати db push. Не читається.
+  projectionVersion      Int                     @default(0)
   startDate              DateTime?
   expectedEndDate        DateTime?
   actualEndDate          DateTime?
@@ -308,6 +311,8 @@ model ProjectStageRecord {
   customName                   String?
   isHidden                     Boolean              @default(false)
   kind                         StageKind            @default(STAGE)
+  // null для GROUP-категорій. Заповнюється з ai-apply / backfill-cost-type.
+  costType                     StageCostType?
   status                       StageStatus          @default(PENDING)
   progress                     Int                  @default(0)
   notes                        String?
@@ -1709,6 +1714,14 @@ enum StageStatus {
 enum StageKind {
   GROUP
   STAGE
+}
+
+/// LABOR — робота (монтаж, демонтаж, влаштування…), має planVolume + ціну.
+/// MATERIAL — товар/матеріал (бетон, бордюр, плитка…), кількість + ціна за од.
+/// null — групи/категорії або стейджі без явної класифікації (legacy).
+enum StageCostType {
+  LABOR
+  MATERIAL
 }
 
 enum PaymentStatus {

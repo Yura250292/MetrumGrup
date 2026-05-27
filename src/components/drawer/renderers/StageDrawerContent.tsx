@@ -290,5 +290,6 @@ function toStageRow(s: ProjectStageApi): StageRow {
     factExpense: Number(s.factExpense ?? 0),
     planIncome: Number(s.planIncome ?? 0),
     factIncome: Number(s.factIncome ?? 0),
+    costType: (s.costType as StageRow["costType"]) ?? null,
   };
 }

@@ -48,6 +48,7 @@ export type StageRow = {
   factExpense: number;
   planIncome: number;
   factIncome: number;
+  costType: "LABOR" | "MATERIAL" | null;
 };
 
 export type StageInlineUpdate = Partial<{
@@ -578,13 +579,21 @@ export function StageTable({
             const isInvalidDropTarget = rowDescendants.has(node.id);
             const dropHere =
               rowDragOver?.id === node.id ? rowDragOver.position : null;
+            // costType tint: легкий зелений для LABOR, легкий синій для
+            // MATERIAL. Selected/drop-target/drag перебивають.
+            const costTint =
+              node.costType === "LABOR"
+                ? "rgba(34, 197, 94, 0.08)"
+                : node.costType === "MATERIAL"
+                  ? "rgba(59, 130, 246, 0.08)"
+                  : "transparent";
             const rowBg = isDragSource
               ? T.warningSoft
               : dropHere === "child"
                 ? T.accentPrimarySoft
                 : isSelected
                   ? T.accentPrimarySoft
-                  : "transparent";
+                  : costTint;
 
             return (
               <tr
@@ -611,8 +620,7 @@ export function StageTable({
                 }}
                 onMouseLeave={(e) => {
                   if (rowDrag) return;
-                  if (!isSelected)
-                    e.currentTarget.style.backgroundColor = "transparent";
+                  if (!isSelected) e.currentTarget.style.backgroundColor = costTint;
                 }}
                 onDragOver={(e) => {
                   if (!rowDrag || !onMoveStage) return;

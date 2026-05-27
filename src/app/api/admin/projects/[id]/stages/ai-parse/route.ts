@@ -374,6 +374,7 @@ export async function POST(
     tempId: string;
     name: string;
     parentTempId: string | null;
+    costType: "LABOR" | "MATERIAL" | null;
   }> = [];
   if (preItems.length > 0) {
     let tempCounter = 1;
@@ -381,7 +382,12 @@ export async function POST(
       if (pi.category && !categoryTempIds.has(pi.category)) {
         const tid = `new-${tempCounter++}`;
         categoryTempIds.set(pi.category, tid);
-        prebuiltNewStages.push({ tempId: tid, name: pi.category, parentTempId: null });
+        prebuiltNewStages.push({
+          tempId: tid,
+          name: pi.category,
+          parentTempId: null,
+          costType: null,
+        });
       }
     }
     for (const pi of preItems) {
@@ -390,7 +396,12 @@ export async function POST(
       const parent = pi.category ? categoryTempIds.get(pi.category) ?? null : null;
       const tid = `new-${tempCounter++}`;
       workTempIds.set(pi.title, tid);
-      prebuiltNewStages.push({ tempId: tid, name: pi.title, parentTempId: parent });
+      prebuiltNewStages.push({
+        tempId: tid,
+        name: pi.title,
+        parentTempId: parent,
+        costType: "LABOR",
+      });
     }
   }
   // Прив'язки для prompt: LABOR → новий новостворений stage; MATERIAL → під батьківську LABOR.

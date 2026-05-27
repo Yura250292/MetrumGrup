@@ -162,6 +162,18 @@ export function StagesSection({
   const [, startTransition] = useTransition();
 
   const [viewMode, setViewMode] = useState<ViewMode>("all");
+  const [costFilter, setCostFilter] = useState<"all" | "labor" | "material">("all");
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem("metrum.stage-table.cost-filter");
+      if (raw === "all" || raw === "labor" || raw === "material") setCostFilter(raw);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("metrum.stage-table.cost-filter", costFilter);
+    } catch {}
+  }, [costFilter]);
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem("metrum.stage-table.view-mode");
@@ -301,6 +313,7 @@ export function StagesSection({
           factExpense: Number(s.factExpense ?? 0),
           planIncome: Number(s.planIncome ?? 0),
           factIncome: Number(s.factIncome ?? 0),
+          costType: (s.costType as StageRow["costType"]) ?? null,
         })),
       );
       startTransition(() => router.refresh());
@@ -479,9 +492,29 @@ export function StagesSection({
     [drawer, projectId],
   );
 
-  const filteredStages = hideCompleted
-    ? stages.filter((s) => s.status !== "COMPLETED")
-    : stages;
+  const filteredStages = useMemo(() => {
+    let arr = stages;
+    if (hideCompleted) arr = arr.filter((s) => s.status !== "COMPLETED");
+    if (costFilter !== "all") {
+      const want = costFilter === "labor" ? "LABOR" : "MATERIAL";
+      const byId = new Map(arr.map((s) => [s.id, s]));
+      const keep = new Set<string>();
+      for (const s of arr) {
+        if (s.costType === want) {
+          keep.add(s.id);
+          // показуємо предків для контексту дерева
+          let cur = s.parentStageId;
+          while (cur) {
+            if (keep.has(cur)) break;
+            keep.add(cur);
+            cur = byId.get(cur)?.parentStageId ?? null;
+          }
+        }
+      }
+      arr = arr.filter((s) => keep.has(s.id));
+    }
+    return arr;
+  }, [stages, hideCompleted, costFilter]);
 
   // ── Excel-like keyboard nav: Arrow Up/Down — focus rows; Enter — open drawer;
   //    Cmd/Ctrl+C — copy focused row as TSV; Cmd/Ctrl+V — paste TSV (одну або
@@ -698,6 +731,19 @@ export function StagesSection({
           <div className="-mx-1 overflow-x-auto sm:mx-0 sm:overflow-visible">
             <ViewModeSwitch value={viewMode} onChange={setViewMode} />
           </div>
+          <CostFilterSwitch value={costFilter} onChange={setCostFilter} />
+          {viewMode === "all" && (
+            <span className="hidden lg:flex items-center gap-2 text-[10px]" style={{ color: T.textMuted }}>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "rgb(34,197,94)" }} />
+                робота
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: "rgb(59,130,246)" }} />
+                матеріал
+              </span>
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setAiAssistantOpen(true)}
@@ -804,6 +850,50 @@ export function StagesSection({
                     onClick={() => {
                       setRestructureOpen(true);
                       setOverflowOpen(false);
+                    }}
+                  />
+                  <OverflowItem
+                    icon={<Sparkles size={13} />}
+                    label="Позначити роботи / матеріали"
+                    onClick={() => {
+                      setOverflowOpen(false);
+                      void (async () => {
+                        try {
+                          const res = await fetch(
+                            `/api/admin/projects/${projectId}/stages/backfill-cost-type`,
+                            { method: "POST" },
+                          );
+                          const json = (await res.json()) as
+                            | {
+                                data: {
+                                  scanned: number;
+                                  labor: number;
+                                  material: number;
+                                  skipped: number;
+                                };
+                              }
+                            | { error: string };
+                          if (!res.ok || !("data" in json)) {
+                            showToast(
+                              "err",
+                              "error" in json
+                                ? json.error
+                                : `HTTP ${res.status}`,
+                            );
+                            return;
+                          }
+                          showToast(
+                            "ok",
+                            `Класифіковано: ${json.data.labor} робіт + ${json.data.material} матеріалів (пропущено ${json.data.skipped})`,
+                          );
+                          await refetch();
+                        } catch (err) {
+                          showToast(
+                            "err",
+                            err instanceof Error ? err.message : String(err),
+                          );
+                        }
+                      })();
                     }}
                   />
                 </div>
@@ -1041,6 +1131,74 @@ function ViewModeSwitch({
               fontWeight: active ? 600 : 500,
             }}
           >
+            {opt.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+type CostFilter = "all" | "labor" | "material";
+
+const COST_FILTER_OPTIONS: {
+  value: CostFilter;
+  label: string;
+  title: string;
+  dotColor?: string;
+}[] = [
+  { value: "all", label: "Усі", title: "Показати всі позиції" },
+  {
+    value: "labor",
+    label: "Роботи",
+    title: "Показати лише роботи (LABOR)",
+    dotColor: "rgb(34,197,94)",
+  },
+  {
+    value: "material",
+    label: "Матеріали",
+    title: "Показати лише матеріали (MATERIAL)",
+    dotColor: "rgb(59,130,246)",
+  },
+];
+
+function CostFilterSwitch({
+  value,
+  onChange,
+}: {
+  value: CostFilter;
+  onChange: (v: CostFilter) => void;
+}) {
+  return (
+    <div
+      className="inline-flex items-center rounded-lg p-0.5"
+      style={{
+        backgroundColor: T.panelSoft,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      {COST_FILTER_OPTIONS.map((opt) => {
+        const active = value === opt.value;
+        return (
+          <button
+            key={opt.value}
+            type="button"
+            title={opt.title}
+            onClick={() => onChange(opt.value)}
+            className="flex items-center gap-1 rounded px-2.5 py-1 text-[11px] font-medium transition"
+            style={{
+              backgroundColor: active ? T.panel : "transparent",
+              color: active ? T.accentPrimary : T.textMuted,
+              boxShadow: active ? `0 1px 2px ${T.borderSoft}` : undefined,
+              fontWeight: active ? 600 : 500,
+            }}
+          >
+            {opt.dotColor && (
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: opt.dotColor }}
+              />
+            )}
             {opt.label}
           </button>
         );

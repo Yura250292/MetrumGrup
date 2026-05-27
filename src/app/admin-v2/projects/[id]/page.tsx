@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { formatCurrency } from "@/lib/utils";
 import { PROJECT_STATUS_LABELS, STAGE_LABELS } from "@/lib/constants";
+import { classifyStageByName } from "@/lib/projects/classify-stage";
 import {
   ArrowLeft,
   MapPin,
@@ -295,6 +296,14 @@ export default async function AdminV2ProjectDetailPage({
               factExpense: agg?.factExpense ?? 0,
               planIncome: agg?.planIncome ?? 0,
               factIncome: agg?.factIncome ?? 0,
+              // Якщо в БД ще null (legacy/до backfill) — обчислюємо евристикою
+              // за назвою. Backfill-endpoint потім запише точне значення.
+              costType:
+                s.costType ??
+                (() => {
+                  const c = classifyStageByName(s.customName ?? s.stage ?? "");
+                  return c === "OTHER" ? null : c;
+                })(),
             };
           }),
           responsibleCandidates,

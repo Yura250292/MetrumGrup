@@ -47,6 +47,11 @@ const NewStageSchema = z.object({
   tempId: z.string().min(1),
   name: z.string().min(1).max(200),
   parentTempId: z.string().nullable().optional(),
+  /**
+   * LABOR/MATERIAL — конкретна позиція кошторису.
+   * null/omit — категорія-група (Демонтажні роботи, Озеленення тощо).
+   */
+  costType: z.enum(["LABOR", "MATERIAL"]).nullable().optional(),
 });
 
 const ApplyItemSchema = z.object({
@@ -205,6 +210,7 @@ export async function POST(
           sortOrder,
           status: "PENDING",
           progress: 0,
+          costType: ns.costType ?? null,
         },
         select: { id: true },
       });
@@ -263,7 +269,10 @@ export async function POST(
             ? mergeAiNote(existing.notes, it.priority, it.estimatedHours)
             : existing.notes;
 
-        const dataUpdate: Record<string, unknown> = { notes: nextNotes };
+        const dataUpdate: Record<string, unknown> = {
+          notes: nextNotes,
+          costType: "LABOR",
+        };
         const volumeValue = nextVolume > 0 ? nextVolume : null;
         const priceValue =
           nextUnitPrice !== null && nextUnitPrice !== undefined
