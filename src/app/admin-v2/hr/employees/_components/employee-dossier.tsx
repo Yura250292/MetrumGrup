@@ -293,19 +293,28 @@ export function EmployeeDossier({
   id,
   currentUserRole,
   inPanel = false,
+  onDirtyChange,
 }: {
   id: string;
   currentUserRole: string;
   /** Якщо рендериться у бічній панелі — приховує back-link «До списку». */
   inPanel?: boolean;
+  /** Сповіщає батька (drawer) про наявність незбережених змін, щоб він
+   *  міг показати confirm перед закриттям. */
+  onDirtyChange?: (isDirty: boolean) => void;
 }) {
   const router = useRouter();
-  const [employee, setEmployee] = useState<Employee | null>(null);
+  const [employeeRaw, setEmployee] = useState<Employee | null>(null);
   const [engagement, setEngagement] = useState<Engagement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<FieldKey | null>(null);
-  const [savingField, setSavingField] = useState<FieldKey | null>(null);
+  /// Чернетка: зміни, які користувач зробив, але ще не зберіг.
+  /// Empty object = немає змін (dirty=false). Save → один PATCH з усіма
+  /// полями draft → reload → setDraft({}).
+  const [draft, setDraft] = useState<Partial<Record<FieldKey, unknown>>>({});
+  const [savingAll, setSavingAll] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const canEdit = ["SUPER_ADMIN", "MANAGER", "HR"].includes(currentUserRole);
   const canDelete = ["SUPER_ADMIN", "MANAGER"].includes(currentUserRole);
@@ -342,37 +351,63 @@ export function EmployeeDossier({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  async function patchField(field: FieldKey, value: unknown) {
-    if (!employee) return;
-    const current = employee[field];
-    if (current === value) {
-      setEditingField(null);
-      return;
-    }
-    setSavingField(field);
+  /// Computed: те, що бачить користувач = raw з БД + локальна чернетка.
+  /// Усі звернення `employee.X` далі в рендері читають саме цю об'єднану
+  /// версію, тож draft видно одразу без додаткових змін у JSX.
+  const employee = useMemo<Employee | null>(
+    () => (employeeRaw ? { ...employeeRaw, ...(draft as Partial<Employee>) } : null),
+    [employeeRaw, draft],
+  );
+
+  /// Запис у чернетку. Якщо нове значення = поточному в БД — поле
+  /// видаляється з draft (повернення до «без змін»).
+  function setDraftField(field: FieldKey, value: unknown) {
+    setDraft((prev) => {
+      const next = { ...prev };
+      const original = employeeRaw ? (employeeRaw[field] as unknown) : undefined;
+      if (Object.is(original, value)) {
+        delete next[field];
+      } else {
+        next[field] = value;
+      }
+      return next;
+    });
+    setEditingField(null);
+  }
+
+  /// Скасувати всі несбережені зміни.
+  function discardChanges() {
+    setDraft({});
+    setEditingField(null);
+    setSaveError(null);
+  }
+
+  /// Зберегти всі поля з draft одним PATCH. Повертає true, якщо успіх.
+  async function saveAll(): Promise<boolean> {
+    if (!employeeRaw || Object.keys(draft).length === 0) return true;
+    setSavingAll(true);
+    setSaveError(null);
     try {
       const res = await fetch(`/api/admin/hr/employees`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, [field]: value }),
+        body: JSON.stringify({ id, ...draft }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        alert(j.error ?? "Помилка збереження");
-        return;
+        setSaveError(j.error ?? "Помилка збереження");
+        return false;
       }
       const j = await res.json();
-      // PATCH /api/admin/hr/employees НЕ повертає salaries / payrollPeriods
-      // (вони лише в GET). Зливаємо нові поля з попереднім станом, щоб не
-      // зіпсувати масиви — інакше undefined.length крашить рендер.
       setEmployee((prev) =>
         prev
           ? { ...prev, ...j.data, salaries: j.data.salaries ?? prev.salaries, payrollPeriods: j.data.payrollPeriods ?? prev.payrollPeriods }
           : j.data,
       );
+      setDraft({});
+      return true;
     } finally {
-      setSavingField(null);
-      setEditingField(null);
+      setSavingAll(false);
     }
   }
 
@@ -405,6 +440,15 @@ export function EmployeeDossier({
       </div>
     );
   }
+
+  // employee (computed) уже містить draft; render автоматично показує
+  // незбережені правки. `dirtyKeys` — для індикатора в Save-bar.
+  const dirtyKeys = Object.keys(draft) as FieldKey[];
+  const isDirty = dirtyKeys.length > 0;
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
 
   const age = calcAge(employee.birthDate);
   const tenure = formatTenure(employee.hiredAt, employee.terminatedAt);
@@ -482,6 +526,58 @@ export function EmployeeDossier({
             <ArrowLeft size={14} />
             До списку співробітників
           </Link>
+        </div>
+      )}
+
+      {/* Save-bar — sticky зверху, показується тільки коли є незбережені зміни. */}
+      {canEdit && isDirty && (
+        <div
+          className="sticky top-0 z-30 flex flex-wrap items-center gap-2 rounded-xl px-3 py-2"
+          style={{
+            backgroundColor: T.warningSoft,
+            border: `1px solid ${T.warning}40`,
+            backdropFilter: "blur(6px)",
+          }}
+        >
+          <span
+            className="inline-block h-2 w-2 rounded-full"
+            style={{ backgroundColor: T.warning }}
+          />
+          <span className="text-[12px] font-semibold" style={{ color: T.warning }}>
+            Незбережено: {dirtyKeys.length} {dirtyKeys.length === 1 ? "поле" : dirtyKeys.length < 5 ? "поля" : "полів"}
+          </span>
+          <span className="text-[11px]" style={{ color: T.textMuted }}>
+            ({dirtyKeys.join(", ")})
+          </span>
+          <div className="flex-1" />
+          {saveError && (
+            <span className="text-[11px] font-semibold" style={{ color: T.danger }}>
+              {saveError}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={discardChanges}
+            disabled={savingAll}
+            className="rounded-lg px-2.5 py-1 text-[12px] font-semibold disabled:opacity-50"
+            style={{ color: T.textSecondary }}
+          >
+            Скасувати
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveAll()}
+            disabled={savingAll}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-60"
+            style={{ backgroundColor: T.accentPrimary }}
+          >
+            {savingAll ? (
+              <Loader2 size={12} className="animate-spin" />
+            ) : (
+              <CheckCircle2 size={12} />
+            )}
+            {savingAll ? "Зберігаю…" : "Зберегти"}
+          </button>
         </div>
       )}
 
@@ -582,10 +678,10 @@ export function EmployeeDossier({
               label="Прізвище"
               field="lastName"
               editing={editingField === "lastName"}
-              saving={savingField === "lastName"}
+              saving={savingAll && dirtyKeys.includes("lastName")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("lastName")}
-              onCommit={(v) => patchField("lastName", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("lastName", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() =>
                 employee.lastName ? (
@@ -606,10 +702,10 @@ export function EmployeeDossier({
               label="Імʼя"
               field="firstName"
               editing={editingField === "firstName"}
-              saving={savingField === "firstName"}
+              saving={savingAll && dirtyKeys.includes("firstName")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("firstName")}
-              onCommit={(v) => patchField("firstName", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("firstName", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => textOrDash(employee.firstName)}
               renderEditor={(stop) => (
@@ -624,10 +720,10 @@ export function EmployeeDossier({
               label="По-батькові"
               field="middleName"
               editing={editingField === "middleName"}
-              saving={savingField === "middleName"}
+              saving={savingAll && dirtyKeys.includes("middleName")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("middleName")}
-              onCommit={(v) => patchField("middleName", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("middleName", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => textOrDash(employee.middleName)}
               renderEditor={(stop) => (
@@ -642,10 +738,10 @@ export function EmployeeDossier({
               label="Посада"
               field="position"
               editing={editingField === "position"}
-              saving={savingField === "position"}
+              saving={savingAll && dirtyKeys.includes("position")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("position")}
-              onCommit={(v) => patchField("position", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("position", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => textOrDash(employee.position)}
               renderEditor={(stop) => (
@@ -660,10 +756,10 @@ export function EmployeeDossier({
               label="Телефон"
               field="phone"
               editing={editingField === "phone"}
-              saving={savingField === "phone"}
+              saving={savingAll && dirtyKeys.includes("phone")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("phone")}
-              onCommit={(v) => patchField("phone", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("phone", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() =>
                 employee.phone ? (
@@ -686,10 +782,10 @@ export function EmployeeDossier({
               label="Email"
               field="email"
               editing={editingField === "email"}
-              saving={savingField === "email"}
+              saving={savingAll && dirtyKeys.includes("email")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("email")}
-              onCommit={(v) => patchField("email", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("email", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() =>
                 employee.email ? (
@@ -713,10 +809,10 @@ export function EmployeeDossier({
               label="Дата народження"
               field="birthDate"
               editing={editingField === "birthDate"}
-              saving={savingField === "birthDate"}
+              saving={savingAll && dirtyKeys.includes("birthDate")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("birthDate")}
-              onCommit={(v) => patchField("birthDate", (v as string) || null)}
+              onCommit={(v) => setDraftField("birthDate", (v as string) || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => (
                 <span style={{ color: T.textSecondary }}>
@@ -741,10 +837,10 @@ export function EmployeeDossier({
               label="Прийнятий"
               field="hiredAt"
               editing={editingField === "hiredAt"}
-              saving={savingField === "hiredAt"}
+              saving={savingAll && dirtyKeys.includes("hiredAt")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("hiredAt")}
-              onCommit={(v) => patchField("hiredAt", (v as string) || null)}
+              onCommit={(v) => setDraftField("hiredAt", (v as string) || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => (
                 <span style={{ color: T.textSecondary }}>
@@ -769,10 +865,10 @@ export function EmployeeDossier({
               label="Звільнений"
               field="terminatedAt"
               editing={editingField === "terminatedAt"}
-              saving={savingField === "terminatedAt"}
+              saving={savingAll && dirtyKeys.includes("terminatedAt")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("terminatedAt")}
-              onCommit={(v) => patchField("terminatedAt", (v as string) || null)}
+              onCommit={(v) => setDraftField("terminatedAt", (v as string) || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => (
                 <span style={{ color: T.textSecondary }}>{formatDate(employee.terminatedAt)}</span>
@@ -790,19 +886,19 @@ export function EmployeeDossier({
               employee={employee}
               canEdit={canEdit}
               editing={editingField === "departmentId"}
-              saving={savingField === "departmentId"}
+              saving={savingAll && dirtyKeys.includes("departmentId")}
               onStartEdit={() => setEditingField("departmentId")}
-              onCommit={(v) => patchField("departmentId", v)}
+              onCommit={(v) => setDraftField("departmentId", v)}
               onCancel={() => setEditingField(null)}
             />
             <PropertyRow
               label="Тип зайнятості"
               field="employmentType"
               editing={editingField === "employmentType"}
-              saving={savingField === "employmentType"}
+              saving={savingAll && dirtyKeys.includes("employmentType")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("employmentType")}
-              onCommit={(v) => patchField("employmentType", v)}
+              onCommit={(v) => setDraftField("employmentType", v)}
               onCancel={() => setEditingField(null)}
               renderValue={() => (
                 <span style={{ color: T.textSecondary }}>
@@ -832,7 +928,7 @@ export function EmployeeDossier({
               label="Ставка зайнятості"
               field="employmentRate"
               editing={editingField === "employmentRate"}
-              saving={savingField === "employmentRate"}
+              saving={savingAll && dirtyKeys.includes("employmentRate")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("employmentRate")}
               onCommit={(v) => {
@@ -842,7 +938,7 @@ export function EmployeeDossier({
                   setEditingField(null);
                   return;
                 }
-                void patchField("employmentRate", num);
+                void setDraftField("employmentRate", num);
               }}
               onCancel={() => setEditingField(null)}
               renderValue={() => (
@@ -863,10 +959,10 @@ export function EmployeeDossier({
               label="Тип відстрочки"
               field="deferralType"
               editing={editingField === "deferralType"}
-              saving={savingField === "deferralType"}
+              saving={savingAll && dirtyKeys.includes("deferralType")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("deferralType")}
-              onCommit={(v) => patchField("deferralType", v)}
+              onCommit={(v) => setDraftField("deferralType", v)}
               onCancel={() => setEditingField(null)}
               renderValue={() => (
                 <span style={{ color: T.textSecondary }}>
@@ -897,10 +993,10 @@ export function EmployeeDossier({
                 label="Відстрочка дійсна до"
                 field="deferralUntil"
                 editing={editingField === "deferralUntil"}
-                saving={savingField === "deferralUntil"}
+                saving={savingAll && dirtyKeys.includes("deferralUntil")}
                 canEdit={canEdit}
                 onStartEdit={() => setEditingField("deferralUntil")}
-                onCommit={(v) => patchField("deferralUntil", (v as string) || null)}
+                onCommit={(v) => setDraftField("deferralUntil", (v as string) || null)}
                 onCancel={() => setEditingField(null)}
                 renderValue={() => {
                   if (!employee.deferralUntil) return <span style={{ color: T.textMuted }}>—</span>;
@@ -929,10 +1025,10 @@ export function EmployeeDossier({
               label="Додаткова інформація"
               field="notes"
               editing={editingField === "notes"}
-              saving={savingField === "notes"}
+              saving={savingAll && dirtyKeys.includes("notes")}
               canEdit={canEdit}
               onStartEdit={() => setEditingField("notes")}
-              onCommit={(v) => patchField("notes", (v as string).trim() || null)}
+              onCommit={(v) => setDraftField("notes", (v as string).trim() || null)}
               onCancel={() => setEditingField(null)}
               renderValue={() => textOrDash(employee.notes)}
               renderEditor={(stop) => (
@@ -947,11 +1043,11 @@ export function EmployeeDossier({
               label="Активний"
               field="isActive"
               editing={false}
-              saving={savingField === "isActive"}
+              saving={savingAll && dirtyKeys.includes("isActive")}
               canEdit={canEdit}
               onStartEdit={() => {
-                if (savingField) return;
-                void patchField("isActive", !employee.isActive);
+                if (savingAll) return;
+                setDraftField("isActive", !employee.isActive);
               }}
               onCommit={() => undefined}
               onCancel={() => undefined}

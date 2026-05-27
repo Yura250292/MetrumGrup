@@ -37,6 +37,20 @@ export function EmployeeDrawer({
   const userId = session?.user?.id;
   const [width, setWidth] = useState<number>(DEFAULT_WIDTH);
   const draggingRef = useRef(false);
+  // Чи має дос'є несбережені зміни — приходить від EmployeeDossier
+  // через onDirtyChange. Використовується для confirm перед закриттям
+  // і для beforeunload при оновленні сторінки.
+  const [dirty, setDirty] = useState(false);
+
+  const requestClose = useCallback(() => {
+    if (dirty) {
+      const ok = window.confirm(
+        "Були внесені зміни, які не збережено.\n\nЗакрити без збереження?",
+      );
+      if (!ok) return;
+    }
+    onClose();
+  }, [dirty, onClose]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -44,14 +58,26 @@ export function EmployeeDrawer({
     if (!isNaN(saved) && saved >= MIN_WIDTH) setWidth(saved);
   }, [userId]);
 
-  // ESC закриває панель.
+  // ESC закриває панель (через dirty-перевірку).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [requestClose]);
+
+  // beforeunload — попередження браузера при refresh/закритті вкладки,
+  // якщо є несбережені зміни.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
 
   const startDrag = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -103,7 +129,7 @@ export function EmployeeDrawer({
         {/* Кнопка закриття — фіксована вгорі справа над контентом. */}
         <button
           type="button"
-          onClick={onClose}
+          onClick={requestClose}
           className="absolute right-3 top-3 z-20 rounded-lg p-1.5 transition hover:bg-black/5"
           style={{ color: T.textSecondary }}
           aria-label="Закрити панель"
@@ -116,6 +142,7 @@ export function EmployeeDrawer({
             id={id}
             currentUserRole={currentUserRole}
             inPanel
+            onDirtyChange={setDirty}
           />
         </div>
       </div>
