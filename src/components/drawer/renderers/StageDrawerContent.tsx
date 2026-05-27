@@ -116,6 +116,17 @@ export function StageDrawerContent({ id }: RendererProps) {
     void refetch().finally(() => setLoading(false));
   }, [refetch]);
 
+  // Stale drawer state: коли URL-стек (`?d=stage:...`) тягнеться між
+  // проєктами або вказує на видалений стейдж — fetch повертає
+  // «Етап не знайдено», а drawer лишається відкритий і блокує екран.
+  // Автоматично закриваємо.
+  useEffect(() => {
+    if (!loading && (error === "Етап не знайдено" || error === "Проєкт не знайдено")) {
+      const t = setTimeout(() => drawer.closeAll(), 600);
+      return () => clearTimeout(t);
+    }
+  }, [loading, error, drawer]);
+
   // Сповіщаємо breadcrumb (поки stage не завантажено — fallback з registry)
   useEffect(() => {
     if (stage) drawer.setTopBreadcrumb(stageDisplayName(stage));
