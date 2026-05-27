@@ -97,6 +97,35 @@ export async function syncEstimateToStages(
           .map((s) => [s.sourceEstimateItemId!, s.id] as const),
       );
 
+      // Fallback-адопція: легасі проєкти, де етапи створили вручну (без
+      // sourceEstimate*Id), мають згрупуватись під відповідні секції/items
+      // за збігом імені. Беремо тільки стейджі без source-link (orphan),
+      // нормалізуємо назву (trim+lower), складаємо в чергу — name може
+      // повторитися (наприклад «Тип 07.1 (2)»), shift'аємо по черзі.
+      const orphans = await tx.projectStageRecord.findMany({
+        where: {
+          projectId,
+          sourceEstimateSectionId: null,
+          sourceEstimateItemId: null,
+        },
+        select: { id: true, customName: true, parentStageId: true },
+        orderBy: { sortOrder: "asc" },
+      });
+      const normalize = (s: string | null | undefined) =>
+        (s ?? "").trim().toLowerCase();
+      const orphansByName = new Map<string, string[]>();
+      for (const o of orphans) {
+        const key = normalize(o.customName);
+        if (!key) continue;
+        const bucket = orphansByName.get(key);
+        if (bucket) bucket.push(o.id);
+        else orphansByName.set(key, [o.id]);
+      }
+      const takeOrphan = (name: string): string | null => {
+        const bucket = orphansByName.get(normalize(name));
+        return bucket && bucket.length > 0 ? (bucket.shift() as string) : null;
+      };
+
       const writeSet = new Set<string>(); // stages, які потрібно re-sync STAGE_AUTO
 
       // Order base: щоб новостворені стейджі лягали в кінець існуючих root-етапів.
@@ -109,8 +138,25 @@ export async function syncEstimateToStages(
 
       // 1) Sections → top-level stages
       for (const section of estimate.sections) {
-        const existingStageId = stageBySectionId.get(section.id);
+        let existingStageId = stageBySectionId.get(section.id);
         const sectionTitle = section.title.slice(0, 200);
+
+        // Адоптуємо orphan із збігом імені — щоб старий плоский етап
+        // став батьком для дітей-items замість дубля.
+        if (!existingStageId) {
+          const adopted = takeOrphan(sectionTitle);
+          if (adopted) {
+            await tx.projectStageRecord.update({
+              where: { id: adopted },
+              data: {
+                sourceEstimateSectionId: section.id,
+                parentStageId: null,
+              },
+            });
+            stageBySectionId.set(section.id, adopted);
+            existingStageId = adopted;
+          }
+        }
 
         if (existingStageId) {
           await tx.projectStageRecord.update({
@@ -151,6 +197,7 @@ export async function syncEstimateToStages(
             sortOrder: nextChildSortOrder++,
             stageByItemId,
             writeSet,
+            takeOrphan,
             counters: {
               itemsCreated: () => itemsCreated++,
               itemsUpdated: () => itemsUpdated++,
@@ -173,6 +220,7 @@ export async function syncEstimateToStages(
           sortOrder: nextSectionlessSortOrder++,
           stageByItemId,
           writeSet,
+          takeOrphan,
           counters: {
             itemsCreated: () => itemsCreated++,
             itemsUpdated: () => itemsUpdated++,
@@ -305,11 +353,11 @@ async function upsertItemStage(args: {
   sortOrder: number;
   stageByItemId: Map<string, string>;
   writeSet: Set<string>;
+  takeOrphan: (name: string) => string | null;
   counters: { itemsCreated: () => void; itemsUpdated: () => void };
 }): Promise<void> {
   const {
     tx,
-    existingStageId,
     projectId,
     parentStageId,
     item,
@@ -317,10 +365,27 @@ async function upsertItemStage(args: {
     sortOrder,
     stageByItemId,
     writeSet,
+    takeOrphan,
     counters,
   } = args;
+  let { existingStageId } = args;
 
   const customName = item.description.slice(0, 200);
+
+  // Адопція: якщо немає прив'язки по item.id, шукаємо orphan-етап з
+  // такою ж назвою і прив'язуємо його як sourceEstimateItemId + ставимо
+  // під батьківську секцію.
+  if (!existingStageId) {
+    const adopted = takeOrphan(customName);
+    if (adopted) {
+      await tx.projectStageRecord.update({
+        where: { id: adopted },
+        data: { sourceEstimateItemId: item.id, parentStageId },
+      });
+      existingStageId = adopted;
+      stageByItemId.set(item.id, adopted);
+    }
+  }
   const planVolume = Number(item.quantity);
   const planUnitPrice = Number(item.unitPrice);
   const clientPrice =
