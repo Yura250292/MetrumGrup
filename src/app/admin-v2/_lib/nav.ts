@@ -111,13 +111,14 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       // «Штат» — основна точка входу, всередині таби: Співробітники / Підрядники / Бригади
       { href: "/admin-v2/hr/employees", label: "Штат", icon: Users, hrAllowed: true },
-      // «Партнери» — Контрагенти + Клієнти в одному вікні
-      { href: "/admin-v2/counterparties", label: "Партнери", icon: Building2, hrAllowed: true },
     ],
   },
   {
     label: "Ресурси",
     items: [
+      // «Контрагенти» — раніше «Партнери» в «Персоналі»; це довідник зовнішніх
+      // сторін (клієнти / постачальники / підрядники) — належить до reference-data.
+      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/catalogs/materials", label: "Матеріали і ціни", icon: Package },
       { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
       { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
