@@ -64,6 +64,9 @@ type ApplyResult = {
   stagesCreated: number;
   stagesUpdated: number;
   materialsCreated: number;
+  stagesPublished?: number;
+  publishFailed?: number;
+  publishSkipReason?: string | null;
 };
 
 type Props = {
@@ -667,11 +670,33 @@ export function StagesAiAssistant({
               }}
             >
               <Check size={14} className="mt-0.5 flex-shrink-0" />
-              <span>
-                Застосовано: <b>{result.stagesCreated}</b> нових етапів,{" "}
-                <b>{result.stagesUpdated}</b> оновлень,{" "}
-                <b>{result.materialsCreated}</b> матеріалів додано.
-              </span>
+              <div className="flex flex-col gap-0.5">
+                <span>
+                  Застосовано: <b>{result.stagesCreated}</b> нових етапів,{" "}
+                  <b>{result.stagesUpdated}</b> оновлень,{" "}
+                  <b>{result.materialsCreated}</b> матеріалів.
+                </span>
+                {typeof result.stagesPublished === "number" &&
+                  result.stagesPublished > 0 && (
+                    <span>
+                      Опубліковано у Фінансуванні:{" "}
+                      <b>{result.stagesPublished}</b> етап
+                      {result.stagesPublished === 1 ? "" : "ів"}.
+                    </span>
+                  )}
+                {result.publishSkipReason && (
+                  <span style={{ color: T.warning }}>
+                    Авто-публікацію пропущено: {result.publishSkipReason}.
+                    Натисни «Опублікувати у фінансування» вручну.
+                  </span>
+                )}
+                {typeof result.publishFailed === "number" &&
+                  result.publishFailed > 0 && (
+                    <span style={{ color: T.danger }}>
+                      Помилок публікації: <b>{result.publishFailed}</b>.
+                    </span>
+                  )}
+              </div>
             </div>
           )}
 

@@ -7,6 +7,9 @@ import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { ensureStageMaterialsSection } from "@/lib/projects/stage-materials";
 import { stageDisplayName } from "@/lib/constants";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
+import { copyDraftToPublishedForStages } from "@/lib/projects/publish-stages";
+import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
+import { canPublishFinance } from "@/lib/financing/rbac";
 
 export const runtime = "nodejs";
 // 300 sec — bulk apply створює N етапів + N materials записів через
@@ -77,6 +80,14 @@ const BodySchema = z.object({
    * Default — "fact" для зворотньої сумісності (стара поведінка).
    */
   targetMode: z.enum(["plan", "fact"]).default("fact"),
+  /**
+   * Після створення/оновлення стейджів — автоматично опублікувати у
+   * фінансування (copy draft→published + STAGE_AUTO FinanceEntry).
+   * Default true для targetMode='plan' (користувач завантажує кошторис і
+   * очікує бачити суми у Фінансуванні без додаткового кліку).
+   * Для тестових проектів і коли role не canPublishFinance — skip.
+   */
+  autoPublish: z.boolean().optional(),
 });
 
 export async function POST(
@@ -92,7 +103,7 @@ export async function POST(
   const { id: projectId } = await ctx.params;
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, firmId: true },
+    select: { id: true, firmId: true, isTestProject: true },
   });
   if (!project) {
     return NextResponse.json({ error: "Проєкт не знайдено" }, { status: 404 });
@@ -391,7 +402,77 @@ export async function POST(
     console.error("[ai-apply] recalcCurrentStage failed:", err);
   }
 
+  // 5) Auto-publish у фінансування (для plan-режиму це default-true).
+  //    Без цього кроку планові значення лишаються лише як DRAFT, а в розділі
+  //    «Фінансування» проект показує 0 ₴ — користувач очікує одно-кліковий
+  //    flow: AI → Застосувати → суми в Фінансуванні.
+  let stagesPublished = 0;
+  let publishFailed = 0;
+  let publishSkipReason: string | null = null;
+  const shouldAutoPublish =
+    body.autoPublish ?? body.targetMode === "plan";
+
+  if (shouldAutoPublish) {
+    if (project.isTestProject) {
+      publishSkipReason = "тестовий проєкт";
+    } else if (!canPublishFinance(session.user.role)) {
+      publishSkipReason = "немає прав на публікацію";
+    } else {
+      // Збираємо id усіх стейджів, що ми торкнулися (нові + оновлені LABOR).
+      const touchedStageIds: string[] = [];
+      for (const real of tempToReal.values()) touchedStageIds.push(real);
+      for (const it of body.items) {
+        if (it.costType === "LABOR" && existingIds.has(it.targetStageRef)) {
+          if (!touchedStageIds.includes(it.targetStageRef)) {
+            touchedStageIds.push(it.targetStageRef);
+          }
+        }
+      }
+
+      if (touchedStageIds.length > 0) {
+        try {
+          await prisma.$transaction(async (tx) => {
+            await copyDraftToPublishedForStages(touchedStageIds, tx);
+            await tx.project.update({
+              where: { id: projectId },
+              data: {
+                lastPublishedAt: new Date(),
+                lastPublishedById: session.user.id,
+                publicationVersion: { increment: 1 },
+              },
+            });
+          });
+          // STAGE_AUTO sync — поза tx (recompute складний, кожен стейдж окремо).
+          for (const stageId of touchedStageIds) {
+            try {
+              await syncStageAutoFinanceEntries(stageId, session.user.id);
+              stagesPublished++;
+            } catch (err) {
+              publishFailed++;
+              console.error(
+                `[ai-apply auto-publish] stage ${stageId} failed:`,
+                err,
+              );
+            }
+          }
+        } catch (err) {
+          publishFailed = touchedStageIds.length;
+          publishSkipReason =
+            err instanceof Error ? err.message : "помилка публікації";
+          console.error("[ai-apply auto-publish] copy/version failed:", err);
+        }
+      }
+    }
+  }
+
   return NextResponse.json({
-    data: { stagesCreated, stagesUpdated, materialsCreated },
+    data: {
+      stagesCreated,
+      stagesUpdated,
+      materialsCreated,
+      stagesPublished,
+      publishFailed,
+      publishSkipReason,
+    },
   });
 }
