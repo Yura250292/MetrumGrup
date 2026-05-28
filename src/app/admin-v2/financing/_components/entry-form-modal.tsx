@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   Loader2,
@@ -18,6 +18,11 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { financeCategoriesForType } from "@/lib/constants";
 import { CommentThread } from "@/components/collab/CommentThread";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
+import { useDirtyForm } from "@/hooks/use-dirty-form";
+import { UnsavedChangesBar } from "@/components/admin-v2/unsaved-changes-bar";
+import { UnsavedChangesDialog } from "@/components/admin-v2/unsaved-changes-dialog";
+import { dirtyFieldClass } from "@/lib/dirty-field-class";
+import { cn } from "@/lib/utils";
 import type {
   CostType,
   FinanceEntryDTO,
@@ -116,7 +121,7 @@ export function EntryFormModal({
   const contextFolderId = preset?.folderId ?? folderContext?.id ?? null;
   const contextFolderName = preset?.folderName ?? folderContext?.name ?? null;
 
-  const [values, setValues] = useState<EntryFormValues>(() => {
+  const initialValues = useMemo<EntryFormValues>(() => {
     if (initial) {
       return {
         kind: initial.kind,
@@ -156,7 +161,27 @@ export function EntryFormModal({
       costType: "",
       pendingFiles: [],
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const {
+    values,
+    setValues,
+    dirtyFields,
+    isDirty,
+    dirtyCount,
+    reset: resetDirtyForm,
+    resetBaseline,
+  } = useDirtyForm<EntryFormValues>({
+    initial: initialValues,
+    ignoreKeys: ["pendingFiles"],
+    onSave: async () => {
+      /* unused — save handled via runSave for unified validation/error UX */
+    },
   });
+
+  const [guardOpen, setGuardOpen] = useState(false);
+  const pendingCloseRef = useRef<(() => void) | null>(null);
 
   // Counterparty + cost-code data sources for the comboboxes.
   const [counterpartyOptions, setCounterpartyOptions] = useState<ComboboxOption[]>([]);
@@ -275,22 +300,21 @@ export function EntryFormModal({
     }
   }, [values.type, values.costCodeId, values.costType]);
 
-  async function handleSubmit(e: React.FormEvent, andCreateAnother: boolean) {
-    e.preventDefault();
+  async function runSave(andCreateAnother: boolean): Promise<boolean> {
     setError(null);
 
     const amountNum = Number(values.amount);
     if (!Number.isFinite(amountNum) || amountNum <= 0) {
       setError("Сума має бути більшою за 0");
-      return;
+      return false;
     }
     if (!values.title.trim()) {
       setError("Назва обов'язкова");
-      return;
+      return false;
     }
     if (!values.category) {
       setError("Виберіть категорію");
-      return;
+      return false;
     }
 
     const projectId = scope ? scope.id : values.projectId;
@@ -298,15 +322,18 @@ export function EntryFormModal({
 
     if (!scope && !projectId && !folderId) {
       setError("Виберіть проєкт або папку");
-      return;
+      return false;
     }
 
     setSaving(true);
     try {
-      await onSave({ ...values, projectId, folderId }, andCreateAnother);
+      const finalValues: EntryFormValues = { ...values, projectId, folderId };
+      await onSave(finalValues, andCreateAnother);
       if (andCreateAnother) {
-        setValues((p) => ({
-          ...p,
+        const next: EntryFormValues = {
+          ...values,
+          projectId,
+          folderId,
           amount: "",
           title: "",
           description: "",
@@ -314,13 +341,55 @@ export function EntryFormModal({
           counterpartyId: "",
           subcategory: "",
           pendingFiles: [],
-        }));
+        };
+        resetBaseline(next);
+      } else {
+        resetBaseline(finalValues);
       }
+      return true;
     } catch (err: any) {
       setError(err?.message ?? "Помилка збереження");
+      return false;
     } finally {
       setSaving(false);
     }
+  }
+
+  async function handleSubmit(e: React.FormEvent, andCreateAnother: boolean) {
+    e.preventDefault();
+    await runSave(andCreateAnother);
+  }
+
+  function attemptClose() {
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+    pendingCloseRef.current = onClose;
+    setGuardOpen(true);
+  }
+
+  async function handleGuardSave() {
+    const ok = await runSave(false);
+    if (ok) {
+      setGuardOpen(false);
+      const close = pendingCloseRef.current;
+      pendingCloseRef.current = null;
+      close?.();
+    }
+  }
+
+  function handleGuardDiscard() {
+    setGuardOpen(false);
+    resetDirtyForm();
+    const close = pendingCloseRef.current;
+    pendingCloseRef.current = null;
+    close?.();
+  }
+
+  function handleGuardContinue() {
+    setGuardOpen(false);
+    pendingCloseRef.current = null;
   }
 
   async function handleDeleteAttachment(attId: string) {
@@ -344,7 +413,7 @@ export function EntryFormModal({
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
       style={{ backgroundColor: "rgba(0,0,0,0.6)" }}
-      onClick={onClose}
+      onClick={attemptClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
@@ -387,7 +456,7 @@ export function EntryFormModal({
                 : `Автор: ${currentUserName}`}
             </p>
           </div>
-          <button onClick={onClose} aria-label="Закрити">
+          <button type="button" onClick={attemptClose} aria-label="Закрити">
             <X size={18} style={{ color: T.textMuted }} />
           </button>
         </div>
@@ -684,7 +753,10 @@ export function EntryFormModal({
                 <select
                   value={values.projectId}
                   onChange={(e) => setValues((p) => ({ ...p, projectId: e.target.value }))}
-                  className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                  className={cn(
+                    "w-full rounded-xl px-3.5 py-3 text-sm outline-none",
+                    dirtyFieldClass(dirtyFields, "projectId"),
+                  )}
                   style={{
                     backgroundColor: T.panelSoft,
                     border: `1px solid ${T.borderStrong}`,
@@ -706,7 +778,10 @@ export function EntryFormModal({
                 value={values.category}
                 onChange={(e) => setValues((p) => ({ ...p, category: e.target.value }))}
                 required
-                className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                className={cn(
+                  "w-full rounded-xl px-3.5 py-3 text-sm outline-none",
+                  dirtyFieldClass(dirtyFields, "category"),
+                )}
                 style={{
                   backgroundColor: T.panelSoft,
                   border: `1px solid ${T.borderStrong}`,
@@ -727,7 +802,10 @@ export function EntryFormModal({
                 value={values.subcategory}
                 onChange={(e) => setValues((p) => ({ ...p, subcategory: e.target.value }))}
                 placeholder="Опціонально"
-                className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                className={cn(
+                  "w-full rounded-xl px-3.5 py-3 text-sm outline-none",
+                  dirtyFieldClass(dirtyFields, "subcategory"),
+                )}
                 style={{
                   backgroundColor: T.panelSoft,
                   border: `1px solid ${T.borderStrong}`,
@@ -745,7 +823,10 @@ export function EntryFormModal({
                 onChange={(e) => setValues((p) => ({ ...p, amount: e.target.value }))}
                 required
                 placeholder="0"
-                className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                className={cn(
+                  "w-full rounded-xl px-3.5 py-3 text-sm outline-none",
+                  dirtyFieldClass(dirtyFields, "amount"),
+                )}
                 style={{
                   backgroundColor: T.panelSoft,
                   border: `1px solid ${T.borderStrong}`,
@@ -760,7 +841,10 @@ export function EntryFormModal({
                 value={values.occurredAt}
                 onChange={(e) => setValues((p) => ({ ...p, occurredAt: e.target.value }))}
                 required
-                className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                className={cn(
+                  "w-full rounded-xl px-3.5 py-3 text-sm outline-none",
+                  dirtyFieldClass(dirtyFields, "occurredAt"),
+                )}
                 style={{
                   backgroundColor: T.panelSoft,
                   border: `1px solid ${T.borderStrong}`,
@@ -857,7 +941,10 @@ export function EntryFormModal({
                       ? "Напр. «Закупка бетону на фундамент (план)»"
                       : "Напр. «Бетон М300 для фундаменту»"
                   }
-                  className="w-full rounded-xl px-3.5 py-3 text-sm outline-none"
+                  className={cn(
+                    "w-full rounded-xl px-3.5 py-3 text-sm outline-none",
+                    dirtyFieldClass(dirtyFields, "title"),
+                  )}
                   style={{
                     backgroundColor: T.panelSoft,
                     border: `1px solid ${T.borderStrong}`,
@@ -874,7 +961,10 @@ export function EntryFormModal({
                   onChange={(e) => setValues((p) => ({ ...p, description: e.target.value }))}
                   rows={3}
                   placeholder="Деталі, номер чеку, уточнення…"
-                  className="w-full rounded-xl px-3.5 py-3 text-sm outline-none resize-none"
+                  className={cn(
+                    "w-full rounded-xl px-3.5 py-3 text-sm outline-none resize-none",
+                    dirtyFieldClass(dirtyFields, "description"),
+                  )}
                   style={{
                     backgroundColor: T.panelSoft,
                     border: `1px solid ${T.borderStrong}`,
@@ -1021,6 +1111,14 @@ export function EntryFormModal({
             </div>
           )}
 
+          <UnsavedChangesBar
+            isDirty={isDirty}
+            dirtyCount={dirtyCount}
+            saving={saving}
+            onSave={() => runSave(false)}
+            onDiscard={resetDirtyForm}
+          />
+
           {/* Actions */}
           <div
             className="sticky bottom-0 z-10 -mx-6 -mb-6 flex flex-wrap justify-end gap-2 border-t px-6 py-4"
@@ -1028,7 +1126,7 @@ export function EntryFormModal({
           >
             <button
               type="button"
-              onClick={onClose}
+              onClick={attemptClose}
               className="rounded-xl px-4 py-2.5 text-sm font-medium"
               style={{ color: T.textSecondary }}
             >
@@ -1062,6 +1160,14 @@ export function EntryFormModal({
           </div>
         </form>
       </div>
+      <UnsavedChangesDialog
+        open={guardOpen}
+        dirtyCount={dirtyCount}
+        saving={saving}
+        onSave={handleGuardSave}
+        onDiscard={handleGuardDiscard}
+        onContinue={handleGuardContinue}
+      />
     </div>
   );
 }
