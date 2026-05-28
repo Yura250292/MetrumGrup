@@ -36,7 +36,7 @@ export function ProjectKpiStrip({
   canViewFinance,
 }: StaticProps) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-2.5">
       <KpiTile
         label="Бюджет"
         value={formatCurrency(totalBudget)}
@@ -131,7 +131,7 @@ function MarginPillClient({ projectId }: { projectId: string }) {
   if (loading) {
     return (
       <div
-        className="flex items-center justify-center rounded-xl py-4 text-[11px]"
+        className="flex items-center justify-center rounded-lg py-2.5 text-[11px]"
         style={{
           backgroundColor: T.panelSoft,
           border: `1px solid ${T.borderSoft}`,
@@ -200,7 +200,7 @@ function KpiTile({
             : T.textPrimary;
   return (
     <div
-      className="flex flex-col gap-1 rounded-xl px-3 py-3 sm:px-4 min-w-0 overflow-hidden"
+      className="flex flex-col gap-0.5 rounded-lg px-3 py-2 min-w-0 overflow-hidden"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <span
@@ -210,17 +210,15 @@ function KpiTile({
         {icon}
         <span>{label.toUpperCase()}</span>
       </span>
-      <div className="flex items-baseline gap-1 sm:gap-2 min-w-0">
-        <span
-          className="text-base sm:text-lg font-bold truncate tabular-nums"
-          style={{ color }}
-        >
-          {value}
-        </span>
-      </div>
+      <span
+        className="text-[15px] sm:text-base font-bold truncate tabular-nums leading-snug"
+        style={{ color }}
+      >
+        {value}
+      </span>
       {sub && (
         <span
-          className="text-[10px] sm:text-[11px] truncate"
+          className="text-[10px] truncate leading-tight"
           style={{ color: T.textMuted }}
         >
           {sub}

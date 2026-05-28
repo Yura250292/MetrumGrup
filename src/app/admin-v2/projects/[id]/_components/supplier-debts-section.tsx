@@ -119,30 +119,11 @@ export function SupplierDebtsSection({
     );
   }
 
+  // No-debt: повністю приховуємо блок. Раніше показували «Без боргу» —
+  // інформативно нуль, але займало ~48px вертикалі без користі для зону
+  // шапки. Якщо борг з'являється — рендеримо повний блок (нижче).
   if (!data || data.debts.length === 0) {
-    return (
-      <div
-        className="rounded-2xl px-4 py-3 flex items-center gap-2"
-        style={{
-          backgroundColor: T.panel,
-          border: `1px solid ${T.borderSoft}`,
-        }}
-      >
-        <Wallet size={14} style={{ color: T.textMuted }} />
-        <span
-          className="text-[10.5px] font-bold uppercase tracking-wider"
-          style={{ color: T.textMuted }}
-        >
-          Борги перед постачальниками
-        </span>
-        <span
-          className="text-[12px]"
-          style={{ color: T.success, marginLeft: "auto" }}
-        >
-          ✓ Без боргу
-        </span>
-      </div>
-    );
+    return null;
   }
 
   const totalColor = data.totalOutstanding > 0 ? T.danger : T.success;

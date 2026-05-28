@@ -121,18 +121,9 @@ export default async function AdminV2ProjectDetailPage({
     >
       {/* Sticky header */}
       <ProjectHeroAnimator>
-      <header className="flex flex-col gap-4">
-        <Link
-          href="/admin-v2/projects"
-          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-[0.97]"
-          style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-        >
-          <ArrowLeft size={14} /> До списку проєктів
-        </Link>
-
+      <header className="flex flex-col gap-3">
         {/* Cover ліворуч | Title-блок посередині | Actions праворуч.
-            Це усуває пусту смугу що раніше була праворуч від «Дії» — title
-            тепер заповнює centрalну зону, actions притиснуті до правого краю.
+            Back-link тепер inline у badge-рядку — заощаджує цілу строчку.
             Mobile (<sm) — вертикальний стек. */}
         <div className="flex flex-col sm:flex-row gap-4 items-start">
           <div className="w-full sm:w-44 md:w-56 flex-shrink-0">
@@ -141,13 +132,26 @@ export default async function AdminV2ProjectDetailPage({
               currentUrl={project.coverImageUrl ?? null}
             />
           </div>
-          <div className="flex flex-1 flex-col gap-2 min-w-0">
+          <div className="flex flex-1 flex-col gap-1.5 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/admin-v2/projects"
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium transition hover:brightness-[0.95]"
+                style={{
+                  backgroundColor: T.panelElevated,
+                  color: T.textMuted,
+                }}
+                aria-label="До списку проєктів"
+                title="До списку проєктів"
+              >
+                <ArrowLeft size={11} />
+                <span className="hidden sm:inline">Усі проєкти</span>
+              </Link>
               <span
-                className="text-[11px] font-bold tracking-wider"
+                className="text-[10.5px] font-bold tracking-wider"
                 style={{ color: T.textMuted }}
               >
-                ПРОЄКТ #{project.id.slice(0, 8).toUpperCase()}
+                #{project.id.slice(0, 8).toUpperCase()}
               </span>
               <StatusBadge status={project.status} />
               {project.isTestProject && <TestBadge />}
