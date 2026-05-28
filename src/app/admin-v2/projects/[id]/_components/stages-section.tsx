@@ -227,6 +227,8 @@ export function StagesSection({
           if (data.factClientUnitPrice !== undefined)
             next.factClientUnitPrice = data.factClientUnitPrice;
           if (data.notes !== undefined) next.notes = data.notes;
+          if (data.startDate !== undefined) next.startDate = data.startDate;
+          if (data.endDate !== undefined) next.endDate = data.endDate;
           return next;
         }),
       );

@@ -68,6 +68,8 @@ export type StageInlineUpdate = Partial<{
   planClientUnitPrice: number | null;
   factClientUnitPrice: number | null;
   notes: string | null;
+  startDate: string | null;
+  endDate: string | null;
 }>;
 
 export type ViewMode = "all" | "plan" | "fact" | "compare";
@@ -362,7 +364,7 @@ export function StageTable({
   //   3 фікс-колонки (Назва / Відповідальний / Статус) + columns × group(s) + 1 (Нотатка).
   // У compare-режимі кожна метрика = 3 колонки (План/Факт/Дельта).
   const ghostColCount = useMemo(() => {
-    const base = 3; // name + responsible + status
+    const base = 5; // name + responsible + status + startDate + endDate
     const notes = 1;
     if (isCompare) return base + COMPARE_METRICS.length * 3 + notes;
     const cols = (showPlan ? planOrder.length : 0) + (showFact ? factOrder.length : 0);
@@ -440,6 +442,24 @@ export function StageTable({
               <span title="Статус виконання" aria-label="Статус">
                 ●
               </span>
+            </Th>
+            <Th
+              width={120}
+              rowSpan={2}
+              colKey="startDate"
+              getWidth={widthFor}
+              onResize={setColWidth}
+            >
+              Дата початку
+            </Th>
+            <Th
+              width={120}
+              rowSpan={2}
+              colKey="endDate"
+              getWidth={widthFor}
+              onResize={setColWidth}
+            >
+              Дата закінчення
             </Th>
             {isCompare ? (
               COMPARE_METRICS.map((metric) => (
@@ -761,6 +781,22 @@ export function StageTable({
                     onCommit={(v) =>
                       onInlineUpdate(node.id, { status: v as StageStatus })
                     }
+                  />
+                </Td>
+
+                {/* Дата початку */}
+                <Td>
+                  <DateCell
+                    value={node.startDate}
+                    onCommit={(v) => onInlineUpdate(node.id, { startDate: v })}
+                  />
+                </Td>
+
+                {/* Дата закінчення */}
+                <Td>
+                  <DateCell
+                    value={node.endDate}
+                    onCommit={(v) => onInlineUpdate(node.id, { endDate: v })}
                   />
                 </Td>
 
@@ -1668,6 +1704,38 @@ function ResponsibleCell({
     >
       {displayName ?? "—"}
     </button>
+  );
+}
+
+function DateCell({
+  value,
+  onCommit,
+}: {
+  value: Date | string | null;
+  onCommit: (v: string | null) => void | Promise<void>;
+}) {
+  const iso = value
+    ? typeof value === "string"
+      ? value.split("T")[0]
+      : new Date(value).toISOString().split("T")[0]
+    : "";
+  return (
+    <input
+      type="date"
+      defaultValue={iso}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={(e) => {
+        const v = e.target.value || null;
+        if (v !== (iso || null)) void onCommit(v);
+      }}
+      className="w-full rounded border px-1.5 py-0.5 text-[11px] outline-none"
+      style={{
+        backgroundColor: T.panel,
+        borderColor: T.borderSoft,
+        color: iso ? T.textPrimary : T.textMuted,
+        colorScheme: "dark",
+      }}
+    />
   );
 }
 
