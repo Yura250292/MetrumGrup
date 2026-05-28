@@ -35,9 +35,14 @@ async function initSentry(): Promise<SentryLike | null> {
   if (!process.env.SENTRY_DSN) return null;
 
   try {
-    // dynamic import — package is optional; if not installed, this returns null
-    // @ts-expect-error optional peer dep, may not be installed
-    const mod = (await import("@sentry/nextjs").catch(() => null)) as SentryLike | null;
+    // Function-індирекція — щоб webpack/Turbopack НЕ резолвили модуль під час
+    // build (інакше `Module not found: Can't resolve '@sentry/nextjs'` як
+    // тільки опціональний peer dep відсутній у node_modules).
+    const dynamicImport = new Function(
+      "specifier",
+      "return import(specifier).catch(() => null)",
+    ) as (specifier: string) => Promise<unknown>;
+    const mod = (await dynamicImport("@sentry/nextjs")) as SentryLike | null;
     sentryClient = mod;
     if (mod) log.info("sentry:initialized");
     return mod;
