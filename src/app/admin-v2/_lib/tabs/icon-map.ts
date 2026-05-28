@@ -1,0 +1,56 @@
+import {
+  LayoutDashboard,
+  FolderKanban,
+  Package,
+  Users,
+  Truck,
+  Warehouse,
+  HardHat,
+  Globe,
+  MessageSquare,
+  Activity,
+  Building2,
+  FileText,
+  ListTodo,
+  Wallet,
+  Mic,
+  ScanLine,
+  TrendingUp,
+  Inbox,
+  ClipboardList,
+  ClipboardCheck,
+  FileSignature,
+  HelpCircle,
+  Squircle,
+  type LucideIcon,
+} from "lucide-react";
+
+const ICONS: Record<string, LucideIcon> = {
+  LayoutDashboard,
+  FolderKanban,
+  Package,
+  Users,
+  Truck,
+  Warehouse,
+  HardHat,
+  Globe,
+  MessageSquare,
+  Activity,
+  Building2,
+  FileText,
+  ListTodo,
+  Wallet,
+  Mic,
+  ScanLine,
+  TrendingUp,
+  Inbox,
+  ClipboardList,
+  ClipboardCheck,
+  FileSignature,
+  HelpCircle,
+};
+
+export function iconFromKey(key: string | undefined): LucideIcon {
+  if (key && ICONS[key]) return ICONS[key];
+  return Squircle;
+}

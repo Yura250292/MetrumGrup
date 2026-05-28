@@ -14,7 +14,10 @@ import { SqueezeWrapper } from "@/components/ai-assistant/SqueezeWrapper";
 import { UserProfileProvider } from "@/contexts/UserProfileContext";
 import { MeetingRecordingProvider } from "@/contexts/MeetingRecordingContext";
 import { MeetingMiniRecorder } from "./_components/meeting-mini-recorder";
-import { PageTransition } from "./_components/page-transition";
+import { TabsProvider } from "./_components/tabs/TabsProvider";
+import { TabsBar } from "./_components/tabs/TabsBar";
+import { TabsViewport } from "./_components/tabs/TabsViewport";
+import { LinkInterceptor } from "./_components/tabs/LinkInterceptor";
 import { InstallPrompt } from "@/components/pwa/InstallPrompt";
 import { MotionProvider } from "@/components/motion";
 import { DrillDownDrawerProvider } from "@/components/drawer/DrillDownDrawerProvider";
@@ -56,12 +59,16 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
               <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
                 <Sidebar activeFirmId={activeFirmId} />
                 <MobileShell activeFirmId={activeFirmId} />
-                <div className="flex flex-col min-h-screen sidebar-push">
-                  <Header />
-                  <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
-                    <PageTransition>{children}</PageTransition>
-                  </main>
-                </div>
+                <TabsProvider userId={session.user.id ?? "anon"} firmScope={activeFirmId ?? "all"}>
+                  <LinkInterceptor />
+                  <div className="flex flex-col min-h-screen sidebar-push">
+                    <Header />
+                    <TabsBar />
+                    <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+                      <TabsViewport>{children}</TabsViewport>
+                    </main>
+                  </div>
+                </TabsProvider>
                 {!isClient && <TimerPill />}
                 <MeetingMiniRecorder />
                 <InstallPrompt />
