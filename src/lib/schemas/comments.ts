@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { ALLOWED_REACTIONS } from "@/lib/comments/service";
 
-export const commentEntityTypeSchema = z.enum(["ESTIMATE", "PROJECT", "TASK", "FINANCE_ENTRY"]);
+export const commentEntityTypeSchema = z.enum([
+  "ESTIMATE",
+  "PROJECT",
+  "TASK",
+  "FINANCE_ENTRY",
+  "STAGE_RECORD",
+]);
 export type CommentEntityTypeInput = z.infer<typeof commentEntityTypeSchema>;
 
 export const listCommentsQuerySchema = z.object({
