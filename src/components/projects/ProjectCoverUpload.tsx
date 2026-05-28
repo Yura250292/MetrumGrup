@@ -2,6 +2,7 @@
 
 import { useState, useRef, type ChangeEvent } from "react";
 import { ImagePlus, Loader2, Trash2 } from "lucide-react";
+import { T } from "@/app/ai-estimate-v2/_components/tokens";
 
 /**
  * Завантажити обкладинку проекту: upload файла у R2 (через presigned URL
@@ -87,12 +88,19 @@ export function ProjectCoverUpload({
   return (
     <div className="flex flex-col gap-2">
       <div
-        className="relative h-28 sm:h-36 md:h-44 rounded-2xl overflow-hidden cursor-pointer group"
+        className="relative h-28 sm:h-36 md:h-44 rounded-2xl overflow-hidden cursor-pointer group transition-colors hover:brightness-95"
         style={{
-          backgroundColor: "rgba(255,255,255,0.03)",
-          border: "1px dashed rgba(255,255,255,0.12)",
+          backgroundColor: T.panelElevated,
+          border: `1px dashed ${T.borderStrong}`,
         }}
         onClick={() => !uploading && inputRef.current?.click()}
+        role="button"
+        aria-label={
+          previewUrl ? "Змінити обкладинку проєкту" : "Додати обкладинку проєкту"
+        }
+        title={
+          previewUrl ? "Змінити обкладинку проєкту" : "Додати обкладинку проєкту"
+        }
       >
         {previewUrl ? (
           <>
@@ -104,18 +112,33 @@ export function ProjectCoverUpload({
             />
             {/* Overlay on hover */}
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-              <span className="text-xs font-semibold text-white">Змінити обкладинку</span>
+              <span className="text-xs font-semibold text-white">
+                Змінити обкладинку
+              </span>
             </div>
           </>
         ) : (
-          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center">
+          <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-center px-3">
             {uploading ? (
-              <Loader2 size={28} className="animate-spin" style={{ color: "rgba(255,255,255,0.3)" }} />
+              <Loader2
+                size={28}
+                className="animate-spin"
+                style={{ color: T.accentPrimary }}
+              />
             ) : (
               <>
-                <ImagePlus size={28} style={{ color: "rgba(255,255,255,0.2)" }} />
-                <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.3)" }}>
+                <ImagePlus size={28} style={{ color: T.accentPrimary }} />
+                <span
+                  className="text-xs font-semibold"
+                  style={{ color: T.textSecondary }}
+                >
                   Додати обкладинку проєкту
+                </span>
+                <span
+                  className="text-[10px]"
+                  style={{ color: T.textMuted }}
+                >
+                  Клік щоб обрати фото
                 </span>
               </>
             )}
@@ -134,8 +157,8 @@ export function ProjectCoverUpload({
             e.stopPropagation();
             removeCover();
           }}
-          className="self-end flex items-center gap-1 text-[11px] font-medium rounded px-2 py-1 transition-colors"
-          style={{ color: "rgba(255,255,255,0.4)" }}
+          className="self-end flex items-center gap-1 text-[11px] font-medium rounded px-2 py-1 transition-colors hover:brightness-95"
+          style={{ color: T.textMuted }}
         >
           <Trash2 size={12} /> Видалити обкладинку
         </button>
