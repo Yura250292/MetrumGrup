@@ -206,6 +206,13 @@ model Project {
   /// `clientName` тримає snapshot назви на момент привʼязки.
   clientCounterpartyId   String?
   managerId              String?
+  /// Display-name менеджера для випадків, коли керівник проекту не має
+  /// User-акаунту в CRM (просто співробітник штату або вільний текст).
+  /// Якщо `managerId` ≠ null — це snapshot User.name; інакше — free-text.
+  managerName            String?
+  /// Хто завів проект у систему (вільний текст). Не FK на User — суто
+  /// display-only довідкове поле. Заповнюється на формі «Новий проект».
+  authorName             String?
   folderId               String?
   firmId                 String?
   /// Telegram chat (forum) + thread (topic) the bot listens to for this

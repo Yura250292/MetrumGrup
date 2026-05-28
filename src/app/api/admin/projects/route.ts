@@ -4,7 +4,6 @@ import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { slugify } from "@/lib/utils";
 import { auditLog } from "@/lib/audit";
-import { ProjectStage } from "@prisma/client";
 import { addProjectMember } from "@/lib/projects/members-service";
 import { seedProjectTaskDefaults } from "@/lib/tasks/defaults";
 import {
@@ -19,10 +18,6 @@ import {
   getActiveRoleFromSession,
 } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
-
-const STAGE_ORDER: ProjectStage[] = [
-  "DESIGN", "FOUNDATION", "WALLS", "ROOF", "ENGINEERING", "FINISHING", "HANDOVER",
-];
 
 // GET /api/admin/projects - List all projects
 export async function GET(request: NextRequest) {
@@ -92,6 +87,8 @@ export async function POST(request: NextRequest) {
     clientCounterpartyId,
     clientName: clientNameRaw,
     managerId,
+    managerName: managerNameRaw,
+    authorName: authorNameRaw,
     totalBudget,
     startDate,
     expectedEndDate,
@@ -146,6 +143,26 @@ export async function POST(request: NextRequest) {
   const clientNameToStore =
     clientNameTrim || resolvedCounterpartyName || null;
 
+  // Менеджер: якщо managerId є — snapshot його імені; інакше беремо
+  // managerName (free-text для штатного працівника без User-акаунту).
+  let managerNameToStore: string | null = null;
+  const managerNameTrim =
+    typeof managerNameRaw === "string" ? managerNameRaw.trim() : "";
+  if (managerId) {
+    const u = await prisma.user.findUnique({
+      where: { id: String(managerId) },
+      select: { name: true },
+    });
+    managerNameToStore = u?.name ?? (managerNameTrim || null);
+  } else if (managerNameTrim) {
+    managerNameToStore = managerNameTrim;
+  }
+
+  const authorNameToStore =
+    typeof authorNameRaw === "string" && authorNameRaw.trim()
+      ? authorNameRaw.trim()
+      : null;
+
   const project = await prisma.project.create({
     data: {
       title,
@@ -156,18 +173,14 @@ export async function POST(request: NextRequest) {
       clientCounterpartyId: clientCounterpartyId || null,
       clientName: clientNameToStore,
       managerId: managerId || null,
+      managerName: managerNameToStore,
+      authorName: authorNameToStore,
       firmId: projectFirmId,
       totalBudget: totalBudget || 0,
       startDate: startDate ? new Date(startDate) : null,
       expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
-      stages: {
-        create: STAGE_ORDER.map((stage, i) => ({
-          stage,
-          status: "PENDING",
-          progress: 0,
-          sortOrder: i,
-        })),
-      },
+      // Дефолтні етапи більше не створюються — користувач сам додає те, що
+      // йому потрібно (раніше юзери змушені були вручну видаляти всі 7 етапів).
     },
     include: { stages: true },
   });

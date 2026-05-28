@@ -7,7 +7,6 @@ import {
   ArrowLeft,
   FolderPlus,
   Loader2,
-  Save,
   Sparkles,
   AlertCircle,
   Link2,
@@ -17,29 +16,29 @@ import {
   ProjectClientPicker,
   type ProjectClientValue,
 } from "@/components/projects/ProjectClientPicker";
+import {
+  ProjectManagerPicker,
+  type ProjectManagerValue,
+} from "@/components/projects/ProjectManagerPicker";
 
-type ManagerOption = { id: string; name: string };
 type MergeCandidate = { id: string; name: string; entryCount: number };
 
 export default function AdminV2NewProjectPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [managers, setManagers] = useState<ManagerOption[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const [form, setForm] = useState({
     title: "",
     description: "",
-    address: "",
-    managerId: "",
+    authorName: "",
     totalBudget: "",
-    startDate: "",
-    expectedEndDate: "",
   });
 
   // Клієнт — або контрагент з книги, або просто текстове ім'я. Без email/phone.
   const [client, setClient] = useState<ProjectClientValue>(null);
+  // Менеджер — User з логіном АБО Employee штату АБО free-text.
+  const [manager, setManager] = useState<ProjectManagerValue>(null);
 
   // Кандидати на merge з існуючою FINANCE-папкою (debounced search by title).
   const [mergeCandidates, setMergeCandidates] = useState<MergeCandidate[]>([]);
@@ -72,31 +71,6 @@ export default function AdminV2NewProjectPage() {
     };
   }, [form.title]);
 
-  useEffect(() => {
-    async function loadUsers() {
-      try {
-        setLoadingUsers(true);
-        setError(null);
-        // Manager dropdown — користувачі з роллю MANAGER/SUPER_ADMIN на
-        // поточній фірмі (firmAware через cookie). Клієнтів окремо не
-        // тягнемо — їх picker сам читає з /financing/counterparties.
-        const managersRes = await fetch(
-          "/api/admin/users?role=MANAGER,SUPER_ADMIN",
-        );
-        if (!managersRes.ok) {
-          throw new Error("Не вдалося завантажити список менеджерів");
-        }
-        const managersData = await managersRes.json();
-        setManagers(managersData.data || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Помилка завантаження");
-      } finally {
-        setLoadingUsers(false);
-      }
-    }
-    loadUsers();
-  }, []);
-
   function updateField(key: string, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));
   }
@@ -115,12 +89,24 @@ export default function AdminV2NewProjectPage() {
           ? { clientCounterpartyId: client.id, clientName: client.name }
           : { clientName: client.name };
 
+      // Менеджер: User-FK ставимо тільки коли source='user'; для employee і
+      // free-text — лише `managerName` (вільний текст, без FK).
+      const managerFields: {
+        managerId?: string;
+        managerName?: string;
+      } = (() => {
+        if (!manager) return {};
+        if (manager.mode === "user") return { managerId: manager.id };
+        return { managerName: manager.name };
+      })();
+
       const res = await fetch("/api/admin/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
           ...clientFields,
+          ...managerFields,
           totalBudget: form.totalBudget ? parseFloat(form.totalBudget) : 0,
           mergeFinanceFolderId: mergeFolderId || undefined,
         }),
@@ -282,20 +268,6 @@ export default function AdminV2NewProjectPage() {
           />
         </Field>
 
-        <Field label="Адреса">
-          <input
-            value={form.address}
-            onChange={(e) => updateField("address", e.target.value)}
-            placeholder="м. Київ, вул. Липова, 15"
-            className="w-full rounded-xl px-4 py-3 text-sm outline-none"
-            style={{
-              backgroundColor: T.panelSoft,
-              border: `1px solid ${T.borderStrong}`,
-              color: T.textPrimary,
-            }}
-          />
-        </Field>
-
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Клієнт" required>
             <ProjectClientPicker
@@ -310,32 +282,30 @@ export default function AdminV2NewProjectPage() {
           </Field>
 
           <Field label="Менеджер">
-            <select
-              value={form.managerId}
-              onChange={(e) => updateField("managerId", e.target.value)}
-              disabled={loadingUsers}
-              className="w-full rounded-xl px-4 py-3 text-sm outline-none disabled:opacity-50"
-              style={{
-                backgroundColor: T.panelSoft,
-                border: `1px solid ${T.borderStrong}`,
-                color: T.textPrimary,
-              }}
-            >
-              <option value="">
-                {loadingUsers
-                  ? "Завантаження…"
-                  : managers.length === 0
-                    ? "Немає менеджерів"
-                    : "Оберіть менеджера"}
-              </option>
-              {managers.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
+            <ProjectManagerPicker value={manager} onChange={setManager} />
+            <p className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
+              Зі списку — User з логіном або співробітник штату. Можна
+              ввести імʼя вручну.
+            </p>
           </Field>
         </div>
+
+        <Field label="Автор проекту">
+          <input
+            value={form.authorName}
+            onChange={(e) => updateField("authorName", e.target.value)}
+            placeholder="Хто заводить проєкт у систему (вільний текст)"
+            className="w-full rounded-xl px-4 py-3 text-sm outline-none"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px solid ${T.borderStrong}`,
+              color: T.textPrimary,
+            }}
+          />
+          <p className="mt-1 text-[11px]" style={{ color: T.textMuted }}>
+            Зберігається у проєкті як довідкове поле (без облікового запису).
+          </p>
+        </Field>
 
         <Field label="Орієнтовний бюджет, ₴">
           <input
@@ -361,37 +331,6 @@ export default function AdminV2NewProjectPage() {
           </p>
         </Field>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Дата початку">
-            <input
-              type="date"
-              value={form.startDate}
-              onChange={(e) => updateField("startDate", e.target.value)}
-              className="w-full rounded-xl px-4 py-3 text-sm outline-none"
-              style={{
-                backgroundColor: T.panelSoft,
-                border: `1px solid ${T.borderStrong}`,
-                color: T.textPrimary,
-                colorScheme: "dark",
-              }}
-            />
-          </Field>
-          <Field label="Планове завершення">
-            <input
-              type="date"
-              value={form.expectedEndDate}
-              onChange={(e) => updateField("expectedEndDate", e.target.value)}
-              className="w-full rounded-xl px-4 py-3 text-sm outline-none"
-              style={{
-                backgroundColor: T.panelSoft,
-                border: `1px solid ${T.borderStrong}`,
-                color: T.textPrimary,
-                colorScheme: "dark",
-              }}
-            />
-          </Field>
-        </div>
-
         {/* Hint */}
         <div
           className="flex items-start gap-2.5 rounded-xl p-3.5"
@@ -415,7 +354,7 @@ export default function AdminV2NewProjectPage() {
           </Link>
           <button
             type="submit"
-            disabled={loading || loadingUsers}
+            disabled={loading}
             className="flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-bold text-white disabled:opacity-50"
             style={{ backgroundColor: T.accentPrimary }}
           >
