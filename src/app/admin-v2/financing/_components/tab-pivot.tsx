@@ -9,6 +9,47 @@ import { formatCurrency } from "@/lib/utils";
 import { FINANCE_CATEGORY_LABELS } from "@/lib/constants";
 import type { FinancingFilters } from "./types";
 import { startOfLocalDayISO, endOfLocalDayISO } from "@/lib/dates/local-day-range";
+import type { PivotEntryDetail } from "@/lib/financing/pivot-entries";
+
+type DrillState = {
+  open: boolean;
+  loading: boolean;
+  error: string | null;
+  entries: PivotEntryDetail[];
+  total: number;
+  /// Skip-offset for the next "show more" request — points past the last loaded entry.
+  nextOffset: number;
+};
+
+const DRILL_PAGE_SIZE = 20;
+
+const EMPTY_DRILL: DrillState = {
+  open: false,
+  loading: false,
+  error: null,
+  entries: [],
+  total: 0,
+  nextOffset: 0,
+};
+
+function drillKey(row: PivotRow): string {
+  return `${row.kind}::${row.type}::${row.projectId ?? "_NULL_"}::${row.category}::${row.subcategory ?? "_NULL_"}`;
+}
+
+function formatDateShort(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yy = String(d.getFullYear()).slice(2);
+  return `${dd}.${mm}.${yy}`;
+}
+
+function formatQty(qty: number, unit: string | null): string {
+  // Trim trailing zeros for readability (10.000 → 10, 85.500 → 85.5).
+  const s = qty % 1 === 0 ? String(Math.round(qty)) : qty.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return unit ? `${s} ${unit}` : s;
+}
 
 type Bucket = "PROJECTS" | "SALARY" | "ADMIN";
 type Granularity = "TOTAL" | "DAY" | "WEEK" | "MONTH" | "YEAR";
@@ -205,6 +246,7 @@ export function TabPivot({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [drillMap, setDrillMap] = useState<Record<string, DrillState>>({});
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -303,7 +345,99 @@ export function TabPivot({
 
   function collapseAll() {
     setExpandedProjects(new Set());
+    setDrillMap({});
   }
+
+  async function loadDrillPage(row: PivotRow, offset: number, append: boolean) {
+    const key = drillKey(row);
+    setDrillMap((m) => ({
+      ...m,
+      [key]: {
+        ...(m[key] ?? EMPTY_DRILL),
+        open: true,
+        loading: true,
+        error: null,
+      },
+    }));
+
+    try {
+      const p = new URLSearchParams();
+      p.set("kind", row.kind);
+      p.set("type", row.type);
+      p.set("category", row.category);
+      // subcategory: empty string = filter for NULL; absent = no filter. Our
+      // PivotRow encodes "missing subcategory" as null → пасе саме як empty.
+      if (row.subcategory != null) p.set("subcategory", row.subcategory);
+      else p.set("subcategory", "");
+      if (row.projectId) p.set("projectId", row.projectId);
+      else p.set("projectId", "null");
+      if (filters.from) p.set("from", startOfLocalDayISO(filters.from));
+      if (filters.to) p.set("to", endOfLocalDayISO(filters.to));
+      if (filters.folderId) p.set("folderId", filters.folderId);
+      if (filters.archived) p.set("archived", "true");
+      p.set("limit", String(DRILL_PAGE_SIZE));
+      p.set("offset", String(offset));
+
+      const res = await fetch(
+        `/api/admin/financing/pivot/entries?${p.toString()}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error("Не вдалось завантажити деталі");
+      const json: {
+        entries: PivotEntryDetail[];
+        total: number;
+        limit: number;
+        offset: number;
+      } = await res.json();
+
+      setDrillMap((m) => {
+        const prev = m[key] ?? EMPTY_DRILL;
+        const merged = append ? [...prev.entries, ...json.entries] : json.entries;
+        return {
+          ...m,
+          [key]: {
+            open: true,
+            loading: false,
+            error: null,
+            entries: merged,
+            total: json.total,
+            nextOffset: json.offset + json.entries.length,
+          },
+        };
+      });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Помилка";
+      setDrillMap((m) => ({
+        ...m,
+        [key]: {
+          ...(m[key] ?? EMPTY_DRILL),
+          open: true,
+          loading: false,
+          error: msg,
+        },
+      }));
+    }
+  }
+
+  function toggleDrill(row: PivotRow) {
+    const key = drillKey(row);
+    const current = drillMap[key];
+    if (current?.open) {
+      setDrillMap((m) => ({ ...m, [key]: { ...current, open: false } }));
+      return;
+    }
+    // Re-use cached entries if we have them; otherwise lazy-load.
+    if (current && current.entries.length > 0) {
+      setDrillMap((m) => ({ ...m, [key]: { ...current, open: true } }));
+      return;
+    }
+    void loadDrillPage(row, 0, /*append*/ false);
+  }
+
+  // Drop drill cache whenever query params change — stale rows would mislead.
+  useEffect(() => {
+    setDrillMap({});
+  }, [query]);
 
   function handleExportCsv() {
     if (!data) return;
@@ -564,6 +698,11 @@ export function TabPivot({
                     linkable={linkable}
                     fromIso={fromIso}
                     toIso={toIso}
+                    drillMap={drillMap}
+                    onDrillToggle={toggleDrill}
+                    onDrillLoadMore={(row) =>
+                      loadDrillPage(row, drillMap[drillKey(row)]?.nextOffset ?? 0, true)
+                    }
                   />
                 );
               })}
@@ -658,6 +797,9 @@ function ProjectRows({
   linkable,
   fromIso,
   toIso,
+  drillMap,
+  onDrillToggle,
+  onDrillLoadMore,
 }: {
   block: ProjectBlock;
   buckets: string[];
@@ -667,6 +809,9 @@ function ProjectRows({
   linkable: boolean;
   fromIso?: string;
   toIso?: string;
+  drillMap: Record<string, DrillState>;
+  onDrillToggle: (row: PivotRow) => void;
+  onDrillLoadMore: (row: PivotRow) => void;
 }) {
   const Chevron = isExpanded ? ChevronDown : ChevronRight;
 
@@ -734,6 +879,9 @@ function ProjectRows({
               buckets={buckets}
               fromIso={fromIso}
               toIso={toIso}
+              drill={drillMap[drillKey(r)] ?? EMPTY_DRILL}
+              onToggle={() => onDrillToggle(r)}
+              onLoadMore={() => onDrillLoadMore(r)}
             />
           ))}
           {block.factExpense.map((r, i) => (
@@ -743,6 +891,9 @@ function ProjectRows({
               buckets={buckets}
               fromIso={fromIso}
               toIso={toIso}
+              drill={drillMap[drillKey(r)] ?? EMPTY_DRILL}
+              onToggle={() => onDrillToggle(r)}
+              onLoadMore={() => onDrillLoadMore(r)}
             />
           ))}
 
@@ -762,6 +913,9 @@ function ProjectRows({
                   buckets={buckets}
                   fromIso={fromIso}
                   toIso={toIso}
+                  drill={drillMap[drillKey(r)] ?? EMPTY_DRILL}
+                  onToggle={() => onDrillToggle(r)}
+                  onLoadMore={() => onDrillLoadMore(r)}
                 />
               ))}
               {block.planExpense.map((r, i) => (
@@ -771,6 +925,9 @@ function ProjectRows({
                   buckets={buckets}
                   fromIso={fromIso}
                   toIso={toIso}
+                  drill={drillMap[drillKey(r)] ?? EMPTY_DRILL}
+                  onToggle={() => onDrillToggle(r)}
+                  onLoadMore={() => onDrillLoadMore(r)}
                 />
               ))}
             </>
@@ -814,11 +971,17 @@ function CategoryRow({
   buckets,
   fromIso,
   toIso,
+  drill,
+  onToggle,
+  onLoadMore,
 }: {
   row: PivotRow;
   buckets: string[];
   fromIso?: string;
   toIso?: string;
+  drill: DrillState;
+  onToggle: () => void;
+  onLoadMore: () => void;
 }) {
   const link = buildOperationsLink({
     projectId: row.projectId,
@@ -830,34 +993,173 @@ function CategoryRow({
     to: toIso,
   });
 
+  const DrillChevron = drill.open ? ChevronDown : ChevronRight;
+  const totalCols = 1 + buckets.length * 3;
+
   return (
-    <tr style={{ borderTop: `1px solid ${T.borderSoft}` }}>
-      <td
-        className="sticky left-0 z-10 px-3 py-1.5"
-        style={{ background: T.panel, color: T.textPrimary, paddingLeft: 44, borderRight: `1px solid ${T.borderSoft}` }}
+    <>
+      <tr
+        style={{ borderTop: `1px solid ${T.borderSoft}`, cursor: "pointer" }}
+        onClick={onToggle}
       >
-        <Link href={link} className="hover:underline" style={{ color: T.textPrimary }}>
-          {categoryLabel(row.category)}
-          {row.subcategory && (
-            <span className="ml-1" style={{ color: T.textMuted }}>
-              / {row.subcategory}
+        <td
+          className="sticky left-0 z-10 px-3 py-1.5"
+          style={{ background: T.panel, color: T.textPrimary, paddingLeft: 44, borderRight: `1px solid ${T.borderSoft}` }}
+        >
+          <div className="flex items-center gap-1.5">
+            <DrillChevron size={12} style={{ color: T.textMuted }} />
+            <Link
+              href={link}
+              onClick={(e) => e.stopPropagation()}
+              className="hover:underline"
+              style={{ color: T.textPrimary }}
+            >
+              {categoryLabel(row.category)}
+              {row.subcategory && (
+                <span className="ml-1" style={{ color: T.textMuted }}>
+                  / {row.subcategory}
+                </span>
+              )}
+            </Link>
+          </div>
+        </td>
+        {buckets.map((b) => {
+          const v = row.perBucket[b] ?? 0;
+          const isExpense = row.type === "EXPENSE";
+          const isIncome = row.type === "INCOME";
+          return (
+            <TripletCells
+              key={b}
+              expense={isExpense ? v : 0}
+              income={isIncome ? v : 0}
+              net={isIncome ? v : -v}
+            />
+          );
+        })}
+      </tr>
+      {drill.open && (
+        <tr style={{ background: T.panelSoft }}>
+          <td colSpan={totalCols} style={{ padding: 0, borderTop: `1px solid ${T.borderSoft}` }}>
+            <DrillContent
+              drill={drill}
+              type={row.type}
+              onLoadMore={onLoadMore}
+            />
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function DrillContent({
+  drill,
+  type,
+  onLoadMore,
+}: {
+  drill: DrillState;
+  type: "INCOME" | "EXPENSE";
+  onLoadMore: () => void;
+}) {
+  const isInitialLoad = drill.loading && drill.entries.length === 0;
+  const hasMore = drill.entries.length < drill.total;
+  const amountColor = type === "EXPENSE" ? T.danger : T.success;
+
+  if (drill.error && drill.entries.length === 0) {
+    return (
+      <div className="px-12 py-3 text-xs" style={{ color: T.danger }}>
+        {drill.error}
+      </div>
+    );
+  }
+
+  if (isInitialLoad) {
+    return (
+      <div className="px-12 py-3 flex items-center gap-2 text-xs" style={{ color: T.textMuted }}>
+        <Loader2 size={12} className="animate-spin" />
+        Завантаження…
+      </div>
+    );
+  }
+
+  if (drill.entries.length === 0) {
+    return (
+      <div className="px-12 py-3 text-xs" style={{ color: T.textMuted }}>
+        Немає окремих записів у цій категорії за період.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-12 py-2">
+      <table className="w-full" style={{ fontSize: 11.5 }}>
+        <thead>
+          <tr style={{ color: T.textMuted }}>
+            <th className="text-left py-1 pr-3 font-medium" style={{ minWidth: 72 }}>Дата</th>
+            <th className="text-left py-1 pr-3 font-medium">Опис</th>
+            <th className="text-right py-1 pr-3 font-medium whitespace-nowrap">Кількість × ціна</th>
+            <th className="text-right py-1 pr-3 font-medium whitespace-nowrap">Сума</th>
+            <th className="text-left py-1 font-medium">Контрагент</th>
+          </tr>
+        </thead>
+        <tbody>
+          {drill.entries.map((e) => (
+            <tr key={e.id} style={{ borderTop: `1px dashed ${T.borderSoft}` }}>
+              <td className="py-1 pr-3 whitespace-nowrap" style={{ color: T.textSecondary }}>
+                {formatDateShort(e.occurredAt)}
+              </td>
+              <td className="py-1 pr-3" style={{ color: T.textPrimary }}>
+                <div className="flex flex-col">
+                  <span>{e.title}</span>
+                  {e.stageName && (
+                    <span className="text-[10px]" style={{ color: T.textMuted }}>
+                      етап: {e.stageName}
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="py-1 pr-3 text-right tabular-nums whitespace-nowrap" style={{ color: T.textSecondary }}>
+                {e.quantity != null && e.unitPrice != null
+                  ? `${formatQty(e.quantity, e.unit)} × ${formatCurrency(e.unitPrice)}`
+                  : "—"}
+              </td>
+              <td
+                className="py-1 pr-3 text-right tabular-nums whitespace-nowrap font-semibold"
+                style={{ color: amountColor }}
+              >
+                {formatCurrency(e.amount)}
+              </td>
+              <td className="py-1" style={{ color: T.textSecondary }}>
+                {e.counterparty ?? "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {(hasMore || drill.error) && (
+        <div className="flex items-center justify-between gap-3 mt-1.5">
+          {drill.error ? (
+            <span className="text-[11px]" style={{ color: T.danger }}>{drill.error}</span>
+          ) : (
+            <span className="text-[11px]" style={{ color: T.textMuted }}>
+              Показано {drill.entries.length} з {drill.total}
             </span>
           )}
-        </Link>
-      </td>
-      {buckets.map((b) => {
-        const v = row.perBucket[b] ?? 0;
-        const isExpense = row.type === "EXPENSE";
-        const isIncome = row.type === "INCOME";
-        return (
-          <TripletCells
-            key={b}
-            expense={isExpense ? v : 0}
-            income={isIncome ? v : 0}
-            net={isIncome ? v : -v}
-          />
-        );
-      })}
-    </tr>
+          {hasMore && (
+            <button
+              type="button"
+              onClick={onLoadMore}
+              disabled={drill.loading}
+              className="text-[11px] font-semibold flex items-center gap-1 disabled:opacity-50"
+              style={{ color: T.accentPrimary }}
+            >
+              {drill.loading && <Loader2 size={11} className="animate-spin" />}
+              Показати ще
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
