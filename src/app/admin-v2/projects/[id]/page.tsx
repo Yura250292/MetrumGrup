@@ -69,14 +69,16 @@ export default async function AdminV2ProjectDetailPage({
       where: { projectId: id, type: "EXPENSE", kind: "FACT", isArchived: false },
       _sum: { amount: true },
     }),
-    prisma.user.findMany({
-      where: {
-        role: { in: ["SUPER_ADMIN", "MANAGER", "ENGINEER"] },
-        isActive: true,
-      },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-    }),
+    // Кандидати на «Відповідальний» — наш Штат (Employee), а не контрагенти.
+    // Раніше тягнули User-акаунти з SUPER_ADMIN/MANAGER/ENGINEER, що показувало
+    // тільки кілька адмінів. Зараз — усі активні співробітники зі Штату.
+    prisma.employee
+      .findMany({
+        where: { isActive: true },
+        select: { id: true, fullName: true },
+        orderBy: { fullName: "asc" },
+      })
+      .then((rows) => rows.map((e) => ({ id: e.id, name: e.fullName }))),
   ]);
 
   if (!project) notFound();
