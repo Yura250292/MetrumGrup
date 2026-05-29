@@ -14,6 +14,8 @@ import {
   Mic,
   Sparkles,
   Truck,
+  Users,
+  Wallet,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +67,20 @@ export default async function V2PreviewHubPage() {
       icon: Mic,
       title: "Наради v2",
       sub: "AI-pipeline статуси · Транскрипт/Резюме · audio duration · project tag",
+      tone: "violet" as const,
+    },
+    {
+      href: "/admin-v2/employees-v2",
+      icon: Users,
+      title: "Працівники v2",
+      sub: "Department chips · Employment rate · Tenure · ЗП за period (SUPER_ADMIN only)",
+      tone: "primary" as const,
+    },
+    {
+      href: "/admin-v2/financing-v2",
+      icon: Wallet,
+      title: "Фінансування v2",
+      sub: "STRICT RBAC · Cashflow KPI · Income/Expense feed · KB2 forms · Read-only preview",
       tone: "violet" as const,
     },
   ];
