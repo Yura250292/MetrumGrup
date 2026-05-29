@@ -67,8 +67,9 @@ export function Header() {
 
   return (
     <header
-      className="glass-header sticky top-0 z-30 flex h-12 md:h-16 items-center justify-between px-4 md:px-8"
+      className="glass-header sticky z-30 flex h-12 md:h-16 items-center justify-between px-4 md:px-8"
       style={{
+        top: "var(--staging-banner-h, 0px)",
         borderBottom: `1px solid ${T.borderSoft}`,
       }}
     >
