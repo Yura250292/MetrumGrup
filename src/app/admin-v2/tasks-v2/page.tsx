@@ -6,18 +6,13 @@ import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import {
   AlertOctagon,
-  AlertTriangle,
-  ArrowRight,
   ArrowUpRight,
   Calendar,
   CheckCircle2,
-  ChevronRight,
-  Clock,
   Flag,
   ListChecks,
-  Plus,
-  User,
 } from "lucide-react";
+import { InteractiveTaskRow, type ClientTaskRow } from "./_components/task-row-client";
 
 export const dynamic = "force-dynamic";
 
@@ -65,7 +60,7 @@ export default async function TasksV2Page({
           completedAt: true,
           estimatedHours: true,
           actualHours: true,
-          status: { select: { id: true, name: true, color: true } },
+          status: { select: { id: true, name: true, color: true, isDone: true } },
           project: { select: { id: true, title: true, slug: true } },
           assignees: {
             select: {
@@ -180,9 +175,27 @@ export default async function TasksV2Page({
         totalCount={totalCount}
       />
 
-      <TaskList tasks={tasks} />
+      <TaskList tasks={tasks.map(toClientRow)} />
     </div>
   );
+}
+
+function toClientRow(t: TaskRow): ClientTaskRow {
+  return {
+    id: t.id,
+    title: t.title,
+    priority: t.priority,
+    dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : null,
+    startDate: t.startDate ? new Date(t.startDate).toISOString() : null,
+    completedAt: t.completedAt ? new Date(t.completedAt).toISOString() : null,
+    estimatedHours: Number(t.estimatedHours ?? 0),
+    actualHours: Number(t.actualHours ?? 0),
+    status: t.status,
+    project: t.project,
+    assignees: t.assignees,
+    checklistCount: t._count.checklist,
+    attachmentCount: t._count.attachments,
+  };
 }
 
 function KpiStrip({
@@ -384,7 +397,7 @@ type TaskRow = {
   completedAt: Date | null;
   estimatedHours: unknown;
   actualHours: unknown;
-  status: { id: string; name: string; color: string | null } | null;
+  status: { id: string; name: string; color: string | null; isDone: boolean } | null;
   project: { id: string; title: string; slug: string };
   assignees: Array<{
     user: { id: string; name: string | null; avatar: string | null } | null;
@@ -392,7 +405,7 @@ type TaskRow = {
   _count: { checklist: number; attachments: number };
 };
 
-function TaskList({ tasks }: { tasks: TaskRow[] }) {
+function TaskList({ tasks }: { tasks: ClientTaskRow[] }) {
   return (
     <section
       className="rounded-2xl overflow-hidden"
@@ -418,245 +431,16 @@ function TaskList({ tasks }: { tasks: TaskRow[] }) {
           </li>
         )}
         {tasks.map((t, idx) => (
-          <TaskRow key={t.id} task={t} isLast={idx === tasks.length - 1} />
+          <InteractiveTaskRow
+            key={t.id}
+            task={t}
+            isLast={idx === tasks.length - 1}
+          />
         ))}
       </ul>
     </section>
   );
 }
 
-function TaskRow({ task, isLast }: { task: TaskRow; isLast: boolean }) {
-  const now = new Date();
-  const isDone = !!task.completedAt;
-  const isOverdue =
-    !isDone && task.dueDate !== null && new Date(task.dueDate) < now;
-  const dueTier = getDueTier(task.dueDate, isDone);
-  const prio = PRIORITY_MAP[task.priority] ?? PRIORITY_MAP.NORMAL;
-  const estimated = Number(task.estimatedHours ?? 0);
-  const actual = Number(task.actualHours ?? 0);
-
-  return (
-    <li
-      style={{
-        borderBottom: isLast ? "none" : `1px solid ${T.borderSoft}`,
-        opacity: isDone ? 0.55 : 1,
-      }}
-    >
-      <Link
-        href={`/admin-v2/projects/${task.project.id}?tab=tasks&taskId=${task.id}`}
-        className="grid grid-cols-1 md:grid-cols-[28px_3px_1fr_160px_140px_120px_20px] items-center gap-3 px-5 py-3 transition hover:brightness-95"
-      >
-        <div
-          className="flex h-5 w-5 items-center justify-center rounded"
-          style={{
-            backgroundColor: isDone ? T.success : "transparent",
-            border: `2px solid ${isDone ? T.success : T.borderSoft}`,
-          }}
-        >
-          {isDone && <CheckCircle2 size={12} style={{ color: "#FFFFFF" }} />}
-        </div>
-        <div
-          className="hidden md:block w-[3px] h-7 rounded-full"
-          style={{ backgroundColor: prio.color }}
-          title={`Priority: ${task.priority}`}
-        />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span
-              className="rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider"
-              style={{ backgroundColor: prio.bg, color: prio.color }}
-            >
-              {task.priority}
-            </span>
-            <Link
-              href={`/admin-v2/projects/${task.project.id}`}
-              className="text-[10px] font-bold tracking-wider tabular-nums truncate"
-              style={{ color: T.accentPrimary }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              PRJ-{task.project.slug.toUpperCase().slice(0, 8)}
-            </Link>
-            {task.status && (
-              <span
-                className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-                style={{
-                  backgroundColor: task.status.color
-                    ? `${task.status.color}22`
-                    : T.panelSoft,
-                  color: task.status.color ?? T.textSecondary,
-                }}
-              >
-                {task.status.name}
-              </span>
-            )}
-          </div>
-          <div
-            className="text-[13px] font-semibold mt-0.5 truncate"
-            style={{
-              color: T.textPrimary,
-              textDecoration: isDone ? "line-through" : "none",
-            }}
-            title={task.title}
-          >
-            {task.title}
-          </div>
-          <div
-            className="text-[11px] mt-0.5 truncate"
-            style={{ color: T.textMuted }}
-          >
-            {task.project.title}
-            {task._count.checklist > 0 && ` · ${task._count.checklist} підзадач`}
-            {task._count.attachments > 0 && ` · 📎 ${task._count.attachments}`}
-          </div>
-        </div>
-        <div>
-          {dueTier ? (
-            <span
-              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold tabular-nums"
-              style={{ backgroundColor: dueTier.bg, color: dueTier.fg }}
-            >
-              <dueTier.icon size={11} />
-              {dueTier.label}
-            </span>
-          ) : (
-            <span className="text-[11px]" style={{ color: T.textMuted }}>
-              без дедлайну
-            </span>
-          )}
-        </div>
-        <div>
-          {task.assignees.length > 0 ? (
-            <div className="flex items-center gap-1">
-              <AvatarStack assignees={task.assignees} />
-              {task.assignees.length === 1 && task.assignees[0].user?.name && (
-                <span
-                  className="text-[11px] font-semibold truncate"
-                  style={{ color: T.textSecondary }}
-                >
-                  {task.assignees[0].user.name}
-                </span>
-              )}
-            </div>
-          ) : (
-            <span className="text-[11px]" style={{ color: T.textMuted }}>
-              не призначено
-            </span>
-          )}
-        </div>
-        <div className="text-right">
-          {estimated > 0 ? (
-            <>
-              <div
-                className="text-[12px] font-bold tabular-nums"
-                style={{
-                  color:
-                    actual > estimated
-                      ? T.danger
-                      : actual > estimated * 0.8
-                        ? T.warning
-                        : T.textPrimary,
-                }}
-              >
-                {actual.toFixed(1)} / {estimated.toFixed(0)}
-              </div>
-              <div className="text-[10px]" style={{ color: T.textMuted }}>
-                год
-              </div>
-            </>
-          ) : (
-            <span className="text-[11px]" style={{ color: T.textMuted }}>
-              —
-            </span>
-          )}
-        </div>
-        <ChevronRight
-          size={14}
-          style={{ color: T.textMuted }}
-          className="hidden md:block"
-        />
-      </Link>
-    </li>
-  );
-}
-
-function AvatarStack({
-  assignees,
-}: {
-  assignees: TaskRow["assignees"];
-}) {
-  const visible = assignees.slice(0, 3);
-  return (
-    <div className="flex items-center -space-x-1.5">
-      {visible.map((a, i) => (
-        <div
-          key={a.user?.id ?? `idx-${i}`}
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold"
-          style={{
-            backgroundColor: AVATAR_COLORS[i % AVATAR_COLORS.length],
-            color: "#FFFFFF",
-            border: `2px solid ${T.panel}`,
-          }}
-          title={a.user?.name ?? ""}
-        >
-          {(a.user?.name ?? "?")
-            .split(" ")
-            .map((n) => n[0])
-            .slice(0, 2)
-            .join("")}
-        </div>
-      ))}
-      {assignees.length > 3 && (
-        <div
-          className="flex h-6 w-6 items-center justify-center rounded-full text-[9px] font-bold"
-          style={{
-            backgroundColor: T.panelSoft,
-            color: T.textSecondary,
-            border: `2px solid ${T.panel}`,
-          }}
-        >
-          +{assignees.length - 3}
-        </div>
-      )}
-    </div>
-  );
-}
-
-const PRIORITY_MAP: Record<string, { bg: string; color: string }> = {
-  URGENT: { bg: T.dangerSoft, color: T.danger },
-  HIGH: { bg: T.warningSoft, color: T.warning },
-  NORMAL: { bg: T.accentPrimarySoft, color: T.accentPrimary },
-  LOW: { bg: T.panelSoft, color: T.textMuted },
-};
-
-const AVATAR_COLORS = [T.violet, T.sky, T.accentPrimary, T.amber, T.emerald, T.rose];
-
-function getDueTier(
-  due: Date | null,
-  isDone: boolean,
-): { bg: string; fg: string; icon: typeof Clock; label: string } | null {
-  if (!due) return null;
-  const days = Math.round(
-    (new Date(due).getTime() - Date.now()) / 86_400_000,
-  );
-  if (isDone) {
-    return { bg: T.successSoft, fg: T.success, icon: CheckCircle2, label: "виконано" };
-  }
-  if (days < 0) {
-    return {
-      bg: T.dangerSoft,
-      fg: T.danger,
-      icon: AlertOctagon,
-      label: `${Math.abs(days)} дн просрочки`,
-    };
-  }
-  if (days === 0) {
-    return { bg: T.warningSoft, fg: T.warning, icon: AlertTriangle, label: "сьогодні" };
-  }
-  if (days <= 3) {
-    return { bg: T.warningSoft, fg: T.warning, icon: Clock, label: `${days} дн` };
-  }
-  if (days <= 14) {
-    return { bg: T.skySoft, fg: T.sky, icon: Clock, label: `${days} дн` };
-  }
-  return { bg: T.panelSoft, fg: T.textMuted, icon: Calendar, label: `${days} дн` };
-}
+// (TaskRow / AvatarStack / getDueTier helpers лишились у Client Component
+// — _components/task-row-client.tsx)
