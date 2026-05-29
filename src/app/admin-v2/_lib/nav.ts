@@ -91,10 +91,10 @@ export const NAV_GROUPS: NavGroup[] = [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin-v2/tasks", label: "Задачі", icon: ListTodo },
       { href: "/admin-v2/estimates-v2", label: "Кошториси", icon: FileText },
-      { href: "/admin-v2/change-orders", label: "Зміни в кошторисах", icon: FileSignature, roles: CHANGE_ORDER_ROLES },
-      { href: "/admin-v2/rfis", label: "RFI (запити)", icon: HelpCircle },
+      { href: "/admin-v2/change-orders-v2", label: "Зміни в кошторисах", icon: FileSignature, roles: CHANGE_ORDER_ROLES },
+      { href: "/admin-v2/rfis-v2", label: "RFI (запити)", icon: HelpCircle },
       { href: "/admin-v2/meetings-v2", label: "Наради", icon: Mic, superAdminOnly: true },
-      { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES, inboxKey: "foremanReports" },
+      { href: "/admin-v2/foreman-reports-v2", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES, inboxKey: "foremanReports" },
     ],
   },
   {
