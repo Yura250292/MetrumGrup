@@ -5,7 +5,12 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ComboboxOption } from "@/components/ui/combobox";
 import { useAddEstimateItem } from "@/hooks/useEstimateItems";
-import { EditableItemRow, type EditableItem, type ForemanOption } from "./EditableItemRow";
+import {
+  EditableItemRow,
+  type EditableItem,
+  type ForemanOption,
+  type PredecessorOption,
+} from "./EditableItemRow";
 
 export function EditableSectionTable({
   estimateId,
@@ -14,6 +19,7 @@ export function EditableSectionTable({
   items,
   costCodeOptions,
   foremanOptions = [],
+  predecessorOptions = [],
   locked = false,
   onChanged,
 }: {
@@ -29,6 +35,8 @@ export function EditableSectionTable({
   costCodeOptions?: ComboboxOption[];
   /** Список потенційних виконробів (MANAGER + FOREMAN). */
   foremanOptions?: ForemanOption[];
+  /** Інші позиції у всьому кошторисі (для select-предка в розгорнутій формі). */
+  predecessorOptions?: PredecessorOption[];
   /** Версія кошторису заморожена — UI блокує редагування. */
   locked?: boolean;
   onChanged?: () => void;
@@ -104,6 +112,7 @@ export function EditableSectionTable({
               estimateId={estimateId}
               costCodeOptions={options}
               foremanOptions={foremanOptions}
+              predecessorOptions={predecessorOptions}
               locked={locked}
               onChanged={onChanged}
             />

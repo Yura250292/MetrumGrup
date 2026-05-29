@@ -5,6 +5,10 @@ import { recomputeProjectPlanSource } from "@/lib/projects/plan-source";
 import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { copyDraftToPublishedForStages } from "@/lib/projects/publish-stages";
 import { isFinanceAutopublishEnabled } from "@/lib/financing/feature-flags";
+import {
+  syncEstimateItemsToTasks,
+  type EstimateToTasksResult,
+} from "@/lib/projects/sync-estimate-to-tasks";
 
 export type EstimateToStagesResult = {
   estimateId: string;
@@ -436,6 +440,8 @@ async function upsertItemStage(args: {
 
 /**
  * Bulk: всі затверджені кошториси проєкту → стейджі.
+ * Кожен кошторис також прокатується через task-sync (за feature-flag),
+ * щоб одним вьюзивим викликом отримати і стейджі, і Gantt-задачі.
  */
 export async function syncProjectEstimatesToStages(
   projectId: string,
@@ -444,6 +450,7 @@ export async function syncProjectEstimatesToStages(
   estimatesProcessed: number;
   estimatesSkipped: number;
   details: EstimateToStagesResult[];
+  tasksDetails: EstimateToTasksResult[];
 }> {
   const approved = await prisma.estimate.findMany({
     where: { projectId, status: "APPROVED" },
@@ -453,13 +460,16 @@ export async function syncProjectEstimatesToStages(
   const total = await prisma.estimate.count({ where: { projectId } });
 
   const details: EstimateToStagesResult[] = [];
+  const tasksDetails: EstimateToTasksResult[] = [];
   for (const e of approved) {
     details.push(await syncEstimateToStages(e.id, userId));
+    tasksDetails.push(await syncEstimateItemsToTasks(e.id, userId));
   }
 
   return {
     estimatesProcessed: approved.length,
     estimatesSkipped: total - approved.length,
     details,
+    tasksDetails,
   };
 }

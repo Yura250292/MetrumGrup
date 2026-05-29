@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { syncEstimateToStages } from "@/lib/projects/sync-estimate-to-stages";
+import { syncEstimateItemsToTasks } from "@/lib/projects/sync-estimate-to-tasks";
 import { canPublishFinance } from "@/lib/financing/rbac";
 
 /**
@@ -32,9 +33,13 @@ export async function POST(
 
   try {
     const result = await syncEstimateToStages(id, session.user.id);
+    const tasksResult = await syncEstimateItemsToTasks(id, session.user.id);
+    const tasksSuffix = tasksResult.enabled
+      ? `; задач: ${tasksResult.tasksCreated}/${tasksResult.tasksUpdated}, залежностей: ${tasksResult.dependenciesCreated}/${tasksResult.dependenciesUpdated}`
+      : "";
     return NextResponse.json({
-      data: result,
-      message: `Створено етапів: ${result.sectionsCreated}, підетапів: ${result.itemsCreated}; оновлено: ${result.sectionsUpdated + result.itemsUpdated}`,
+      data: { ...result, tasks: tasksResult },
+      message: `Створено етапів: ${result.sectionsCreated}, підетапів: ${result.itemsCreated}; оновлено: ${result.sectionsUpdated + result.itemsUpdated}${tasksSuffix}`,
     });
   } catch (error) {
     console.error("sync-to-financing failed:", error);

@@ -100,6 +100,13 @@ const TASK_DETAIL_INCLUDE = {
     },
   },
   _count: { select: { subtasks: true, outgoingDeps: true, incomingDeps: true } },
+  sourceEstimateItem: {
+    select: {
+      id: true,
+      description: true,
+      estimate: { select: { id: true, title: true } },
+    },
+  },
 } as const;
 
 export type TaskDetail = Prisma.TaskGetPayload<{ include: typeof TASK_DETAIL_INCLUDE }>;

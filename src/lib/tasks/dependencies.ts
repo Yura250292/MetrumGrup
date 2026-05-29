@@ -431,6 +431,7 @@ export async function getGanttData(projectId: string) {
         actualHours: true,
         status: { select: { isDone: true, color: true, name: true } },
         priority: true,
+        sourceEstimateItemId: true,
         _count: { select: { checklist: true } },
       },
       orderBy: { startDate: { sort: "asc", nulls: "last" } },
@@ -499,13 +500,20 @@ export async function getGanttData(projectId: string) {
             }
           : null;
 
+      const isAutoTask = Boolean(t.sourceEstimateItemId);
+      const customClasses = [
+        critical.criticalIds.includes(t.id) ? "critical" : "",
+        isAutoTask ? "auto-from-estimate" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
       return {
         id: t.id,
         name: t.title,
         start: actualStart.toISOString().slice(0, 10),
         end: actualEnd.toISOString().slice(0, 10),
         progress,
-        custom_class: critical.criticalIds.includes(t.id) ? "critical" : "",
+        custom_class: customClasses,
         dependencies: (incomingBySuccessor.get(t.id) ?? []).join(","),
         _meta: {
           status: t.status.name,
@@ -515,6 +523,10 @@ export async function getGanttData(projectId: string) {
           checklistCount: t._count.checklist,
           baseline,
           baselineFrozenAt: t.baselineFrozenAt?.toISOString() ?? null,
+          /// true якщо таск згенерований з рядка кошторису через
+          /// syncEstimateItemsToTasks. UI показує badge "↗ кошторис".
+          isAutoFromEstimate: isAutoTask,
+          sourceEstimateItemId: t.sourceEstimateItemId,
         },
       };
     })
