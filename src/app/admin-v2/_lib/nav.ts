@@ -120,7 +120,7 @@ export const NAV_GROUPS: NavGroup[] = [
       // «Контрагенти» — раніше «Партнери» в «Персоналі»; це довідник зовнішніх
       // сторін (клієнти / постачальники / підрядники) — належить до reference-data.
       { href: "/admin-v2/counterparties-v2", label: "Контрагенти", icon: Building2, hrAllowed: true },
-      { href: "/admin-v2/catalogs/materials", label: "Матеріали і ціни", icon: Package },
+      { href: "/admin-v2/materials-v2", label: "Матеріали і ціни", icon: Package },
       { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
       { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
       { href: "/admin-v2/catalogs/form-templates", label: "Шаблони форм", icon: ClipboardList, hrAllowed: true },
@@ -131,7 +131,7 @@ export const NAV_GROUPS: NavGroup[] = [
     collapsedByDefault: true,
     items: [
       { href: "/admin-v2/documents/inbox", label: "Документи AI", icon: Inbox, roles: SUPPLIERS_ACCESS_ROLES, pillBadge: { text: "AI", color: "accent" }, inboxKey: "documents" },
-      { href: "/admin-v2/receipts", label: "Накладні (скан)", icon: ScanLine, inboxKey: "receipts" },
+      { href: "/admin-v2/receipts-v2", label: "Накладні (скан)", icon: ScanLine, inboxKey: "receipts" },
       { href: "/admin-v2/queue/form-submissions", label: "Заповнені форми", icon: ClipboardCheck, hrAllowed: true, inboxKey: "formSubmissions" },
       { href: "/admin-v2/cms/portfolio", label: "Портфоліо", icon: Globe },
       { href: "/admin-v2/cms/news", label: "Новини", icon: Globe },
