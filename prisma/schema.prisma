@@ -144,6 +144,12 @@ model User {
   passwordResetTokens       PasswordResetToken[]
   estimateProposalsCreated  EstimateProposal[]             @relation("EstimateProposalCreator")
   estimateNegotiationRounds EstimateItemNegotiationRound[] @relation("EstimateNegotiationRoundActor")
+  /// Позиції кошторису, на яких я виконроб (звітую).
+  estimateItemsAsForeman    EstimateItem[]                 @relation("EstimateItemForeman")
+  /// Версії кошторису, що я заморозив.
+  estimateVersionsLocked    EstimateVersion[]              @relation("EstimateVersionLocker")
+  /// Звіти виконробів, які я повернув на доопрацювання.
+  foremanReportsRevisionRequested ForemanReport[]          @relation("ForemanReportRevisionRequester")
 
   @@index([firmId])
   @@map("users")
@@ -167,6 +173,10 @@ model Project {
   id                     String                  @id @default(cuid())
   title                  String
   slug                   String                  @unique
+  /// Авто-код PRJ-YYYY-NNN (peekNextProjectCode у src/lib/projects/generate-code.ts).
+  code                   String?                 @unique
+  /// Бізнес-тип: ЖК / Комерція / IT / Інше (вільний рядок).
+  type                   String?
   description            String?
   address                String?
   coverImageUrl          String?
@@ -327,6 +337,10 @@ model ProjectStageRecord {
   notes                        String?
   startDate                    DateTime?
   endDate                      DateTime?
+  /// Факт-старт етапу. Ставиться ПМ-ом коли роботи реально розпочались.
+  actualStartDate              DateTime?
+  /// Факт-завершення етапу. У майбутньому (P2) auto при completion усіх дітей.
+  actualEndDate                DateTime?
   sortOrder                    Int                  @default(0)
   allocatedBudget              Decimal?             @db.Decimal(12, 2)
   // Об'єм / одиниці виміру / ціна за одиницю для табличної картки
@@ -379,6 +393,10 @@ model ProjectStageRecord {
   /// in admin UI. The pair (project.telegramChatId, telegramThreadId) is
   /// effectively unique — enforced in code, not at DB level (chatId lives on Project).
   telegramThreadId Int?
+
+  /// Опціональна привʼязка ForemanReport до етапу — виконроб може лишити
+  /// порожнім при подачі, ПМ призначить при approve.
+  foremanReports ForemanReport[] @relation("StageForemanReports")
 
   @@index([projectId, stage])
   @@index([projectId, parentStageId])
@@ -559,6 +577,18 @@ model EstimateItem {
   marginAmount        Decimal                @default(0) @db.Decimal(12, 2)
   priceWithMargin     Decimal                @default(0) @db.Decimal(12, 2)
   useCustomMargin     Boolean                @default(false)
+  /// Собівартість позиції для фірми (план). Backfill = unitPrice.
+  unitCost            Decimal?               @db.Decimal(12, 2)
+  /// Ціна позиції для замовника (план). Маржа = unitPriceCustomer − unitCost.
+  unitPriceCustomer   Decimal?               @db.Decimal(12, 2)
+  /// Виконроб (FK → User) — хто звітує по позиції. Null → fallback на
+  /// ProjectStageRecord.responsibleUserId через getEffectiveForemanId.
+  foremanId           String?
+  foreman             User?                  @relation("EstimateItemForeman", fields: [foremanId], references: [id], onDelete: SetNull)
+  /// Виконавець (free-form: бригада/майстер). Не FK.
+  executorText        String?
+  /// Посилання на KB (база знань). Поки String, без FK. P2: FK → KBItem.
+  kbItemId            String?
   // Cost-code axis (Phase 1.A1). Nullable; backfill from itemType + section title.
   costCodeId          String?
   costType            CostType?
@@ -575,12 +605,19 @@ model EstimateItem {
   kb2Items            KB2FormItem[]          @relation("EstimateItemKB2")
   stageRecords        ProjectStageRecord[]   @relation("EstimateItemToStage")
   itemProposals       EstimateItemProposal[]
+  /// ESTIMATE-рядки звітів виконробів, що ссилаються на цю позицію кошторису.
+  reportItemsAsEstimate ForemanReportItem[]    @relation("ReportItemEstimate")
+  /// EXTRA-рядки, які ПМ привʼязав до цієї позиції (pmDecision=LINKED).
+  reportItemsAsLinked   ForemanReportItem[]    @relation("ReportItemLinked")
+  /// Прогрес виконання плану (виконані обʼєми) — окремо від items expenses.
+  progressRecords     ForemanReportProgress[]
 
   @@index([engineKey])
   @@index([confidence])
   @@index([costCodeId])
   @@index([costType])
   @@index([parentItemId])
+  @@index([foremanId])
   @@map("estimate_items")
 }
 
@@ -814,38 +851,87 @@ model FinanceEntryAttachment {
 /// AI парсить їх у ForemanReportItem-и; виконроб може редагувати DRAFT, потім submit-ить
 /// → менеджер approve-ить, що матеріалізує items у FinanceEntry (kind=FACT, source=FOREMAN_REPORT).
 model ForemanReport {
-  id              String              @id @default(cuid())
-  projectId       String
-  firmId          String?
-  createdById     String
-  status          ForemanReportStatus @default(DRAFT)
-  rawText         String?             @db.Text
+  id                    String              @id @default(cuid())
+  projectId             String
+  firmId                String?
+  createdById           String
+  status                ForemanReportStatus @default(DRAFT)
+  rawText               String?             @db.Text
   /// Дата витрати (foreman picks); за замовчуванням — день створення.
-  occurredAt      DateTime
-  currency        String              @default("UAH")
+  occurredAt            DateTime
+  /// Початок звітного періоду виконроба. Авто-обчислюється:
+  ///   • перший звіт — Project.startDate / Stage.actualStartDate / today.
+  ///   • наступний — periodEnd останнього APPROVED + 1 day.
+  periodStart           DateTime?
+  /// Кінець звітного періоду. Дефолт = today; null до approve (ПМ зафіксує).
+  periodEnd             DateTime?
+  /// Опціональна привʼязка до етапу. ПМ призначить при approve якщо null.
+  stageId               String?
+  stage                 ProjectStageRecord? @relation("StageForemanReports", fields: [stageId], references: [id], onDelete: SetNull)
+  /// Сума ЗП майстрам = SUM(progress.quantityActual × estimateItem.unitCost)
+  /// + LINKED EXTRA items. Розраховується автоматично при approve.
+  totalCalculated       Decimal?            @db.Decimal(14, 2)
+  currency              String              @default("UAH")
   /// Повний JSON-вивід AI-парсерів для аудиту (об'єднаний результат
   /// parseExpenseText + classifyExpenseImage + ocrReceiptStructured + parseExcelEstimate).
-  aiResultJson    Json?
-  submittedAt     DateTime?
-  reviewedAt      DateTime?
-  reviewedById    String?
-  rejectionReason String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  aiResultJson          Json?
+  submittedAt           DateTime?
+  reviewedAt            DateTime?
+  reviewedById          String?
+  rejectionReason       String?
+  /// PM notes when sending report back для доопрацювання (status=NEEDS_REVISION).
+  revisionNotes         String?             @db.Text
+  revisionRequestedAt   DateTime?
+  revisionRequestedById String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
 
-  project         Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  firm            Firm?                     @relation(fields: [firmId], references: [id])
-  createdBy       User                      @relation("ForemanReportCreator", fields: [createdById], references: [id])
-  reviewedBy      User?                     @relation("ForemanReportReviewer", fields: [reviewedById], references: [id])
-  items           ForemanReportItem[]
-  attachments     ForemanReportAttachment[]
-  formSubmissions FormSubmission[]
+  project             Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  firm                Firm?                     @relation(fields: [firmId], references: [id])
+  createdBy           User                      @relation("ForemanReportCreator", fields: [createdById], references: [id])
+  reviewedBy          User?                     @relation("ForemanReportReviewer", fields: [reviewedById], references: [id])
+  revisionRequestedBy User?                     @relation("ForemanReportRevisionRequester", fields: [revisionRequestedById], references: [id])
+  items               ForemanReportItem[]
+  progress            ForemanReportProgress[]
+  attachments         ForemanReportAttachment[]
+  formSubmissions     FormSubmission[]
 
   @@index([projectId])
   @@index([firmId])
   @@index([createdById])
   @@index([status])
+  @@index([stageId])
+  @@index([projectId, createdById, status])
   @@map("foreman_reports")
+}
+
+/// Виконання плану — позиції з кошторису з фактичним обʼємом.
+/// Окремо від ForemanReportItem (cost expenses) — це progress towards plan.
+/// При APPROVED report-і сумуються у computeEstimateExecution для PM-аналітики.
+model ForemanReportProgress {
+  id                      String   @id @default(cuid())
+  reportId                String
+  estimateItemId          String
+  /// Виконаний обʼєм у одиниці EstimateItem.unit на момент звіту.
+  quantityActual          Decimal  @db.Decimal(12, 3)
+  /// Snapshot план-значень на момент створення прогресу — щоб історія факту
+  /// не "пливла" коли кошторис пізніше редагується.
+  unitSnapshot            String?
+  unitPriceSnapshot       Decimal? @db.Decimal(12, 2)
+  quantityPlannedSnapshot Decimal? @db.Decimal(12, 3)
+  note                    String?  @db.Text
+  /// 0..1: для AI-парсу позапланового тексту. Manual entry = 1.0 / null.
+  confidence              Float?
+  sortOrder               Int      @default(0)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  report       ForemanReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  estimateItem EstimateItem  @relation(fields: [estimateItemId], references: [id], onDelete: Restrict)
+
+  @@index([reportId])
+  @@index([estimateItemId])
+  @@map("foreman_report_progress")
 }
 
 /// Окрема позиція у звіті виконроба. На approve кожна позиція стає FinanceEntry.
@@ -891,6 +977,20 @@ model ForemanReportItem {
   financeIntent ForemanFinanceIntent?
   /// Опційна нотатка менеджера по позиції (буде в FinanceEntry.description).
   managerNote   String?
+  /// Розрізнення «з кошторису» vs «додаткова робота, не передбачена».
+  /// ESTIMATE → estimateItemId обовʼязковий.
+  /// EXTRA    → nameOverride + unitOverride; pmDecision вирішує долю.
+  itemType             ReportItemType @default(EXTRA)
+  estimateItemId       String?
+  estimateItem         EstimateItem?  @relation("ReportItemEstimate", fields: [estimateItemId], references: [id], onDelete: SetNull)
+  nameOverride         String?
+  unitOverride         String?
+  /// Рішення ПМ для EXTRA: PENDING / LINKED / NEW_ITEM / INFO_ONLY.
+  pmDecision           PmDecision?
+  linkedEstimateItemId String?
+  linkedEstimateItem   EstimateItem?  @relation("ReportItemLinked", fields: [linkedEstimateItemId], references: [id], onDelete: SetNull)
+  /// Сума по рядку при approve = quantity × (estimateItem.unitCost ?? unitPrice).
+  amountCalculated     Decimal?       @db.Decimal(14, 2)
 
   report       ForemanReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   counterparty Counterparty? @relation("ForemanItemSupplier", fields: [counterpartyId], references: [id], onDelete: SetNull)
@@ -900,6 +1000,9 @@ model ForemanReportItem {
   @@index([reportId])
   @@index([counterpartyId])
   @@index([costCodeId])
+  @@index([estimateItemId])
+  @@index([linkedEstimateItemId])
+  @@index([itemType])
   @@map("foreman_report_items")
 }
 
@@ -1335,6 +1438,16 @@ model EstimateVersion {
   versionNumber       Int
   eventType           String
   status              EstimateStatus
+  /// Заморожування активної версії. Items/sections не можна редагувати.
+  /// Перевірка у assertEstimateEditable() (src/lib/estimates/version-lock.ts).
+  isLocked            Boolean                  @default(false)
+  /// Лише одна активна версія на estimate (partial unique index у міграції).
+  isActive            Boolean                  @default(true)
+  /// Тип версії: початкова / переглянута / фінальна.
+  versionType         EstimateVersionType      @default(ORIGINAL)
+  /// Хто і коли заморозив версію (для аудиту).
+  lockedAt            DateTime?
+  lockedById          String?
   financialSnapshot   Json
   snapshotHash        String
   changeDescription   String?
@@ -1342,13 +1455,21 @@ model EstimateVersion {
   createdById         String
   estimate            Estimate                 @relation(fields: [estimateId], references: [id], onDelete: Cascade)
   createdBy           User                     @relation(fields: [createdById], references: [id])
+  lockedBy            User?                    @relation("EstimateVersionLocker", fields: [lockedById], references: [id], onDelete: SetNull)
   approvalSteps       EstimateApprovalStep[]
   criticalChanges     EstimateCriticalChange[]
   proposalsAsBaseline EstimateProposal[]       @relation("EstimateProposalBaseline")
 
   @@unique([estimateId, versionNumber])
   @@index([estimateId, createdAt])
+  @@index([estimateId, isActive])
   @@map("estimate_versions")
+}
+
+enum EstimateVersionType {
+  ORIGINAL
+  REVISED
+  FINAL
 }
 
 model EstimateApprovalStep {
@@ -1923,15 +2044,33 @@ enum FinanceNature {
 /// Lifecycle звіту виконроба:
 /// DRAFT             — після parse, foreman ще редагує items.
 /// PENDING_APPROVAL  — foreman submit, чекає менеджера.
+/// NEEDS_REVISION    — менеджер повернув на доопрацювання (revisionNotes).
 /// APPROVED          — менеджер apprive-ив, FinanceEntry створені (kind=FACT).
 /// REJECTED          — менеджер відхилив (з rejectionReason).
 /// CANCELLED         — foreman скасував DRAFT.
 enum ForemanReportStatus {
   DRAFT
   PENDING_APPROVAL
+  NEEDS_REVISION
   APPROVED
   REJECTED
   CANCELLED
+}
+
+/// Розрізнення рядка звіту виконроба:
+/// ESTIMATE — позиція з кошторису (estimateItemId обовʼязковий).
+/// EXTRA    — додаткова робота, не передбачена кошторисом. ПМ вирішує долю.
+enum ReportItemType {
+  ESTIMATE
+  EXTRA
+}
+
+/// Рішення ПМ для EXTRA-рядка звіту виконроба.
+enum PmDecision {
+  PENDING
+  LINKED
+  NEW_ITEM
+  INFO_ONLY
 }
 
 enum FolderDomain {

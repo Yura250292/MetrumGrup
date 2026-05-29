@@ -14,6 +14,7 @@ import {
   Send,
   Loader2,
   MessageSquare,
+  Lock,
 } from "lucide-react";
 import { ESTIMATE_STATUS_LABELS } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
@@ -114,6 +115,18 @@ export function EstimateHeader({
           {isFinancier && (
             <ActionBtn icon={Calculator} label="Фінанси" onClick={controller.openFinance} />
           )}
+          {!e.isLocked && (
+            <LockButton estimateId={e.id} onLocked={() => controller.loadEstimate()} />
+          )}
+          {e.isLocked && (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold"
+              style={{ borderColor: T.warning, color: T.warning }}
+              title="Активна версія кошторису заморожена. Items не можна редагувати."
+            >
+              <Lock size={12} /> Заморожено
+            </span>
+          )}
           {isDraft && (
             <button
               onClick={() => controller.updateStatus("SENT")}
@@ -133,6 +146,45 @@ export function EstimateHeader({
         </div>
       </div>
     </header>
+  );
+}
+
+function LockButton({
+  estimateId,
+  onLocked,
+}: {
+  estimateId: string;
+  onLocked: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  async function onClick() {
+    if (busy) return;
+    if (!confirm("Заморозити активну версію кошторису? Items після цього редагувати не можна.")) {
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/admin/estimates/${estimateId}/lock`, {
+        method: "POST",
+      });
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        alert(j?.error ?? "Не вдалось заморозити версію");
+        return;
+      }
+      onLocked();
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <ActionBtn
+      icon={busy ? Loader2 : Lock}
+      label="Заморозити"
+      onClick={onClick}
+      disabled={busy}
+      spinning={busy}
+    />
   );
 }
 

@@ -84,12 +84,18 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
                   estimateId={e.id}
                   sectionId={section.id}
                   sectionTitle={section.title}
+                  locked={Boolean(e.isLocked)}
                   items={section.items.map((it) => ({
                     id: it.id,
                     description: it.description,
                     unit: it.unit,
                     quantity: it.quantity,
                     unitPrice: it.unitPrice,
+                    unitCost: it.unitCost,
+                    unitPriceCustomer: it.unitPriceCustomer,
+                    foremanId: it.foremanId,
+                    foreman: it.foreman,
+                    executorText: it.executorText,
                     amount: it.amount,
                     costCodeId: it.costCodeId,
                     costCode: it.costCode,

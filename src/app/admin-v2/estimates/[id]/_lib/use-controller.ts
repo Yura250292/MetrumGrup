@@ -23,6 +23,15 @@ export type EstimateItem = {
   unit: string;
   quantity: number;
   unitPrice: number;
+  /** Собівартість для фірми (план). */
+  unitCost: number | null;
+  /** Ціна для замовника (план). */
+  unitPriceCustomer: number | null;
+  /** Виконроб (FK → User) для звітування. */
+  foremanId: string | null;
+  foreman: { id: string; name: string | null } | null;
+  /** Виконавець (free-form). */
+  executorText: string | null;
   laborRate: number;
   laborHours: number;
   amount: number;
@@ -46,6 +55,8 @@ export type Estimate = {
   title: string;
   description: string | null;
   status: string;
+  /** Чи активна версія заморожена (isLocked на EstimateVersion). */
+  isLocked?: boolean;
   totalMaterials: number;
   totalLabor: number;
   totalOverhead: number;

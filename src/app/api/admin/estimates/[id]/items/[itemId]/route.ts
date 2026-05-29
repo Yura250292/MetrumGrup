@@ -10,6 +10,7 @@ import {
   normalizeCostType,
   updateEstimateItem,
 } from "@/lib/estimates/items-service";
+import { EstimateVersionLockedError } from "@/lib/estimates/version-lock";
 import { findActiveProposal } from "@/lib/estimates/proposals";
 import type { CostType } from "@prisma/client";
 
@@ -34,6 +35,12 @@ async function assertNoActiveProposal(estimateId: string): Promise<NextResponse 
 }
 
 function handleError(err: unknown) {
+  if (err instanceof EstimateVersionLockedError) {
+    return NextResponse.json(
+      { error: "Кошторис заморожено", code: "ESTIMATE_LOCKED", versionId: err.versionId },
+      { status: 409 },
+    );
+  }
   const message = err instanceof Error ? err.message : "Unknown error";
   if (message === "Unauthorized") return unauthorizedResponse();
   if (message === "Forbidden") return forbiddenResponse();
@@ -62,6 +69,10 @@ export async function PATCH(
       unit?: string;
       quantity?: number;
       unitPrice?: number;
+      unitCost?: number | null;
+      unitPriceCustomer?: number | null;
+      foremanId?: string | null;
+      executorText?: string | null;
       costCodeId?: string | null;
       costType?: CostType | null;
       itemType?: string | null;
@@ -111,6 +122,40 @@ export async function PATCH(
         return NextResponse.json({ error: "Невірний parentItemId" }, { status: 400 });
       }
       patch.parentItemId = json.parentItemId;
+    }
+    if ("unitCost" in json) {
+      if (json.unitCost !== null) {
+        const v = Number(json.unitCost);
+        if (!Number.isFinite(v) || v < 0) {
+          return NextResponse.json({ error: "Невірний unitCost" }, { status: 400 });
+        }
+        patch.unitCost = v;
+      } else {
+        patch.unitCost = null;
+      }
+    }
+    if ("unitPriceCustomer" in json) {
+      if (json.unitPriceCustomer !== null) {
+        const v = Number(json.unitPriceCustomer);
+        if (!Number.isFinite(v) || v < 0) {
+          return NextResponse.json({ error: "Невірний unitPriceCustomer" }, { status: 400 });
+        }
+        patch.unitPriceCustomer = v;
+      } else {
+        patch.unitPriceCustomer = null;
+      }
+    }
+    if ("foremanId" in json) {
+      if (json.foremanId !== null && typeof json.foremanId !== "string") {
+        return NextResponse.json({ error: "Невірний foremanId" }, { status: 400 });
+      }
+      patch.foremanId = json.foremanId;
+    }
+    if ("executorText" in json) {
+      if (json.executorText !== null && typeof json.executorText !== "string") {
+        return NextResponse.json({ error: "Невірний executorText" }, { status: 400 });
+      }
+      patch.executorText = json.executorText;
     }
 
     const item = await updateEstimateItem({ itemId, patch, userId: session.user.id });

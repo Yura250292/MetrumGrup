@@ -9,6 +9,7 @@ import {
   addEstimateItem,
   normalizeCostType,
 } from "@/lib/estimates/items-service";
+import { EstimateVersionLockedError } from "@/lib/estimates/version-lock";
 
 export async function POST(
   request: NextRequest,
@@ -78,11 +79,51 @@ export async function POST(
       }
       opts.parentItemId = json.parentItemId;
     }
+    if ("unitCost" in json) {
+      if (json.unitCost !== null) {
+        const v = Number(json.unitCost);
+        if (!Number.isFinite(v) || v < 0) {
+          return NextResponse.json({ error: "Невірний unitCost" }, { status: 400 });
+        }
+        opts.unitCost = v;
+      } else {
+        opts.unitCost = null;
+      }
+    }
+    if ("unitPriceCustomer" in json) {
+      if (json.unitPriceCustomer !== null) {
+        const v = Number(json.unitPriceCustomer);
+        if (!Number.isFinite(v) || v < 0) {
+          return NextResponse.json({ error: "Невірний unitPriceCustomer" }, { status: 400 });
+        }
+        opts.unitPriceCustomer = v;
+      } else {
+        opts.unitPriceCustomer = null;
+      }
+    }
+    if ("foremanId" in json) {
+      if (json.foremanId !== null && typeof json.foremanId !== "string") {
+        return NextResponse.json({ error: "Невірний foremanId" }, { status: 400 });
+      }
+      opts.foremanId = json.foremanId;
+    }
+    if ("executorText" in json) {
+      if (json.executorText !== null && typeof json.executorText !== "string") {
+        return NextResponse.json({ error: "Невірний executorText" }, { status: 400 });
+      }
+      opts.executorText = json.executorText;
+    }
 
     const item = await addEstimateItem(opts);
 
     return NextResponse.json({ item }, { status: 201 });
   } catch (err) {
+    if (err instanceof EstimateVersionLockedError) {
+      return NextResponse.json(
+        { error: "Кошторис заморожено", code: "ESTIMATE_LOCKED", versionId: err.versionId },
+        { status: 409 },
+      );
+    }
     const message = err instanceof Error ? err.message : "Unknown error";
     if (message === "Unauthorized") return unauthorizedResponse();
     if (message === "Forbidden") return forbiddenResponse();

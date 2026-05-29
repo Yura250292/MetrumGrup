@@ -5,6 +5,8 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { slugify } from "@/lib/utils";
 import { auditLog } from "@/lib/audit";
 import { addProjectMember } from "@/lib/projects/members-service";
+import { peekNextProjectCode } from "@/lib/projects/generate-code";
+import { withRetryOnUniqueViolation } from "@/lib/change-orders/numbering";
 import { seedProjectTaskDefaults } from "@/lib/tasks/defaults";
 import {
   ensureProjectMirror,
@@ -83,6 +85,7 @@ export async function POST(request: NextRequest) {
     title,
     description,
     address,
+    type,
     clientId,
     clientCounterpartyId,
     clientName: clientNameRaw,
@@ -163,27 +166,37 @@ export async function POST(request: NextRequest) {
       ? authorNameRaw.trim()
       : null;
 
-  const project = await prisma.project.create({
-    data: {
-      title,
-      slug,
-      description: description || null,
-      address: address || null,
-      clientId: clientId || null,
-      clientCounterpartyId: clientCounterpartyId || null,
-      clientName: clientNameToStore,
-      managerId: managerId || null,
-      managerName: managerNameToStore,
-      authorName: authorNameToStore,
-      firmId: projectFirmId,
-      totalBudget: totalBudget || 0,
-      startDate: startDate ? new Date(startDate) : null,
-      expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
-      // Дефолтні етапи більше не створюються — користувач сам додає те, що
-      // йому потрібно (раніше юзери змушені були вручну видаляти всі 7 етапів).
-    },
-    include: { stages: true },
-  });
+  // Auto-генерація PRJ-YYYY-NNN атомарно у транзакції з create.
+  // P2002 на code → retry (race-safe).
+  const typeTrim = typeof type === "string" && type.trim() ? type.trim() : null;
+  const project = await withRetryOnUniqueViolation(() =>
+    prisma.$transaction(async (tx) => {
+      const code = await peekNextProjectCode(tx, projectFirmId);
+      return tx.project.create({
+        data: {
+          title,
+          slug,
+          code,
+          type: typeTrim,
+          description: description || null,
+          address: address || null,
+          clientId: clientId || null,
+          clientCounterpartyId: clientCounterpartyId || null,
+          clientName: clientNameToStore,
+          managerId: managerId || null,
+          managerName: managerNameToStore,
+          authorName: authorNameToStore,
+          firmId: projectFirmId,
+          totalBudget: totalBudget || 0,
+          startDate: startDate ? new Date(startDate) : null,
+          expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
+          // Дефолтні етапи більше не створюються — користувач сам додає те, що
+          // йому потрібно (раніше юзери змушені були вручну видаляти всі 7 етапів).
+        },
+        include: { stages: true },
+      });
+    }),
+  );
 
   // Auto-add manager as PROJECT_MANAGER member
   if (project.managerId) {

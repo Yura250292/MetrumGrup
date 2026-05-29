@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
 import { CostType } from "@prisma/client";
 import { recomputeEstimateTotals } from "./recompute";
+import { assertEstimateEditable } from "./version-lock";
 
 const COST_TYPES: CostType[] = [
   "MATERIAL",
@@ -145,12 +146,22 @@ export async function addEstimateItem(opts: {
   unit: string;
   quantity: number;
   unitPrice: number;
+  /** Собівартість (для фірми). Якщо null/undefined — backend == unitPrice. */
+  unitCost?: number | null;
+  /** Ціна для замовника. Якщо null/undefined — backend == unitPrice × 1.20. */
+  unitPriceCustomer?: number | null;
+  /** Виконроб (FK → User) для звітування. Null → fallback на stage.responsibleUserId. */
+  foremanId?: string | null;
+  /** Виконавець (free-form: бригада/майстер). */
+  executorText?: string | null;
   costCodeId?: string | null;
   costType?: CostType | null;
   itemType?: string | null;
   parentItemId?: string | null;
   userId: string;
 }): Promise<EstimateItemDTO> {
+  // Блок: якщо активна версія кошторису заморожена — заборонено мутувати items.
+  await assertEstimateEditable(opts.estimateId);
   const section = await prisma.estimateSection.findUnique({
     where: { id: opts.sectionId },
     select: { id: true, estimateId: true, title: true },
@@ -192,6 +203,19 @@ export async function addEstimateItem(opts: {
     }
   }
 
+  // Резолв нових цінових полів:
+  //   unitCost = opts.unitCost ?? opts.unitPrice (legacy semantic).
+  //   unitPriceCustomer = opts.unitPriceCustomer ?? unitCost × 1.20.
+  // Дефолтна маржа 20% узгоджена з Estimate.profitMarginOverall.
+  const unitCost =
+    opts.unitCost !== undefined && opts.unitCost !== null
+      ? opts.unitCost
+      : opts.unitPrice;
+  const unitPriceCustomer =
+    opts.unitPriceCustomer !== undefined && opts.unitPriceCustomer !== null
+      ? opts.unitPriceCustomer
+      : new Decimal(unitCost).times(1.2).toNumber();
+
   const item = await prisma.estimateItem.create({
     data: {
       estimateId: opts.estimateId,
@@ -200,6 +224,10 @@ export async function addEstimateItem(opts: {
       unit,
       quantity: opts.quantity,
       unitPrice: opts.unitPrice,
+      unitCost,
+      unitPriceCustomer,
+      ...("foremanId" in opts ? { foremanId: opts.foremanId ?? null } : {}),
+      ...("executorText" in opts ? { executorText: opts.executorText ?? null } : {}),
       amount,
       sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
       ...costFields,
@@ -240,6 +268,10 @@ export async function updateEstimateItem(opts: {
     unit?: string;
     quantity?: number;
     unitPrice?: number;
+    unitCost?: number | null;
+    unitPriceCustomer?: number | null;
+    foremanId?: string | null;
+    executorText?: string | null;
     costCodeId?: string | null;
     costType?: CostType | null;
     itemType?: string | null;
@@ -257,6 +289,10 @@ export async function updateEstimateItem(opts: {
       unit: true,
       quantity: true,
       unitPrice: true,
+      unitCost: true,
+      unitPriceCustomer: true,
+      foremanId: true,
+      executorText: true,
       costCodeId: true,
       costType: true,
       itemType: true,
@@ -264,6 +300,7 @@ export async function updateEstimateItem(opts: {
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
+  await assertEstimateEditable(existing.estimateId);
 
   const oldDescription = existing.description;
   const oldUnit = existing.unit;
@@ -320,6 +357,14 @@ export async function updateEstimateItem(opts: {
       quantity: newQuantity,
       unitPrice: newUnitPrice,
       amount: newAmount,
+      ...("unitCost" in opts.patch ? { unitCost: opts.patch.unitCost } : {}),
+      ...("unitPriceCustomer" in opts.patch
+        ? { unitPriceCustomer: opts.patch.unitPriceCustomer }
+        : {}),
+      ...("foremanId" in opts.patch ? { foremanId: opts.patch.foremanId } : {}),
+      ...("executorText" in opts.patch
+        ? { executorText: opts.patch.executorText }
+        : {}),
       ...costFields,
       ...("itemType" in opts.patch ? { itemType: newItemType } : {}),
       ...("itemType" in opts.patch || "parentItemId" in opts.patch
@@ -429,6 +474,7 @@ export async function deleteEstimateItem(
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
+  await assertEstimateEditable(existing.estimateId);
 
   await prisma.estimateItem.delete({ where: { id: itemId } });
   await recomputeEstimateTotals(existing.estimateId);
