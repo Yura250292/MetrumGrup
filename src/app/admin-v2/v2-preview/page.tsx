@@ -11,7 +11,9 @@ import {
   FolderKanban,
   LayoutDashboard,
   ListChecks,
+  Mic,
   Sparkles,
+  Truck,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +44,27 @@ export default async function V2PreviewHubPage() {
       icon: FileText,
       title: "Кошториси v2",
       sub: "Status-фільтри · Avg margin · AI-згенеровано dark accent · Risk markers",
+      tone: "violet" as const,
+    },
+    {
+      href: "/admin-v2/tasks-v2",
+      icon: ListChecks,
+      title: "Задачі v2",
+      sub: "Cross-project inbox · На мені / Прострочені / Сьогодні · Priority chips · Avatar stacks",
+      tone: "primary" as const,
+    },
+    {
+      href: "/admin-v2/counterparties-v2",
+      icon: Truck,
+      title: "Постачальники v2",
+      sub: "Type/role фільтри · Material/чек count · Rating stars · ЄДРПОУ tabular",
+      tone: "primary" as const,
+    },
+    {
+      href: "/admin-v2/meetings-v2",
+      icon: Mic,
+      title: "Наради v2",
+      sub: "AI-pipeline статуси · Транскрипт/Резюме · audio duration · project tag",
       tone: "violet" as const,
     },
   ];
