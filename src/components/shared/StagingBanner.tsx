@@ -27,6 +27,7 @@ export function StagingBanner() {
         ))}
       </div>
       <style>{`
+        :root { --staging-banner-h: 28px; }
         @keyframes staging-marquee {
           0% { transform: translateX(0); }
           100% { transform: translateX(-50%); }
