@@ -89,6 +89,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Проєкти",
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
+      { href: "/admin-v2/tasks", label: "Задачі", icon: ListTodo },
       { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
       { href: "/admin-v2/change-orders", label: "Зміни в кошторисах", icon: FileSignature, roles: CHANGE_ORDER_ROLES },
       { href: "/admin-v2/rfis", label: "RFI (запити)", icon: HelpCircle },
