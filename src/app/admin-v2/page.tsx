@@ -765,6 +765,14 @@ export default async function AdminV2Dashboard({
           homeFirmName={homeFirmName}
         />
       )}
+      {/* V2 Preview hub link — temporary while v2 redesign is in flight */}
+      <Link
+        href="/admin-v2/v2-preview"
+        className="inline-flex items-center gap-2 self-start rounded-lg px-3 py-1.5 text-[12px] font-bold tracking-wider transition hover:brightness-110"
+        style={{ backgroundColor: T.violet, color: "#FFFFFF" }}
+      >
+        ✨ V2 PREVIEW HUB →
+      </Link>
       {/* Hero — always on top */}
       <HeroBlock
         firstName={firstName}

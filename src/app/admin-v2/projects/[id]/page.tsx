@@ -155,6 +155,14 @@ export default async function AdminV2ProjectDetailPage({
               </span>
               <StatusBadge status={project.status} />
               {project.isTestProject && <TestBadge />}
+              <Link
+                href={`/admin-v2/projects/${project.id}/v2`}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-bold tracking-wider transition hover:brightness-110"
+                style={{ backgroundColor: T.violet, color: "#FFFFFF" }}
+                title="Спробувати нову версію цієї сторінки"
+              >
+                ✨ V2 PREVIEW
+              </Link>
             </div>
             <h1
               className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-tight break-words"
