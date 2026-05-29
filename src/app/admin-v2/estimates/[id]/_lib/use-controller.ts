@@ -93,7 +93,9 @@ export function useEstimateController(estimateId: string) {
   const [updating, setUpdating] = useState(false);
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "history" | "discussion">("details");
+  const [activeTab, setActiveTab] = useState<
+    "details" | "history" | "discussion" | "negotiation"
+  >("details");
 
   // Approvals (lazy)
   const [approvals, setApprovals] = useState<any[]>([]);

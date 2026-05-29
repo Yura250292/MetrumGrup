@@ -1,6 +1,6 @@
 "use client";
 
-import { Info, History, MessageSquare, AlertCircle } from "lucide-react";
+import { Info, History, MessageSquare, AlertCircle, Handshake } from "lucide-react";
 import { EditableSectionTable } from "@/components/estimates/EditableSectionTable";
 import { TaxBreakdownCard } from "@/components/admin/TaxBreakdownCard";
 import { ApprovalSignatureCard } from "@/components/admin/ApprovalSignatureCard";
@@ -9,10 +9,12 @@ import { CommentThread } from "@/components/collab/CommentThread";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
+import { NegotiationTab } from "./negotiation-tab";
 import type { EstimateController } from "../_lib/use-controller";
 
 const TABS = [
   { id: "details", label: "Деталі", icon: Info },
+  { id: "negotiation", label: "Перемовини", icon: Handshake },
   { id: "history", label: "Історія", icon: History },
   { id: "discussion", label: "Обговорення", icon: MessageSquare },
 ] as const;
@@ -211,6 +213,15 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
           <div className="admin-light" style={DARK_VARS}>
             <CommentThread entityType="ESTIMATE" entityId={e.id} />
           </div>
+        </div>
+      )}
+
+      {controller.activeTab === "negotiation" && (
+        <div
+          className="rounded-2xl p-5"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          <NegotiationTab estimateId={e.id} />
         </div>
       )}
     </div>
