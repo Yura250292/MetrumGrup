@@ -52,8 +52,10 @@ export default async function DashboardV2Page() {
 
   const now = new Date();
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const sparkStart = new Date(now.getTime() - 29 * 86_400_000);
+  sparkStart.setHours(0, 0, 0, 0);
 
-  const [monthIncome, monthExpense, overdueStagesRaw, pendingReports, openRfis] =
+  const [monthIncome, monthExpense, overdueStagesRaw, pendingReports, openRfis, sparkEntries] =
     await Promise.all([
       showFinance
         ? prisma.financeEntry.aggregate({
@@ -107,6 +109,20 @@ export default async function DashboardV2Page() {
           ...(firmId ? { project: { firmId } } : {}),
         },
       }).catch(() => 0),
+      showFinance
+        ? prisma.financeEntry.findMany({
+            where: {
+              kind: "FACT",
+              isArchived: false,
+              occurredAt: { gte: sparkStart },
+              ...(firmId ? { project: { firmId } } : {}),
+            },
+            select: { occurredAt: true, amount: true, type: true },
+            take: 5000,
+          })
+        : Promise.resolve(
+            [] as Array<{ occurredAt: Date; amount: unknown; type: string }>,
+          ),
     ]);
 
   const monthIncomeNum = Number(monthIncome._sum.amount ?? 0);
@@ -114,6 +130,9 @@ export default async function DashboardV2Page() {
   const monthNet = monthIncomeNum - monthExpenseNum;
   const overdueStagesCount = overdueStagesRaw.length;
   const openRfiCount = openRfis;
+
+  // Aggregate sparkEntries into daily net cashflow for 30-day spark.
+  const sparkSeries = buildDailyNetSeries(sparkEntries, sparkStart, 30);
 
   const watchlist = computeWatchlist(projects);
 
@@ -223,6 +242,7 @@ export default async function DashboardV2Page() {
         monthExpense={monthExpenseNum}
         monthNet={monthNet}
         risksCount={risks.length}
+        sparkSeries={sparkSeries}
       />
 
       <MiniMetrics
@@ -301,6 +321,7 @@ function KpiStrip({
   monthExpense,
   monthNet,
   risksCount,
+  sparkSeries,
 }: {
   activeProjects: number;
   totalProjects: number;
@@ -311,6 +332,7 @@ function KpiStrip({
   monthExpense: number;
   monthNet: number;
   risksCount: number;
+  sparkSeries: number[];
 }) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
@@ -337,11 +359,13 @@ function KpiStrip({
             icon={monthNet >= 0 ? TrendingUp : TrendingDown}
             iconBg={monthNet >= 0 ? T.successSoft : T.dangerSoft}
             iconColor={monthNet >= 0 ? T.success : T.danger}
-            label={`CASHFLOW · ${monthLabel()}`}
+            label="CASHFLOW · 30 ДНІВ"
             value={`${monthNet >= 0 ? "+" : ""}${formatCompact(monthNet)}`}
             sub={`${formatCompact(monthIncome)} ↑ / ${formatCompact(monthExpense)} ↓`}
             unit="₴"
             valueColor={monthNet >= 0 ? T.success : T.danger}
+            spark={sparkSeries}
+            sparkColor={monthNet >= 0 ? T.success : T.danger}
           />
           <KpiCard
             icon={Percent}
@@ -366,6 +390,8 @@ function KpiCard({
   value,
   sub,
   unit,
+  spark,
+  sparkColor,
   valueColor,
 }: {
   icon: typeof FolderKanban;
@@ -376,13 +402,15 @@ function KpiCard({
   sub: string;
   unit?: string;
   valueColor?: string;
+  spark?: number[];
+  sparkColor?: string;
 }) {
   return (
     <article
-      className="rounded-xl p-3.5"
+      className="rounded-xl p-3.5 relative overflow-hidden"
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3 relative z-10">
         <div
           className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0"
           style={{ backgroundColor: iconBg }}
@@ -414,7 +442,65 @@ function KpiCard({
           </div>
         </div>
       </div>
+      {spark && spark.length > 1 && (
+        <Sparkline
+          series={spark}
+          color={sparkColor ?? T.accentPrimary}
+        />
+      )}
     </article>
+  );
+}
+
+/**
+ * Inline SVG sparkline. Renders cumulative-net daily series as a
+ * smoothed area + line in the bottom of the card. No external deps.
+ */
+function Sparkline({ series, color }: { series: number[]; color: string }) {
+  const width = 220;
+  const height = 36;
+  const padY = 2;
+  const min = Math.min(...series);
+  const max = Math.max(...series);
+  const range = max - min || 1;
+  const step = series.length > 1 ? width / (series.length - 1) : width;
+  const points = series.map((v, i) => {
+    const x = i * step;
+    const y = padY + (1 - (v - min) / range) * (height - padY * 2);
+    return [x, y] as const;
+  });
+  const linePath = points
+    .map(([x, y], i) => `${i === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`)
+    .join(" ");
+  const areaPath = `${linePath} L ${width} ${height} L 0 ${height} Z`;
+  const zeroY =
+    min < 0 && max > 0
+      ? padY + (1 - (0 - min) / range) * (height - padY * 2)
+      : null;
+  return (
+    <svg
+      width={width}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      className="absolute bottom-0 right-0 pointer-events-none"
+      style={{ opacity: 0.7 }}
+      aria-hidden
+    >
+      <path d={areaPath} fill={color} fillOpacity={0.12} />
+      {zeroY !== null && (
+        <line
+          x1={0}
+          y1={zeroY}
+          x2={width}
+          y2={zeroY}
+          stroke={T.borderSoft}
+          strokeDasharray="2 2"
+          strokeWidth={1}
+        />
+      )}
+      <path d={linePath} fill="none" stroke={color} strokeWidth={1.5} />
+    </svg>
   );
 }
 
@@ -846,4 +932,29 @@ function humanStage(stage: string): string {
     PREPARATION: "Підготовка",
   };
   return map[stage] ?? stage;
+}
+
+/**
+ * Bucket FinanceEntry rows into `days` daily buckets starting from `start`,
+ * returning **cumulative net** (income − expense) progression — visually
+ * the most useful sparkline shape for cashflow (showing accumulation).
+ */
+function buildDailyNetSeries(
+  entries: Array<{ occurredAt: Date; amount: unknown; type: string }>,
+  start: Date,
+  days: number,
+): number[] {
+  const buckets = new Array<number>(days).fill(0);
+  const startMs = start.getTime();
+  for (const e of entries) {
+    const offsetDays = Math.floor(
+      (new Date(e.occurredAt).getTime() - startMs) / 86_400_000,
+    );
+    if (offsetDays < 0 || offsetDays >= days) continue;
+    const amt = Number(e.amount ?? 0);
+    buckets[offsetDays] += e.type === "INCOME" ? amt : -amt;
+  }
+  // Cumulative — each day = sum of all prior days + current day's net.
+  let acc = 0;
+  return buckets.map((v) => (acc += v));
 }
