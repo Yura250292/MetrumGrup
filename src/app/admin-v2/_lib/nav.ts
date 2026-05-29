@@ -79,7 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Головне",
     items: [
-      { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, exact: true, hrAllowed: true },
+      { href: "/admin-v2/dashboard-v2", label: "Дашборд", icon: LayoutDashboard, hrAllowed: true },
       { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo, hrAllowed: true },
       { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true, hrAllowed: true },
       { href: "/admin-v2/feed", label: "Стрічка активності", icon: Activity },
@@ -90,17 +90,17 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: "/admin-v2/projects", label: "Проєкти", icon: FolderKanban },
       { href: "/admin-v2/tasks", label: "Задачі", icon: ListTodo },
-      { href: "/admin-v2/estimates", label: "Кошториси", icon: FileText },
+      { href: "/admin-v2/estimates-v2", label: "Кошториси", icon: FileText },
       { href: "/admin-v2/change-orders", label: "Зміни в кошторисах", icon: FileSignature, roles: CHANGE_ORDER_ROLES },
       { href: "/admin-v2/rfis", label: "RFI (запити)", icon: HelpCircle },
-      { href: "/admin-v2/meetings", label: "Наради", icon: Mic, superAdminOnly: true },
+      { href: "/admin-v2/meetings-v2", label: "Наради", icon: Mic, superAdminOnly: true },
       { href: "/admin-v2/foreman-reports", label: "Заявки виконробів", icon: HardHat, roles: FOREMAN_REVIEW_ROLES, inboxKey: "foremanReports" },
     ],
   },
   {
     label: "Фінанси",
     items: [
-      { href: "/admin-v2/financing", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
+      { href: "/admin-v2/financing-v2", label: "Фінансування", icon: Wallet, roles: FINANCE_VIEW_ROLES },
       { href: "/admin-v2/financing/suppliers", label: "Постачальники", icon: Truck, roles: SUPPLIERS_ACCESS_ROLES },
       { href: "/admin-v2/procurement", label: "Закупівлі (RFQ)", icon: ClipboardList, roles: PROCUREMENT_ROLES, pillBadge: { text: "BETA", color: "amber" } },
       { href: "/admin-v2/strategic-planning", label: "Стратегічне планування", icon: TrendingUp, roles: FINANCE_VIEW_ROLES },
@@ -111,7 +111,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Персонал",
     items: [
       // «Штат» — основна точка входу, всередині таби: Співробітники / Підрядники / Бригади
-      { href: "/admin-v2/hr/employees", label: "Штат", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/employees-v2", label: "Штат", icon: Users, hrAllowed: true },
     ],
   },
   {
@@ -119,7 +119,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       // «Контрагенти» — раніше «Партнери» в «Персоналі»; це довідник зовнішніх
       // сторін (клієнти / постачальники / підрядники) — належить до reference-data.
-      { href: "/admin-v2/counterparties", label: "Контрагенти", icon: Building2, hrAllowed: true },
+      { href: "/admin-v2/counterparties-v2", label: "Контрагенти", icon: Building2, hrAllowed: true },
       { href: "/admin-v2/catalogs/materials", label: "Матеріали і ціни", icon: Package },
       { href: "/admin-v2/resources/warehouse", label: "Склад", icon: Warehouse, hrAllowed: true },
       { href: "/admin-v2/resources/equipment", label: "Техніка", icon: Truck, hrAllowed: true },
