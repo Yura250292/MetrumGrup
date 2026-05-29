@@ -10,7 +10,28 @@ import {
   normalizeCostType,
   updateEstimateItem,
 } from "@/lib/estimates/items-service";
+import { findActiveProposal } from "@/lib/estimates/proposals";
 import type { CostType } from "@prisma/client";
+
+/**
+ * Якщо у кошториса є active proposal (SENT/IN_NEGOTIATION/PARTIALLY_APPROVED) —
+ * редагування/видалення рядків заблоковано. Фірма має натиснути "Withdraw and
+ * edit" → створиться новий proposal зі snapshot після правок.
+ */
+async function assertNoActiveProposal(estimateId: string): Promise<NextResponse | null> {
+  const activeId = await findActiveProposal(estimateId);
+  if (activeId) {
+    return NextResponse.json(
+      {
+        error:
+          "Кошторис заблокований активною propositions клієнту. Спершу Withdraw, потім редагуй.",
+        proposalId: activeId,
+      },
+      { status: 409 },
+    );
+  }
+  return null;
+}
 
 function handleError(err: unknown) {
   const message = err instanceof Error ? err.message : "Unknown error";
@@ -30,7 +51,10 @@ export async function PATCH(
       return forbiddenResponse();
     }
 
-    const { itemId } = await ctx.params;
+    const { id: estimateId, itemId } = await ctx.params;
+    const blocked = await assertNoActiveProposal(estimateId);
+    if (blocked) return blocked;
+
     const json = await request.json();
 
     const patch: {
@@ -106,7 +130,10 @@ export async function DELETE(
       return forbiddenResponse();
     }
 
-    const { itemId } = await ctx.params;
+    const { id: estimateId, itemId } = await ctx.params;
+    const blocked = await assertNoActiveProposal(estimateId);
+    if (blocked) return blocked;
+
     await deleteEstimateItem(itemId, { userId: session.user.id });
     return NextResponse.json({ ok: true });
   } catch (err) {
