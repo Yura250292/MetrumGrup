@@ -24,10 +24,6 @@ import { DrillDownDrawerProvider } from "@/components/drawer/DrillDownDrawerProv
 import { DrillDownDrawer } from "@/components/drawer/DrillDownDrawer";
 import { HelpProvider } from "@/contexts/HelpContext";
 import { HelpDrawer } from "./_components/help/HelpDrawer";
-import { ToastProvider } from "@/components/shared/ToastProvider";
-// StagingBanner вже рендериться у root app/layout.tsx через
-// @/components/shared/StagingBanner — другий екземпляр тут спричиняв
-// подвоєння жовтих стрічок на metrum-grup.xyz.
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 import "@/styles/premium.css";
@@ -53,7 +49,6 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
 
   return (
     <ThemeShell>
-      <ToastProvider>
       <MotionProvider>
       <DrillDownDrawerProvider>
       <AiPanelProvider>
@@ -69,7 +64,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
                   <div className="flex flex-col min-h-screen sidebar-push">
                     <Header />
                     <TabsBar />
-                    <main className="flex-1 px-4 py-2 sm:px-6 sm:py-3 md:px-6 md:py-3 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-4">
+                    <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
                       <TabsViewport>{children}</TabsViewport>
                     </main>
                   </div>
@@ -88,7 +83,6 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
       </AiPanelProvider>
       </DrillDownDrawerProvider>
       </MotionProvider>
-      </ToastProvider>
     </ThemeShell>
   );
 }
