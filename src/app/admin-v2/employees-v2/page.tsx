@@ -97,10 +97,10 @@ export default async function EmployeesV2Page({
     if (latestPeriod) {
       const agg = await prisma.employeePayrollPeriod.aggregate({
         where: { period: latestPeriod },
-        _sum: { officialPart: true, total: true },
+        _sum: { officialPart: true, totalSum: true },
         _count: { id: true },
       });
-      latestPeriodPayrollTotal = Number(agg._sum.total ?? agg._sum.officialPart ?? 0);
+      latestPeriodPayrollTotal = Number(agg._sum.totalSum ?? agg._sum.officialPart ?? 0);
       latestPeriodEmployeeCount = agg._count.id;
     }
   }
