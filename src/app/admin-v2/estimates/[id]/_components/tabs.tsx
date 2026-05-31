@@ -73,38 +73,54 @@ export function EstimateTabs({ controller }: { controller: EstimateController })
           )}
 
           {/* Sections + items */}
-          {e.sections.map((section) => (
-            <div
-              key={section.id}
-              className="rounded-2xl p-5"
-              style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
-            >
-              <div className="admin-light" style={DARK_VARS}>
-                <EditableSectionTable
-                  estimateId={e.id}
-                  sectionId={section.id}
-                  sectionTitle={section.title}
-                  locked={Boolean(e.isLocked)}
-                  items={section.items.map((it) => ({
-                    id: it.id,
-                    description: it.description,
-                    unit: it.unit,
-                    quantity: it.quantity,
-                    unitPrice: it.unitPrice,
-                    unitCost: it.unitCost,
-                    unitPriceCustomer: it.unitPriceCustomer,
-                    foremanId: it.foremanId,
-                    foreman: it.foreman,
-                    executorText: it.executorText,
-                    amount: it.amount,
-                    costCodeId: it.costCodeId,
-                    costCode: it.costCode,
-                  }))}
-                  onChanged={() => controller.loadEstimate()}
-                />
+          {(() => {
+            // Глобальний список потенційних попередників — усі items з усіх
+            // секцій. Префіксуємо заголовком секції для зрозумілості UI.
+            const predecessorOptions = e.sections.flatMap((sec) =>
+              sec.items.map((it) => ({
+                id: it.id,
+                label: `${sec.title} · ${it.description}`.slice(0, 80),
+              })),
+            );
+            return e.sections.map((section) => (
+              <div
+                key={section.id}
+                className="rounded-2xl p-5"
+                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+              >
+                <div className="admin-light" style={DARK_VARS}>
+                  <EditableSectionTable
+                    estimateId={e.id}
+                    sectionId={section.id}
+                    sectionTitle={section.title}
+                    locked={Boolean(e.isLocked)}
+                    predecessorOptions={predecessorOptions}
+                    items={section.items.map((it) => ({
+                      id: it.id,
+                      description: it.description,
+                      unit: it.unit,
+                      quantity: it.quantity,
+                      unitPrice: it.unitPrice,
+                      unitCost: it.unitCost,
+                      unitPriceCustomer: it.unitPriceCustomer,
+                      foremanId: it.foremanId,
+                      foreman: it.foreman,
+                      executorText: it.executorText,
+                      amount: it.amount,
+                      costCodeId: it.costCodeId,
+                      costCode: it.costCode,
+                      plannedStart: it.plannedStart ?? null,
+                      plannedDurationDays: it.plannedDurationDays ?? null,
+                      predecessorItemId: it.predecessorItemId ?? null,
+                      dependencyType: it.dependencyType ?? null,
+                      dependencyLagDays: it.dependencyLagDays ?? 0,
+                    }))}
+                    onChanged={() => controller.loadEstimate()}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            ));
+          })()}
 
           {/* Tax breakdown */}
           {e.taxationType && e.taxationType !== "CASH" && e.taxCalculationDetails && (

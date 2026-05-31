@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import {
   ArrowLeft,
@@ -25,23 +25,40 @@ import type { EstimateController } from "../_lib/use-controller";
 export function EstimateHeader({
   controller,
   isFinancier,
+  hideBackLink = false,
 }: {
   controller: EstimateController;
   isFinancier: boolean;
+  /** Inline mode: parent (наприклад TabEstimates) показує власний back-link. */
+  hideBackLink?: boolean;
 }) {
   const e = controller.estimate!;
   const isApproved = e.status === "APPROVED";
   const isDraft = e.status === "DRAFT";
 
+  // Якщо користувач прийшов з конкретного проєкту (ProjectEstimatesSection
+  // передає ?fromProjectId=X) — повертаємо у той самий проєкт на ?tab=estimates.
+  // Інакше — до глобального списку кошторисів.
+  const searchParams = useSearchParams();
+  const fromProjectId = searchParams.get("fromProjectId");
+  const backHref = fromProjectId
+    ? `/admin-v2/projects/${fromProjectId}?tab=estimates`
+    : "/admin-v2/estimates";
+  const backLabel = fromProjectId
+    ? `До проєкту${e.project?.title ? ` "${e.project.title}"` : ""}`
+    : "До списку кошторисів";
+
   return (
     <header className="flex flex-col gap-4">
-      <Link
-        href="/admin-v2/estimates"
-        className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-[0.97]"
-        style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-      >
-        <ArrowLeft size={14} /> До списку кошторисів
-      </Link>
+      {!hideBackLink && (
+        <Link
+          href={backHref}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-[0.97]"
+          style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+        >
+          <ArrowLeft size={14} /> {backLabel}
+        </Link>
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2 min-w-0 flex-1">

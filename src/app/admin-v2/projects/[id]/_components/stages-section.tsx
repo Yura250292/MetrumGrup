@@ -14,6 +14,7 @@ import {
   EyeOff,
   Plus,
   FileDown,
+  FileSpreadsheet,
   ClipboardPaste,
   Save,
   CheckCircle2,
@@ -39,6 +40,7 @@ import {
 } from "./stage-table";
 import { StageMobileList } from "./stage-mobile-list";
 import { ImportEstimateModal } from "./import-estimate-modal";
+import { ImportPlanModal } from "./import-plan-modal";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
 import { PublishFinanceDialog } from "./publish-finance-dialog";
 import { StagesAiAssistant } from "./stages-ai-assistant";
@@ -153,6 +155,7 @@ export function StagesSection({
   }, [hideCompleted]);
 
   const [importOpen, setImportOpen] = useState(false);
+  const [planImportOpen, setPlanImportOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [restructureOpen, setRestructureOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -832,6 +835,14 @@ export function StagesSection({
                     }}
                   />
                   <OverflowItem
+                    icon={<FileSpreadsheet size={13} />}
+                    label="Імпорт плану з Excel"
+                    onClick={() => {
+                      setPlanImportOpen(true);
+                      setOverflowOpen(false);
+                    }}
+                  />
+                  <OverflowItem
                     icon={<ClipboardPaste size={13} />}
                     label="Вставити з Excel"
                     onClick={() => {
@@ -998,6 +1009,13 @@ export function StagesSection({
         <ImportEstimateModal
           projectId={projectId}
           onClose={() => setImportOpen(false)}
+          onImported={refetch}
+        />
+      )}
+      {planImportOpen && (
+        <ImportPlanModal
+          projectId={projectId}
+          onClose={() => setPlanImportOpen(false)}
           onImported={refetch}
         />
       )}

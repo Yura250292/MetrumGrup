@@ -27,15 +27,31 @@ export type EditableItem = {
   amount: number;
   costCodeId: string | null;
   costCode: { id: string; code: string; name: string } | null;
+  /** Планувальні поля (для Estimate → Task sync). */
+  plannedStart?: string | null;
+  plannedDurationDays?: number | null;
+  predecessorItemId?: string | null;
+  dependencyType?: "FS" | "SS" | "FF" | "SF" | null;
+  dependencyLagDays?: number;
 };
 
 export type ForemanOption = { id: string; name: string };
+
+export type PredecessorOption = { id: string; label: string };
+
+const DEP_TYPE_OPTIONS: { value: "FS" | "SS" | "FF" | "SF"; label: string }[] = [
+  { value: "FS", label: "FS (після завершення)" },
+  { value: "SS", label: "SS (одночасно зі стартом)" },
+  { value: "FF", label: "FF (одночасне завершення)" },
+  { value: "SF", label: "SF (від старту до кінця)" },
+];
 
 export function EditableItemRow({
   item,
   estimateId,
   costCodeOptions,
   foremanOptions = [],
+  predecessorOptions = [],
   locked = false,
   onChanged,
 }: {
@@ -44,6 +60,8 @@ export function EditableItemRow({
   costCodeOptions: ComboboxOption[];
   /** Список потенційних виконробів (для select). */
   foremanOptions?: ForemanOption[];
+  /** Інші позиції у тому ж кошторисі — для вибору попередника. */
+  predecessorOptions?: PredecessorOption[];
   /** Версія заморожена — поля read-only. */
   locked?: boolean;
   onChanged?: () => void;
@@ -58,6 +76,13 @@ export function EditableItemRow({
   const [unitPriceCustomer, setUnitPriceCustomer] = useState(String(initialCustomer));
   const [executorText, setExecutorText] = useState(item.executorText ?? "");
   const [expanded, setExpanded] = useState(false);
+  const [plannedStart, setPlannedStart] = useState(item.plannedStart?.slice(0, 10) ?? "");
+  const [plannedDuration, setPlannedDuration] = useState(
+    item.plannedDurationDays != null ? String(item.plannedDurationDays) : "",
+  );
+  const [dependencyLag, setDependencyLag] = useState(
+    item.dependencyLagDays != null ? String(item.dependencyLagDays) : "0",
+  );
 
   const updateItem = useUpdateEstimateItem(estimateId);
   const deleteItem = useDeleteEstimateItem(estimateId);
@@ -73,6 +98,11 @@ export function EditableItemRow({
       String(item.unitPriceCustomer ?? (item.unitCost ?? item.unitPrice) * 1.2),
     );
     setExecutorText(item.executorText ?? "");
+    setPlannedStart(item.plannedStart?.slice(0, 10) ?? "");
+    setPlannedDuration(
+      item.plannedDurationDays != null ? String(item.plannedDurationDays) : "",
+    );
+    setDependencyLag(item.dependencyLagDays != null ? String(item.dependencyLagDays) : "0");
   }, [
     item.id,
     item.description,
@@ -82,6 +112,9 @@ export function EditableItemRow({
     item.unitCost,
     item.unitPriceCustomer,
     item.executorText,
+    item.plannedStart,
+    item.plannedDurationDays,
+    item.dependencyLagDays,
   ]);
 
   const costNum = Number(unitCost) || 0;
@@ -100,6 +133,11 @@ export function EditableItemRow({
     executorText?: string | null;
     costCodeId?: string | null;
     costType?: EstimateItemCostType | null;
+    plannedStart?: string | null;
+    plannedDurationDays?: number | null;
+    predecessorItemId?: string | null;
+    dependencyType?: "FS" | "SS" | "FF" | "SF" | null;
+    dependencyLagDays?: number;
   }) => {
     try {
       await updateItem.mutateAsync({ itemId: item.id, patch });
@@ -302,6 +340,110 @@ export function EditableItemRow({
                     }
                   }}
                   className="flex-1 rounded border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-white/5 admin-light:bg-white px-2 py-1 text-xs disabled:opacity-60"
+                />
+              </label>
+            </div>
+            <div className="mt-2 pt-2 border-t admin-dark:border-white/5 admin-light:border-gray-200 flex flex-wrap items-center gap-3 text-xs">
+              <div className="font-medium admin-dark:text-gray-300 admin-light:text-gray-700">
+                Планування:
+              </div>
+              <label className="flex items-center gap-2">
+                <span className="admin-dark:text-gray-400 admin-light:text-gray-600">Початок:</span>
+                <input
+                  type="date"
+                  value={plannedStart}
+                  disabled={locked}
+                  onChange={(e) => setPlannedStart(e.target.value)}
+                  onBlur={() => {
+                    const next = plannedStart || null;
+                    const prev = item.plannedStart?.slice(0, 10) ?? null;
+                    if (next !== prev) {
+                      handleSave({
+                        plannedStart: next ? new Date(next).toISOString() : null,
+                      });
+                    }
+                  }}
+                  className="rounded border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-white/5 admin-light:bg-white px-2 py-1 text-xs disabled:opacity-60"
+                />
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="admin-dark:text-gray-400 admin-light:text-gray-600">Днів:</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={plannedDuration}
+                  disabled={locked}
+                  placeholder="—"
+                  onChange={(e) => setPlannedDuration(e.target.value)}
+                  onBlur={() => {
+                    const raw = plannedDuration.trim();
+                    const next = raw === "" ? null : Number(raw);
+                    const prev = item.plannedDurationDays ?? null;
+                    if (next !== prev && (next === null || Number.isInteger(next))) {
+                      handleSave({ plannedDurationDays: next });
+                    }
+                  }}
+                  className="w-16 rounded border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-white/5 admin-light:bg-white px-2 py-1 text-xs text-right disabled:opacity-60"
+                />
+              </label>
+              <label className="flex items-center gap-2 flex-1 min-w-[180px]">
+                <span className="admin-dark:text-gray-400 admin-light:text-gray-600">Попередник:</span>
+                <select
+                  value={item.predecessorItemId ?? ""}
+                  disabled={locked}
+                  onChange={(e) => {
+                    const v = e.target.value || null;
+                    if (v === (item.predecessorItemId ?? null)) return;
+                    handleSave({ predecessorItemId: v });
+                  }}
+                  className="flex-1 rounded border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-white/5 admin-light:bg-white px-2 py-1 text-xs disabled:opacity-60"
+                >
+                  <option value="">— нема —</option>
+                  {predecessorOptions
+                    .filter((o) => o.id !== item.id)
+                    .map((o) => (
+                      <option key={o.id} value={o.id}>
+                        {o.label}
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="admin-dark:text-gray-400 admin-light:text-gray-600">Тип:</span>
+                <select
+                  value={item.dependencyType ?? "FS"}
+                  disabled={locked || !item.predecessorItemId}
+                  onChange={(e) => {
+                    const v = e.target.value as "FS" | "SS" | "FF" | "SF";
+                    if (v === (item.dependencyType ?? "FS")) return;
+                    handleSave({ dependencyType: v });
+                  }}
+                  className="rounded border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-white/5 admin-light:bg-white px-2 py-1 text-xs disabled:opacity-60"
+                >
+                  {DEP_TYPE_OPTIONS.map((d) => (
+                    <option key={d.value} value={d.value}>
+                      {d.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-2">
+                <span className="admin-dark:text-gray-400 admin-light:text-gray-600">Лаг (дн):</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={dependencyLag}
+                  disabled={locked || !item.predecessorItemId}
+                  onChange={(e) => setDependencyLag(e.target.value)}
+                  onBlur={() => {
+                    const n = Number(dependencyLag);
+                    if (!Number.isInteger(n)) return;
+                    if (n !== (item.dependencyLagDays ?? 0)) {
+                      handleSave({ dependencyLagDays: n });
+                    }
+                  }}
+                  className="w-16 rounded border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-white/5 admin-light:bg-white px-2 py-1 text-xs text-right disabled:opacity-60"
                 />
               </label>
             </div>

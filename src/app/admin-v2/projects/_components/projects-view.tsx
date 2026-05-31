@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, Table as TableIcon, Plus, FolderPlus } from "lucide-react";
+import {
+  LayoutGrid,
+  Table as TableIcon,
+  FolderPlus,
+  Upload,
+  Download,
+  GanttChartSquare,
+} from "lucide-react";
 import {
   PageToolbar,
   ViewModeSwitcher,
@@ -21,10 +28,18 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectsCards } from "./projects-cards";
 import { ProjectsTable } from "./projects-table";
+import { ProjectsTimeline } from "./projects-timeline";
+import {
+  ProjectsFilterBar,
+  applyProjectsFilterSort,
+  type StatusFilter,
+  type SortMode,
+  type Preset,
+} from "./projects-filter-bar";
 import type { ProjectRow } from "./projects-types";
 
-type Mode = "cards" | "table";
-const MODES: Mode[] = ["cards", "table"];
+type Mode = "cards" | "table" | "timeline";
+const MODES: Mode[] = ["cards", "table", "timeline"];
 
 export function ProjectsView({
   projects,
@@ -35,6 +50,9 @@ export function ProjectsView({
   folders,
   breadcrumbs,
   isSuperAdmin,
+  showFinance = false,
+  currentUserId,
+  firmName,
 }: {
   projects: ProjectRow[];
   canDelete: boolean;
@@ -44,10 +62,37 @@ export function ProjectsView({
   folders: FolderItem[];
   breadcrumbs: BreadcrumbItem[];
   isSuperAdmin?: boolean;
+  showFinance?: boolean;
+  currentUserId: string;
+  /** Назва поточної фірми ("Metrum Group" / "Metrum Studio") для chip-у. */
+  firmName: string | null;
 }) {
   const isDesktop = useIsDesktop();
   const initial: Mode = isDesktop ? "table" : "cards";
   const [mode, setMode] = usePersistedViewMode<Mode>("projects", MODES, initial);
+
+  // Client-side filter+sort стан. UX: всі дані вже в RSC payload, тому
+  // мить-фільтрація без round-trip. Зміняти URL не варто — це не виглядає
+  // як "navigation event" а скоріше як local view-state.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [managerFilter, setManagerFilter] = useState<string | null>(null);
+  const [activePreset, setActivePreset] = useState<Preset | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>("updated");
+  const filtered = applyProjectsFilterSort(
+    projects,
+    statusFilter,
+    typeFilter,
+    managerFilter,
+    activePreset,
+    currentUserId,
+    sortMode,
+  );
+
+  // Toggle preset: повторний клік знімає, інший — переключає.
+  const togglePreset = (preset: Preset) => {
+    setActivePreset((cur) => (cur === preset ? null : preset));
+  };
 
   // Folder mutations (раніше жили у ProjectFoldersClient — переїхали сюди
   // щоб папки + проєкти жили в єдиному гріді).
@@ -120,16 +165,32 @@ export function ProjectsView({
 
       <PageToolbar
         title="Проєкти"
-        subtitle={`${totalCount} ${
+        titleBadge={
+          firmName ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={{
+                backgroundColor: T.accentPrimarySoft,
+                color: T.accentPrimary,
+              }}
+              title={`Поточна фірма: ${firmName}`}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: T.accentPrimary }}
+              />
+              {firmName}
+            </span>
+          ) : null
+        }
+        subtitle={`Управління будівельними проектами · ${totalCount} ${
           totalCount === 1 ? "проєкт" : "проєктів"
-        } · ${activeCount} активних${
+        } · ${activeCount} в роботі${
           folders.length > 0 ? ` · ${folders.length} папок` : ""
         }`}
-        primaryAction={{
-          label: "Новий проєкт",
-          href: "/admin-v2/projects/new",
-          icon: <Plus size={16} />,
-        }}
+        // primaryAction дублювався з кнопкою "+ Новий проєкт" у admin Header,
+        // користувач попросив прибрати. Створення проєкту тепер тільки через
+        // header (доступно з усіх admin-v2 сторінок) або через "Папка" → "Новий".
         viewMode={
           <ViewModeSwitcher<Mode>
             value={mode}
@@ -138,33 +199,62 @@ export function ProjectsView({
             options={[
               { value: "table", label: "Таблиця", icon: TableIcon },
               { value: "cards", label: "Картки", icon: LayoutGrid },
+              { value: "timeline", label: "Шкала", icon: GanttChartSquare },
             ]}
           />
         }
         rightSlot={
-          <button
-            type="button"
-            onClick={() => setShowCreateFolder(true)}
-            className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:brightness-95"
-            style={{
-              backgroundColor: T.panelElevated,
-              color: T.textPrimary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-            title="Нова папка"
-          >
-            <FolderPlus size={14} />
-            Папка
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Експорт / Імпорт — feature flagged off поки API не готове. */}
+            <SecondaryButton
+              icon={<Download size={14} />}
+              label="Експорт"
+              disabled
+              title="Експорт у CSV — скоро"
+            />
+            <SecondaryButton
+              icon={<Upload size={14} />}
+              label="Імпорт"
+              disabled
+              title="Імпорт з CSV — скоро"
+            />
+            <SecondaryButton
+              icon={<FolderPlus size={14} />}
+              label="Папка"
+              onClick={() => setShowCreateFolder(true)}
+              title="Нова папка"
+            />
+          </div>
         }
       />
+
+      {/* Filter+sort bar поверх grid — для cards і timeline view (в table свої сорти). */}
+      {(mode === "cards" || mode === "timeline") && projects.length > 0 && (
+        <ProjectsFilterBar
+          projects={projects}
+          statusFilter={statusFilter}
+          onStatusChange={setStatusFilter}
+          typeFilter={typeFilter}
+          onTypeChange={setTypeFilter}
+          managerFilter={managerFilter}
+          onManagerChange={setManagerFilter}
+          sortMode={sortMode}
+          onSortChange={setSortMode}
+          currentUserId={currentUserId}
+          activePreset={activePreset}
+          onPresetClick={togglePreset}
+        />
+      )}
+
       {mode === "cards" && (
         <ProjectsCards
-          projects={projects}
+          projects={filtered}
           canDelete={canDelete}
           currentFolderId={currentFolderId}
           folders={folders}
           isSuperAdmin={isSuperAdmin}
+          showFinance={showFinance}
+          currentUserId={currentUserId}
           onRenameFolder={handleRenameFolder}
           onDeleteFolder={handleDeleteFolder}
           onMoveFolder={(id) => setMoveFolderId(id)}
@@ -180,6 +270,7 @@ export function ProjectsView({
           onMoveFolder={(id) => setMoveFolderId(id)}
         />
       )}
+      {mode === "timeline" && <ProjectsTimeline projects={filtered} />}
 
       <CreateFolderDialog
         open={showCreateFolder}
@@ -204,6 +295,38 @@ export function ProjectsView({
         onMove={handleMoveFolderTo}
       />
     </div>
+  );
+}
+
+function SecondaryButton({
+  icon,
+  label,
+  onClick,
+  disabled,
+  title,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-semibold transition hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
+      style={{
+        backgroundColor: T.panelElevated,
+        color: T.textPrimary,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 

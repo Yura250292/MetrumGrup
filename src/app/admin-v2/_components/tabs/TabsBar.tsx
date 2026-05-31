@@ -7,7 +7,7 @@ import { useTabs } from "./TabsProvider";
 import { iconFromKey } from "../../_lib/tabs/icon-map";
 import type { Tab } from "../../_lib/tabs/types";
 
-const BAR_HEIGHT = 36;
+const BAR_HEIGHT = 48;
 
 export function TabsBar() {
   const tabs = useTabs();
@@ -85,27 +85,38 @@ export function TabsBar() {
     [closeTab],
   );
 
-  if (state.tabs.length === 0) return null;
+  // Раніше було: if (state.tabs.length === 0) return null;
+  // Прибираю — якщо state каже 0 (corrupted localStorage чи bug), все одно
+  // рендеримо bar з кнопкою "+ Нова вкладка" замість мовчазного null.
+  // Це гарантує що користувач завжди бачить bar (на md+ breakpoint).
 
   return (
     <div
       role="tablist"
       aria-label="Вкладки"
-      className="hidden md:flex items-stretch w-full select-none"
+      className="hidden md:flex items-stretch w-full select-none flex-shrink-0"
       style={{
         height: BAR_HEIGHT,
-        backgroundColor: T.background,
-        borderBottom: `1px solid ${T.borderSoft}`,
+        minHeight: BAR_HEIGHT,
+        maxHeight: BAR_HEIGHT,
+        backgroundColor: T.panelElevated,
+        borderBottom: `1px solid ${T.borderStrong}`,
       }}
     >
       <div
         ref={scrollerRef}
-        className="flex items-stretch flex-1 overflow-x-auto"
-        style={{ scrollbarWidth: "thin" }}
+        className="flex items-stretch flex-1 overflow-x-auto overflow-y-hidden"
+        style={{ scrollbarWidth: "thin", height: BAR_HEIGHT }}
       >
         {state.tabs.map((tab) => {
           const Icon = iconFromKey(tab.iconKey);
           const isActive = tab.id === state.activeTabId;
+          // Fallback: якщо title порожній (corrupted state) — беремо
+          // останній сегмент path як видимий title. Точно показуємо щось.
+          const displayTitle =
+            (tab.title && tab.title.trim()) ||
+            tab.path.replace(/^\/admin-v2\/?/, "").split("/")[0] ||
+            "Дашборд";
           return (
             <div
               key={tab.id}
@@ -118,18 +129,26 @@ export function TabsBar() {
                 e.preventDefault();
                 setMenu({ tabId: tab.id, x: e.clientX, y: e.clientY });
               }}
-              title={tab.path}
-              className="group relative flex items-center gap-2 px-3 cursor-pointer min-w-[140px] max-w-[220px] transition-colors"
+              title={`${displayTitle} — ${tab.path}`}
+              className="group relative flex items-center gap-2.5 px-4 cursor-pointer min-w-[220px] max-w-[300px] transition-colors"
               style={{
                 color: isActive ? T.textPrimary : T.textSecondary,
                 backgroundColor: isActive ? T.panel : "transparent",
                 borderRight: `1px solid ${T.borderSoft}`,
-                borderTop: isActive ? `2px solid ${T.accentPrimary}` : `2px solid transparent`,
-                fontWeight: isActive ? 600 : 500,
+                borderTop: isActive
+                  ? `3px solid ${T.accentPrimary}`
+                  : `3px solid transparent`,
+                fontWeight: isActive ? 700 : 600,
               }}
             >
-              <Icon size={14} style={{ color: isActive ? T.accentPrimary : T.textMuted, flexShrink: 0 }} />
-              <span className="flex-1 text-[12.5px] truncate">{tab.title}</span>
+              <Icon
+                size={16}
+                style={{
+                  color: isActive ? T.accentPrimary : T.textPrimary,
+                  flexShrink: 0,
+                }}
+              />
+              <span className="flex-1 text-[14px] truncate">{displayTitle}</span>
               <button
                 type="button"
                 aria-label="Закрити вкладку"

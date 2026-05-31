@@ -41,6 +41,13 @@ export type EstimateItem = {
   costCodeId: string | null;
   costType: EstimateItemCostType | null;
   costCode: EstimateItemCostCode | null;
+  /// Planning fields (Estimate → Task sync). ISO-рядок з GET.
+  plannedStart?: string | null;
+  plannedDurationDays?: number | null;
+  plannedEnd?: string | null;
+  predecessorItemId?: string | null;
+  dependencyType?: "FS" | "SS" | "FF" | "SF" | null;
+  dependencyLagDays?: number;
 };
 
 export type EstimateSection = {

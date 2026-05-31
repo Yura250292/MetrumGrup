@@ -9,6 +9,7 @@ import { fireRFIEscalations } from "@/lib/cron/rfi-escalation";
 import { fireCounterpartyDocumentExpiry } from "@/lib/counterparties/cron/document-expiry";
 import { fireCounterpartyEdrpouRefresh } from "@/lib/counterparties/cron/edrpou-refresh";
 import { expireProposals } from "@/lib/estimates/proposals";
+import { fireEstimateTaskResync } from "@/lib/cron/estimate-task-resync";
 
 /**
  * Vercel cron endpoint — fires every minute (configured in vercel.json).
@@ -81,6 +82,12 @@ export async function GET(request: NextRequest) {
     out.estimateProposalsExpired = await expireProposals();
   } catch (err) {
     out.estimateProposalsExpireError = String(err);
+  }
+
+  try {
+    out.estimateTaskResync = await fireEstimateTaskResync();
+  } catch (err) {
+    out.estimateTaskResyncError = String(err);
   }
 
   return NextResponse.json({ ok: true, ...out });

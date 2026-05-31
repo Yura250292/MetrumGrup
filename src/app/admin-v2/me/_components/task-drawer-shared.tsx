@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Trash2,
   Pencil,
+  FileSpreadsheet,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -55,6 +56,13 @@ type DrawerDetail = {
   checklist: { id: string; content: string; isDone: boolean; position: number }[];
   customFields: Record<string, unknown> | null;
   _count: { subtasks: number; checklist: number };
+  /** Якщо таск автоматично згенерований із рядка кошторису. */
+  sourceEstimateItemId?: string | null;
+  sourceEstimateItem?: {
+    id: string;
+    description: string;
+    estimate: { id: string; title: string };
+  } | null;
 };
 
 type TimeLogEntry = {
@@ -611,6 +619,24 @@ export function SelfContainedTaskDrawer({
                     {detail.project.title}
                   </button>
                 )}
+              {!editing && detail.sourceEstimateItemId && (
+                <div
+                  className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                  style={{
+                    backgroundColor: T.accentPrimarySoft,
+                    color: T.accentPrimary,
+                    border: `1px solid ${T.borderAccent}`,
+                  }}
+                  title={
+                    detail.sourceEstimateItem
+                      ? `Згенеровано з рядка кошторису «${detail.sourceEstimateItem.estimate.title}»`
+                      : "Згенеровано з рядка кошторису"
+                  }
+                >
+                  <FileSpreadsheet size={10} />
+                  Auto з кошторису
+                </div>
+              )}
             </div>
 
             {/* Compact meta-row: дедлайн + пріоритет.
