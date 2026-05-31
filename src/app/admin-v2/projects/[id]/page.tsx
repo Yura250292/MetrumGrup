@@ -19,6 +19,7 @@ import { ProjectKpiStrip } from "./_components/project-kpi-strip";
 import { FinanceDiagnosticsCard } from "./_components/finance-diagnostics-card";
 import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
+import { ProjectDetailCanonicalBody } from "./_components/project-detail-canonical-body";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { canViewFinance } from "@/lib/auth-utils";
@@ -39,6 +40,13 @@ export default async function AdminV2ProjectDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const activeTab = sp.tab || "overview";
+
+  // Overview = канонічний v2-дизайн (HeroCard/KpiStrip/StagesPanel/...).
+  // Інші ?tab=X = legacy ProjectTabs (фінанси, документи, медіа, ...).
+  // Раніше overview жив у /v2/page.tsx як preview; зараз /v2 → redirect /[id].
+  if (activeTab === "overview") {
+    return <ProjectDetailCanonicalBody id={id} session={session} />;
+  }
 
   const [project, factIncome, factExpense, responsibleCandidates] = await Promise.all([
     prisma.project.findUnique({
@@ -155,14 +163,6 @@ export default async function AdminV2ProjectDetailPage({
               </span>
               <StatusBadge status={project.status} />
               {project.isTestProject && <TestBadge />}
-              <Link
-                href={`/admin-v2/projects/${project.id}/v2`}
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-bold tracking-wider transition hover:brightness-110"
-                style={{ backgroundColor: T.violet, color: "#FFFFFF" }}
-                title="Спробувати нову версію цієї сторінки"
-              >
-                ✨ V2 PREVIEW
-              </Link>
             </div>
             <h1
               className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight leading-tight break-words"
