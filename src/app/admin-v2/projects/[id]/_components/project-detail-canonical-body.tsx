@@ -140,44 +140,52 @@ export async function ProjectDetailCanonicalBody({
   ).length;
 
   return (
-    <ProjectOverviewContent
-      project={project}
-      stages={stages}
-      activeStage={activeStage}
-      completedStages={completedStages}
-      totalStages={totalStages}
-      overallProgress={overallProgress}
-      showFinance={showFinance}
-      totalBudget={totalBudget}
-      totalPaid={totalPaid}
-      budgetUsedPct={budgetUsedPct}
-      daysToDeadline={daysToDeadline}
-      overdueStages={overdueStages}
-      members={members.map((m) => ({
-        id: m.id,
-        userId: m.user.id,
-        userName: m.user.name ?? "—",
-        userRole: m.user.role,
-        userAvatar: m.user.avatar,
-        roleInProject: m.roleInProject,
-      }))}
-      canManageMembers={canManageMembers}
-      recentFiles={recentFiles.map((f) => ({
-        id: f.id,
-        name: f.name,
-        size: f.size,
-        mimeType: f.mimeType,
-        url: f.url,
-        createdAt: f.createdAt.toISOString(),
-      }))}
-      recentPhotoImages={recentPhotoImages.map((img) => ({
-        id: img.id,
-        url: img.url,
-        thumbnailUrl: img.thumbnailUrl,
-        caption: img.caption,
-        photoReportId: img.photoReportId,
-      }))}
-    />
+    <div className="flex flex-col gap-5 pb-12">
+      <HeroCard project={project} tasksEnabled={tasksEnabled} />
+      <SubNavTabs
+        projectId={project.id}
+        tasksEnabled={tasksEnabled}
+        activeTab="overview"
+      />
+      <ProjectOverviewContent
+        project={project}
+        stages={stages}
+        activeStage={activeStage}
+        completedStages={completedStages}
+        totalStages={totalStages}
+        overallProgress={overallProgress}
+        showFinance={showFinance}
+        totalBudget={totalBudget}
+        totalPaid={totalPaid}
+        budgetUsedPct={budgetUsedPct}
+        daysToDeadline={daysToDeadline}
+        overdueStages={overdueStages}
+        members={members.map((m) => ({
+          id: m.id,
+          userId: m.user.id,
+          userName: m.user.name ?? "—",
+          userRole: m.user.role,
+          userAvatar: m.user.avatar,
+          roleInProject: m.roleInProject,
+        }))}
+        canManageMembers={canManageMembers}
+        recentFiles={recentFiles.map((f) => ({
+          id: f.id,
+          name: f.name,
+          size: f.size,
+          mimeType: f.mimeType,
+          url: f.url,
+          createdAt: f.createdAt.toISOString(),
+        }))}
+        recentPhotoImages={recentPhotoImages.map((img) => ({
+          id: img.id,
+          url: img.url,
+          thumbnailUrl: img.thumbnailUrl,
+          caption: img.caption,
+          photoReportId: img.photoReportId,
+        }))}
+      />
+    </div>
   );
 }
 
