@@ -94,17 +94,19 @@ export function TabsBar() {
     <div
       role="tablist"
       aria-label="Вкладки"
-      className="hidden md:flex items-stretch w-full select-none"
+      className="hidden md:flex items-stretch w-full select-none flex-shrink-0"
       style={{
         height: BAR_HEIGHT,
+        minHeight: BAR_HEIGHT,
+        maxHeight: BAR_HEIGHT,
         backgroundColor: T.panelElevated,
         borderBottom: `1px solid ${T.borderStrong}`,
       }}
     >
       <div
         ref={scrollerRef}
-        className="flex items-stretch flex-1 overflow-x-auto"
-        style={{ scrollbarWidth: "thin" }}
+        className="flex items-stretch flex-1 overflow-x-auto overflow-y-hidden"
+        style={{ scrollbarWidth: "thin", height: BAR_HEIGHT }}
       >
         {state.tabs.map((tab) => {
           const Icon = iconFromKey(tab.iconKey);
