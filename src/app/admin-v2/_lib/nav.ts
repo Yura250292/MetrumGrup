@@ -79,7 +79,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: "Головне",
     items: [
-      { href: "/admin-v2/dashboard-v2", label: "Дашборд", icon: LayoutDashboard, hrAllowed: true },
+      { href: "/admin-v2", label: "Дашборд", icon: LayoutDashboard, hrAllowed: true },
       { href: "/admin-v2/me", label: "Мої задачі", icon: ListTodo, hrAllowed: true },
       { href: "/admin-v2/chat", label: "Чат", icon: MessageSquare, showUnreadBadge: true, hrAllowed: true },
       { href: "/admin-v2/feed", label: "Стрічка активності", icon: Activity },

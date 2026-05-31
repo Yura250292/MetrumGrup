@@ -34,19 +34,6 @@ import { AiSummary } from "./_components/dashboard/ai-summary";
 import { HrDashboard } from "./_components/dashboard/hr-dashboard";
 import { FinancierDashboard } from "./_components/dashboard/financier-dashboard";
 import {
-  CashflowChartWidget,
-  ProjectMarginWidget,
-  TodayLiveWidget,
-  ActivityTimelineWidget,
-  MarginKpiTileWidget,
-  LiveWorkersTileWidget,
-  DeadlineWatchlistWidget,
-  buildDailySeries,
-  computeProjectMarginRows,
-  computeDeadlineWatchlist,
-  buildActivityTimelineEvents,
-} from "./_components/dashboard/widgets/dashboard-v2-widgets";
-import {
   projectNotTestByFirm,
   financeEntryNotTestByFirm,
   paymentNotTestByFirm,
@@ -203,9 +190,6 @@ export default async function AdminV2Dashboard({
   const endOfToday = new Date();
   endOfToday.setHours(23, 59, 59, 999);
   const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 3600 * 1000);
-  // Inline finance gate for Promise.all; `canSeeFinance` is also recomputed
-  // below from `role` for the rendering pass — kept identical on purpose.
-  const canSeeFinanceForFetch = activeRole === "SUPER_ADMIN";
 
   const [
     projectsCount,
@@ -260,14 +244,6 @@ export default async function AdminV2Dashboard({
     incomeByCategoryRaw,
     // P2: Stage analytics
     completedStageRecords,
-    // dashboard-v2.pen widgets
-    cashflow30dEntries,
-    todayForemanReports,
-    activeNowStages,
-    activityForemanReports,
-    activityCompletedStages,
-    activityIncomeEntries,
-    activityChangeOrders,
   ] = await Promise.all([
     prisma.project.count({ where: PROJECT_SCOPE }),
     prisma.project.count({ where: { status: "ACTIVE", ...PROJECT_SCOPE } }),
@@ -630,131 +606,6 @@ export default async function AdminV2Dashboard({
         endDate: true,
       },
     }),
-    // ------ dashboard-v2.pen widgets ------
-    // cashflow-chart + project-margin: 30-day FACT income/expense series
-    canSeeFinanceForFetch
-      ? prisma.financeEntry.findMany({
-          where: {
-            kind: "FACT",
-            isArchived: false,
-            occurredAt: { gte: new Date(now.getTime() - 29 * 86_400_000) },
-            type: { in: ["INCOME", "EXPENSE"] },
-            ...FINANCE_SCOPE,
-          },
-          select: { occurredAt: true, amount: true, type: true, projectId: true },
-          take: 8000,
-        })
-      : Promise.resolve([] as Array<{ occurredAt: Date; amount: unknown; type: string; projectId: string | null }>),
-    // today-live + live-workers-tile: today's foreman reports
-    prisma.foremanReport.findMany({
-      where: {
-        OR: [{ submittedAt: { gte: startOfToday } }, { createdAt: { gte: startOfToday } }],
-        ...(firmId ? { firmId } : {}),
-      },
-      select: { createdById: true, projectId: true },
-      take: 500,
-    }),
-    // today-live: 3 IN_PROGRESS stages right now
-    prisma.projectStageRecord.findMany({
-      where: { status: "IN_PROGRESS", ...(firmId ? { project: { firmId } } : {}) },
-      select: { customName: true, stage: true, project: { select: { title: true } }, updatedAt: true },
-      orderBy: { updatedAt: "desc" },
-      take: 3,
-    }),
-    // activity-timeline: recent foreman reports (7d)
-    prisma.foremanReport.findMany({
-      where: {
-        status: { in: ["PENDING_APPROVAL", "APPROVED"] },
-        submittedAt: { not: null, gte: new Date(now.getTime() - 7 * 86_400_000) },
-        ...(firmId ? { firmId } : {}),
-      },
-      select: {
-        id: true,
-        submittedAt: true,
-        totalCalculated: true,
-        createdBy: { select: { name: true } },
-        project: { select: { id: true, title: true, slug: true, code: true } },
-      },
-      orderBy: { submittedAt: "desc" },
-      take: 3,
-    }),
-    // activity-timeline: recently completed stages (7d)
-    prisma.projectStageRecord.findMany({
-      where: {
-        status: "COMPLETED",
-        actualEndDate: { gte: new Date(now.getTime() - 7 * 86_400_000) },
-        ...(firmId ? { project: { firmId } } : {}),
-      },
-      select: {
-        id: true,
-        customName: true,
-        stage: true,
-        actualEndDate: true,
-        endDate: true,
-        project: { select: { id: true, title: true, code: true, slug: true } },
-      },
-      orderBy: { actualEndDate: "desc" },
-      take: 3,
-    }),
-    // activity-timeline: recent INCOME entries (7d)
-    canSeeFinanceForFetch
-      ? prisma.financeEntry.findMany({
-          where: {
-            type: "INCOME",
-            kind: "FACT",
-            isArchived: false,
-            occurredAt: { gte: new Date(now.getTime() - 7 * 86_400_000) },
-            ...FINANCE_SCOPE,
-          },
-          select: {
-            id: true,
-            amount: true,
-            occurredAt: true,
-            title: true,
-            project: { select: { id: true, title: true, code: true, slug: true } },
-          },
-          orderBy: { occurredAt: "desc" },
-          take: 3,
-        })
-      : Promise.resolve(
-          [] as Array<{
-            id: string;
-            amount: unknown;
-            occurredAt: Date;
-            title: string;
-            project: { id: string; title: string; code: string | null; slug: string } | null;
-          }>,
-        ),
-    // activity-timeline: recent change orders (7d) — wrap in catch for missing table
-    prisma.changeOrder
-      .findMany({
-        where: {
-          status: { in: ["PENDING_PM", "PENDING_ADMIN", "APPROVED"] },
-          updatedAt: { gte: new Date(now.getTime() - 7 * 86_400_000) },
-          ...(firmId ? { firmId } : {}),
-        },
-        select: {
-          id: true,
-          number: true,
-          title: true,
-          status: true,
-          updatedAt: true,
-          project: { select: { id: true, title: true, code: true, slug: true } },
-        },
-        orderBy: { updatedAt: "desc" },
-        take: 3,
-      })
-      .catch(
-        () =>
-          [] as Array<{
-            id: string;
-            number: string;
-            title: string;
-            status: string;
-            updatedAt: Date;
-            project: { id: string; title: string; code: string | null; slug: string };
-          }>,
-      ),
   ]);
 
   const revenue = Number(totalRevenuePaid._sum.amount || 0);
@@ -873,39 +724,6 @@ export default async function AdminV2Dashboard({
       count: durations.length,
     }),
   );
-
-  // ------ dashboard-v2.pen widget computations ------
-  // cashflow-chart: daily income/expense series over 30 days
-  const dv2Days = 30;
-  const dv2Start = new Date(now.getTime() - (dv2Days - 1) * 86_400_000);
-  dv2Start.setHours(0, 0, 0, 0);
-  const dv2Series = buildDailySeries(cashflow30dEntries, dv2Start, dv2Days);
-
-  // project-margin: per-project income/expense aggregation from same dataset
-  const projectMarginRows = computeProjectMarginRows(activeProjects, cashflow30dEntries);
-
-  // margin-kpi-tile: company-wide fact margin %
-  const dv2FactMarginPct =
-    income > 0 ? Math.round(((income - expense) / income) * 100) : 0;
-
-  // today-live + live-workers-tile: distinct workers + sites today
-  const dv2WorkersToday = new Set(todayForemanReports.map((r) => r.createdById)).size;
-  const dv2SitesToday = new Set(todayForemanReports.map((r) => r.projectId)).size;
-
-  // deadline-watchlist: top 6 projects scored by risk + deadline
-  const dv2Watchlist = computeDeadlineWatchlist(activeProjects);
-
-  // activity-timeline: multi-source merged feed
-  // overdueStages currently empty — page-level overdue is by Task, not Stage.
-  // Add a dedicated stage query later if this becomes important.
-  const dv2ActivityEvents = buildActivityTimelineEvents({
-    foremanReports: activityForemanReports,
-    completedStages: activityCompletedStages,
-    overdueStages: [],
-    incomeEntries: activityIncomeEntries,
-    changeOrders: activityChangeOrders,
-    now,
-  });
 
   // P2: Role-based visibility
   // Видимість блоків — за активною роллю (з урахуванням firm-context).
@@ -1151,39 +969,6 @@ export default async function AdminV2Dashboard({
                 "projects-risk": <ProjectsAtRisk projects={projectsAtRisk} />,
                 activity: <ActivityFeed events={feedEvents} />,
                 "ai-widget": <AiDashboardWidgetWrapper />,
-                // dashboard-v2.pen widgets
-                "cashflow-chart": showFinance ? (
-                  <CashflowChartWidget
-                    income={dv2Series.income}
-                    expense={dv2Series.expense}
-                    days={dv2Days}
-                  />
-                ) : null,
-                "project-margin": showFinance ? (
-                  <ProjectMarginWidget rows={projectMarginRows} />
-                ) : null,
-                "today-live": (
-                  <TodayLiveWidget
-                    workersToday={dv2WorkersToday}
-                    sitesToday={dv2SitesToday}
-                    activeStages={activeNowStages}
-                  />
-                ),
-                "activity-timeline": <ActivityTimelineWidget events={dv2ActivityEvents} />,
-                "margin-kpi-tile": showFinance ? (
-                  <MarginKpiTileWidget
-                    factMarginPct={dv2FactMarginPct}
-                    monthIncome={income}
-                    monthExpense={expense}
-                  />
-                ) : null,
-                "live-workers-tile": (
-                  <LiveWorkersTileWidget
-                    workersToday={dv2WorkersToday}
-                    sitesToday={dv2SitesToday}
-                  />
-                ),
-                "deadline-watchlist": <DeadlineWatchlistWidget projects={dv2Watchlist} />,
               }}
             />
           </DashboardShell>

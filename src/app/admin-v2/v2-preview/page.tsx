@@ -9,7 +9,6 @@ import {
   ExternalLink,
   FileText,
   FolderKanban,
-  LayoutDashboard,
   ListChecks,
   Mic,
   Sparkles,
@@ -34,13 +33,6 @@ export default async function V2PreviewHubPage() {
   });
 
   const generalRoutes = [
-    {
-      href: "/admin-v2/dashboard-v2",
-      icon: LayoutDashboard,
-      title: "Робочий стіл v2",
-      sub: "5 KPI · Watchlist топ-проєктів · Cross-project ризики · Швидкі дії",
-      tone: "primary" as const,
-    },
     {
       href: "/admin-v2/estimates-v2",
       icon: FileText,

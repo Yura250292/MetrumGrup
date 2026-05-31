@@ -23,14 +23,6 @@ export const WIDGET_TYPES = [
   "my-tasks",
   "meetings",
   "pivot-quick",
-  // dashboard-v2.pen widgets (added 2026-05-31)
-  "cashflow-chart",
-  "project-margin",
-  "today-live",
-  "activity-timeline",
-  "margin-kpi-tile",
-  "live-workers-tile",
-  "deadline-watchlist",
 ] as const;
 export type WidgetType = (typeof WIDGET_TYPES)[number];
 

@@ -18,9 +18,7 @@ export type ProjectWithAggregations = {
   totalBudget: number;
   totalPaid: number;
   address: string | null;
-  code: string | null;
   startDate: Date | null;
-  expectedEndDate: Date | null;
   updatedAt: Date;
   isTestProject: boolean;
   client: { name: string };
@@ -197,9 +195,7 @@ export async function listProjectsWithAggregations(
         totalBudget: Number(project.totalBudget),
         totalPaid: Number(project.totalPaid),
         address: project.address,
-        code: project.code,
         startDate: project.startDate,
-        expectedEndDate: project.expectedEndDate,
         updatedAt: project.updatedAt,
         isTestProject: project.isTestProject,
         client: {
