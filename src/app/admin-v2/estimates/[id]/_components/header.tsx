@@ -25,9 +25,12 @@ import type { EstimateController } from "../_lib/use-controller";
 export function EstimateHeader({
   controller,
   isFinancier,
+  hideBackLink = false,
 }: {
   controller: EstimateController;
   isFinancier: boolean;
+  /** Inline mode: parent (наприклад TabEstimates) показує власний back-link. */
+  hideBackLink?: boolean;
 }) {
   const e = controller.estimate!;
   const isApproved = e.status === "APPROVED";
@@ -47,13 +50,15 @@ export function EstimateHeader({
 
   return (
     <header className="flex flex-col gap-4">
-      <Link
-        href={backHref}
-        className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-[0.97]"
-        style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
-      >
-        <ArrowLeft size={14} /> {backLabel}
-      </Link>
+      {!hideBackLink && (
+        <Link
+          href={backHref}
+          className="inline-flex w-fit items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition hover:brightness-[0.97]"
+          style={{ backgroundColor: T.panelElevated, color: T.textSecondary }}
+        >
+          <ArrowLeft size={14} /> {backLabel}
+        </Link>
+      )}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex flex-col gap-2 min-w-0 flex-1">
