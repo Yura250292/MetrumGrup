@@ -37,6 +37,8 @@ export function ProjectsFilterBar({
   onStatusChange,
   typeFilter,
   onTypeChange,
+  managerFilter,
+  onManagerChange,
   sortMode,
   onSortChange,
 }: {
@@ -45,6 +47,8 @@ export function ProjectsFilterBar({
   onStatusChange: (s: StatusFilter) => void;
   typeFilter: string | null;
   onTypeChange: (t: string | null) => void;
+  managerFilter: string | null;
+  onManagerChange: (id: string | null) => void;
   sortMode: SortMode;
   onSortChange: (s: SortMode) => void;
 }) {
@@ -62,6 +66,17 @@ export function ProjectsFilterBar({
       if (p.extra.type) set.add(p.extra.type);
     }
     return Array.from(set).sort();
+  }, [projects]);
+
+  // Список менеджерів проєктів (унікально по id+name)
+  const managerOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const p of projects) {
+      if (p.manager) map.set(p.manager.id, p.manager.name);
+    }
+    return Array.from(map.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "uk"));
   }, [projects]);
 
   return (
@@ -127,6 +142,19 @@ export function ProjectsFilterBar({
         />
       )}
 
+      {/* PM filter */}
+      {managerOptions.length > 0 && (
+        <Select
+          label="ПМ"
+          value={managerFilter ?? ""}
+          onChange={(v) => onManagerChange(v || null)}
+          options={[
+            { value: "", label: "Усі ПМ" },
+            ...managerOptions.map((m) => ({ value: m.id, label: m.name })),
+          ]}
+        />
+      )}
+
       {/* Sort */}
       <Select
         label="Сорт."
@@ -181,11 +209,13 @@ export function applyProjectsFilterSort(
   projects: ProjectRow[],
   status: StatusFilter,
   type: string | null,
+  managerId: string | null,
   sort: SortMode,
 ): ProjectRow[] {
   let out = projects;
   if (status !== "ALL") out = out.filter((p) => p.status === status);
   if (type) out = out.filter((p) => p.extra.type === type);
+  if (managerId) out = out.filter((p) => p.manager?.id === managerId);
   out = [...out].sort((a, b) => {
     switch (sort) {
       case "deadline": {

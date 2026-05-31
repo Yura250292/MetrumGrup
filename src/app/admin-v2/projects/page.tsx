@@ -12,7 +12,7 @@ import { ProjectsView } from "./_components/projects-view";
 import { SectionTabs } from "../_components/section-tabs";
 import { PageIntroCard } from "../_components/help/PageIntroCard";
 import type { ProjectExtra, ProjectRow } from "./_components/projects-types";
-import { firmWhereForProject, isHomeFirmFor } from "@/lib/firm/scope";
+import { firmWhereForProject, isHomeFirmFor, KNOWN_FIRMS } from "@/lib/firm/scope";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { canViewFinance } from "@/lib/auth-utils";
 
@@ -159,8 +159,7 @@ export default async function AdminV2ProjectsPage({
   const activeCount = projects.filter((p) => p.status === "ACTIVE").length;
 
   // Ризики: просрочка (expectedEndDate < сьогодні і не COMPLETED/CANCELLED) +
-  // RFI на проєктах. Маржу не показуємо — даних для plannedCost vs actualCost
-  // у Project немає окремо.
+  // RFI на проєктах.
   const now = Date.now();
   const overdueCount = rows.filter((r) => {
     const due = r.extra.expectedEndDate;
@@ -172,6 +171,40 @@ export default async function AdminV2ProjectsPage({
   const burnPct = showFinance && totalBudget > 0
     ? Math.round((totalPaid / totalBudget) * 100)
     : 0;
+
+  // Планова маржа з APPROVED кошторисів — середнє по profitMarginOverall.
+  // Тільки для SUPER_ADMIN (фінансові дані). Якщо немає approved estimates —
+  // показуємо "—". Фактичну маржу не маємо (нема окремого totalActualCost
+  // на Project), тільки заплановану.
+  let plannedMarginPct: number | null = null;
+  if (showFinance && projects.length > 0) {
+    const approvedEstimates = await prisma.estimate.findMany({
+      where: {
+        projectId: { in: projects.map((p) => p.id) },
+        status: { in: ["APPROVED", "FINANCE_REVIEW"] },
+      },
+      select: { profitMarginOverall: true },
+    });
+    if (approvedEstimates.length > 0) {
+      const sum = approvedEstimates.reduce(
+        (acc, e) => acc + Number(e.profitMarginOverall),
+        0,
+      );
+      plannedMarginPct = Math.round(sum / approvedEstimates.length);
+    }
+  }
+
+  // Дельта для KPI "Активні проєкти": скільки нових ACTIVE з'явилось за останні
+  // 30 днів. Базується на Project.updatedAt (нема createdAt у aggregations).
+  // Це наближення — як проксі для активності. Якщо updatedAt = 0 (legacy),
+  // не рахується.
+  const thirtyDaysAgo = now - 30 * 86_400_000;
+  const recentActiveDelta = projects.filter(
+    (p) =>
+      p.status === "ACTIVE" && new Date(p.updatedAt).getTime() >= thirtyDaysAgo,
+  ).length;
+
+  const firmDisplayName = KNOWN_FIRMS[firmId ?? ""]?.name ?? null;
 
   const canSeeOverview =
     session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
@@ -187,10 +220,12 @@ export default async function AdminV2ProjectsPage({
       <KpiCards
         totalCount={projects.length}
         activeCount={activeCount}
+        recentActiveDelta={recentActiveDelta}
         showFinance={showFinance}
         totalBudget={totalBudget}
         totalPaid={totalPaid}
         burnPct={burnPct}
+        plannedMarginPct={plannedMarginPct}
         overdueCount={overdueCount}
         openRfiCount={totalOpenRfis}
       />
@@ -214,6 +249,7 @@ export default async function AdminV2ProjectsPage({
           isSuperAdmin={isSuperAdmin}
           showFinance={showFinance}
           currentUserId={session.user.id}
+          firmName={firmDisplayName}
         />
       )}
     </div>
@@ -230,19 +266,23 @@ export default async function AdminV2ProjectsPage({
 function KpiCards({
   totalCount,
   activeCount,
+  recentActiveDelta,
   showFinance,
   totalBudget,
   totalPaid,
   burnPct,
+  plannedMarginPct,
   overdueCount,
   openRfiCount,
 }: {
   totalCount: number;
   activeCount: number;
+  recentActiveDelta: number;
   showFinance: boolean;
   totalBudget: number;
   totalPaid: number;
   burnPct: number;
+  plannedMarginPct: number | null;
   overdueCount: number;
   openRfiCount: number;
 }) {
@@ -250,8 +290,13 @@ function KpiCards({
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       <KpiCard
         label="Активні проєкти"
-        value={String(activeCount)}
-        secondary={`з ${totalCount}`}
+        value={`${activeCount}/${totalCount}`}
+        secondary="в активній фазі"
+        delta={
+          recentActiveDelta > 0
+            ? { value: `+${recentActiveDelta}`, positive: true }
+            : null
+        }
         accent={T.emerald}
         bg={T.emeraldSoft}
       />
@@ -265,9 +310,9 @@ function KpiCards({
         />
       ) : (
         <KpiCard
-          label="Завершені"
-          value={String(0)}
-          secondary="з усіх проєктів"
+          label="У портфелі"
+          value={String(totalCount)}
+          secondary="загалом проєктів"
           accent={T.accentPrimary}
           bg={T.accentPrimarySoft}
         />
@@ -279,6 +324,35 @@ function KpiCards({
           secondary={burnPct > 80 ? "перевитрата ризик" : burnPct > 60 ? "помірно" : "у нормі"}
           accent={burnPct > 80 ? T.danger : burnPct > 60 ? T.warning : T.success}
           bg={burnPct > 80 ? T.dangerSoft : burnPct > 60 ? T.warningSoft : T.successSoft}
+        />
+      )}
+      {showFinance && (
+        <KpiCard
+          label="Маржа (план)"
+          value={plannedMarginPct !== null ? `${plannedMarginPct}%` : "—"}
+          secondary={
+            plannedMarginPct === null
+              ? "немає approved кошторисів"
+              : "з затверджених кошторисів"
+          }
+          accent={
+            plannedMarginPct === null
+              ? T.textMuted
+              : plannedMarginPct >= 20
+                ? T.success
+                : plannedMarginPct >= 10
+                  ? T.warning
+                  : T.danger
+          }
+          bg={
+            plannedMarginPct === null
+              ? T.panelSoft
+              : plannedMarginPct >= 20
+                ? T.successSoft
+                : plannedMarginPct >= 10
+                  ? T.warningSoft
+                  : T.dangerSoft
+          }
         />
       )}
       <KpiCard
@@ -303,12 +377,14 @@ function KpiCard({
   label,
   value,
   secondary,
+  delta,
   accent,
   bg,
 }: {
   label: string;
   value: string;
   secondary: string;
+  delta?: { value: string; positive: boolean } | null;
   accent: string;
   bg: string;
 }) {
@@ -320,11 +396,25 @@ function KpiCard({
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      <div
-        className="text-[10px] font-bold uppercase tracking-wider mb-1.5"
-        style={{ color: T.textMuted }}
-      >
-        {label}
+      <div className="flex items-start justify-between mb-1.5">
+        <div
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: T.textMuted }}
+        >
+          {label}
+        </div>
+        {delta && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            style={{
+              backgroundColor: delta.positive ? T.successSoft : T.dangerSoft,
+              color: delta.positive ? T.success : T.danger,
+            }}
+            title={delta.positive ? "Зростання за 30 днів" : "Падіння за 30 днів"}
+          >
+            {delta.positive ? "▲" : "▼"} {delta.value}
+          </span>
+        )}
       </div>
       <div
         className="text-[24px] font-extrabold tabular-nums leading-none mb-1"

@@ -43,6 +43,7 @@ export function ProjectsView({
   isSuperAdmin,
   showFinance = false,
   currentUserId,
+  firmName,
 }: {
   projects: ProjectRow[];
   canDelete: boolean;
@@ -54,6 +55,8 @@ export function ProjectsView({
   isSuperAdmin?: boolean;
   showFinance?: boolean;
   currentUserId: string;
+  /** Назва поточної фірми ("Metrum Group" / "Metrum Studio") для chip-у. */
+  firmName: string | null;
 }) {
   const isDesktop = useIsDesktop();
   const initial: Mode = isDesktop ? "table" : "cards";
@@ -64,8 +67,15 @@ export function ProjectsView({
   // як "navigation event" а скоріше як local view-state.
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
+  const [managerFilter, setManagerFilter] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("updated");
-  const filtered = applyProjectsFilterSort(projects, statusFilter, typeFilter, sortMode);
+  const filtered = applyProjectsFilterSort(
+    projects,
+    statusFilter,
+    typeFilter,
+    managerFilter,
+    sortMode,
+  );
 
   // Folder mutations (раніше жили у ProjectFoldersClient — переїхали сюди
   // щоб папки + проєкти жили в єдиному гріді).
@@ -138,6 +148,24 @@ export function ProjectsView({
 
       <PageToolbar
         title="Проєкти"
+        titleBadge={
+          firmName ? (
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold"
+              style={{
+                backgroundColor: T.accentPrimarySoft,
+                color: T.accentPrimary,
+              }}
+              title={`Поточна фірма: ${firmName}`}
+            >
+              <span
+                className="h-1.5 w-1.5 rounded-full"
+                style={{ backgroundColor: T.accentPrimary }}
+              />
+              {firmName}
+            </span>
+          ) : null
+        }
         subtitle={`Управління будівельними проектами · ${totalCount} ${
           totalCount === 1 ? "проєкт" : "проєктів"
         } · ${activeCount} в роботі${
@@ -192,6 +220,8 @@ export function ProjectsView({
           onStatusChange={setStatusFilter}
           typeFilter={typeFilter}
           onTypeChange={setTypeFilter}
+          managerFilter={managerFilter}
+          onManagerChange={setManagerFilter}
           sortMode={sortMode}
           onSortChange={setSortMode}
         />
