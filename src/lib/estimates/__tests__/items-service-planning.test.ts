@@ -62,12 +62,28 @@ beforeEach(() => {
   if (!(prisma as any).estimateItem) (prisma as any).estimateItem = {};
   if (!(prisma as any).estimateCriticalChange)
     (prisma as any).estimateCriticalChange = {};
+  if (!(prisma as any).estimateVersion) (prisma as any).estimateVersion = {};
 
   estimateItemFindUnique = setStub((prisma as any).estimateItem, "findUnique");
   estimateItemUpdate = setStub((prisma as any).estimateItem, "update");
   estimateItemUpdate.mockResolvedValue(updatedRow as never);
   criticalChangeCreate = setStub((prisma as any).estimateCriticalChange, "create");
   criticalChangeCreate.mockResolvedValue({} as never);
+
+  // Belt-and-suspenders: jest.mock factory для ../version-lock + ../recompute
+  // не завжди honor-иться на CI (next/jest hoisting іноді не догрібає).
+  // Стабаємо реальні prisma-виклики що вони роблять, щоб тести проходили
+  // навіть якщо моки розвалились.
+  setStub((prisma as any).estimateVersion, "findFirst").mockResolvedValue(
+    null as never,
+  );
+  if (!(prisma as any).estimate) (prisma as any).estimate = {};
+  setStub((prisma as any).estimate, "findUnique").mockResolvedValue({
+    id: "est-1",
+    sections: [],
+    items: [],
+  } as never);
+  setStub((prisma as any).estimate, "update").mockResolvedValue({} as never);
 
   // updateMany / deleteMany used in itemType-change cleanup path — stub to no-op.
   setStub((prisma as any).estimateItem, "updateMany").mockResolvedValue({
