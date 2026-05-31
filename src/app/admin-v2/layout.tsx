@@ -69,7 +69,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
                   <div className="flex flex-col min-h-screen sidebar-push">
                     <Header />
                     <TabsBar />
-                    <main className="flex-1 px-4 py-4 sm:px-6 sm:py-6 md:px-8 md:py-8 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+                    <main className="flex-1 px-4 py-2 sm:px-6 sm:py-3 md:px-6 md:py-3 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-4">
                       <TabsViewport>{children}</TabsViewport>
                     </main>
                   </div>

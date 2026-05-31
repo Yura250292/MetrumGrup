@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   LayoutGrid,
   Table as TableIcon,
-  Plus,
   FolderPlus,
   Upload,
   Download,
@@ -189,11 +188,9 @@ export function ProjectsView({
         } · ${activeCount} в роботі${
           folders.length > 0 ? ` · ${folders.length} папок` : ""
         }`}
-        primaryAction={{
-          label: "Новий проєкт",
-          href: "/admin-v2/projects/new",
-          icon: <Plus size={16} />,
-        }}
+        // primaryAction дублювався з кнопкою "+ Новий проєкт" у admin Header,
+        // користувач попросив прибрати. Створення проєкту тепер тільки через
+        // header (доступно з усіх admin-v2 сторінок) або через "Папка" → "Новий".
         viewMode={
           <ViewModeSwitcher<Mode>
             value={mode}
