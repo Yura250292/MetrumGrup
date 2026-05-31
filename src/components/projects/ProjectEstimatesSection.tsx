@@ -103,7 +103,7 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
               className="flex items-center gap-3 rounded-lg border admin-dark:border-white/5 admin-dark:bg-gray-900/40 admin-dark:hover:bg-gray-900/60 admin-light:border-gray-100 admin-light:bg-white admin-light:hover:bg-gray-50 p-3 transition-colors"
             >
               <Link
-                href={`/admin/estimates/${est.id}`}
+                href={`/admin-v2/estimates/${est.id}?fromProjectId=${projectId}`}
                 className="flex items-center gap-3 flex-1 min-w-0"
               >
                 <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-white flex-shrink-0">
