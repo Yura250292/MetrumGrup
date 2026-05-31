@@ -214,7 +214,7 @@ export default async function AdminV2ProjectsPage({
   ];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
       <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
       <KpiCards
@@ -287,7 +287,7 @@ function KpiCards({
   openRfiCount: number;
 }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
       <KpiCard
         label="Активні проєкти"
         value={`${activeCount}/${totalCount}`}
@@ -390,41 +390,44 @@ function KpiCard({
 }) {
   return (
     <div
-      className="rounded-xl p-3.5 transition hover:shadow-sm"
+      className="rounded-lg p-2.5 transition hover:shadow-sm"
       style={{
         backgroundColor: bg,
         border: `1px solid ${T.borderSoft}`,
       }}
     >
-      <div className="flex items-start justify-between mb-1.5">
+      <div className="flex items-start justify-between mb-1 gap-1">
         <div
-          className="text-[10px] font-bold uppercase tracking-wider"
+          className="text-[9px] font-bold uppercase tracking-wider leading-tight truncate"
           style={{ color: T.textMuted }}
+          title={label}
         >
           {label}
         </div>
         {delta && (
           <span
-            className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            className="inline-flex items-center gap-0.5 rounded px-1 text-[9px] font-bold tabular-nums flex-shrink-0"
             style={{
               backgroundColor: delta.positive ? T.successSoft : T.dangerSoft,
               color: delta.positive ? T.success : T.danger,
             }}
             title={delta.positive ? "Зростання за 30 днів" : "Падіння за 30 днів"}
           >
-            {delta.positive ? "▲" : "▼"} {delta.value}
+            {delta.positive ? "▲" : "▼"}
+            {delta.value}
           </span>
         )}
       </div>
       <div
-        className="text-[24px] font-extrabold tabular-nums leading-none mb-1"
+        className="text-[20px] font-extrabold tabular-nums leading-none mb-0.5"
         style={{ color: accent }}
       >
         {value}
       </div>
       <div
-        className="text-[11px] font-medium"
+        className="text-[10px] font-medium truncate"
         style={{ color: T.textSecondary }}
+        title={secondary}
       >
         {secondary}
       </div>

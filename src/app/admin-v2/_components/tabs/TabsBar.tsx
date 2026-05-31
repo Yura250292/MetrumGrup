@@ -91,8 +91,12 @@ export function TabsBar() {
     <div
       role="tablist"
       aria-label="Вкладки"
-      className="hidden md:flex items-stretch w-full select-none"
+      className="hidden md:flex items-stretch w-full select-none sticky z-20"
       style={{
+        // Stick під Header (h-12 md:h-16 → 48/64px). Використовуємо
+        // var для adapt-у до висоти header-а на mobile, але хедер
+        // сам прихований на mobile→sm, тож top:0 на mobile ок.
+        top: "var(--admin-header-h, 64px)",
         height: BAR_HEIGHT,
         backgroundColor: T.background,
         borderBottom: `1px solid ${T.borderSoft}`,
