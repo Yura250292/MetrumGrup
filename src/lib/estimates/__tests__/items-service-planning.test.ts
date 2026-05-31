@@ -1,15 +1,12 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 
 jest.mock("@/lib/prisma");
+// SWC/next-jest на CI спотикається на class definitions усередині factory.
+// EstimateVersionLockedError не використовується у тестах update flow —
+// тримаємо мок мінімальним щоб уникнути hoisting-issues.
 jest.mock("../version-lock", () => ({
   assertEstimateEditable: jest.fn(async () => undefined),
-  EstimateVersionLockedError: class extends Error {
-    versionId: string;
-    constructor(versionId: string) {
-      super("locked");
-      this.versionId = versionId;
-    }
-  },
+  EstimateVersionLockedError: Error,
 }));
 jest.mock("../recompute", () => ({
   recomputeEstimateTotals: jest.fn(async () => undefined),
