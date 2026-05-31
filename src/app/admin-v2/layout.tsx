@@ -24,6 +24,7 @@ import { DrillDownDrawerProvider } from "@/components/drawer/DrillDownDrawerProv
 import { DrillDownDrawer } from "@/components/drawer/DrillDownDrawer";
 import { HelpProvider } from "@/contexts/HelpContext";
 import { HelpDrawer } from "./_components/help/HelpDrawer";
+import { ToastProvider } from "@/components/shared/ToastProvider";
 // StagingBanner вже рендериться у root app/layout.tsx через
 // @/components/shared/StagingBanner — другий екземпляр тут спричиняв
 // подвоєння жовтих стрічок на metrum-grup.xyz.
@@ -52,6 +53,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
 
   return (
     <ThemeShell>
+      <ToastProvider>
       <MotionProvider>
       <DrillDownDrawerProvider>
       <AiPanelProvider>
@@ -86,6 +88,7 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
       </AiPanelProvider>
       </DrillDownDrawerProvider>
       </MotionProvider>
+      </ToastProvider>
     </ThemeShell>
   );
 }
