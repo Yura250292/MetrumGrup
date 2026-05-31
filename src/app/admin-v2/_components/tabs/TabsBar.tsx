@@ -7,7 +7,7 @@ import { useTabs } from "./TabsProvider";
 import { iconFromKey } from "../../_lib/tabs/icon-map";
 import type { Tab } from "../../_lib/tabs/types";
 
-const BAR_HEIGHT = 42;
+const BAR_HEIGHT = 48;
 
 export function TabsBar() {
   const tabs = useTabs();
@@ -109,6 +109,12 @@ export function TabsBar() {
         {state.tabs.map((tab) => {
           const Icon = iconFromKey(tab.iconKey);
           const isActive = tab.id === state.activeTabId;
+          // Fallback: якщо title порожній (corrupted state) — беремо
+          // останній сегмент path як видимий title. Точно показуємо щось.
+          const displayTitle =
+            (tab.title && tab.title.trim()) ||
+            tab.path.replace(/^\/admin-v2\/?/, "").split("/")[0] ||
+            "Дашборд";
           return (
             <div
               key={tab.id}
@@ -121,26 +127,26 @@ export function TabsBar() {
                 e.preventDefault();
                 setMenu({ tabId: tab.id, x: e.clientX, y: e.clientY });
               }}
-              title={tab.path}
-              className="group relative flex items-center gap-2 px-3.5 cursor-pointer min-w-[180px] max-w-[260px] transition-colors"
+              title={`${displayTitle} — ${tab.path}`}
+              className="group relative flex items-center gap-2.5 px-4 cursor-pointer min-w-[220px] max-w-[300px] transition-colors"
               style={{
                 color: isActive ? T.textPrimary : T.textSecondary,
                 backgroundColor: isActive ? T.panel : "transparent",
                 borderRight: `1px solid ${T.borderSoft}`,
                 borderTop: isActive
-                  ? `2px solid ${T.accentPrimary}`
-                  : `2px solid transparent`,
-                fontWeight: isActive ? 700 : 500,
+                  ? `3px solid ${T.accentPrimary}`
+                  : `3px solid transparent`,
+                fontWeight: isActive ? 700 : 600,
               }}
             >
               <Icon
-                size={15}
+                size={16}
                 style={{
-                  color: isActive ? T.accentPrimary : T.textSecondary,
+                  color: isActive ? T.accentPrimary : T.textPrimary,
                   flexShrink: 0,
                 }}
               />
-              <span className="flex-1 text-[13px] truncate">{tab.title}</span>
+              <span className="flex-1 text-[14px] truncate">{displayTitle}</span>
               <button
                 type="button"
                 aria-label="Закрити вкладку"
