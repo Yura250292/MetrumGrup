@@ -24,7 +24,9 @@ import { DrillDownDrawerProvider } from "@/components/drawer/DrillDownDrawerProv
 import { DrillDownDrawer } from "@/components/drawer/DrillDownDrawer";
 import { HelpProvider } from "@/contexts/HelpContext";
 import { HelpDrawer } from "./_components/help/HelpDrawer";
-import { StagingBanner } from "@/components/admin-v2/staging-banner";
+// StagingBanner вже рендериться у root app/layout.tsx через
+// @/components/shared/StagingBanner — другий екземпляр тут спричиняв
+// подвоєння жовтих стрічок на metrum-grup.xyz.
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import "./admin-v2-dark.css";
 import "@/styles/premium.css";
@@ -58,7 +60,6 @@ export default async function AdminV2Layout({ children }: { children: React.Reac
           <MeetingRecordingProvider>
             <SqueezeWrapper>
               <div className="min-h-screen transition-colors duration-300" style={{ backgroundColor: T.background, color: T.textPrimary }}>
-                <StagingBanner />
                 <Sidebar activeFirmId={activeFirmId} />
                 <MobileShell activeFirmId={activeFirmId} />
                 <TabsProvider userId={session.user.id ?? "anon"} firmScope={activeFirmId ?? "all"}>
