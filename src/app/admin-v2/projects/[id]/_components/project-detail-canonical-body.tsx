@@ -75,7 +75,7 @@ export async function ProjectDetailCanonicalBody({
 
   const showFinance = canViewFinance(session.user.role);
   const tasksEnabled = await isTasksEnabledForProject(project.id);
-  const [members, canManageMembers, recentFiles] = await Promise.all([
+  const [members, canManageMembers, recentFiles, recentPhotoImages] = await Promise.all([
     listActiveMembers(project.id),
     canManageProjectMembers(project.id, session.user.id),
     prisma.projectFile.findMany({
@@ -89,6 +89,21 @@ export async function ProjectDetailCanonicalBody({
         mimeType: true,
         url: true,
         createdAt: true,
+      },
+    }),
+    // Останні 6 фото-зображень. Підтягуємо одне зображення на звіт,
+    // через flat-mapping (без groupBy — щоб бачити lasts-N серед усіх).
+    prisma.photoReportImage.findMany({
+      where: { photoReport: { projectId: project.id } },
+      orderBy: { createdAt: "desc" },
+      take: 6,
+      select: {
+        id: true,
+        url: true,
+        thumbnailUrl: true,
+        caption: true,
+        createdAt: true,
+        photoReportId: true,
       },
     }),
   ]);
@@ -183,6 +198,17 @@ export async function ProjectDetailCanonicalBody({
               mimeType: f.mimeType,
               url: f.url,
               createdAt: f.createdAt.toISOString(),
+            }))}
+          />
+          <PhotosCard
+            projectId={project.id}
+            totalCount={project._count.photoReports}
+            recentImages={recentPhotoImages.map((img) => ({
+              id: img.id,
+              url: img.url,
+              thumbnailUrl: img.thumbnailUrl,
+              caption: img.caption,
+              photoReportId: img.photoReportId,
             }))}
           />
         </div>
@@ -1109,6 +1135,104 @@ function formatBytes(b: number): string {
   if (b < 1024) return `${b} Б`;
   if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} КБ`;
   return `${(b / 1024 / 1024).toFixed(1)} МБ`;
+}
+
+type RecentPhotoImage = {
+  id: string;
+  url: string;
+  thumbnailUrl: string | null;
+  caption: string | null;
+  photoReportId: string;
+};
+
+function PhotosCard({
+  projectId,
+  totalCount,
+  recentImages,
+}: {
+  projectId: string;
+  totalCount: number;
+  recentImages: RecentPhotoImage[];
+}) {
+  return (
+    <section
+      className="rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <header className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          {/* Briefcase reused — uniform іконка для card-headers. */}
+          <Briefcase size={16} style={{ color: T.violet }} />
+          <h3 className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
+            Фото
+          </h3>
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
+          >
+            {totalCount} {totalCount === 1 ? "звіт" : "звітів"}
+          </span>
+        </div>
+        <Link
+          href={`/admin-v2/projects/${projectId}/photos/new`}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition hover:brightness-95"
+          style={{
+            backgroundColor: T.violetSoft,
+            color: T.violet,
+            border: `1px solid ${T.violet}33`,
+          }}
+          title="Завантажити новий фото-звіт"
+        >
+          <Plus size={11} />
+          Звіт
+        </Link>
+      </header>
+      <div className="px-4 pb-4">
+        {recentImages.length === 0 ? (
+          <Link
+            href={`/admin-v2/projects/${projectId}/photos/new`}
+            className="block rounded-xl px-3 py-6 text-[12px] text-center transition hover:brightness-95"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px dashed ${T.borderStrong}`,
+              color: T.textMuted,
+            }}
+          >
+            Завантаж перший фото-звіт
+          </Link>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {recentImages.map((img) => (
+              <Link
+                key={img.id}
+                href={`/admin-v2/projects/${projectId}?tab=media&sub=photos`}
+                className="relative aspect-square overflow-hidden rounded-md transition hover:brightness-95"
+                style={{ backgroundColor: T.panelSoft }}
+                title={img.caption ?? ""}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={img.thumbnailUrl ?? img.url}
+                  alt={img.caption ?? ""}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              </Link>
+            ))}
+          </div>
+        )}
+        {recentImages.length > 0 && (
+          <Link
+            href={`/admin-v2/projects/${projectId}?tab=media&sub=photos`}
+            className="mt-2 block text-[11px] text-center font-semibold transition hover:brightness-110"
+            style={{ color: T.accentPrimary }}
+          >
+            Усі фото →
+          </Link>
+        )}
+      </div>
+    </section>
+  );
 }
 
 function formatRelativeShort(iso: string): string {
