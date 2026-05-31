@@ -40,6 +40,7 @@ export async function PUT(
       projectId: true,
       createdById: true,
       baselineFrozenAt: true,
+      sourceEstimateItemId: true,
     },
   });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -109,5 +110,35 @@ export async function PUT(
       baselineFrozenAt: true,
     },
   });
+
+  // Bi-directional sync: якщо таск згенерований з рядка кошторису і ми
+  // змінили planned* дати — оновити EstimateItem.plannedStart / plannedDurationDays
+  // щоб наступний sync не перетер ці зміни назад. Виконуємо best-effort:
+  // помилка тут не валідує сам PUT (Gantt уже зрендерив нову позицію бару).
+  if (existing.sourceEstimateItemId && touchingPlanned) {
+    try {
+      const effStart = data.plannedStartAt ?? updated.plannedStartAt ?? null;
+      const effEnd = data.plannedEndAt ?? updated.plannedEndAt ?? null;
+      const durationDays =
+        effStart && effEnd
+          ? Math.max(0, Math.round((effEnd.getTime() - effStart.getTime()) / 86400000))
+          : null;
+      await prisma.estimateItem.update({
+        where: { id: existing.sourceEstimateItemId },
+        data: {
+          plannedStart: effStart,
+          plannedEnd: effEnd,
+          plannedDurationDays: durationDays,
+        },
+      });
+    } catch (err) {
+      console.warn(
+        "[tasks/dates] bi-directional sync to estimate failed",
+        { taskId, sourceItemId: existing.sourceEstimateItemId },
+        err,
+      );
+    }
+  }
+
   return NextResponse.json({ data: updated });
 }

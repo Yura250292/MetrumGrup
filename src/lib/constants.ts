@@ -73,6 +73,7 @@ export const PAYMENT_STATUS_COLORS: Record<PaymentStatus, string> = {
 export const ESTIMATE_STATUS_LABELS: Record<EstimateStatus, string> = {
   DRAFT: "Чернетка",
   SENT: "Надіслано",
+  CLIENT_REVIEW: "На розгляді клієнта",
   APPROVED: "Затверджено",
   REJECTED: "Відхилено",
   REVISION: "На доопрацюванні",

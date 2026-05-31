@@ -58,6 +58,11 @@ export async function GET(
       bidIntelligence: true,
       project: { select: { title: true, client: { select: { name: true } } } },
       createdBy: { select: { name: true } },
+      versions: {
+        where: { isActive: true },
+        select: { id: true, isLocked: true, versionType: true, versionNumber: true },
+        take: 1,
+      },
       sections: {
         orderBy: { sortOrder: "asc" },
         include: {
@@ -66,6 +71,7 @@ export async function GET(
             include: {
               material: { select: { name: true, sku: true } },
               costCode: { select: { id: true, code: true, name: true } },
+              foreman: { select: { id: true, name: true } },
             },
           },
         },
@@ -77,7 +83,12 @@ export async function GET(
     return NextResponse.json({ error: "Не знайдено" }, { status: 404 });
   }
 
-  return NextResponse.json({ data: estimate });
+  // Computed isLocked зчитуємо з активної версії. Якщо версій немає (legacy) —
+  // вважаємо незамороженим.
+  const activeVersion = estimate.versions?.[0];
+  return NextResponse.json({
+    data: { ...estimate, isLocked: activeVersion?.isLocked ?? false },
+  });
 }
 
 export async function PATCH(

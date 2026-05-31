@@ -242,16 +242,92 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
         }
       }
 
+      // ─── Розрахунок totalCalculated ─────────────────────────────────
+      // = SUM(ForemanReportProgress.quantityActual × EstimateItem.unitCost)
+      //   + SUM(ESTIMATE-рядків item.quantity × EstimateItem.unitCost)
+      //   + LINKED EXTRA-рядки (pmDecision=LINKED) — теж створюємо progress
+      //
+      // Сума виплат майстрам за період. Не дублює FinanceEntry — це окрема
+      // метрика для виконроба ("скільки фірма має мені віддати").
+      const progressRows = await tx.foremanReportProgress.findMany({
+        where: { reportId: report.id },
+        select: {
+          quantityActual: true,
+          estimateItem: { select: { unitCost: true, unitPrice: true } },
+        },
+      });
+      let total = 0;
+      for (const p of progressRows) {
+        const cost = Number(p.estimateItem?.unitCost ?? p.estimateItem?.unitPrice ?? 0);
+        total += Number(p.quantityActual) * cost;
+      }
+
+      // Розрахунок amountCalculated для items + LINKED → ForemanReportProgress.
+      const itemsForReport = await tx.foremanReportItem.findMany({
+        where: { reportId: report.id },
+        select: {
+          id: true,
+          itemType: true,
+          estimateItemId: true,
+          linkedEstimateItemId: true,
+          pmDecision: true,
+          quantity: true,
+          unitPrice: true,
+        },
+      });
+      for (const item of itemsForReport) {
+        const targetItemId =
+          item.itemType === "ESTIMATE"
+            ? item.estimateItemId
+            : item.pmDecision === "LINKED"
+              ? item.linkedEstimateItemId
+              : null;
+        if (!targetItemId || item.quantity == null) continue;
+        const estimateItem = await tx.estimateItem.findUnique({
+          where: { id: targetItemId },
+          select: { unitCost: true, unitPrice: true },
+        });
+        const cost = Number(estimateItem?.unitCost ?? estimateItem?.unitPrice ?? 0);
+        const qty = Number(item.quantity);
+        const amount = qty * cost;
+        await tx.foremanReportItem.update({
+          where: { id: item.id },
+          data: { amountCalculated: amount },
+        });
+        // LINKED EXTRA → створити ForemanReportProgress (якщо ще нема).
+        if (item.itemType === "EXTRA" && item.pmDecision === "LINKED") {
+          const existingProgress = await tx.foremanReportProgress.findFirst({
+            where: { reportId: report.id, estimateItemId: targetItemId },
+            select: { id: true },
+          });
+          if (!existingProgress) {
+            await tx.foremanReportProgress.create({
+              data: {
+                reportId: report.id,
+                estimateItemId: targetItemId,
+                quantityActual: qty,
+              },
+            });
+            total += amount;
+          }
+        }
+      }
+
       await tx.foremanReport.update({
         where: { id: report.id },
         data: {
           status: "APPROVED",
           reviewedAt: new Date(),
           reviewedById: reviewerId,
+          totalCalculated: total,
+          // periodEnd дозамити якщо foreman лишив порожнім (рідкий легасі-кейс).
+          ...(report.periodEnd == null
+            ? { periodEnd: new Date() }
+            : {}),
         },
       });
 
-      return { financeEntryIds };
+      return { financeEntryIds, totalCalculated: total };
     });
 
     return NextResponse.json({ ok: true, financeEntryIds: result.financeEntryIds });

@@ -23,6 +23,15 @@ export type EstimateItem = {
   unit: string;
   quantity: number;
   unitPrice: number;
+  /** Собівартість для фірми (план). */
+  unitCost: number | null;
+  /** Ціна для замовника (план). */
+  unitPriceCustomer: number | null;
+  /** Виконроб (FK → User) для звітування. */
+  foremanId: string | null;
+  foreman: { id: string; name: string | null } | null;
+  /** Виконавець (free-form). */
+  executorText: string | null;
   laborRate: number;
   laborHours: number;
   amount: number;
@@ -32,6 +41,13 @@ export type EstimateItem = {
   costCodeId: string | null;
   costType: EstimateItemCostType | null;
   costCode: EstimateItemCostCode | null;
+  /// Planning fields (Estimate → Task sync). ISO-рядок з GET.
+  plannedStart?: string | null;
+  plannedDurationDays?: number | null;
+  plannedEnd?: string | null;
+  predecessorItemId?: string | null;
+  dependencyType?: "FS" | "SS" | "FF" | "SF" | null;
+  dependencyLagDays?: number;
 };
 
 export type EstimateSection = {
@@ -46,6 +62,8 @@ export type Estimate = {
   title: string;
   description: string | null;
   status: string;
+  /** Чи активна версія заморожена (isLocked на EstimateVersion). */
+  isLocked?: boolean;
   totalMaterials: number;
   totalLabor: number;
   totalOverhead: number;
@@ -93,7 +111,9 @@ export function useEstimateController(estimateId: string) {
   const [updating, setUpdating] = useState(false);
   const [exporting, setExporting] = useState<"pdf" | "excel" | null>(null);
   const [sendingToClient, setSendingToClient] = useState(false);
-  const [activeTab, setActiveTab] = useState<"details" | "history" | "discussion">("details");
+  const [activeTab, setActiveTab] = useState<
+    "details" | "history" | "discussion" | "negotiation"
+  >("details");
 
   // Approvals (lazy)
   const [approvals, setApprovals] = useState<any[]>([]);

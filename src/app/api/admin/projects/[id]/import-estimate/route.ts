@@ -7,6 +7,7 @@ import {
   syncEstimateToStages,
   syncProjectEstimatesToStages,
 } from "@/lib/projects/sync-estimate-to-stages";
+import { syncEstimateItemsToTasks } from "@/lib/projects/sync-estimate-to-tasks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -115,7 +116,8 @@ export async function POST(
         return NextResponse.json({ error: "Кошторис не знайдено" }, { status: 404 });
       }
       const result = await syncEstimateToStages(estimateId, session.user.id);
-      return NextResponse.json({ data: result });
+      const tasks = await syncEstimateItemsToTasks(estimateId, session.user.id);
+      return NextResponse.json({ data: { ...result, tasks } });
     }
 
     const bulk = await syncProjectEstimatesToStages(projectId, session.user.id);

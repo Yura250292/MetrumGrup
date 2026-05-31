@@ -5,7 +5,12 @@ import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { ComboboxOption } from "@/components/ui/combobox";
 import { useAddEstimateItem } from "@/hooks/useEstimateItems";
-import { EditableItemRow, type EditableItem } from "./EditableItemRow";
+import {
+  EditableItemRow,
+  type EditableItem,
+  type ForemanOption,
+  type PredecessorOption,
+} from "./EditableItemRow";
 
 export function EditableSectionTable({
   estimateId,
@@ -13,6 +18,9 @@ export function EditableSectionTable({
   sectionTitle,
   items,
   costCodeOptions,
+  foremanOptions = [],
+  predecessorOptions = [],
+  locked = false,
   onChanged,
 }: {
   estimateId: string;
@@ -25,6 +33,12 @@ export function EditableSectionTable({
    * when rendering many tables on one screen to avoid N parallel fetches.
    */
   costCodeOptions?: ComboboxOption[];
+  /** Список потенційних виконробів (MANAGER + FOREMAN). */
+  foremanOptions?: ForemanOption[];
+  /** Інші позиції у всьому кошторисі (для select-предка в розгорнутій формі). */
+  predecessorOptions?: PredecessorOption[];
+  /** Версія кошторису заморожена — UI блокує редагування. */
+  locked?: boolean;
   onChanged?: () => void;
 }) {
   const addItem = useAddEstimateItem(estimateId);
@@ -83,7 +97,9 @@ export function EditableSectionTable({
             <th className="px-2 py-1.5 text-left w-44">Стаття</th>
             <th className="px-2 py-1.5 text-center w-16">Од.</th>
             <th className="px-2 py-1.5 text-right w-24">К-сть</th>
-            <th className="px-2 py-1.5 text-right w-28">Ціна</th>
+            <th className="px-2 py-1.5 text-right w-28" title="Собівартість">Cost</th>
+            <th className="px-2 py-1.5 text-right w-28" title="Ціна для замовника">Замовнику</th>
+            <th className="px-2 py-1.5 text-right w-16">Маржа</th>
             <th className="px-2 py-1.5 text-right w-32">Сума</th>
             <th className="w-10"></th>
           </tr>
@@ -95,13 +111,16 @@ export function EditableSectionTable({
               item={item}
               estimateId={estimateId}
               costCodeOptions={options}
+              foremanOptions={foremanOptions}
+              predecessorOptions={predecessorOptions}
+              locked={locked}
               onChanged={onChanged}
             />
           ))}
           {items.length === 0 && (
             <tr>
               <td
-                colSpan={7}
+                colSpan={9}
                 className="px-4 py-4 text-center text-xs admin-dark:text-gray-500 admin-light:text-gray-500"
               >
                 Немає позицій
@@ -115,7 +134,8 @@ export function EditableSectionTable({
           size="sm"
           variant="outline"
           onClick={handleAdd}
-          disabled={addItem.isPending}
+          disabled={locked || addItem.isPending}
+          title={locked ? "Версія кошторису заморожена" : ""}
         >
           <Plus className="h-4 w-4" />
           Додати позицію

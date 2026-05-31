@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Providers } from "@/components/shared/Providers";
+import { StagingBanner } from "@/components/shared/StagingBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -46,6 +47,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <StagingBanner />
         <Providers>{children}</Providers>
       </body>
     </html>

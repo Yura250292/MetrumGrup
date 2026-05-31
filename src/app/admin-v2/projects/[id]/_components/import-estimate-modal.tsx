@@ -46,6 +46,16 @@ export function ImportEstimateModal({
     sectionsUpdated: number;
     itemsCreated: number;
     itemsUpdated: number;
+    tasks: {
+      enabled: boolean;
+      tasksCreated: number;
+      tasksUpdated: number;
+      tasksArchived: number;
+      dependenciesCreated: number;
+      dependenciesUpdated: number;
+      dependenciesRemoved: number;
+      warnings: number;
+    } | null;
   } | null>(null);
 
   useEffect(() => {
@@ -97,6 +107,16 @@ export function ImportEstimateModal({
           sectionsUpdated: number;
           itemsCreated: number;
           itemsUpdated: number;
+          tasks?: {
+            enabled: boolean;
+            tasksCreated: number;
+            tasksUpdated: number;
+            tasksArchived: number;
+            dependenciesCreated: number;
+            dependenciesUpdated: number;
+            dependenciesRemoved: number;
+            warnings: string[];
+          };
         };
       };
       setResult({
@@ -105,6 +125,18 @@ export function ImportEstimateModal({
         sectionsUpdated: json.data.sectionsUpdated,
         itemsCreated: json.data.itemsCreated,
         itemsUpdated: json.data.itemsUpdated,
+        tasks: json.data.tasks
+          ? {
+              enabled: json.data.tasks.enabled,
+              tasksCreated: json.data.tasks.tasksCreated,
+              tasksUpdated: json.data.tasks.tasksUpdated,
+              tasksArchived: json.data.tasks.tasksArchived,
+              dependenciesCreated: json.data.tasks.dependenciesCreated,
+              dependenciesUpdated: json.data.tasks.dependenciesUpdated,
+              dependenciesRemoved: json.data.tasks.dependenciesRemoved,
+              warnings: json.data.tasks.warnings.length,
+            }
+          : null,
       });
       await onImported();
     } catch (err) {
@@ -179,6 +211,28 @@ export function ImportEstimateModal({
                   <b>{result.sectionsUpdated}</b>. Позицій створено:{" "}
                   <b>{result.itemsCreated}</b>, оновлено: <b>{result.itemsUpdated}</b>.
                 </div>
+                {result.tasks?.enabled && (
+                  <div className="mt-1" style={{ color: T.textSecondary }}>
+                    Задач створено: <b>{result.tasks.tasksCreated}</b>, оновлено:{" "}
+                    <b>{result.tasks.tasksUpdated}</b>
+                    {result.tasks.tasksArchived > 0 && (
+                      <>, архівовано: <b>{result.tasks.tasksArchived}</b></>
+                    )}
+                    . Залежностей: <b>+{result.tasks.dependenciesCreated}</b>
+                    {result.tasks.dependenciesUpdated > 0 && (
+                      <> / ~{result.tasks.dependenciesUpdated}</>
+                    )}
+                    {result.tasks.dependenciesRemoved > 0 && (
+                      <> / −{result.tasks.dependenciesRemoved}</>
+                    )}
+                    {result.tasks.warnings > 0 && (
+                      <span style={{ color: T.warning }}>
+                        {" "}· ⚠ {result.tasks.warnings}
+                      </span>
+                    )}
+                    .
+                  </div>
+                )}
               </div>
             )}
 

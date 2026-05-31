@@ -98,9 +98,10 @@ export function Sidebar({ activeFirmId }: SidebarProps = {}) {
 
   return (
     <aside
-      className="fixed inset-y-0 left-0 z-40 hidden md:flex flex-col"
+      className="fixed bottom-0 left-0 z-40 hidden md:flex flex-col"
       style={{
         width,
+        top: "var(--staging-banner-h, 0px)",
         background: "var(--sidebar-bg)",
         borderRight: `1px solid ${T.borderSoft}`,
         transition: "width 0.2s ease",

@@ -1,7 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
-import { CostType } from "@prisma/client";
+import { CostType, type TaskDependencyType } from "@prisma/client";
 import { recomputeEstimateTotals } from "./recompute";
+import { assertEstimateEditable } from "./version-lock";
 
 const COST_TYPES: CostType[] = [
   "MATERIAL",
@@ -72,6 +73,13 @@ export type EstimateItemDTO = {
   costCode: EstimateItemCostCodeDTO | null;
   itemType: string | null;
   parentItemId: string | null;
+  /// Planning (Estimate → Task sync). Дати серіалізуються як ISO-рядки.
+  plannedStart: string | null;
+  plannedDurationDays: number | null;
+  plannedEnd: string | null;
+  predecessorItemId: string | null;
+  dependencyType: TaskDependencyType | null;
+  dependencyLagDays: number;
 };
 
 function toDTO(row: {
@@ -88,6 +96,12 @@ function toDTO(row: {
   costCode?: { id: string; code: string; name: string } | null;
   itemType?: string | null;
   parentItemId?: string | null;
+  plannedStart?: Date | null;
+  plannedDurationDays?: number | null;
+  plannedEnd?: Date | null;
+  predecessorItemId?: string | null;
+  dependencyType?: TaskDependencyType | null;
+  dependencyLagDays?: number;
 }): EstimateItemDTO {
   return {
     id: row.id,
@@ -105,6 +119,12 @@ function toDTO(row: {
       : null,
     itemType: row.itemType ?? null,
     parentItemId: row.parentItemId ?? null,
+    plannedStart: row.plannedStart ? row.plannedStart.toISOString() : null,
+    plannedDurationDays: row.plannedDurationDays ?? null,
+    plannedEnd: row.plannedEnd ? row.plannedEnd.toISOString() : null,
+    predecessorItemId: row.predecessorItemId ?? null,
+    dependencyType: row.dependencyType ?? null,
+    dependencyLagDays: row.dependencyLagDays ?? 0,
   };
 }
 
@@ -145,12 +165,22 @@ export async function addEstimateItem(opts: {
   unit: string;
   quantity: number;
   unitPrice: number;
+  /** Собівартість (для фірми). Якщо null/undefined — backend == unitPrice. */
+  unitCost?: number | null;
+  /** Ціна для замовника. Якщо null/undefined — backend == unitPrice × 1.20. */
+  unitPriceCustomer?: number | null;
+  /** Виконроб (FK → User) для звітування. Null → fallback на stage.responsibleUserId. */
+  foremanId?: string | null;
+  /** Виконавець (free-form: бригада/майстер). */
+  executorText?: string | null;
   costCodeId?: string | null;
   costType?: CostType | null;
   itemType?: string | null;
   parentItemId?: string | null;
   userId: string;
 }): Promise<EstimateItemDTO> {
+  // Блок: якщо активна версія кошторису заморожена — заборонено мутувати items.
+  await assertEstimateEditable(opts.estimateId);
   const section = await prisma.estimateSection.findUnique({
     where: { id: opts.sectionId },
     select: { id: true, estimateId: true, title: true },
@@ -192,6 +222,19 @@ export async function addEstimateItem(opts: {
     }
   }
 
+  // Резолв нових цінових полів:
+  //   unitCost = opts.unitCost ?? opts.unitPrice (legacy semantic).
+  //   unitPriceCustomer = opts.unitPriceCustomer ?? unitCost × 1.20.
+  // Дефолтна маржа 20% узгоджена з Estimate.profitMarginOverall.
+  const unitCost =
+    opts.unitCost !== undefined && opts.unitCost !== null
+      ? opts.unitCost
+      : opts.unitPrice;
+  const unitPriceCustomer =
+    opts.unitPriceCustomer !== undefined && opts.unitPriceCustomer !== null
+      ? opts.unitPriceCustomer
+      : new Decimal(unitCost).times(1.2).toNumber();
+
   const item = await prisma.estimateItem.create({
     data: {
       estimateId: opts.estimateId,
@@ -200,6 +243,10 @@ export async function addEstimateItem(opts: {
       unit,
       quantity: opts.quantity,
       unitPrice: opts.unitPrice,
+      unitCost,
+      unitPriceCustomer,
+      ...("foremanId" in opts ? { foremanId: opts.foremanId ?? null } : {}),
+      ...("executorText" in opts ? { executorText: opts.executorText ?? null } : {}),
       amount,
       sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
       ...costFields,
@@ -240,10 +287,24 @@ export async function updateEstimateItem(opts: {
     unit?: string;
     quantity?: number;
     unitPrice?: number;
+    unitCost?: number | null;
+    unitPriceCustomer?: number | null;
+    foremanId?: string | null;
+    executorText?: string | null;
     costCodeId?: string | null;
     costType?: CostType | null;
     itemType?: string | null;
     parentItemId?: string | null;
+    /// Planning fields для Excel-style Gantt sync. Інваріанти:
+    /// - predecessorItemId не може посилатись на саму позицію
+    /// - predecessor має бути у тому ж кошторисі
+    /// Cycle-detection — у syncEstimateItemsToTasks.
+    plannedStart?: Date | null;
+    plannedDurationDays?: number | null;
+    plannedEnd?: Date | null;
+    predecessorItemId?: string | null;
+    dependencyType?: TaskDependencyType | null;
+    dependencyLagDays?: number;
   };
   userId: string;
 }): Promise<EstimateItemDTO> {
@@ -257,6 +318,10 @@ export async function updateEstimateItem(opts: {
       unit: true,
       quantity: true,
       unitPrice: true,
+      unitCost: true,
+      unitPriceCustomer: true,
+      foremanId: true,
+      executorText: true,
       costCodeId: true,
       costType: true,
       itemType: true,
@@ -264,6 +329,7 @@ export async function updateEstimateItem(opts: {
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
+  await assertEstimateEditable(existing.estimateId);
 
   const oldDescription = existing.description;
   const oldUnit = existing.unit;
@@ -312,6 +378,20 @@ export async function updateEstimateItem(opts: {
     }
   }
 
+  // Validate planning fields.
+  if ("predecessorItemId" in opts.patch && opts.patch.predecessorItemId) {
+    if (opts.patch.predecessorItemId === opts.itemId) {
+      throw new Error("Попередник не може посилатись на саму позицію");
+    }
+    const pred = await prisma.estimateItem.findUnique({
+      where: { id: opts.patch.predecessorItemId },
+      select: { estimateId: true },
+    });
+    if (!pred || pred.estimateId !== existing.estimateId) {
+      throw new Error("Попередник має бути у тому ж кошторисі");
+    }
+  }
+
   const updated = await prisma.estimateItem.update({
     where: { id: opts.itemId },
     data: {
@@ -320,10 +400,32 @@ export async function updateEstimateItem(opts: {
       quantity: newQuantity,
       unitPrice: newUnitPrice,
       amount: newAmount,
+      ...("unitCost" in opts.patch ? { unitCost: opts.patch.unitCost } : {}),
+      ...("unitPriceCustomer" in opts.patch
+        ? { unitPriceCustomer: opts.patch.unitPriceCustomer }
+        : {}),
+      ...("foremanId" in opts.patch ? { foremanId: opts.patch.foremanId } : {}),
+      ...("executorText" in opts.patch
+        ? { executorText: opts.patch.executorText }
+        : {}),
       ...costFields,
       ...("itemType" in opts.patch ? { itemType: newItemType } : {}),
       ...("itemType" in opts.patch || "parentItemId" in opts.patch
         ? { parentItemId: newParentItemId }
+        : {}),
+      ...("plannedStart" in opts.patch ? { plannedStart: opts.patch.plannedStart } : {}),
+      ...("plannedDurationDays" in opts.patch
+        ? { plannedDurationDays: opts.patch.plannedDurationDays }
+        : {}),
+      ...("plannedEnd" in opts.patch ? { plannedEnd: opts.patch.plannedEnd } : {}),
+      ...("predecessorItemId" in opts.patch
+        ? { predecessorItemId: opts.patch.predecessorItemId }
+        : {}),
+      ...("dependencyType" in opts.patch
+        ? { dependencyType: opts.patch.dependencyType }
+        : {}),
+      ...("dependencyLagDays" in opts.patch
+        ? { dependencyLagDays: opts.patch.dependencyLagDays }
         : {}),
     },
     include: { costCode: { select: { id: true, code: true, name: true } } },
@@ -429,6 +531,7 @@ export async function deleteEstimateItem(
     },
   });
   if (!existing) throw new Error("Позицію не знайдено");
+  await assertEstimateEditable(existing.estimateId);
 
   await prisma.estimateItem.delete({ where: { id: itemId } });
   await recomputeEstimateTotals(existing.estimateId);
