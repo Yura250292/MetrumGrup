@@ -85,7 +85,10 @@ export function TabsBar() {
     [closeTab],
   );
 
-  if (state.tabs.length === 0) return null;
+  // Раніше було: if (state.tabs.length === 0) return null;
+  // Прибираю — якщо state каже 0 (corrupted localStorage чи bug), все одно
+  // рендеримо bar з кнопкою "+ Нова вкладка" замість мовчазного null.
+  // Це гарантує що користувач завжди бачить bar (на md+ breakpoint).
 
   return (
     <div
