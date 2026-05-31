@@ -29,9 +29,14 @@ import {
   AlertOctagon,
   Plus,
   CircleDot,
+  MessageSquare,
+  Sparkles,
+  Warehouse,
+  Image as ImageIcon,
 } from "lucide-react";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { ProjectHeaderActions } from "./project-header-actions";
+import { SupplierDebtsSection } from "./supplier-debts-section";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { listActiveMembers } from "@/lib/projects/members-service";
 import { canManageProjectMembers } from "@/lib/projects/access";
@@ -266,7 +271,7 @@ export function ProjectOverviewContent({
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        <div className="lg:col-span-2">
+        <div className="flex flex-col gap-5 lg:col-span-2">
           <StagesPanel
             stages={stages}
             activeStageId={activeStage?.id ?? null}
@@ -274,6 +279,13 @@ export function ProjectOverviewContent({
             totalCount={totalStages}
             projectId={project.id}
           />
+          {project.description && <DescriptionCard description={project.description} />}
+          {showFinance && (
+            <SupplierDebtsSection
+              projectId={project.id}
+              projectTitle={project.title}
+            />
+          )}
         </div>
         <div className="flex flex-col gap-5">
           <RisksCard
@@ -282,6 +294,13 @@ export function ProjectOverviewContent({
             budgetUsedPct={budgetUsedPct}
             overallProgress={overallProgress}
           />
+          <DatesCard
+            startDate={project.startDate}
+            expectedEndDate={project.expectedEndDate}
+            actualEndDate={project.actualEndDate}
+            status={project.status}
+          />
+          <ClientContactCard project={project} />
           <TeamCard
             project={project}
             members={members}
@@ -309,8 +328,11 @@ type ProjectShape = {
   slug: string;
   status: string;
   address: string | null;
+  description: string | null;
   startDate: Date | null;
   expectedEndDate: Date | null;
+  /** Фактична дата завершення (показуємо коли COMPLETED). */
+  actualEndDate: Date | null;
   isTestProject: boolean;
   coverImageUrl: string | null;
   clientName: string | null;
@@ -908,6 +930,156 @@ const PROJECT_ROLE_COLOR: Record<string, string> = {
   VIEWER: T.textMuted,
 };
 
+/**
+ * Опис проєкту — простий текстовий блок. Раніше був окремою картою у
+ * V1 TabOverview, тепер inline у правій колонці overview.
+ */
+function DescriptionCard({ description }: { description: string }) {
+  return (
+    <section
+      className="rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <header className="flex items-center gap-2 px-4 py-3">
+        <Pencil size={16} style={{ color: T.textMuted }} />
+        <h3 className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
+          Опис проєкту
+        </h3>
+      </header>
+      <div className="px-4 pb-4">
+        <p
+          className="text-[13px] whitespace-pre-wrap leading-relaxed"
+          style={{ color: T.textSecondary }}
+        >
+          {description}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Дати проєкту — startDate / expectedEndDate / actualEndDate.
+ * actualEndDate показуємо тільки коли COMPLETED (фактичне завершення).
+ */
+function DatesCard({
+  startDate,
+  expectedEndDate,
+  actualEndDate,
+  status,
+}: {
+  startDate: Date | string | null;
+  expectedEndDate: Date | string | null;
+  actualEndDate: Date | string | null;
+  status: string;
+}) {
+  if (!startDate && !expectedEndDate && !actualEndDate) return null;
+  return (
+    <section
+      className="rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <header className="flex items-center gap-2 px-4 py-3">
+        <Calendar size={16} style={{ color: T.accentPrimary }} />
+        <h3 className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
+          Дати
+        </h3>
+      </header>
+      <div className="flex flex-col gap-2 px-4 pb-4 text-[12px]">
+        <DateRow
+          label="Початок"
+          date={startDate}
+          color={T.accentPrimary}
+        />
+        <DateRow
+          label="Очікуване завершення"
+          date={expectedEndDate}
+          color={T.warning}
+        />
+        {status === "COMPLETED" && actualEndDate && (
+          <DateRow
+            label="Фактично завершено"
+            date={actualEndDate}
+            color={T.success}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function DateRow({
+  label,
+  date,
+  color,
+}: {
+  label: string;
+  date: Date | string | null;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span style={{ color: T.textMuted }}>{label}</span>
+      <span className="tabular-nums font-semibold" style={{ color: date ? color : T.textMuted }}>
+        {date ? formatShortDate(date) : "—"}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Контакти замовника — окрема карта з email/phone + кнопки "Дзвонити/Email".
+ * Раніше це жило у V1 TabOverview як Card "Контакти".
+ */
+function ClientContactCard({ project }: { project: ProjectShape }) {
+  const clientName =
+    project.clientCounterparty?.name ?? project.client?.name ?? project.clientName;
+  if (!clientName) return null;
+  const email = project.client?.email ?? null;
+  const phone = project.client?.phone ?? null;
+  return (
+    <section
+      className="rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <header className="flex items-center gap-2 px-4 py-3">
+        <Briefcase size={16} style={{ color: T.sky }} />
+        <h3 className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
+          Замовник
+        </h3>
+      </header>
+      <div className="flex flex-col gap-2 px-4 pb-4">
+        <div className="text-[13px] font-semibold" style={{ color: T.textPrimary }}>
+          {clientName}
+        </div>
+        {email && (
+          <a
+            href={`mailto:${email}`}
+            className="text-[12px] truncate transition hover:brightness-110"
+            style={{ color: T.sky }}
+          >
+            ✉ {email}
+          </a>
+        )}
+        {phone && (
+          <a
+            href={`tel:${phone}`}
+            className="text-[12px] truncate transition hover:brightness-110"
+            style={{ color: T.success }}
+          >
+            ☎ {phone}
+          </a>
+        )}
+        {!email && !phone && (
+          <span className="text-[11px]" style={{ color: T.textMuted }}>
+            Контакти не вказані
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function TeamCard({
   project,
   members,
@@ -1459,13 +1631,31 @@ export function SubNavTabs({
       id: "media",
       label: "Медіа",
       href: `/admin-v2/projects/${projectId}?tab=media`,
-      icon: Briefcase,
+      icon: ImageIcon,
     },
     {
       id: "team",
       label: "Команда",
       href: `/admin-v2/projects/${projectId}?tab=team`,
       icon: Users,
+    },
+    {
+      id: "chat",
+      label: "Чат",
+      href: `/admin-v2/projects/${projectId}?tab=chat`,
+      icon: MessageSquare,
+    },
+    {
+      id: "warehouse",
+      label: "Склад",
+      href: `/admin-v2/projects/${projectId}/warehouse`,
+      icon: Warehouse,
+    },
+    {
+      id: "ai-render",
+      label: "AI Візуалізація",
+      href: `/admin-v2/projects/${projectId}?tab=ai-render`,
+      icon: Sparkles,
     },
     {
       id: "activity",
