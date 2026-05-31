@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getForemanProjects } from "@/lib/auth-utils";
-import { ForemanShell } from "../../../_components/foreman-shell";
+import { LightShell } from "../../../_components/v2/light-shell";
 import { ReportInputForm } from "./_form";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +28,8 @@ export default async function ForemanReportInputPage({ params }: PageProps) {
     : "/foreman/report/folder/none";
 
   return (
-    <ForemanShell title={project.title} backHref={backHref} firmId={firmId}>
+    <LightShell title={project.title} backHref={backHref} hideBottomNav>
       <ReportInputForm projectId={project.id} projectTitle={project.title} />
-    </ForemanShell>
+    </LightShell>
   );
 }
