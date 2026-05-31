@@ -75,9 +75,22 @@ export async function ProjectDetailCanonicalBody({
 
   const showFinance = canViewFinance(session.user.role);
   const tasksEnabled = await isTasksEnabledForProject(project.id);
-  const [members, canManageMembers] = await Promise.all([
+  const [members, canManageMembers, recentFiles] = await Promise.all([
     listActiveMembers(project.id),
     canManageProjectMembers(project.id, session.user.id),
+    prisma.projectFile.findMany({
+      where: { projectId: project.id },
+      orderBy: { createdAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        name: true,
+        size: true,
+        mimeType: true,
+        url: true,
+        createdAt: true,
+      },
+    }),
   ]);
 
   const stages = project.stages.filter((s) => s.kind === "STAGE");
@@ -159,6 +172,18 @@ export async function ProjectDetailCanonicalBody({
               roleInProject: m.roleInProject,
             }))}
             canManageMembers={canManageMembers}
+          />
+          <FilesCard
+            projectId={project.id}
+            totalCount={project._count.files}
+            recentFiles={recentFiles.map((f) => ({
+              id: f.id,
+              name: f.name,
+              size: f.size,
+              mimeType: f.mimeType,
+              url: f.url,
+              createdAt: f.createdAt.toISOString(),
+            }))}
           />
         </div>
       </div>
@@ -965,6 +990,136 @@ function Avatar({
       {initials}
     </div>
   );
+}
+
+type RecentFile = {
+  id: string;
+  name: string;
+  size: number;
+  mimeType: string;
+  url: string;
+  createdAt: string;
+};
+
+function FilesCard({
+  projectId,
+  totalCount,
+  recentFiles,
+}: {
+  projectId: string;
+  totalCount: number;
+  recentFiles: RecentFile[];
+}) {
+  return (
+    <section
+      className="rounded-2xl"
+      style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+    >
+      <header className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Briefcase size={16} style={{ color: T.accentPrimary }} />
+          <h3 className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
+            Файли
+          </h3>
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
+          >
+            {totalCount}
+          </span>
+        </div>
+        <Link
+          href={`/admin-v2/projects/${projectId}?tab=media&sub=files`}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition hover:brightness-95"
+          style={{
+            backgroundColor: T.accentPrimarySoft,
+            color: T.accentPrimary,
+            border: `1px solid ${T.accentPrimary}33`,
+          }}
+          title="Усі файли та drag-and-drop вантаження"
+        >
+          <Plus size={11} />
+          Файли
+        </Link>
+      </header>
+      <div className="flex flex-col gap-2 px-4 pb-4">
+        {recentFiles.length === 0 ? (
+          <Link
+            href={`/admin-v2/projects/${projectId}?tab=media&sub=files`}
+            className="rounded-xl px-3 py-4 text-[12px] text-center transition hover:brightness-95"
+            style={{
+              backgroundColor: T.panelSoft,
+              border: `1px dashed ${T.borderStrong}`,
+              color: T.textMuted,
+            }}
+          >
+            Перетягни сюди файли або клікни, щоб додати
+          </Link>
+        ) : (
+          recentFiles.map((f) => (
+            <a
+              key={f.id}
+              href={f.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 rounded-lg px-2 py-1.5 transition hover:brightness-95"
+              style={{ backgroundColor: T.panelSoft }}
+            >
+              <FileIcon mimeType={f.mimeType} />
+              <div className="min-w-0 flex-1">
+                <div
+                  className="text-[12px] font-semibold truncate"
+                  style={{ color: T.textPrimary }}
+                  title={f.name}
+                >
+                  {f.name}
+                </div>
+                <div
+                  className="text-[10px] tabular-nums"
+                  style={{ color: T.textMuted }}
+                >
+                  {formatBytes(f.size)} · {formatRelativeShort(f.createdAt)}
+                </div>
+              </div>
+            </a>
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function FileIcon({ mimeType }: { mimeType: string }) {
+  const isImage = mimeType.startsWith("image/");
+  const isPdf = mimeType === "application/pdf";
+  const isText = mimeType === "text/plain";
+  const Icon = isImage ? ListChecks : isPdf ? ExternalLink : isText ? Pencil : ListChecks;
+  const color = isImage ? T.violet : isPdf ? T.danger : isText ? T.warning : T.textSecondary;
+  return (
+    <span
+      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md"
+      style={{ backgroundColor: T.panel }}
+    >
+      <Icon size={13} style={{ color }} />
+    </span>
+  );
+}
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} Б`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} КБ`;
+  return `${(b / 1024 / 1024).toFixed(1)} МБ`;
+}
+
+function formatRelativeShort(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const min = Math.round(diff / 60_000);
+  if (min < 60) return `${min} хв тому`;
+  const hr = Math.round(diff / 3_600_000);
+  if (hr < 24) return `${hr} год тому`;
+  const days = Math.round(diff / 86_400_000);
+  if (days < 30) return `${days} дн тому`;
+  return new Date(iso).toLocaleDateString("uk-UA", { day: "2-digit", month: "short" });
 }
 
 function StatusBadgeV2({ status }: { status: string }) {
