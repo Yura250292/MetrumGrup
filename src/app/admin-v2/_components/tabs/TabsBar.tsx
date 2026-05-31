@@ -94,8 +94,8 @@ export function TabsBar() {
       className="hidden md:flex items-stretch w-full select-none"
       style={{
         height: BAR_HEIGHT,
-        backgroundColor: T.panelSoft,
-        borderBottom: `1px solid ${T.borderSoft}`,
+        backgroundColor: T.panelElevated,
+        borderBottom: `1px solid ${T.borderStrong}`,
       }}
     >
       <div
