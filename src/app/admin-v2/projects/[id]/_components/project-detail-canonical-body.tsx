@@ -1434,7 +1434,7 @@ export function SubNavTabs({
     {
       id: "stages",
       label: "Етапи",
-      href: `/admin-v2/projects/${projectId}/stages-v2`,
+      href: `/admin-v2/projects/${projectId}?tab=stages`,
       icon: ListChecks,
     },
     {

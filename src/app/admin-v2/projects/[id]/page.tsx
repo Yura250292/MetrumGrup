@@ -10,6 +10,7 @@ import {
   HeroCard,
   SubNavTabs,
 } from "./_components/project-detail-canonical-body";
+import { ProjectStagesBody } from "./_components/project-stages-body";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { computeStageFinanceAggregates } from "@/lib/projects/stages-helpers";
@@ -258,14 +259,19 @@ export default async function AdminV2ProjectDetailPage({
         <FinanceDiagnosticsCard projectId={project.id} />
       )}
 
-      {/* Tab content без власної nav-стрічки. */}
-      <ProjectTabs
-        activeTab={activeTab}
-        projectId={project.id}
-        tasksEnabled={tasksEnabled}
-        hideNav
-        project={legacyProjectShape}
-      />
+      {/* Tab content — без власної nav-стрічки. Stages розгортається inline
+          через окремий named export (раніше жив у /stages-v2/page.tsx). */}
+      {activeTab === "stages" ? (
+        <ProjectStagesBody id={project.id} session={session} />
+      ) : (
+        <ProjectTabs
+          activeTab={activeTab}
+          projectId={project.id}
+          tasksEnabled={tasksEnabled}
+          hideNav
+          project={legacyProjectShape}
+        />
+      )}
     </div>
   );
 }
