@@ -33,6 +33,8 @@ import {
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
 import { ProjectHeaderActions } from "./project-header-actions";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
+import { listActiveMembers } from "@/lib/projects/members-service";
+import { canManageProjectMembers } from "@/lib/projects/access";
 
 /**
  * Канонічне тіло сторінки деталей проєкту. `/admin-v2/projects/[id]`
@@ -73,6 +75,10 @@ export async function ProjectDetailCanonicalBody({
 
   const showFinance = canViewFinance(session.user.role);
   const tasksEnabled = await isTasksEnabledForProject(project.id);
+  const [members, canManageMembers] = await Promise.all([
+    listActiveMembers(project.id),
+    canManageProjectMembers(project.id, session.user.id),
+  ]);
 
   const stages = project.stages.filter((s) => s.kind === "STAGE");
   const completedStages = stages.filter((s) => s.status === "COMPLETED").length;
@@ -142,7 +148,18 @@ export async function ProjectDetailCanonicalBody({
             budgetUsedPct={budgetUsedPct}
             overallProgress={overallProgress}
           />
-          <TeamCard project={project} />
+          <TeamCard
+            project={project}
+            members={members.map((m) => ({
+              id: m.id,
+              userId: m.user.id,
+              userName: m.user.name ?? "—",
+              userRole: m.user.role,
+              userAvatar: m.user.avatar,
+              roleInProject: m.roleInProject,
+            }))}
+            canManageMembers={canManageMembers}
+          />
         </div>
       </div>
     </div>
@@ -725,31 +742,53 @@ function RisksCard({
   );
 }
 
-function TeamCard({ project }: { project: ProjectShape }) {
-  const items: Array<{
-    role: string;
-    name: string;
-    color: string;
-    icon: typeof Users;
-  }> = [];
-  if (project.manager?.name) {
-    items.push({
-      role: "ПМ",
-      name: project.manager.name,
-      color: T.violet,
-      icon: Users,
-    });
-  }
+type TeamMemberRow = {
+  id: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  userAvatar: string | null;
+  roleInProject: string;
+};
+
+const PROJECT_ROLE_LABEL: Record<string, string> = {
+  PROJECT_ADMIN: "Адмін",
+  PROJECT_MANAGER: "ПМ",
+  ENGINEER: "Інженер",
+  FOREMAN: "Виконроб",
+  FINANCE: "Фінанси",
+  PROCUREMENT: "Закупівлі",
+  VIEWER: "Спостерігач",
+};
+
+const PROJECT_ROLE_COLOR: Record<string, string> = {
+  PROJECT_ADMIN: T.danger,
+  PROJECT_MANAGER: T.violet,
+  ENGINEER: T.accentPrimary,
+  FOREMAN: T.warning,
+  FINANCE: T.success,
+  PROCUREMENT: T.teal,
+  VIEWER: T.textMuted,
+};
+
+function TeamCard({
+  project,
+  members,
+  canManageMembers,
+}: {
+  project: ProjectShape;
+  members: TeamMemberRow[];
+  canManageMembers: boolean;
+}) {
   const clientName =
     project.clientCounterparty?.name ?? project.client?.name ?? project.clientName;
-  if (clientName) {
-    items.push({
-      role: "ЗАМОВНИК",
-      name: clientName,
-      color: T.sky,
-      icon: Briefcase,
-    });
-  }
+
+  // ПМ з User-FK (managerId) може бути серед members як PROJECT_MANAGER;
+  // не показуємо двічі. Якщо ПМ не в членах — додаємо як перший рядок.
+  const managerInMembers = project.manager?.id
+    ? members.some((m) => m.userId === project.manager?.id)
+    : false;
+
   return (
     <section
       className="rounded-2xl"
@@ -759,40 +798,113 @@ function TeamCard({ project }: { project: ProjectShape }) {
         <div className="flex items-center gap-2">
           <Users size={16} style={{ color: T.accentPrimary }} />
           <h3 className="text-[14px] font-bold" style={{ color: T.textPrimary }}>
-            Команда проєкту
+            Команда
           </h3>
+          <span
+            className="rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            style={{ backgroundColor: T.panelSoft, color: T.textSecondary }}
+          >
+            {members.length}
+          </span>
         </div>
+        {canManageMembers && (
+          <Link
+            href={`/admin-v2/projects/${project.id}?tab=team`}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold transition hover:brightness-95"
+            style={{
+              backgroundColor: T.accentPrimarySoft,
+              color: T.accentPrimary,
+              border: `1px solid ${T.accentPrimary}33`,
+            }}
+            title="Додати/видалити учасників"
+          >
+            <Plus size={11} />
+            Управляти
+          </Link>
+        )}
       </header>
       <div className="flex flex-col gap-2 px-4 pb-4">
-        {items.length === 0 && (
-          <div className="text-[12px] text-center py-3" style={{ color: T.textMuted }}>
-            Команду ще не призначено
-          </div>
-        )}
-        {items.map((m, i) => (
-          <div key={i} className="flex items-center gap-3">
+        {/* Клієнт окремо — він не є ProjectMember (зовнішня сторона). */}
+        {clientName && (
+          <div className="flex items-center gap-3">
             <div
               className="flex h-9 w-9 items-center justify-center rounded-full flex-shrink-0"
-              style={{ backgroundColor: m.color }}
+              style={{ backgroundColor: T.sky }}
             >
-              <m.icon size={14} style={{ color: "#FFFFFF" }} />
+              <Briefcase size={14} style={{ color: "#FFFFFF" }} />
             </div>
             <div className="min-w-0">
               <div
                 className="text-[10px] font-bold tracking-wider"
                 style={{ color: T.textMuted }}
               >
-                {m.role}
+                ЗАМОВНИК
               </div>
               <div
                 className="text-[12px] font-semibold truncate"
                 style={{ color: T.textPrimary }}
               >
-                {m.name}
+                {clientName}
               </div>
             </div>
           </div>
-        ))}
+        )}
+
+        {/* ПМ якщо не в members */}
+        {project.manager?.name && !managerInMembers && (
+          <div className="flex items-center gap-3">
+            <Avatar
+              name={project.manager.name}
+              avatar={project.manager.avatar}
+              color={T.violet}
+            />
+            <div className="min-w-0">
+              <div
+                className="text-[10px] font-bold tracking-wider"
+                style={{ color: T.textMuted }}
+              >
+                ПМ
+              </div>
+              <div
+                className="text-[12px] font-semibold truncate"
+                style={{ color: T.textPrimary }}
+              >
+                {project.manager.name}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Список членів */}
+        {members.length === 0 && !project.manager && !clientName && (
+          <div className="text-[12px] text-center py-3" style={{ color: T.textMuted }}>
+            {canManageMembers ? "Додай першого учасника" : "Команду ще не призначено"}
+          </div>
+        )}
+        {members.map((m) => {
+          const color = PROJECT_ROLE_COLOR[m.roleInProject] ?? T.textMuted;
+          const label = PROJECT_ROLE_LABEL[m.roleInProject] ?? m.roleInProject;
+          return (
+            <div key={m.id} className="flex items-center gap-3">
+              <Avatar name={m.userName} avatar={m.userAvatar} color={color} />
+              <div className="min-w-0 flex-1">
+                <div
+                  className="text-[10px] font-bold tracking-wider"
+                  style={{ color: T.textMuted }}
+                >
+                  {label}
+                </div>
+                <div
+                  className="text-[12px] font-semibold truncate"
+                  style={{ color: T.textPrimary }}
+                >
+                  {m.userName}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
         {project.manager?.phone && (
           <div className="flex gap-2 mt-1">
             <a
@@ -815,6 +927,43 @@ function TeamCard({ project }: { project: ProjectShape }) {
         )}
       </div>
     </section>
+  );
+}
+
+function Avatar({
+  name,
+  avatar,
+  color,
+}: {
+  name: string;
+  avatar: string | null;
+  color: string;
+}) {
+  if (avatar) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return (
+      <img
+        src={avatar}
+        alt={name}
+        className="h-9 w-9 rounded-full object-cover flex-shrink-0"
+        style={{ border: `2px solid ${color}` }}
+      />
+    );
+  }
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .map((n) => n[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  return (
+    <div
+      className="flex h-9 w-9 items-center justify-center rounded-full flex-shrink-0 text-[11px] font-bold"
+      style={{ backgroundColor: color, color: "#FFFFFF" }}
+    >
+      {initials}
+    </div>
   );
 }
 
