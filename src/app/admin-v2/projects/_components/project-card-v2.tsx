@@ -58,8 +58,6 @@ export function ProjectCardV2({
   const canSeeBudget =
     showFinance || project.manager?.id === currentUserId;
   const extra = project.extra;
-  const isActive = project.status === "ACTIVE";
-  const isDraft = project.status === "DRAFT";
   const stageName =
     extra.activeStageName ??
     (project.status === "COMPLETED" ? "Завершено" : "Не задано");
@@ -77,8 +75,14 @@ export function ProjectCardV2({
         )
       : 0;
 
-  const code = `PRJ-${project.slug.toUpperCase().slice(0, 8)}`;
-  const projectType = inferProjectType(project.title);
+  // Real Project.code з міграції 20260529150000_projects_subsystem_alignment
+  // (наприклад "PRJ-2026-001"). Fallback на slug-based для legacy без code.
+  const code = extra.code ?? `PRJ-${project.slug.toUpperCase().slice(0, 8)}`;
+  // Real Project.type ("Житло"/"Комерція"/"Благоустрій"/"IT"/...) — вільний рядок
+  // в БД. Fallback на heuristic за keywords у title.
+  const projectType = extra.type
+    ? typeFromString(extra.type)
+    : inferProjectType(project.title);
 
   return (
     <Link
@@ -311,7 +315,7 @@ function CoverArea({
   canDelete,
 }: {
   coverImage: string | null;
-  projectType: { bg: string; fg: string; label: string };
+  projectType: ProjectTypeStyle;
   status: ProjectStatus;
   isTestProject: boolean;
   title: string;
@@ -320,10 +324,17 @@ function CoverArea({
   currentFolderId: string | null;
   canDelete: boolean;
 }) {
+  // Pastel gradient placeholder коли немає фото — щоб не сірий "Building" icon,
+  // а кольоровий блок відповідно до категорії проєкту (як у Pencil-mockup).
+  const gradientStyle: React.CSSProperties = coverImage
+    ? { backgroundColor: T.panelElevated }
+    : {
+        background: `linear-gradient(135deg, ${projectType.coverFrom} 0%, ${projectType.coverTo} 100%)`,
+      };
   return (
     <div
       className="relative aspect-[16/9] flex items-center justify-center overflow-hidden"
-      style={{ backgroundColor: T.panelElevated }}
+      style={gradientStyle}
     >
       {coverImage ? (
         // eslint-disable-next-line @next/next/no-img-element
@@ -333,7 +344,11 @@ function CoverArea({
           className="h-full w-full object-cover"
         />
       ) : (
-        <Building size={48} style={{ color: T.borderStrong }} />
+        <Building
+          size={56}
+          style={{ color: projectType.fg, opacity: 0.55 }}
+          strokeWidth={1.5}
+        />
       )}
 
       {/* Top-left: project type chip */}
@@ -496,32 +511,95 @@ function DeadlineChip({
 
 /* ---------- Helpers ---------- */
 
+type ProjectTypeStyle = {
+  bg: string;
+  fg: string;
+  label: string;
+  /** Pastel gradient для cover-area коли немає фото. */
+  coverFrom: string;
+  coverTo: string;
+};
+
 /**
- * Infer project category from title keywords. Tactical heuristic поки
- * Project model не має `type` field. Можна замінити коли модель розшириться.
+ * Канонічні палітри по категорії проєкту. Кожен має:
+ * - bg/fg — chip під code
+ * - coverFrom/coverTo — м'який пастельний градієнт як placeholder для cover
  */
-function inferProjectType(title: string): { bg: string; fg: string; label: string } {
-  const t = title.toLowerCase();
-  if (/жк|будинок|корпус|поверх|квартир/.test(t)) {
-    return { bg: T.amberSoft, fg: T.amber, label: "Житло" };
-  }
-  if (/трц|офіс|бізнес-центр|комерц|готель/.test(t)) {
-    return { bg: T.skySoft, fg: T.sky, label: "Комерція" };
-  }
-  if (/парк|сквер|благоустр|алея|тротуар|реконструкц/.test(t)) {
-    return { bg: T.violetSoft, fg: T.violet, label: "Благоустрій" };
-  }
-  if (/склад|hub|логіст|депо/.test(t)) {
-    return { bg: T.tealSoft, fg: T.teal, label: "Інфра-ра" };
-  }
-  if (/crm|erp|систем|метрум/.test(t)) {
-    return { bg: T.violetSoft, fg: T.violet, label: "Внутр." };
-  }
-  return { bg: T.panelSoft, fg: T.textSecondary, label: PROJECT_STATUS_LABELS_FALLBACK };
+const TYPE_PALETTE = {
+  housing: {
+    bg: T.amberSoft,
+    fg: T.amber,
+    label: "Житло",
+    coverFrom: "#FEF3C7",
+    coverTo: "#FDE68A",
+  },
+  commercial: {
+    bg: T.skySoft,
+    fg: T.sky,
+    label: "Комерція",
+    coverFrom: "#E0E7FF",
+    coverTo: "#C7D2FE",
+  },
+  landscape: {
+    bg: T.successSoft,
+    fg: T.success,
+    label: "Благоустрій",
+    coverFrom: "#D1FAE5",
+    coverTo: "#A7F3D0",
+  },
+  infra: {
+    bg: T.tealSoft,
+    fg: T.teal,
+    label: "Інфра-ра",
+    coverFrom: "#CCFBF1",
+    coverTo: "#99F6E4",
+  },
+  internal: {
+    bg: T.violetSoft,
+    fg: T.violet,
+    label: "Внутр.",
+    coverFrom: "#EDE9FE",
+    coverTo: "#DDD6FE",
+  },
+  other: {
+    bg: T.panelSoft,
+    fg: T.textSecondary,
+    label: "Інше",
+    coverFrom: T.panelElevated,
+    coverTo: T.panelSoft,
+  },
+} as const satisfies Record<string, ProjectTypeStyle>;
+
+/**
+ * Маппить вільний рядок Project.type (вкл. ЖК/Комерція/Благоустрій/IT/Інше)
+ * на канонічну палітру. Case-insensitive.
+ */
+function typeFromString(raw: string): ProjectTypeStyle {
+  const t = raw.toLowerCase().trim();
+  if (/житл|жк|апартам|квартир/.test(t)) return TYPE_PALETTE.housing;
+  if (/комерц|офіс|трц|готел|бц/.test(t)) return TYPE_PALETTE.commercial;
+  if (/благоустр|парк|ландшафт|алея|сквер/.test(t)) return TYPE_PALETTE.landscape;
+  if (/інфра|склад|hub|логіст|депо|дорог/.test(t)) return TYPE_PALETTE.infra;
+  if (/it|crm|erp|систем|внутр|метрум/.test(t)) return TYPE_PALETTE.internal;
+  // Безпечний fallback з власною міткою з БД.
+  return { ...TYPE_PALETTE.other, label: raw };
 }
 
-const PROJECT_STATUS_LABELS_FALLBACK = "Інше";
-// Touch import to avoid unused warning when STATUS_LABELS imported later.
+/**
+ * Infer project category from title keywords. Tactical heuristic для legacy
+ * проєктів без заповненого Project.type. Повертає той самий тип palette.
+ */
+function inferProjectType(title: string): ProjectTypeStyle {
+  const t = title.toLowerCase();
+  if (/жк|будинок|корпус|поверх|квартир/.test(t)) return TYPE_PALETTE.housing;
+  if (/трц|офіс|бізнес-центр|комерц|готель/.test(t)) return TYPE_PALETTE.commercial;
+  if (/парк|сквер|благоустр|алея|тротуар|реконструкц/.test(t)) return TYPE_PALETTE.landscape;
+  if (/склад|hub|логіст|депо/.test(t)) return TYPE_PALETTE.infra;
+  if (/crm|erp|систем|метрум/.test(t)) return TYPE_PALETTE.internal;
+  return TYPE_PALETTE.other;
+}
+
+// Touch imports to avoid unused warnings (used conditionally).
 void PROJECT_STATUS_LABELS;
 void HardHat;
 void UserCircle2;

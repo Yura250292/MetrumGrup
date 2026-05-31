@@ -11,6 +11,10 @@ export type ProjectExtra = {
   totalStageCount: number;
   /** Відкриті RFI прив'язані до проєкту (OPEN | IN_PROGRESS). */
   openRfiCount: number;
+  /** Code з Project.code (наприклад "PRJ-2026-001"). Null якщо не заповнено. */
+  code: string | null;
+  /** Type з Project.type ("ЖИТЛО"/"КОМЕРЦІЯ"/...). Null якщо не заповнено. */
+  type: string | null;
 };
 
 export type ProjectRow = ProjectWithAggregations & { extra: ProjectExtra };

@@ -59,6 +59,8 @@ export default async function AdminV2ProjectsPage({
         where: { id: { in: ids }, ...firmWhereForProject(firmId) },
         select: {
           id: true,
+          code: true,
+          type: true,
           expectedEndDate: true,
           coverImageUrl: true,
           estimates: { select: { id: true, status: true } },
@@ -125,6 +127,8 @@ export default async function AdminV2ProjectsPage({
         activeStageIndex: activeIdx >= 0 ? activeIdx + 1 : null,
         totalStageCount: stages.length,
         openRfiCount: rfiByProject.get(e.id) ?? 0,
+        code: e.code,
+        type: e.type,
       });
     }
   }
@@ -140,6 +144,8 @@ export default async function AdminV2ProjectsPage({
       activeStageIndex: null,
       totalStageCount: 0,
       openRfiCount: 0,
+      code: null,
+      type: null,
     },
   }));
 
@@ -152,6 +158,21 @@ export default async function AdminV2ProjectsPage({
     : 0;
   const activeCount = projects.filter((p) => p.status === "ACTIVE").length;
 
+  // Ризики: просрочка (expectedEndDate < сьогодні і не COMPLETED/CANCELLED) +
+  // RFI на проєктах. Маржу не показуємо — даних для plannedCost vs actualCost
+  // у Project немає окремо.
+  const now = Date.now();
+  const overdueCount = rows.filter((r) => {
+    const due = r.extra.expectedEndDate;
+    if (!due) return false;
+    if (r.status === "COMPLETED" || r.status === "CANCELLED") return false;
+    return new Date(due).getTime() < now;
+  }).length;
+  const totalOpenRfis = rows.reduce((sum, r) => sum + r.extra.openRfiCount, 0);
+  const burnPct = showFinance && totalBudget > 0
+    ? Math.round((totalPaid / totalBudget) * 100)
+    : 0;
+
   const canSeeOverview =
     session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
   const projectTabs = [
@@ -163,12 +184,15 @@ export default async function AdminV2ProjectsPage({
     <div className="flex flex-col gap-6">
       <PageIntroCard />
       {projectTabs.length > 1 && <SectionTabs tabs={projectTabs} />}
-      <KpiStrip
+      <KpiCards
         totalCount={projects.length}
         activeCount={activeCount}
         showFinance={showFinance}
         totalBudget={totalBudget}
         totalPaid={totalPaid}
+        burnPct={burnPct}
+        overdueCount={overdueCount}
+        openRfiCount={totalOpenRfis}
       />
 
       {projects.length === 0 && folders.length === 0 ? (
@@ -196,88 +220,136 @@ export default async function AdminV2ProjectsPage({
   );
 }
 
-function KpiStrip({
+/**
+ * 5 rich KPI cards за Pencil-mockup. Кожна — окрема пастельна картка з:
+ * - eyebrow-label (uppercase tracking)
+ * - велике число
+ * - secondary рядок (контекст: з N, % освоєно, тощо)
+ * Дельти vs попередній період не показуємо — даних для них немає у БД.
+ */
+function KpiCards({
   totalCount,
   activeCount,
   showFinance,
   totalBudget,
   totalPaid,
+  burnPct,
+  overdueCount,
+  openRfiCount,
 }: {
   totalCount: number;
   activeCount: number;
   showFinance: boolean;
   totalBudget: number;
   totalPaid: number;
+  burnPct: number;
+  overdueCount: number;
+  openRfiCount: number;
 }) {
-  const paidPct =
-    showFinance && totalBudget > 0
-      ? Math.round((totalPaid / totalBudget) * 100)
-      : 0;
   return (
-    <div
-      className="flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-lg px-3.5 py-2 text-[12px]"
-      style={{
-        backgroundColor: T.panelSoft,
-        border: `1px solid ${T.borderSoft}`,
-        color: T.textSecondary,
-      }}
-    >
-      <KpiInline label="Усього" value={String(totalCount)} accent={T.sky} />
-      <Sep />
-      <KpiInline
-        label="Активних"
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <KpiCard
+        label="Активні проєкти"
         value={String(activeCount)}
+        secondary={`з ${totalCount}`}
         accent={T.emerald}
+        bg={T.emeraldSoft}
       />
-      {showFinance && (
-        <>
-          <Sep />
-          <KpiInline
-            label="Бюджет"
-            value={formatCurrency(totalBudget)}
-            accent={T.violet}
-          />
-          <Sep />
-          <KpiInline
-            label="Сплачено"
-            value={`${formatCurrency(totalPaid)} (${paidPct}%)`}
-            accent={T.textPrimary}
-          />
-        </>
+      {showFinance ? (
+        <KpiCard
+          label="Бюджет (план)"
+          value={formatCurrencyCompact(totalBudget)}
+          secondary={`сплачено ${formatCurrencyCompact(totalPaid)}`}
+          accent={T.violet}
+          bg={T.violetSoft}
+        />
+      ) : (
+        <KpiCard
+          label="Завершені"
+          value={String(0)}
+          secondary="з усіх проєктів"
+          accent={T.accentPrimary}
+          bg={T.accentPrimarySoft}
+        />
       )}
+      {showFinance && (
+        <KpiCard
+          label="Освоєно"
+          value={`${burnPct}%`}
+          secondary={burnPct > 80 ? "перевитрата ризик" : burnPct > 60 ? "помірно" : "у нормі"}
+          accent={burnPct > 80 ? T.danger : burnPct > 60 ? T.warning : T.success}
+          bg={burnPct > 80 ? T.dangerSoft : burnPct > 60 ? T.warningSoft : T.successSoft}
+        />
+      )}
+      <KpiCard
+        label="Відкриті RFI"
+        value={String(openRfiCount)}
+        secondary={openRfiCount === 0 ? "усі закриті" : "потребують уваги"}
+        accent={T.sky}
+        bg={T.skySoft}
+      />
+      <KpiCard
+        label="Ризики"
+        value={String(overdueCount)}
+        secondary={overdueCount === 0 ? "без просрочок" : "просрочених дедлайнів"}
+        accent={overdueCount > 0 ? T.danger : T.textMuted}
+        bg={overdueCount > 0 ? T.dangerSoft : T.panelSoft}
+      />
     </div>
   );
 }
 
-function KpiInline({
+function KpiCard({
   label,
   value,
+  secondary,
   accent,
+  bg,
 }: {
   label: string;
   value: string;
+  secondary: string;
   accent: string;
+  bg: string;
 }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5 min-w-0">
-      <span
-        className="text-[10px] uppercase tracking-wider"
+    <div
+      className="rounded-xl p-3.5 transition hover:shadow-sm"
+      style={{
+        backgroundColor: bg,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+    >
+      <div
+        className="text-[10px] font-bold uppercase tracking-wider mb-1.5"
         style={{ color: T.textMuted }}
       >
         {label}
-      </span>
-      <span className="font-semibold tabular-nums" style={{ color: accent }}>
+      </div>
+      <div
+        className="text-[24px] font-extrabold tabular-nums leading-none mb-1"
+        style={{ color: accent }}
+      >
         {value}
-      </span>
-    </span>
+      </div>
+      <div
+        className="text-[11px] font-medium"
+        style={{ color: T.textSecondary }}
+      >
+        {secondary}
+      </div>
+    </div>
   );
 }
 
-function Sep() {
-  return (
-    <span aria-hidden style={{ color: T.borderStrong }}>
-      ·
-    </span>
-  );
+/** Компактний формат: 47 200 000 → "47.2М ₴". Для KPI cards. */
+function formatCurrencyCompact(n: number): string {
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}М ₴`;
+  if (abs >= 1_000) return `${Math.round(n / 1_000)}К ₴`;
+  return `${n.toFixed(0)} ₴`;
 }
+
+// Touch import щоб не виключати з ts-bundle (тримаю формат currency для table).
+void formatCurrency;
 
