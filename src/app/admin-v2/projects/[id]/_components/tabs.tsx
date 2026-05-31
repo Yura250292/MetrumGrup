@@ -64,11 +64,14 @@ export function ProjectTabs({
   projectId,
   project,
   tasksEnabled = false,
+  hideNav = false,
 }: {
   activeTab: string;
   projectId: string;
   project: ProjectDetailData;
   tasksEnabled?: boolean;
+  /** Не рендерити власну nav-стрічку — її показує SubNavTabs у parent. */
+  hideNav?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -114,6 +117,7 @@ export function ProjectTabs({
 
   return (
     <div className="flex flex-col gap-6">
+      {!hideNav && (
       <div
         ref={scrollRef}
         className="flex gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-none -mx-6 px-6 md:mx-0 md:px-0 pb-1 md:pb-0 rounded-none md:rounded-2xl md:p-1.5"
@@ -215,6 +219,7 @@ export function ProjectTabs({
           </div>
         </div>
       </div>
+      )}
 
       <div>
         {current === "overview" && <TabOverview project={project} />}

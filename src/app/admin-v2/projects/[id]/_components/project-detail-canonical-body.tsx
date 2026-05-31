@@ -140,14 +140,112 @@ export async function ProjectDetailCanonicalBody({
   ).length;
 
   return (
-    <div className="flex flex-col gap-5 pb-12">
-      <HeroCard
-        project={project}
-        tasksEnabled={tasksEnabled}
-      />
+    <ProjectOverviewContent
+      project={project}
+      stages={stages}
+      activeStage={activeStage}
+      completedStages={completedStages}
+      totalStages={totalStages}
+      overallProgress={overallProgress}
+      showFinance={showFinance}
+      totalBudget={totalBudget}
+      totalPaid={totalPaid}
+      budgetUsedPct={budgetUsedPct}
+      daysToDeadline={daysToDeadline}
+      overdueStages={overdueStages}
+      members={members.map((m) => ({
+        id: m.id,
+        userId: m.user.id,
+        userName: m.user.name ?? "—",
+        userRole: m.user.role,
+        userAvatar: m.user.avatar,
+        roleInProject: m.roleInProject,
+      }))}
+      canManageMembers={canManageMembers}
+      recentFiles={recentFiles.map((f) => ({
+        id: f.id,
+        name: f.name,
+        size: f.size,
+        mimeType: f.mimeType,
+        url: f.url,
+        createdAt: f.createdAt.toISOString(),
+      }))}
+      recentPhotoImages={recentPhotoImages.map((img) => ({
+        id: img.id,
+        url: img.url,
+        thumbnailUrl: img.thumbnailUrl,
+        caption: img.caption,
+        photoReportId: img.photoReportId,
+      }))}
+    />
+  );
+}
 
-      <SubNavTabs projectId={project.id} tasksEnabled={tasksEnabled} />
+/**
+ * Контент Overview-таби: KPI strip + 2-колонкова сітка
+ * (Stages | Risks/Team/Files/Photos). Без hero/nav — рендериться у
+ * /[id]/page.tsx нижче за стабільним Hero+SubNavTabs.
+ */
+type OverviewStage = {
+  id: string;
+  status: string;
+  progress: number;
+  endDate: Date | null;
+  startDate: Date | null;
+  customName: string | null;
+  stage: string | null;
+  sortOrder: number;
+  notes: string | null;
+  unit: string | null;
+  planVolume: unknown;
+  factVolume: unknown;
+  responsibleUser: { id: string; name: string | null; avatar: string | null } | null;
+};
 
+export function ProjectOverviewContent({
+  project,
+  stages,
+  activeStage,
+  completedStages,
+  totalStages,
+  overallProgress,
+  showFinance,
+  totalBudget,
+  totalPaid,
+  budgetUsedPct,
+  daysToDeadline,
+  overdueStages,
+  members,
+  canManageMembers,
+  recentFiles,
+  recentPhotoImages,
+}: {
+  project: ProjectShape;
+  stages: OverviewStage[];
+  activeStage: OverviewStage | null;
+  completedStages: number;
+  totalStages: number;
+  overallProgress: number;
+  showFinance: boolean;
+  totalBudget: number;
+  totalPaid: number;
+  budgetUsedPct: number;
+  daysToDeadline: number | null;
+  overdueStages: number;
+  members: TeamMemberRow[];
+  canManageMembers: boolean;
+  recentFiles: Array<{
+    id: string;
+    name: string;
+    size: number;
+    mimeType: string;
+    url: string;
+    createdAt: string;
+  }>;
+  recentPhotoImages: RecentPhotoImage[];
+}) {
+  return (
+    <div className="flex flex-col gap-5">
       <KpiStrip
         overallProgress={overallProgress}
         completedStages={completedStages}
@@ -178,38 +276,18 @@ export async function ProjectDetailCanonicalBody({
           />
           <TeamCard
             project={project}
-            members={members.map((m) => ({
-              id: m.id,
-              userId: m.user.id,
-              userName: m.user.name ?? "—",
-              userRole: m.user.role,
-              userAvatar: m.user.avatar,
-              roleInProject: m.roleInProject,
-            }))}
+            members={members}
             canManageMembers={canManageMembers}
           />
           <FilesCard
             projectId={project.id}
             totalCount={project._count.files}
-            recentFiles={recentFiles.map((f) => ({
-              id: f.id,
-              name: f.name,
-              size: f.size,
-              mimeType: f.mimeType,
-              url: f.url,
-              createdAt: f.createdAt.toISOString(),
-            }))}
+            recentFiles={recentFiles}
           />
           <PhotosCard
             projectId={project.id}
             totalCount={project._count.photoReports}
-            recentImages={recentPhotoImages.map((img) => ({
-              id: img.id,
-              url: img.url,
-              thumbnailUrl: img.thumbnailUrl,
-              caption: img.caption,
-              photoReportId: img.photoReportId,
-            }))}
+            recentImages={recentPhotoImages}
           />
         </div>
       </div>
@@ -241,7 +319,7 @@ type ProjectShape = {
   _count: { photoReports: number; files: number; financeEntries: number };
 };
 
-function HeroCard({
+export function HeroCard({
   project,
   tasksEnabled,
 }: {
@@ -1323,51 +1401,66 @@ function formatShortDate(d: Date | string): string {
  * "Overview"-tab). Кожен chip → legacy URL з відповідним ?tab=X
  * і вертає той самий проект з повним функціоналом.
  */
-function SubNavTabs({
+/**
+ * Stable суб-навігація проєкту. Усі links → `?tab=X` на тому самому
+ * /[id], щоб hero + nav залишались на місці, а нижче переключався контент.
+ * "Етапи" окремий route /stages-v2 (повна сторінка з власним керуванням).
+ */
+export function SubNavTabs({
   projectId,
   tasksEnabled,
+  activeTab,
 }: {
   projectId: string;
   tasksEnabled: boolean;
+  /** "overview" | "stages" | "tasks" | "estimates" | ... */
+  activeTab: string;
 }) {
-  const tabs: Array<{ label: string; href: string; icon: typeof ListChecks; active?: boolean }> = [
+  const tabs: Array<{ id: string; label: string; href: string; icon: typeof ListChecks }> = [
     {
+      id: "overview",
       label: "Огляд",
-      href: `/admin-v2/projects/${projectId}/v2`,
+      href: `/admin-v2/projects/${projectId}`,
       icon: Building,
-      active: true,
     },
     {
+      id: "stages",
       label: "Етапи",
       href: `/admin-v2/projects/${projectId}/stages-v2`,
       icon: ListChecks,
     },
     {
+      id: "estimates",
       label: "Кошториси",
       href: `/admin-v2/projects/${projectId}?tab=estimates`,
       icon: Briefcase,
     },
     {
+      id: "finances",
       label: "Фінанси",
       href: `/admin-v2/projects/${projectId}?tab=finances`,
       icon: Wallet,
     },
     {
+      id: "documents",
       label: "Документи",
       href: `/admin-v2/projects/${projectId}?tab=documents`,
       icon: HardHat,
     },
     {
+      id: "media",
       label: "Медіа",
       href: `/admin-v2/projects/${projectId}?tab=media`,
       icon: Briefcase,
     },
     {
+      id: "team",
       label: "Команда",
       href: `/admin-v2/projects/${projectId}?tab=team`,
       icon: Users,
     },
     {
+      id: "activity",
       label: "Активність",
       href: `/admin-v2/projects/${projectId}?tab=activity`,
       icon: Clock,
@@ -1375,6 +1468,7 @@ function SubNavTabs({
   ];
   if (tasksEnabled) {
     tabs.splice(2, 0, {
+      id: "tasks",
       label: "Задачі",
       href: `/admin-v2/projects/${projectId}?tab=tasks`,
       icon: Check,
@@ -1389,20 +1483,24 @@ function SubNavTabs({
       }}
       aria-label="Розділи проєкту"
     >
-      {tabs.map((t) => (
-        <Link
-          key={t.href}
-          href={t.href}
-          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:brightness-95"
-          style={{
-            backgroundColor: t.active ? T.accentPrimarySoft : "transparent",
-            color: t.active ? T.accentPrimary : T.textSecondary,
-          }}
-        >
-          <t.icon size={14} />
-          {t.label}
-        </Link>
-      ))}
+      {tabs.map((t) => {
+        const active = t.id === activeTab;
+        return (
+          <Link
+            key={t.href}
+            href={t.href}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:brightness-95"
+            style={{
+              backgroundColor: active ? T.accentPrimarySoft : "transparent",
+              color: active ? T.accentPrimary : T.textSecondary,
+            }}
+            aria-current={active ? "page" : undefined}
+          >
+            <t.icon size={14} />
+            {t.label}
+          </Link>
+        );
+      })}
     </nav>
   );
 }
