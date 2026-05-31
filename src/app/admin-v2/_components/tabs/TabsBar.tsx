@@ -7,7 +7,7 @@ import { useTabs } from "./TabsProvider";
 import { iconFromKey } from "../../_lib/tabs/icon-map";
 import type { Tab } from "../../_lib/tabs/types";
 
-const BAR_HEIGHT = 36;
+const BAR_HEIGHT = 42;
 
 export function TabsBar() {
   const tabs = useTabs();
@@ -122,17 +122,25 @@ export function TabsBar() {
                 setMenu({ tabId: tab.id, x: e.clientX, y: e.clientY });
               }}
               title={tab.path}
-              className="group relative flex items-center gap-2 px-3 cursor-pointer min-w-[140px] max-w-[220px] transition-colors"
+              className="group relative flex items-center gap-2 px-3.5 cursor-pointer min-w-[180px] max-w-[260px] transition-colors"
               style={{
                 color: isActive ? T.textPrimary : T.textSecondary,
                 backgroundColor: isActive ? T.panel : "transparent",
                 borderRight: `1px solid ${T.borderSoft}`,
-                borderTop: isActive ? `2px solid ${T.accentPrimary}` : `2px solid transparent`,
-                fontWeight: isActive ? 600 : 500,
+                borderTop: isActive
+                  ? `2px solid ${T.accentPrimary}`
+                  : `2px solid transparent`,
+                fontWeight: isActive ? 700 : 500,
               }}
             >
-              <Icon size={14} style={{ color: isActive ? T.accentPrimary : T.textMuted, flexShrink: 0 }} />
-              <span className="flex-1 text-[12.5px] truncate">{tab.title}</span>
+              <Icon
+                size={15}
+                style={{
+                  color: isActive ? T.accentPrimary : T.textSecondary,
+                  flexShrink: 0,
+                }}
+              />
+              <span className="flex-1 text-[13px] truncate">{tab.title}</span>
               <button
                 type="button"
                 aria-label="Закрити вкладку"
