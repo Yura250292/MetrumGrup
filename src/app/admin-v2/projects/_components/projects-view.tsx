@@ -36,6 +36,7 @@ export function ProjectsView({
   breadcrumbs,
   isSuperAdmin,
   showFinance = false,
+  currentUserId,
 }: {
   projects: ProjectRow[];
   canDelete: boolean;
@@ -46,6 +47,7 @@ export function ProjectsView({
   breadcrumbs: BreadcrumbItem[];
   isSuperAdmin?: boolean;
   showFinance?: boolean;
+  currentUserId: string;
 }) {
   const isDesktop = useIsDesktop();
   const initial: Mode = isDesktop ? "table" : "cards";
@@ -168,6 +170,7 @@ export function ProjectsView({
           folders={folders}
           isSuperAdmin={isSuperAdmin}
           showFinance={showFinance}
+          currentUserId={currentUserId}
           onRenameFolder={handleRenameFolder}
           onDeleteFolder={handleDeleteFolder}
           onMoveFolder={(id) => setMoveFolderId(id)}

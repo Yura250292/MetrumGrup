@@ -41,12 +41,22 @@ export function ProjectCardV2({
   canDelete,
   currentFolderId,
   showFinance,
+  currentUserId,
 }: {
   project: ProjectRow;
   canDelete: boolean;
   currentFolderId: string | null;
+  /** Глобальний доступ до фінансів (SUPER_ADMIN — canViewFinance). */
   showFinance: boolean;
+  /** ID поточного користувача — для per-project PM-доступу. */
+  currentUserId: string;
 }) {
+  // Бюджет на картці видимий якщо:
+  //   - користувач має глобальний доступ (SUPER_ADMIN), АБО
+  //   - користувач є project.manager для цього проєкту (ПМ свого проєкту).
+  // Все ще STRICT для решти: цифри інших проєктів недоступні.
+  const canSeeBudget =
+    showFinance || project.manager?.id === currentUserId;
   const extra = project.extra;
   const isActive = project.status === "ACTIVE";
   const isDraft = project.status === "DRAFT";
@@ -61,7 +71,7 @@ export function ProjectCardV2({
         : "етапи не задані";
 
   const budgetPct =
-    showFinance && project.totalBudget > 0
+    canSeeBudget && project.totalBudget > 0
       ? Math.round(
           (Number(project.totalPaid) / Number(project.totalBudget)) * 100,
         )
@@ -225,7 +235,7 @@ export function ProjectCardV2({
           className="flex items-center justify-between gap-2 pt-2 border-t text-[11px]"
           style={{ borderColor: T.borderSoft }}
         >
-          {showFinance && project.totalBudget > 0 ? (
+          {canSeeBudget && project.totalBudget > 0 ? (
             <div className="flex flex-col min-w-0">
               <span className="font-bold tabular-nums" style={{ color: T.textPrimary }}>
                 {formatCompact(Number(project.totalPaid))} /{" "}

@@ -20,6 +20,7 @@ export function ProjectsCards({
   folders = [],
   isSuperAdmin,
   showFinance = false,
+  currentUserId,
   onRenameFolder,
   onDeleteFolder,
   onMoveFolder,
@@ -30,6 +31,7 @@ export function ProjectsCards({
   folders?: FolderItem[];
   isSuperAdmin?: boolean;
   showFinance?: boolean;
+  currentUserId: string;
   onRenameFolder?: (id: string, name: string) => void;
   onDeleteFolder?: (id: string) => void;
   onMoveFolder?: (id: string) => void;
@@ -79,6 +81,7 @@ export function ProjectsCards({
               canDelete={canDelete}
               currentFolderId={currentFolderId}
               showFinance={showFinance}
+              currentUserId={currentUserId}
             />
           </motion.div>
         ) : (
@@ -88,6 +91,7 @@ export function ProjectsCards({
             canDelete={canDelete}
             currentFolderId={currentFolderId}
             showFinance={showFinance}
+            currentUserId={currentUserId}
           />
         );
       })}

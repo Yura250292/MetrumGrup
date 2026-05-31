@@ -189,6 +189,7 @@ export default async function AdminV2ProjectsPage({
           breadcrumbs={breadcrumbs}
           isSuperAdmin={isSuperAdmin}
           showFinance={showFinance}
+          currentUserId={session.user.id}
         />
       )}
     </div>
