@@ -10,6 +10,7 @@ import {
   FlaskConical,
   Link2,
   Loader2,
+  Pencil,
   Sparkles,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
@@ -104,6 +105,20 @@ export function ProjectHeaderActions({
                 border: `1px solid ${T.borderSoft}`,
               }}
             >
+              <MenuItem
+                asLink
+                href={`/admin-v2/projects/${projectId}/edit`}
+                icon={<Pencil size={14} style={{ color: T.accentPrimary }} />}
+                label="Редагувати"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div
+                style={{
+                  height: 1,
+                  backgroundColor: T.borderSoft,
+                  margin: "2px 0",
+                }}
+              />
               <MenuItem
                 icon={<Sparkles size={14} style={{ color: T.violet }} />}
                 label="AI · Синх. з фінансами"
