@@ -7,20 +7,20 @@ import { assertCanAccessFirm } from "@/lib/firm/scope";
 import {
   ArrowLeft,
   ArrowUpRight,
-  Calendar,
-  CalendarCheck,
   Check,
   ChevronRight,
   Clock,
   Layers,
-  ListChecks,
-  MoreHorizontal,
   Pause,
-  Pencil,
   Plus,
   TrendingUp,
   Users,
 } from "lucide-react";
+import {
+  StageStatusButton,
+  StageProgressSlider,
+  StageDatesEditor,
+} from "./_components/stage-actions-client";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +56,10 @@ export default async function StagesV2Page({
   const completed = stages.filter((s) => s.status === "COMPLETED").length;
   const inProgress = stages.find((s) => s.status === "IN_PROGRESS") ?? null;
   const pending = stages.filter((s) => s.status === "PENDING").length;
+
+  // CRUD дозволено лише SUPER_ADMIN/MANAGER (співпадає з API PATCH/DELETE).
+  const canEdit =
+    session.user.role === "SUPER_ADMIN" || session.user.role === "MANAGER";
 
   // Project time window
   const projectStart =
@@ -149,18 +153,20 @@ export default async function StagesV2Page({
         projectEnd={projectEnd}
       />
 
-      {inProgress && <ActiveStageCard stage={inProgress} />}
+      {inProgress && <ActiveStageCard stage={inProgress} canEdit={canEdit} />}
 
       <CompactList
         title="Заплановані"
         stages={stages.filter((s) => s.status === "PENDING")}
         tone="pending"
+        canEdit={canEdit}
       />
 
       <CompactList
         title="Завершені"
         stages={stages.filter((s) => s.status === "COMPLETED")}
         tone="done"
+        canEdit={canEdit}
       />
     </div>
   );
@@ -347,7 +353,7 @@ function GanttStrip({
   );
 }
 
-function ActiveStageCard({ stage }: { stage: StageType }) {
+function ActiveStageCard({ stage, canEdit }: { stage: StageType; canEdit: boolean }) {
   const planVolume = Number(stage.planVolume ?? 0);
   const factVolume = Number(stage.factVolume ?? 0);
   const volumePct = planVolume > 0 ? Math.round((factVolume / planVolume) * 100) : 0;
@@ -399,31 +405,9 @@ function ActiveStageCard({ stage }: { stage: StageType }) {
           )}
         </div>
         <div className="flex items-start gap-1.5">
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-lg"
-            style={{
-              backgroundColor: T.panel,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          >
-            <Pencil size={15} style={{ color: T.textSecondary }} />
-          </button>
-          <button
-            className="flex h-9 w-9 items-center justify-center rounded-lg"
-            style={{
-              backgroundColor: T.panel,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          >
-            <MoreHorizontal size={15} style={{ color: T.textSecondary }} />
-          </button>
-          <button
-            className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12px] font-semibold"
-            style={{ backgroundColor: T.success, color: "#FFFFFF" }}
-          >
-            <Check size={14} />
-            Завершити
-          </button>
+          {canEdit && (
+            <StageStatusButton stageId={stage.id} status={stage.status} />
+          )}
         </div>
       </div>
 
@@ -498,6 +482,39 @@ function ActiveStageCard({ stage }: { stage: StageType }) {
           barColor={T.violet}
         />
       </div>
+
+      {canEdit && (
+        <div
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4 px-5 py-3"
+          style={{ borderTop: `1px solid ${T.borderSoft}` }}
+        >
+          <div>
+            <label
+              className="block text-[10px] font-bold tracking-wider mb-1.5"
+              style={{ color: T.textMuted }}
+            >
+              ПРОГРЕС
+            </label>
+            <StageProgressSlider
+              stageId={stage.id}
+              initialProgress={stage.progress}
+            />
+          </div>
+          <div>
+            <label
+              className="block text-[10px] font-bold tracking-wider mb-1.5"
+              style={{ color: T.textMuted }}
+            >
+              ДАТИ
+            </label>
+            <StageDatesEditor
+              stageId={stage.id}
+              startDate={stage.startDate}
+              endDate={stage.endDate}
+            />
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -565,10 +582,12 @@ function CompactList({
   title,
   stages,
   tone,
+  canEdit,
 }: {
   title: string;
   stages: StageType[];
   tone: "pending" | "done";
+  canEdit: boolean;
 }) {
   if (stages.length === 0) return null;
   const iconBg = tone === "done" ? T.successSoft : T.panelSoft;
@@ -602,7 +621,7 @@ function CompactList({
           return (
             <li
               key={s.id}
-              className="grid grid-cols-[24px_1fr_auto_auto] items-center gap-3 px-5 py-2.5"
+              className="grid grid-cols-[24px_1fr_auto_auto_auto] items-center gap-3 px-5 py-2.5"
               style={{ borderTop: i > 0 ? `1px solid ${T.borderSoft}` : "none" }}
             >
               <span
@@ -632,6 +651,15 @@ function CompactList({
                 {" – "}
                 {s.endDate ? formatShortDate(s.endDate) : "—"}
               </div>
+              {canEdit ? (
+                <StageStatusButton
+                  stageId={s.id}
+                  status={s.status}
+                  className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[11px] font-semibold transition disabled:opacity-60"
+                />
+              ) : (
+                <span />
+              )}
               <ChevronRight size={14} style={{ color: T.textMuted }} />
             </li>
           );
