@@ -54,29 +54,77 @@ export default async function AdminV2ProjectsPage({
   const extrasMap = new Map<string, ProjectExtra>();
   if (projects.length > 0) {
     const ids = projects.map((p) => p.id);
-    const extras = await prisma.project.findMany({
-      where: { id: { in: ids }, ...firmWhereForProject(firmId) },
-      select: {
-        id: true,
-        expectedEndDate: true,
-        coverImageUrl: true,
-        estimates: { select: { id: true, status: true } },
-        photoReports: {
-          orderBy: { createdAt: "desc" },
-          take: 1,
-          include: { images: { take: 1, select: { url: true } } },
+    const [extras, stageRecords, rfiCounts] = await Promise.all([
+      prisma.project.findMany({
+        where: { id: { in: ids }, ...firmWhereForProject(firmId) },
+        select: {
+          id: true,
+          expectedEndDate: true,
+          coverImageUrl: true,
+          estimates: { select: { id: true, status: true } },
+          photoReports: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            include: { images: { take: 1, select: { url: true } } },
+          },
         },
-      },
-    });
+      }),
+      // Активний етап + загальна кількість на проєкт. Один query, group у JS.
+      prisma.projectStageRecord.findMany({
+        where: {
+          projectId: { in: ids },
+          kind: "STAGE",
+        },
+        select: {
+          projectId: true,
+          customName: true,
+          stage: true,
+          status: true,
+          sortOrder: true,
+        },
+        orderBy: { sortOrder: "asc" },
+      }),
+      // Open RFI per project
+      prisma.rFI.groupBy({
+        by: ["projectId"],
+        where: {
+          projectId: { in: ids },
+          status: { in: ["OPEN", "IN_PROGRESS"] },
+        },
+        _count: { id: true },
+      }).catch(() => [] as Array<{ projectId: string; _count: { id: number } }>),
+    ]);
+
+    // Group stages by project
+    const stagesByProject = new Map<
+      string,
+      Array<{ customName: string | null; stage: string | null; status: string; sortOrder: number }>
+    >();
+    for (const s of stageRecords) {
+      const list = stagesByProject.get(s.projectId) ?? [];
+      list.push(s);
+      stagesByProject.set(s.projectId, list);
+    }
+    const rfiByProject = new Map(
+      rfiCounts.map((r) => [r.projectId, r._count.id]),
+    );
+
     for (const e of extras) {
       const approved = e.estimates.some(
         (es) => es.status === "APPROVED" || es.status === "FINANCE_REVIEW",
       );
+      const stages = stagesByProject.get(e.id) ?? [];
+      const activeIdx = stages.findIndex((s) => s.status === "IN_PROGRESS");
+      const active = activeIdx >= 0 ? stages[activeIdx] : null;
       extrasMap.set(e.id, {
         estimatesCount: e.estimates.length,
         hasApprovedEstimate: approved,
         expectedEndDate: e.expectedEndDate,
         coverImage: e.coverImageUrl ?? e.photoReports[0]?.images[0]?.url ?? null,
+        activeStageName: active?.customName ?? active?.stage ?? null,
+        activeStageIndex: activeIdx >= 0 ? activeIdx + 1 : null,
+        totalStageCount: stages.length,
+        openRfiCount: rfiByProject.get(e.id) ?? 0,
       });
     }
   }
@@ -88,6 +136,10 @@ export default async function AdminV2ProjectsPage({
       hasApprovedEstimate: false,
       expectedEndDate: null,
       coverImage: null,
+      activeStageName: null,
+      activeStageIndex: null,
+      totalStageCount: 0,
+      openRfiCount: 0,
     },
   }));
 
@@ -136,6 +188,7 @@ export default async function AdminV2ProjectsPage({
           folders={JSON.parse(JSON.stringify(folders))}
           breadcrumbs={breadcrumbs}
           isSuperAdmin={isSuperAdmin}
+          showFinance={showFinance}
         />
       )}
     </div>
