@@ -31,6 +31,9 @@ import {
   Plus,
   CircleDot,
 } from "lucide-react";
+import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
+import { ProjectHeaderActions } from "../_components/project-header-actions";
+import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +70,7 @@ export default async function ProjectDetailV2Page({
   }
 
   const showFinance = canViewFinance(session.user.role);
+  const tasksEnabled = await isTasksEnabledForProject(project.id);
 
   const stages = project.stages.filter((s) => s.kind === "STAGE");
   const completedStages = stages.filter((s) => s.status === "COMPLETED").length;
@@ -118,7 +122,12 @@ export default async function ProjectDetailV2Page({
         </span>
       </div>
 
-      <HeroCard project={project} />
+      <HeroCard
+        project={project}
+        tasksEnabled={tasksEnabled}
+      />
+
+      <SubNavTabs projectId={project.id} tasksEnabled={tasksEnabled} />
 
       <KpiStrip
         overallProgress={overallProgress}
@@ -179,7 +188,13 @@ type ProjectShape = {
   _count: { photoReports: number; files: number; financeEntries: number };
 };
 
-function HeroCard({ project }: { project: ProjectShape }) {
+function HeroCard({
+  project,
+  tasksEnabled,
+}: {
+  project: ProjectShape;
+  tasksEnabled: boolean;
+}) {
   const code = `PRJ-${project.slug.toUpperCase().slice(0, 12)}`;
   const clientName =
     project.clientCounterparty?.name ?? project.client?.name ?? project.clientName ?? null;
@@ -197,22 +212,16 @@ function HeroCard({ project }: { project: ProjectShape }) {
       style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
     >
       <div className="grid grid-cols-1 md:grid-cols-[280px_1fr_auto] gap-0">
-        <div
-          className="relative aspect-[16/11] md:aspect-auto flex items-center justify-center overflow-hidden"
-          style={{ backgroundColor: "#1E293B" }}
-        >
-          {project.coverImageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={project.coverImageUrl}
-              alt={project.title}
-              className="h-full w-full object-cover"
+        <div className="relative aspect-[16/11] md:aspect-auto md:min-h-[200px] overflow-hidden">
+          {/* Interactive cover з upload UI (наведення показує кнопку завантажити). */}
+          <div className="absolute inset-0 [&>div]:!aspect-auto [&>div]:!h-full">
+            <ProjectCoverUpload
+              projectId={project.id}
+              currentUrl={project.coverImageUrl}
             />
-          ) : (
-            <Building size={48} style={{ color: "#475569" }} />
-          )}
+          </div>
           <div
-            className="absolute bottom-3 left-3 right-3 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium"
+            className="absolute bottom-3 left-3 right-3 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium pointer-events-none z-10"
             style={{ backgroundColor: "rgba(15, 23, 42, 0.7)", color: "#CBD5E1" }}
           >
             <Briefcase size={11} />
@@ -303,18 +312,11 @@ function HeroCard({ project }: { project: ProjectShape }) {
         </div>
 
         <div className="hidden md:flex flex-col items-end gap-3 px-5 py-5">
-          <div className="flex gap-1.5">
-            <IconBtn icon={Pencil} title="Редагувати" />
-            <IconBtn icon={MoreHorizontal} title="Ще" />
-          </div>
-          <Link
-            href={`/admin-v2/projects/${project.id}/edit`}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition hover:brightness-110"
-            style={{ backgroundColor: T.accentPrimary, color: "#FFFFFF" }}
-          >
-            <Send size={14} />
-            Опублікувати
-          </Link>
+          <ProjectHeaderActions
+            projectId={project.id}
+            isTestProject={project.isTestProject}
+            tasksEnabled={tasksEnabled}
+          />
           {project.manager?.name && (
             <div
               className="rounded-xl px-3 py-2.5 max-w-[220px]"
@@ -901,4 +903,88 @@ function formatShortDate(d: Date | string): string {
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   return `${dd}.${mm}`;
+}
+
+/**
+ * Sub-nav з лінками на існуючі legacy tabs (поки v2 detail =
+ * "Overview"-tab). Кожен chip → legacy URL з відповідним ?tab=X
+ * і вертає той самий проект з повним функціоналом.
+ */
+function SubNavTabs({
+  projectId,
+  tasksEnabled,
+}: {
+  projectId: string;
+  tasksEnabled: boolean;
+}) {
+  const tabs: Array<{ label: string; href: string; icon: typeof ListChecks; active?: boolean }> = [
+    {
+      label: "Огляд",
+      href: `/admin-v2/projects/${projectId}/v2`,
+      icon: Building,
+      active: true,
+    },
+    {
+      label: "Етапи",
+      href: `/admin-v2/projects/${projectId}/stages-v2`,
+      icon: ListChecks,
+    },
+    {
+      label: "Кошториси",
+      href: `/admin-v2/projects/${projectId}?tab=estimates`,
+      icon: Briefcase,
+    },
+    {
+      label: "Фінанси",
+      href: `/admin-v2/projects/${projectId}?tab=finance`,
+      icon: Wallet,
+    },
+    {
+      label: "Документи",
+      href: `/admin-v2/projects/${projectId}?tab=files`,
+      icon: HardHat,
+    },
+    {
+      label: "Команда",
+      href: `/admin-v2/projects/${projectId}?tab=team`,
+      icon: Users,
+    },
+    {
+      label: "Активність",
+      href: `/admin-v2/projects/${projectId}?tab=activity`,
+      icon: Clock,
+    },
+  ];
+  if (tasksEnabled) {
+    tabs.splice(2, 0, {
+      label: "Задачі",
+      href: `/admin-v2/projects/${projectId}?tab=tasks`,
+      icon: Check,
+    });
+  }
+  return (
+    <nav
+      className="flex flex-wrap items-center gap-1 rounded-2xl p-1.5"
+      style={{
+        backgroundColor: T.panel,
+        border: `1px solid ${T.borderSoft}`,
+      }}
+      aria-label="Розділи проєкту"
+    >
+      {tabs.map((t) => (
+        <Link
+          key={t.href}
+          href={t.href}
+          className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:brightness-95"
+          style={{
+            backgroundColor: t.active ? T.accentPrimarySoft : "transparent",
+            color: t.active ? T.accentPrimary : T.textSecondary,
+          }}
+        >
+          <t.icon size={14} />
+          {t.label}
+        </Link>
+      ))}
+    </nav>
+  );
 }
