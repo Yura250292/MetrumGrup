@@ -1,9 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
+import { AlertOctagon, Star, UserX } from "lucide-react";
 import type { ProjectStatus } from "@prisma/client";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import type { ProjectRow } from "./projects-types";
+
+/**
+ * Preset = поіменована комбінація filters/sort. Натиск встановлює всі
+ * параметри за один клік. Дані лічильників — у parent через extraInfo.
+ */
+export type Preset = "MINE" | "OVERDUE" | "NO_PM";
 
 export type StatusFilter = "ALL" | ProjectStatus;
 export type SortMode = "updated" | "deadline" | "budget" | "title";
@@ -41,6 +48,9 @@ export function ProjectsFilterBar({
   onManagerChange,
   sortMode,
   onSortChange,
+  currentUserId,
+  activePreset,
+  onPresetClick,
 }: {
   projects: ProjectRow[];
   statusFilter: StatusFilter;
@@ -51,6 +61,9 @@ export function ProjectsFilterBar({
   onManagerChange: (id: string | null) => void;
   sortMode: SortMode;
   onSortChange: (s: SortMode) => void;
+  currentUserId: string;
+  activePreset: Preset | null;
+  onPresetClick: (preset: Preset) => void;
 }) {
   // Counts per status, computed once per render.
   const counts = useMemo(() => {
@@ -78,6 +91,21 @@ export function ProjectsFilterBar({
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "uk"));
   }, [projects]);
+
+  // Лічильники для preset-ів (показуємо тільки коли > 0)
+  const presetCounts = useMemo(() => {
+    const now = Date.now();
+    return {
+      MINE: projects.filter((p) => p.manager?.id === currentUserId).length,
+      OVERDUE: projects.filter((p) => {
+        const due = p.extra.expectedEndDate;
+        if (!due) return false;
+        if (p.status === "COMPLETED" || p.status === "CANCELLED") return false;
+        return new Date(due).getTime() < now;
+      }).length,
+      NO_PM: projects.filter((p) => !p.manager).length,
+    };
+  }, [projects, currentUserId]);
 
   return (
     <div
@@ -162,7 +190,81 @@ export function ProjectsFilterBar({
         onChange={(v) => onSortChange(v as SortMode)}
         options={SORT_OPTIONS}
       />
+
+      {/* Right-aligned presets */}
+      <div className="ml-auto flex flex-wrap items-center gap-1">
+        <PresetChip
+          icon={<Star size={11} />}
+          label="Мої"
+          count={presetCounts.MINE}
+          active={activePreset === "MINE"}
+          onClick={() => onPresetClick("MINE")}
+          accent={T.violet}
+          softBg={T.violetSoft}
+        />
+        <PresetChip
+          icon={<AlertOctagon size={11} />}
+          label="Просрочка"
+          count={presetCounts.OVERDUE}
+          active={activePreset === "OVERDUE"}
+          onClick={() => onPresetClick("OVERDUE")}
+          accent={T.danger}
+          softBg={T.dangerSoft}
+        />
+        <PresetChip
+          icon={<UserX size={11} />}
+          label="Без ПМ"
+          count={presetCounts.NO_PM}
+          active={activePreset === "NO_PM"}
+          onClick={() => onPresetClick("NO_PM")}
+          accent={T.warning}
+          softBg={T.warningSoft}
+        />
+      </div>
     </div>
+  );
+}
+
+function PresetChip({
+  icon,
+  label,
+  count,
+  active,
+  onClick,
+  accent,
+  softBg,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  accent: string;
+  softBg: string;
+}) {
+  if (count === 0 && !active) return null;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold transition hover:brightness-95"
+      style={{
+        backgroundColor: active ? softBg : "transparent",
+        color: active ? accent : T.textSecondary,
+        border: `1px solid ${active ? accent : T.borderSoft}`,
+      }}
+    >
+      <span style={{ color: accent }}>{icon}</span>
+      {label}
+      {count > 0 && (
+        <span
+          className="text-[10px] font-bold tabular-nums"
+          style={{ color: active ? accent : T.textMuted }}
+        >
+          {count}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -210,12 +312,30 @@ export function applyProjectsFilterSort(
   status: StatusFilter,
   type: string | null,
   managerId: string | null,
+  preset: Preset | null,
+  currentUserId: string,
   sort: SortMode,
 ): ProjectRow[] {
   let out = projects;
   if (status !== "ALL") out = out.filter((p) => p.status === status);
   if (type) out = out.filter((p) => p.extra.type === type);
   if (managerId) out = out.filter((p) => p.manager?.id === managerId);
+
+  // Preset застосовується ПОВЕРХ інших фільтрів. Якщо потрібен AND
+  // з manual filter — preset просто переписує відповідну ось.
+  if (preset === "MINE") {
+    out = out.filter((p) => p.manager?.id === currentUserId);
+  } else if (preset === "OVERDUE") {
+    const now = Date.now();
+    out = out.filter((p) => {
+      const due = p.extra.expectedEndDate;
+      if (!due) return false;
+      if (p.status === "COMPLETED" || p.status === "CANCELLED") return false;
+      return new Date(due).getTime() < now;
+    });
+  } else if (preset === "NO_PM") {
+    out = out.filter((p) => !p.manager);
+  }
   out = [...out].sort((a, b) => {
     switch (sort) {
       case "deadline": {

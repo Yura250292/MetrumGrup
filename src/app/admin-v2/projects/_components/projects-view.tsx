@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LayoutGrid, Table as TableIcon, Plus, FolderPlus, Upload, Download } from "lucide-react";
+import {
+  LayoutGrid,
+  Table as TableIcon,
+  Plus,
+  FolderPlus,
+  Upload,
+  Download,
+  GanttChartSquare,
+} from "lucide-react";
 import {
   PageToolbar,
   ViewModeSwitcher,
@@ -21,16 +29,18 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { ProjectsCards } from "./projects-cards";
 import { ProjectsTable } from "./projects-table";
+import { ProjectsTimeline } from "./projects-timeline";
 import {
   ProjectsFilterBar,
   applyProjectsFilterSort,
   type StatusFilter,
   type SortMode,
+  type Preset,
 } from "./projects-filter-bar";
 import type { ProjectRow } from "./projects-types";
 
-type Mode = "cards" | "table";
-const MODES: Mode[] = ["cards", "table"];
+type Mode = "cards" | "table" | "timeline";
+const MODES: Mode[] = ["cards", "table", "timeline"];
 
 export function ProjectsView({
   projects,
@@ -68,14 +78,22 @@ export function ProjectsView({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [managerFilter, setManagerFilter] = useState<string | null>(null);
+  const [activePreset, setActivePreset] = useState<Preset | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("updated");
   const filtered = applyProjectsFilterSort(
     projects,
     statusFilter,
     typeFilter,
     managerFilter,
+    activePreset,
+    currentUserId,
     sortMode,
   );
+
+  // Toggle preset: повторний клік знімає, інший — переключає.
+  const togglePreset = (preset: Preset) => {
+    setActivePreset((cur) => (cur === preset ? null : preset));
+  };
 
   // Folder mutations (раніше жили у ProjectFoldersClient — переїхали сюди
   // щоб папки + проєкти жили в єдиному гріді).
@@ -184,6 +202,7 @@ export function ProjectsView({
             options={[
               { value: "table", label: "Таблиця", icon: TableIcon },
               { value: "cards", label: "Картки", icon: LayoutGrid },
+              { value: "timeline", label: "Шкала", icon: GanttChartSquare },
             ]}
           />
         }
@@ -212,8 +231,8 @@ export function ProjectsView({
         }
       />
 
-      {/* Filter+sort bar поверх grid — лише для cards view (в table свої сорти). */}
-      {mode === "cards" && projects.length > 0 && (
+      {/* Filter+sort bar поверх grid — для cards і timeline view (в table свої сорти). */}
+      {(mode === "cards" || mode === "timeline") && projects.length > 0 && (
         <ProjectsFilterBar
           projects={projects}
           statusFilter={statusFilter}
@@ -224,6 +243,9 @@ export function ProjectsView({
           onManagerChange={setManagerFilter}
           sortMode={sortMode}
           onSortChange={setSortMode}
+          currentUserId={currentUserId}
+          activePreset={activePreset}
+          onPresetClick={togglePreset}
         />
       )}
 
@@ -251,6 +273,7 @@ export function ProjectsView({
           onMoveFolder={(id) => setMoveFolderId(id)}
         />
       )}
+      {mode === "timeline" && <ProjectsTimeline projects={filtered} />}
 
       <CreateFolderDialog
         open={showCreateFolder}
