@@ -936,13 +936,18 @@ function SubNavTabs({
     },
     {
       label: "Фінанси",
-      href: `/admin-v2/projects/${projectId}?tab=finance`,
+      href: `/admin-v2/projects/${projectId}?tab=finances`,
       icon: Wallet,
     },
     {
       label: "Документи",
-      href: `/admin-v2/projects/${projectId}?tab=files`,
+      href: `/admin-v2/projects/${projectId}?tab=documents`,
       icon: HardHat,
+    },
+    {
+      label: "Медіа",
+      href: `/admin-v2/projects/${projectId}?tab=media`,
+      icon: Briefcase,
     },
     {
       label: "Команда",
