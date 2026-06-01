@@ -47,14 +47,17 @@ export async function GET(
       unit: true,
       quantity: true,
       itemType: true,
+      isReportable: true,
       sectionId: true,
       section: { select: { id: true, title: true } },
     },
     orderBy: [{ sectionId: "asc" }, { sortOrder: "asc" }],
   });
 
-  // Reportable = не матеріал (itemType ≠ 'material', null теж reportable).
-  const reportable = items.filter((it) => isReportableItemType(it.itemType));
+  // Reportable = не матеріал (itemType ≠ 'material') і не знято через ДКО REMOVE.
+  const reportable = items.filter(
+    (it) => isReportableItemType(it.itemType) && it.isReportable !== false,
+  );
 
   const approvedMap = await approvedQuantitiesFor(reportable.map((i) => i.id));
 

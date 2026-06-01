@@ -47,7 +47,7 @@ export async function checkProjectActivationReadiness(
       },
       sections: { select: { id: true }, take: 1 },
       items: {
-        select: { id: true, description: true, itemType: true },
+        select: { id: true, description: true, itemType: true, isReportable: true },
       },
     },
   });
@@ -60,7 +60,7 @@ export async function checkProjectActivationReadiness(
 
   const reportableItems = estimates
     .flatMap((e) => e.items)
-    .filter((i) => isReportableItemType(i.itemType));
+    .filter((i) => isReportableItemType(i.itemType) && i.isReportable !== false);
   const hasWork = reportableItems.length > 0;
 
   // Effective foreman per reportable item. Activate — рідкісна дія,

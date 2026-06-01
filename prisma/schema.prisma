@@ -637,6 +637,16 @@ model EstimateItem {
   /// Зворотний зв'язок: задачі, згенеровані з цього рядка кошторису.
   sourcedTasks        Task[]              @relation("EstimateItemToTask")
 
+  /// P10 (ДКО scope): джерело позиції. ORIGINAL = первинний кошторис;
+  /// CHANGE_ORDER = матеріалізована approved ДКО (не мутуємо frozen original).
+  sourceType              EstimateItemSource @default(ORIGINAL)
+  /// ChangeOrderItem, що породив цю позицію (трасування ДКО → робота).
+  sourceChangeOrderItemId String?
+  /// Для MODIFY-delta: базова позиція, яку коригує ця delta-робота.
+  baseEstimateItemId      String?
+  /// Чи доступна позиція для звітування виконробом. REMOVE через ДКО → false.
+  isReportable            Boolean            @default(true)
+
   @@index([engineKey])
   @@index([confidence])
   @@index([costCodeId])
@@ -644,6 +654,7 @@ model EstimateItem {
   @@index([parentItemId])
   @@index([foremanId])
   @@index([predecessorItemId])
+  @@index([sourceChangeOrderItemId])
   @@map("estimate_items")
 }
 
@@ -1496,6 +1507,12 @@ enum EstimateVersionType {
   ORIGINAL
   REVISED
   FINAL
+}
+
+/// P10: джерело позиції кошторису.
+enum EstimateItemSource {
+  ORIGINAL // первинний кошторис
+  CHANGE_ORDER // матеріалізована approved ДКО
 }
 
 model EstimateApprovalStep {
@@ -4604,6 +4621,13 @@ enum ChangeOrderType {
   SWAP // заміна (одне на інше)
 }
 
+/// P10: дія scope-рядка ДКО над кошторисом.
+enum ChangeOrderItemAction {
+  ADD // нова reportable-робота
+  MODIFY // delta до існуючої роботи
+  REMOVE // прибрати роботу зі звітування
+}
+
 enum ChangeOrderStatus {
   DRAFT // створено, ще не подано
   PENDING_PM // на затвердженні PM
@@ -4682,7 +4706,8 @@ model ChangeOrder {
 model ChangeOrderItem {
   id            String  @id @default(cuid())
   changeOrderId String
-  costCodeId    String
+  /// P10: опційний для scope-рядків (робота не завжди має cost code).
+  costCodeId    String?
   description   String
   unit          String
   qty           Decimal @db.Decimal(14, 4)
@@ -4693,11 +4718,31 @@ model ChangeOrderItem {
   sign          Int
   sortOrder     Int     @default(0)
 
+  /// P10 (scope-change). null = суто фінансовий рядок (legacy ДКО).
+  ///   ADD    → нова reportable-робота у кошторисі;
+  ///   MODIFY → delta-робота (baseEstimateItemId), не мутуючи frozen original;
+  ///   REMOVE → робота estimateItemId стає isReportable=false.
+  action            ChangeOrderItemAction?
+  /// Цільова існуюча робота для MODIFY / REMOVE.
+  estimateItemId    String?
+  /// Зміна обсягу для MODIFY (може бути відʼємною).
+  quantityDelta     Decimal? @db.Decimal(14, 4)
+  /// Новий повний обсяг для ADD (якщо не qty).
+  newQuantity       Decimal? @db.Decimal(14, 4)
+  /// Собівартість/ціна замовника для матеріалізованої роботи.
+  unitCost          Decimal? @db.Decimal(14, 2)
+  unitPriceCustomer Decimal? @db.Decimal(14, 2)
+  /// Розділ, відповідальний і виконавець для матеріалізованої ADD-роботи.
+  sectionId         String?
+  foremanId         String?
+  executorText      String?
+
   changeOrder ChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
-  costCode    CostCode    @relation("CostCodeChangeOrderItems", fields: [costCodeId], references: [id], onDelete: Restrict)
+  costCode    CostCode?   @relation("CostCodeChangeOrderItems", fields: [costCodeId], references: [id], onDelete: Restrict)
 
   @@index([changeOrderId])
   @@index([costCodeId])
+  @@index([estimateItemId])
   @@map("change_order_items")
 }
 

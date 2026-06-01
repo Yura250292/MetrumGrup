@@ -9,7 +9,7 @@ import {
 } from "@react-pdf/renderer";
 import type { ChangeOrder, ChangeOrderItem, Firm, Project } from "@prisma/client";
 
-type CostCodeLite = { code: string; name: string };
+type CostCodeLite = { code: string; name: string } | null;
 
 type ItemWithCode = ChangeOrderItem & { costCode: CostCodeLite };
 
@@ -161,7 +161,7 @@ function ChangeOrderDocument({ co }: { co: COForPdf }) {
           {co.items.map((item, idx) => (
             <View key={item.id} style={styles.row}>
               <Text style={styles.cellNo}>{idx + 1}</Text>
-              <Text style={styles.cellCode}>{item.costCode.code}</Text>
+              <Text style={styles.cellCode}>{item.costCode?.code ?? "—"}</Text>
               <Text style={styles.cellDesc}>{item.description}</Text>
               <Text style={styles.cellUnit}>{item.unit}</Text>
               <Text style={styles.cellQty}>
