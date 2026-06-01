@@ -78,7 +78,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 
   const existing = await loadOwnedReport(id, session.user.id, firmId);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (existing.status !== "DRAFT") {
+  if (existing.status !== "DRAFT" && existing.status !== "NEEDS_REVISION") {
     return NextResponse.json(
       { error: "Conflict", message: "Звіт уже надіслано — редагування неможливе" },
       { status: 409 },

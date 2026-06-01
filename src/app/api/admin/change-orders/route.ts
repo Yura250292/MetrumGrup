@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma, type ChangeOrderStatus, type ChangeOrderType } from "@prisma/client";
+import {
+  Prisma,
+  type ChangeOrderStatus,
+  type ChangeOrderType,
+  type ChangeOrderItemAction,
+} from "@prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
@@ -26,13 +31,23 @@ const VALID_STATUSES = new Set<ChangeOrderStatus>([
 const VALID_TYPES = new Set<ChangeOrderType>(["ADD", "REMOVE", "SWAP"]);
 
 type ItemInput = {
-  costCodeId: string;
+  costCodeId?: string | null;
   description: string;
   unit: string;
   qty: number;
   unitPrice: number;
   sign: 1 | -1;
   sortOrder?: number;
+  // P10 scope-зміна (опційно). Якщо action задано — costCodeId необовʼязковий.
+  action?: ChangeOrderItemAction | null;
+  estimateItemId?: string | null;
+  quantityDelta?: number | null;
+  newQuantity?: number | null;
+  unitCost?: number | null;
+  unitPriceCustomer?: number | null;
+  sectionId?: string | null;
+  foremanId?: string | null;
+  executorText?: string | null;
 };
 
 type CreateBody = {
@@ -142,7 +157,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!Array.isArray(body.items) || body.items.length === 0)
     return badRequest("items-required");
   for (const it of body.items) {
-    if (!it.costCodeId) return badRequest("item.costCodeId-required");
+    // costCodeId обовʼязковий лише для суто-фінансових рядків (без action).
+    if (!it.action && !it.costCodeId) return badRequest("item.costCodeId-required");
     if (it.qty == null || it.unitPrice == null)
       return badRequest("item.qty/unitPrice-required");
     if (it.sign !== 1 && it.sign !== -1) return badRequest("item.sign-invalid");
@@ -181,7 +197,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           aiConfidence: body.aiConfidence ?? null,
           items: {
             create: body.items.map((it, idx) => ({
-              costCodeId: it.costCodeId,
+              costCodeId: it.costCodeId ?? null,
               description: it.description,
               unit: it.unit,
               qty: new Prisma.Decimal(it.qty),
@@ -191,6 +207,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               ),
               sign: it.sign,
               sortOrder: it.sortOrder ?? idx,
+              // P10 scope-поля (null для звичайних фінансових рядків).
+              action: it.action ?? null,
+              estimateItemId: it.estimateItemId ?? null,
+              quantityDelta: it.quantityDelta != null ? new Prisma.Decimal(it.quantityDelta) : null,
+              newQuantity: it.newQuantity != null ? new Prisma.Decimal(it.newQuantity) : null,
+              unitCost: it.unitCost != null ? new Prisma.Decimal(it.unitCost) : null,
+              unitPriceCustomer:
+                it.unitPriceCustomer != null ? new Prisma.Decimal(it.unitPriceCustomer) : null,
+              sectionId: it.sectionId ?? null,
+              foremanId: it.foremanId ?? null,
+              executorText: it.executorText ?? null,
             })),
           },
         },

@@ -16,6 +16,7 @@ import { getNextEstimateNumber } from "@/lib/document-numbers";
 import { normalizeAiItems, type AiItem } from "@/lib/estimates/ai-item-normalizer";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
 import { indexEstimate, contextFromWizard } from "@/lib/estimates/indexer";
+import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 
 interface AiSection {
   title: string;
@@ -204,6 +205,12 @@ export async function POST(request: NextRequest) {
       projectId,
       newData: { title, totalAmount: completeEstimate!.totalAmount, source: "ai" },
     });
+
+    try {
+      await ensureActiveEstimateVersion(completeEstimate!.id, session.user.id);
+    } catch (err) {
+      console.error("[estimates/from-ai] ensureActiveEstimateVersion failed:", err);
+    }
 
     return NextResponse.json({ data: completeEstimate }, { status: 201 });
   } catch (error: any) {

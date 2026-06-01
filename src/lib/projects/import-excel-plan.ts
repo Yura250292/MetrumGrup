@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { auditLog } from "@/lib/audit";
+import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 import Decimal from "decimal.js";
 import type { ParsedPlanItem, ParseProjectPlanResult } from "@/lib/parsers/excel-project-plan-parser";
 
@@ -180,6 +181,15 @@ export async function importExcelPlanToEstimate(opts: {
       predecessorsUnresolved: result.predecessorsUnresolved,
     },
   });
+
+  // Гарантуємо активну версію v1 (після commit tx).
+  if (result.estimateId) {
+    try {
+      await ensureActiveEstimateVersion(result.estimateId, userId);
+    } catch (err) {
+      console.error("[import-excel-plan] ensureActiveEstimateVersion failed:", err);
+    }
+  }
 
   return result;
 }

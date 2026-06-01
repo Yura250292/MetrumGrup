@@ -29,6 +29,12 @@ export default async function ForemanReportInputPage({ params }: PageProps) {
 
   return (
     <LightShell title={project.title} backHref={backHref} hideBottomNav>
+      <a
+        href={`/foreman/report/project/${project.id}/progress`}
+        className="mb-4 flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-700"
+      >
+        📋 Табличний звіт по роботах кошторису
+      </a>
       <ReportInputForm projectId={project.id} projectTitle={project.title} />
     </LightShell>
   );
