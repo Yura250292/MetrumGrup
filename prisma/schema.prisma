@@ -202,8 +202,13 @@ model Project {
   /// LEGACY: попередник publicationVersion (rename). У БД ще є 11 non-null
   /// значень — лишаємо колонку, щоб не блокувати db push. Не читається.
   projectionVersion      Int                     @default(0)
+  /// Планова дата старту (заповнюється на формі «Новий проект»). Не означає,
+  /// що проект уже в роботі — фактичний старт ставиться окремо при activate.
   startDate              DateTime?
   expectedEndDate        DateTime?
+  /// Фактична дата старту. Ставиться вручну PM/Owner при запуску проекту
+  /// (POST /api/admin/projects/[id]/activate), коли план робіт заморожено.
+  actualStartDate        DateTime?
   actualEndDate          DateTime?
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt

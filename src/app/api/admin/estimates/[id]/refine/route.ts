@@ -18,6 +18,7 @@ import { parsePDF } from "@/lib/pdf-helper";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { vectorizeProject } from "@/lib/rag/vectorizer";
 import { normalizeAiItems } from "@/lib/estimates/ai-item-normalizer";
+import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 import { detectImpactedCategories, isSectionImpacted } from "@/lib/refine/section-detector";
 import { computeEstimateDiff, type DiffItem } from "@/lib/refine/diff";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
@@ -304,6 +305,13 @@ ${additionalInfo}
             sections: { orderBy: { sortOrder: "asc" } }
           }
         });
+
+        // Гарантуємо активну версію v1 для доповненого кошторису.
+        try {
+          await ensureActiveEstimateVersion(refinedEstimate.id, session.user.id);
+        } catch (err) {
+          console.error("[estimates/refine] ensureActiveEstimateVersion failed:", err);
+        }
 
         // 🆕 DELTA REFINE (Plan Stage 6):
         // Detect which sections the user actually wants to refine. Sections

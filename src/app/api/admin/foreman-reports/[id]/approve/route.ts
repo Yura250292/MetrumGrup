@@ -5,6 +5,7 @@ import { unauthorizedResponse, forbiddenResponse, FOREMAN_REPORT_REVIEWERS } fro
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
 import { upsertSupplierMaterial } from "@/lib/foreman/upsert-supplier-material";
+import { recomputeWorkCompletion } from "@/lib/projects/work-progress";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -326,6 +327,21 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             : {}),
         },
       });
+
+      // Автозавершення робіт/розділів (P11): звіт уже APPROVED, тож
+      // recomputeWorkCompletion врахує його approved-обʼєм. Збираємо всі
+      // зачеплені EstimateItem (progress + LINKED extra) і перераховуємо.
+      const touchedItemIds = new Set<string>();
+      const allProgress = await tx.foremanReportProgress.findMany({
+        where: { reportId: report.id },
+        select: { estimateItemId: true },
+      });
+      for (const p of allProgress) {
+        if (p.estimateItemId) touchedItemIds.add(p.estimateItemId);
+      }
+      for (const itemId of touchedItemIds) {
+        await recomputeWorkCompletion(itemId, tx);
+      }
 
       return { financeEntryIds, totalCalculated: total };
     });

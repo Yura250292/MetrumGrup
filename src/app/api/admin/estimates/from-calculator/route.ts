@@ -16,6 +16,7 @@ import { auditLog } from "@/lib/audit";
 import { getNextEstimateNumber } from "@/lib/document-numbers";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
 import { scaleReference } from "@/lib/estimates/calculator-scale";
+import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 
 interface FromCalculatorBody {
   projectId: string;
@@ -193,6 +194,12 @@ export async function POST(request: NextRequest) {
         grandTotal: scaled.grandTotal,
       },
     });
+
+    try {
+      await ensureActiveEstimateVersion(created.id, session.user.id);
+    } catch (err) {
+      console.error("[estimates/from-calculator] ensureActiveEstimateVersion failed:", err);
+    }
 
     return NextResponse.json({ data: { id: created.id } }, { status: 201 });
   } catch (error: any) {
