@@ -111,7 +111,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: "Персонал",
     items: [
       // «Штат» — основна точка входу, всередині таби: Співробітники / Підрядники / Бригади
-      { href: "/admin-v2/employees-v2", label: "Штат", icon: Users, hrAllowed: true },
+      { href: "/admin-v2/hr/employees", label: "Штат", icon: Users, hrAllowed: true },
     ],
   },
   {
