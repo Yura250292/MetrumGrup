@@ -16,6 +16,7 @@ import {
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { SyncFinanceModal } from "./sync-finance-modal";
 import { LinkFinanceFolderModal } from "./link-finance-folder-button";
+import { ProjectLifecycleButton } from "./project-lifecycle-button";
 
 /**
  * Компактна шапка дій проєкту: 1 primary (📷 Додати фото) + overflow-меню
@@ -62,6 +63,8 @@ export function ProjectHeaderActions({
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
+      <ProjectLifecycleButton projectId={projectId} />
+
       <Link
         href={`/admin-v2/projects/${projectId}/photos/new`}
         className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
