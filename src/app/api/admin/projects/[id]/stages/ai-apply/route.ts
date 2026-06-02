@@ -4,18 +4,14 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
-import { ensureStageMaterialsSection } from "@/lib/projects/stage-materials";
-import { stageDisplayName } from "@/lib/constants";
 import { recalcCurrentStage } from "@/lib/projects/stages-helpers";
 import { copyDraftToPublishedForStages } from "@/lib/projects/publish-stages";
 import { syncStageAutoFinanceEntries } from "@/lib/projects/stage-auto-finance";
 import { canPublishFinance } from "@/lib/financing/rbac";
 
 export const runtime = "nodejs";
-// 300 sec — bulk apply створює N етапів + N materials записів через
-// `ensureStageMaterialsSection` (не-tx-safe). На 219-позицій кошторисі це
-// може бути 5-30 сек, але старий ліміт 60 теоретично пройде. Збільшено до
-// 300 для консистентності з ai-parse і запасу.
+// 300 sec — bulk apply створює N етапів + N матеріалів (дочірні рядки дерева).
+// На 219-позицій кошторисі це може бути 5-30 сек; запас для надійності.
 export const maxDuration = 300;
 
 const MAX_DEPTH = 2;
@@ -307,86 +303,45 @@ export async function POST(
           updatedStageIds.add(stageId);
           stagesUpdated++;
         }
-      } else {
-        // MATERIAL — додаємо як ProjectStageMaterial (EstimateItem у materials-section).
-        // Берем стандартний потік ensureStageMaterialsSection.
-        const st = await tx.projectStageRecord.findUnique({
-          where: { id: stageId },
-          select: { stage: true, customName: true },
-        });
-        if (!st) continue;
-        const stageName = stageDisplayName({
-          stage: st.stage,
-          customName: st.customName,
-        });
-        // ensureStageMaterialsSection не транзакційний (повертає sectionId).
-        // Викликаємо поза tx — приймемо незначне погіршення атомарності для
-        // зменшення складності. Якщо створення items впаде — section
-        // лишиться, що ОК (idempotent).
-        // У середині транзакції потрібно використовувати tx, але цей хелпер
-        // приймає prisma напряму. Тому для MVP — створюємо EstimateItem
-        // напряму:
-        // Простіша стратегія для MVP — створити секцію + item напряму через tx.
-        // ensureStageMaterialsSection хелпер не приймає tx, тому викликаємо
-        // його поза транзакцією. Тут — placeholder: відкладемо MATERIAL items
-        // обробку до кінця транзакції.
       }
+      // MATERIAL обробляється поза транзакцією нижче (як дочірній рядок дерева).
     }
   });
 
-  // 3) Поза транзакцією — обробка MATERIAL items (через ensureStageMaterialsSection).
+  // 3) MATERIAL items — створюємо як ДОЧІРНІ рядки дерева (ProjectStageRecord,
+  //    costType=MATERIAL) під відповідною роботою/етапом, щоб вони були видимі
+  //    у таблиці «Етапи виконання» (а не лише в drawer-і), отримували WBS-код
+  //    (…М1) і підпадали під фільтри/звірку. Plan vs Fact — за targetMode.
+  const isPlanMode = body.targetMode === "plan";
   for (const it of body.items) {
     if (it.costType !== "MATERIAL") continue;
-    const stageId = existingIds.has(it.targetStageRef)
+    const parentStageId = existingIds.has(it.targetStageRef)
       ? it.targetStageRef
       : tempToReal.get(it.targetStageRef) ?? null;
-    if (!stageId) continue;
+    if (!parentStageId) continue;
 
-    const st = await prisma.projectStageRecord.findUnique({
-      where: { id: stageId },
-      select: { stage: true, customName: true },
+    const last = await prisma.projectStageRecord.aggregate({
+      where: { projectId, parentStageId },
+      _max: { sortOrder: true },
     });
-    if (!st) continue;
-    const stageName = stageDisplayName({
-      stage: st.stage,
-      customName: st.customName,
-    });
-    const sectionId = await ensureStageMaterialsSection(
-      projectId,
-      stageId,
-      stageName,
-      session.user.id,
-    );
-
-    const section = await prisma.estimateSection.findUnique({
-      where: { id: sectionId },
-      select: {
-        estimateId: true,
-        items: {
-          select: { sortOrder: true },
-          orderBy: { sortOrder: "desc" },
-          take: 1,
-        },
-      },
-    });
-    if (!section) continue;
-    const sortOrder = (section.items[0]?.sortOrder ?? -1) + 1;
+    const sortOrder = (last._max.sortOrder ?? -1) + 1;
     const qty = it.quantity ?? 0;
-    const price = it.unitPrice ?? 0;
+    const price = it.unitPrice ?? null;
+    const volume = qty > 0 ? qty : null;
+    const unitPrice = price !== null && price !== undefined ? Number(price) : null;
 
-    await prisma.estimateItem.create({
+    await prisma.projectStageRecord.create({
       data: {
-        estimateId: section.estimateId,
-        sectionId,
-        description: it.title,
-        unit: it.unit ?? "шт",
-        quantity: qty,
-        unitPrice: price,
-        amount: qty * price,
-        priceSource: it.supplier ?? null,
-        itemType: "material",
+        projectId,
+        parentStageId,
+        kind: "STAGE",
+        costType: "MATERIAL",
+        status: "PENDING",
+        customName: it.title,
         sortOrder,
-        stageRecords: { connect: { id: stageId } },
+        ...(isPlanMode
+          ? { unit: it.unit ?? "шт", planVolume: volume, planUnitPrice: unitPrice }
+          : { factUnit: it.unit ?? "шт", factVolume: volume, factUnitPrice: unitPrice }),
       },
     });
     materialsCreated++;
