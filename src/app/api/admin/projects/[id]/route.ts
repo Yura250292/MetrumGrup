@@ -101,8 +101,6 @@ export async function PATCH(
     actualEndDate,
     coverImageUrl,
     isTestProject,
-    code,
-    type,
   } = body;
 
   // Read previous managerId to know if we need to sync ProjectMember
@@ -138,14 +136,6 @@ export async function PATCH(
   if (actualEndDate !== undefined) updateData.actualEndDate = actualEndDate ? new Date(actualEndDate) : null;
   if (coverImageUrl !== undefined) updateData.coverImageUrl = coverImageUrl || null;
   if (isTestProject !== undefined) updateData.isTestProject = Boolean(isTestProject);
-  if (code !== undefined) {
-    const trimmed = typeof code === "string" ? code.trim() : "";
-    updateData.code = trimmed || null;
-  }
-  if (type !== undefined) {
-    const trimmed = typeof type === "string" ? type.trim() : "";
-    updateData.type = trimmed || null;
-  }
 
   // Client editing: підтримуємо три варіанти — User-FK, Counterparty-FK,
   // free-text. Якщо вказано counterparty — підтягуємо snapshot його імені

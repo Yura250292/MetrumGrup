@@ -367,19 +367,14 @@ export async function POST(request: NextRequest) {
             const createdSection = estimate.sections[sIdx];
 
             const normalized = normalizeAiItems(section.items);
-            // parentSortOrder / predecessorSortOrder — транзитні поля AI-output,
-            // у БД їх нема (ієрархія/попередник зберігається через FK після
-            // pass-2 резолва). dependencyLagDays nullable у normalizer, але DB
-            // має default 0 і non-null Int — прибираємо null.
-            const itemsToCreate = normalized.map(
-              ({ parentSortOrder, predecessorSortOrder, dependencyLagDays, ...item }, itemIndex) => ({
-                ...item,
-                dependencyLagDays: dependencyLagDays ?? 0,
-                sortOrder: itemIndex,
-                estimateId: estimate.id,
-                sectionId: createdSection.id,
-              }),
-            );
+            // parentSortOrder — транзитне поле AI-output, у БД його нема
+            // (ієрархія зберігається через parentItemId). Прибираємо перед createMany.
+            const itemsToCreate = normalized.map(({ parentSortOrder, ...item }, itemIndex) => ({
+              ...item,
+              sortOrder: itemIndex,
+              estimateId: estimate.id,
+              sectionId: createdSection.id,
+            }));
 
             if (itemsToCreate.length > 0) {
               await prisma.estimateItem.createMany({
@@ -605,17 +600,13 @@ export async function POST(request: NextRequest) {
           const createdSection = estimate.sections[sIdx];
 
           const normalized = normalizeAiItems(section.items);
-          // parentSortOrder / predecessorSortOrder — транзитні поля AI-output;
-          // dependencyLagDays — у БД non-null Int @default(0).
-          const itemsToCreate = normalized.map(
-            ({ parentSortOrder, predecessorSortOrder, dependencyLagDays, ...item }, itemIndex) => ({
-              ...item,
-              dependencyLagDays: dependencyLagDays ?? 0,
-              sortOrder: itemIndex,
-              estimateId: estimate.id,
-              sectionId: createdSection.id,
-            }),
-          );
+          // parentSortOrder — транзитне поле AI-output, у БД його нема.
+          const itemsToCreate = normalized.map(({ parentSortOrder, ...item }, itemIndex) => ({
+            ...item,
+            sortOrder: itemIndex,
+            estimateId: estimate.id,
+            sectionId: createdSection.id,
+          }));
 
           if (itemsToCreate.length > 0) {
             await prisma.estimateItem.createMany({

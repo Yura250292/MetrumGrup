@@ -32,13 +32,6 @@ export type AiItem = {
   priceSource?: string;
   priceSourceType?: 'catalog' | 'prozorro' | 'scrape' | 'llm' | 'manual' | string;
   confidence?: number | string;
-  // Planning fields (Excel-style Gantt sync). Опціонально — AI може лишати
-  // null. Резолв predecessor → predecessorItemId робиться у вищому слої.
-  plannedStart?: string | Date | null;
-  plannedDurationDays?: number | string | null;
-  predecessorSortOrder?: number | string | null;
-  dependencyType?: 'FS' | 'SS' | 'FF' | 'SF' | string | null;
-  dependencyLagDays?: number | string | null;
 };
 
 export type NormalizedItem = {
@@ -56,11 +49,6 @@ export type NormalizedItem = {
   priceSourceType?: string | null;
   confidence?: number | null;
   parentSortOrder?: number | null;
-  plannedStart?: Date | null;
-  plannedDurationDays?: number | null;
-  predecessorSortOrder?: number | null;
-  dependencyType?: 'FS' | 'SS' | 'FF' | 'SF' | null;
-  dependencyLagDays?: number | null;
 };
 
 export class InvalidAiItemError extends Error {
@@ -138,31 +126,6 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     if (Number.isFinite(n) && n > 0) parentSortOrder = Math.trunc(n);
   }
 
-  // Planning fields — opt-in. AI може лишати порожніми.
-  let plannedStart: Date | null = null;
-  if (item.plannedStart) {
-    const d = item.plannedStart instanceof Date ? item.plannedStart : new Date(String(item.plannedStart));
-    if (Number.isFinite(d.getTime())) plannedStart = d;
-  }
-  let plannedDurationDays: number | null = null;
-  if (item.plannedDurationDays !== undefined && item.plannedDurationDays !== null && item.plannedDurationDays !== '') {
-    const n = Number(item.plannedDurationDays);
-    if (Number.isFinite(n) && n >= 0) plannedDurationDays = Math.trunc(n);
-  }
-  let predecessorSortOrder: number | null = null;
-  if (item.predecessorSortOrder !== undefined && item.predecessorSortOrder !== null && item.predecessorSortOrder !== '') {
-    const n = Number(item.predecessorSortOrder);
-    if (Number.isFinite(n) && n > 0) predecessorSortOrder = Math.trunc(n);
-  }
-  const depRaw = item.dependencyType ? String(item.dependencyType).toUpperCase() : null;
-  const dependencyType: NormalizedItem['dependencyType'] =
-    depRaw === 'FS' || depRaw === 'SS' || depRaw === 'FF' || depRaw === 'SF' ? depRaw : null;
-  let dependencyLagDays: number | null = null;
-  if (item.dependencyLagDays !== undefined && item.dependencyLagDays !== null && item.dependencyLagDays !== '') {
-    const n = Number(item.dependencyLagDays);
-    if (Number.isFinite(n)) dependencyLagDays = Math.trunc(n);
-  }
-
   return {
     description,
     quantity,
@@ -178,11 +141,6 @@ export function normalizeAiItem(item: AiItem, index: number): NormalizedItem {
     priceSourceType: item.priceSourceType ? String(item.priceSourceType) : null,
     confidence: confidence !== null && Number.isFinite(confidence) ? confidence : null,
     parentSortOrder,
-    plannedStart,
-    plannedDurationDays,
-    predecessorSortOrder,
-    dependencyType,
-    dependencyLagDays,
   };
 }
 
