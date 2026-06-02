@@ -51,6 +51,19 @@ describe("computeWbsCodes", () => {
     expect(m.get("mat2")).toBe("1.М2");
   });
 
+  it("MATERIAL-вузол З дітьми = контейнер → числовий код, не М (баг-фікс)", () => {
+    const m = computeWbsCodes([
+      r({ id: "s1", sortOrder: 0 }),
+      // помилково позначений як матеріал, але має дітей → підетап 1.1
+      r({ id: "sub", parentStageId: "s1", sortOrder: 0, costType: "MATERIAL" }),
+      r({ id: "w", parentStageId: "sub", sortOrder: 0, costType: "LABOR" }),
+      r({ id: "mat", parentStageId: "sub", sortOrder: 1, costType: "MATERIAL" }),
+    ]);
+    expect(m.get("sub")).toBe("1.1"); // НЕ 1.М1
+    expect(m.get("w")).toBe("1.1.1");
+    expect(m.get("mat")).toBe("1.1.М1");
+  });
+
   it("осиротілі (батько поза набором) — як корені", () => {
     const m = computeWbsCodes([r({ id: "x", parentStageId: "ghost", sortOrder: 0 })]);
     expect(m.get("x")).toBe("1");
