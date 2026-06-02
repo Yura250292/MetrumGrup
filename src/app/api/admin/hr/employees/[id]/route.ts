@@ -48,11 +48,30 @@ export async function GET(
     return NextResponse.json({ error: "Співробітника не знайдено" }, { status: 404 });
   }
 
-  const engagement = await loadEngagement(id, employee.userId);
+  // Відпустки/лікарняні — TimeOff привʼязаний до User, не до Employee.
+  // Тягнемо лише якщо співробітник має акаунт; інакше — порожній масив.
+  const [engagement, timeOff] = await Promise.all([
+    loadEngagement(id, employee.userId),
+    employee.userId
+      ? prisma.timeOff.findMany({
+          where: { userId: employee.userId },
+          orderBy: { startDate: "desc" },
+          select: {
+            id: true,
+            type: true,
+            startDate: true,
+            endDate: true,
+            notes: true,
+            approvedAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
   return NextResponse.json({
     data: redactSalaryForHr(employee as EmployeeRecord, role),
     engagement,
+    timeOff,
   });
 }
 
