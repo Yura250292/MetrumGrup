@@ -604,6 +604,8 @@ model EstimateItem {
   financeEntries      FinanceEntry[]
   kb2Items            KB2FormItem[]          @relation("EstimateItemKB2")
   stageRecords        ProjectStageRecord[]   @relation("EstimateItemToStage")
+  /// Задача, згенерована/злінкована з цього рядка кошторису (1:1, для cost-колонок).
+  linkedTask          Task?                  @relation("EstimateItemToTask")
   itemProposals       EstimateItemProposal[]
   /// ESTIMATE-рядки звітів виконробів, що ссилаються на цю позицію кошторису.
   reportItemsAsEstimate ForemanReportItem[]    @relation("ReportItemEstimate")
@@ -2496,8 +2498,15 @@ model Task {
   /// Якщо задача згенерована з ChangeOrder (через окрему кнопку "Створити задачі з CO").
   changeOrderId String?
 
+  /// Звʼязок із рядком кошторису для колонок витрат (ClickUp-style "Витрати план").
+  /// План = unitCost×quantity рядка; nullable → задача без привʼязки (тоді plannedCostManual).
+  sourceEstimateItemId String?  @unique
+  /// Ручний план витрат, коли немає привʼязки до кошторису. Бачать лише фінанс-ролі.
+  plannedCostManual    Decimal? @db.Decimal(12, 2)
+
   project            Project               @relation(fields: [projectId], references: [id], onDelete: Cascade)
   changeOrder        ChangeOrder?          @relation("ChangeOrderTasks", fields: [changeOrderId], references: [id], onDelete: SetNull)
+  sourceEstimateItem EstimateItem?         @relation("EstimateItemToTask", fields: [sourceEstimateItemId], references: [id], onDelete: SetNull)
   stage              ProjectStageRecord    @relation(fields: [stageId], references: [id], onDelete: Restrict)
   parentTask         Task?                 @relation("TaskHierarchy", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks           Task[]                @relation("TaskHierarchy")
@@ -2523,6 +2532,7 @@ model Task {
   @@index([createdById])
   @@index([projectId, plannedStartAt])
   @@index([changeOrderId])
+  @@index([sourceEstimateItemId])
   @@map("tasks")
 }
 
@@ -2721,6 +2731,7 @@ enum TaskViewType {
   GANTT
   CALENDAR
   PEOPLE
+  TABLE
 }
 
 // ============================================================

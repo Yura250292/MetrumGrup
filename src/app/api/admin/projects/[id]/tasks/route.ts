@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { unauthorizedResponse } from "@/lib/auth-utils";
+import { canViewFinance, unauthorizedResponse } from "@/lib/auth-utils";
 import { prisma } from "@/lib/prisma";
 import {
   addChecklistItem,
@@ -19,10 +19,16 @@ export async function GET(
   const session = await auth();
   if (!session?.user) return unauthorizedResponse();
 
+  // RBAC: цифри витрат бачить ЛИШЕ фінанс-роль (SUPER_ADMIN). Клієнт може
+  // попросити cost (?withCost=1), але числа долучаються лише коли дозволено.
+  const wantsCost = new URL(request.url).searchParams.get("withCost") === "1";
+  const includeCost = wantsCost && canViewFinance(session.user.role);
+
   const url = new URL(request.url);
   const q = url.searchParams;
   const filter: ListFilter = {
     projectId,
+    includeCost,
     stageId: q.get("stageId") || undefined,
     statusId: q.get("statusId") || undefined,
     assigneeId: q.get("assigneeId") || undefined,
@@ -97,11 +103,22 @@ export async function POST(
       })
     : [];
 
+  // Запис cost-полів — лише фінанс-роль.
+  const canWriteCost = canViewFinance(session.user.role);
+
   try {
     const task = await createTask(
       {
         projectId,
         stageId,
+        sourceEstimateItemId:
+          canWriteCost && body.sourceEstimateItemId
+            ? String(body.sourceEstimateItemId)
+            : undefined,
+        plannedCostManual:
+          canWriteCost && body.plannedCostManual != null
+            ? Number(body.plannedCostManual)
+            : undefined,
         parentTaskId: body.parentTaskId ? String(body.parentTaskId) : undefined,
         title: String(body.title ?? ""),
         description: body.description ? String(body.description) : undefined,

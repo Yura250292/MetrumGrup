@@ -233,6 +233,7 @@ export default async function AdminV2ProjectDetailPage({
         activeTab={activeTab}
         projectId={project.id}
         tasksEnabled={tasksEnabled}
+        canViewCost={showFinance}
         project={{
           id: project.id,
           title: project.title,

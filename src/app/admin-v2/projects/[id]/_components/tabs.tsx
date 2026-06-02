@@ -64,11 +64,13 @@ export function ProjectTabs({
   projectId,
   project,
   tasksEnabled = false,
+  canViewCost = false,
 }: {
   activeTab: string;
   projectId: string;
   project: ProjectDetailData;
   tasksEnabled?: boolean;
+  canViewCost?: boolean;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -248,6 +250,7 @@ export function ProjectTabs({
           <TabTasks
             projectId={projectId}
             stages={project.stages.map((s) => ({ id: s.id, stage: s.stage }))}
+            canViewCost={canViewCost}
           />
         )}
         {current === "activity" && <TabActivity projectId={projectId} />}

@@ -7,7 +7,7 @@ import { getProjectAccessContext } from "@/lib/projects/access";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import type { TaskViewType } from "@prisma/client";
 
-const ALLOWED_VIEW_TYPES: TaskViewType[] = ["LIST", "KANBAN", "GANTT", "CALENDAR", "PEOPLE"];
+const ALLOWED_VIEW_TYPES: TaskViewType[] = ["LIST", "KANBAN", "GANTT", "CALENDAR", "PEOPLE", "TABLE"];
 
 const ALLOWED_GROUP_BY = ["status", "priority", "assignee", "stage", "label", "dueDate", null] as const;
 const ALLOWED_SORT_BY = [
@@ -33,7 +33,7 @@ const columnsJsonSchema = z.array(z.string().min(1)).optional();
 
 const savedViewBodySchema = z.object({
   name: z.string().trim().min(1, "name required").max(100),
-  viewType: z.enum(["LIST", "KANBAN", "GANTT", "CALENDAR", "PEOPLE"]),
+  viewType: z.enum(["LIST", "KANBAN", "GANTT", "CALENDAR", "PEOPLE", "TABLE"]),
   filtersJson: filtersJsonSchema,
   groupBy: z.enum(["status", "priority", "assignee", "stage", "label", "dueDate"]).nullable().optional(),
   sortBy: z.enum(["newest", "oldest", "dueAsc", "dueDesc", "priority", "position", "title"]).nullable().optional(),
