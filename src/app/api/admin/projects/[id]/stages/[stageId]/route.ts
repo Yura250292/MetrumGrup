@@ -109,6 +109,12 @@ export async function PATCH(
         ? body.customName.trim()
         : null;
   }
+  if (body.costType !== undefined) {
+    if (body.costType !== null && body.costType !== "LABOR" && body.costType !== "MATERIAL") {
+      return NextResponse.json({ error: "Невалідний тип позиції" }, { status: 400 });
+    }
+    data.costType = body.costType;
+  }
   // Поля редагуються миттєво у самому стейджі, але STAGE_AUTO у фінансування
   // НЕ синхронізуємо тут — це робить окремий endpoint /sync-stages-finance,
   // що викликається явно кнопкою «Зберегти у фінансування».
