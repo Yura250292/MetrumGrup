@@ -20,6 +20,7 @@ import { stageDisplayName, STAGE_STATUS_LABELS } from "@/lib/constants";
 import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { tryEvaluateFormula } from "@/lib/formulas/eval";
+import { computeWbsCodes } from "@/lib/projects/wbs-numbering";
 import type { ProjectStage, StageStatus } from "@prisma/client";
 
 const UNIT_OPTIONS = ["", "шт", "м", "м²", "м³", "кг", "т", "л", "пог.м", "год"];
@@ -282,6 +283,10 @@ export function StageTable({
     const filtered = showHidden ? stages : stages.filter((s) => !s.isHidden);
     return buildTree(filtered);
   }, [stages, showHidden]);
+
+  // WBS-коди (1 / 1.1 / 1.1.1; матеріали — 1.1.М1) рахуємо з повної структури,
+  // щоб нумерація не «стрибала» від фільтрів. Лише для відображення.
+  const wbsCodes = useMemo(() => computeWbsCodes(stages), [stages]);
 
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const ids = new Set<string>();
@@ -721,6 +726,7 @@ export function StageTable({
                 >
                   <NameCell
                     node={node}
+                    wbsCode={wbsCodes.get(node.id)}
                     hasChildren={hasChildren}
                     isExpanded={isExpanded}
                     canAddChild={node.depth < 2}
@@ -1293,6 +1299,7 @@ function DraggableHeader({
 
 function NameCell({
   node,
+  wbsCode,
   hasChildren,
   isExpanded,
   canAddChild,
@@ -1306,6 +1313,7 @@ function NameCell({
   onDragHandleEnd,
 }: {
   node: TreeNode;
+  wbsCode?: string;
   hasChildren: boolean;
   isExpanded: boolean;
   canAddChild: boolean;
@@ -1391,6 +1399,15 @@ function NameCell({
           aria-label="Матеріал"
         >
           <Package size={10} />
+        </span>
+      )}
+      {wbsCode && (
+        <span
+          className="flex-shrink-0 font-mono text-[11px] tabular-nums"
+          style={{ color: T.textMuted, minWidth: "fit-content" }}
+          title={`WBS-код: ${wbsCode}`}
+        >
+          {wbsCode}
         </span>
       )}
       {editing ? (
