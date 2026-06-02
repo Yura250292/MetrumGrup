@@ -115,6 +115,43 @@ export async function PATCH(
     }
     data.costType = body.costType;
   }
+  // Календарне планування (графік).
+  if (body.plannedDurationDays !== undefined) {
+    if (body.plannedDurationDays === null || body.plannedDurationDays === "") {
+      data.plannedDurationDays = null;
+    } else {
+      const n = Number(body.plannedDurationDays);
+      if (!Number.isFinite(n) || n < 0) {
+        return NextResponse.json({ error: "Невалідна тривалість" }, { status: 400 });
+      }
+      data.plannedDurationDays = Math.round(n);
+    }
+  }
+  if (body.predecessorStageId !== undefined) {
+    if (body.predecessorStageId && body.predecessorStageId !== stageId) {
+      const pred = await prisma.projectStageRecord.findFirst({
+        where: { id: body.predecessorStageId, projectId },
+        select: { id: true },
+      });
+      if (!pred) {
+        return NextResponse.json({ error: "Попередник не знайдений у проєкті" }, { status: 400 });
+      }
+      data.predecessorStageId = body.predecessorStageId;
+    } else {
+      data.predecessorStageId = null;
+    }
+  }
+  if (body.dependencyType !== undefined) {
+    const allowed = ["FS", "SS", "FF", "SF"];
+    if (body.dependencyType !== null && !allowed.includes(body.dependencyType)) {
+      return NextResponse.json({ error: "Невалідний тип звʼязку" }, { status: 400 });
+    }
+    data.dependencyType = body.dependencyType;
+  }
+  if (body.dependencyLagDays !== undefined) {
+    const n = Number(body.dependencyLagDays);
+    data.dependencyLagDays = Number.isFinite(n) ? Math.round(n) : 0;
+  }
   // Поля редагуються миттєво у самому стейджі, але STAGE_AUTO у фінансування
   // НЕ синхронізуємо тут — це робить окремий endpoint /sync-stages-finance,
   // що викликається явно кнопкою «Зберегти у фінансування».

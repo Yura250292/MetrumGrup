@@ -343,6 +343,13 @@ model ProjectStageRecord {
   actualEndDate                DateTime?
   sortOrder                    Int                  @default(0)
   allocatedBudget              Decimal?             @db.Decimal(12, 2)
+  // Календарне планування (кошторис-графік): тривалість у днях + залежність
+  // від попередника (тип FS/SS/FF/SF + зміщення). startDate/endDate можуть
+  // обчислюватись із цих полів (див. src/lib/projects/stage-schedule.ts).
+  plannedDurationDays          Int?
+  predecessorStageId           String?
+  dependencyType               TaskDependencyType?
+  dependencyLagDays            Int                  @default(0)
   // Об'єм / одиниці виміру / ціна за одиницю для табличної картки
   // «Етапи виконання» (План vs Факт). `unit` — план-одиниця, `factUnit` —
   // факт (зазвичай те саме, але дозволяємо відмінність для довезень
@@ -387,6 +394,9 @@ model ProjectStageRecord {
   sourceEstimateSection        EstimateSection?     @relation("EstimateSectionToStage", fields: [sourceEstimateSectionId], references: [id], onDelete: SetNull)
   sourceEstimateItemId         String?
   sourceEstimateItem           EstimateItem?        @relation("EstimateItemToStage", fields: [sourceEstimateItemId], references: [id], onDelete: SetNull)
+  // Попередник у графіку (self-ref). SetNull щоб видалення попередника не каскадувало.
+  predecessorStage             ProjectStageRecord?  @relation("StagePredecessor", fields: [predecessorStageId], references: [id], onDelete: SetNull)
+  dependents                   ProjectStageRecord[] @relation("StagePredecessor")
 
   /// Telegram forum topic this stage receives expense reports from. Bound by
   /// /num <N> in a topic, by forum_topic_created auto-binding, or by manager
@@ -403,6 +413,7 @@ model ProjectStageRecord {
   @@index([responsibleUserId])
   @@index([sourceEstimateSectionId])
   @@index([sourceEstimateItemId])
+  @@index([predecessorStageId])
   @@index([telegramThreadId])
   @@map("project_stage_records")
 }

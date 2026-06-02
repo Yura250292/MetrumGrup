@@ -291,5 +291,12 @@ function toStageRow(s: ProjectStageApi): StageRow {
     planIncome: Number(s.planIncome ?? 0),
     factIncome: Number(s.factIncome ?? 0),
     costType: (s.costType as StageRow["costType"]) ?? null,
+    plannedDurationDays:
+      s.plannedDurationDays === null || s.plannedDurationDays === undefined
+        ? null
+        : Number(s.plannedDurationDays),
+    predecessorStageId: (s.predecessorStageId as string | null) ?? null,
+    dependencyType: (s.dependencyType as StageRow["dependencyType"]) ?? null,
+    dependencyLagDays: Number(s.dependencyLagDays ?? 0),
   };
 }
