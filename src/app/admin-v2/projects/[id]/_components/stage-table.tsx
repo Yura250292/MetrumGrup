@@ -101,6 +101,11 @@ type StageTableProps = {
     position: DropPosition,
   ) => Promise<void>;
   /**
+   * Перенесення зміною WBS-коду: користувач редагує код (напр. "5.2.М1") →
+   * UI-шар резолвить нового батька й дзвонить /move. Альтернатива drag&drop.
+   */
+  onChangeCode?: (stageId: string, newCode: string) => Promise<void>;
+  /**
    * Excel-mode: рендерить додаткові порожні рядки після даних щоб таблиця
    * виглядала як «справжній» аркуш Excel із сіткою. Клік по ghost-рядку
    * викликає onAddChild(null) (створення нового top-level етапу).
@@ -249,6 +254,7 @@ export function StageTable({
   dirtyStageIds,
   viewMode = "all",
   onMoveStage,
+  onChangeCode,
   excelMode = false,
 }: StageTableProps) {
   const showPlan = viewMode === "all" || viewMode === "plan";
@@ -727,6 +733,11 @@ export function StageTable({
                   <NameCell
                     node={node}
                     wbsCode={wbsCodes.get(node.id)}
+                    onChangeCode={
+                      onChangeCode
+                        ? (newCode) => onChangeCode(node.id, newCode)
+                        : undefined
+                    }
                     hasChildren={hasChildren}
                     isExpanded={isExpanded}
                     canAddChild={node.depth < 2}
@@ -1300,6 +1311,7 @@ function DraggableHeader({
 function NameCell({
   node,
   wbsCode,
+  onChangeCode,
   hasChildren,
   isExpanded,
   canAddChild,
@@ -1314,6 +1326,7 @@ function NameCell({
 }: {
   node: TreeNode;
   wbsCode?: string;
+  onChangeCode?: (newCode: string) => Promise<void> | void;
   hasChildren: boolean;
   isExpanded: boolean;
   canAddChild: boolean;
@@ -1327,6 +1340,7 @@ function NameCell({
   onDragHandleEnd?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [editingCode, setEditingCode] = useState(false);
   const display = stageDisplayName(node);
 
   return (
@@ -1401,15 +1415,42 @@ function NameCell({
           <Package size={10} />
         </span>
       )}
-      {wbsCode && (
-        <span
-          className="flex-shrink-0 font-mono text-[11px] tabular-nums"
-          style={{ color: T.textMuted, minWidth: "fit-content" }}
-          title={`WBS-код: ${wbsCode}`}
-        >
-          {wbsCode}
-        </span>
-      )}
+      {wbsCode &&
+        (editingCode && onChangeCode ? (
+          <input
+            autoFocus
+            defaultValue={wbsCode}
+            onClick={(e) => e.stopPropagation()}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v && v !== wbsCode) void onChangeCode(v);
+              setEditingCode(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingCode(false);
+            }}
+            className="w-16 flex-shrink-0 rounded border px-1 py-0.5 font-mono text-[11px] tabular-nums outline-none"
+            style={{ backgroundColor: T.panel, borderColor: T.borderAccent, color: T.textPrimary }}
+          />
+        ) : (
+          <span
+            onDoubleClick={(e) => {
+              if (!onChangeCode) return;
+              e.stopPropagation();
+              setEditingCode(true);
+            }}
+            className="flex-shrink-0 font-mono text-[11px] tabular-nums"
+            style={{ color: T.textMuted, minWidth: "fit-content", cursor: onChangeCode ? "text" : "default" }}
+            title={
+              onChangeCode
+                ? `WBS-код: ${wbsCode} — подвійний клік, щоб перенести зміною коду`
+                : `WBS-код: ${wbsCode}`
+            }
+          >
+            {wbsCode}
+          </span>
+        ))}
       {editing ? (
         <input
           autoFocus

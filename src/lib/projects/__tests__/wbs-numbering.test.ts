@@ -1,5 +1,9 @@
 import { describe, it, expect } from "@jest/globals";
-import { computeWbsCodes, type WbsRow } from "@/lib/projects/wbs-numbering";
+import {
+  computeWbsCodes,
+  resolveParentByCode,
+  type WbsRow,
+} from "@/lib/projects/wbs-numbering";
 
 const r = (over: Partial<WbsRow> & { id: string }): WbsRow => ({
   parentStageId: null,
@@ -67,5 +71,43 @@ describe("computeWbsCodes", () => {
     ]);
     expect(m.get("a")).toBe("1");
     expect(m.get("z")).toBe("2");
+  });
+});
+
+describe("resolveParentByCode", () => {
+  // Дерево: s1=1, s11=1.1, w=1.1.1, s5=5, s52=5.2
+  const codes = new Map<string, string>([
+    ["s1", "1"],
+    ["s11", "1.1"],
+    ["w", "1.1.1"],
+    ["s5", "5"],
+    ["s52", "5.2"],
+  ]);
+
+  it("перенос матеріалу в інший підетап: 5.2.М1 → батько s52", () => {
+    const r = resolveParentByCode("5.2.М1", "w", codes);
+    expect(r).toEqual({ newParentId: "s52" });
+  });
+
+  it("код верхнього рівня → корінь (null)", () => {
+    expect(resolveParentByCode("5", "w", codes)).toEqual({ newParentId: null });
+  });
+
+  it("1.1.1 → батько 1.1", () => {
+    expect(resolveParentByCode("1.1.1", "x", codes)).toEqual({ newParentId: "s11" });
+  });
+
+  it("неіснуючий батько → помилка", () => {
+    const r = resolveParentByCode("9.9.1", "w", codes);
+    expect("error" in r).toBe(true);
+  });
+
+  it("сам собі батько → помилка", () => {
+    const r = resolveParentByCode("1.1.5", "s11", codes); // батько 1.1 = s11 = сам
+    expect("error" in r).toBe(true);
+  });
+
+  it("недопустимі символи → помилка", () => {
+    expect("error" in resolveParentByCode("abc", "w", codes)).toBe(true);
   });
 });
