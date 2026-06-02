@@ -139,6 +139,12 @@ export async function PUT(
           data: { isHidden: true },
         });
       } else {
+        // Прибираємо авто-фінанси (STAGE_AUTO) видаленого піддерева, інакше
+        // осиротілі записи й далі сумуються у Факт·Баланс. Реальні
+        // (MANUAL/FOREMAN_REPORT тощо) лишаються.
+        await tx.financeEntry.deleteMany({
+          where: { stageRecordId: { in: subtree }, source: "STAGE_AUTO" },
+        });
         await tx.projectStageRecord.deleteMany({
           where: { id: { in: removedRootIds } },
         });

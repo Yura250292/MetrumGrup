@@ -259,6 +259,32 @@ export async function DELETE(
     return forbiddenResponse();
   }
 
+  // Прибираємо авто-фінанси (STAGE_AUTO) етапу та його піддерева, інакше
+  // осиротілі (FK SetNull) PLAN/FACT-записи й далі сумуються у Факт·Баланс
+  // проєкту. MANUAL/FOREMAN_REPORT та інші реальні записи лишаються.
+  const projectStages = await prisma.projectStageRecord.findMany({
+    where: { projectId },
+    select: { id: true, parentStageId: true },
+  });
+  const childrenOf = new Map<string, string[]>();
+  for (const s of projectStages) {
+    if (s.parentStageId) {
+      const arr = childrenOf.get(s.parentStageId) ?? [];
+      arr.push(s.id);
+      childrenOf.set(s.parentStageId, arr);
+    }
+  }
+  const subtree: string[] = [];
+  const stack = [stageId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    subtree.push(id);
+    for (const c of childrenOf.get(id) ?? []) stack.push(c);
+  }
+  await prisma.financeEntry.deleteMany({
+    where: { stageRecordId: { in: subtree }, source: "STAGE_AUTO" },
+  });
+
   await prisma.projectStageRecord.delete({ where: { id: stageId } });
 
   await recalcCurrentStage(projectId, {
