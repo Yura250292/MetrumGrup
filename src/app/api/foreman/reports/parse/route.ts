@@ -15,7 +15,6 @@ import { parseExcelEstimate } from "@/lib/parsers/excel-estimate-parser";
 import { parseKB2ActExcel } from "@/lib/parsers/kb2-act-parser";
 import { mergeForemanItems, fromParsedExpense, type ForemanDraftItem } from "@/lib/foreman/merge-items";
 import { resolveSuppliersBulk } from "@/lib/foreman/resolve-supplier";
-import { checkPriceIncreases } from "@/lib/foreman/check-price-increase";
 import type { CostType } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -220,22 +219,11 @@ export async function POST(req: NextRequest) {
     guesses: merged.map((it) => ({ guess: it.supplier ?? null })),
   });
 
-  // 5. Preview price-increase check — порівнюємо unitPrice кожної позиції з
-  // SupplierMaterial.lastPrice (для resolved counterparty). UI alert ще до approve.
-  const priceChecks = await checkPriceIncreases(
-    merged.map((it, idx) => ({
-      counterpartyId: resolutions[idx]?.counterpartyId ?? null,
-      title: it.title,
-      unitPrice: it.unitPrice,
-    })),
-  );
-
-  // 6. Зберегти items + raw json
+  // 5. Зберегти items + raw json
   if (merged.length > 0) {
     await prisma.foremanReportItem.createMany({
       data: merged.map((it, idx) => {
         const r = resolutions[idx];
-        const pc = priceChecks[idx];
         return {
           reportId: report.id,
           costType: it.costType,
@@ -249,14 +237,11 @@ export async function POST(req: NextRequest) {
           sortOrder: idx,
           counterpartyId: r?.counterpartyId ?? null,
           supplierGuess: r?.supplierGuess ?? null,
-          priceIncreaseFlag: pc?.priceIncreaseFlag ?? false,
-          previousUnitPrice: pc?.previousUnitPrice ?? null,
         };
       }),
     });
   }
 
-  // 7. Audit raw AI output.
   await prisma.foremanReport.update({
     where: { id: report.id },
     data: { aiResultJson: aiRaw as object },

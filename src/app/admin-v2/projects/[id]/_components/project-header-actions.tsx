@@ -10,13 +10,11 @@ import {
   FlaskConical,
   Link2,
   Loader2,
-  Pencil,
   Sparkles,
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { SyncFinanceModal } from "./sync-finance-modal";
 import { LinkFinanceFolderModal } from "./link-finance-folder-button";
-import { ProjectLifecycleButton } from "./project-lifecycle-button";
 
 /**
  * Компактна шапка дій проєкту: 1 primary (📷 Додати фото) + overflow-меню
@@ -63,8 +61,6 @@ export function ProjectHeaderActions({
 
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <ProjectLifecycleButton projectId={projectId} />
-
       <Link
         href={`/admin-v2/projects/${projectId}/photos/new`}
         className="flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold tap-highlight-none active:scale-[0.97]"
@@ -108,20 +104,6 @@ export function ProjectHeaderActions({
                 border: `1px solid ${T.borderSoft}`,
               }}
             >
-              <MenuItem
-                asLink
-                href={`/admin-v2/projects/${projectId}/edit`}
-                icon={<Pencil size={14} style={{ color: T.accentPrimary }} />}
-                label="Редагувати"
-                onClick={() => setMenuOpen(false)}
-              />
-              <div
-                style={{
-                  height: 1,
-                  backgroundColor: T.borderSoft,
-                  margin: "2px 0",
-                }}
-              />
               <MenuItem
                 icon={<Sparkles size={14} style={{ color: T.violet }} />}
                 label="AI · Синх. з фінансами"

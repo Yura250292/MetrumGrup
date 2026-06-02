@@ -25,13 +25,6 @@ const PatchBody = z.object({
     .enum(["MATERIAL", "LABOR", "SUBCONTRACT", "EQUIPMENT", "OVERHEAD", "OTHER"])
     .optional(),
   managerNote: z.string().max(500).nullable().optional(),
-  // P7: рішення ПМ по EXTRA-рядку.
-  //   LINKED     → потрібен linkedEstimateItemId (cost через totalCalculated);
-  //   NEW_ITEM   → ініціювати ДКО (матеріалізація у I5);
-  //   INFO_ONLY  → інформаційний рядок, без cost;
-  //   PENDING    → ще не вирішено (блокує approve).
-  pmDecision: z.enum(["PENDING", "LINKED", "NEW_ITEM", "INFO_ONLY"]).optional(),
-  linkedEstimateItemId: z.string().min(1).nullable().optional(),
 });
 
 interface Ctx {
@@ -132,46 +125,6 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   if ("financeIntent" in parsed.data) data.financeIntent = parsed.data.financeIntent ?? null;
   if ("costType" in parsed.data && parsed.data.costType) data.costType = parsed.data.costType;
   if ("managerNote" in parsed.data) data.managerNote = parsed.data.managerNote ?? null;
-
-  // P7: PM-рішення по EXTRA-рядку. LINKED вимагає валідний estimateItem у тому
-  // ж проєкті; інші рішення скидають linkedEstimateItemId.
-  const nextDecision =
-    "pmDecision" in parsed.data ? parsed.data.pmDecision : undefined;
-  const nextLinkedId =
-    "linkedEstimateItemId" in parsed.data ? parsed.data.linkedEstimateItemId ?? null : undefined;
-  if (nextDecision !== undefined || nextLinkedId !== undefined) {
-    const effectiveDecision = nextDecision ?? item.pmDecision ?? "PENDING";
-    if (effectiveDecision === "LINKED") {
-      const linkId = nextLinkedId ?? item.linkedEstimateItemId;
-      if (!linkId) {
-        return NextResponse.json(
-          { error: "Bad request", message: "Для LINKED потрібно вибрати роботу кошторису" },
-          { status: 400 },
-        );
-      }
-      const target = await prisma.estimateItem.findUnique({
-        where: { id: linkId },
-        select: { id: true, estimate: { select: { projectId: true } } },
-      });
-      // Перевірка: робота належить тому ж проєкту, що і звіт.
-      const report = await prisma.foremanReport.findUnique({
-        where: { id },
-        select: { projectId: true },
-      });
-      if (!target || target.estimate?.projectId !== report?.projectId) {
-        return NextResponse.json(
-          { error: "Bad request", message: "Робота не належить проєкту звіту" },
-          { status: 400 },
-        );
-      }
-      data.pmDecision = "LINKED";
-      data.linkedEstimateItemId = linkId;
-    } else {
-      if (nextDecision !== undefined) data.pmDecision = nextDecision;
-      // Будь-яке рішення крім LINKED скидає привʼязку.
-      data.linkedEstimateItemId = null;
-    }
-  }
 
   const updated = await prisma.foremanReportItem.update({
     where: { id: itemId },

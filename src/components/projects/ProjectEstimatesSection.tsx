@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Calculator, Plus, Sparkles, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,23 +38,6 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
   const [aiModalOpen, setAiModalOpen] = useState(false);
   const [calcModalOpen, setCalcModalOpen] = useState(false);
   const [reportFor, setReportFor] = useState<ProjectEstimateDTO | null>(null);
-
-  // Inline navigation: коли користувач у проєктному tab-context
-  // (pathname починається з /admin-v2/projects/[id]) — відкриваємо
-  // кошторис в межах того ж URL через ?estimateId. Це робить редактор
-  // повноцінною частиною project-tabs замість окремої сторінки.
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const inProjectContext = pathname?.startsWith(`/admin-v2/projects/${projectId}`);
-
-  const handleEstimateOpen = (estimateId: string) => {
-    if (!inProjectContext) return; // дозволити default <Link> навігацію
-    const sp = new URLSearchParams(searchParams?.toString() ?? "");
-    sp.set("tab", "estimates");
-    sp.set("estimateId", estimateId);
-    router.push(`${pathname}?${sp.toString()}`, { scroll: false });
-  };
 
   return (
     <div className="rounded-xl border admin-dark:border-white/10 admin-light:border-gray-200 admin-dark:bg-gray-900/40 admin-light:bg-white p-4">
@@ -120,22 +102,10 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
               key={est.id}
               className="flex items-center gap-3 rounded-lg border admin-dark:border-white/5 admin-dark:bg-gray-900/40 admin-dark:hover:bg-gray-900/60 admin-light:border-gray-100 admin-light:bg-white admin-light:hover:bg-gray-50 p-3 transition-colors"
             >
-              {/* Inline у проєкті → клік відкриває inline editor через ?estimateId.
-                  Поза проєктним контекстом — fallback на окрему сторінку. */}
-              {inProjectContext ? (
-                // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => handleEstimateOpen(est.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      handleEstimateOpen(est.id);
-                    }
-                  }}
-                  className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                >
+              <Link
+                href={`/admin/estimates/${est.id}`}
+                className="flex items-center gap-3 flex-1 min-w-0"
+              >
                 <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-white flex-shrink-0">
                   <Calculator className="h-4 w-4" />
                 </div>
@@ -160,38 +130,7 @@ export function ProjectEstimatesSection({ projectId }: { projectId: string }) {
                     {formatCurrency(Number(est.finalClientPrice || est.totalAmount || 0))}
                   </p>
                 </div>
-                </div>
-              ) : (
-                <Link
-                  href={`/admin-v2/estimates/${est.id}?fromProjectId=${projectId}`}
-                  className="flex items-center gap-3 flex-1 min-w-0"
-                >
-                  <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-white flex-shrink-0">
-                    <Calculator className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline gap-2 flex-wrap">
-                      <p className="text-sm font-semibold truncate admin-dark:text-white admin-light:text-gray-900">
-                        {est.number}
-                      </p>
-                      <Badge className={STATUS_COLORS[est.status] ?? ""}>
-                        {ESTIMATE_STATUS_LABELS[est.status as keyof typeof ESTIMATE_STATUS_LABELS] ?? est.status}
-                      </Badge>
-                    </div>
-                    <p className="text-xs truncate admin-dark:text-gray-400 admin-light:text-gray-600">
-                      {est.title}
-                    </p>
-                    <p className="text-[10px] admin-dark:text-gray-500 admin-light:text-gray-500">
-                      {formatDate(est.createdAt)}
-                    </p>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-sm font-bold admin-dark:text-emerald-400 admin-light:text-emerald-600">
-                      {formatCurrency(Number(est.finalClientPrice || est.totalAmount || 0))}
-                    </p>
-                  </div>
-                </Link>
-              )}
+              </Link>
               {hasReport && (
                 <button
                   type="button"

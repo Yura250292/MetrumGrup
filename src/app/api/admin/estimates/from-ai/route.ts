@@ -16,7 +16,6 @@ import { getNextEstimateNumber } from "@/lib/document-numbers";
 import { normalizeAiItems, type AiItem } from "@/lib/estimates/ai-item-normalizer";
 import { recomputeEstimateTotals } from "@/lib/estimates/recompute";
 import { indexEstimate, contextFromWizard } from "@/lib/estimates/indexer";
-import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 
 interface AiSection {
   title: string;
@@ -126,10 +125,9 @@ export async function POST(request: NextRequest) {
         await tx.estimateItem.createMany({
           data: section.items.map((item, iIdx) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { parentSortOrder: _ps, predecessorSortOrder: _ps2, dependencyLagDays: lag, ...rest } = item;
+            const { parentSortOrder: _ps, ...rest } = item;
             return {
               ...rest,
-              dependencyLagDays: lag ?? 0,
               sortOrder: iIdx,
               estimateId: estimate.id,
               sectionId: createdSection.id,
@@ -205,12 +203,6 @@ export async function POST(request: NextRequest) {
       projectId,
       newData: { title, totalAmount: completeEstimate!.totalAmount, source: "ai" },
     });
-
-    try {
-      await ensureActiveEstimateVersion(completeEstimate!.id, session.user.id);
-    } catch (err) {
-      console.error("[estimates/from-ai] ensureActiveEstimateVersion failed:", err);
-    }
 
     return NextResponse.json({ data: completeEstimate }, { status: 201 });
   } catch (error: any) {

@@ -15,12 +15,12 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     title: "Метрум",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
   other: {
     "mobile-web-app-capable": "yes",
     "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "default",
+    "apple-mobile-web-app-status-bar-style": "black-translucent",
   },
 };
 
@@ -32,11 +32,14 @@ export const metadata: Metadata = {
 export async function generateViewport(): Promise<Viewport> {
   const session = await auth();
   const { firmId } = await resolveFirmScopeForRequest(session);
-  // v2 — світла тема. URL bar мімікрує під slate-100 фон, щоб не було
-  // різкого бордюру між системним chrome і контентом.
-  void firmId;
+  const themeColor =
+    firmId === "metrum-studio"
+      ? "#1a0f04" // deep amber-bronze
+      : firmId === "metrum-group"
+        ? "#0a0f25" // deep indigo
+        : "#09090b"; // default zinc
   return {
-    themeColor: "#F1F5F9",
+    themeColor,
     width: "device-width",
     initialScale: 1,
     maximumScale: 1,

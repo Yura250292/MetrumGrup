@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth";
-import { Role, Prisma } from "@prisma/client";
+import { Role } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
@@ -190,71 +190,60 @@ export async function requireForeman() {
 }
 
 /**
- * Foreman-доступ до проекту (P5). Проект доступний виконробу, якщо виконано
- * хоча б одну з умов:
- *   (a) він призначений на позицію кошторису — EstimateItem.foremanId = userId;
- *   (b) він відповідальний за етап — ProjectStageRecord.responsibleUserId = userId;
- *   (c) legacy: він ProjectMember з roleInProject=FOREMAN та isActive=true.
- * Завжди в межах активної фірми. Спільний фільтр для list + guard.
+ * Список проектів виконроба у активній фірмі. Foreman бачить ТІЛЬКИ ті проекти,
+ * де він є ProjectMember з roleInProject=FOREMAN та isActive=true. Single source
+ * of truth для всіх foreman endpoints.
  */
-function foremanProjectAccessOR(userId: string): Prisma.ProjectWhereInput["OR"] {
-  return [
-    { estimates: { some: { items: { some: { foremanId: userId } } } } },
-    { stages: { some: { responsibleUserId: userId } } },
-    { members: { some: { userId, roleInProject: "FOREMAN", isActive: true } } },
-  ];
-}
-
-/**
- * Список проектів виконроба у активній фірмі. Single source of truth для всіх
- * foreman endpoints. Включає effective-foreman (призначення по роботах/етапах),
- * а не лише legacy ProjectMember FOREMAN.
- */
-export async function getForemanAccessibleProjects(
-  userId: string,
-  firmId: string | null,
-) {
-  return prisma.project.findMany({
+export async function getForemanProjects(userId: string, firmId: string | null) {
+  const memberships = await prisma.projectMember.findMany({
     where: {
-      firmId: firmId ?? undefined,
-      status: { not: "CANCELLED" },
-      OR: foremanProjectAccessOR(userId),
+      userId,
+      roleInProject: "FOREMAN",
+      isActive: true,
+      project: {
+        firmId: firmId ?? undefined,
+        status: { not: "CANCELLED" },
+      },
     },
-    select: {
-      id: true,
-      title: true,
-      slug: true,
-      address: true,
-      folderId: true,
-      firmId: true,
-      status: true,
+    include: {
+      project: {
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          address: true,
+          folderId: true,
+          firmId: true,
+          status: true,
+        },
+      },
     },
-    orderBy: { createdAt: "desc" },
   });
+  return memberships.map((m) => m.project);
 }
-
-/** @deprecated Назва-аліас. Використовуй getForemanAccessibleProjects. */
-export const getForemanProjects = getForemanAccessibleProjects;
 
 /**
  * Defensive guard: foreman пробує писати у проект → перевір що проект справді
- * у його активній фірмі і він має до нього effective-foreman доступ.
- * Кидає "Forbidden" якщо ні.
+ * у його активній фірмі і він на нього призначений. Кидає "Forbidden" якщо ні.
  */
 export async function assertForemanCanAccessProject(
   userId: string,
   firmId: string | null,
   projectId: string,
 ) {
-  const project = await prisma.project.findFirst({
+  const member = await prisma.projectMember.findFirst({
     where: {
-      id: projectId,
-      firmId: firmId ?? undefined,
-      OR: foremanProjectAccessOR(userId),
+      userId,
+      projectId,
+      roleInProject: "FOREMAN",
+      isActive: true,
+      project: {
+        firmId: firmId ?? undefined,
+      },
     },
     select: { id: true },
   });
-  if (!project) {
+  if (!member) {
     throw new Error("Forbidden");
   }
 }

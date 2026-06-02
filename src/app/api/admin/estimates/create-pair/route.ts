@@ -6,7 +6,6 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { syncEstimateToFinancing } from "@/lib/financing/sync-from-estimate";
 import { isFinanceAutopublishEnabled } from "@/lib/financing/feature-flags";
-import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -278,16 +277,6 @@ export async function POST(request: NextRequest) {
         internalItemsCount: internalItems.length,
       },
     });
-
-    // Гарантуємо активну версію v1 для кожного зі створених кошторисів.
-    try {
-      if (result.clientEst?.id)
-        await ensureActiveEstimateVersion(result.clientEst.id, session.user.id);
-      if (result.internalEst?.id)
-        await ensureActiveEstimateVersion(result.internalEst.id, session.user.id);
-    } catch (err) {
-      console.error("[estimates/create-pair] ensureActiveEstimateVersion failed:", err);
-    }
 
     return NextResponse.json({
       estimateGroupId: groupId,

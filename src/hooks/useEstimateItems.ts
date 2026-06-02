@@ -22,12 +22,6 @@ export type EstimateItemDTO = {
   costCodeId: string | null;
   costType: EstimateItemCostType | null;
   costCode: { id: string; code: string; name: string } | null;
-  plannedStart?: string | null;
-  plannedDurationDays?: number | null;
-  plannedEnd?: string | null;
-  predecessorItemId?: string | null;
-  dependencyType?: "FS" | "SS" | "FF" | "SF" | null;
-  dependencyLagDays?: number;
 };
 
 const estimateKey = (estimateId: string) => ["estimate", estimateId] as const;
@@ -87,18 +81,8 @@ export function useUpdateEstimateItem(estimateId: string) {
         unit?: string;
         quantity?: number;
         unitPrice?: number;
-        unitCost?: number | null;
-        unitPriceCustomer?: number | null;
-        foremanId?: string | null;
-        executorText?: string | null;
         costCodeId?: string | null;
         costType?: EstimateItemCostType | null;
-        plannedStart?: string | null;
-        plannedDurationDays?: number | null;
-        plannedEnd?: string | null;
-        predecessorItemId?: string | null;
-        dependencyType?: "FS" | "SS" | "FF" | "SF" | null;
-        dependencyLagDays?: number;
       };
     }) =>
       jsonFetch<{ item: EstimateItemDTO }>(
