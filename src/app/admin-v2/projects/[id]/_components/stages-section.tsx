@@ -39,6 +39,7 @@ import {
 } from "./stage-table";
 import { StageMobileList } from "./stage-mobile-list";
 import { ImportEstimateModal } from "./import-estimate-modal";
+import { computeWbsCodes, resolveParentByCode } from "@/lib/projects/wbs-numbering";
 import { PasteSpreadsheetModal } from "./paste-spreadsheet-modal";
 import { PublishFinanceDialog } from "./publish-finance-dialog";
 import { StagesAiAssistant } from "./stages-ai-assistant";
@@ -518,6 +519,49 @@ export function StagesSection({
     return arr;
   }, [stages, hideCompleted, costFilter]);
 
+  // Перенос зміною WBS-коду: резолвимо нового батька за кодом (з того ж набору,
+  // що показує таблиця — filteredStages) і дзвонимо /move (та сама машинерія,
+  // що й drag — з рефетчем і перерахунком фінансів).
+  const reparentByCode = useCallback(
+    async (stageId: string, newCode: string) => {
+      const wbsCodes = computeWbsCodes(filteredStages);
+      const resolved = resolveParentByCode(newCode, stageId, wbsCodes);
+      if ("error" in resolved) {
+        alert(resolved.error);
+        return;
+      }
+      const current = stages.find((s) => s.id === stageId);
+      if (!current) return;
+      if (current.parentStageId === resolved.newParentId) return; // вже там
+
+      const sortOrder = stages.filter(
+        (s) => s.parentStageId === resolved.newParentId && s.id !== stageId,
+      ).length;
+
+      try {
+        const res = await fetch(
+          `/api/admin/projects/${projectId}/stages/${stageId}/move`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ parentStageId: resolved.newParentId, sortOrder }),
+          },
+        );
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error ?? "Помилка переміщення");
+        }
+        await refetch();
+      } catch (err) {
+        console.error("[stages-section] reparentByCode failed", err);
+        alert(err instanceof Error ? err.message : "Помилка переміщення");
+        await refetch();
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, stages, filteredStages],
+  );
+
   // ── Excel-like keyboard nav: Arrow Up/Down — focus rows; Enter — open drawer;
   //    Cmd/Ctrl+C — copy focused row as TSV; Cmd/Ctrl+V — paste TSV (одну або
   //    декілька рядків — оновлює existing stages by sequential order starting
@@ -948,6 +992,7 @@ export function StagesSection({
           dirtyStageIds={dirtyStageIds}
           viewMode={viewMode}
           onMoveStage={moveStage}
+          onChangeCode={reparentByCode}
           excelMode={excelMode}
         />
         {!excelMode && (

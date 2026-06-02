@@ -79,3 +79,42 @@ export function computeWbsCodes(rows: WbsRow[]): Map<string, string> {
 
   return result;
 }
+
+/**
+ * Резолвить нового батька за введеним WBS-кодом — для переносу позиції зміною
+ * коду. Парент = код без останнього сегмента: "5.2.М1" → батько "5.2";
+ * "5.2" → "5"; "5" → корінь (null).
+ *
+ * Повертає { newParentId } (null = корінь) або { error }.
+ */
+export function resolveParentByCode(
+  newCode: string,
+  currentStageId: string,
+  wbsCodes: Map<string, string>,
+): { newParentId: string | null } | { error: string } {
+  const code = newCode.trim();
+  if (!code) return { error: "Порожній код" };
+  if (!/^[0-9МM.]+$/i.test(code)) return { error: "Код містить недопустимі символи" };
+
+  const segments = code.split(".").map((s) => s.trim()).filter(Boolean);
+  if (segments.length === 0) return { error: "Порожній код" };
+
+  const parentSegments = segments.slice(0, -1);
+  if (parentSegments.length === 0) {
+    return { newParentId: null }; // верхній рівень
+  }
+  const parentCode = parentSegments.join(".");
+
+  // Зворотний пошук: код → stageId.
+  let foundId: string | null = null;
+  for (const [id, c] of wbsCodes) {
+    if (c === parentCode) {
+      foundId = id;
+      break;
+    }
+  }
+  if (!foundId) return { error: `Етап з кодом «${parentCode}» не знайдено` };
+  if (foundId === currentStageId) return { error: "Етап не може бути власним батьком" };
+
+  return { newParentId: foundId };
+}
