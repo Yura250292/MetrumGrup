@@ -5,7 +5,6 @@ import { unauthorizedResponse, forbiddenResponse, FOREMAN_REPORT_REVIEWERS } fro
 import { resolveFirmScopeForRequest } from "@/lib/firm/server-scope";
 import { getActiveRoleFromSession } from "@/lib/firm/scope";
 import { upsertSupplierMaterial } from "@/lib/foreman/upsert-supplier-material";
-import { recomputeWorkCompletion } from "@/lib/projects/work-progress";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +40,6 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     where: { id, firmId: activeFirmId ?? undefined },
     include: {
       items: { orderBy: { sortOrder: "asc" } },
-      progress: { select: { id: true, estimateItemId: true } },
       attachments: true,
       project: { select: { id: true, folderId: true, firmId: true } },
     },
@@ -65,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     );
   }
 
-  if (report.items.length === 0 && report.progress.length === 0) {
+  if (report.items.length === 0) {
     return NextResponse.json({ error: "Bad request", message: "Звіт без позицій" }, { status: 400 });
   }
 
@@ -74,36 +72,12 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     return forbiddenResponse();
   }
 
-  // Structured-флоу (P6/P7): розрізняємо рядки за pmDecision.
-  //   • legacy expense item     → pmDecision == null, itemType != ESTIMATE → FinanceEntry;
-  //   • structured EXTRA        → pmDecision != null → cost через totalCalculated / ДКО;
-  //   • ESTIMATE-рядок          → cost через totalCalculated.
-  // Блокуємо approve, якщо є EXTRA з невирішеним PENDING.
-  const pendingExtras = report.items.filter(
-    (i) => i.itemType === "EXTRA" && i.pmDecision === "PENDING",
-  );
-  if (pendingExtras.length > 0) {
-    return NextResponse.json(
-      {
-        error: "Pending decisions",
-        message: "Спершу прийми рішення по всіх додаткових роботах (extra).",
-        pendingItems: pendingExtras.map((i) => ({ id: i.id, title: i.title })),
-      },
-      { status: 422 },
-    );
-  }
-
-  // Лише legacy expense-рядки матеріалізуються у FinanceEntry.
-  const expenseItems = report.items.filter(
-    (i) => i.pmDecision == null && i.itemType !== "ESTIMATE",
-  );
-
   // Phase 2 (supplier-debt): MATERIAL items мають бути привʼязані до постачальника,
   // інакше факт не агрегуватиметься як борг. Менеджеру повертаємо 422 зі списком
   // items що потребують ручної привʼязки — UI відкриває диалог вибору/створення.
   // LABOR і OTHER пропускаються (необовʼязково мати постачальника).
   const SUPPLIER_REQUIRED: ReadonlyArray<string> = ["MATERIAL", "SUBCONTRACT"];
-  const missingSupplierItems = expenseItems.filter(
+  const missingSupplierItems = report.items.filter(
     (i) => SUPPLIER_REQUIRED.includes(i.costType) && !i.counterpartyId,
   );
   if (missingSupplierItems.length > 0) {
@@ -131,7 +105,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     const result = await prisma.$transaction(async (tx) => {
       const financeEntryIds: string[] = [];
 
-      for (const item of expenseItems) {
+      for (const item of report.items) {
         const category = item.costType === "LABOR" ? "Робота" : "Матеріали";
         const baseDescription = [
           item.unit && item.quantity ? `${item.quantity} ${item.unit}` : null,
@@ -352,21 +326,6 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
             : {}),
         },
       });
-
-      // Автозавершення робіт/розділів (P11): звіт уже APPROVED, тож
-      // recomputeWorkCompletion врахує його approved-обʼєм. Збираємо всі
-      // зачеплені EstimateItem (progress + LINKED extra) і перераховуємо.
-      const touchedItemIds = new Set<string>();
-      const allProgress = await tx.foremanReportProgress.findMany({
-        where: { reportId: report.id },
-        select: { estimateItemId: true },
-      });
-      for (const p of allProgress) {
-        if (p.estimateItemId) touchedItemIds.add(p.estimateItemId);
-      }
-      for (const itemId of touchedItemIds) {
-        await recomputeWorkCompletion(itemId, tx);
-      }
 
       return { financeEntryIds, totalCalculated: total };
     });

@@ -177,9 +177,6 @@ export async function POST(request: NextRequest) {
           title,
           slug,
           code,
-          // Новий проект завжди стартує як DRAFT — без кошторису/етапів.
-          // Перехід у ACTIVE — лише через POST .../activate (із замороженим планом).
-          status: "DRAFT",
           type: typeTrim,
           description: description || null,
           address: address || null,

@@ -12,17 +12,7 @@ import {
 } from "@/lib/estimates/items-service";
 import { EstimateVersionLockedError } from "@/lib/estimates/version-lock";
 import { findActiveProposal } from "@/lib/estimates/proposals";
-import type { CostType, TaskDependencyType } from "@prisma/client";
-
-const DEP_TYPES: TaskDependencyType[] = ["FS", "SS", "FF", "SF"];
-
-function parseOptionalDate(v: unknown): Date | null | undefined {
-  if (v === undefined) return undefined;
-  if (v === null) return null;
-  if (typeof v !== "string") return undefined;
-  const d = new Date(v);
-  return Number.isFinite(d.getTime()) ? d : undefined;
-}
+import type { CostType } from "@prisma/client";
 
 /**
  * Якщо у кошториса є active proposal (SENT/IN_NEGOTIATION/PARTIALLY_APPROVED) —
@@ -87,12 +77,6 @@ export async function PATCH(
       costType?: CostType | null;
       itemType?: string | null;
       parentItemId?: string | null;
-      plannedStart?: Date | null;
-      plannedDurationDays?: number | null;
-      plannedEnd?: Date | null;
-      predecessorItemId?: string | null;
-      dependencyType?: TaskDependencyType | null;
-      dependencyLagDays?: number;
     } = {};
 
     if (typeof json.description === "string") patch.description = json.description;
@@ -172,65 +156,6 @@ export async function PATCH(
         return NextResponse.json({ error: "Невірний executorText" }, { status: 400 });
       }
       patch.executorText = json.executorText;
-    }
-    if ("plannedStart" in json) {
-      const d = parseOptionalDate(json.plannedStart);
-      if (d === undefined && json.plannedStart !== null) {
-        return NextResponse.json({ error: "Невірна plannedStart" }, { status: 400 });
-      }
-      patch.plannedStart = d ?? null;
-    }
-    if ("plannedDurationDays" in json) {
-      if (json.plannedDurationDays === null) {
-        patch.plannedDurationDays = null;
-      } else {
-        const n = Number(json.plannedDurationDays);
-        if (!Number.isInteger(n) || n < 0) {
-          return NextResponse.json(
-            { error: "plannedDurationDays має бути цілим >= 0" },
-            { status: 400 },
-          );
-        }
-        patch.plannedDurationDays = n;
-      }
-    }
-    if ("plannedEnd" in json) {
-      const d = parseOptionalDate(json.plannedEnd);
-      if (d === undefined && json.plannedEnd !== null) {
-        return NextResponse.json({ error: "Невірна plannedEnd" }, { status: 400 });
-      }
-      patch.plannedEnd = d ?? null;
-    }
-    if ("predecessorItemId" in json) {
-      if (json.predecessorItemId !== null && typeof json.predecessorItemId !== "string") {
-        return NextResponse.json({ error: "Невірний predecessorItemId" }, { status: 400 });
-      }
-      patch.predecessorItemId = json.predecessorItemId;
-    }
-    if ("dependencyType" in json) {
-      if (json.dependencyType === null) {
-        patch.dependencyType = null;
-      } else if (
-        typeof json.dependencyType !== "string" ||
-        !DEP_TYPES.includes(json.dependencyType as TaskDependencyType)
-      ) {
-        return NextResponse.json(
-          { error: "dependencyType: FS | SS | FF | SF | null" },
-          { status: 400 },
-        );
-      } else {
-        patch.dependencyType = json.dependencyType as TaskDependencyType;
-      }
-    }
-    if ("dependencyLagDays" in json) {
-      const n = Number(json.dependencyLagDays);
-      if (!Number.isInteger(n)) {
-        return NextResponse.json(
-          { error: "dependencyLagDays має бути цілим" },
-          { status: 400 },
-        );
-      }
-      patch.dependencyLagDays = n;
     }
 
     const item = await updateEstimateItem({ itemId, patch, userId: session.user.id });

@@ -5,7 +5,6 @@ import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { auditLog } from "@/lib/audit";
 import { getNextEstimateNumber } from "@/lib/document-numbers";
 import { notifyProjectMembers } from "@/lib/notifications/create";
-import { ensureActiveEstimateVersion } from "@/lib/estimates/ensure-version";
 
 export async function GET(request: NextRequest) {
   const session = await auth();
@@ -197,13 +196,6 @@ export async function POST(request: NextRequest) {
         },
       });
     });
-
-    // Гарантуємо активну версію v1 (ORIGINAL, не locked) — після commit tx.
-    try {
-      await ensureActiveEstimateVersion(completeEstimate!.id, session.user.id);
-    } catch (err) {
-      console.error("[estimates/POST] ensureActiveEstimateVersion failed:", err);
-    }
 
     await auditLog({
       userId: session.user.id,

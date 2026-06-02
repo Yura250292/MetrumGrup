@@ -61,15 +61,6 @@ export function TabsViewport({ children }: { children: ReactNode }) {
     }
   }
 
-  // Fallback: якщо state.tabs пустий АБО жоден tab не відповідає поточному
-  // pathname (rare race під час hydration), просто рендеримо children без
-  // кешування. Це гарантує що користувач завжди бачить контент.
-  const hasMatchingCached =
-    targetTab && cacheRef.current.has(targetTab.id);
-  if (!hasMatchingCached) {
-    return <>{children}</>;
-  }
-
   return (
     <>
       {state.tabs.map((tab) => {

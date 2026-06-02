@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { BigButton } from "../../../_components/big-button";
 import { UploadDropzone, type UploadedFile } from "../../../_components/upload-dropzone";
 import { ParseLoadingOverlay } from "../../../_components/parse-loading-overlay";
 
@@ -21,9 +21,7 @@ export function ReportInputForm({ projectId, projectTitle }: Props) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [files, setFiles] = useState<UploadedFile[]>([]);
-  const [occurredAt, setOccurredAt] = useState(() =>
-    new Date().toISOString().slice(0, 10),
-  );
+  const [occurredAt, setOccurredAt] = useState(() => new Date().toISOString().slice(0, 10));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -69,10 +67,7 @@ export function ReportInputForm({ projectId, projectTitle }: Props) {
         }),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          message?: string;
-          error?: string;
-        };
+        const body = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
         throw new Error(body.message ?? body.error ?? "Не вдалось проаналізувати");
       }
       const { reportId } = (await res.json()) as { reportId: string };
@@ -88,64 +83,49 @@ export function ReportInputForm({ projectId, projectTitle }: Props) {
   }
 
   return (
-    <div className="space-y-4 mt-1 pb-28">
-      <div className="rounded-2xl bg-white border border-slate-200 px-3 py-2.5">
-        <div className="text-[10px] font-extrabold tracking-[0.12em] text-slate-400 uppercase">
-          Обʼєкт
-        </div>
-        <div className="text-[14px] font-semibold text-slate-900 truncate">
-          {projectTitle}
-        </div>
+    <div className="space-y-5 mt-2 pb-32">
+      <div className="text-sm text-zinc-400">
+        <span className="text-zinc-500">Об{"’"}єкт:</span> <span className="text-zinc-200 font-semibold">{projectTitle}</span>
       </div>
 
       <label className="block">
-        <span className="text-[10px] font-extrabold tracking-[0.12em] text-slate-500 uppercase">
-          Дата витрати
-        </span>
+        <span className="text-xs font-semibold uppercase text-zinc-500">Дата витрати</span>
         <input
           type="date"
           value={occurredAt}
           onChange={(e) => setOccurredAt(e.target.value)}
-          className="w-full mt-1 px-3 py-3 rounded-xl bg-white border border-slate-200 text-slate-900 text-[15px] font-medium focus:border-indigo-500 focus:outline-none"
+          className="w-full mt-1 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 text-white text-lg focus:border-emerald-500 focus:outline-none"
         />
       </label>
 
       <label className="block">
-        <span className="text-[10px] font-extrabold tracking-[0.12em] text-slate-500 uppercase">
-          Опис витрат
-        </span>
+        <span className="text-xs font-semibold uppercase text-zinc-500">Опис витрат</span>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={PLACEHOLDER}
-          className="w-full mt-1 h-48 sm:h-72 max-h-[40vh] px-3 py-3 rounded-2xl bg-white border border-slate-200 text-slate-900 text-[15px] leading-relaxed focus:border-indigo-500 focus:outline-none resize-none"
+          className="w-full mt-1 h-48 sm:h-72 max-h-[40vh] px-4 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-white text-lg leading-relaxed focus:border-emerald-500 focus:outline-none resize-none"
         />
       </label>
 
       <div>
-        <span className="text-[10px] font-extrabold tracking-[0.12em] text-slate-500 uppercase block mb-1.5">
+        <span className="text-xs font-semibold uppercase text-zinc-500 block mb-2">
           Або сфотографуйте накладну
         </span>
         <UploadDropzone files={files} onChange={setFiles} disabled={submitting} />
       </div>
 
       {error && (
-        <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2 text-sm">
+        <div className="rounded-xl bg-rose-500/10 border border-rose-500/40 text-rose-300 px-4 py-3 text-sm">
           {error}
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-slate-100/95 backdrop-blur px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] border-t border-slate-200">
+      <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-4 py-3">
         <div className="max-w-md mx-auto">
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 text-white font-bold text-[15px] py-3.5 active:scale-[0.99] transition disabled:opacity-60 shadow-[0_10px_24px_-10px_rgba(79,70,229,0.6)]"
-          >
-            <Sparkles size={18} strokeWidth={2.2} />
-            {submitting ? "Аналізуємо…" : "Аналізувати"}
-          </button>
+          <BigButton onClick={handleSubmit} disabled={!canSubmit} loading={submitting} size="huge">
+            Аналізувати
+          </BigButton>
         </div>
       </div>
 

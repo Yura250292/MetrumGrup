@@ -5,94 +5,9 @@ import { prisma } from "@/lib/prisma";
 export type CascadeResult = {
   createdFinanceEntries: number;
   endDateShifted: boolean;
-  /// P10: матеріалізовані у кошторис scope-зміни (ADD/MODIFY/REMOVE).
-  materializedItems: number;
 };
 
 type TxClient = Prisma.TransactionClient | typeof prisma;
-
-/// Вибирає кошторис проєкту, у який матеріалізувати approved ДКО:
-/// пріоритет — той, що має заморожену активну версію (frozen plan); інакше
-/// перший за створенням. Повертає null, якщо у проєкта немає кошторисів.
-async function pickProjectPlanEstimate(
-  tx: TxClient,
-  projectId: string,
-): Promise<string | null> {
-  const locked = await tx.estimate.findFirst({
-    where: { projectId, versions: { some: { isActive: true, isLocked: true } } },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  if (locked) return locked.id;
-  const any = await tx.estimate.findFirst({
-    where: { projectId },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  return any?.id ?? null;
-}
-
-/// P10: матеріалізує scope-рядки approved ДКО у EstimateItem проєкту.
-/// Не мутує frozen original (MODIFY → delta-робота). Пише напряму через tx,
-/// свідомо обходячи assertEstimateEditable — ДКО і є контрольованим механізмом
-/// зміни замороженого кошторису.
-async function materializeScopeItems(
-  tx: TxClient,
-  co: Prisma.ChangeOrderGetPayload<{ include: { items: true } }>,
-): Promise<number> {
-  const scopeItems = co.items.filter((i) => i.action != null);
-  if (scopeItems.length === 0) return 0;
-
-  const estimateId = await pickProjectPlanEstimate(tx, co.projectId);
-  if (!estimateId) return 0;
-
-  let count = 0;
-  for (const item of scopeItems) {
-    if (item.action === "REMOVE") {
-      if (item.estimateItemId) {
-        await tx.estimateItem.update({
-          where: { id: item.estimateItemId },
-          data: { isReportable: false },
-        });
-        count += 1;
-      }
-      continue;
-    }
-
-    // ADD або MODIFY → нова reportable-робота (для MODIFY — delta).
-    const isModify = item.action === "MODIFY";
-    const qty = isModify
-      ? Number(item.quantityDelta ?? 0)
-      : Number(item.newQuantity ?? item.qty);
-    const unitCost = Number(item.unitCost ?? item.unitPrice);
-    const amount = Math.abs(qty) * unitCost;
-
-    await tx.estimateItem.create({
-      data: {
-        estimateId,
-        sectionId: item.sectionId ?? null,
-        description: isModify
-          ? `${item.description} (ДКО ${co.number})`
-          : item.description,
-        unit: item.unit,
-        quantity: qty,
-        unitPrice: unitCost,
-        amount,
-        unitCost,
-        unitPriceCustomer: item.unitPriceCustomer ?? null,
-        foremanId: item.foremanId ?? null,
-        executorText: item.executorText ?? null,
-        itemType: "labor",
-        sourceType: "CHANGE_ORDER",
-        sourceChangeOrderItemId: item.id,
-        baseEstimateItemId: isModify ? item.estimateItemId ?? null : null,
-        isReportable: true,
-      },
-    });
-    count += 1;
-  }
-  return count;
-}
 
 /// Виконує каскад для APPROVED ChangeOrder:
 ///   1. Створює FinanceEntry(kind=PLAN, source=CHANGE_ORDER) на кожен item.
@@ -120,7 +35,7 @@ export async function applyApprovedCascade(
     select: { id: true },
   });
   if (existing) {
-    return { createdFinanceEntries: 0, endDateShifted: false, materializedItems: 0 };
+    return { createdFinanceEntries: 0, endDateShifted: false };
   }
 
   const now = new Date();
@@ -164,10 +79,7 @@ export async function applyApprovedCascade(
     endDateShifted = true;
   }
 
-  // P10: матеріалізація scope-змін у кошторис (нові роботи стають reportable).
-  const materializedItems = await materializeScopeItems(tx, co);
-
-  return { createdFinanceEntries: created, endDateShifted, materializedItems };
+  return { createdFinanceEntries: created, endDateShifted };
 }
 
 /// Розгортає item.totalPrice → знак для FinanceEntry. Експортовано для тестів.

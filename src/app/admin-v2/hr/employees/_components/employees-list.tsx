@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  Briefcase,
   CheckCircle2,
   Eye,
   EyeOff,
@@ -12,7 +11,6 @@ import {
   Plus,
   Search,
   Upload,
-  UserX,
   Users,
   X,
   XCircle,
@@ -222,108 +220,58 @@ export function EmployeesList({
   }, [externalUsers, search, showInactive]);
 
   const activeCount = items.filter((e) => e.isActive).length;
-  const inactiveCount = items.length - activeCount;
-  const departmentCount = useMemo(
-    () =>
-      new Set(
-        items
-          .filter((e) => e.department?.id)
-          .map((e) => e.department!.id),
-      ).size,
-    [items],
-  );
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Users size={20} style={{ color: T.textPrimary }} />
-            <h1
-              className="text-[24px] font-bold leading-tight"
-              style={{ color: T.textPrimary }}
-            >
-              Співробітники
-            </h1>
-          </div>
-          <p className="text-[13px] mt-1" style={{ color: T.textSecondary }}>
-            {tab === "employees" ? (
-              <>
-                <span className="font-semibold" style={{ color: T.textPrimary }}>
-                  {items.length}
-                </span>{" "}
-                {pluralize(items.length, "співробітник", "співробітники", "співробітників")}
-                {" · "}
-                <span className="font-semibold" style={{ color: T.success }}>
-                  {activeCount}
-                </span>{" "}
-                активних
-                {departmentCount > 0 && (
-                  <>
-                    {" · "}
-                    <span className="font-semibold" style={{ color: T.textPrimary }}>
-                      {departmentCount}
-                    </span>{" "}
-                    {pluralize(departmentCount, "підрозділ", "підрозділи", "підрозділів")}
-                  </>
-                )}
-                {filtered.length !== items.length && (
-                  <>
-                    {" · "}
-                    <span className="font-semibold" style={{ color: T.accentPrimary }}>
-                      {filtered.length}
-                    </span>{" "}
-                    у фільтрі
-                  </>
-                )}
-              </>
-            ) : tab === "external" ? (
-              <>
-                <span className="font-semibold" style={{ color: T.textPrimary }}>
-                  {filteredExternal.length}
-                </span>{" "}
-                зовнішніх акаунтів
-              </>
-            ) : (
-              "Структура штату за підрозділами"
-            )}
-          </p>
-        </div>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-2 flex-wrap">
+        <Users size={20} style={{ color: T.textPrimary }} />
+        <h1 className="text-xl font-bold" style={{ color: T.textPrimary }}>
+          Співробітники
+        </h1>
+        {tab !== "departments" && (
+          <span
+            className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+            style={{ backgroundColor: T.panelSoft, color: T.textMuted }}
+          >
+            {tab === "employees"
+              ? filtered.length !== items.length
+                ? `${filtered.length} з ${items.length} · ${activeCount} активних`
+                : `Всього: ${items.length} співробітник${
+                    items.length % 10 === 1 && items.length % 100 !== 11
+                      ? ""
+                      : items.length % 10 >= 2 &&
+                          items.length % 10 <= 4 &&
+                          (items.length % 100 < 10 || items.length % 100 >= 20)
+                        ? "и"
+                        : "ів"
+                  } · ${activeCount} активних`
+              : `${filteredExternal.length} зовнішніх акаунтів`}
+          </span>
+        )}
+        <div className="flex-1" />
         {tab === "employees" && canEdit && (
-          <div className="flex items-center gap-2 flex-wrap">
+          <>
             <button
               onClick={() => setShowImport(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition hover:brightness-95"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
               style={{
-                backgroundColor: T.panel,
-                color: T.textPrimary,
-                border: `1px solid ${T.borderSoft}`,
+                backgroundColor: T.panelSoft,
+                color: T.accentPrimary,
+                border: `1px solid ${T.borderStrong}`,
               }}
             >
-              <Upload size={14} />
-              Імпорт з Excel
+              <Upload size={13} /> Імпорт з Excel
             </button>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center justify-center rounded-lg w-10 h-10 transition hover:brightness-110"
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-[12px] font-semibold"
               style={{ backgroundColor: T.accentPrimary, color: "#fff" }}
-              aria-label="Додати співробітника"
-              title="Додати співробітника"
             >
-              <Plus size={18} />
+              <Plus size={13} /> Додати співробітника
             </button>
-          </div>
+          </>
         )}
-      </header>
-
-      {tab === "employees" && (
-        <HrKpiStrip
-          totalCount={items.length}
-          activeCount={activeCount}
-          inactiveCount={inactiveCount}
-          departmentCount={departmentCount}
-        />
-      )}
+      </div>
 
       <div
         className="inline-flex w-fit gap-1 rounded-xl p-1"
@@ -388,7 +336,7 @@ export function EmployeesList({
       {/* Toolbar */}
       {tab !== "departments" && (
       <div
-        className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2.5"
+        className="flex flex-wrap items-center gap-2 rounded-2xl p-3"
         style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
       >
         <div className="relative flex-1 min-w-[220px]">
@@ -908,110 +856,4 @@ function modalInputStyle(): React.CSSProperties {
     border: `1px solid ${T.borderStrong}`,
     color: T.textPrimary,
   };
-}
-
-function pluralize(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10;
-  const mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return one;
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
-  return many;
-}
-
-function HrKpiStrip({
-  totalCount,
-  activeCount,
-  inactiveCount,
-  departmentCount,
-}: {
-  totalCount: number;
-  activeCount: number;
-  inactiveCount: number;
-  departmentCount: number;
-}) {
-  const activeShare =
-    totalCount > 0 ? Math.round((activeCount / totalCount) * 100) : 0;
-
-  const cards: Array<{
-    icon: typeof Users;
-    iconBg: string;
-    iconColor: string;
-    label: string;
-    value: string;
-    sub: string;
-  }> = [
-    {
-      icon: Users,
-      iconBg: T.accentPrimarySoft,
-      iconColor: T.accentPrimary,
-      label: "ВСЬОГО",
-      value: String(totalCount),
-      sub: "у штаті",
-    },
-    {
-      icon: CheckCircle2,
-      iconBg: T.successSoft,
-      iconColor: T.success,
-      label: "АКТИВНІ",
-      value: String(activeCount),
-      sub: totalCount > 0 ? `${activeShare}% від загалу` : "—",
-    },
-    {
-      icon: UserX,
-      iconBg: inactiveCount > 0 ? T.warningSoft : T.successSoft,
-      iconColor: inactiveCount > 0 ? T.warning : T.success,
-      label: "НЕАКТИВНІ",
-      value: String(inactiveCount),
-      sub: inactiveCount > 0 ? "звільнені/призупинені" : "усі працюють",
-    },
-    {
-      icon: Briefcase,
-      iconBg: T.skySoft,
-      iconColor: T.sky,
-      label: "ПІДРОЗДІЛИ",
-      value: String(departmentCount),
-      sub: pluralize(departmentCount, "напрям", "напрями", "напрямів"),
-    },
-  ];
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {cards.map((c, i) => (
-        <article
-          key={i}
-          className="rounded-xl p-3.5"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          <div className="flex items-start gap-3">
-            <div
-              className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0"
-              style={{ backgroundColor: c.iconBg }}
-            >
-              <c.icon size={16} style={{ color: c.iconColor }} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div
-                className="text-[9.5px] font-bold tracking-wider"
-                style={{ color: T.textMuted }}
-              >
-                {c.label}
-              </div>
-              <div
-                className="text-[22px] font-bold tabular-nums leading-none mt-0.5"
-                style={{ color: T.textPrimary }}
-              >
-                {c.value}
-              </div>
-              <div className="text-[11px] mt-1 truncate" style={{ color: T.textMuted }}>
-                {c.sub}
-              </div>
-            </div>
-          </div>
-        </article>
-      ))}
-    </div>
-  );
 }

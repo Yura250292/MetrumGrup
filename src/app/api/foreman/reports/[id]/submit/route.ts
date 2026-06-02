@@ -21,22 +21,18 @@ export async function POST(_req: Request, { params }: RouteContext) {
 
   const report = await prisma.foremanReport.findFirst({
     where: { id, createdById: session.user.id, firmId: firmId ?? undefined },
-    include: {
-      items: { select: { id: true } },
-      progress: { select: { id: true } },
-    },
+    include: { items: { select: { id: true } } },
   });
   if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  // Подати можна з DRAFT або після повернення на доопрацювання (NEEDS_REVISION).
-  if (report.status !== "DRAFT" && report.status !== "NEEDS_REVISION") {
+  if (report.status !== "DRAFT") {
     return NextResponse.json(
       { error: "Conflict", message: "Звіт уже надіслано" },
       { status: 409 },
     );
   }
-  if (report.items.length === 0 && report.progress.length === 0) {
+  if (report.items.length === 0) {
     return NextResponse.json(
-      { error: "Bad request", message: "Додайте хоча б один рядок або обсяг роботи" },
+      { error: "Bad request", message: "Додайте хоча б один рядок" },
       { status: 400 },
     );
   }

@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse, FOREMAN_REPORT_REVIEWERS } from "@/lib/auth-utils";
@@ -33,26 +32,6 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
         include: {
           counterparty: { select: { id: true, name: true } },
           costCode: { select: { id: true, code: true, name: true } },
-          estimateItem: {
-            select: { id: true, description: true, unit: true, section: { select: { id: true, title: true } } },
-          },
-          linkedEstimateItem: {
-            select: { id: true, description: true, unit: true, section: { select: { id: true, title: true } } },
-          },
-        },
-      },
-      progress: {
-        orderBy: { sortOrder: "asc" },
-        include: {
-          estimateItem: {
-            select: {
-              id: true,
-              description: true,
-              unit: true,
-              quantity: true,
-              section: { select: { id: true, title: true } },
-            },
-          },
         },
       },
       attachments: true,
@@ -79,64 +58,4 @@ export async function GET(_req: NextRequest, { params }: RouteContext) {
       attachments: attachmentsWithUrls,
     },
   });
-}
-
-const PatchReportBody = z.object({
-  stageId: z.string().min(1).nullable().optional(),
-});
-
-/**
- * PATCH (P7): PM переприв'язує звіт до етапу (stageId). Доступно крім APPROVED.
- */
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const { id } = await params;
-  const session = await auth();
-  if (!session?.user) return unauthorizedResponse();
-
-  const { firmId: activeFirmId } = await resolveFirmScopeForRequest(session);
-  const role = getActiveRoleFromSession(session, activeFirmId);
-  if (!role || !FOREMAN_REPORT_REVIEWERS.includes(role)) return forbiddenResponse();
-
-  const report = await prisma.foremanReport.findFirst({
-    where: { id, firmId: activeFirmId ?? undefined },
-    select: { id: true, status: true, projectId: true },
-  });
-  if (!report) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  if (report.status === "APPROVED") {
-    return NextResponse.json(
-      { error: "Conflict", message: "Звіт затверджено." },
-      { status: 409 },
-    );
-  }
-
-  const body = await req.json().catch(() => null);
-  const parsed = PatchReportBody.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Bad request" }, { status: 400 });
-  }
-
-  const data: Record<string, unknown> = {};
-  if ("stageId" in parsed.data) {
-    const stageId = parsed.data.stageId ?? null;
-    if (stageId) {
-      const stage = await prisma.projectStageRecord.findFirst({
-        where: { id: stageId, projectId: report.projectId },
-        select: { id: true },
-      });
-      if (!stage) {
-        return NextResponse.json(
-          { error: "Bad request", message: "Етап не належить проєкту звіту" },
-          { status: 400 },
-        );
-      }
-    }
-    data.stageId = stageId;
-  }
-
-  const updated = await prisma.foremanReport.update({
-    where: { id },
-    data,
-    select: { id: true, stageId: true },
-  });
-  return NextResponse.json({ data: updated });
 }

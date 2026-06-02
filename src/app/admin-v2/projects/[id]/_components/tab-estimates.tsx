@@ -2,26 +2,13 @@
 
 import { useState } from "react";
 import { useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
 import { DollarSign, Loader2 } from "lucide-react";
 import { ProjectEstimatesSection } from "@/components/projects/ProjectEstimatesSection";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { DARK_VARS } from "@/app/admin-v2/_lib/dark-overrides";
 import { formatCurrency } from "@/lib/utils";
-import { ProjectInlineEstimate } from "./project-inline-estimate";
 
 export function TabEstimates({ projectId }: { projectId: string }) {
-  const searchParams = useSearchParams();
-  const selectedEstimateId = searchParams.get("estimateId");
-
-  // Inline view конкретного кошторису — повний редактор у межах табу.
-  if (selectedEstimateId) {
-    return <ProjectInlineEstimate estimateId={selectedEstimateId} />;
-  }
-  return <EstimatesList projectId={projectId} />;
-}
-
-function EstimatesList({ projectId }: { projectId: string }) {
   const { data: session } = useSession();
   const role = session?.user?.role;
   const canSync = role === "FINANCIER" || role === "SUPER_ADMIN" || role === "MANAGER";

@@ -3,7 +3,6 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { StructuredReviewPanel } from "./_structured-review-panel";
 import {
   Bot,
   Check,
@@ -374,9 +373,6 @@ export default function ForemanReportDetailPage({ params }: PageProps) {
           </div>
         </div>
       )}
-
-      {/* P7/P10: structured-review (виконані обсяги + extra-рішення + доопрацювання) */}
-      <StructuredReviewPanel id={id} canDecide={canDecide} />
 
       <div className="rounded-xl bg-zinc-900 border border-zinc-800 overflow-hidden mb-4">
         <table className="w-full text-sm">

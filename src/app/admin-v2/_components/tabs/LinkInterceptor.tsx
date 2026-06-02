@@ -47,30 +47,6 @@ export function LinkInterceptor() {
 
       if (e.button !== 0) return;
 
-      // Якщо href збігається з поточною повною URL (pathname + search) —
-      // нічого робити не треба (вже там). Інакше дамо Next.js навігувати
-      // навіть якщо pathname той самий — це потрібно щоб клік на "Огляд"
-      // (бare /admin-v2/projects/X) з URL з ?tab=tasks реально перейшов
-      // і скинув query string.
-      const targetFull = href; // як написано у Link
-      const currentFull = window.location.pathname + window.location.search;
-      if (targetFull === currentFull) {
-        e.preventDefault();
-        return;
-      }
-
-      // Browser-tabs feature: якщо така ж path уже відкрита в іншому
-      // browser-tab — переключаємо туди БЕЗ дублювання. Але якщо це
-      // активний tab + URL відрізняється query — пропускаємо
-      // (Next.js саме навігуватиме і оновить tab.path watcher-ом).
-      const targetPathOnly = path; // без query
-      const currentPath = normalize(window.location.pathname);
-      const isSamePath = targetPathOnly === currentPath;
-      if (isSamePath) {
-        // Той самий pathname → дамо Next.js навігувати (query change).
-        return;
-      }
-
       const existing = state.tabs.find((t) => t.path === path);
       if (existing) {
         e.preventDefault();
