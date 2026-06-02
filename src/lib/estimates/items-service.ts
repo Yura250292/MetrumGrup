@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import Decimal from "decimal.js";
-import { CostType, type TaskDependencyType } from "@prisma/client";
+import { CostType } from "@prisma/client";
 import { recomputeEstimateTotals } from "./recompute";
 import { assertEstimateEditable } from "./version-lock";
 
@@ -73,13 +73,6 @@ export type EstimateItemDTO = {
   costCode: EstimateItemCostCodeDTO | null;
   itemType: string | null;
   parentItemId: string | null;
-  /// Planning (Estimate → Task sync). Дати серіалізуються як ISO-рядки.
-  plannedStart: string | null;
-  plannedDurationDays: number | null;
-  plannedEnd: string | null;
-  predecessorItemId: string | null;
-  dependencyType: TaskDependencyType | null;
-  dependencyLagDays: number;
 };
 
 function toDTO(row: {
@@ -96,12 +89,6 @@ function toDTO(row: {
   costCode?: { id: string; code: string; name: string } | null;
   itemType?: string | null;
   parentItemId?: string | null;
-  plannedStart?: Date | null;
-  plannedDurationDays?: number | null;
-  plannedEnd?: Date | null;
-  predecessorItemId?: string | null;
-  dependencyType?: TaskDependencyType | null;
-  dependencyLagDays?: number;
 }): EstimateItemDTO {
   return {
     id: row.id,
@@ -119,12 +106,6 @@ function toDTO(row: {
       : null,
     itemType: row.itemType ?? null,
     parentItemId: row.parentItemId ?? null,
-    plannedStart: row.plannedStart ? row.plannedStart.toISOString() : null,
-    plannedDurationDays: row.plannedDurationDays ?? null,
-    plannedEnd: row.plannedEnd ? row.plannedEnd.toISOString() : null,
-    predecessorItemId: row.predecessorItemId ?? null,
-    dependencyType: row.dependencyType ?? null,
-    dependencyLagDays: row.dependencyLagDays ?? 0,
   };
 }
 
@@ -295,16 +276,6 @@ export async function updateEstimateItem(opts: {
     costType?: CostType | null;
     itemType?: string | null;
     parentItemId?: string | null;
-    /// Planning fields для Excel-style Gantt sync. Інваріанти:
-    /// - predecessorItemId не може посилатись на саму позицію
-    /// - predecessor має бути у тому ж кошторисі
-    /// Cycle-detection — у syncEstimateItemsToTasks.
-    plannedStart?: Date | null;
-    plannedDurationDays?: number | null;
-    plannedEnd?: Date | null;
-    predecessorItemId?: string | null;
-    dependencyType?: TaskDependencyType | null;
-    dependencyLagDays?: number;
   };
   userId: string;
 }): Promise<EstimateItemDTO> {
@@ -378,20 +349,6 @@ export async function updateEstimateItem(opts: {
     }
   }
 
-  // Validate planning fields.
-  if ("predecessorItemId" in opts.patch && opts.patch.predecessorItemId) {
-    if (opts.patch.predecessorItemId === opts.itemId) {
-      throw new Error("Попередник не може посилатись на саму позицію");
-    }
-    const pred = await prisma.estimateItem.findUnique({
-      where: { id: opts.patch.predecessorItemId },
-      select: { estimateId: true },
-    });
-    if (!pred || pred.estimateId !== existing.estimateId) {
-      throw new Error("Попередник має бути у тому ж кошторисі");
-    }
-  }
-
   const updated = await prisma.estimateItem.update({
     where: { id: opts.itemId },
     data: {
@@ -412,20 +369,6 @@ export async function updateEstimateItem(opts: {
       ...("itemType" in opts.patch ? { itemType: newItemType } : {}),
       ...("itemType" in opts.patch || "parentItemId" in opts.patch
         ? { parentItemId: newParentItemId }
-        : {}),
-      ...("plannedStart" in opts.patch ? { plannedStart: opts.patch.plannedStart } : {}),
-      ...("plannedDurationDays" in opts.patch
-        ? { plannedDurationDays: opts.patch.plannedDurationDays }
-        : {}),
-      ...("plannedEnd" in opts.patch ? { plannedEnd: opts.patch.plannedEnd } : {}),
-      ...("predecessorItemId" in opts.patch
-        ? { predecessorItemId: opts.patch.predecessorItemId }
-        : {}),
-      ...("dependencyType" in opts.patch
-        ? { dependencyType: opts.patch.dependencyType }
-        : {}),
-      ...("dependencyLagDays" in opts.patch
-        ? { dependencyLagDays: opts.patch.dependencyLagDays }
         : {}),
     },
     include: { costCode: { select: { id: true, code: true, name: true } } },

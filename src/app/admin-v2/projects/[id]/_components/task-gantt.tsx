@@ -18,9 +18,6 @@ type GanttItem = {
     priority: "LOW" | "NORMAL" | "HIGH" | "URGENT";
     isDone: boolean;
     checklistCount: number;
-    /** true якщо таск згенерований з рядка кошторису (auto-from-estimate). */
-    isAutoFromEstimate?: boolean;
-    sourceEstimateItemId?: string | null;
   };
 };
 
@@ -308,14 +305,6 @@ export function TaskGantt({
           }
           .metrum-gantt .gantt .critical .arrow {
             stroke: #ef4444;
-          }
-          /* Auto-from-estimate: задача згенерована з рядка кошторису через
-             syncEstimateItemsToTasks. Бар отримує синю штрих-обвідку, щоб
-             візуально відрізнити від manual-задач. */
-          .metrum-gantt .gantt .auto-from-estimate .bar {
-            stroke: ${T.accentPrimary} !important;
-            stroke-width: 1.5 !important;
-            stroke-dasharray: 4 2 !important;
           }
         `}</style>
       </div>

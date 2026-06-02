@@ -19,7 +19,6 @@ import { ProjectKpiStrip } from "./_components/project-kpi-strip";
 import { FinanceDiagnosticsCard } from "./_components/finance-diagnostics-card";
 import { ProjectHeroAnimator, ProjectHeroItem } from "./_components/project-hero-animator";
 import { ProjectCoverUpload } from "@/components/projects/ProjectCoverUpload";
-import { ProjectDetailCanonicalBody } from "./_components/project-detail-canonical-body";
 import { isTasksEnabledForProject } from "@/lib/tasks/feature-flag";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
 import { canViewFinance } from "@/lib/auth-utils";
@@ -40,13 +39,6 @@ export default async function AdminV2ProjectDetailPage({
   const { id } = await params;
   const sp = await searchParams;
   const activeTab = sp.tab || "overview";
-
-  // Overview = канонічний v2-дизайн (HeroCard/KpiStrip/StagesPanel/...).
-  // Інші ?tab=X = legacy ProjectTabs (фінанси, документи, медіа, ...).
-  // Раніше overview жив у /v2/page.tsx як preview; зараз /v2 → redirect /[id].
-  if (activeTab === "overview") {
-    return <ProjectDetailCanonicalBody id={id} session={session} />;
-  }
 
   const [project, factIncome, factExpense, responsibleCandidates] = await Promise.all([
     prisma.project.findUnique({

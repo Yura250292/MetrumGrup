@@ -125,10 +125,9 @@ export async function POST(request: NextRequest) {
         await tx.estimateItem.createMany({
           data: section.items.map((item, iIdx) => {
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            const { parentSortOrder: _ps, predecessorSortOrder: _ps2, dependencyLagDays: lag, ...rest } = item;
+            const { parentSortOrder: _ps, ...rest } = item;
             return {
               ...rest,
-              dependencyLagDays: lag ?? 0,
               sortOrder: iIdx,
               estimateId: estimate.id,
               sectionId: createdSection.id,

@@ -161,13 +161,6 @@ export default async function AdminV2Dashboard({
   if (activeRole === "FINANCIER") {
     return <FinancierDashboard firstName={firstName} today={today} firmId={firmId} />;
   }
-  // Дашборд тимчасово → проста стабільна сторінка. Інтерактивний V1 widget-grid
-  // нижче кидав React #310 при кліку на проект. Повернути після фіксу грід-віджетів.
-  // Прапор з явним типом boolean, щоб TS не вважав код нижче недосяжним.
-  const DASHBOARD_GRID_DISABLED: boolean = true;
-  if (DASHBOARD_GRID_DISABLED) {
-    redirect("/admin-v2/dashboard-v2");
-  }
   const activePeriod = (sp.period || "month") as PeriodId;
 
   // Tabs `projects` and `team` are placeholders — render Hero + tabs only.
@@ -772,14 +765,6 @@ export default async function AdminV2Dashboard({
           homeFirmName={homeFirmName}
         />
       )}
-      {/* V2 Preview hub link — temporary while v2 redesign is in flight */}
-      <Link
-        href="/admin-v2/v2-preview"
-        className="inline-flex items-center gap-2 self-start rounded-lg px-3 py-1.5 text-[12px] font-bold tracking-wider transition hover:brightness-110"
-        style={{ backgroundColor: T.violet, color: "#FFFFFF" }}
-      >
-        ✨ V2 PREVIEW HUB →
-      </Link>
       {/* Hero — always on top */}
       <HeroBlock
         firstName={firstName}
