@@ -879,8 +879,15 @@ function ItemRow({
             >
               {item.title}
             </span>
-            <span
-              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+            <button
+              type="button"
+              onClick={() =>
+                onChange({
+                  ...item,
+                  costType: item.costType === "LABOR" ? "MATERIAL" : "LABOR",
+                })
+              }
+              className="rounded-full px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider transition hover:brightness-110"
               style={{
                 backgroundColor:
                   item.costType === "LABOR"
@@ -888,9 +895,10 @@ function ItemRow({
                     : T.warningSoft,
                 color: iconColor,
               }}
+              title="Клік, щоб переключити Робота / Матеріал (якщо AI помилився)"
             >
-              {item.costType === "LABOR" ? "Робота" : "Матеріал"}
-            </span>
+              {item.costType === "LABOR" ? "Робота" : "Матеріал"} ⇄
+            </button>
           </div>
           <div
             className="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]"

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronDown,
   ChevronRight,
@@ -71,6 +71,7 @@ export type StageInlineUpdate = Partial<{
   notes: string | null;
   startDate: string | null;
   endDate: string | null;
+  costType: "LABOR" | "MATERIAL" | null;
 }>;
 
 export type ViewMode = "all" | "plan" | "fact" | "compare";
@@ -738,6 +739,9 @@ export function StageTable({
                         ? (newCode) => onChangeCode(node.id, newCode)
                         : undefined
                     }
+                    onChangeCostType={(ct) =>
+                      void onInlineUpdate(node.id, { costType: ct })
+                    }
                     hasChildren={hasChildren}
                     isExpanded={isExpanded}
                     canAddChild={node.depth < 2}
@@ -1306,12 +1310,112 @@ function DraggableHeader({
   );
 }
 
+// ---------- Cost-type toggle (Робота / Матеріал / Без типу) ----------
+
+const COST_TYPE_OPTIONS: { value: "LABOR" | "MATERIAL" | null; label: string }[] = [
+  { value: "LABOR", label: "Робота" },
+  { value: "MATERIAL", label: "Матеріал" },
+  { value: null, label: "Без типу" },
+];
+
+function costTypeStyle(costType: "LABOR" | "MATERIAL" | null) {
+  if (costType === "LABOR")
+    return { bg: "rgba(34,197,94,0.14)", fg: "rgb(22,163,74)", Icon: Hammer, label: "Робота" };
+  if (costType === "MATERIAL")
+    return { bg: "rgba(59,130,246,0.14)", fg: "rgb(37,99,235)", Icon: Package, label: "Матеріал" };
+  return { bg: "transparent", fg: T.textMuted, Icon: Circle, label: "Без типу" };
+}
+
+/** Перемикач типу позиції. Read-only (іконка) якщо onChange не передано. */
+function CostTypeToggle({
+  costType,
+  onChange,
+}: {
+  costType: "LABOR" | "MATERIAL" | null;
+  onChange?: (costType: "LABOR" | "MATERIAL" | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  const s = costTypeStyle(costType);
+  const Icon = s.Icon;
+
+  // Read-only: статична іконка (порожній плейсхолдер для контейнерів без типу).
+  if (!onChange) {
+    if (!costType) return <span className="inline-block h-4 w-4 flex-shrink-0" />;
+    return (
+      <span
+        className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded"
+        style={{ backgroundColor: s.bg, color: s.fg }}
+        title={s.label}
+      >
+        <Icon size={10} />
+      </span>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-4 w-4 items-center justify-center rounded transition hover:brightness-110"
+        style={{
+          backgroundColor: s.bg,
+          color: s.fg,
+          border: costType ? "none" : `1px dashed ${T.borderSoft}`,
+        }}
+        title={`Тип: ${s.label} — клік, щоб змінити (Робота/Матеріал)`}
+      >
+        <Icon size={10} />
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 z-30 mt-1 flex min-w-[140px] flex-col gap-0.5 rounded-xl p-1 shadow-lg"
+          style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+        >
+          {COST_TYPE_OPTIONS.map((o) => {
+            const active = o.value === costType;
+            const os = costTypeStyle(o.value);
+            const OIcon = os.Icon;
+            return (
+              <button
+                key={String(o.value)}
+                type="button"
+                onClick={() => {
+                  if (!active) onChange(o.value);
+                  setOpen(false);
+                }}
+                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold transition hover:brightness-110"
+                style={{ color: active ? T.accentPrimary : T.textPrimary }}
+              >
+                <OIcon size={11} style={{ color: os.fg }} />
+                <span className="flex-1">{o.label}</span>
+                {active && <span>✓</span>}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---------- Name cell with inline rename + actions ----------
 
 function NameCell({
   node,
   wbsCode,
   onChangeCode,
+  onChangeCostType,
   hasChildren,
   isExpanded,
   canAddChild,
@@ -1327,6 +1431,7 @@ function NameCell({
   node: TreeNode;
   wbsCode?: string;
   onChangeCode?: (newCode: string) => Promise<void> | void;
+  onChangeCostType?: (costType: "LABOR" | "MATERIAL" | null) => void;
   hasChildren: boolean;
   isExpanded: boolean;
   canAddChild: boolean;
@@ -1389,32 +1494,7 @@ function NameCell({
       ) : (
         <span className="inline-block h-4 w-4" />
       )}
-      {node.costType === "LABOR" && (
-        <span
-          className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded"
-          style={{
-            backgroundColor: "rgba(34,197,94,0.14)",
-            color: "rgb(22,163,74)",
-          }}
-          title="Робота (LABOR)"
-          aria-label="Робота"
-        >
-          <Hammer size={10} />
-        </span>
-      )}
-      {node.costType === "MATERIAL" && (
-        <span
-          className="inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded"
-          style={{
-            backgroundColor: "rgba(59,130,246,0.14)",
-            color: "rgb(37,99,235)",
-          }}
-          title="Матеріал (MATERIAL)"
-          aria-label="Матеріал"
-        >
-          <Package size={10} />
-        </span>
-      )}
+      <CostTypeToggle costType={node.costType} onChange={onChangeCostType} />
       {wbsCode &&
         (editingCode && onChangeCode ? (
           <input
