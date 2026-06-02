@@ -311,6 +311,13 @@ export default async function AdminV2ProjectDetailPage({
                   const c = classifyStageByName(s.customName ?? s.stage ?? "");
                   return c === "OTHER" ? null : c;
                 })(),
+              plannedDurationDays:
+                s.plannedDurationDays === null || s.plannedDurationDays === undefined
+                  ? null
+                  : Number(s.plannedDurationDays),
+              predecessorStageId: s.predecessorStageId ?? null,
+              dependencyType: s.dependencyType ?? null,
+              dependencyLagDays: Number(s.dependencyLagDays ?? 0),
             };
           }),
           responsibleCandidates,

@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/utils";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { tryEvaluateFormula } from "@/lib/formulas/eval";
 import { computeWbsCodes } from "@/lib/projects/wbs-numbering";
+import { scheduleStages } from "@/lib/projects/stage-schedule";
 import type { ProjectStage, StageStatus } from "@prisma/client";
 
 const UNIT_OPTIONS = ["", "шт", "м", "м²", "м³", "кг", "т", "л", "пог.м", "год"];
@@ -53,6 +54,10 @@ export type StageRow = {
   planIncome: number;
   factIncome: number;
   costType: "LABOR" | "MATERIAL" | null;
+  plannedDurationDays: number | null;
+  predecessorStageId: string | null;
+  dependencyType: "FS" | "SS" | "FF" | "SF" | null;
+  dependencyLagDays: number;
 };
 
 export type StageInlineUpdate = Partial<{
@@ -72,6 +77,10 @@ export type StageInlineUpdate = Partial<{
   startDate: string | null;
   endDate: string | null;
   costType: "LABOR" | "MATERIAL" | null;
+  plannedDurationDays: number | null;
+  predecessorStageId: string | null;
+  dependencyType: "FS" | "SS" | "FF" | "SF" | null;
+  dependencyLagDays: number;
 }>;
 
 export type ViewMode = "all" | "plan" | "fact" | "compare";
@@ -295,6 +304,31 @@ export function StageTable({
   // щоб нумерація не «стрибала» від фільтрів. Лише для відображення.
   const wbsCodes = useMemo(() => computeWbsCodes(stages), [stages]);
 
+  // Авто-дати з графіка (тривалість + залежність від попередника).
+  const schedule = useMemo(
+    () =>
+      scheduleStages(
+        stages.map((s) => ({
+          id: s.id,
+          startDate: s.startDate,
+          endDate: s.endDate,
+          plannedDurationDays: s.plannedDurationDays ?? null,
+          predecessorStageId: s.predecessorStageId ?? null,
+          dependencyType: s.dependencyType ?? null,
+          dependencyLagDays: s.dependencyLagDays ?? 0,
+        })),
+      ),
+    [stages],
+  );
+  // Кандидати-попередники: усі етапи з їх WBS-кодом (крім себе — фільтр у select).
+  const predecessorOptions = useMemo(
+    () =>
+      stages
+        .map((s) => ({ id: s.id, code: wbsCodes.get(s.id) ?? "?", name: s.customName ?? "" }))
+        .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true })),
+    [stages, wbsCodes],
+  );
+
   const [expanded, setExpanded] = useState<Set<string>>(() => {
     const ids = new Set<string>();
     const walk = (nodes: TreeNode[]) => {
@@ -376,7 +410,8 @@ export function StageTable({
   //   3 фікс-колонки (Назва / Відповідальний / Статус) + columns × group(s) + 1 (Нотатка).
   // У compare-режимі кожна метрика = 3 колонки (План/Факт/Дельта).
   const ghostColCount = useMemo(() => {
-    const base = 5; // name + responsible + status + startDate + endDate
+    // name + responsible + status + startDate + endDate + duration + predecessor + depType + lag
+    const base = 9;
     const notes = 1;
     if (isCompare) return base + COMPARE_METRICS.length * 3 + notes;
     const cols = (showPlan ? planOrder.length : 0) + (showFact ? factOrder.length : 0);
@@ -472,6 +507,18 @@ export function StageTable({
               onResize={setColWidth}
             >
               Дата закінчення
+            </Th>
+            <Th width={70} rowSpan={2} colKey="duration" getWidth={widthFor} onResize={setColWidth} align="center">
+              Тривал., дн
+            </Th>
+            <Th width={90} rowSpan={2} colKey="predecessor" getWidth={widthFor} onResize={setColWidth} align="center">
+              Попередник
+            </Th>
+            <Th width={70} rowSpan={2} colKey="depType" getWidth={widthFor} onResize={setColWidth} align="center">
+              Звʼязок
+            </Th>
+            <Th width={64} rowSpan={2} colKey="lag" getWidth={widthFor} onResize={setColWidth} align="center">
+              Зміщ.
             </Th>
             {isCompare ? (
               COMPARE_METRICS.map((metric) => (
@@ -805,19 +852,69 @@ export function StageTable({
                   />
                 </Td>
 
-                {/* Дата початку */}
+                {/* Дата початку — авто з попередника або ручний якір */}
                 <Td>
-                  <DateCell
-                    value={node.startDate}
-                    onCommit={(v) => onInlineUpdate(node.id, { startDate: v })}
+                  {node.predecessorStageId ? (
+                    <ReadOnlyDate
+                      iso={schedule.get(node.id)?.start ?? null}
+                      title="Авто: розраховано з попередника"
+                    />
+                  ) : (
+                    <DateCell
+                      value={node.startDate}
+                      onCommit={(v) => onInlineUpdate(node.id, { startDate: v })}
+                    />
+                  )}
+                </Td>
+
+                {/* Дата закінчення — авто з тривалості/звʼязку або ручна */}
+                <Td>
+                  {node.plannedDurationDays != null ||
+                  node.dependencyType === "FF" ||
+                  node.dependencyType === "SF" ? (
+                    <ReadOnlyDate
+                      iso={schedule.get(node.id)?.end ?? null}
+                      title="Авто: початок + тривалість"
+                    />
+                  ) : (
+                    <DateCell
+                      value={node.endDate}
+                      onCommit={(v) => onInlineUpdate(node.id, { endDate: v })}
+                    />
+                  )}
+                </Td>
+
+                {/* Тривалість (днів) */}
+                <Td align="center">
+                  <DurationCell
+                    value={node.plannedDurationDays ?? null}
+                    onCommit={(v) => onInlineUpdate(node.id, { plannedDurationDays: v })}
                   />
                 </Td>
 
-                {/* Дата закінчення */}
-                <Td>
-                  <DateCell
-                    value={node.endDate}
-                    onCommit={(v) => onInlineUpdate(node.id, { endDate: v })}
+                {/* Попередник */}
+                <Td align="center">
+                  <PredecessorCell
+                    value={node.predecessorStageId ?? null}
+                    selfId={node.id}
+                    options={predecessorOptions}
+                    onCommit={(v) => onInlineUpdate(node.id, { predecessorStageId: v })}
+                  />
+                </Td>
+
+                {/* Тип звʼязку */}
+                <Td align="center">
+                  <DepTypeCell
+                    value={node.dependencyType ?? null}
+                    onCommit={(v) => onInlineUpdate(node.id, { dependencyType: v })}
+                  />
+                </Td>
+
+                {/* Зміщення (днів) */}
+                <Td align="center">
+                  <LagCell
+                    value={node.dependencyLagDays ?? 0}
+                    onCommit={(v) => onInlineUpdate(node.id, { dependencyLagDays: v })}
                   />
                 </Td>
 
@@ -1842,6 +1939,128 @@ function ResponsibleCell({
     >
       {displayName ?? "—"}
     </button>
+  );
+}
+
+function ReadOnlyDate({ iso, title }: { iso: string | null; title?: string }) {
+  const label = iso
+    ? new Date(iso + "T00:00:00Z").toLocaleDateString("uk-UA", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+      })
+    : "—";
+  return (
+    <span className="text-[11px] tabular-nums" style={{ color: T.textMuted }} title={title}>
+      {label}
+    </span>
+  );
+}
+
+function DurationCell({
+  value,
+  onCommit,
+}: {
+  value: number | null;
+  onCommit: (v: number | null) => void | Promise<void>;
+}) {
+  return (
+    <input
+      type="number"
+      min={0}
+      defaultValue={value ?? ""}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={(e) => {
+        const raw = e.target.value.trim();
+        const next = raw === "" ? null : Math.max(0, Math.round(Number(raw)));
+        if ((value ?? null) !== next) void onCommit(next);
+      }}
+      className="w-12 rounded bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none focus:bg-black/5"
+      style={{ color: T.textPrimary }}
+      placeholder="—"
+    />
+  );
+}
+
+function LagCell({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (v: number) => void | Promise<void>;
+}) {
+  return (
+    <input
+      type="number"
+      defaultValue={value || 0}
+      onClick={(e) => e.stopPropagation()}
+      onBlur={(e) => {
+        const next = Math.round(Number(e.target.value.trim() || 0));
+        if ((value || 0) !== next) void onCommit(Number.isFinite(next) ? next : 0);
+      }}
+      className="w-10 rounded bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none focus:bg-black/5"
+      style={{ color: T.textPrimary }}
+    />
+  );
+}
+
+function DepTypeCell({
+  value,
+  onCommit,
+}: {
+  value: "FS" | "SS" | "FF" | "SF" | null;
+  onCommit: (v: "FS" | "SS" | "FF" | "SF" | null) => void | Promise<void>;
+}) {
+  return (
+    <select
+      value={value ?? ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        const v = e.target.value;
+        void onCommit(v === "" ? null : (v as "FS" | "SS" | "FF" | "SF"));
+      }}
+      className="cursor-pointer rounded bg-transparent px-1 py-0.5 text-center text-[11px] font-semibold outline-none focus:bg-black/5"
+      style={{ color: value ? T.textPrimary : T.textMuted }}
+      title="Тип звʼязку: FS (фініш→старт), SS (старт→старт), FF, SF"
+    >
+      <option value="" style={{ color: "#000" }}>—</option>
+      <option value="FS" style={{ color: "#000" }}>FS</option>
+      <option value="SS" style={{ color: "#000" }}>SS</option>
+      <option value="FF" style={{ color: "#000" }}>FF</option>
+      <option value="SF" style={{ color: "#000" }}>SF</option>
+    </select>
+  );
+}
+
+function PredecessorCell({
+  value,
+  selfId,
+  options,
+  onCommit,
+}: {
+  value: string | null;
+  selfId: string;
+  options: { id: string; code: string; name: string }[];
+  onCommit: (v: string | null) => void | Promise<void>;
+}) {
+  return (
+    <select
+      value={value ?? ""}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onCommit(e.target.value === "" ? null : e.target.value)}
+      className="max-w-[80px] cursor-pointer rounded bg-transparent px-1 py-0.5 text-center text-[11px] tabular-nums outline-none focus:bg-black/5"
+      style={{ color: value ? T.textPrimary : T.textMuted }}
+      title="Попередник (від якої позиції залежить старт)"
+    >
+      <option value="" style={{ color: "#000" }}>—</option>
+      {options
+        .filter((o) => o.id !== selfId)
+        .map((o) => (
+          <option key={o.id} value={o.id} style={{ color: "#000" }}>
+            {o.code}
+          </option>
+        ))}
+    </select>
   );
 }
 
