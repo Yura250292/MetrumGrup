@@ -20,7 +20,7 @@ const STORAGE_PREFIX = "employeeDrawer.width";
 const DEFAULT_WIDTH = 880;
 // Мінімум, нижче якого панель ламає верстку картки (рядок з 4 KPI-карток
 // і дво-колонкові блоки починають «пливти»). Жорстко обмежуємо drag.
-const MIN_WIDTH = 600;
+const MIN_WIDTH = 660;
 
 function storageKeyFor(userId: string | undefined): string {
   return userId ? `${STORAGE_PREFIX}:${userId}` : STORAGE_PREFIX;
