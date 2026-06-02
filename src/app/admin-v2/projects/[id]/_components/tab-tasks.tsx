@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { stageDisplayName } from "@/lib/constants";
@@ -25,13 +25,26 @@ import {
   Search,
   Archive,
   ArchiveRestore,
-  Flag,
-  CalendarPlus,
+  ChevronRight,
+  ChevronDown,
+  Table2,
+  Layers,
 } from "lucide-react";
 import { TaskKanban, type KanbanCard, type KanbanStatus } from "./task-kanban";
 import { TaskCalendar } from "./task-calendar";
 import { TaskPeopleView } from "./task-people";
 import { InlineStatusPicker } from "./inline-status-picker";
+import { PriorityPicker, DueDatePicker } from "./task-inline-pickers";
+import { TaskTable } from "./task-table";
+import { formatCurrencyCompact } from "@/lib/utils";
+import {
+  groupTasks,
+  buildTaskTree,
+  flattenTree,
+  type GroupKey,
+  type TaskTreeNode,
+} from "@/lib/tasks/grouping";
+import { rollupTaskCosts, sumGroupCost, type TaskCost } from "@/lib/tasks/cost";
 // Gantt is heavy (frappe-gantt + vendor CSS) and only mounted when the
 // "gantt" tab is selected — defer the bundle.
 const TaskGantt = dynamic(() => import("./task-gantt").then((m) => m.TaskGantt), {
@@ -71,51 +84,52 @@ type TaskListItem = {
   dueDate: string | null;
   stageId: string;
   statusId: string;
+  parentTaskId: string | null;
   status: TaskStatus;
   isArchived: boolean;
+  progressPercent?: number;
   assignees: { user: { id: string; name: string; avatar: string | null } }[];
   labels: { label: TaskLabel }[];
   _count: { subtasks: number; checklist: number };
+  /** Долучається лише для фінанс-ролей (RBAC). SELF-значення; rollup рахуємо на клієнті. */
+  costPlanned?: number | null;
+  costActual?: number;
 };
 
-const PRIORITY_LABEL: Record<TaskListItem["priority"], string> = {
-  LOW: "Низький",
-  NORMAL: "Звичайний",
-  HIGH: "Високий",
-  URGENT: "Терміновий",
-};
-const PRIORITY_ORDER: TaskListItem["priority"][] = [
-  "LOW",
-  "NORMAL",
-  "HIGH",
-  "URGENT",
-];
+export type TaskTableItem = TaskListItem;
 
-const PRIORITY_COLOR: Record<TaskListItem["priority"], string> = {
-  LOW: "#64748b",
-  NORMAL: "#3b82f6",
-  HIGH: "#f59e0b",
-  URGENT: "#ef4444",
-};
-
-type ViewMode = "list" | "kanban" | "gantt" | "calendar" | "people";
+type ViewMode = "list" | "kanban" | "gantt" | "calendar" | "people" | "table";
 
 const VIEW_DEFS: { id: ViewMode; label: string; icon: typeof List }[] = [
   { id: "list", label: "Список", icon: List },
+  { id: "table", label: "Таблиця", icon: Table2 },
   { id: "kanban", label: "Kanban", icon: Columns },
   { id: "gantt", label: "Gantt", icon: GanttChartSquare },
   { id: "calendar", label: "Календар", icon: CalendarIcon },
   { id: "people", label: "По людях", icon: UsersIcon },
 ];
 
+const GROUP_DEFS: { id: GroupKey; label: string }[] = [
+  { id: "stage", label: "Етап" },
+  { id: "status", label: "Статус" },
+  { id: "assignee", label: "Виконавець" },
+  { id: "priority", label: "Пріоритет" },
+  { id: "none", label: "Без груп" },
+];
+
 export function TabTasks({
   projectId,
   stages,
+  canViewCost = false,
 }: {
   projectId: string;
   stages: StageLite[];
+  canViewCost?: boolean;
 }) {
   const [view, setView] = useState<ViewMode>("list");
+  const [groupBy, setGroupBy] = useState<GroupKey>("stage");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   const [tasks, setTasks] = useState<TaskListItem[]>([]);
   const [statuses, setStatuses] = useState<TaskStatus[]>([]);
   const [labels, setLabels] = useState<TaskLabel[]>([]);
@@ -169,6 +183,7 @@ export function TabTasks({
     baseParams.set("take", String(PAGE_SIZE));
     if (search) baseParams.set("search", search);
     if (includeArchived) baseParams.set("includeArchived", "true");
+    if (canViewCost) baseParams.set("withCost", "1");
     try {
       const [firstTasksRes, statusesRes, labelsRes] = await Promise.all([
         fetch(`/api/admin/projects/${projectId}/tasks?${baseParams.toString()}`),
@@ -214,7 +229,7 @@ export function TabTasks({
     } finally {
       setLoading(false);
     }
-  }, [projectId, search, includeArchived]);
+  }, [projectId, search, includeArchived, canViewCost]);
 
   useEffect(() => {
     void loadAll();
@@ -261,15 +276,49 @@ export function TabTasks({
     }
   });
 
-  const tasksByStage = useMemo(() => {
-    const map = new Map<string, TaskListItem[]>();
-    for (const t of tasks) {
-      const arr = map.get(t.stageId) ?? [];
-      arr.push(t);
-      map.set(t.stageId, arr);
-    }
-    return map;
-  }, [tasks]);
+  // Rollup витрат: SELF-значення з API → дерево підсумків (батько = self + Σ дітей).
+  const costMap = useMemo<Map<string, TaskCost>>(() => {
+    if (!canViewCost) return new Map();
+    return rollupTaskCosts(
+      tasks.map((t) => ({
+        id: t.id,
+        parentTaskId: t.parentTaskId,
+        estimatePlanned: t.costPlanned ?? null,
+        manualPlanned: null,
+        financeFact: t.costActual ?? 0,
+        timeLogCost: 0,
+      })),
+    );
+  }, [tasks, canViewCost]);
+
+  // Контекст групування (етапи + статуси).
+  const groupingCtx = useMemo(
+    () => ({
+      stages: stages.map((s) => ({
+        id: s.id,
+        name: stageDisplayName({ stage: s.stage, customName: s.customName ?? null }),
+      })),
+      statuses: statuses.map((s) => ({ id: s.id, name: s.name, color: s.color })),
+    }),
+    [stages, statuses],
+  );
+
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+  const toggleTask = useCallback((id: string) => {
+    setExpandedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const createQuick = useCallback(async () => {
     if (!quickTitle.trim() || !quickStageId) return;
@@ -442,6 +491,27 @@ export function TabTasks({
             );
           })}
         </div>
+        {(view === "list" || view === "table") && (
+          <div
+            className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs"
+            style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+            title="Групувати задачі"
+          >
+            <Layers size={13} style={{ color: T.textMuted }} />
+            <select
+              value={groupBy}
+              onChange={(e) => setGroupBy(e.target.value as GroupKey)}
+              className="bg-transparent outline-none text-xs font-semibold cursor-pointer"
+              style={{ color: T.textPrimary }}
+            >
+              {GROUP_DEFS.map((g) => (
+                <option key={g.id} value={g.id} style={{ color: "#000" }}>
+                  {g.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div
           className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs"
           style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
@@ -633,60 +703,124 @@ export function TabTasks({
           onOpen={openTask}
           onChangeStatus={(taskId, statusId) => void changeStatus(taskId, statusId)}
         />
+      ) : view === "table" ? (
+        <TaskTable
+          tasks={tasks}
+          statuses={statuses}
+          projectId={projectId}
+          groupBy={groupBy}
+          groupingCtx={groupingCtx}
+          expandedTasks={expandedTasks}
+          collapsedGroups={collapsedGroups}
+          costMap={costMap}
+          canViewCost={canViewCost}
+          onToggleGroup={toggleGroup}
+          onToggleTask={toggleTask}
+          onOpen={openTask}
+          onChangeStatus={(id, sid) => void changeStatus(id, sid)}
+          onChangePriority={(id, p) => void patchTask(id, { priority: p })}
+          onChangeDueDate={(id, d) => void patchTask(id, { dueDate: d })}
+        />
       ) : (
-        // list
-        stages.map((stage) => {
-          const items = tasksByStage.get(stage.id) ?? [];
-          return (
-            <section
-              key={stage.id}
-              className="rounded-2xl p-4"
-              style={{
-                backgroundColor: T.panel,
-                border: `1px solid ${T.borderSoft}`,
-              }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h3
-                  className="text-[13px] font-bold"
-                  style={{ color: T.textPrimary }}
-                >
-                  {stageDisplayName({ stage: stage.stage, customName: stage.customName ?? null })}
-                </h3>
-                <span
-                  className="text-[11px] font-semibold"
-                  style={{ color: T.textMuted }}
-                >
-                  {items.length}
-                </span>
-              </div>
-              {items.length === 0 ? (
-                <p className="text-[12px]" style={{ color: T.textMuted }}>
-                  Немає задач
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {items.map((t) => (
-                    <TaskRow
-                      key={t.id}
-                      task={t}
-                      statuses={statuses}
-                      onOpen={() => openTask(t.id)}
-                      onChangeStatus={(sid) => void changeStatus(t.id, sid)}
-                      onChangePriority={(p) =>
-                        void patchTask(t.id, { priority: p })
-                      }
-                      onChangeDueDate={(d) =>
-                        void patchTask(t.id, { dueDate: d })
-                      }
-                      onRestore={() => void restoreTask(t.id)}
-                    />
-                  ))}
-                </ul>
-              )}
-            </section>
+        // list — групування (Етап/Статус/Виконавець/Пріоритет) + вкладені підзадачі
+        (() => {
+          const tree = buildTaskTree(tasks);
+          const rootNodeById = new Map<string, TaskTreeNode<TaskListItem>>(
+            tree.map((n) => [n.task.id, n]),
           );
-        })
+          const groups = groupTasks(
+            tree.map((n) => n.task),
+            groupBy,
+            groupingCtx,
+          );
+          if (groups.length === 0) {
+            return (
+              <div
+                className="rounded-2xl p-8 text-center text-sm"
+                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}`, color: T.textMuted }}
+              >
+                Немає задач
+              </div>
+            );
+          }
+          return groups.map((group) => {
+            const collapsed = collapsedGroups.has(group.key);
+            const subtotal = canViewCost
+              ? sumGroupCost(
+                  group.items
+                    .map((it) => costMap.get(it.id))
+                    .filter((c): c is TaskCost => !!c),
+                )
+              : null;
+            return (
+              <section
+                key={group.key}
+                className="rounded-2xl p-4"
+                style={{ backgroundColor: T.panel, border: `1px solid ${T.borderSoft}` }}
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.key)}
+                  className="flex w-full items-center gap-2 mb-3"
+                >
+                  {collapsed ? (
+                    <ChevronRight size={15} style={{ color: T.textMuted }} />
+                  ) : (
+                    <ChevronDown size={15} style={{ color: T.textMuted }} />
+                  )}
+                  {group.color && (
+                    <span
+                      className="rounded-full px-2 py-0.5 text-[11px] font-bold"
+                      style={{ backgroundColor: group.color + "22", color: group.color }}
+                    >
+                      {group.label}
+                    </span>
+                  )}
+                  {!group.color && (
+                    <h3 className="text-[13px] font-bold" style={{ color: T.textPrimary }}>
+                      {group.label}
+                    </h3>
+                  )}
+                  <span className="text-[11px] font-semibold" style={{ color: T.textMuted }}>
+                    {group.items.length}
+                  </span>
+                  {subtotal && (
+                    <span className="ml-auto text-[11px] font-semibold" style={{ color: T.textMuted }}>
+                      план {formatCurrencyCompact(subtotal.planned)} · факт{" "}
+                      {formatCurrencyCompact(subtotal.actual)}
+                    </span>
+                  )}
+                </button>
+                {!collapsed && (
+                  <ul className="flex flex-col gap-2">
+                    {group.items.flatMap((it) => {
+                      const node = rootNodeById.get(it.id);
+                      if (!node) return [];
+                      return flattenTree([node], (n) => expandedTasks.has(n.task.id)).map((n) => (
+                        <TaskRow
+                          key={n.task.id}
+                          task={n.task}
+                          depth={n.depth}
+                          hasSubtasks={n.children.length > 0}
+                          expanded={expandedTasks.has(n.task.id)}
+                          onToggleExpand={() => toggleTask(n.task.id)}
+                          cost={canViewCost ? costMap.get(n.task.id) : undefined}
+                          canViewCost={canViewCost}
+                          statuses={statuses}
+                          onOpen={() => openTask(n.task.id)}
+                          onChangeStatus={(sid) => void changeStatus(n.task.id, sid)}
+                          onChangePriority={(p) => void patchTask(n.task.id, { priority: p })}
+                          onChangeDueDate={(d) => void patchTask(n.task.id, { dueDate: d })}
+                          onRestore={() => void restoreTask(n.task.id)}
+                        />
+                      ));
+                    })}
+                  </ul>
+                )}
+              </section>
+            );
+          });
+        })()
       )}
 
     </div>
@@ -696,6 +830,12 @@ export function TabTasks({
 function TaskRow({
   task,
   statuses,
+  depth = 0,
+  hasSubtasks = false,
+  expanded = false,
+  onToggleExpand,
+  cost,
+  canViewCost = false,
   onOpen,
   onChangeStatus,
   onChangePriority,
@@ -704,6 +844,12 @@ function TaskRow({
 }: {
   task: TaskListItem;
   statuses: TaskStatus[];
+  depth?: number;
+  hasSubtasks?: boolean;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+  cost?: TaskCost;
+  canViewCost?: boolean;
   onOpen: () => void;
   onChangeStatus: (statusId: string) => void;
   onChangePriority: (priority: TaskListItem["priority"]) => void;
@@ -718,8 +864,25 @@ function TaskRow({
         backgroundColor: T.panelElevated,
         border: `1px solid ${T.borderSoft}`,
         opacity: task.isArchived ? 0.6 : 1,
+        marginLeft: depth * 22,
       }}
     >
+      {hasSubtasks ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleExpand?.();
+          }}
+          className="flex h-4 w-4 flex-shrink-0 items-center justify-center"
+          title={expanded ? "Згорнути підзадачі" : "Розгорнути підзадачі"}
+          style={{ color: T.textMuted }}
+        >
+          {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+        </button>
+      ) : (
+        <span className="w-4 flex-shrink-0" />
+      )}
       <PriorityPicker current={task.priority} onChange={onChangePriority} />
       <span
         className="text-sm truncate flex-1"
@@ -729,7 +892,21 @@ function TaskRow({
         }}
       >
         {task.title}
+        {task._count.subtasks > 0 && (
+          <span className="ml-1.5 text-[10px] font-semibold" style={{ color: T.textMuted }}>
+            ({task._count.subtasks})
+          </span>
+        )}
       </span>
+      {canViewCost && cost && (
+        <span
+          className="text-[11px] font-semibold flex-shrink-0 tabular-nums"
+          style={{ color: T.textMuted }}
+          title={`Витрати план / факт${depth || hasSubtasks ? " (з підзадачами)" : ""}`}
+        >
+          {formatCurrencyCompact(cost.plannedRollup)} / {formatCurrencyCompact(cost.actualRollup)}
+        </span>
+      )}
       {task.isArchived && (
         <span
           className="rounded-full px-2 py-0.5 text-[10px] font-bold flex-shrink-0"
@@ -793,181 +970,3 @@ function TaskRow({
     </li>
   );
 }
-
-function PriorityPicker({
-  current,
-  onChange,
-}: {
-  current: TaskListItem["priority"];
-  onChange: (p: TaskListItem["priority"]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  return (
-    <div ref={wrapRef} className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex h-5 w-5 items-center justify-center rounded-full transition hover:brightness-110"
-        style={{ backgroundColor: PRIORITY_COLOR[current] + "33" }}
-        title={`Пріоритет: ${PRIORITY_LABEL[current]}`}
-      >
-        <Flag size={11} style={{ color: PRIORITY_COLOR[current] }} />
-      </button>
-      {open && (
-        <div
-          className="absolute left-0 z-30 mt-1 flex min-w-[150px] flex-col gap-0.5 rounded-xl p-1 shadow-lg"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          {PRIORITY_ORDER.map((p) => {
-            const active = p === current;
-            return (
-              <button
-                key={p}
-                type="button"
-                onClick={() => {
-                  if (!active) onChange(p);
-                  setOpen(false);
-                }}
-                className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[11px] font-semibold transition hover:brightness-110"
-                style={{
-                  backgroundColor: active ? PRIORITY_COLOR[p] + "22" : "transparent",
-                  color: active ? PRIORITY_COLOR[p] : T.textPrimary,
-                }}
-              >
-                <Flag size={11} style={{ color: PRIORITY_COLOR[p] }} />
-                <span className="flex-1">{PRIORITY_LABEL[p]}</span>
-                {active && <span style={{ color: PRIORITY_COLOR[p] }}>✓</span>}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function DueDatePicker({
-  current,
-  onChange,
-}: {
-  current: string | null;
-  onChange: (iso: string | null) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!open) return;
-    const onDoc = (e: MouseEvent) => {
-      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDoc);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const due = current ? new Date(current) : null;
-  const overdue = due ? due.getTime() < today.getTime() : false;
-  const valueStr = due ? due.toISOString().slice(0, 10) : "";
-  const label = due
-    ? due.toLocaleDateString("uk-UA", { day: "2-digit", month: "short" })
-    : "Додати дату";
-  const color = !due
-    ? T.textMuted
-    : overdue
-      ? T.danger ?? "#ef4444"
-      : T.accentPrimary;
-
-  return (
-    <div ref={wrapRef} className="relative flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:brightness-110"
-        style={{
-          backgroundColor: due ? color + "22" : "transparent",
-          color,
-          border: `1px solid ${due ? color + "55" : T.borderSoft}`,
-        }}
-        title={due ? `Дедлайн: ${due.toLocaleDateString("uk-UA")}` : "Призначити дедлайн"}
-      >
-        <CalendarPlus size={11} />
-        {label}
-      </button>
-      {open && (
-        <div
-          className="absolute right-0 z-30 mt-1 flex flex-col gap-2 rounded-xl p-2 shadow-lg"
-          style={{
-            backgroundColor: T.panel,
-            border: `1px solid ${T.borderSoft}`,
-          }}
-        >
-          <input
-            type="date"
-            value={valueStr}
-            onChange={(e) => {
-              const v = e.target.value;
-              if (!v) {
-                onChange(null);
-              } else {
-                onChange(new Date(v + "T00:00:00").toISOString());
-              }
-              setOpen(false);
-            }}
-            className="rounded-lg px-2 py-1.5 text-[12px] outline-none"
-            style={{
-              backgroundColor: T.panelElevated,
-              color: T.textPrimary,
-              border: `1px solid ${T.borderSoft}`,
-            }}
-          />
-          {due && (
-            <button
-              type="button"
-              onClick={() => {
-                onChange(null);
-                setOpen(false);
-              }}
-              className="rounded-lg px-2 py-1 text-[11px] font-semibold"
-              style={{
-                backgroundColor: T.panelElevated,
-                color: T.textMuted,
-                border: `1px solid ${T.borderSoft}`,
-              }}
-            >
-              Прибрати дату
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-

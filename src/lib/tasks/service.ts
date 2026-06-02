@@ -155,6 +155,8 @@ export type ListFilter = {
   includeArchived?: boolean;
   cursor?: string;
   take?: number;
+  /** Долучити SELF-витрати (план/факт) до кожного item. Лише для фінанс-ролей (RBAC у route). */
+  includeCost?: boolean;
 };
 
 export async function listTasks(filter: ListFilter, currentUserId: string) {
@@ -209,6 +211,24 @@ export async function listTasks(filter: ListFilter, currentUserId: string) {
 
   const hasMore = rows.length > take;
   const page = hasMore ? rows.slice(0, take) : rows;
+
+  // Cost-збагачення (лише коли явно дозволено фінанс-роллю у route).
+  if (filter.includeCost && page.length > 0) {
+    const { loadTaskSelfCosts } = await import("./cost-loader");
+    const costs = await loadTaskSelfCosts(
+      page.map((t) => ({
+        id: t.id,
+        sourceEstimateItemId: t.sourceEstimateItemId,
+        plannedCostManual: t.plannedCostManual,
+      })),
+    );
+    const items = page.map((t) => {
+      const c = costs.get(t.id);
+      return { ...t, costPlanned: c?.planned ?? null, costActual: c?.actual ?? 0 };
+    });
+    return { items, nextCursor: hasMore ? page[page.length - 1]!.id : null };
+  }
+
   return {
     items: page,
     nextCursor: hasMore ? page[page.length - 1]!.id : null,
@@ -330,6 +350,10 @@ export type CreateInput = {
    */
   isRecurring?: boolean;
   recurrenceRule?: string | null;
+  /** Привʼязка до рядка кошторису для cost-колонок. Запис гейтиться фінанс-роллю у route. */
+  sourceEstimateItemId?: string | null;
+  /** Ручний план витрат (коли немає привʼязки до кошторису). */
+  plannedCostManual?: number | null;
 };
 
 export async function createTask(input: CreateInput, actorId: string): Promise<TaskDetail> {
@@ -358,6 +382,14 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
       select: { id: true },
     });
     if (!parent) bad("Parent task not found in this project");
+  }
+
+  if (input.sourceEstimateItemId) {
+    const ei = await prisma.estimateItem.findFirst({
+      where: { id: input.sourceEstimateItemId, estimate: { projectId: input.projectId } },
+      select: { id: true },
+    });
+    if (!ei) bad("Estimate item not found in this project");
   }
 
   // Position — next free slot within (project, status)
@@ -456,6 +488,8 @@ export async function createTask(input: CreateInput, actorId: string): Promise<T
         isPrivate: input.isPrivate ?? false,
         isRecurring: input.isRecurring ?? false,
         recurrenceRule: input.isRecurring && input.recurrenceRule ? input.recurrenceRule : null,
+        sourceEstimateItemId: input.sourceEstimateItemId ?? null,
+        plannedCostManual: input.plannedCostManual ?? null,
         position,
         createdById: actorId,
       },
@@ -593,6 +627,8 @@ export type UpdateInput = Partial<{
   isPrivate: boolean;
   position: number;
   customFields: Record<string, unknown> | null;
+  sourceEstimateItemId: string | null;
+  plannedCostManual: number | null;
 }>;
 
 export async function updateTask(
@@ -636,6 +672,13 @@ export async function updateTask(
     });
     if (!parent) bad("Parent task not found in this project");
   }
+  if (patch.sourceEstimateItemId) {
+    const ei = await prisma.estimateItem.findFirst({
+      where: { id: patch.sourceEstimateItemId, estimate: { projectId: existing.projectId } },
+      select: { id: true },
+    });
+    if (!ei) bad("Estimate item not found in this project");
+  }
 
   const data: Prisma.TaskUpdateInput = {};
   if (patch.title !== undefined) data.title = patch.title.trim();
@@ -661,6 +704,14 @@ export async function updateTask(
     data.customFields = (patch.customFields ?? undefined) as
       | Prisma.InputJsonValue
       | undefined;
+  }
+  if (patch.sourceEstimateItemId !== undefined) {
+    data.sourceEstimateItem = patch.sourceEstimateItemId
+      ? { connect: { id: patch.sourceEstimateItemId } }
+      : { disconnect: true };
+  }
+  if (patch.plannedCostManual !== undefined) {
+    data.plannedCostManual = patch.plannedCostManual;
   }
 
   // Completion tracking

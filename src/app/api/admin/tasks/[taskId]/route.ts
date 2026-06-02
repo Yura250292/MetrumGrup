@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { unauthorizedResponse } from "@/lib/auth-utils";
+import { canViewFinance, unauthorizedResponse } from "@/lib/auth-utils";
 import {
   archiveTask,
   getTask,
@@ -74,6 +74,18 @@ export async function PATCH(
       body.customFields === null
         ? null
         : (body.customFields as Record<string, unknown>);
+  }
+  // Cost-поля — лише фінанс-роль (RBAC).
+  if (canViewFinance(session.user.role)) {
+    if (body.sourceEstimateItemId !== undefined) {
+      patch.sourceEstimateItemId = body.sourceEstimateItemId
+        ? String(body.sourceEstimateItemId)
+        : null;
+    }
+    if (body.plannedCostManual !== undefined) {
+      patch.plannedCostManual =
+        body.plannedCostManual === null ? null : Number(body.plannedCostManual);
+    }
   }
 
   try {
