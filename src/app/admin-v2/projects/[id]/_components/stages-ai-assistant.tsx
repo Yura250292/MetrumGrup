@@ -157,86 +157,32 @@ export function StagesAiAssistant({
         }
         const mime = file.type || "application/octet-stream";
 
-        // 1) Get presigned PUT URL
-        let presignRes: Response;
+        // Серверне завантаження (multipart) → сервер кладе в R2. Без браузерного
+        // CORS на бакеті.
+        const fd = new FormData();
+        fd.append("file", file, file.name);
+        let res: Response;
         try {
-          presignRes = await fetch(
+          res = await fetch(
             `/api/admin/projects/${projectId}/stages/ai-upload`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                originalName: file.name,
-                mimeType: mime,
-                size: file.size,
-              }),
-            },
+            { method: "POST", body: fd },
           );
         } catch (e) {
           throw new Error(
-            `[presign network] ${file.name}: ${
+            `[upload network] ${file.name}: ${
               e instanceof Error ? e.message : String(e)
             }`,
           );
         }
-        if (!presignRes.ok) {
-          const j = await presignRes.json().catch(() => ({}));
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
           throw new Error(
-            `[presign ${presignRes.status}] ${file.name}: ${
-              j.error ?? "невідома помилка"
-            }`,
+            `[upload ${res.status}] ${file.name}: ${j.error ?? "невідома помилка"}`,
           );
         }
-        let key: string;
-        let putUrl: string;
-        try {
-          const parsed = (await presignRes.json()) as {
-            key: string;
-            putUrl: string;
-          };
-          key = parsed.key;
-          putUrl = parsed.putUrl;
-        } catch (e) {
-          throw new Error(
-            `[presign json] ${file.name}: ${
-              e instanceof Error ? e.message : String(e)
-            }`,
-          );
-        }
-        if (!putUrl || typeof putUrl !== "string") {
-          throw new Error(`[presign empty] ${file.name}: backend не повернув putUrl`);
-        }
-        // Валідуємо URL — щоб діагностувати «The string did not match...»
-        try {
-          // eslint-disable-next-line no-new
-          new URL(putUrl);
-        } catch (e) {
-          throw new Error(
-            `[presign bad URL] ${file.name}: ${
-              e instanceof Error ? e.message : String(e)
-            } (url[0..120]=${putUrl.slice(0, 120)})`,
-          );
-        }
-
-        // 2) Direct PUT to R2
-        let putRes: Response;
-        try {
-          putRes = await fetch(putUrl, {
-            method: "PUT",
-            body: file,
-            headers: { "Content-Type": mime },
-          });
-        } catch (e) {
-          throw new Error(
-            `[R2 PUT network] ${file.name}: ${
-              e instanceof Error ? e.message : String(e)
-            }`,
-          );
-        }
-        if (!putRes.ok) {
-          throw new Error(
-            `[R2 PUT ${putRes.status}] ${file.name}: ${putRes.statusText}`,
-          );
+        const { key } = (await res.json()) as { key: string };
+        if (!key) {
+          throw new Error(`[upload] ${file.name}: backend не повернув key`);
         }
         setFiles((prev) => [
           ...prev,

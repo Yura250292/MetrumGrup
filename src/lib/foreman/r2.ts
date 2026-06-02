@@ -69,6 +69,39 @@ export async function getR2PutUrl(params: {
 }
 
 /**
+ * Серверне завантаження вмісту в R2 (без presigned URL) — щоб уникнути
+ * браузерного CORS на бакеті. Файл іде клієнт → наш сервер → R2.
+ * Обмеження: розмір тіла запиту обмежений платформою (Vercel ~4.5 МБ),
+ * тож підходить для xlsx-кошторисів/PDF; для великих медіа лишається presign.
+ */
+export async function putObjectToR2(params: {
+  userId: string;
+  originalName: string;
+  mimeType: string;
+  prefix: string;
+  source: string;
+  body: Buffer | Uint8Array;
+}): Promise<{ key: string }> {
+  const timestamp = Date.now();
+  const sanitized = params.originalName.replace(/[^a-zA-Z0-9.-]/g, "_");
+  const key = `${params.prefix}/${params.userId}/${timestamp}_${sanitized}`;
+  await client().send(
+    new PutObjectCommand({
+      Bucket: FOREMAN_BUCKET,
+      Key: key,
+      Body: params.body,
+      ContentType: params.mimeType,
+      Metadata: {
+        uploadedBy: params.userId,
+        source: params.source,
+        uploadedAt: new Date().toISOString(),
+      },
+    }),
+  );
+  return { key };
+}
+
+/**
  * Завантажити вміст файлу з R2 у memory buffer (для AI парсерів).
  * Використовується серверним кодом для image classification / OCR.
  */

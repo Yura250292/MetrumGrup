@@ -1,25 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unauthorizedResponse, forbiddenResponse } from "@/lib/auth-utils";
 import { assertCanAccessFirm } from "@/lib/firm/scope";
-import { getR2PutUrl } from "@/lib/foreman/r2";
+import { putObjectToR2 } from "@/lib/foreman/r2";
 
 export const dynamic = "force-dynamic";
 
 const MAX_SIZE = 20 * 1024 * 1024; // 20 МБ
 
-const Body = z.object({
-  originalName: z.string().min(1).max(256),
-  mimeType: z.string().min(1).max(128),
-  size: z.number().int().positive().max(MAX_SIZE),
-});
-
 /**
- * Видає presigned PUT URL для завантаження файлу в R2 з-під admin-сесії.
- * Використовується AI-помічником у розділі «Етапи виконання» (фото чеків,
- * PDF накладних, Excel-кошторисів). Префікс key: `stages-ai/<userId>/<ts>_<name>`.
+ * Серверне завантаження файлу в R2 для AI-помічника «Етапи виконання»
+ * (Excel-кошториси, PDF накладних, фото). Файл іде multipart клієнт → сервер
+ * → R2, щоб уникнути браузерного CORS на бакеті. Повертає { key }.
  */
 export async function POST(
   req: NextRequest,
@@ -45,28 +38,41 @@ export async function POST(
     return forbiddenResponse();
   }
 
-  const json = await req.json().catch(() => null);
-  const parsed = Body.safeParse(json);
-  if (!parsed.success) {
+  let form: FormData;
+  try {
+    form = await req.formData();
+  } catch {
     return NextResponse.json(
-      { error: "Невалідні параметри" },
+      { error: "Очікується multipart/form-data" },
+      { status: 400 },
+    );
+  }
+  const file = form.get("file");
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: "Файл не передано" }, { status: 400 });
+  }
+  if (file.size <= 0 || file.size > MAX_SIZE) {
+    return NextResponse.json(
+      { error: "Завеликий або порожній файл" },
       { status: 400 },
     );
   }
 
   try {
-    const result = await getR2PutUrl({
+    const body = Buffer.from(await file.arrayBuffer());
+    const result = await putObjectToR2({
       userId: session.user.id,
-      originalName: parsed.data.originalName,
-      mimeType: parsed.data.mimeType,
+      originalName: file.name || "upload",
+      mimeType: file.type || "application/octet-stream",
       prefix: "stages-ai",
       source: "stages-ai-assistant",
+      body,
     });
     return NextResponse.json(result);
   } catch (err) {
-    console.error("[ai-upload] presign failed:", err);
+    console.error("[ai-upload] server upload failed:", err);
     return NextResponse.json(
-      { error: "Не вдалось отримати посилання на завантаження" },
+      { error: "Не вдалось завантажити файл" },
       { status: 500 },
     );
   }
