@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { T } from "@/app/ai-estimate-v2/_components/tokens";
 import { formatCurrency } from "@/lib/utils";
+import { reconcileLine } from "@/lib/projects/estimate-reconcile";
 import { stageDisplayName } from "@/lib/constants";
 import type { StageRow } from "./stage-table";
 
@@ -904,11 +905,29 @@ function ItemRow({
             {item.unitPrice !== null && item.unitPrice !== undefined && (
               <span>× {formatCurrency(item.unitPrice)}</span>
             )}
-            {item.amount !== null && item.amount !== undefined && (
-              <span style={{ color: T.textSecondary, fontWeight: 600 }}>
-                = {formatCurrency(item.amount)}
-              </span>
-            )}
+            {item.amount !== null &&
+              item.amount !== undefined &&
+              (() => {
+                const rec = reconcileLine(item.quantity, item.unitPrice, item.amount);
+                const bad = rec.status === "mismatch";
+                return (
+                  <span
+                    className="rounded px-1 font-semibold"
+                    style={{
+                      color: bad ? T.danger : T.textSecondary,
+                      backgroundColor: bad ? "rgba(220,38,38,0.12)" : "transparent",
+                    }}
+                    title={
+                      bad && rec.expected !== null
+                        ? `⚠ Не збігається: вказано ${formatCurrency(item.amount)}, а кількість×ціна = ${formatCurrency(rec.expected)} (різниця ${formatCurrency(rec.diff ?? 0)}). Можлива помилка в кошторисі.`
+                        : undefined
+                    }
+                  >
+                    = {formatCurrency(item.amount)}
+                    {bad && " ⚠"}
+                  </span>
+                );
+              })()}
             {item.supplier && <span>· {item.supplier}</span>}
           </div>
           {item.reasoning && (

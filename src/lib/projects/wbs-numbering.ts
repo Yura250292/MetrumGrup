@@ -47,10 +47,15 @@ export function computeWbsCodes(rows: WbsRow[]): Map<string, string> {
       if (visited.has(child.id)) continue; // захист від циклів
       visited.add(child.id);
 
-      const seg =
-        child.costType === "MATERIAL"
-          ? `${MATERIAL_PREFIX}${++materialN}`
-          : `${++workN}`;
+      // Суфікс «М» — ЛИШЕ для листків-матеріалів. Якщо вузол має дітей, це
+      // етап/підетап-контейнер → числовий сегмент (навіть якщо costType=MATERIAL,
+      // напр. помилково позначений підетап).
+      const isMaterialLeaf =
+        child.costType === "MATERIAL" &&
+        (childrenByParent.get(child.id)?.length ?? 0) === 0;
+      const seg = isMaterialLeaf
+        ? `${MATERIAL_PREFIX}${++materialN}`
+        : `${++workN}`;
       const code = parentCode ? `${parentCode}.${seg}` : seg;
       result.set(child.id, code);
 
@@ -69,10 +74,12 @@ export function computeWbsCodes(rows: WbsRow[]): Map<string, string> {
   for (const row of rows) {
     if (visited.has(row.id)) continue;
     visited.add(row.id);
-    const seg =
-      row.costType === "MATERIAL"
-        ? `${MATERIAL_PREFIX}${++rootMaterial}`
-        : `${++rootWork}`;
+    const isMaterialLeaf =
+      row.costType === "MATERIAL" &&
+      (childrenByParent.get(row.id)?.length ?? 0) === 0;
+    const seg = isMaterialLeaf
+      ? `${MATERIAL_PREFIX}${++rootMaterial}`
+      : `${++rootWork}`;
     result.set(row.id, seg);
     assign(row.id, seg);
   }
